@@ -1,0 +1,56 @@
+{
+  "name": "unikvs",
+  "version": "0.0.0",
+  "description": "",
+  "homepage": "https://github.com/tai-kun/unikvs",
+  "license": "MIT",
+  "author": "tai-kun",
+  "repository": {
+    "url": "https://github.com/tai-kun/unikvs"
+  },
+  "files": [
+    "dist",
+    "src",
+    "package.json",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project ./.config/tsconfig.build.json"
+  },
+  "dependencies": {
+    "@unikvs/core": "^0.0.0",
+    "asyncmux": "^0.0.5",
+    "call-fn-once": "^0.0.4",
+    "try-capture-stack-trace": "^0.0.3"
+  },
+  "devDependencies": {
+    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/strictest": "^2.0.8",
+    "@types/node": "^22.19.17",
+    "@unikvs/checksum": "^0.0.0",
+    "@unikvs/compression": "^0.0.0",
+    "@unikvs/fs.node": "^0.0.0",
+    "@unikvs/memory": "^0.0.0",
+    "@unikvs/opfs": "^0.0.0",
+    "@unikvs/utils": "^0.0.0",
+    "@vitest/browser": "^4.1.4",
+    "@vitest/browser-playwright": "^4.1.4",
+    "npm-check-updates": "^20.0.2",
+    "playwright": "^1.59.1",
+    "vitest": "^4.1.4"
+  },
+  "peerDependencies": {
+    "@logtape/logtape": "^2.0.0",
+    "valibot": "^1.0.0"
+  }
+}

@@ -1,0 +1,15 @@
+[tools]
+node = "22"
+npm = "11.13.0"
+
+[tasks.test]
+run = [{ task = "test:format" }]
+
+[tasks."test:format"]
+run = "npx oxfmt --config ./.config/.oxfmtrc.json --check"
+
+[tasks.fmt]
+run = "npx oxfmt --config ./.config/.oxfmtrc.json"
+
+[tasks.update]
+run = ["npx npm-check-updates --target minor -u --cooldown 3", "npm install", "npm audit"]

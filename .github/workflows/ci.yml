@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+defaults:
+  run:
+    shell: bash -euo pipefail {0}
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        package-directory:
+          - unikvs
+          - packages/checksum
+          - packages/compression
+          - packages/core
+          - packages/fs.node
+          - packages/indexeddb
+          - packages/memory
+          - packages/opfs
+          - packages/s3.node
+          - packages/utils
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: "mise をセットアップ"
+        uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5 # v3.5.1
+
+      - name: "依存関係をインストール（ルート）"
+        run: npm ci
+
+      - name: "依存関係をインストール（パッケージ）"
+        run: |
+          npm ci
+          if grep -q "playwright" package.json; then
+            npx playwright install --with-deps
+          fi
+        working-directory: ${{ matrix.package-directory }}
+
+      - name: "テスト"
+        run: mise run test
+        working-directory: ${{ matrix.package-directory }}
+
+      - name: "ビルド"
+        run: npm run build
+        working-directory: ${{ matrix.package-directory }}

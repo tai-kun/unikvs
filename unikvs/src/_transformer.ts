@@ -1,0 +1,75 @@
+import type { Context, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
+
+import {
+  DecodableStreamNotSupportedError,
+  EncodableStreamNotSupportedError,
+  TransformerIsNotOpenError,
+} from "./errors.js";
+
+export default class UniKvsTransformer {
+  private readonly tf: ITransformer;
+
+  public constructor(tf: ITransformer) {
+    this.tf = tf;
+  }
+
+  public async open(context: Context, signal: AbortSignal): Promise<void> {
+    if (typeof this.tf.open !== "function") {
+      return;
+    }
+
+    if (!this.tf.isOpen) {
+      await this.tf.open({ signal, context });
+    }
+  }
+
+  public async close(context: Context, signal: AbortSignal): Promise<void> {
+    if (typeof this.tf.close !== "function") {
+      return;
+    }
+
+    if (this.tf.isOpen) {
+      await this.tf.close({ signal, context });
+    }
+  }
+
+  public async encode(context: Context, signal: AbortSignal, data: any): Promise<void> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    return await this.tf.encode({ data, signal, context });
+  }
+
+  public async decode(context: Context, signal: AbortSignal, data: any): Promise<any> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    return await this.tf.decode({ data, signal, context });
+  }
+
+  public async getEncodable(context: Context, signal: AbortSignal): Promise<IEncodable> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.getEncodable !== "function") {
+      throw new EncodableStreamNotSupportedError({ name: this.tf.name });
+    }
+
+    return await this.tf.getEncodable({ signal, context });
+  }
+
+  public async getDecodable(context: Context, signal: AbortSignal): Promise<IDecodable> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.getDecodable !== "function") {
+      throw new DecodableStreamNotSupportedError({ name: this.tf.name });
+    }
+
+    return await this.tf.getDecodable({ signal, context });
+  }
+}
