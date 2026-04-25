@@ -40,10 +40,29 @@ jobs:
 
       - name: "依存関係をインストール（パッケージ）"
         run: |
-          npm ci
           if grep -q "playwright" package.json; then
             npx playwright install --with-deps
           fi
+        working-directory: ${{ matrix.package-directory }}
+
+      - name: "内部依存パッケージのビルド"
+        run: |
+          DEPENDENCIES=$(jq -r '.dependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+
+          DEV_DEPENDENCIES=$(jq -r '.devDependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+
+          ALL_DEPS=$(echo "$DEPENDENCIES $DEV_DEPENDENCIES" | tr ' ' '\n' | sort -u)
+
+          for pkg in $ALL_DEPS; do
+            TARGET_DIR="./packages/$pkg"
+            if [ -d "$TARGET_DIR" ]; then
+              echo "Building internal dependency: $pkg in $TARGET_DIR"
+              (cd "$TARGET_DIR" && npm run build)
+            else
+              echo "Error: Directory $TARGET_DIR not found, skipping."
+              exit 1
+            fi
+          done
         working-directory: ${{ matrix.package-directory }}
 
       - name: "テスト"
