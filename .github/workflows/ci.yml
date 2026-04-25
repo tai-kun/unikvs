@@ -38,13 +38,6 @@ jobs:
       - name: "依存関係をインストール（ルート）"
         run: npm ci
 
-      - name: "依存関係をインストール（パッケージ）"
-        run: |
-          if grep -q "playwright" package.json; then
-            npx playwright install --with-deps
-          fi
-        working-directory: ${{ matrix.package-directory }}
-
       - name: "内部依存パッケージのビルド"
         run: |
           DEPENDENCIES=$(jq -r '.dependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
@@ -63,6 +56,12 @@ jobs:
               exit 1
             fi
           done
+
+      - name: "依存関係をインストール（パッケージ）"
+        run: |
+          if grep -q "playwright" package.json; then
+            npx playwright install --with-deps
+          fi
         working-directory: ${{ matrix.package-directory }}
 
       - name: "テスト"
