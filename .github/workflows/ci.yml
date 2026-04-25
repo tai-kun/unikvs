@@ -40,20 +40,41 @@ jobs:
 
       - name: "内部依存パッケージのビルド"
         run: |
-          DEPENDENCIES=$(jq -r '.dependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+          root_directory=$(pwd)
+          root_package_json="${root_directory}/package.json"
 
-          DEV_DEPENDENCIES=$(jq -r '.devDependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+          cd ${{ matrix.package-directory }}
 
-          ALL_DEPS=$(echo "$DEPENDENCIES $DEV_DEPENDENCIES" | tr ' ' '\n' | sort -u)
+          # 1. 現在のパッケージの依存関係を抽出
+          dependencies=$(jq -r '.dependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+          dev_dependencies=$(jq -r '.devDependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
 
-          for pkg in $ALL_DEPS; do
-            TARGET_DIR="./packages/$pkg"
-            if [ -d "$TARGET_DIR" ]; then
-              echo "Building internal dependency: $pkg in $TARGET_DIR"
-              (cd "$TARGET_DIR" && npm run build)
+          # 重複を排除した依存パッケージリスト
+          raw_deps=$(echo "$dependencies $dev_dependencies" | tr ' ' '\n' | sort -u)
+
+          # 2. ルートの workspaces の順番に従ってソート
+          # - root の workspaces から "packages/name" の "name" 部分だけを取り出して順番を保持
+          # - raw_deps に含まれるものだけを、その順番でフィルタリング
+          all_dependencies=$(jq -r --argjson deps "$(echo "$raw_deps" | jq -R . | jq -s .)" \
+            '.workspaces[] | sub("packages/"; "") | select(. as $pkg | $deps | index($pkg))' \
+            "$root_package_json")
+
+          # 3. ビルド実行
+          for package_name in $all_dependencies; do
+            target_directory="${root_directory}/packages/${package_name}"
+            if [ -d "${target_directory}" ]; then
+              echo "Building internal dependency: ${package_name} in ${target_directory}"
+              (cd "${target_directory}" && npm run build)
             else
-              echo "Error: Directory $TARGET_DIR not found, skipping."
-              exit 1
+              # unikvs など packages/ 外にあるディレクトリの場合のフォールバック
+              if [ -d "${root_directory}/${package_name}" ]; then
+                target_directory="${root_directory}/${package_name}"
+                echo "Building internal dependency: ${package_name} in ${target_directory}"
+                (cd "${target_directory}" && npm run build)
+              else
+                echo "Error: Directory ${target_directory} not found, skipping."
+                exit 1
+              fi
             fi
           done
 
