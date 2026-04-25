@@ -14,10 +14,10 @@
     "packages/checksum",
     "packages/compression",
     "packages/memory",
+    "packages/fs.node",
     "packages/s3.node",
     "packages/opfs",
     "packages/indexeddb",
-    "packages/fs.node",
     "unikvs"
   ],
   "type": "module",
