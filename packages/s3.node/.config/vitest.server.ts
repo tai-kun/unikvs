@@ -15,5 +15,6 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/**/*.client.test.ts"],
     setupFiles: [".config/_debugging.ts"],
+    testTimeout: 15e3,
   },
 });

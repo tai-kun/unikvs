@@ -4,13 +4,16 @@ import { describe, test as vitest } from "vitest";
 
 import S3 from "../src/s3.js";
 
+const rustfsVersion = process.env["_RUSTFS_VERSION"] ?? "1.0.0-alpha.98";
+
+console.log("rustfs version: " + rustfsVersion);
+
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 const test = vitest.extend<{
   storage: S3;
 }>({
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
-    const rustfsVersion = process.env["_RUSTFS_VERSION"] ?? "1.0.0-alpha.98";
     const container = await new GenericContainer("rustfs/rustfs:" + rustfsVersion)
       .withExposedPorts(9000)
       .start();
