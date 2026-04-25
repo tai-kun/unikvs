@@ -1,6 +1,8 @@
 import type { IStorage } from "@unikvs/core";
 import { assertValidFilename, assertValidDirname } from "@unikvs/utils";
 
+const rootDir = new Set(["", ".", "/"]);
+
 /**
  * ブラウザーの OPFS (Origin Private File System) を永続化先として使用するストレージクラスです。
  *
@@ -29,7 +31,9 @@ export default class Opfs implements IStorage {
   public constructor(root: string | FileSystemDirectoryHandle = ".unikvs") {
     this.name = "Opfs";
     if (typeof root === "string") {
-      assertValidDirname(root);
+      if (!rootDir.has(root)) {
+        assertValidDirname(root);
+      }
 
       this.root = root;
       this.rootHandle = null;
@@ -49,7 +53,7 @@ export default class Opfs implements IStorage {
     }
 
     const opfsRoot = await navigator.storage.getDirectory();
-    if (!this.root || this.root === "." || this.root === "/") {
+    if (rootDir.has(this.root)) {
       this.rootHandle = opfsRoot;
     } else {
       // 指定された名前のディレクトリーを作成・取得します
