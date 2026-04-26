@@ -17,17 +17,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package-directory:
-          - unikvs
-          - packages/checksum
-          - packages/compression
-          - packages/core
-          - packages/fs.node
-          - packages/indexeddb
-          - packages/memory
-          - packages/opfs
-          - packages/s3.node
-          - packages/utils
+        package-directory: [
+          "packages/core",
+          "packages/utils",
+          "packages/checksum",
+          "packages/compression",
+          "packages/memory",
+          "packages/fs.node",
+          "packages/s3.node",
+          "packages/opfs",
+          "packages/indexeddb",
+          "unikvs"
+        ]
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -42,41 +43,48 @@ jobs:
 
       - name: "内部依存パッケージのビルド"
         run: |
-          root_directory=$(pwd)
-          root_package_json="${root_directory}/package.json"
+          root_dir="$(pwd)"
 
-          cd ${{ matrix.package-directory }}
+          # 1. ルートの workspaces 設定から、全内部パッケージの「パッケージ名」と「ディレクトリ名」のマップを作成
+          internal_pkg_map=$(jq -r '
+            .workspaces[] as $ws 
+            | ($ws | sub("/\\*$"; "")) as $path 
+            | $path 
+          ' package.json | xargs -I {} sh -c '
+            if [ -f "{}/package.json" ]; then
+              name=$(jq -r .name "{}/package.json")
+              echo "{\"$name\": \"{}\"}"
+            fi
+          ' | jq -s 'add')
 
-          # 1. 現在のパッケージの依存関係を抽出
-          dependencies=$(jq -r '.dependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
-          dev_dependencies=$(jq -r '.devDependencies // {} | keys[] | select(startswith("@unikvs/")) | split("/")[1]' package.json)
+          cd "${{ matrix.package-directory }}"
 
-          # 重複を排除した依存パッケージリスト
-          raw_deps=$(echo "$dependencies $dev_dependencies" | tr ' ' '\n' | sort -u)
+          # 2. 現在のパッケージの全依存関係を取得
+          all_deps_in_pkg=$(jq -r '
+            ( .dependencies // {}, 
+              .devDependencies // {}, 
+              .peerDependencies // {}, 
+              .optionalDependencies // {} 
+            ) | keys[]
+          ' package.json | sort -u)
 
-          # 2. ルートの workspaces の順番に従ってソート
-          # - root の workspaces から "packages/name" の "name" 部分だけを取り出して順番を保持
-          # - raw_deps に含まれるものだけを、その順番でフィルタリング
-          all_dependencies=$(jq -r --argjson deps "$(echo "$raw_deps" | jq -R . | jq -s .)" \
-            '.workspaces[] | sub("packages/"; "") | select(. as $pkg | $deps | index($pkg))' \
-            "$root_package_json")
+          # 3. ルートの workspaces の定義順（ビルド順序のヒント）に従って、依存している内部パッケージを抽出
+          ordered_internal_deps=$(jq -r --argjson map "$internal_pkg_map" '
+            .workspaces[] as $ws 
+            | ($ws | sub("/\\*$"; "")) as $path
+            | ($map | to_entries[] | select(.value == $path) | .key) as $pkg_name
+            | $pkg_name
+          ' "${root_dir}/package.json")
 
-          # 3. ビルド実行
-          for package_name in $all_dependencies; do
-            target_directory="${root_directory}/packages/${package_name}"
-            if [ -d "${target_directory}" ]; then
-              echo "Building internal dependency: ${package_name} in ${target_directory}"
-              (cd "${target_directory}" && npm run build)
-            else
-              # unikvs など packages/ 外にあるディレクトリの場合のフォールバック
-              if [ -d "${root_directory}/${package_name}" ]; then
-                target_directory="${root_directory}/${package_name}"
-                echo "Building internal dependency: ${package_name} in ${target_directory}"
-                (cd "${target_directory}" && npm run build)
-              else
-                echo "Error: Directory ${target_directory} not found, skipping."
-                exit 1
-              fi
+          for dep_name in $ordered_internal_deps; do
+            # 現在のパッケージがその内部パッケージに依存しているかチェック
+            if echo "$all_deps_in_pkg" | grep -qx "$dep_name"; then
+              target_rel_path=$(echo "$internal_pkg_map" | jq -r ".\"$dep_name\"")
+              target_abs_path="${root_dir}/${target_rel_path}"
+
+              echo "${target_rel_path} で内部依存パッケージ ${dep_name} をビルドします"
+              (cd "${target_abs_path}" && npm run build)
+              echo
             fi
           done
 
