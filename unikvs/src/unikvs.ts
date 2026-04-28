@@ -359,7 +359,7 @@ const ioLockRegistry: FinalizationRegistry<AsyncmuxLock> | null =
     ? null
     : new FinalizationRegistry((lock) => {
         try {
-          lock.unlock();
+          lock.release();
         } catch {}
       });
 
@@ -567,7 +567,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         throw ex;
       } finally {
-        lock.unlock();
+        lock.release();
       }
     } catch (ex) {
       this.#con = null;
@@ -643,11 +643,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           throw new PluginOperationAggregateError({ action: "close", errors });
         }
       } finally {
-        lock.unlock();
+        lock.release();
       }
     } finally {
       this.#con = null;
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -739,7 +739,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             }),
           );
         } finally {
-          lock.unlock();
+          lock.release();
         }
       } else {
         // 登録されているトランスフォーマーを順番に適用してデータをエンコードします。
@@ -761,7 +761,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             }),
           );
         } finally {
-          lock.unlock();
+          lock.release();
         }
       }
 
@@ -795,7 +795,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw error;
       }
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -858,7 +858,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           }
         }
       } finally {
-        lock.unlock();
+        lock.release();
       }
 
       if (data === NONE) {
@@ -874,7 +874,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       return data;
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -955,7 +955,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               await r.cancel();
             } catch {}
             try {
-              lock.unlock();
+              lock.release();
             } catch {}
           });
         }
@@ -969,7 +969,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             await r.cancel();
           } catch {}
           try {
-            lock.unlock();
+            lock.release();
           } catch {}
         });
 
@@ -978,11 +978,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         return valueStream;
       } catch (ex) {
-        lock.unlock();
+        lock.release();
         throw ex;
       }
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -1039,10 +1039,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         return false;
       } finally {
-        lock.unlock();
+        lock.release();
       }
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -1108,10 +1108,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           throw new PluginOperationAggregateError({ plugin: "storage", action: "delete", errors });
         }
       } finally {
-        lock.unlock();
+        lock.release();
       }
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 
@@ -1162,10 +1162,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           throw new PluginOperationAggregateError({ plugin: "storage", action: "clear", errors });
         }
       } finally {
-        lock.unlock();
+        lock.release();
       }
     } finally {
-      lock.unlock();
+      lock.release();
     }
   }
 }

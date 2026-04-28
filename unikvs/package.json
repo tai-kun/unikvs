@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@unikvs/core": "^0.0.0",
-    "asyncmux": "^0.0.5",
+    "asyncmux": "^0.0.8",
     "call-fn-once": "^0.0.4",
     "try-capture-stack-trace": "^0.0.3"
   },
