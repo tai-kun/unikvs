@@ -14,6 +14,8 @@ defaults:
 
 jobs:
   publish:
+    env:
+      _NPM_VERSION: "11.13.0"
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
@@ -93,10 +95,10 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: "npm のバージョンを固定"
-        run: npm install -g npm@11.13.0
+        run: npm install -g npm@${{ env._NPM_VERSION }}
 
       - name: "依存関係をインストール"
-        run: npm i
+        run: npm ci
 
       - name: "ビルド"
         run: npm run build --workspaces
