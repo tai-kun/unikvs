@@ -12,4 +12,4 @@ run = "npx oxfmt --config ./.config/.oxfmtrc.json --check"
 run = "npx oxfmt --config ./.config/.oxfmtrc.json"
 
 [tasks.update]
-run = ["npx npm-check-updates --target minor -u --cooldown 3", "npm install", "npm audit"]
+run = ["npx npm-check-updates --target minor -u --cooldown 7", "npm install", "npm audit"]
