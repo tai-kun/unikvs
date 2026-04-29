@@ -1,14 +1,13 @@
-import type { Context, IReadableStream, Key } from "@unikvs/core";
+import type { Context, IReadableStream, IStorage } from "@unikvs/core";
 import { asyncmux, Asyncmux, type AsyncmuxLock } from "asyncmux";
-import * as v from "valibot";
 
 import combineSignals from "./_combine-signals.js";
 import logger from "./_logger.js";
 import mergeContext from "./_merge-context.js";
-import { UniKvsStorage } from "./_storage.js";
+import UniKvsStorage from "./_storage.js";
 import toValueStream from "./_to-value-stream.js";
 import UniKvsTransformer from "./_transformer.js";
-import { parse } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import type { ContextSource } from "./context.types.js";
 import {
   KeyNotFoundError,
@@ -138,7 +137,7 @@ export type SetOptions<
  *
  * @template TKey 対象となるキーの型です。
  */
-export type GetOptions<TKey = Key> = {
+export type GetOptions<TKey = IStorage.Key> = {
   /**
    * 操作対象を識別するためのキーです。
    */
@@ -160,7 +159,7 @@ export type GetOptions<TKey = Key> = {
  *
  * @template TKey 対象となるキーの型です。
  */
-export type StreamOptions<TKey = Key> = {
+export type StreamOptions<TKey = IStorage.Key> = {
   /**
    * 操作対象を識別するためのキーです。
    */
@@ -182,7 +181,7 @@ export type StreamOptions<TKey = Key> = {
  *
  * @template TKey 対象となるキーの型です。
  */
-export type HasOptions<TKey = Key> = {
+export type HasOptions<TKey = IStorage.Key> = {
   /**
    * 操作対象を識別するためのキーです。
    */
@@ -204,7 +203,7 @@ export type HasOptions<TKey = Key> = {
  *
  * @template TKey 対象となるキーの型です。
  */
-export type DeleteOptions<TKey = Key> = {
+export type DeleteOptions<TKey = IStorage.Key> = {
   /**
    * 操作対象を識別するためのキーです。
    */
@@ -486,7 +485,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       ioMux: new Asyncmux(),
     };
     try {
-      const [options = {}] = parse(OpenArgsSchema, args);
+      const [options = {}] = v.parseInput(OpenArgsSchema, args);
       const { signal: signalOption, context: contextOption } = options;
 
       const { conAc } = this.#con;
@@ -588,7 +587,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options = {}] = parse(CloseArgsSchema, args);
+    const [options = {}] = v.parseInput(CloseArgsSchema, args);
     const { signal = AbortSignal.timeout(10e3), context: contextOption } = options;
 
     const context = mergeContext(this.#context, contextOption);
@@ -692,7 +691,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parse(SetArgsSchema, args);
+    const [options] = v.parseInput(SetArgsSchema, args);
     const { key, value, signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;
@@ -828,7 +827,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parse(GetArgsSchema, args);
+    const [options] = v.parseInput(GetArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;
@@ -846,7 +845,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       const NONE = {};
-      let data = NONE;
+      let data: any = NONE;
 
       const lock = await ioMux.rLock({ key, signal });
       try {
@@ -907,7 +906,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parse(StreamArgsSchema, args);
+    const [options] = v.parseInput(StreamArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;
@@ -1011,7 +1010,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parse(HasArgsSchema, args);
+    const [options] = v.parseInput(HasArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;
@@ -1071,7 +1070,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parse(DeleteArgsSchema, args);
+    const [options] = v.parseInput(DeleteArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;
@@ -1128,7 +1127,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options = {}] = parse(ClearArgsSchema, args);
+    const [options = {}] = v.parseInput(ClearArgsSchema, args);
     const { signal: signalOption, context: contextOption } = options;
 
     const { conAc, ioMux } = this.#con;

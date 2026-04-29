@@ -3,13 +3,12 @@ import type {
   IReadableStreamStorage,
   IStorage,
   IWritableStreamStorage,
-  Key,
   IDecodableStreamTransformer,
   IEncodableStreamTransformer,
   ITransformer,
 } from "@unikvs/core";
 
-import { UniKvsStorage } from "./_storage.js";
+import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
 import type { ContextSource } from "./context.types.js";
 import { MissingStorageError } from "./errors.js";
@@ -95,18 +94,16 @@ export type StreamValue<TChunkData = any> = [Type: typeof STREAM_VALUE, ChunkDat
 /**
  * UniKvs で扱う値の抽象型です。プレーンな値かストリーム値のいずれかになります。
  *
- * @template TDataAndChunkData データまたはチャンクデータの型です。
+ * @template TData データまたはチャンクデータの型です。
  */
-export type Value<TDataAndChunkData = any> =
-  | PlainValue<TDataAndChunkData>
-  | StreamValue<TDataAndChunkData>;
+export type Value<TData = any> = PlainValue<TData> | StreamValue<TData>;
 
 /**
  * キーと値のマッピングを定義するオブジェクトの型です。
  *
  * @template T マッピングされる値の型です。
  */
-export type KeyValueMapping<T = any> = { readonly [key: Key]: Value<T> };
+export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> };
 
 /**
  * PlainValue 型から内部のデータ型を抽出します。
@@ -130,7 +127,7 @@ export type $InferStreamValueChunkData<TStremValue> =
  * @template TKeyValueMapping 対象となるマッピング型です。
  */
 export type KeyofKeyValueMapping<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> =
-  Extract<keyof TKeyValueMapping, Key>;
+  Extract<keyof TKeyValueMapping, IStorage.Key>;
 
 /**
  * UniKvs の設定を構築するためのビルダーインターフェースです。

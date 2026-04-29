@@ -1,5 +1,6 @@
 import type { Context, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
 
+import * as v from "./_valibot.js";
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
@@ -33,20 +34,24 @@ export default class UniKvsTransformer {
     }
   }
 
-  public async encode(context: Context, signal: AbortSignal, data: any): Promise<void> {
+  public async encode(context: Context, signal: AbortSignal, data: any): Promise<unknown> {
     if (!this.tf.isOpen) {
       throw new TransformerIsNotOpenError({ name: this.tf.name });
     }
 
-    return await this.tf.encode({ data, signal, context });
+    const output = await this.tf.encode({ data, signal, context });
+
+    return output;
   }
 
-  public async decode(context: Context, signal: AbortSignal, data: any): Promise<any> {
+  public async decode(context: Context, signal: AbortSignal, data: any): Promise<unknown> {
     if (!this.tf.isOpen) {
       throw new TransformerIsNotOpenError({ name: this.tf.name });
     }
 
-    return await this.tf.decode({ data, signal, context });
+    const output = await this.tf.decode({ data, signal, context });
+
+    return output;
   }
 
   public async getEncodable(context: Context, signal: AbortSignal): Promise<IEncodable> {
@@ -58,7 +63,10 @@ export default class UniKvsTransformer {
       throw new EncodableStreamNotSupportedError({ name: this.tf.name });
     }
 
-    return await this.tf.getEncodable({ signal, context });
+    const output = await this.tf.getEncodable({ signal, context });
+    const parsed = v.parseOutput(v.instance(TransformStream), output);
+
+    return parsed;
   }
 
   public async getDecodable(context: Context, signal: AbortSignal): Promise<IDecodable> {
@@ -70,6 +78,9 @@ export default class UniKvsTransformer {
       throw new DecodableStreamNotSupportedError({ name: this.tf.name });
     }
 
-    return await this.tf.getDecodable({ signal, context });
+    const output = await this.tf.getDecodable({ signal, context });
+    const parsed = v.parseOutput(v.instance(TransformStream), output);
+
+    return parsed;
   }
 }

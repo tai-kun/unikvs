@@ -1,4 +1,10 @@
-import { setErrorMessage, ErrorBase, type ErrorOptions, type ErrorMeta, Key } from "@unikvs/core";
+import {
+  setErrorMessage,
+  ErrorBase,
+  type ErrorOptions,
+  type ErrorMeta,
+  type IStorage,
+} from "@unikvs/core";
 import type { BaseIssue } from "valibot";
 
 // -------------------------------------------------------------------------------------------------
@@ -90,7 +96,7 @@ export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
 setErrorMessage(UniKvsIsNotOpenError, "UniKvs は開いていません", "ja");
 
 export type KeyNotFoundErrorMeta = {
-  readonly key: Key;
+  readonly key: IStorage.Key;
 };
 
 export type KeyNotFoundErrorArgs = KeyNotFoundErrorMeta;
@@ -101,7 +107,7 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   }
 
   public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key ${JSON.stringify(key)} not found`, options);
+    super(args, ({ key }) => `IStorage.Key ${JSON.stringify(key)} not found`, options);
   }
 }
 
@@ -194,6 +200,28 @@ export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNot
 setErrorMessage(
   StorageIsNotOpenError,
   ({ name }) => `ストレージ "${name}" は読み取り可能なストリームをサポートしていません`,
+  "ja",
+);
+
+export type MultipartWriteNotSupportedErrorMeta = {
+  readonly name: string;
+};
+
+export type MultipartWriteNotSupportedErrorArgs = MultipartWriteNotSupportedErrorMeta;
+
+export class MultipartWriteNotSupportedError extends ErrorBase<MultipartWriteNotSupportedErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsMultipartWriteNotSupportedError";
+  }
+
+  public constructor(args: MultipartWriteNotSupportedErrorArgs, options?: ErrorOptions) {
+    super(args, ({ name }) => `Storage "${name}" does not support multipart-write`, options);
+  }
+}
+
+setErrorMessage(
+  StorageIsNotOpenError,
+  ({ name }) => `ストレージ "${name}" はマルチパート書き込みをサポートしていません`,
   "ja",
 );
 

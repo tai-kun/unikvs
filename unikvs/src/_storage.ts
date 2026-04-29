@@ -1,5 +1,6 @@
-import type { Context, IReadableStream, IStorage, IWritableStream, Key } from "@unikvs/core";
+import type { Context, IReadableStream, IStorage, IWritableStream } from "@unikvs/core";
 
+import * as v from "./_valibot.js";
 import {
   type PluginOperationAggregateError,
   ReadableStreamNotSupportedError,
@@ -7,7 +8,7 @@ import {
   WritableStreamNotSupportedError,
 } from "./errors.js";
 
-export class UniKvsStorage {
+export default class UniKvsStorage {
   private readonly io: IStorage;
 
   public constructor(io: IStorage) {
@@ -37,7 +38,7 @@ export class UniKvsStorage {
   public async onOtherWriteError(
     context: Context,
     signal: AbortSignal,
-    key: Key,
+    key: IStorage.Key,
     error: PluginOperationAggregateError,
   ): Promise<void> {
     if (!this.io.isOpen) {
@@ -56,7 +57,12 @@ export class UniKvsStorage {
     });
   }
 
-  public async write(context: Context, signal: AbortSignal, key: Key, data: any): Promise<void> {
+  public async write(
+    context: Context,
+    signal: AbortSignal,
+    key: IStorage.Key,
+    data: unknown,
+  ): Promise<void> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
     }
@@ -64,23 +70,28 @@ export class UniKvsStorage {
     await this.io.write({ key, data, signal, context });
   }
 
-  public async read(context: Context, signal: AbortSignal, key: Key): Promise<any> {
+  public async read(context: Context, signal: AbortSignal, key: IStorage.Key): Promise<unknown> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
     }
 
-    return await this.io.read({ key, signal, context });
+    const output = await this.io.read({ key, signal, context });
+
+    return output;
   }
 
-  public async exists(context: Context, signal: AbortSignal, key: Key): Promise<boolean> {
+  public async exists(context: Context, signal: AbortSignal, key: IStorage.Key): Promise<boolean> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
     }
 
-    return await this.io.exists({ key, signal, context });
+    const output = await this.io.exists({ key, signal, context });
+    const parsed = Boolean(output);
+
+    return parsed;
   }
 
-  public async delete(context: Context, signal: AbortSignal, key: Key): Promise<void> {
+  public async delete(context: Context, signal: AbortSignal, key: IStorage.Key): Promise<void> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
     }
@@ -99,7 +110,7 @@ export class UniKvsStorage {
   public async getWritable(
     context: Context,
     signal: AbortSignal,
-    key: Key,
+    key: IStorage.Key,
   ): Promise<IWritableStream> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
@@ -109,13 +120,16 @@ export class UniKvsStorage {
       throw new WritableStreamNotSupportedError({ name: this.io.name });
     }
 
-    return await this.io.getWritable({ key, signal, context });
+    const output = await this.io.getWritable({ key, signal, context });
+    const parsed = v.parseOutput(v.instance(WritableStream), output);
+
+    return parsed;
   }
 
   public async getReadable(
     context: Context,
     signal: AbortSignal,
-    key: Key,
+    key: IStorage.Key,
   ): Promise<IReadableStream> {
     if (!this.io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.io.name });
@@ -125,6 +139,9 @@ export class UniKvsStorage {
       throw new ReadableStreamNotSupportedError({ name: this.io.name });
     }
 
-    return await this.io.getReadable({ key, signal, context });
+    const output = await this.io.getReadable({ key, signal, context });
+    const parsed = v.parseOutput(v.instance(ReadableStream), output);
+
+    return parsed;
   }
 }
