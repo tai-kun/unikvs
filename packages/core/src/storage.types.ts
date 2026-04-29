@@ -3,14 +3,14 @@ import type { ErrorBase } from "./errors.js";
 import type { MaybePromise } from "./utils.types.js";
 
 /**
- * ストレージ操作で使用されるキーの型定義です。
- */
-export type Key = string;
-
-/**
  * ストレージに関連する引数の型定義を格納する名前空間です。
  */
 export namespace IStorage {
+  /**
+   * ストレージ操作で使用されるキーの型定義です。
+   */
+  export type Key = string;
+
   /**
    * 書き込み可能なストリームを取得する際の引数定義です。
    */
