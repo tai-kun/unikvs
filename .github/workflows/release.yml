@@ -87,18 +87,20 @@ jobs:
         env:
           TARGETS: ${{ steps.targets.outputs.targets }}
 
+      - name: "pnpm をインストール"
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10
+
       - name: "Node.js をセットアップ"
         uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
+          cache: pnpm
           node-version: 24.x
-          cache: npm
           registry-url: https://registry.npmjs.org
 
-      - name: "npm のバージョンを固定"
-        run: npm install -g npm@${{ env._NPM_VERSION }}
-
       - name: "依存関係をインストール"
-        run: npm ci
+        run: pnpm i
 
       - name: "ビルド"
         run: npm run build --workspaces
@@ -142,7 +144,7 @@ jobs:
 
           # 各パッケージの依存を書き換え
           for pkg in $PACKAGES; do
-            echo "Fixing dependencies in $pkg"
+            echo "$pkg の依存関係を編集"
 
             jq --arg version "$_VERSION" --slurpfile names "$NAMES_JSON" '
               def is_internal($names):
@@ -198,8 +200,8 @@ jobs:
         run: |
           for pkg in $TARGETS; do
             NAME=$(jq -r .name "$pkg/package.json")
-            echo "Publishing $NAME ..."
-            npm publish --workspace "$pkg"
+            echo "$NAME を公開..."
+            pnpm publish --access public --no-git-checks --workspace "$pkg"
             sleep 10
           done
         env:
@@ -229,11 +231,11 @@ jobs:
           _TAG_NAME: ${{ steps.create_tag.outputs.tag_name }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "npm ログをアップロード"
+      - name: "pnpm ログをアップロード"
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: npm-logs-publish
-          path: /home/runner/.npm/_logs/*.log
+          name: pnpm-logs-publish
+          path: /home/runner/.pnpm-debug.log
           if-no-files-found: ignore
           retention-days: 3

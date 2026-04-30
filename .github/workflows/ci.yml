@@ -17,18 +17,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package-directory: [
-          "packages/core",
-          "packages/utils",
-          "packages/checksum",
-          "packages/compression",
-          "packages/memory",
-          "packages/fs.node",
-          "packages/s3.node",
-          "packages/opfs",
-          "packages/indexeddb",
-          "unikvs"
-        ]
+        package-directory:
+          [
+            "packages/core",
+            "packages/utils",
+            "packages/checksum",
+            "packages/compression",
+            "packages/memory",
+            "packages/fs.node",
+            "packages/s3.node",
+            "packages/opfs",
+            "packages/indexeddb",
+            "unikvs",
+          ]
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -39,7 +40,7 @@ jobs:
         uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5 # v3.5.1
 
       - name: "依存関係をインストール（ルート）"
-        run: npm ci
+        run: pnpm i
 
       - name: "内部依存パッケージのビルド"
         run: |
@@ -83,7 +84,7 @@ jobs:
               target_abs_path="${root_dir}/${target_rel_path}"
 
               echo "${target_rel_path} で内部依存パッケージ ${dep_name} をビルドします"
-              (cd "${target_abs_path}" && npm run build)
+              (cd "${target_abs_path}" && pnpm run build)
               echo
             fi
           done
@@ -107,5 +108,5 @@ jobs:
         working-directory: ${{ matrix.package-directory }}
 
       - name: "ビルド"
-        run: npm run build
+        run: pnpm run build
         working-directory: ${{ matrix.package-directory }}

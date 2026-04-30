@@ -1,6 +1,6 @@
 [tools]
-node = "22"
-npm = "11.13.0"
+node = "24"
+pnpm = "10"
 
 [tasks.test]
 run = [{ task = "test:format" }]
@@ -12,4 +12,9 @@ run = "npx oxfmt --config ./.config/.oxfmtrc.json --check"
 run = "npx oxfmt --config ./.config/.oxfmtrc.json"
 
 [tasks.update]
-run = ["npx npm-check-updates --target minor -u --cooldown 3", "npm install", "npm audit"]
+run = [
+  "npx npm-check-updates --target minor -u --cooldown 7 --reject oxfmt",
+  "pnpm install",
+  "for d in $(jq -r '.workspaces[]' package.json | xargs ls -d); do (cd \"$d\" && mise run update); done",
+  "pnpm audit",
+]

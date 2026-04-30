@@ -1,0 +1,24 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - asyncmux
+  - fast-utf8
+onlyBuiltDependencies: []
+strictDepBuilds: false
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+packages:
+  [
+    "packages/core",
+    "packages/utils",
+    "packages/checksum",
+    "packages/compression",
+    "packages/memory",
+    "packages/fs.node",
+    "packages/s3.node",
+    "packages/opfs",
+    "packages/indexeddb",
+    "unikvs",
+  ]
+# overrides:
+#   fast-xml-parser: "^5.7.0"
+#   uuid: "^14.0.0"

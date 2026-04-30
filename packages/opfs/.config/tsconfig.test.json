@@ -1,5 +1,5 @@
 {
-  "extends": ["@tsconfig/node22", "@tsconfig/strictest"],
+  "extends": ["@tsconfig/node24", "@tsconfig/strictest"],
   "include": ["./global.d.ts", "../tests/**/*"],
   "exclude": ["../tests/**/*.client.test.ts", "../tests/**/*.server.test.ts"],
   "compilerOptions": {

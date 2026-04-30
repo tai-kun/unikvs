@@ -28,14 +28,15 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@unikvs/core": "^0.0.0",
-    "@unikvs/utils": "^0.0.0"
+    "@unikvs/core": "workspace:*",
+    "@unikvs/utils": "workspace:*"
   },
   "devDependencies": {
-    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/node24": "^24.0.4",
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^22.19.17",
+    "@types/node": "^24.12.2",
     "npm-check-updates": "^20.0.2",
+    "vite": "^8.0.10",
     "vitest": "^4.1.5"
   },
   "peerDependencies": {

@@ -33,17 +33,18 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "@unikvs/core": "^0.0.0",
-    "@unikvs/utils": "^0.0.0"
+    "@unikvs/core": "workspace:*",
+    "@unikvs/utils": "workspace:*"
   },
   "devDependencies": {
-    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/node24": "^24.0.4",
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^22.19.17",
+    "@types/node": "^24.12.2",
     "@vitest/browser": "^4.1.5",
     "@vitest/browser-playwright": "^4.1.5",
     "npm-check-updates": "^20.0.2",
     "playwright": "^1.59.1",
+    "vite": "^8.0.10",
     "vitest": "^4.1.5"
   },
   "peerDependencies": {
