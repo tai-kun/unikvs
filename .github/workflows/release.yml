@@ -58,12 +58,12 @@ jobs:
             PRIVATE=$(jq -r .private "$pkg/package.json")
 
             if [ "$PRIVATE" = "true" ]; then
-              echo "skip private package: $NAME"
+              echo "プライベートパッケージをスキップ: $NAME"
               continue
             fi
 
             if npm view "$NAME@$_VERSION" version >/dev/null 2>&1; then
-              echo "skip existing version: $NAME@$_VERSION"
+              echo "既存のバージョンをスキップ: $NAME@$_VERSION"
               continue
             fi
 
@@ -71,7 +71,7 @@ jobs:
           done
 
           if [ ${#TARGETS[@]} -eq 0 ]; then
-            echo "Error: 公開対象のパッケージが存在しません。" >&2
+            echo "エラー: 公開対象のパッケージが存在しません。" >&2
             exit 1
           fi
 

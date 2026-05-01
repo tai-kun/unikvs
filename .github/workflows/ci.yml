@@ -19,6 +19,7 @@ jobs:
       matrix:
         package-directory:
           [
+            "packages/testcontainer",
             "packages/core",
             "packages/utils",
             "packages/checksum",

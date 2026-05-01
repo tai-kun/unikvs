@@ -1,6 +1,6 @@
 import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
-import { GenericContainer } from "testcontainers";
-import { describe, test as vitest } from "vitest";
+import { TestContainer, type StartedContainer } from "@unikvs/testcontainer";
+import { afterAll, beforeAll, describe, test as vitest } from "vitest";
 
 import S3 from "../src/s3.js";
 
@@ -8,16 +8,28 @@ const rustfsVersion = process.env["_RUSTFS_VERSION"] ?? "1.0.0-alpha.98";
 
 console.log("rustfs version: " + rustfsVersion);
 
+let bucketId = 0;
+let container: StartedContainer;
+
+beforeAll(async () => {
+  container = await new TestContainer("rustfs/rustfs:" + rustfsVersion)
+    .withExposedPorts(9000)
+    .start();
+});
+
+afterAll(async () => {
+  await container.dispose();
+});
+
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 const test = vitest.extend<{
   storage: S3;
 }>({
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
-    const container = await new GenericContainer("rustfs/rustfs:" + rustfsVersion)
-      .withExposedPorts(9000)
-      .start();
+    const bucket = `test-bucket-${bucketId++}`;
     const endpoint = `http://${container.getHost()}:${container.getMappedPort(9000)}`;
+
     const config: S3ClientConfig = {
       endpoint,
       region: "ap-northeast-1",
@@ -28,7 +40,6 @@ const test = vitest.extend<{
       forcePathStyle: true,
     };
     const client = new S3Client(config);
-    const bucket = "test-bucket";
     await client.send(
       new CreateBucketCommand({
         Bucket: bucket,
@@ -46,8 +57,6 @@ const test = vitest.extend<{
     if (storage.isOpen) {
       storage.close();
     }
-
-    await container.stop();
   },
 });
 

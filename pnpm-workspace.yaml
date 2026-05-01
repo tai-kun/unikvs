@@ -8,6 +8,7 @@ blockExoticSubdeps: true
 trustPolicy: no-downgrade
 packages:
   [
+    "packages/testcontainer",
     "packages/core",
     "packages/utils",
     "packages/checksum",
@@ -19,6 +20,3 @@ packages:
     "packages/indexeddb",
     "unikvs",
   ]
-# overrides:
-#   fast-xml-parser: "^5.7.0"
-#   uuid: "^14.0.0"
