@@ -1,6 +1,5 @@
 import type { Context, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
 
-import * as v from "./_valibot.js";
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
@@ -64,7 +63,7 @@ export default class UniKvsTransformer {
     }
 
     const output = await this.tf.getEncodable({ signal, context });
-    const parsed = v.parseOutput(v.instance(TransformStream), output);
+    const parsed = output; // TODO(tai-kun): 要検証
 
     return parsed;
   }
@@ -79,7 +78,7 @@ export default class UniKvsTransformer {
     }
 
     const output = await this.tf.getDecodable({ signal, context });
-    const parsed = v.parseOutput(v.instance(TransformStream), output);
+    const parsed = output; // TODO(tai-kun): 要検証
 
     return parsed;
   }
