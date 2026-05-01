@@ -198,10 +198,10 @@ jobs:
 
       - name: "公開"
         run: |
-          for pkg in $TARGETS; do
-            NAME=$(jq -r .name "$pkg/package.json")
+          for target in $TARGETS; do
+            NAME=$(jq -r .name "$target/package.json")
             echo "$NAME を公開..."
-            pnpm publish --access public --no-git-checks --workspace "$pkg"
+            pnpm publish "$target" --access public --no-git-checks
             sleep 10
           done
         env:
