@@ -9,25 +9,23 @@ import {
   type InvalidOutputErrorArgs,
 } from "./errors.js";
 
+export type { InferInput, InferOutput } from "valibot";
 export {
   any,
   omit,
   pipe,
-  array,
-  tuple,
   union,
   number,
-  object,
-  record,
   string,
   symbol,
   unknown,
   instance,
   minValue,
   optional,
-  transform,
   safeInteger,
 } from "valibot";
+
+export { array, tuple, object, record, transform } from "@tai-kun/valibot-extra-lab";
 
 type BaseSchema = typeof safeParse extends (schema: infer S, ...args: any) => any ? S : never;
 

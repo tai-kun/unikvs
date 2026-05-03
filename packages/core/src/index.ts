@@ -6,5 +6,3 @@ export { ErrorBase, setErrorMessage } from "./errors.js";
 export type * from "./storage.types.js";
 
 export type * from "./transformer.types.js";
-
-export type * from "./utils.types.js";

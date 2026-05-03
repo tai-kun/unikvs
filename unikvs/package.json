@@ -28,6 +28,7 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
+    "@tai-kun/valibot-extra-lab": "^0.0.4",
     "@unikvs/core": "workspace:*",
     "asyncmux": "^0.0.8",
     "call-fn-once": "^0.0.4",

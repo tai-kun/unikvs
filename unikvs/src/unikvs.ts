@@ -67,6 +67,136 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 
 // -------------------------------------------------------------------------------------------------
 //
+// スキーマ
+//
+// -------------------------------------------------------------------------------------------------
+
+const ContextKeySchema = v.string();
+
+const ContextSourceSchema = v.union([
+  v.record(v.any(), v.unknown()),
+  v.array(v.tuple([ContextKeySchema, v.unknown()])),
+]);
+
+const OpenOptionsSchema = v.object({
+  /**
+   * 処理の中断を通知するためのシグナルです。
+   */
+  signal: v.optional(v.instance(AbortSignal)),
+
+  /**
+   * 実行時のコンテキスト情報です。
+   */
+  context: v.optional(ContextSourceSchema),
+});
+
+const OpenArgsSchema = v.tuple([v.optional(OpenOptionsSchema)]);
+
+const CloseOptionsSchema = v.object({
+  /**
+   * 処理の中断を通知するためのシグナルです。
+   */
+  signal: v.optional(v.instance(AbortSignal)),
+
+  /**
+   * 実行時のコンテキスト情報です。
+   */
+  context: v.optional(ContextSourceSchema),
+});
+
+const CloseArgsSchema = v.tuple([v.optional(CloseOptionsSchema)]);
+
+const SetOptionsSchema = v.object({
+  key: v.string(),
+  value: v.unknown(),
+  signal: v.optional(v.instance(AbortSignal)),
+  context: v.optional(ContextSourceSchema),
+});
+
+const SetArgsSchema = v.union([
+  v.tuple([SetOptionsSchema]),
+  v.pipe(
+    v.tuple([
+      SetOptionsSchema.entries.key,
+      SetOptionsSchema.entries.value,
+      v.optional(v.omit(SetOptionsSchema, ["key", "value"])),
+    ]),
+    v.transform(([key, value, options]) => [{ ...options, key, value }]),
+  ),
+]);
+
+const GetOptionsSchema = v.object({
+  key: v.string(),
+  signal: v.optional(v.instance(AbortSignal)),
+  context: v.optional(ContextSourceSchema),
+});
+
+const GetArgsSchema = v.union([
+  v.tuple([GetOptionsSchema]),
+  v.pipe(
+    v.tuple([GetOptionsSchema.entries.key, v.optional(v.omit(GetOptionsSchema, ["key"]))]),
+    v.transform(([key, options]) => [{ ...options, key }]),
+  ),
+]);
+
+const StreamOptionsSchema = v.object({
+  key: v.string(),
+  signal: v.optional(v.instance(AbortSignal)),
+  context: v.optional(ContextSourceSchema),
+});
+
+const StreamArgsSchema = v.union([
+  v.tuple([StreamOptionsSchema]),
+  v.pipe(
+    v.tuple([StreamOptionsSchema.entries.key, v.optional(v.omit(StreamOptionsSchema, ["key"]))]),
+    v.transform(([key, options]) => [{ ...options, key }]),
+  ),
+]);
+
+const HasOptionsSchema = v.object({
+  key: v.string(),
+  signal: v.optional(v.instance(AbortSignal)),
+  context: v.optional(ContextSourceSchema),
+});
+
+const HasArgsSchema = v.union([
+  v.tuple([HasOptionsSchema]),
+  v.pipe(
+    v.tuple([HasOptionsSchema.entries.key, v.optional(v.omit(HasOptionsSchema, ["key"]))]),
+    v.transform(([key, options]) => [{ ...options, key }]),
+  ),
+]);
+
+const DeleteOptionsSchema = v.object({
+  key: v.string(),
+  signal: v.optional(v.instance(AbortSignal)),
+  context: v.optional(ContextSourceSchema),
+});
+
+const DeleteArgsSchema = v.union([
+  v.tuple([DeleteOptionsSchema]),
+  v.pipe(
+    v.tuple([DeleteOptionsSchema.entries.key, v.optional(v.omit(DeleteOptionsSchema, ["key"]))]),
+    v.transform(([key, options]) => [{ ...options, key }]),
+  ),
+]);
+
+const ClearOptionsSchema = v.object({
+  /**
+   * 処理の中断を通知するためのシグナルです。
+   */
+  signal: v.optional(v.instance(AbortSignal)),
+
+  /**
+   * 実行時のコンテキスト情報です。
+   */
+  context: v.optional(ContextSourceSchema),
+});
+
+const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
+
+// -------------------------------------------------------------------------------------------------
+//
 // 型定義
 //
 // -------------------------------------------------------------------------------------------------
@@ -74,32 +204,12 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 /**
  * オープン操作時のオプションです。
  */
-export type OpenOptions = {
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * 実行時のコンテキスト情報です。
-   */
-  readonly context?: ContextSource | undefined;
-};
+export type OpenOptions = v.InferInput<typeof OpenOptionsSchema>;
 
 /**
  * クローズ操作時のオプションです。
  */
-export type CloseOptions = {
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * 実行時のコンテキスト情報です。
-   */
-  readonly context?: ContextSource | undefined;
-};
+export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
 
 /**
  * 保存操作時のオプションです。
@@ -223,126 +333,7 @@ export type DeleteOptions<TKey = IStorage.Key> = {
 /**
  * 全削除操作時のオプションです。
  */
-export type ClearOptions = {
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * 実行時のコンテキスト情報です。
-   */
-  readonly context?: ContextSource | undefined;
-};
-
-// -------------------------------------------------------------------------------------------------
-//
-// スキーマ
-//
-// -------------------------------------------------------------------------------------------------
-
-const ContextKeySchema = v.union([v.string(), v.symbol(), v.number()]);
-
-const ContextSourceSchema = v.union([
-  v.record(v.any(), v.unknown()),
-  v.array(v.tuple([ContextKeySchema, v.unknown()])),
-]);
-
-const OpenOptionsSchema = v.object({
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const OpenArgsSchema = v.tuple([v.optional(OpenOptionsSchema)]);
-
-const CloseOptionsSchema = v.object({
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const CloseArgsSchema = v.tuple([v.optional(CloseOptionsSchema)]);
-
-const SetOptionsSchema = v.object({
-  key: v.string(),
-  value: v.unknown(),
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const SetArgsSchema = v.union([
-  v.tuple([SetOptionsSchema]),
-  v.pipe(
-    v.tuple([
-      SetOptionsSchema.entries.key,
-      SetOptionsSchema.entries.value,
-      v.optional(v.omit(SetOptionsSchema, ["key", "value"])),
-    ]),
-    v.transform(([key, value, options]) => [{ ...options, key, value }]),
-  ),
-]);
-
-const GetOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const GetArgsSchema = v.union([
-  v.tuple([GetOptionsSchema]),
-  v.pipe(
-    v.tuple([GetOptionsSchema.entries.key, v.optional(v.omit(GetOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const StreamOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const StreamArgsSchema = v.union([
-  v.tuple([StreamOptionsSchema]),
-  v.pipe(
-    v.tuple([StreamOptionsSchema.entries.key, v.optional(v.omit(StreamOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const HasOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const HasArgsSchema = v.union([
-  v.tuple([HasOptionsSchema]),
-  v.pipe(
-    v.tuple([HasOptionsSchema.entries.key, v.optional(v.omit(HasOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const DeleteOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const DeleteArgsSchema = v.union([
-  v.tuple([DeleteOptionsSchema]),
-  v.pipe(
-    v.tuple([DeleteOptionsSchema.entries.key, v.optional(v.omit(DeleteOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const ClearOptionsSchema = v.object({
-  signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
-});
-
-const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
+export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
 
 // -------------------------------------------------------------------------------------------------
 //

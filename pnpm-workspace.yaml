@@ -2,6 +2,7 @@ minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - asyncmux
   - fast-utf8
+  - "@tai-kun/valibot-extra-lab"
 onlyBuiltDependencies: []
 strictDepBuilds: false
 blockExoticSubdeps: true

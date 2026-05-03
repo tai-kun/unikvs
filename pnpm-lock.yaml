@@ -375,8 +375,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       fast-utf8:
-        specifier: ^0.0.3
-        version: 0.0.3
+        specifier: ^0.0.7
+        version: 0.0.7
       filename-reserved-regex:
         specifier: ^4.0.0
         version: 4.0.0
@@ -420,6 +420,9 @@ importers:
       '@logtape/logtape':
         specifier: ^2.0.0
         version: 2.0.5
+      '@tai-kun/valibot-extra-lab':
+        specifier: ^0.0.4
+        version: 0.0.4(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))
       '@unikvs/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -1276,6 +1279,12 @@ packages:
   '@tai-kun/is-promise-like@0.0.5':
     resolution: {integrity: sha512-kQ3bjOVFS1Ff7/tXQAG3Mwo7UiF2ymyHa34X0gPs8P1eua2Y2kJh8zmj04eflp7JqwHq+6QA6sTJp8VDoL9yAA==}
 
+  '@tai-kun/valibot-extra-lab@0.0.4':
+    resolution: {integrity: sha512-2mBuzbHWD3QTNU2r/CV0uDHW3t4cpKaePfBCoHxJkXx4DfWrb9epnVoPNbwru/nc3sDIv14RnSRNtrYzE6bUDQ==}
+    peerDependencies:
+      fast-utf8: ^0.0.7
+      valibot: ^1.0.0
+
   '@tsconfig/node24@24.0.4':
     resolution: {integrity: sha512-2A933l5P5oCbv6qSxHs7ckKwobs8BDAe9SJ/Xr2Hy+nDlwmLE1GhFh/g/vXGRZWgxBg9nX/5piDtHR9Dkw/XuA==}
 
@@ -1386,8 +1395,8 @@ packages:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
 
-  fast-utf8@0.0.3:
-    resolution: {integrity: sha512-hdGJy9YadrXYbeu/WFYQneSjRbSAPQk2/N1bMKjT1YPcx6KDVRWev3JsgmHeARhHP/JETwB0uHTEaBrawr+WnA==}
+  fast-utf8@0.0.7:
+    resolution: {integrity: sha512-tx02jdpgf/ZkDijnvFiOdRzgn0AYLtK+duvK/9Q57iaAigxJSDfmTnIe0rO9wF6bnYLNQEpBWhZFWRDFlxD+EQ==}
 
   fast-xml-builder@1.1.5:
     resolution: {integrity: sha512-4TJn/8FKLeslLAH3dnohXqE3QSoxkhvaMzepOIZytwJXZO69Bfz0HBdDHzOTOon6G59Zrk6VQ2bEiv1t61rfkA==}
@@ -2793,6 +2802,11 @@ snapshots:
 
   '@tai-kun/is-promise-like@0.0.5': {}
 
+  '@tai-kun/valibot-extra-lab@0.0.4(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))':
+    dependencies:
+      fast-utf8: 0.0.7
+      valibot: 1.3.1(typescript@6.0.3)
+
   '@tsconfig/node24@24.0.4': {}
 
   '@tsconfig/strictest@2.0.8': {}
@@ -2928,7 +2942,7 @@ snapshots:
 
   expect-type@1.3.0: {}
 
-  fast-utf8@0.0.3:
+  fast-utf8@0.0.7:
     dependencies:
       try-capture-stack-trace: 0.0.3
 
