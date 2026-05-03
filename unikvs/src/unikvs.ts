@@ -369,12 +369,12 @@ type Connection = {
   /**
    * 接続全体を管理する AbortController です。
    */
-  readonly conAc: AbortController;
+  readonly ac: AbortController;
 
   /**
    * I/O の多重化を制御する Asyncmux インスタンスです。
    */
-  readonly ioMux: Asyncmux;
+  readonly io: Asyncmux;
 };
 
 /**
@@ -421,6 +421,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   #con: Connection | null;
 
+  readonly #acSet: Set<AbortController>;
+
   /**
    * 基本となる実行コンテキスト情報です。
    */
@@ -450,10 +452,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     transformers: readonly UniKvsTransformer[],
   ) {
     this.#con = null;
-    this.#context = {
-      ...context,
-      "unikvs:instance": this,
-    };
+    this.#acSet = new Set();
+    this.#context = { ...context };
     this.#destinations = destinations;
     this.#transformers = transformers;
   }
@@ -464,7 +464,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @returns 利用可能である場合は true、そうでない場合は false を返します。
    */
   public get isOpen(): boolean {
-    return !!this.#con;
+    return this.#con !== null;
   }
 
   /**
@@ -476,134 +476,109 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public open(options?: OpenOptions): Promise<void>;
 
   public async open(...args: any): Promise<void> {
-    if (this.#con) {
+    if (this.#con !== null) {
       throw new UniKvsIsOpenError();
     }
 
-    this.#con = {
-      conAc: new AbortController(),
-      ioMux: new Asyncmux(),
-    };
-    try {
-      const [options = {}] = v.parseInput(OpenArgsSchema, args);
-      const { signal: signalOption, context: contextOption } = options;
+    const [options = {}] = v.parseInput(OpenArgsSchema, args);
+    const { signal: signalOption, context: contextOption } = options;
 
-      const { conAc } = this.#con;
-      const signal = combineSignals([conAc.signal, signalOption]);
-
-      const context = mergeContext(this.#context, contextOption);
-      context["unikvs:action"] = "open";
-
-      const openFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
-      const dispose: (() => Promise<void>)[] = [];
-      const lock = await asyncmux(this, signal);
-      try {
-        // ロック待機中に接続状態が変更されていないか再確認します。
-        if (this.#con.conAc !== conAc) {
-          throw new UniKvsIsOpenError();
-        }
-
-        // 各ストレージのオープン処理をリストに追加します。
-        for (const storage of this.#destinations) {
-          openFns.push([
-            async () => {
-              await storage.open(context, signal);
-
-              dispose.push(async () => {
-                try {
-                  await storage.close(context, signal);
-                } catch (ex) {
-                  logger.error`Failed to close storage: ${ex}`;
-                }
-              });
-            },
-            "storage",
-          ]);
-        }
-
-        // 各トランスフォーマーのオープン処理をリストに追加します。
-        for (const transformer of this.#transformers) {
-          openFns.push([
-            async () => {
-              await transformer.open(context, signal);
-
-              dispose.push(async () => {
-                try {
-                  await transformer.close(context, signal);
-                } catch (ex) {
-                  logger.error`Failed to close transformer: ${ex}`;
-                }
-              });
-            },
-            "transformer",
-          ]);
-        }
-
-        // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { plugin: "storage" | "transformer"; reason: unknown }[] = [];
-        await Promise.all(
-          openFns.map(async ([f, plugin]) => {
-            try {
-              await f();
-            } catch (reason) {
-              errors.push({ plugin, reason });
-            }
-          }),
-        );
-        if (errors.length > 0) {
-          throw new PluginOperationAggregateError({ action: "open", errors });
-        }
-      } catch (ex) {
-        this.#con = null; // unlock の前に null に戻します。
-
-        if (dispose.length > 0) {
-          await Promise.all(
-            dispose.map(async (f) => {
-              await f();
-            }),
-          );
-        }
-
-        throw ex;
-      } finally {
-        lock.release();
-      }
-    } catch (ex) {
-      this.#con = null;
-      throw ex;
-    }
-  }
-
-  /**
-   * ストレージをクローズします。
-   *
-   * @param options クローズ時のオプションです。
-   * @returns 完了を通知する Promise です。
-   */
-  public close(options?: CloseOptions): Promise<void>;
-
-  public async close(...args: any): Promise<void> {
-    if (!this.#con) {
-      throw new UniKvsIsNotOpenError();
-    }
-
-    const [options = {}] = v.parseInput(CloseArgsSchema, args);
-    const { signal = AbortSignal.timeout(10e3), context: contextOption } = options;
+    const ac = new AbortController();
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "close";
+    context["unikvs:action"] = "open";
 
-    const { conAc, ioMux } = this.#con;
-    conAc.abort(new UniKvsIsNotOpenError()); // 実行中の他の操作をすべて中断させるために signal を発火させます。
+    signal.throwIfAborted();
+
+    this.#acSet.add(ac);
+
+    const dispose: (() => Promise<void>)[] = [];
 
     const lock = await asyncmux(this, signal);
     try {
+      if (this.#con !== null) {
+        throw new UniKvsIsOpenError();
+      }
+
+      const openFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
+
+      // 各ストレージのオープン処理をリストに追加します。
+      for (const storage of this.#destinations) {
+        openFns.push([
+          async () => {
+            await storage.open(context, signal);
+
+            dispose.push(async () => {
+              try {
+                await storage.close(context, signal);
+              } catch (ex) {
+                logger.error`Failed to close storage: ${ex}`;
+              }
+            });
+          },
+          "storage",
+        ]);
+      }
+
+      // 各トランスフォーマーのオープン処理をリストに追加します。
+      for (const transformer of this.#transformers) {
+        openFns.push([
+          async () => {
+            await transformer.open(context, signal);
+
+            dispose.push(async () => {
+              try {
+                await transformer.close(context, signal);
+              } catch (ex) {
+                logger.error`Failed to close transformer: ${ex}`;
+              }
+            });
+          },
+          "transformer",
+        ]);
+      }
+
+      // すべての処理を並列に実行し、エラーが発生した場合は集約します。
+      const errors: { plugin: "storage" | "transformer"; reason: unknown }[] = [];
+      await Promise.all(
+        openFns.map(async ([f, plugin]) => {
+          try {
+            await f();
+          } catch (reason) {
+            errors.push({ plugin, reason });
+          }
+        }),
+      );
+      if (errors.length > 0) {
+        throw new PluginOperationAggregateError({ action: "open", errors });
+      }
+    } catch (ex) {
+      if (dispose.length > 0) {
+        await Promise.all(
+          dispose.map(async (f) => {
+            await f();
+          }),
+        );
+      }
+
+      throw ex;
+    } finally {
+      this.#acSet.delete(ac);
+      lock.release();
+    }
+  }
+
+  async #close(context: Context, signal: AbortSignal, con: Connection): Promise<void> {
+    const lock = await asyncmux(this, signal);
+    try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con !== con) {
         throw new UniKvsIsNotOpenError();
       }
 
-      const lock = await ioMux.lock({ signal });
+      const { io } = this.#con;
+      const lock = await io.lock({ signal });
       try {
         const closeFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
 
@@ -645,8 +620,50 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         lock.release();
       }
     } finally {
-      this.#con = null;
       lock.release();
+    }
+  }
+
+  /**
+   * ストレージをクローズします。
+   *
+   * @param options クローズ時のオプションです。
+   * @returns 完了を通知する Promise です。
+   */
+  public close(options?: CloseOptions): Promise<void>;
+
+  public close(...args: any): Promise<void> {
+    try {
+      const [options = {}] = v.parseInput(CloseArgsSchema, args);
+      const { signal = AbortSignal.timeout(10e3), context: contextOption } = options;
+
+      const context = mergeContext(this.#context, contextOption);
+      context["unikvs:action"] = "close";
+
+      if (this.#con === null) {
+        const acArr = [...this.#acSet];
+        this.#acSet.clear();
+        for (const ac of acArr) {
+          if (!ac.signal.aborted) {
+            ac.abort(new UniKvsIsNotOpenError());
+          }
+        }
+
+        throw new UniKvsIsNotOpenError();
+      }
+
+      const { ac } = this.#con;
+      const acArr = [ac, ...this.#acSet];
+      this.#acSet.clear();
+      for (const ac of acArr) {
+        if (!ac.signal.aborted) {
+          ac.abort(new UniKvsIsNotOpenError());
+        }
+      }
+
+      return this.#close(context, signal, this.#con);
+    } catch (ex) {
+      return Promise.reject(ex);
     }
   }
 
@@ -687,15 +704,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   ): Promise<void>;
 
   public async set(...args: any): Promise<void> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options] = v.parseInput(SetArgsSchema, args);
     const { key, value, signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "set";
@@ -704,7 +721,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
@@ -718,7 +735,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           data = data.pipeThrough(e);
         }
 
-        const lock = await ioMux.lock({ key, signal });
+        const lock = await io.lock({ key, signal });
         try {
           await Promise.all(
             this.#destinations.map(async (storage, i) => {
@@ -747,7 +764,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           data = await transformer.encode(context, signal, data);
         }
 
-        const lock = await ioMux.lock({ key, signal });
+        const lock = await io.lock({ key, signal });
         try {
           await Promise.all(
             this.#destinations.map(async (storage) => {
@@ -823,15 +840,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
 
   public async get(...args: any): Promise<unknown> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options] = v.parseInput(GetArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "get";
@@ -840,14 +857,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux.readonly(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
       const NONE = {};
       let data: any = NONE;
 
-      const lock = await ioMux.rLock({ key, signal });
+      const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         for (const storage of this.#destinations) {
@@ -902,15 +919,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
   public async stream(...args: any): Promise<ValueStream> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options] = v.parseInput(StreamArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "stream";
@@ -919,14 +936,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
       const NONE: any = {};
       let r: IReadableStream = NONE;
 
-      const lock = await ioMux.rLock({ key, signal });
+      const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         for (const storage of this.#destinations) {
@@ -1006,15 +1023,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
 
   public async has(...args: any): Promise<boolean> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options] = v.parseInput(HasArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "has";
@@ -1023,11 +1040,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
-      const lock = await ioMux.rLock({ key, signal });
+      const lock = await io.rLock({ key, signal });
       try {
         // いずれかのストレージに存在すれば true を返します。
         for (const storage of this.#destinations) {
@@ -1066,15 +1083,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
 
   public async delete(...args: any): Promise<void> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options] = v.parseInput(DeleteArgsSchema, args);
     const { key, signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "delete";
@@ -1083,11 +1100,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
-      const lock = await ioMux.lock({ key, signal });
+      const lock = await io.lock({ key, signal });
       try {
         // すべてのストレージから対象データを削除します。
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
@@ -1123,15 +1140,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public async clear(options?: ClearOptions): Promise<void>;
 
   public async clear(...args: any): Promise<void> {
-    if (!this.#con) {
+    if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
 
     const [options = {}] = v.parseInput(ClearArgsSchema, args);
     const { signal: signalOption, context: contextOption } = options;
 
-    const { conAc, ioMux } = this.#con;
-    const signal = combineSignals([conAc.signal, signalOption]);
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, signalOption]);
 
     const context = mergeContext(this.#context, contextOption);
     context["unikvs:action"] = "clear";
@@ -1139,11 +1156,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (!this.#con) {
+      if (this.#con === null) {
         throw new UniKvsIsNotOpenError();
       }
 
-      const lock = await ioMux.lock({ signal });
+      const lock = await io.lock({ signal });
       try {
         // すべてのストレージで一括削除を実行します。
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
