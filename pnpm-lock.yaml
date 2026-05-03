@@ -115,6 +115,9 @@ importers:
       i18n-error-base:
         specifier: ^0.0.3
         version: 0.0.3(valibot@1.3.1(typescript@6.0.3))
+      maypromise:
+        specifier: ^0.0.2
+        version: 0.0.2
       valibot:
         specifier: ^1.0.0
         version: 1.3.1(typescript@6.0.3)
@@ -1506,6 +1509,9 @@ packages:
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+
+  maypromise@0.0.2:
+    resolution: {integrity: sha512-OdswB9XcyNn5x78RFOixfSVxhIoL3VLxsfPXl13DQnvDlEk/gvmk/TE8SD71V955Yl+TiQNVDBuPeIjp5gqXEg==}
 
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
@@ -3011,6 +3017,8 @@ snapshots:
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  maypromise@0.0.2: {}
 
   mrmime@2.0.1: {}
 

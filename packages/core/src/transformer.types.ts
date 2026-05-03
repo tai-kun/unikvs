@@ -1,5 +1,6 @@
+import type { MaybePromise } from "maypromise";
+
 import type { Context } from "./context.types.js";
-import type { MaybePromise } from "./utils.types.js";
 
 /**
  * トランスフォーマーに関連する引数の型定義を格納する名前空間です。

@@ -36,7 +36,8 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "i18n-error-base": "^0.0.3"
+    "i18n-error-base": "^0.0.3",
+    "maypromise": "^0.0.2"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
