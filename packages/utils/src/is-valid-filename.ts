@@ -8,7 +8,7 @@ const WINDOWS_RESERVED_NAME_REGEX = /*#__PURE__*/ windowsReservedNameRegex();
 const utf8 = /*#__PURE__*/ new FastUtf8({
   strict: true,
   ignoreBOM: true,
-  bufferSize: 255,
+  allocateSize: 255,
 });
 
 /**
