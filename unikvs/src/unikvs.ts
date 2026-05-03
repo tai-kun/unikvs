@@ -544,6 +544,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       if (errors.length > 0) {
         throw new PluginOperationAggregateError({ action: "open", errors });
       }
+
+      this.#con = {
+        ac,
+        io: new Asyncmux(),
+      };
     } catch (ex) {
       if (dispose.length > 0) {
         await Promise.all(
@@ -610,6 +615,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       } finally {
         lock.release();
       }
+
+      this.#con = null;
     } finally {
       lock.release();
     }
