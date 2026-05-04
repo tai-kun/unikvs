@@ -26,7 +26,7 @@ interface IHasher {
    *
    * @param data ハッシュ値を計算するチャンクデータです。
    */
-  update(data: Uint8Array): void;
+  update(data: Uint8Array<ArrayBuffer>): void;
 
   /**
    * ハッシュ値を計算します。
@@ -46,7 +46,7 @@ interface IHash {
    * @param ハッシュ値を計算するデータです。
    * @returns ハッシュ値を表す Uint8Array です。
    */
-  (data: Uint8Array): Uint8Array;
+  (data: Uint8Array<ArrayBuffer>): Uint8Array;
 
   /**
    * ハッシュ値を逐次計算する IHasher を作成します。

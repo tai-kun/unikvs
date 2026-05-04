@@ -1,3 +1,6 @@
+export type * from "./checksum.js";
+export { default as Checksum } from "./checksum.js";
+
 export type { ChecksumMismatchErrorArgs, ChecksumMismatchErrorMeta } from "./errors.js";
 export { ChecksumMismatchError } from "./errors.js";
 
