@@ -676,6 +676,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 指定したオプションで値を保存します。
+   *
+   * @template TKey 対象キーの型定義です。
+   * @param options セット操作のオプション一式です。
+   * @returns 完了を通知する Promise です。
+   */
+  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
+    options: SetOptions<TKeyValueMapping, TKey>,
+  ): Promise<void>;
+
+  /**
    * 指定したキーに値を保存します。
    *
    * @template TKey 対象キーの型定義です。
@@ -688,17 +699,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: TKey,
     value: SetValue<TKeyValueMapping[TKey]>,
     options?: Omit<SetOptions, "key" | "value">,
-  ): Promise<void>;
-
-  /**
-   * 指定したオプションで値を保存します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options セット操作のオプション一式です。
-   * @returns 完了を通知する Promise です。
-   */
-  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
-    options: SetOptions<TKeyValueMapping, TKey>,
   ): Promise<void>;
 
   public async set(...args: any): Promise<void> {
@@ -814,6 +814,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 指定したオプションで値を取得します。
+   *
+   * @template TKey 対象キーの型定義です。
+   * @param options 取得操作のオプション一式です。
+   * @returns 取得した値を返します。
+   */
+  public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
+    options: GetOptions<TKey>,
+  ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
+
+  /**
    * 指定したキーから値を取得します。
    *
    * @template TKey 対象キーの型定義です。
@@ -824,17 +835,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
     key: TKey,
     options?: Omit<GetOptions, "key">,
-  ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
-
-  /**
-   * 指定したオプションで値を取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options 取得操作のオプション一式です。
-   * @returns 取得した値を返します。
-   */
-  public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
-    options: GetOptions<TKey>,
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
 
   public async get(...args: any): Promise<unknown> {
@@ -893,6 +893,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 指定したオプションでストリームを取得します。
+   *
+   * @template TKey 対象キーの型定義です。
+   * @param options ストリーム取得操作のオプション一式です。
+   * @returns 取得したストリームを返します。
+   */
+  public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
+    options: StreamOptions<TKey>,
+  ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
+
+  /**
    * 指定したキーからストリームを取得します。
    *
    * @template TKey 対象キーの型定義です。
@@ -903,17 +914,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     key: TKey,
     options?: Omit<StreamOptions, "key">,
-  ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
-
-  /**
-   * 指定したオプションでストリームを取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options ストリーム取得操作のオプション一式です。
-   * @returns 取得したストリームを返します。
-   */
-  public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
-    options: StreamOptions<TKey>,
   ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
   public async stream(...args: any): Promise<ValueStream> {
@@ -1001,6 +1001,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 指定したオプションでキーの存在を確認します。
+   *
+   * @param options 存在確認操作のオプションです。
+   * @returns 存在する場合は true、そうでない場合は false を返します。
+   */
+  public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
+
+  /**
    * 指定したキーが存在するかを確認します。
    *
    * @param key 操作対象を識別するためのキーです。
@@ -1011,14 +1019,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<HasOptions, "key">,
   ): Promise<boolean>;
-
-  /**
-   * 指定したオプションでキーの存在を確認します。
-   *
-   * @param options 存在確認操作のオプションです。
-   * @returns 存在する場合は true、そうでない場合は false を返します。
-   */
-  public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
 
   public async has(...args: any): Promise<boolean> {
     if (this.#con === null) {
@@ -1061,6 +1061,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 指定したオプションでキーを削除します。
+   *
+   * @param options 削除操作のオプションです。
+   * @returns 完了を通知する Promise です。
+   */
+  public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
+
+  /**
    * 指定したキーを削除します。
    *
    * @param key 操作対象を識別するためのキーです。
@@ -1071,14 +1079,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<DeleteOptions, "key">,
   ): Promise<void>;
-
-  /**
-   * 指定したオプションでキーを削除します。
-   *
-   * @param options 削除操作のオプションです。
-   * @returns 完了を通知する Promise です。
-   */
-  public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
 
   public async delete(...args: any): Promise<void> {
     if (this.#con === null) {
