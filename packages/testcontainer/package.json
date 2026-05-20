@@ -31,10 +31,10 @@
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",
     "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.12.2",
+    "@types/node": "^24.12.4",
     "npm-check-updates": "^20.0.2",
-    "vite": "^8.0.10",
-    "vitest": "^4.1.5"
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
   },
   "peerDependencies": {
     "@logtape/logtape": "^2.0.0"

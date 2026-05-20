@@ -85,7 +85,7 @@ jobs:
               target_abs_path="${root_dir}/${target_rel_path}"
 
               echo "${target_rel_path} で内部依存パッケージ ${dep_name} をビルドします"
-              (cd "${target_abs_path}" && pnpm run build)
+              (cd "${target_abs_path}" && npm run build)
               echo
             fi
           done
@@ -104,10 +104,10 @@ jobs:
           fi
         working-directory: ${{ matrix.package-directory }}
 
-      - name: "テスト"
-        run: mise run test
+      - name: "ビルド"
+        run: npm run build
         working-directory: ${{ matrix.package-directory }}
 
-      - name: "ビルド"
-        run: pnpm run build
+      - name: "テスト"
+        run: mise run test
         working-directory: ${{ matrix.package-directory }}

@@ -14,8 +14,6 @@ defaults:
 
 jobs:
   publish:
-    env:
-      _NPM_VERSION: "11.13.0"
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
