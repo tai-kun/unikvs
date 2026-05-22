@@ -1,8 +1,11 @@
 import type { Context, ITransformer } from "@unikvs/core";
-import { chunks } from "@unikvs/utils";
+import { chunks, bytesToHex } from "@unikvs/utils";
 
-import bytesToHex from "./_bytes-to-hex.js";
-import { ChecksumMismatchError } from "./errors.js";
+import {
+  ChecksumMismatchError,
+  ChecksumRequiredError,
+  ChecksumInvalidContextKeyError,
+} from "./errors.js";
 
 // データのサイズ単位を定義する定数群です。
 const B = 1;
@@ -20,7 +23,7 @@ const MAX_CHUNK_SIZE = 4 * GB;
 /**
  * ハッシュ値を逐次計算するオブジェクトのインターフェースです。
  */
-interface IHasher {
+export interface IHasher {
   /**
    * チャンクデータを使ってハッシュ値計算の内需状態を更新します。
    *
@@ -39,7 +42,7 @@ interface IHasher {
 /**
  * ハッシュ値を計算する関数のインターフェースです。
  */
-interface IHash {
+export interface IHash {
   /**
    * ハッシュ値を計算します。
    *
@@ -57,6 +60,18 @@ interface IHash {
 }
 
 /**
+ * {@link Checksum} のオプションです。
+ */
+export type ChecksumOptions = {
+  /**
+   * ハッシュ値の検証を必須にするかどうかです。
+   *
+   * @default false
+   */
+  readonly required?: boolean | undefined;
+};
+
+/**
  * SHA-256 アルゴリズムを使用してデータの整合性を検証するトランスフォーマーです。
  *
  * コンテキストに含まれる期待値と、実際のデータのハッシュ値を比較します。
@@ -70,16 +85,26 @@ export default abstract class Checksum implements ITransformer {
   public readonly name: string;
 
   /**
+   * ハッシュ値の検証を必須にするかどうかです。
+   */
+  public readonly required: boolean;
+
+  /**
    * ハッシュ値を計算する関数です。
    */
   private readonly hash: IHash;
 
   /**
    * Checksum の新しいインスタンスを初期化します。
+   *
+   * @param name トランスフォーマーの名前です。デバッグメッセージなどに使用されます。
+   * @param hash ハッシュ値を計算する関数です。
+   * @param options オプションです。
    */
-  public constructor(name: string, hash: IHash) {
+  public constructor(name: string, hash: IHash, options: ChecksumOptions = {}) {
     this.name = name;
     this.hash = hash;
+    this.required = Boolean(options.required);
   }
 
   public get isOpen(): boolean {
@@ -107,7 +132,7 @@ export default abstract class Checksum implements ITransformer {
   public getEncodable(
     args: Pick<ITransformer.GetEncodableArgs, "context">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    return this.#createChecksumStream(args);
+    return this.#checksumStream(args);
   }
 
   // デコード用の TransformStream を生成します。
@@ -115,7 +140,7 @@ export default abstract class Checksum implements ITransformer {
   public getDecodable(
     args: Pick<ITransformer.GetDecodableArgs, "context">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    return this.#createChecksumStream(args);
+    return this.#checksumStream(args);
   }
 
   /**
@@ -123,11 +148,14 @@ export default abstract class Checksum implements ITransformer {
    *
    * @param args データとコンテキストを含むオブジェクトです。
    * @returns 入力されたデータをそのまま返します。
-   * @throws {ChecksumMismatchError} コンテキストの期待値とハッシュ値が一致しない場合に投げます。
    */
   #checksum(args: { data: Uint8Array<ArrayBuffer>; context: Context }): Uint8Array<ArrayBuffer> {
     const { data, context } = args;
     const { CHECKSUM_CONTEXT_KEY } = this.constructor as typeof Checksum;
+    if (typeof CHECKSUM_CONTEXT_KEY !== "string") {
+      throw new ChecksumInvalidContextKeyError({ actual: CHECKSUM_CONTEXT_KEY });
+    }
+
     const checksum = context[CHECKSUM_CONTEXT_KEY];
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
@@ -135,6 +163,8 @@ export default abstract class Checksum implements ITransformer {
       if (checksum !== hash) {
         throw new ChecksumMismatchError({ actual: hash, expected: checksum });
       }
+    } else if (this.required) {
+      throw new ChecksumRequiredError();
     }
 
     // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
@@ -146,20 +176,28 @@ export default abstract class Checksum implements ITransformer {
    *
    * @param args コンテキストを含むオブジェクトです。
    * @returns 変換処理を定義した TransformStream オブジェクトです。
-   * @throws {ChecksumMismatchError} ストリーム終了時のハッシュ値が期待値と異なる場合に投げます。
    */
-  #createChecksumStream(args: {
+  #checksumStream(args: {
     context: Context;
   }): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     const { context } = args;
     const { CHECKSUM_CONTEXT_KEY } = this.constructor as typeof Checksum;
+    if (typeof CHECKSUM_CONTEXT_KEY !== "string") {
+      throw new ChecksumInvalidContextKeyError({ actual: CHECKSUM_CONTEXT_KEY });
+    }
+
     const checksum = context[CHECKSUM_CONTEXT_KEY];
     if (typeof checksum !== "string") {
+      if (this.required) {
+        throw new ChecksumRequiredError();
+      }
+
       // チェックサムが指定されていない場合は、何も処理をしない透過ストリームを返します。
       return new TransformStream();
     }
 
     const hasher = this.hash.create();
+
     return new TransformStream({
       /**
        * ストリームの各チャンクが到達した際の処理です。

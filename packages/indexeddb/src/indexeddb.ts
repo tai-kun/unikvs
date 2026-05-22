@@ -89,6 +89,7 @@ export default class Indexeddb implements IStorage {
 
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { key } = args;
+
     await this.db!.delete(this.storeName, key);
   }
 

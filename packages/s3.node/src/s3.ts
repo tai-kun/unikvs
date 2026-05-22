@@ -1,4 +1,6 @@
 import {
+  type S3ClientConfig,
+  type ListObjectsV2CommandOutput,
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
@@ -6,8 +8,6 @@ import {
   DeleteObjectCommand,
   ListObjectsV2Command,
   DeleteObjectsCommand,
-  type ListObjectsV2CommandOutput,
-  type S3ClientConfig,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import type { IStorage } from "@unikvs/core";
@@ -64,51 +64,41 @@ export default class S3 implements IStorage {
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
   ): Promise<void> {
-    const { key, data, signal } = args;
+    const { key, data, signal: abortSignal } = args;
 
-    await this.client!.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: data,
-      }),
-      { abortSignal: signal },
-    );
+    const command = new PutObjectCommand({
+      Key: key,
+      Body: data,
+      Bucket: this.bucket,
+    });
+    await this.client!.send(command, { abortSignal });
   }
 
   public async read(
     args: Pick<IStorage.ReadArgs, "key" | "signal">,
   ): Promise<Uint8Array<ArrayBuffer>> {
-    const { key, signal } = args;
+    const { key, signal: abortSignal } = args;
 
-    const response = await this.client!.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }),
-      { abortSignal: signal },
-    );
-
-    if (!response.Body) {
-      throw new Error(`[S3 Storage] Body is empty for key: ${key}`);
-    }
-
-    const byteArray = await response.Body.transformToByteArray();
+    const command = new GetObjectCommand({
+      Key: key,
+      Bucket: this.bucket,
+    });
+    const response = await this.client!.send(command, { abortSignal });
+    const byteArray = await response.Body!.transformToByteArray();
 
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
   }
 
   public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
-    const { key, signal } = args;
+    const { key, signal: abortSignal } = args;
 
     try {
-      await this.client!.send(
-        new HeadObjectCommand({
-          Bucket: this.bucket,
-          Key: key,
-        }),
-        { abortSignal: signal },
-      );
+      const command = new HeadObjectCommand({
+        Key: key,
+        Bucket: this.bucket,
+      });
+      await this.client!.send(command, { abortSignal });
+
       return true;
     } catch (ex: any) {
       // S3 の HeadObject はオブジェクトが存在しない場合に 404 NotFound エラーを投げます。
@@ -121,33 +111,30 @@ export default class S3 implements IStorage {
   }
 
   public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
-    const { key, signal } = args;
+    const { key, signal: abortSignal } = args;
 
-    await this.client!.send(
-      new DeleteObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }),
-      { abortSignal: signal },
-    );
+    const command = new DeleteObjectCommand({
+      Key: key,
+      Bucket: this.bucket,
+    });
+    await this.client!.send(command, { abortSignal });
   }
 
   public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
-    const { signal } = args;
+    const { signal: abortSignal } = args;
 
     let isTruncated = true;
     let continuationToken: string | undefined = undefined;
 
     // バケット内のオブジェクトをページネーションで取得し、全て削除します。
     while (isTruncated) {
-      const response: ListObjectsV2CommandOutput = await this.client!.send(
-        new ListObjectsV2Command({
-          Bucket: this.bucket,
-          ContinuationToken: continuationToken,
-        }),
-        { abortSignal: signal },
-      );
-
+      const command = new ListObjectsV2Command({
+        Bucket: this.bucket,
+        ContinuationToken: continuationToken,
+      });
+      const response: ListObjectsV2CommandOutput = await this.client!.send(command, {
+        abortSignal,
+      });
       const contents = response.Contents;
       if (!contents || contents.length === 0) {
         break;
@@ -155,19 +142,17 @@ export default class S3 implements IStorage {
 
       // 削除対象のオブジェクトリストを生成
       const objectsToDelete = contents
-        .filter((item) => item.Key !== undefined)
-        .map((item) => ({ Key: item.Key as string }));
-
+        .map((item) => item.Key)
+        .filter((key) => key !== undefined)
+        .map((key) => ({ Key: key }));
       if (objectsToDelete.length > 0) {
-        await this.client!.send(
-          new DeleteObjectsCommand({
-            Bucket: this.bucket,
-            Delete: {
-              Objects: objectsToDelete,
-            },
-          }),
-          { abortSignal: signal },
-        );
+        const command = new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: {
+            Objects: objectsToDelete,
+          },
+        });
+        await this.client!.send(command, { abortSignal });
       }
 
       isTruncated = response.IsTruncated ?? false;
@@ -179,6 +164,7 @@ export default class S3 implements IStorage {
     args: Pick<IStorage.GetWritableArgs, "context" | "key">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
     const { key, context } = args;
+    const partSize = context["@unikvs/s3.node:partSize"] ?? context["@unikvs/s3:partSize"];
 
     const { writable, readable } = new TransformStream<
       Uint8Array<ArrayBuffer>,
@@ -187,11 +173,11 @@ export default class S3 implements IStorage {
     const upload = new Upload({
       client: this.client!,
       params: {
-        Bucket: this.bucket,
         Key: key,
         Body: readable,
+        Bucket: this.bucket,
       },
-      partSize: context["unikvs:s3:part_size"] as number,
+      partSize: partSize as number,
     });
 
     // Upload 処理をバックグラウンドで開始します。
@@ -224,20 +210,15 @@ export default class S3 implements IStorage {
   public async getReadable(
     args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    const { key, signal } = args;
+    const { key, signal: abortSignal } = args;
 
-    const response = await this.client!.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-      }),
-      { abortSignal: signal },
-    );
+    const command = new GetObjectCommand({
+      Key: key,
+      Bucket: this.bucket,
+    });
+    const response = await this.client!.send(command, { abortSignal });
+    const readableStream = response.Body!.transformToWebStream();
 
-    if (!response.Body) {
-      throw new Error(`[S3 Storage] Body is empty for key: ${key}`);
-    }
-
-    return response.Body.transformToWebStream();
+    return readableStream;
   }
 }

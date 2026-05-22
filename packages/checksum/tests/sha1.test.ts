@@ -1,48 +1,33 @@
 import { test } from "vitest";
 
 import { ChecksumRequiredError } from "../src/errors.js";
-import ChecksumSha256 from "../src/sha256.js";
+import ChecksumSha1 from "../src/sha1.js";
 
 const TEST_DATA = new TextEncoder().encode("test");
-const VALID_HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+const VALID_HASH = "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3";
 
 test("CHECKSUM_CONTEXT_KEY が定義されている", ({ expect }) => {
   // Assert
-  expect(ChecksumSha256.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:sha256");
+  expect(ChecksumSha1.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:sha1");
 });
 
 test("インスタンスを作成したとき、指定した名前が name プロパティに正しく設定される", ({
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256();
+  const checksum = new ChecksumSha1();
 
   // Assert
-  expect(checksum.name).toBe("ChecksumSha256");
+  expect(checksum.name).toBe("ChecksumSha1");
 });
 
 test("context に正確なハッシュ値が含まれるとき、encode 処理で例外が発生せずにデータが透過される", ({
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256();
+  const checksum = new ChecksumSha1();
   const data = TEST_DATA;
-  const context = { [ChecksumSha256.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
-
-  // Act
-  const result = checksum.encode({ context, data });
-
-  // Assert
-  expect(result).toStrictEqual(data);
-});
-
-test("context に正確なハッシュ値が含まれるとき、encode 処理で例外が発生せずにデータが透過される", ({
-  expect,
-}) => {
-  // Arrange
-  const checksum = new ChecksumSha256();
-  const data = TEST_DATA;
-  const context = { [ChecksumSha256.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
+  const context = { [ChecksumSha1.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
 
   // Act
   const result = checksum.encode({ context, data });
@@ -55,7 +40,7 @@ test("チェックサムを必須にして context にチェックサムキー�
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256({ required: true });
+  const checksum = new ChecksumSha1({ required: true });
   const data = TEST_DATA;
   const context = {};
 

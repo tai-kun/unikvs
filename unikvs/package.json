@@ -28,10 +28,11 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@tai-kun/valibot-extra-lab": "^0.0.4",
+    "@tai-kun/valibot-extra-lab": "^0.0.5",
     "@unikvs/core": "workspace:*",
+    "abort-signal-utils": "^0.0.2",
     "asyncmux": "^0.0.8",
-    "call-fn-once": "^0.0.4",
+    "call-fn-once": "^0.0.6",
     "try-capture-stack-trace": "^0.0.3"
   },
   "devDependencies": {

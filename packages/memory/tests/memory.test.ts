@@ -1,12 +1,30 @@
-import { describe, test } from "vitest";
+import { describe, test, beforeEach } from "vitest";
 
 import { KeyNotFoundError, InvalidChunkTypeError } from "../src/errors.js";
 import Memory from "../src/memory.js";
 
+describe("初期化と接続管理", () => {
+  let storage: Memory;
+
+  beforeEach(async () => {
+    storage = new Memory();
+  });
+
+  test("初期状態のとき、isOpen は true である", ({ expect }) => {
+    // Act & Assert
+    expect(storage.isOpen).toBe(true);
+  });
+});
+
 describe("基本操作（CRUD）", () => {
+  let storage: Memory;
+
+  beforeEach(async () => {
+    storage = new Memory();
+  });
+
   test("データを保存したとき、そのキーでデータを取得できる", async ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "k1";
     const data = "v1";
 
@@ -20,7 +38,6 @@ describe("基本操作（CRUD）", () => {
 
   test("データが存在するとき、exists が true を返す", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "k1";
     storage.write({ key, data: "v1" });
 
@@ -32,9 +49,6 @@ describe("基本操作（CRUD）", () => {
   });
 
   test("データが存在しないとき、exists が false を返す", ({ expect }) => {
-    // Arrange
-    const storage = new Memory();
-
     // Act
     const result = storage.exists({ key: "none" });
 
@@ -44,7 +58,6 @@ describe("基本操作（CRUD）", () => {
 
   test("データを削除したとき、そのデータが存在しなくなる", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "k1";
     storage.write({ key, data: "v1" });
 
@@ -57,7 +70,6 @@ describe("基本操作（CRUD）", () => {
 
   test("全データを消去したとき、すべてのキーが存在しなくなる", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     storage.write({ key: "k1", data: "v1" });
     storage.write({ key: "k2", data: "v2" });
 
@@ -71,7 +83,6 @@ describe("基本操作（CRUD）", () => {
 
   test("既存のキーに対してデータを書き込んだとき、値が更新される", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "k1";
     storage.write({ key, data: "v1" });
 
@@ -85,11 +96,17 @@ describe("基本操作（CRUD）", () => {
 });
 
 describe("ストリーム操作", () => {
+  let storage: Memory;
+
+  beforeEach(async () => {
+    storage = new Memory();
+  });
+
   test("WritableStream を使用して書き込んだとき、結合された Uint8Array として取得できる", async ({
     expect,
   }) => {
     // Arrange
-    const storage = new Memory();
+
     const key = "s1";
     const writable = storage.getWritable({ key });
     const writer = writable.getWriter();
@@ -108,7 +125,7 @@ describe("ストリーム操作", () => {
     expect,
   }) => {
     // Arrange
-    const storage = new Memory();
+
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
     storage.write({ key, data });
@@ -132,7 +149,7 @@ describe("ストリーム操作", () => {
 
   test("空のストリームを書き込んだとき、長さ 0 の Uint8Array が保存される", async ({ expect }) => {
     // Arrange
-    const storage = new Memory();
+
     const key = "s2";
     const writable = storage.getWritable({ key });
 
@@ -147,18 +164,18 @@ describe("ストリーム操作", () => {
 });
 
 describe("異常系・エラーハンドリング", () => {
-  test("未登録のキーを読み取ろうとしたとき、KeyNotFoundError が発生する", ({ expect }) => {
-    // Arrange
-    const storage = new Memory();
+  let storage: Memory;
 
+  beforeEach(async () => {
+    storage = new Memory();
+  });
+
+  test("未登録のキーを読み取ろうとしたとき、KeyNotFoundError が発生する", ({ expect }) => {
     // Act & Assert
     expect(() => storage.read({ key: "unknown" })).toThrow(KeyNotFoundError);
   });
 
   test("未登録のキーを削除しようとしたとき、KeyNotFoundError が発生する", ({ expect }) => {
-    // Arrange
-    const storage = new Memory();
-
     // Act & Assert
     expect(() => storage.delete({ key: "unknown" })).toThrow(KeyNotFoundError);
   });
@@ -167,7 +184,6 @@ describe("異常系・エラーハンドリング", () => {
     expect,
   }) => {
     // Arrange
-    const storage = new Memory();
     const writable = storage.getWritable({ key: "s1" });
     const writer = writable.getWriter();
 
@@ -180,7 +196,6 @@ describe("異常系・エラーハンドリング", () => {
     expect,
   }) => {
     // Arrange
-    const storage = new Memory();
     const key = "k1";
     storage.write({ key, data: { a: 1 } }); // オブジェクトを保存
 
@@ -194,9 +209,14 @@ describe("異常系・エラーハンドリング", () => {
 });
 
 describe("境界値・特殊ケース", () => {
+  let storage: Memory;
+
+  beforeEach(async () => {
+    storage = new Memory();
+  });
+
   test("空文字のキーを使用しても、正常に保存と取得ができる", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "";
     const data = "empty key data";
 
@@ -210,7 +230,6 @@ describe("境界値・特殊ケース", () => {
 
   test("特殊文字を含むキーを使用しても、正常に保存と取得ができる", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const key = "path/to/key!@#";
     const data = "special key data";
 
@@ -222,9 +241,6 @@ describe("境界値・特殊ケース", () => {
   });
 
   test("null または undefined を保存したとき、そのままの値が取得できる", ({ expect }) => {
-    // Arrange
-    const storage = new Memory();
-
     // Act
     storage.write({ key: "null-key", data: null });
     storage.write({ key: "undefined-key", data: undefined });
@@ -236,7 +252,6 @@ describe("境界値・特殊ケース", () => {
 
   test("巨大なバイナリデータを保存したとき、整合性を保ったまま取得できる", ({ expect }) => {
     // Arrange
-    const storage = new Memory();
     const size = 10 * 1024 * 1024; // 10 MB
     const bigData = new Uint8Array(size).fill(1);
     const key = "large-data";

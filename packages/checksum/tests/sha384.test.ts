@@ -1,33 +1,34 @@
 import { test } from "vitest";
 
 import { ChecksumRequiredError } from "../src/errors.js";
-import ChecksumSha256 from "../src/sha256.js";
+import ChecksumSha384 from "../src/sha384.js";
 
 const TEST_DATA = new TextEncoder().encode("test");
-const VALID_HASH = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+const VALID_HASH =
+  "768412320f7b0aa5812fce428dc4706b3cae50e02a64caa16a782249bfe8efc4b7ef1ccb126255d196047dfedf17a0a9";
 
 test("CHECKSUM_CONTEXT_KEY が定義されている", ({ expect }) => {
   // Assert
-  expect(ChecksumSha256.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:sha256");
+  expect(ChecksumSha384.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:sha384");
 });
 
 test("インスタンスを作成したとき、指定した名前が name プロパティに正しく設定される", ({
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256();
+  const checksum = new ChecksumSha384();
 
   // Assert
-  expect(checksum.name).toBe("ChecksumSha256");
+  expect(checksum.name).toBe("ChecksumSha384");
 });
 
 test("context に正確なハッシュ値が含まれるとき、encode 処理で例外が発生せずにデータが透過される", ({
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256();
+  const checksum = new ChecksumSha384();
   const data = TEST_DATA;
-  const context = { [ChecksumSha256.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
+  const context = { [ChecksumSha384.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
 
   // Act
   const result = checksum.encode({ context, data });
@@ -40,9 +41,9 @@ test("context に正確なハッシュ値が含まれるとき、encode 処理�
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256();
+  const checksum = new ChecksumSha384();
   const data = TEST_DATA;
-  const context = { [ChecksumSha256.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
+  const context = { [ChecksumSha384.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
 
   // Act
   const result = checksum.encode({ context, data });
@@ -55,7 +56,7 @@ test("チェックサムを必須にして context にチェックサムキー�
   expect,
 }) => {
   // Arrange
-  const checksum = new ChecksumSha256({ required: true });
+  const checksum = new ChecksumSha384({ required: true });
   const data = TEST_DATA;
   const context = {};
 

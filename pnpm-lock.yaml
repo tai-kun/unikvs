@@ -38,6 +38,9 @@ importers:
       '@unikvs/utils':
         specifier: workspace:*
         version: link:../utils
+      inspect-lite:
+        specifier: ^0.0.2
+        version: 0.0.2
     devDependencies:
       '@tsconfig/node24':
         specifier: ^24.0.4
@@ -421,17 +424,20 @@ importers:
         specifier: ^2.0.0
         version: 2.0.5
       '@tai-kun/valibot-extra-lab':
-        specifier: ^0.0.4
-        version: 0.0.4(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))
+        specifier: ^0.0.5
+        version: 0.0.5(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))
       '@unikvs/core':
         specifier: workspace:*
         version: link:../packages/core
+      abort-signal-utils:
+        specifier: ^0.0.2
+        version: 0.0.2
       asyncmux:
         specifier: ^0.0.8
         version: 0.0.8(@logtape/logtape@2.0.5)(valibot@1.3.1(typescript@6.0.3))
       call-fn-once:
-        specifier: ^0.0.4
-        version: 0.0.4
+        specifier: ^0.0.6
+        version: 0.0.6
       try-capture-stack-trace:
         specifier: ^0.0.3
         version: 0.0.3
@@ -1280,8 +1286,8 @@ packages:
   '@tai-kun/is-promise-like@0.0.5':
     resolution: {integrity: sha512-kQ3bjOVFS1Ff7/tXQAG3Mwo7UiF2ymyHa34X0gPs8P1eua2Y2kJh8zmj04eflp7JqwHq+6QA6sTJp8VDoL9yAA==}
 
-  '@tai-kun/valibot-extra-lab@0.0.4':
-    resolution: {integrity: sha512-2mBuzbHWD3QTNU2r/CV0uDHW3t4cpKaePfBCoHxJkXx4DfWrb9epnVoPNbwru/nc3sDIv14RnSRNtrYzE6bUDQ==}
+  '@tai-kun/valibot-extra-lab@0.0.5':
+    resolution: {integrity: sha512-V6oow6ULIZB61r1CNwhXPYhA2BWohebRRMaA8GKyCZF/KHDEqkao5+dqORlwbiaRZMGpjPkHVyrmY8l9e1PlUw==}
     peerDependencies:
       fast-utf8: ^0.0.7
       valibot: ^1.0.0
@@ -1306,6 +1312,9 @@ packages:
 
   '@types/node@24.12.4':
     resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
+
+  '@types/object-inspect@1.13.0':
+    resolution: {integrity: sha512-lwGTVESDDV+XsQ1pH4UifpJ1f7OtXzQ6QBOX2Afq2bM/T3oOt8hF6exJMjjIjtEWeAN2YAo25J7HxWh97CCz9w==}
 
   '@types/type-name@1.0.32':
     resolution: {integrity: sha512-7o3lgglGQ81eskYCY1OtEtnlJBjVCleYEXo/vb+gWl2YAd+GkuTAu0Ft+VYmpUP2Vf/K6S2QXtCpKbQ/2lYWLQ==}
@@ -1350,6 +1359,9 @@ packages:
   '@vitest/utils@4.1.6':
     resolution: {integrity: sha512-FxIY+U81R3LGKCxaHHFRQ5+g6/iRgGLmeHWdp2Amj4ljQRrEIWHmZyDfDYBRZlpyqA7qKxtS9DD1dhk8RnRIVQ==}
 
+  abort-signal-utils@0.0.2:
+    resolution: {integrity: sha512-dkti+X9MEn6rSbQ9mDoO9Eco9JO2eqlrvTaiJ6T/yXT8PyfT62xnX3dtmjdyEfIxonmJtav+MqmSFd71HX4S0Q==}
+
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
     engines: {node: '>=12'}
@@ -1368,8 +1380,8 @@ packages:
   buffer@5.6.0:
     resolution: {integrity: sha512-/gDYp/UtU0eA1ys8bOs9J6a+E/KWIY+DZ+Q2WESNUA0jFRsJOc0SNUO6xJ5SGA1xueg3NL65W6s+NY5l9cunuw==}
 
-  call-fn-once@0.0.4:
-    resolution: {integrity: sha512-bKHx7bVCxbEE0nmGz6WaU4gaq14uk3lFldfC4txG1EnOKZNLf9vjtL4u6gZgNSt+6A2MdNvKm6lUjcnPjRCv9Q==}
+  call-fn-once@0.0.6:
+    resolution: {integrity: sha512-UEHgUCzg07DyCcf/qJafSQiOktoUiO97iJ22H7zaHpT8qrTNSoU9GHJ9MhDm+5f3LdJMBUR8LJdASa3ILMG2+Q==}
 
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
@@ -1442,6 +1454,9 @@ packages:
 
   inherits@2.0.4:
     resolution: {integrity: sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==}
+
+  inspect-lite@0.0.2:
+    resolution: {integrity: sha512-r4u2I3KZAi67c1yAUoUPG7AmKXgEi475Rk987Z4GXNtgYIzW/newSy9j+g9oPSyaX5Vxpj64obx/iBUsG9UDQw==}
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -1523,6 +1538,9 @@ packages:
   maypromise@0.0.2:
     resolution: {integrity: sha512-OdswB9XcyNn5x78RFOixfSVxhIoL3VLxsfPXl13DQnvDlEk/gvmk/TE8SD71V955Yl+TiQNVDBuPeIjp5gqXEg==}
 
+  maypromise@0.0.4:
+    resolution: {integrity: sha512-NhTqjMZsOZtLR+MHHMWxQxMapwRGYhqW82xBOXVL5529DnTHx4DFMBSezfquLkXaCHwm4sAxBYEglJ5vrdttfg==}
+
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -1541,6 +1559,10 @@ packages:
     resolution: {integrity: sha512-kaxgbkGkCOtoSrsUXShgcEiEfrRPqmOGk6Yeya+5hoNptblu9vuE8/PLABUSJz+IeNgKJBFxcC3UrBYmKsB8iA==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0, npm: '>=10.0.0'}
     hasBin: true
+
+  object-inspect@1.13.4:
+    resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
+    engines: {node: '>= 0.4'}
 
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
@@ -2802,9 +2824,10 @@ snapshots:
 
   '@tai-kun/is-promise-like@0.0.5': {}
 
-  '@tai-kun/valibot-extra-lab@0.0.4(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))':
+  '@tai-kun/valibot-extra-lab@0.0.5(fast-utf8@0.0.7)(valibot@1.3.1(typescript@6.0.3))':
     dependencies:
       fast-utf8: 0.0.7
+      inspect-lite: 0.0.2
       valibot: 1.3.1(typescript@6.0.3)
 
   '@tsconfig/node24@24.0.4': {}
@@ -2828,6 +2851,8 @@ snapshots:
   '@types/node@24.12.4':
     dependencies:
       undici-types: 7.16.0
+
+  '@types/object-inspect@1.13.0': {}
 
   '@types/type-name@1.0.32': {}
 
@@ -2902,6 +2927,10 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  abort-signal-utils@0.0.2:
+    dependencies:
+      try-capture-stack-trace: 0.0.3
+
   assertion-error@2.0.1: {}
 
   asyncmux@0.0.8(@logtape/logtape@2.0.5)(valibot@1.3.1(typescript@6.0.3)):
@@ -2922,9 +2951,10 @@ snapshots:
       base64-js: 1.5.1
       ieee754: 1.2.1
 
-  call-fn-once@0.0.4:
+  call-fn-once@0.0.6:
     dependencies:
-      '@tai-kun/is-promise-like': 0.0.5
+      abort-signal-utils: 0.0.2
+      maypromise: 0.0.4
 
   chai@6.2.2: {}
 
@@ -2978,6 +3008,11 @@ snapshots:
   ieee754@1.2.1: {}
 
   inherits@2.0.4: {}
+
+  inspect-lite@0.0.2:
+    dependencies:
+      '@types/object-inspect': 1.13.0
+      object-inspect: 1.13.4
 
   lightningcss-android-arm64@1.32.0:
     optional: true
@@ -3034,6 +3069,8 @@ snapshots:
 
   maypromise@0.0.2: {}
 
+  maypromise@0.0.4: {}
+
   mrmime@2.0.1: {}
 
   nanoid@3.3.11: {}
@@ -3041,6 +3078,8 @@ snapshots:
   npm-check-updates@20.0.2: {}
 
   npm-check-updates@22.2.0: {}
+
+  object-inspect@1.13.4: {}
 
   obug@2.1.1: {}
 

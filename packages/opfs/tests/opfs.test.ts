@@ -3,19 +3,15 @@ import { describe, test, beforeEach, afterEach } from "vitest";
 import Opfs from "../src/opfs.js";
 
 let storage: Opfs;
-const TEST_ROOT = ".unikvs_test";
+const TEST_ROOT = ".unikvs/test";
 
 beforeEach(async () => {
   // 実際の OPFS を使用してインスタンスを作成する。
   storage = new Opfs(TEST_ROOT);
 
   // 前のテストの影響を除去するために、初期化してクリアする。
-  try {
-    await storage.open();
-    await storage.clear();
-  } catch {
-    // 未初期化状態でのエラーは無視する。
-  }
+  await storage.open();
+  await storage.clear();
 });
 
 afterEach(async () => {

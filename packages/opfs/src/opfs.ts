@@ -1,7 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import { assertValidFilename, assertValidDirname } from "@unikvs/utils";
-
-const rootDir = new Set(["", ".", "/"]);
+import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
  * ブラウザーの OPFS (Origin Private File System) を永続化先として使用するストレージクラスです。
@@ -31,11 +29,22 @@ export default class Opfs implements IStorage {
   public constructor(root: string | FileSystemDirectoryHandle = ".unikvs") {
     this.name = "Opfs";
     if (typeof root === "string") {
-      if (!rootDir.has(root)) {
-        assertValidDirname(root);
+      if (root === "" || root === "." || root === "/") {
+        this.root = "";
+      } else {
+        this.root = root.replace(/\/+/g, "/");
+        if (this.root.startsWith("/")) {
+          this.root = this.root.slice(1);
+        }
+        if (this.root.endsWith("/")) {
+          this.root = this.root.slice(0, -1);
+        }
+
+        for (const dirname of this.root.split("/")) {
+          assertValidDirname(dirname);
+        }
       }
 
-      this.root = root;
       this.rootHandle = null;
     } else {
       this.root = root.name;
@@ -52,12 +61,12 @@ export default class Opfs implements IStorage {
       return;
     }
 
-    const opfsRoot = await navigator.storage.getDirectory();
-    if (rootDir.has(this.root)) {
-      this.rootHandle = opfsRoot;
-    } else {
-      // 指定された名前のディレクトリーを作成・取得します
-      this.rootHandle = await opfsRoot.getDirectoryHandle(this.root, { create: true });
+    this.rootHandle = await navigator.storage.getDirectory();
+    if (this.root !== "") {
+      // 指定された名前のディレクトリーを作成・取得します。
+      for (const dirname of this.root.split("/")) {
+        this.rootHandle = await this.rootHandle.getDirectoryHandle(dirname, { create: true });
+      }
     }
   }
 
@@ -116,16 +125,24 @@ export default class Opfs implements IStorage {
   }
 
   public async clear(): Promise<void> {
-    if (!this.root || this.root === "." || this.root === "/") {
+    if (this.root === "") {
       // ルートディレクトリー直下を使用している場合は、全てのエントリーを個別に削除します。
+
       for await (const name of this.rootHandle!.keys()) {
         await this.rootHandle!.removeEntry(name, { recursive: true });
       }
     } else {
       // サブディレクトリーを使用している場合は、ディレクトリーごと削除して再作成します。
-      const opfsRoot = await navigator.storage.getDirectory();
-      await opfsRoot.removeEntry(this.root, { recursive: true });
-      this.rootHandle = await opfsRoot.getDirectoryHandle(this.root, { create: true });
+
+      const dirnames = this.root.split("/");
+      let parentHandle = await navigator.storage.getDirectory();
+      for (const dirname of dirnames.slice(0, -1)) {
+        parentHandle = await parentHandle.getDirectoryHandle(dirname, { create: true });
+      }
+
+      const currentDirname = dirnames[dirnames.length - 1]!;
+      await parentHandle.removeEntry(currentDirname, { recursive: true });
+      this.rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
     }
   }
 

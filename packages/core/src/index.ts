@@ -1,7 +1,7 @@
 export type * from "./context.types.js";
 
 export type { ErrorMeta, ErrorOptions } from "./errors.js";
-export { ErrorBase, setErrorMessage } from "./errors.js";
+export { ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "./errors.js";
 
 export type * from "./storage.types.js";
 

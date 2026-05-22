@@ -2,7 +2,7 @@ import { type ErrorMeta, I18nErrorBase, setErrorMessage, type ErrorOptions } fro
 
 // -------------------------------------------------------------------------------------------------
 //
-// ユーティリテー
+// ユーティリティー
 //
 // -------------------------------------------------------------------------------------------------
 
@@ -18,3 +18,13 @@ export type { ErrorMeta, ErrorOptions };
 export class ErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends I18nErrorBase<TMeta> {}
+
+// -------------------------------------------------------------------------------------------------
+//
+// 境界エラー
+//
+// -------------------------------------------------------------------------------------------------
+
+export class InvalidUsageErrorBase<
+  TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
+> extends ErrorBase<TMeta> {}

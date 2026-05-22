@@ -9,8 +9,11 @@ import {
 export default class UniKvsTransformer {
   private readonly tf: ITransformer;
 
+  private managed: boolean;
+
   public constructor(tf: ITransformer) {
     this.tf = tf;
+    this.managed = false;
   }
 
   public async open(context: Context, signal: AbortSignal): Promise<void> {
@@ -19,6 +22,7 @@ export default class UniKvsTransformer {
     }
 
     if (!this.tf.isOpen) {
+      this.managed = true;
       await this.tf.open({ signal, context });
     }
   }
@@ -28,7 +32,7 @@ export default class UniKvsTransformer {
       return;
     }
 
-    if (this.tf.isOpen) {
+    if (this.tf.isOpen && this.managed) {
       await this.tf.close({ signal, context });
     }
   }

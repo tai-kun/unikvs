@@ -4,11 +4,19 @@ export { default as assertValidDirname } from "./assert-valid-dirname.js";
 export type * from "./assert-valid-filename.js";
 export { default as assertValidFilename } from "./assert-valid-filename.js";
 
+export type * from "./bytes-to-hex.js";
+export { default as bytesToHex } from "./bytes-to-hex.js";
+
 export type * from "./chunks.js";
 export { default as chunks } from "./chunks.js";
 
-export type { InvalidFilenameErrorArgs, InvalidFilenameErrorMeta } from "./errors.js";
-export { InvalidFilenameError } from "./errors.js";
+export type {
+  InvalidDirnameErrorArgs,
+  InvalidDirnameErrorMeta,
+  InvalidFilenameErrorArgs,
+  InvalidFilenameErrorMeta,
+} from "./errors.js";
+export { InvalidDirnameError, InvalidFilenameError } from "./errors.js";
 
 export type * from "./is-valid-dirname.js";
 export { default as isValidDirname } from "./is-valid-dirname.js";

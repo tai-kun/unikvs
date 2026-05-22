@@ -5,10 +5,12 @@ const FILENAME_RESERVED_REGEX = /*#__PURE__*/ filenameReservedRegex();
 
 const WINDOWS_RESERVED_NAME_REGEX = /*#__PURE__*/ windowsReservedNameRegex();
 
+const MAX_BYTES = 255;
+
 const utf8 = /*#__PURE__*/ new FastUtf8({
   strict: true,
   ignoreBOM: true,
-  allocateSize: 255,
+  allocateSize: MAX_BYTES,
 });
 
 /**
@@ -24,9 +26,9 @@ export default function isValidFilename(filename: string): boolean {
     return false;
   }
 
-  // 255 バイトを超えている場合は不当と判断します。
+  // バイト数が MAX_BYTES を超えている場合は不当と判断します。
   const encoded = utf8.encode(filename);
-  if (encoded.length > 255) {
+  if (encoded.length > MAX_BYTES) {
     return false;
   }
 

@@ -3,10 +3,10 @@ import { tryCaptureStackTrace } from "try-capture-stack-trace";
 import { type InferOutput, safeParse } from "valibot";
 
 import {
-  InvalidInputError,
-  InvalidOutputError,
   type InvalidInputErrorArgs,
   type InvalidOutputErrorArgs,
+  InvalidInputError,
+  InvalidOutputError,
 } from "./errors.js";
 
 export type { InferInput, InferOutput } from "valibot";

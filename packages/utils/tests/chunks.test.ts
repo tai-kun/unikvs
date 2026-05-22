@@ -14,9 +14,7 @@ describe("基本動作の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(2);
-    expect(result[0]).toStrictEqual(new Uint8Array([1, 2]));
-    expect(result[1]).toStrictEqual(new Uint8Array([3, 4]));
+    expect(result).toStrictEqual([new Uint8Array([1, 2]), new Uint8Array([3, 4])]);
   });
 
   test("データが最大チャンクサイズで割り切れないとき、最後のチャンクに残りのデータが含まれる", ({
@@ -30,10 +28,11 @@ describe("基本動作の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(3);
-    expect(result[0]).toStrictEqual(new Uint8Array([1, 2]));
-    expect(result[1]).toStrictEqual(new Uint8Array([3, 4]));
-    expect(result[2]).toStrictEqual(new Uint8Array([5]));
+    expect(result).toStrictEqual([
+      new Uint8Array([1, 2]),
+      new Uint8Array([3, 4]),
+      new Uint8Array([5]),
+    ]);
   });
 
   test("Int32Array のような複数バイト要素を扱うとき、指定したバイト長に基づいて正しく分割される", ({
@@ -50,9 +49,7 @@ describe("基本動作の検証", () => {
     data.BYTES_PER_ELEMENT;
 
     // Assert
-    expect(result).toHaveLength(2);
-    expect(result[0]).toStrictEqual(new Int32Array([1]));
-    expect(result[1]).toStrictEqual(new Int32Array([2]));
+    expect(result).toStrictEqual([new Int32Array([1]), new Int32Array([2])]);
   });
 
   test("最大チャンクサイズがデータ全体のサイズを上回るとき、一度のイテレーションで全データが生成される", ({
@@ -66,8 +63,7 @@ describe("基本動作の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(1);
-    expect(result[0]).toStrictEqual(new Uint8Array([1, 2]));
+    expect(result).toStrictEqual([new Uint8Array([1, 2])]);
   });
 });
 
@@ -81,7 +77,7 @@ describe("境界値および特殊な入力の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(0);
+    expect(result).toStrictEqual([]);
   });
 
   test("最大チャンクサイズが 1 バイトのとき、要素ごとに分割されたチャンクが生成される", ({
@@ -95,9 +91,7 @@ describe("境界値および特殊な入力の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(2);
-    expect(result[0]).toStrictEqual(new Uint8Array([1]));
-    expect(result[1]).toStrictEqual(new Uint8Array([2]));
+    expect(result).toStrictEqual([new Uint8Array([1]), new Uint8Array([2])]);
   });
 
   test("最大チャンクサイズがデータ全体のサイズと一致するとき、一度のイテレーションで全データが生成される", ({
@@ -111,8 +105,7 @@ describe("境界値および特殊な入力の検証", () => {
     const result = Array.from(chunks(data, maxChunkByteSize));
 
     // Assert
-    expect(result).toHaveLength(1);
-    expect(result[0]).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(result).toStrictEqual([new Uint8Array([1, 2, 3])]);
   });
 });
 
@@ -127,8 +120,8 @@ describe("メモリ効率と副作用の検証", () => {
     const firstChunk = iterator.next().value;
 
     // Assert
-    // subarray を使用しているため、buffer プロパティが同一であることを確認する。
-    expect(firstChunk?.buffer).toBe(data.buffer);
+    expect(firstChunk).toBeDefined();
+    expect(firstChunk!.buffer).toBe(data.buffer);
   });
 
   test("生成されたチャンクの値を変更したとき、その変更が元のデータにも反映される", ({ expect }) => {

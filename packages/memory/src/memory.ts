@@ -1,6 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 
-import { InvalidChunkTypeError, KeyNotFoundError } from "./errors.js";
+import { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
 
 /**
  * メモリーを永続化先として使用するストレージクラスです。

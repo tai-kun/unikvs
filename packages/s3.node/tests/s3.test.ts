@@ -285,9 +285,12 @@ describe("境界値・異常系テスト", () => {
     storage.open();
 
     // Act & Assert
-    // SDK v3 は AbortSignal に対応しており、通常は AbortError (名前は実装に依存) を投げる。
-    await expect(
-      storage.write({ key, data: new Uint8Array([1]), signal: controller.signal }),
-    ).rejects.toThrow();
+    await expect(async () => {
+      await storage.write({
+        key,
+        data: new Uint8Array([1]),
+        signal: controller.signal,
+      });
+    }).rejects.toThrow();
   });
 });

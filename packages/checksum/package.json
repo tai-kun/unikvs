@@ -23,9 +23,37 @@
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
     },
+    "./errors": {
+      "types": "./dist/src/errors.d.ts",
+      "default": "./dist/src/errors.js"
+    },
+    "./checksum": {
+      "types": "./dist/src/checksum.d.ts",
+      "default": "./dist/src/checksum.js"
+    },
+    "./md5": {
+      "types": "./dist/src/md5.d.ts",
+      "default": "./dist/src/md5.js"
+    },
+    "./sha1": {
+      "types": "./dist/src/sha1.d.ts",
+      "default": "./dist/src/sha1.js"
+    },
+    "./sha224": {
+      "types": "./dist/src/sha224.d.ts",
+      "default": "./dist/src/sha224.js"
+    },
     "./sha256": {
       "types": "./dist/src/sha256.d.ts",
       "default": "./dist/src/sha256.js"
+    },
+    "./sha384": {
+      "types": "./dist/src/sha384.d.ts",
+      "default": "./dist/src/sha384.js"
+    },
+    "./sha512": {
+      "types": "./dist/src/sha512.d.ts",
+      "default": "./dist/src/sha512.js"
     }
   },
   "scripts": {
@@ -33,7 +61,8 @@
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
-    "@unikvs/utils": "workspace:*"
+    "@unikvs/utils": "workspace:*",
+    "inspect-lite": "^0.0.2"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.4",

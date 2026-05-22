@@ -17,43 +17,60 @@ export default function toValueStream<T>(
   onAsyncDispose: () => Promise<void>,
 ): ValueStream<T> {
   const cacheMap = new Map();
-  async function handleDispose(): Promise<void> {
+  async function disposeValueStream(): Promise<void> {
     await callAsyncableFnOnce(cacheMap, "dispose", onAsyncDispose);
   }
 
-  // 既存のストリームに対して Symbol.asyncIterator を動的に割り当てて返します。
-  return Object.assign(readableStream.pipeThrough(new TransformStream({ flush: handleDispose })), {
-    dispose: handleDispose,
-    [Symbol.asyncDispose]: handleDispose,
-    async *[Symbol.asyncIterator](this: IReadableStream<T>) {
-      const r = this.getReader();
-      try {
-        // ストリームが終了するまでループを回し、チャンクを読み取ります。
-        while (true) {
-          const { done, value } = await r.read();
-          if (done) {
-            break;
+  return Object.assign(
+    // ReadableStream
+    readableStream.pipeThrough(
+      new TransformStream({
+        flush: disposeValueStream,
+      }),
+    ),
+
+    // AsyncDisposable
+    {
+      [Symbol.asyncDispose]: disposeValueStream,
+    },
+
+    // { dispose(): Promise<void> }
+    {
+      dispose: disposeValueStream,
+    },
+
+    // AsyncIterable<T, void, unknown>
+    {
+      async *[Symbol.asyncIterator](this: ReadableStream<T>) {
+        const r = this.getReader();
+        try {
+          // ストリームが終了するまでループを回し、チャンクを読み取ります。
+          while (true) {
+            const { done, value } = await r.read();
+            if (done) {
+              break;
+            }
+
+            yield value;
+          }
+        } catch (ex) {
+          // エラーが発生した場合は、リーダーのキャンセルを試みます。
+          try {
+            await r.cancel(ex);
+          } catch (ex) {
+            logger.error`Failed to cancel reader: ${ex}`;
           }
 
-          yield value;
+          throw ex;
+        } finally {
+          // 最後に必ずリーダーのロックを解放し、ストリームを再利用可能な状態にします。
+          try {
+            r.releaseLock();
+          } catch (ex) {
+            logger.error`Failed to release reader's lock: ${ex}`;
+          }
         }
-      } catch (ex) {
-        // エラーが発生した場合は、リーダーのキャンセルを試みます。
-        try {
-          await r.cancel(ex);
-        } catch (ex) {
-          logger.error`Failed to cancel reader: ${ex}`;
-        }
-
-        throw ex;
-      } finally {
-        // 最後に必ずリーダーのロックを解放し、ストリームを再利用可能な状態にします。
-        try {
-          r.releaseLock();
-        } catch (ex) {
-          logger.error`Failed to release reader's lock: ${ex}`;
-        }
-      }
+      },
     },
-  }) as unknown as ValueStream<T>;
+  );
 }

@@ -7,8 +7,8 @@
  */
 export interface ValueStream<T = any>
   extends
-    Omit<ReadableStream, keyof AsyncDisposable | keyof AsyncIteratorObject<T>>,
+    Omit<ReadableStream, keyof AsyncDisposable | keyof AsyncIterable<unknown>>,
     AsyncDisposable,
-    AsyncIteratorObject<T, void, void> {
+    AsyncIterable<T, void, unknown> {
   dispose(): Promise<void>;
 }

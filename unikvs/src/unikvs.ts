@@ -1,7 +1,7 @@
-import type { Context, IReadableStream, IStorage } from "@unikvs/core";
-import { asyncmux, Asyncmux, type AsyncmuxLock } from "asyncmux";
+import type { Context, IStorage, IReadableStream } from "@unikvs/core";
+import { combineSignals } from "abort-signal-utils";
+import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
-import combineSignals from "./_combine-signals.js";
 import logger from "./_logger.js";
 import mergeContext from "./_merge-context.js";
 import UniKvsStorage from "./_storage.js";
@@ -11,19 +11,19 @@ import * as v from "./_valibot.js";
 import type { ContextSource } from "./context.types.js";
 import {
   KeyNotFoundError,
+  UniKvsIsOpenError,
   PluginOperationAggregateError,
   UniKvsIsNotOpenError,
-  UniKvsIsOpenError,
 } from "./errors.js";
 import UniKvsConfig, {
-  type $InferPlainValueData,
-  type $InferStreamValueChunkData,
-  type IUniKvsConfigBuilder,
-  type KeyofKeyValueMapping,
-  type KeyValueMapping,
+  type Value,
   type PlainValue,
   type StreamValue,
-  type Value,
+  type KeyValueMapping,
+  type $InferPlainValueData,
+  type IUniKvsConfigBuilder,
+  type KeyofKeyValueMapping,
+  type $InferStreamValueChunkData,
 } from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
@@ -344,13 +344,13 @@ export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
 /**
  * ストリームの読み取りロックを自動解放するための FinalizationRegistry です。
  */
-const ioLockRegistry: FinalizationRegistry<AsyncmuxLock> | null =
+const ioLockRegistry =
   typeof FinalizationRegistry !== "function"
     ? null
-    : new FinalizationRegistry((lock) => {
-        try {
+    : new FinalizationRegistry<AsyncmuxLock>((lock) => {
+        if (!lock.released) {
           lock.release();
-        } catch {}
+        }
       });
 
 /**

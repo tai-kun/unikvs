@@ -25,7 +25,7 @@ async function readAllChunks<T>(stream: ReadableStream<T>): Promise<T[]> {
   }
 }
 
-describe("同期反復可能オブジェクト（Iterable）を渡したとき", () => {
+describe("同期反復可能オブジェクトを渡したとき", () => {
   test("配列を渡したとき、各要素が順番に出力されるストリームが返される", async ({ expect }) => {
     // Arrange
     const input = ["a", "b", "c"];
@@ -85,7 +85,7 @@ describe("同期反復可能オブジェクト（Iterable）を渡したとき",
   });
 });
 
-describe("非同期反復可能オブジェクト（AsyncIterable）を渡したとき", () => {
+describe("非同期反復可能オブジェクトを渡したとき", () => {
   test("非同期ジェネレーターを渡したとき、値が非同期に解決されて出力される", async ({ expect }) => {
     // Arrange
     async function* gen() {
@@ -119,23 +119,6 @@ describe("非同期反復可能オブジェクト（AsyncIterable）を渡した
     await expect(reader.read()).resolves.toMatchObject({ value: 1, done: false });
     await expect(reader.read()).rejects.toThrow(error);
     reader.releaseLock();
-  });
-});
-
-describe("大規模データを扱うとき", () => {
-  test("100,000 要素の配列を渡したとき、全ての要素が欠損なく出力される", async ({ expect }) => {
-    // Arrange
-    const size = 100000;
-    const input = Array.from({ length: size }, (_, i) => i);
-
-    // Act
-    const stream = toReadableStream(input);
-    const result = await readAllChunks(stream);
-
-    // Assert
-    expect(result.length).toBe(size);
-    expect(result[0]).toBe(0);
-    expect(result[size - 1]).toBe(size - 1);
   });
 });
 

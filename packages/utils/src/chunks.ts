@@ -60,7 +60,7 @@ export default function* chunks<
   while (offset < totalElements) {
     const end = Math.min(offset + maxElementsPerChunk, totalElements);
 
-    // 元のデータをコピーせず、指定した範囲を参照する新しいビュー（subarray）を作成して yield します。
+    // 元のデータをコピーせず、指定した範囲を参照する新しいビューを作成して yield します。
     // メモリー効率を考慮し、データの再配置は行いません。
     yield data.subarray(offset, end);
 
