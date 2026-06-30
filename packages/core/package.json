@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/core",
   "version": "0.0.0",
-  "description": "",
+  "description": "プラグインを含む全パッケージで共有して使用されるコアパッケージです。",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",

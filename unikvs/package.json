@@ -1,7 +1,7 @@
 {
   "name": "unikvs",
   "version": "0.0.0",
-  "description": "",
+  "description": "unikvs は TypeScript で実装されたモジュラーでポータブルな KVS クライアントです。",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",

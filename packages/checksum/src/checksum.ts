@@ -7,10 +7,13 @@ import {
   ChecksumInvalidContextKeyError,
 } from "./errors.js";
 
-// データのサイズ単位を定義する定数群です。
+/** データのサイズ単位を定義する定数です。 */
 const B = 1;
+/** キロバイト（1000 バイト）を表す定数です。 */
 const KB = 1000 * B;
+/** メガバイト（1000 KB）を表す定数です。 */
 const MB = 1000 * KB;
+/** ギガバイト（1000 MB）を表す定数です。 */
 const GB = 1000 * MB;
 
 /**
@@ -46,7 +49,7 @@ export interface IHash {
   /**
    * ハッシュ値を計算します。
    *
-   * @param ハッシュ値を計算するデータです。
+   * @param data ハッシュ値を計算するデータです。
    * @returns ハッシュ値を表す Uint8Array です。
    */
   (data: Uint8Array<ArrayBuffer>): Uint8Array;
@@ -78,10 +81,13 @@ export type ChecksumOptions = {
  */
 export default abstract class Checksum implements ITransformer {
   /**
-   * 期待するチェックサムを保持するコンテクストのキーです。
+   * 期待するチェックサムを保持するコンテクストキーです。サブクラスで上書きして使用します。
    */
   public static readonly CHECKSUM_CONTEXT_KEY: string;
 
+  /**
+   * トランスフォーマーの名前です。
+   */
   public readonly name: string;
 
   /**
@@ -107,36 +113,57 @@ export default abstract class Checksum implements ITransformer {
     this.required = Boolean(options.required);
   }
 
+  /**
+   * トランスフォーマーが開かれているかどうかを示します。
+   *
+   * Checksum トランスフォーマーは常に開かれていると見なされます。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
-  // エンコード処理（ハッシュ検証）を実行します。
-  // 検証後のバイナリーデータ（入力データと同一）を返します。
+  /**
+   * エンコード処理（ハッシュ検証）を実行します。
+   *
+   * @param args データとコンテキストを含むオブジェクトです。
+   * @returns 検証後のバイナリーデータ（入力データと同一）です。
+   */
   public encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
   ): Uint8Array<ArrayBuffer> {
     return this.#checksum(args);
   }
 
-  // デコード処理（ハッシュ検証）を実行します。
-  // 検証後のバイナリーデータ（入力データと同一）を返します。
+  /**
+   * デコード処理（ハッシュ検証）を実行します。
+   *
+   * @param args データとコンテキストを含むオブジェクトです。
+   * @returns 検証後のバイナリーデータ（入力データと同一）です。
+   */
   public decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
   ): Uint8Array<ArrayBuffer> {
     return this.#checksum(args);
   }
 
-  // エンコード用の TransformStream を生成します。
-  // 入力データを透過させながらハッシュを計算する TransformStream を返します。
+  /**
+   * エンコード用の TransformStream を生成します。
+   *
+   * @param args コンテキストを含むオブジェクトです。
+   * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
+   */
   public getEncodable(
     args: Pick<ITransformer.GetEncodableArgs, "context">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     return this.#checksumStream(args);
   }
 
-  // デコード用の TransformStream を生成します。
-  // 入力データを透過させながらハッシュを計算する TransformStream を返します。
+  /**
+   * デコード用の TransformStream を生成します。
+   *
+   * @param args コンテキストを含むオブジェクトです。
+   * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
+   */
   public getDecodable(
     args: Pick<ITransformer.GetDecodableArgs, "context">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {

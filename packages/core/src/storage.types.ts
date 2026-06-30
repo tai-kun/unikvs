@@ -5,6 +5,23 @@ import type { ErrorBase } from "./errors.js";
 
 /**
  * ストレージに関連する引数の型定義を格納する名前空間です。
+ *
+ * @example
+ * `Pick` を使用して必要なプロパティーのみを受け取る実装パターンです。
+ *
+ * ```ts
+ * import type { IStorage } from "@unikvs/core";
+ *
+ * class Memory implements IStorage {
+ *   public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+ *     this.map.set(args.key, args.data);
+ *   }
+ *
+ *   public read(args: Pick<IStorage.ReadArgs, "key">): any {
+ *     return this.map.get(args.key);
+ *   }
+ * }
+ * ```
  */
 export namespace IStorage {
   /**
@@ -14,6 +31,21 @@ export namespace IStorage {
 
   /**
    * 書き込み可能なストリームを取得する際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public getWritable(
+   *     args: Pick<IStorage.GetWritableArgs, "key">,
+   *   ): WritableStream<Uint8Array<ArrayBuffer>> {
+   *     return new WritableStream({
+   *       write: (chunk) => { chunks.push(chunk); },
+   *     });
+   *   }
+   * }
+   * ```
    */
   export type GetWritableArgs = {
     /**
@@ -34,6 +66,25 @@ export namespace IStorage {
 
   /**
    * 読み取り可能なストリームを取得する際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public getReadable(
+   *     args: Pick<IStorage.GetReadableArgs, "key">,
+   *   ): ReadableStream<Uint8Array<ArrayBuffer>> {
+   *     const data = this.map.get(args.key);
+   *     return new ReadableStream({
+   *       pull: (controller) => {
+   *         controller.enqueue(data);
+   *         controller.close();
+   *       },
+   *     });
+   *   }
+   * }
+   * ```
    */
   export type GetReadableArgs = {
     /**
@@ -54,6 +105,23 @@ export namespace IStorage {
 
   /**
    * ストレージをオープンする際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class Indexeddb implements IStorage {
+   *   private db: IDBPDatabase | null = null;
+   *
+   *   public get isOpen(): boolean {
+   *     return this.db !== null;
+   *   }
+   *
+   *   public async open(args: IStorage.OpenArgs): Promise<void> {
+   *     this.db = await openDB("my-db", 1);
+   *   }
+   * }
+   * ```
    */
   export type OpenArgs = {
     /**
@@ -69,6 +137,18 @@ export namespace IStorage {
 
   /**
    * ストレージをクローズする際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class Indexeddb implements IStorage {
+   *   public close(args: IStorage.CloseArgs): void {
+   *     this.db!.close();
+   *     this.db = null;
+   *   }
+   * }
+   * ```
    */
   export type CloseArgs = {
     /**
@@ -84,6 +164,22 @@ export namespace IStorage {
 
   /**
    * エラーハンドリングに必要な引数定義です。
+   *
+   * @example
+   * 複数ストレージへの書き込み中に他のストレージがエラーを投げた場合の後処理です。
+   *
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public onOtherWriteError?(
+   *     args: IStorage.OnOtherWriteErrorArgs,
+   *   ): void {
+   *     // 他のストレージが失敗したので、自身の書き込みをロールバックします。
+   *     this.map.delete(args.key);
+   *   }
+   * }
+   * ```
    */
   export type OnOtherWriteErrorArgs = {
     /**
@@ -118,6 +214,17 @@ export namespace IStorage {
    * データを書き込む際の引数定義です。
    *
    * @template TData 書き込むデータの型です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public write(args: Pick<IStorage.WriteArgs<Uint8Array>, "key" | "data">): void {
+   *     this.map.set(args.key, args.data);
+   *   }
+   * }
+   * ```
    */
   export type WriteArgs<TData = any> = {
     /**
@@ -143,6 +250,22 @@ export namespace IStorage {
 
   /**
    * データを読み取る際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public read(args: Pick<IStorage.ReadArgs, "key">): any {
+   *     const value = this.map.get(args.key);
+   *     if (value === undefined) {
+   *       throw new KeyNotFoundError({ key: args.key });
+   *     }
+   *
+   *     return value;
+   *   }
+   * }
+   * ```
    */
   export type ReadArgs = {
     /**
@@ -163,6 +286,17 @@ export namespace IStorage {
 
   /**
    * データの存在確認を行う際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
+   *     return this.map.has(args.key);
+   *   }
+   * }
+   * ```
    */
   export type ExistsArgs = {
     /**
@@ -183,6 +317,21 @@ export namespace IStorage {
 
   /**
    * データを削除する際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
+   *     if (!this.map.has(args.key)) {
+   *       throw new KeyNotFoundError({ key: args.key });
+   *     }
+   *
+   *     this.map.delete(args.key);
+   *   }
+   * }
+   * ```
    */
   export type DeleteArgs = {
     /**
@@ -203,6 +352,17 @@ export namespace IStorage {
 
   /**
    * ストレージ内の全データを消去する際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { IStorage } from "@unikvs/core";
+   *
+   * class MyStorage implements IStorage {
+   *   public clear(): void {
+   *     this.map.clear();
+   *   }
+   * }
+   * ```
    */
   export type ClearArgs = {
     /**
@@ -223,6 +383,23 @@ export namespace IStorage {
  * `WritableStream` を継承し、非同期的なデータの流し込みをサポートします。
  *
  * @template TData ストリームに書き込むデータの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IStorage, IWritableStream } from "@unikvs/core";
+ *
+ * class MyStorage implements IStorage {
+ *   public getWritable(
+ *     args: Pick<IStorage.GetWritableArgs, "key">,
+ *   ): IWritableStream<Uint8Array<ArrayBuffer>> {
+ *     const chunks: Uint8Array[] = [];
+ *     return new WritableStream({
+ *       write: (chunk) => { chunks.push(chunk); },
+ *       close: () => { this.map.set(args.key, chunks); },
+ *     });
+ *   }
+ * }
+ * ```
  */
 export interface IWritableStream<TData = any> extends WritableStream<TData> {}
 
@@ -230,6 +407,19 @@ export interface IWritableStream<TData = any> extends WritableStream<TData> {}
  * 書き込み可能なストリームを提供するストレージ機能のインターフェースです。
  *
  * @template TData ストリームで扱うデータの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IStorage, IWritableStreamStorage } from "@unikvs/core";
+ *
+ * class MyStorage implements IWritableStreamStorage<Uint8Array<ArrayBuffer>> {
+ *   getWritable(
+ *     args: Pick<IStorage.GetWritableArgs, "key">,
+ *   ): WritableStream<Uint8Array<ArrayBuffer>> {
+ *     // ...
+ *   }
+ * }
+ * ```
  */
 export interface IWritableStreamStorage<TData = any> {
   /**
@@ -247,6 +437,25 @@ export interface IWritableStreamStorage<TData = any> {
  * `ReadableStream` を継承し、蓄積されたデータのストリーミング読み出しをサポートします。
  *
  * @template TData ストリームから読み取られるデータの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IStorage, IReadableStream } from "@unikvs/core";
+ *
+ * class MyStorage implements IStorage {
+ *   public getReadable(
+ *     args: Pick<IStorage.GetReadableArgs, "key">,
+ *   ): IReadableStream<Uint8Array<ArrayBuffer>> {
+ *     const value = this.map.get(args.key);
+ *     return new ReadableStream({
+ *       pull: (controller) => {
+ *         controller.enqueue(value);
+ *         controller.close();
+ *       },
+ *     });
+ *   }
+ * }
+ * ```
  */
 export interface IReadableStream<TData = any> extends ReadableStream<TData> {}
 
@@ -254,6 +463,19 @@ export interface IReadableStream<TData = any> extends ReadableStream<TData> {}
  * 読み取り可能なストリームを提供するストレージ機能のインターフェースです。
  *
  * @template TData ストリームで扱うデータの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IStorage, IReadableStreamStorage } from "@unikvs/core";
+ *
+ * class MyStorage implements IReadableStreamStorage<Uint8Array<ArrayBuffer>> {
+ *   getReadable(
+ *     args: Pick<IStorage.GetReadableArgs, "key">,
+ *   ): ReadableStream<Uint8Array<ArrayBuffer>> {
+ *     // ...
+ *   }
+ * }
+ * ```
  */
 export interface IReadableStreamStorage<TData = any> {
   /**
@@ -274,6 +496,128 @@ export interface IReadableStreamStorage<TData = any> {
  * @template TReadDataOutput 読み取り時の出力データ型です。初期値は `TWriteDataInput` です。
  * @template TWriteChunkInput ストリーム書き込み時の入力チャンク型です。バイナリーデータの場合はその型を、それ以外は `any` をデフォルトとします。
  * @template TReadChunkOutput ストリーム読み取り時の出力チャンク型です。初期値は `TWriteChunkInput` です。
+ *
+ * @example
+ * メモリーストレージのシンプルな実装です。
+ *
+ * ```ts
+ * import type { IStorage } from "@unikvs/core";
+ *
+ * class Memory implements IStorage {
+ *   private readonly map = new Map<string, any>();
+ *
+ *   public readonly name = "Memory";
+ *   public readonly isOpen = true;
+ *
+ *   public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+ *     this.map.set(args.key, args.data);
+ *   }
+ *
+ *   public read(args: Pick<IStorage.ReadArgs, "key">): any {
+ *     return this.map.get(args.key);
+ *   }
+ *
+ *   public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
+ *     return this.map.has(args.key);
+ *   }
+ *
+ *   public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
+ *     this.map.delete(args.key);
+ *   }
+ *
+ *   public clear(): void {
+ *     this.map.clear();
+ *   }
+ * }
+ * ```
+ *
+ * @example
+ * インメモリーストレージでストリーム読み書きを提供します。
+ *
+ * ```ts
+ * import type { IStorage } from "@unikvs/core";
+ *
+ * class MemoryStream implements IStorage {
+ *   private readonly map = new Map<string, Uint8Array>();
+ *
+ *   public readonly name = "MemoryStream";
+ *   public readonly isOpen = true;
+ *
+ *   public getWritable(
+ *     args: Pick<IStorage.GetWritableArgs, "key">,
+ *   ): WritableStream<Uint8Array<ArrayBuffer>> {
+ *     const chunks: Uint8Array[] = [];
+ *     return new WritableStream({
+ *       write: (chunk) => { chunks.push(chunk); },
+ *       close: () => {
+ *         const merged = new Uint8Array(
+ *           chunks.reduce((sum, c) => sum + c.byteLength, 0),
+ *         );
+ *         let offset = 0;
+ *         for (const c of chunks) { merged.set(c, offset); offset += c.byteLength; }
+ *         this.map.set(args.key, merged);
+ *       },
+ *     });
+ *   }
+ *
+ *   public getReadable(
+ *     args: Pick<IStorage.GetReadableArgs, "key">,
+ *   ): ReadableStream<Uint8Array<ArrayBuffer>> {
+ *     const value = this.map.get(args.key);
+ *     return new ReadableStream({
+ *       pull: (controller) => {
+ *         controller.enqueue(value);
+ *         controller.close();
+ *       },
+ *     });
+ *   }
+ *
+ *   // write / read / exists / delete / clear の実装は省略
+ *   public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void { }
+ *   public read(args: Pick<IStorage.ReadArgs, "key">): any { return undefined; }
+ *   public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean { return false; }
+ *   public delete(args: Pick<IStorage.DeleteArgs, "key">): void { }
+ *   public clear(): void { }
+ * }
+ * ```
+ *
+ * @example
+ * 非同期ストレージ（IndexedDB）の実装パターンです。
+ *
+ * ```ts
+ * import type { IStorage } from "@unikvs/core";
+ *
+ * class Indexeddb implements IStorage {
+ *   private db: IDBPDatabase | null = null;
+ *
+ *   public readonly name = "Indexeddb";
+ *
+ *   public get isOpen(): boolean {
+ *     return this.db !== null;
+ *   }
+ *
+ *   public async open(args: IStorage.OpenArgs): Promise<void> {
+ *     this.db = await openDB("my-db", 1);
+ *   }
+ *
+ *   public close(args: IStorage.CloseArgs): void {
+ *     this.db!.close();
+ *     this.db = null;
+ *   }
+ *
+ *   public async write(
+ *     args: Pick<IStorage.WriteArgs<any>, "key" | "data">,
+ *   ): Promise<void> {
+ *     await this.db!.put("store", args.data, args.key);
+ *   }
+ *
+ *   public async read(
+ *     args: Pick<IStorage.ReadArgs, "key">,
+ *   ): Promise<any> {
+ *     return await this.db!.get("store", args.key);
+ *   }
+ * }
+ * ```
  */
 export interface IStorage<
   TWriteDataInput = any,

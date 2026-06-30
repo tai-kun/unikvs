@@ -48,11 +48,14 @@ export default function isValidFilename(filename: string): boolean {
   }
 
   // Unix 系や Windows で使用が禁止されている制御文字や特殊記号を確認します。
+  // 注: filename-reserved-regex は g フラグ付きの正規表現を返すため、lastIndex を明示的にリセットします。
+  FILENAME_RESERVED_REGEX.lastIndex = 0;
   if (FILENAME_RESERVED_REGEX.test(filename)) {
     return false;
   }
 
   // Windows においてシステム予約されている名称（LPT1 や COM1 など）に合致しないか確認します。
+  WINDOWS_RESERVED_NAME_REGEX.lastIndex = 0;
   if (WINDOWS_RESERVED_NAME_REGEX.test(filename)) {
     return false;
   }

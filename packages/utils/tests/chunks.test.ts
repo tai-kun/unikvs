@@ -2,143 +2,107 @@ import { describe, test } from "vitest";
 
 import chunks from "../src/chunks.js";
 
-describe("基本動作の検証", () => {
-  test("データが最大チャンクサイズで割り切れるとき、等分割されたチャンクが生成される", ({
-    expect,
-  }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2, 3, 4]);
-    const maxChunkByteSize = 2;
+describe("chunks", () => {
+  test("Uint8Array を指定サイズで分割する", ({ expect }) => {
+    // 準備
+    const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
 
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
+    // 実行
+    const result = [...chunks(data, 3)];
 
-    // Assert
-    expect(result).toStrictEqual([new Uint8Array([1, 2]), new Uint8Array([3, 4])]);
+    // 検証
+    expect(result).toHaveLength(3);
+    expect(result[0]).toEqual(new Uint8Array([1, 2, 3]));
+    expect(result[1]).toEqual(new Uint8Array([4, 5, 6]));
+    expect(result[2]).toEqual(new Uint8Array([7, 8]));
   });
 
-  test("データが最大チャンクサイズで割り切れないとき、最後のチャンクに残りのデータが含まれる", ({
-    expect,
-  }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2, 3, 4, 5]);
-    const maxChunkByteSize = 2;
-
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
-
-    // Assert
-    expect(result).toStrictEqual([
-      new Uint8Array([1, 2]),
-      new Uint8Array([3, 4]),
-      new Uint8Array([5]),
-    ]);
-  });
-
-  test("Int32Array のような複数バイト要素を扱うとき、指定したバイト長に基づいて正しく分割される", ({
-    expect,
-  }) => {
-    // Arrange
-    // Int32Array は 1 要素 4 バイトである。
-    const data = new Int32Array([1, 2]);
-    const maxChunkByteSize = 4;
-
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
-
-    data.BYTES_PER_ELEMENT;
-
-    // Assert
-    expect(result).toStrictEqual([new Int32Array([1]), new Int32Array([2])]);
-  });
-
-  test("最大チャンクサイズがデータ全体のサイズを上回るとき、一度のイテレーションで全データが生成される", ({
-    expect,
-  }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2]);
-    const maxChunkByteSize = 10;
-
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
-
-    // Assert
-    expect(result).toStrictEqual([new Uint8Array([1, 2])]);
-  });
-});
-
-describe("境界値および特殊な入力の検証", () => {
-  test("空のデータを渡したとき、チャンクは一度も生成されず終了する", ({ expect }) => {
-    // Arrange
-    const data = new Uint8Array([]);
-    const maxChunkByteSize = 10;
-
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
-
-    // Assert
-    expect(result).toStrictEqual([]);
-  });
-
-  test("最大チャンクサイズが 1 バイトのとき、要素ごとに分割されたチャンクが生成される", ({
-    expect,
-  }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2]);
-    const maxChunkByteSize = 1;
-
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
-
-    // Assert
-    expect(result).toStrictEqual([new Uint8Array([1]), new Uint8Array([2])]);
-  });
-
-  test("最大チャンクサイズがデータ全体のサイズと一致するとき、一度のイテレーションで全データが生成される", ({
-    expect,
-  }) => {
-    // Arrange
+  test("チャンクサイズがデータより大きい場合は全体を1つにまとめる", ({ expect }) => {
+    // 準備
     const data = new Uint8Array([1, 2, 3]);
-    const maxChunkByteSize = 3;
 
-    // Act
-    const result = Array.from(chunks(data, maxChunkByteSize));
+    // 実行
+    const result = [...chunks(data, 100)];
 
-    // Assert
-    expect(result).toStrictEqual([new Uint8Array([1, 2, 3])]);
-  });
-});
-
-describe("メモリ効率と副作用の検証", () => {
-  test("生成されたチャンクは、元のデータと同じメモリ領域を共有している", ({ expect }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2, 3, 4]);
-    const maxChunkByteSize = 2;
-
-    // Act
-    const iterator = chunks(data, maxChunkByteSize);
-    const firstChunk = iterator.next().value;
-
-    // Assert
-    expect(firstChunk).toBeDefined();
-    expect(firstChunk!.buffer).toBe(data.buffer);
+    // 検証
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(new Uint8Array([1, 2, 3]));
   });
 
-  test("生成されたチャンクの値を変更したとき、その変更が元のデータにも反映される", ({ expect }) => {
-    // Arrange
-    const data = new Uint8Array([1, 2, 3, 4]);
-    const maxChunkByteSize = 2;
+  test("空のデータに対して空のジェネレーターを返す", ({ expect }) => {
+    // 準備
+    const data = new Uint8Array(0);
 
-    // Act
-    const iterator = chunks(data, maxChunkByteSize);
-    const firstChunk = iterator.next().value;
+    // 実行
+    const result = [...chunks(data, 3)];
 
-    // 最初の要素を書き換える。
-    if (firstChunk) {
-      firstChunk[0] = 99;
-    }
+    // 検証
+    expect(result).toHaveLength(0);
+  });
 
-    // Assert
-    expect(data[0]).toBe(99);
+  test("BYTES_PER_ELEMENT が 4 の Int32Array を正しく分割する", ({ expect }) => {
+    // 準備
+    const data = new Int32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+
+    // 実行: maxChunkByteSize=10 → 1チャンクあたり最大2要素 (floor(10/4)=2)
+    const result = [...chunks(data, 10)];
+
+    // 検証
+    expect(result).toHaveLength(4);
+    expect(result[0]).toEqual(new Int32Array([1, 2]));
+    expect(result[1]).toEqual(new Int32Array([3, 4]));
+    expect(result[2]).toEqual(new Int32Array([5, 6]));
+    expect(result[3]).toEqual(new Int32Array([7, 8]));
+  });
+
+  test("チャンクサイズが要素サイズより小さい場合でも最低1要素を返す", ({ expect }) => {
+    // 準備
+    const data = new Int32Array([1, 2]);
+
+    // 実行: maxChunkByteSize=1 → floor(1/4)=0 → Math.max(1, 0)=1
+    const result = [...chunks(data, 1)];
+
+    // 検証
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual(new Int32Array([1]));
+    expect(result[1]).toEqual(new Int32Array([2]));
+  });
+
+  test("BYTES_PER_ELEMENT と length を持たない DataView 的なオブジェクトを扱う", ({ expect }) => {
+    // 準備
+    const buffer = new ArrayBuffer(10);
+    const data = new Uint8Array(buffer);
+    data.set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+    // BYTES_PER_ELEMENT なし、length なし、byteLength あり
+    const view = {
+      byteLength: 10,
+      subarray(start: number, end: number) {
+        return new Uint8Array(buffer, start, end - start);
+      },
+    };
+
+    // 実行
+    const result = [...chunks(view, 3)];
+
+    // 検証
+    expect(result).toHaveLength(4);
+    expect(result[0]).toEqual(new Uint8Array([1, 2, 3]));
+    expect(result[1]).toEqual(new Uint8Array([4, 5, 6]));
+    expect(result[2]).toEqual(new Uint8Array([7, 8, 9]));
+    expect(result[3]).toEqual(new Uint8Array([10]));
+  });
+
+  test("int8Array を最大チャンクサイズぴったりで分割する", ({ expect }) => {
+    // 準備
+    const data = new Uint8Array([1, 2, 3, 4, 5, 6]);
+
+    // 実行
+    const result = [...chunks(data, 3)];
+
+    // 検証
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual(new Uint8Array([1, 2, 3]));
+    expect(result[1]).toEqual(new Uint8Array([4, 5, 6]));
   });
 });

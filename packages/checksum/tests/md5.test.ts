@@ -7,44 +7,44 @@ const TEST_DATA = new TextEncoder().encode("test");
 const VALID_HASH = "098f6bcd4621d373cade4e832627b4f6";
 
 test("CHECKSUM_CONTEXT_KEY が定義されている", ({ expect }) => {
-  // Assert
+  // 検証
   expect(ChecksumMd5.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:md5");
 });
 
 test("インスタンスを作成したとき、指定した名前が name プロパティに正しく設定される", ({
   expect,
 }) => {
-  // Arrange
+  // 準備
   const checksum = new ChecksumMd5();
 
-  // Assert
+  // 検証
   expect(checksum.name).toBe("ChecksumMd5");
 });
 
 test("context に正確なハッシュ値が含まれるとき、encode 処理で例外が発生せずにデータが透過される", ({
   expect,
 }) => {
-  // Arrange
+  // 準備
   const checksum = new ChecksumMd5();
   const data = TEST_DATA;
   const context = { [ChecksumMd5.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
 
-  // Act
+  // 実行
   const result = checksum.encode({ context, data });
 
-  // Assert
+  // 検証
   expect(result).toStrictEqual(data);
 });
 
 test("チェックサムを必須にして context にチェックサムキーが存在しないときに encode すると ChecksumRequiredError を投げる", ({
   expect,
 }) => {
-  // Arrange
+  // 準備
   const checksum = new ChecksumMd5({ required: true });
   const data = TEST_DATA;
   const context = {};
 
-  // Act & Assert
+  // 実行と検証
   expect(() => {
     checksum.encode({ context, data });
   }).toThrow(ChecksumRequiredError);

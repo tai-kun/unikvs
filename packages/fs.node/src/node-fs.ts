@@ -10,27 +10,30 @@ type Connection = {
 /**
  * ローカルのファイルシステムを永続化先として使用するストレージクラスです。
  *
- * Node.js 環境での動作を前提としています。
+ * Node.js 環境での動作を前提としています。指定されたルートディレクトリー配下に
+ * キーをファイル名としてデータを保存します。
  */
 export default class NodeFs implements IStorage {
   /**
    * Node.js モジュールのインスタンスを保持します。
    *
-   * ストレージがオープンされるまで null です。
+   * ストレージがオープンされるまで null です。オープン後は
+   * `node:fs`、`node:path`、`node:stream` の各モジュールが利用可能になります。
    */
   private con: Connection | null;
 
   /**
-   * データを保存するルートディレクトリーのパスです。
+   * データを保存するルートディレクトリーの絶対パスです。
    */
   private root: string;
 
+  /** ストレージの名前です。デバッグメッセージなどに使用されます。 */
   public readonly name: string;
 
   /**
    * NodeFs インスタンスを初期化します。
    *
-   * @param root データを保存するルートディレクトリーのパスです。
+   * @param root データを保存するルートディレクトリーのパスです。相対パスの場合はカレントワーキングディレクトリーからの相対として解決されます。デフォルトは `".unikvs"` です。
    */
   public constructor(root: string = ".unikvs") {
     this.name = "NodeFs";
@@ -38,10 +41,12 @@ export default class NodeFs implements IStorage {
     this.con = null;
   }
 
+  /** ストレージが現在利用可能な状態であるかを示します。 */
   public get isOpen(): boolean {
     return !!this.con;
   }
 
+  /** ストレージをオープンし、読み書きが可能な状態に準備します。 */
   public async open(): Promise<void> {
     const [fs, path, stream] = await Promise.all([
       import("node:fs"),
@@ -53,6 +58,13 @@ export default class NodeFs implements IStorage {
     this.con = { fs, path, stream: stream as any };
   }
 
+  /**
+   * 指定されたデータを、対応するキーでストレージに保存します。
+   *
+   * @param args.key 保存先のキーです。
+   * @param args.data 保存するバイト配列です。
+   * @param args.signal 中断シグナルです。
+   */
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
   ): Promise<void> {
@@ -65,6 +77,13 @@ export default class NodeFs implements IStorage {
     await fs.promises.writeFile(file, data, { signal });
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから取得します。
+   *
+   * @param args.key 取得元のキーです。
+   * @param args.signal 中断シグナルです。
+   * @returns キーに対応するバイト配列です。
+   */
   public async read(
     args: Pick<IStorage.ReadArgs, "key" | "signal">,
   ): Promise<Uint8Array<ArrayBuffer>> {
@@ -79,6 +98,12 @@ export default class NodeFs implements IStorage {
     return data;
   }
 
+  /**
+   * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
+   *
+   * @param args.key 確認するキーです。
+   * @returns キーに対応するデータが存在する場合は true、それ以外は false です。
+   */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { fs, path } = this.con!;
     const { key } = args;
@@ -94,6 +119,11 @@ export default class NodeFs implements IStorage {
     }
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから削除します。
+   *
+   * @param args.key 削除するキーです。
+   */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { fs, path } = this.con!;
     const { key } = args;
@@ -104,6 +134,7 @@ export default class NodeFs implements IStorage {
     await fs.promises.unlink(file);
   }
 
+  /** ストレージ内のすべてのデータを完全に消去します。 */
   public async clear(): Promise<void> {
     const { fs } = this.con!;
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
@@ -111,6 +142,12 @@ export default class NodeFs implements IStorage {
     await fs.promises.mkdir(this.root, { recursive: true });
   }
 
+  /**
+   * 指定されたキーに対応する書き込み可能なストリームを取得します。
+   *
+   * @param args.key 書き込み先のキーです。
+   * @returns 書き込み可能なストリームです。
+   */
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "key">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
@@ -126,6 +163,13 @@ export default class NodeFs implements IStorage {
     return writableStream;
   }
 
+  /**
+   * 指定されたキーに対応する読み取り可能なストリームを取得します。
+   *
+   * @param args.key 読み取り元のキーです。
+   * @param args.signal 中断シグナルです。
+   * @returns 読み取り可能なストリームです。
+   */
   public getReadable(
     args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
   ): ReadableStream<Uint8Array<ArrayBuffer>> {

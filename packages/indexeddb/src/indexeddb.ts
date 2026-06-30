@@ -22,13 +22,16 @@ export default class Indexeddb implements IStorage {
    */
   private readonly storeName: string;
 
+  /**
+   * ストレージの名前です。デバッグメッセージなどに使用されます。
+   */
   public readonly name: string;
 
   /**
    * Indexeddb インスタンスを初期化します。
    *
-   * @param dbName データベース名です。
-   * @param storeName データを保存するオブジェクトストア名です。
+   * @param dbName データベース名です。デフォルトは `"unikvs_db"` です。
+   * @param storeName データを保存するオブジェクトストア名です。デフォルトは `"kvs_store"` です。
    */
   public constructor(dbName: string = "unikvs_db", storeName: string = "kvs_store") {
     this.name = "Indexeddb";
@@ -37,10 +40,16 @@ export default class Indexeddb implements IStorage {
     this.storeName = storeName;
   }
 
+  /** ストレージが現在利用可能な状態であるかを示します。 */
   public get isOpen(): boolean {
     return this.db !== null;
   }
 
+  /**
+   * ストレージをオープンし、IndexedDB データベースへの接続を確立します。
+   *
+   * 既にオープンされている場合は何も行いません。
+   */
   public async open(): Promise<void> {
     if (this.db) {
       return;
@@ -56,16 +65,33 @@ export default class Indexeddb implements IStorage {
     });
   }
 
+  /**
+   * ストレージを安全にクローズします。
+   *
+   * データベース接続を閉じ、内部状態を初期化します。
+   */
   public async close(): Promise<void> {
     this.db!.close();
     this.db = null;
   }
 
+  /**
+   * 指定されたデータを、対応するキーでストレージに保存します。
+   *
+   * @param args.key 保存先のキーです。
+   * @param args.data 保存するデータです。
+   */
   public async write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): Promise<void> {
     const { key, data } = args;
     await this.db!.put(this.storeName, data, key);
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから取得します。
+   *
+   * @param args.key 取得元のキーです。
+   * @returns キーに対応するデータです。存在しない場合は DOMException (NotFoundError) を投げます。
+   */
   public async read(args: Pick<IStorage.ReadArgs, "key">): Promise<any> {
     const { key } = args;
     // Opfs の挙動に合わせて、存在しない場合は DOMException (NotFoundError) を投げます
@@ -79,6 +105,12 @@ export default class Indexeddb implements IStorage {
     return await this.db!.get(this.storeName, key);
   }
 
+  /**
+   * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
+   *
+   * @param args.key 確認するキーです。
+   * @returns キーに対応するデータが存在する場合は true、それ以外は false です。
+   */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { key } = args;
 
@@ -87,21 +119,36 @@ export default class Indexeddb implements IStorage {
     return count > 0;
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから削除します。
+   *
+   * @param args.key 削除するキーです。
+   */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { key } = args;
 
     await this.db!.delete(this.storeName, key);
   }
 
+  /**
+   * ストレージ内のすべてのデータを完全に消去します。
+   */
   public async clear(): Promise<void> {
     await this.db!.clear(this.storeName);
   }
 
+  /**
+   * 指定されたキーに対応する書き込み可能なストリームを取得します。
+   *
+   * IndexedDB にはネイティブなストリームがないため、書き込まれたチャンクをメモリー上に保持し、ストリームがクローズされたときにまとめて保存します。
+   *
+   * @param args.key 書き込み先のキーです。
+   * @returns 書き込み可能なストリームです。
+   */
   public getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
     const { key } = args;
     const chunks: Uint8Array[] = [];
 
-    // IndexedDB にはネイティブなファイルストリームがないため、書き込まれたチャンクをメモリに保持し、クローズ時にまとめて put します。
     return new WritableStream({
       write: (chunk) => {
         chunks.push(chunk);
@@ -121,12 +168,19 @@ export default class Indexeddb implements IStorage {
     });
   }
 
+  /**
+   * 指定されたキーに対応する読み取り可能なストリームを取得します。
+   *
+   * IndexedDB にはネイティブなストリームがないため、データ全体をメモリーにロードしてから単一チャンクとしてストリームで送出します。
+   *
+   * @param args.key 読み取り元のキーです。
+   * @returns 読み取り可能なストリームです。
+   */
   public getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<Uint8Array> {
     const { key } = args;
 
     return new ReadableStream({
       pull: async (controller) => {
-        // データ全体をメモリにロードしてから ReadableStream に流し込みます。
         const data = await this.read({ key });
         controller.enqueue(data);
         controller.close();

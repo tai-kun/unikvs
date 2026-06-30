@@ -62,43 +62,43 @@ const test = vitest.extend<{
 
 describe("ライフサイクル管理", () => {
   test("インスタンス化した直後は、isOpen が false である", ({ expect, storage }) => {
-    // Arrange & Act は constructor で完了している。
+    // 準備 & Act は constructor で完了している。
 
-    // Assert
+    // 検証
     expect(storage.isOpen).toBe(false);
   });
 
   test("open を呼び出すと、isOpen が true になる", ({ expect, storage }) => {
-    // Act
+    // 実行
     storage.open();
 
-    // Assert
+    // 検証
     expect(storage.isOpen).toBe(true);
   });
 
   test("close を呼び出すと、isOpen が false に戻る", ({ expect, storage }) => {
-    // Arrange
+    // 準備
     storage.open();
 
-    // Act
+    // 実行
     storage.close();
 
-    // Assert
+    // 検証
     expect(storage.isOpen).toBe(false);
   });
 });
 
 describe("基本データ操作 (CRUD)", () => {
   test("データを書き込んだとき、正常に保存される", async ({ expect, storage, signal }) => {
-    // Arrange
+    // 準備
     const key = "test.txt";
     const data = new TextEncoder().encode("Hello S3");
     storage.open();
 
-    // Act
+    // 実行
     await storage.write({ key, data, signal });
 
-    // Assert
+    // 検証
     const exists = await storage.exists({ key, signal });
     expect(exists).toBe(true);
   });
@@ -108,28 +108,28 @@ describe("基本データ操作 (CRUD)", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "read-test.txt";
     const expectedData = new TextEncoder().encode("Read Content");
     storage.open();
     await storage.write({ key, data: expectedData, signal });
 
-    // Act
+    // 実行
     const result = await storage.read({ key, signal });
 
-    // Assert
+    // 検証
     expect(result).toStrictEqual(expectedData);
   });
 
   test("存在しないキーを確認したとき、false が返る", async ({ expect, storage, signal }) => {
-    // Arrange
+    // 準備
     const key = "non-existent.txt";
     storage.open();
 
-    // Act
+    // 実行
     const result = await storage.exists({ key, signal });
 
-    // Assert
+    // 検証
     expect(result).toBe(false);
   });
 
@@ -138,15 +138,15 @@ describe("基本データ操作 (CRUD)", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "delete-test.txt";
     storage.open();
     await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
 
-    // Act
+    // 実行
     await storage.delete({ key, signal });
 
-    // Assert
+    // 検証
     const exists = await storage.exists({ key, signal });
     expect(exists).toBe(false);
   });
@@ -158,18 +158,18 @@ describe("ストリーム操作", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "stream-write.dat";
     const data = new Uint8Array([10, 20, 30]);
     storage.open();
     const writable = storage.getWritable({ key, context: {} });
 
-    // Act
+    // 実行
     const writer = writable.getWriter();
     await writer.write(data);
     await writer.close();
 
-    // Assert
+    // 検証
     const result = await storage.read({ key, signal });
     expect(result).toStrictEqual(data);
   });
@@ -179,13 +179,13 @@ describe("ストリーム操作", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "stream-read.dat";
     const expectedData = new Uint8Array([100, 200]);
     storage.open();
     await storage.write({ key, data: expectedData, signal });
 
-    // Act
+    // 実行
     const readable = await storage.getReadable({ key, signal });
     const reader = readable.getReader();
     const chunks: number[] = [];
@@ -196,7 +196,7 @@ describe("ストリーム操作", () => {
       chunks.push(...value);
     }
 
-    // Assert
+    // 検証
     expect(new Uint8Array(chunks)).toStrictEqual(expectedData);
   });
 });
@@ -207,15 +207,15 @@ describe("バケット一括削除 (clear)", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     storage.open();
     await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal });
     await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal });
 
-    // Act
+    // 実行
     await storage.clear({ signal });
 
-    // Assert
+    // 検証
     const exists1 = await storage.exists({ key: "file1.txt", signal });
     const exists2 = await storage.exists({ key: "file2.txt", signal });
     expect(exists1).toBe(false);
@@ -227,11 +227,11 @@ describe("バケット一括削除 (clear)", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     storage.open();
     await storage.clear({ signal }); // 一旦空にする
 
-    // Act & Assert
+    // 実行と検証
     await expect(storage.clear({ signal })).resolves.not.toThrow();
   });
 });
@@ -242,15 +242,15 @@ describe("境界値・異常系テスト", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "empty.bin";
     const emptyData = new Uint8Array(0);
     storage.open();
 
-    // Act
+    // 実行
     await storage.write({ key, data: emptyData, signal });
 
-    // Assert
+    // 検証
     const result = await storage.read({ key, signal });
     expect(result.length).toBe(0);
     expect(result).toStrictEqual(emptyData);
@@ -261,16 +261,16 @@ describe("境界値・異常系テスト", () => {
     storage,
     signal,
   }) => {
-    // Arrange
+    // 準備
     const key = "folder/テスト #123.dat";
     const data = new TextEncoder().encode("Special Key Content");
     storage.open();
 
-    // Act
+    // 実行
     await storage.write({ key, data, signal });
     const result = await storage.read({ key, signal });
 
-    // Assert
+    // 検証
     expect(result).toStrictEqual(data);
   });
 
@@ -278,13 +278,13 @@ describe("境界値・異常系テスト", () => {
     expect,
     storage,
   }) => {
-    // Arrange
+    // 準備
     const controller = new AbortController();
     controller.abort();
     const key = "abort.txt";
     storage.open();
 
-    // Act & Assert
+    // 実行と検証
     await expect(async () => {
       await storage.write({
         key,

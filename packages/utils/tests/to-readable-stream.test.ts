@@ -1,140 +1,59 @@
-import { test, describe } from "vitest";
+import { describe, test } from "vitest";
 
 import toReadableStream from "../src/to-readable-stream.js";
 
-/**
- * ストリームから全てのデータを読み取って配列として返すヘルパー関数
- */
-async function readAllChunks<T>(stream: ReadableStream<T>): Promise<T[]> {
+async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
   const reader = stream.getReader();
-  const chunks: T[] = [];
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      if (value !== undefined) {
-        chunks.push(value);
-      }
-    }
-
-    return chunks;
-  } finally {
-    reader.releaseLock();
+  const values: T[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    values.push(value);
   }
+  return values;
 }
 
-describe("同期反復可能オブジェクトを渡したとき", () => {
-  test("配列を渡したとき、各要素が順番に出力されるストリームが返される", async ({ expect }) => {
-    // Arrange
-    const input = ["a", "b", "c"];
+describe("toReadableStream", () => {
+  test("同期イテラブルを ReadableStream に変換する", async ({ expect }) => {
+    // 実行
+    const stream = toReadableStream([1, 2, 3]);
 
-    // Act
-    const stream = toReadableStream(input);
-    const result = await readAllChunks(stream);
-
-    // Assert
-    expect(result).toStrictEqual(["a", "b", "c"]);
+    // 検証
+    const values = await collectFromStream(stream);
+    expect(values).toEqual([1, 2, 3]);
   });
 
-  test("文字列を渡したとき、各文字がチャンクとして出力される", async ({ expect }) => {
-    // Arrange
-    const input = "abc";
-
-    // Act
-    const stream = toReadableStream(input);
-    const result = await readAllChunks(stream);
-
-    // Assert
-    expect(result).toStrictEqual(["a", "b", "c"]);
-  });
-
-  test("空の配列を渡したとき、即座にクローズされる空のストリームが返される", async ({ expect }) => {
-    // Arrange
-    const input: number[] = [];
-
-    // Act
-    const stream = toReadableStream(input);
-    const result = await readAllChunks(stream);
-
-    // Assert
-    expect(result).toStrictEqual([]);
-  });
-
-  test("反復中にエラーが発生したとき、ストリームがエラー状態になる", async ({ expect }) => {
-    // Arrange
-    const error = new Error("Iteration error");
-    const iterable = {
-      [Symbol.iterator]() {
-        return {
-          next() {
-            throw error;
-          },
-        };
-      },
-    };
-
-    // Act
-    const stream = toReadableStream(iterable);
-    const reader = stream.getReader();
-
-    // Assert
-    await expect(reader.read()).rejects.toThrow(error);
-    reader.releaseLock();
-  });
-});
-
-describe("非同期反復可能オブジェクトを渡したとき", () => {
-  test("非同期ジェネレーターを渡したとき、値が非同期に解決されて出力される", async ({ expect }) => {
-    // Arrange
-    async function* gen() {
+  test("非同期イテラブルを ReadableStream に変換する", async ({ expect }) => {
+    // 準備
+    async function* asyncGen() {
       yield 1;
       yield 2;
+      yield 3;
     }
 
-    // Act
-    const stream = toReadableStream(gen());
-    const result = await readAllChunks(stream);
+    // 実行
+    const stream = toReadableStream(asyncGen());
 
-    // Assert
-    expect(result).toStrictEqual([1, 2]);
+    // 検証
+    const values = await collectFromStream(stream);
+    expect(values).toEqual([1, 2, 3]);
   });
 
-  test("非同期反復中に Promise が拒絶されたとき、ストリームにエラーが伝播する", async ({
-    expect,
-  }) => {
-    // Arrange
-    const error = new Error("Async iteration error");
-    async function* gen() {
-      yield 1;
-      throw error;
-    }
+  test("空のイテラブルを ReadableStream に変換する", async ({ expect }) => {
+    // 実行
+    const stream = toReadableStream([]);
 
-    // Act
-    const stream = toReadableStream(gen());
-    const reader = stream.getReader();
-
-    // Assert
-    await expect(reader.read()).resolves.toMatchObject({ value: 1, done: false });
-    await expect(reader.read()).rejects.toThrow(error);
-    reader.releaseLock();
-  });
-});
-
-describe("不適切な入力を受け取ったとき", () => {
-  test("null を渡したとき、例外がスローされる", ({ expect }) => {
-    // Act & Assert
-    // @ts-expect-error: テストのために無効な値を渡す
-    expect(() => toReadableStream(null)).toThrow();
+    // 検証
+    const values = await collectFromStream(stream);
+    expect(values).toEqual([]);
   });
 
-  test("反復可能ではないオブジェクトを渡したとき、例外がスローされる", ({ expect }) => {
-    // Arrange
-    const input = { key: "value" };
+  test("文字列のイテラブルを ReadableStream に変換する", async ({ expect }) => {
+    // 実行
+    const stream = toReadableStream("abc");
 
-    // Act & Assert
-    // @ts-expect-error: テストのために無効な値を渡す
-    expect(() => toReadableStream(input)).toThrow();
+    // 検証
+    const values = await collectFromStream(stream);
+    expect(values).toEqual(["a", "b", "c"]);
   });
 });

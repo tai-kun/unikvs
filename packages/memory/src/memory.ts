@@ -4,14 +4,23 @@ import { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
 
 /**
  * メモリーを永続化先として使用するストレージクラスです。
+ *
+ * アプリケーションの実行中のみデータを保持し、プロセス終了時に破棄されます。
+ * 全ての操作が同期で完了するため、非同期処理のオーバーヘッドがありません。
  */
 export default class Memory implements IStorage {
+  /**
+   * キーと値のペアを保持する内部マップです。
+   */
   private readonly map: Map<string, any>;
 
+  /** ストレージの名前です。デバッグやエラーメッセージなどに使用されます。 */
   public readonly name: string;
 
   /**
    * Memory インスタンスを初期化します。
+   *
+   * 内部のマップを初期化し、常にオープン状態として動作します。
    */
   public constructor() {
     this.name = "Memory";
@@ -62,6 +71,7 @@ export default class Memory implements IStorage {
     args: Pick<IStorage.GetWritableArgs, "key">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
     const { key } = args;
+    // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
       write: (chunk) => {
@@ -96,6 +106,7 @@ export default class Memory implements IStorage {
       throw new KeyNotFoundError({ key });
     }
 
+    // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
     const value = this.map.get(key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {

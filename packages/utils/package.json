@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/utils",
   "version": "0.0.0",
-  "description": "",
+  "description": "一部のプラグインなどで使用される可能性のある共有ユーティリティーです。",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",

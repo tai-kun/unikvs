@@ -4,10 +4,41 @@ import type { Context } from "./context.types.js";
 
 /**
  * トランスフォーマーに関連する引数の型定義を格納する名前空間です。
+ *
+ * @example
+ * `Pick` を使用して必要なプロパティーのみを受け取る実装パターンです。
+ *
+ * ```ts
+ * import type { ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements ITransformer {
+ *   public encode(
+ *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
+ *   ): Promise<Uint8Array<ArrayBuffer>> {
+ *     // ...
+ *   }
+ * }
+ * ```
  */
 export namespace ITransformer {
   /**
    * エンコード可能なストリームを取得する際の引数定義です。
+   *
+   * @example
+   * コンテキストからチェックサムを読み取る実装です。
+   *
+   * ```ts
+   * import type { ITransformer } from "@unikvs/core";
+   *
+   * class Checksum implements ITransformer {
+   *   public getEncodable(
+   *     args: Pick<ITransformer.GetEncodableArgs, "context">,
+   *   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+   *     const expected = args.context[CHECKSUM_CONTEXT_KEY];
+   *     // ...
+   *   }
+   * }
+   * ```
    */
   export type GetEncodableArgs = {
     /**
@@ -23,6 +54,20 @@ export namespace ITransformer {
 
   /**
    * デコード可能なストリームを取得する際の引数定義です。
+   *
+   * @example
+   * ```ts
+   * import type { ITransformer } from "@unikvs/core";
+   *
+   * class Checksum implements ITransformer {
+   *   public getDecodable(
+   *     args: Pick<ITransformer.GetDecodableArgs, "context">,
+   *   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+   *     const expected = args.context[CHECKSUM_CONTEXT_KEY];
+   *     // ...
+   *   }
+   * }
+   * ```
    */
   export type GetDecodableArgs = {
     /**
@@ -70,6 +115,23 @@ export namespace ITransformer {
    * データをエンコードする際の引数定義です。
    *
    * @template TData エンコード対象となるデータの型です。
+   *
+   * @example
+   * 圧縮トランスフォーマーのエンコード実装です。
+   *
+   * ```ts
+   * import type { ITransformer } from "@unikvs/core";
+   *
+   * class Compression implements ITransformer {
+   *   public async encode(
+   *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
+   *   ): Promise<Uint8Array<ArrayBuffer>> {
+   *     const stream = new CompressionStream("gzip");
+   *     const body = toReadableStream([args.data]).pipeThrough(stream);
+   *     return new Uint8Array(await new Response(body).arrayBuffer());
+   *   }
+   * }
+   * ```
    */
   export type EncodeArgs<TData = any> = {
     /**
@@ -92,6 +154,23 @@ export namespace ITransformer {
    * データをデコードする際の引数定義です。
    *
    * @template TData デコード対象となるデータの型です。
+   *
+   * @example
+   * 伸長トランスフォーマーのデコード実装です。
+   *
+   * ```ts
+   * import type { ITransformer } from "@unikvs/core";
+   *
+   * class Compression implements ITransformer {
+   *   public async decode(
+   *     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
+   *   ): Promise<Uint8Array<ArrayBuffer>> {
+   *     const stream = new DecompressionStream("gzip");
+   *     const body = toReadableStream([args.data]).pipeThrough(stream);
+   *     return new Uint8Array(await new Response(body).arrayBuffer());
+   *   }
+   * }
+   * ```
    */
   export type DecodeArgs<TData = any> = {
     /**
@@ -118,6 +197,17 @@ export namespace ITransformer {
  *
  * @template TChunkInput 入力されるチャンクの型です。
  * @template TChunkOutput 出力されるチャンクの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IEncodable, ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements ITransformer {
+ *   public getEncodable(): IEncodable<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+ *     return new CompressionStream("gzip");
+ *   }
+ * }
+ * ```
  */
 export interface IEncodable<TChunkInput = any, TChunkOutput = any> extends TransformStream<
   TChunkInput,
@@ -129,6 +219,17 @@ export interface IEncodable<TChunkInput = any, TChunkOutput = any> extends Trans
  *
  * @template TChunkInput 入力されるチャンクの型です。
  * @template TChunkOutput 出力されるチャンクの型です。
+ *
+ * @example
+ * ```ts
+ * import { type IEncodableStreamTransformer, type ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements IEncodableStreamTransformer {
+ *   public getEncodable(): TransformStream {
+ *     return new CompressionStream("gzip");
+ *   }
+ * }
+ * ```
  */
 export interface IEncodableStreamTransformer<TChunkInput = any, TChunkOutput = any> {
   /**
@@ -149,6 +250,17 @@ export interface IEncodableStreamTransformer<TChunkInput = any, TChunkOutput = a
  *
  * @template TChunkInput 入力されるチャンクの型です。
  * @template TChunkOutput 出力されるチャンクの型です。
+ *
+ * @example
+ * ```ts
+ * import type { IDecodable, ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements ITransformer {
+ *   public getDecodable(): IDecodable<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+ *     return new DecompressionStream("gzip");
+ *   }
+ * }
+ * ```
  */
 export interface IDecodable<TChunkInput = any, TChunkOutput = any> extends TransformStream<
   TChunkInput,
@@ -160,6 +272,17 @@ export interface IDecodable<TChunkInput = any, TChunkOutput = any> extends Trans
  *
  * @template TChunkInput 入力されるチャンクの型です。
  * @template TChunkOutput 出力されるチャンクの型です。
+ *
+ * @example
+ * ```ts
+ * import { type IDecodableStreamTransformer, type ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements IDecodableStreamTransformer {
+ *   public getDecodable(): TransformStream {
+ *     return new DecompressionStream("gzip");
+ *   }
+ * }
+ * ```
  */
 export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = any> {
   /**
@@ -185,6 +308,75 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
  * @template TDecodeChunkInput ストリームデコード時の入力チャンク型です。
  * @template TEncodeChunkOutput ストリームエンコード時の出力チャンク型です。
  * @template TDecodeChunkOutput ストリームデコード時の出力チャンク型です。
+ *
+ * @example
+ * 圧縮トランスフォーマーの実装です。
+ *
+ * ```ts
+ * import type { ITransformer } from "@unikvs/core";
+ *
+ * class Compression implements ITransformer {
+ *   public readonly name = "Compression";
+ *   public readonly isOpen = true;
+ *
+ *   public async encode(
+ *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
+ *   ): Promise<Uint8Array<ArrayBuffer>> {
+ *     const stream = new CompressionStream("gzip");
+ *     const body = toReadableStream([args.data]).pipeThrough(stream);
+ *     return new Uint8Array(await new Response(body).arrayBuffer());
+ *   }
+ *
+ *   public async decode(
+ *     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
+ *   ): Promise<Uint8Array<ArrayBuffer>> {
+ *     const stream = new DecompressionStream("gzip");
+ *     const body = toReadableStream([args.data]).pipeThrough(stream);
+ *     return new Uint8Array(await new Response(body).arrayBuffer());
+ *   }
+ *
+ *   public getEncodable(): TransformStream {
+ *     return new CompressionStream("gzip");
+ *   }
+ *
+ *   public getDecodable(): TransformStream {
+ *     return new DecompressionStream("gzip");
+ *   }
+ * }
+ * ```
+ *
+ * @example
+ * 透過的チェックサム検証トランスフォーマーの実装です。
+ *
+ * ```ts
+ * import type { Context, ITransformer } from "@unikvs/core";
+ * import { bytesToHex } from "@unikvs/utils";
+ *
+ * class ChecksumSha256 implements ITransformer {
+ *   public readonly name = "ChecksumSha256";
+ *   public readonly isOpen = true;
+ *
+ *   public encode(
+ *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+ *   ): Uint8Array<ArrayBuffer> {
+ *     const expected = args.context["@unikvs/checksum:sha256"];
+ *     if (typeof expected === "string") {
+ *       const actual = bytesToHex(sha256(args.data));
+ *       if (actual !== expected) {
+ *         throw new Error("Checksum mismatch");
+ *       }
+ *     }
+ *
+ *     return args.data;
+ *   }
+ *
+ *   public decode(
+ *     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+ *   ): Uint8Array<ArrayBuffer> {
+ *     return this.encode(args);
+ *   }
+ * }
+ * ```
  */
 export interface ITransformer<
   TEncodeDataInput = any,

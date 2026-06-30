@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/compression",
   "version": "0.0.0",
-  "description": "",
+  "description": "バイト配列を指定の形式で透過的に圧縮/展開するトランスフォーマープラグインです。",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",

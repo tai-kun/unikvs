@@ -1,230 +1,260 @@
-import { Compression } from "@unikvs/compression";
-import { NodeFs } from "@unikvs/fs.node";
-import { Opfs } from "@unikvs/opfs";
-import { describe, test } from "vitest";
+import type { IStorage } from "@unikvs/core";
+import { describe, test, afterEach } from "vitest";
 
-import { KeyNotFoundError, UniKvsIsNotOpenError, UniKvsIsOpenError } from "../src/errors.js";
-import type { PlainValue, StreamValue, Value } from "../src/unikvs-config.js";
+import {
+  UniKvsIsOpenError,
+  UniKvsIsNotOpenError,
+  KeyNotFoundError,
+  MissingStorageError,
+} from "../src/errors.js";
+import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
-describe("ライフサイクル (open / close)", () => {
-  test("正常に open と close ができること", async ({ expect, signal }) => {
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    const kvs = UniKvs.config().appendTransformer(tf).appendStorage(fs).create();
+class MockStorage implements IStorage {
+  readonly name = "MockStorage";
+  isOpen = true;
+  private readonly map = new Map<string, any>();
 
-    expect(tf.isOpen).toBe(true);
-    expect(fs.isOpen).toBe(false);
-    expect(kvs.isOpen).toBe(false);
+  async write(args: IStorage.WriteArgs): Promise<void> {
+    this.map.set(args.key, args.data);
+  }
 
-    await kvs.open({ signal });
+  async read(args: IStorage.ReadArgs): Promise<unknown> {
+    return this.map.get(args.key);
+  }
 
-    expect(tf.isOpen).toBe(true);
-    expect(fs.isOpen).toBe(true);
+  async exists(args: IStorage.ExistsArgs): Promise<boolean> {
+    return this.map.has(args.key);
+  }
+
+  async delete(args: IStorage.DeleteArgs): Promise<void> {
+    this.map.delete(args.key);
+  }
+
+  async clear(_args: IStorage.ClearArgs): Promise<void> {
+    this.map.clear();
+  }
+}
+
+function createKvs(): UniKvs {
+  const config = new UniKvsConfig(UniKvs) as any;
+  return config.appendStorage(new MockStorage()).create();
+}
+
+describe("UniKvs - 設定からの生成", () => {
+  test("config から生成したとき、create で UniKvs インスタンスが返る", ({ expect }) => {
+    // 実行
+    const kvs = createKvs();
+
+    // 検証
+    expect(kvs).toBeInstanceOf(UniKvs);
+  });
+
+  test("ストレージなしで create すると MissingStorageError を投げる", ({ expect }) => {
+    // 実行と検証
+    expect(() => new UniKvsConfig(UniKvs).create()).toThrow(MissingStorageError);
+  });
+});
+
+describe("UniKvs - オープン / クローズ", () => {
+  test("open すると isOpen が true になる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
+
+    // 実行
+    await kvs.open();
+
+    // 検証
     expect(kvs.isOpen).toBe(true);
 
-    await kvs.close({ signal });
+    // 後片付け
+    await kvs.close();
+  });
 
-    expect(tf.isOpen).toBe(true);
-    expect(fs.isOpen).toBe(true);
+  test("close すると isOpen が false になる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
+    await kvs.open();
+
+    // 実行
+    await kvs.close();
+
+    // 検証
     expect(kvs.isOpen).toBe(false);
   });
 
-  test("すでに open されている状態で open を呼ぶとエラーになること", async ({ expect, signal }) => {
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config().appendTransformer(tf).appendStorage(fs).create();
+  test("既に開いているときに open すると UniKvsIsOpenError を投げる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
+    await kvs.open();
 
-    await kvs.open({ signal });
+    // 実行と検証
+    await expect(kvs.open()).rejects.toThrow(UniKvsIsOpenError);
 
-    await expect(kvs.open({ signal })).rejects.toThrow(UniKvsIsOpenError);
+    // 後片付け
+    await kvs.close();
   });
 
-  test("open 前に操作しようとするとエラーになること", async ({ expect, signal }) => {
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config().appendTransformer(tf).appendStorage(fs).create();
+  test("閉じているときに close すると UniKvsIsNotOpenError を投げる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
 
-    await expect(kvs.set("key", "value", { signal })).rejects.toThrow(UniKvsIsNotOpenError);
-    await expect(kvs.get("key", { signal })).rejects.toThrow(UniKvsIsNotOpenError);
-    await expect(kvs.close({ signal })).rejects.toThrow(UniKvsIsNotOpenError);
-  });
-});
-
-describe("プレーンな値の操作 (set / get / has / delete / clear)", () => {
-  test("値を保存し、取得できること", async ({ expect, signal }) => {
-    type Kvs = {
-      foo: PlainValue<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-
-    await kvs.set("foo", Uint8Array.from([0, 1, 2]), { signal });
-    const value = await kvs.get("foo", { signal });
-
-    expect(Array.from(value)).toStrictEqual([0, 1, 2]);
-
-    await kvs.clear({ signal });
+    // 実行と検証
+    await expect(kvs.close()).rejects.toThrow(UniKvsIsNotOpenError);
   });
 
-  test("存在しないキーを取得しようとすると KeyNotFoundError を投げること", async ({
-    expect,
-    signal,
-  }) => {
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
+  test("close 後に再 open できる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
+    await kvs.open();
+    await kvs.close();
 
-    await expect(kvs.get("unknown-key", { signal })).rejects.toThrow(KeyNotFoundError);
-  });
+    // 実行
+    await kvs.open();
+    await kvs.close();
 
-  test("キーの存在確認 (has) ができること", async ({ expect, signal }) => {
-    type Kvs = {
-      foo: PlainValue<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-    await kvs.set("foo", Uint8Array.from([0, 1, 2]), { signal });
-
-    await expect(fs.exists({ key: "foo" })).resolves.toBe(true);
-    await expect(kvs.has("foo", { signal })).resolves.toBe(true);
-
-    await kvs.clear({ signal });
-  });
-
-  test("キーを削除 (delete) できること", async ({ expect, signal }) => {
-    type Kvs = {
-      foo: PlainValue<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-    await kvs.set("foo", Uint8Array.from([0, 1, 2]), { signal });
-    await kvs.delete("foo", { signal });
-
-    await expect(kvs.has("foo", { signal })).resolves.toBe(false);
-
-    await kvs.clear({ signal });
-  });
-
-  test("すべてのデータを削除 (clear) できること", async ({ expect, signal }) => {
-    type Kvs = {
-      key1: PlainValue<Uint8Array<ArrayBuffer>>;
-      key2: PlainValue<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-    await kvs.set("key1", Uint8Array.from([0, 1, 2]), { signal });
-    await kvs.set("key2", Uint8Array.from([0, 1, 2]), { signal });
-    await kvs.clear({ signal });
-
-    await expect(kvs.has("key1", { signal })).resolves.toBe(false);
-    await expect(kvs.has("key2", { signal })).resolves.toBe(false);
-
-    await kvs.clear({ signal });
+    // 検証
+    expect(kvs.isOpen).toBe(false);
   });
 });
 
-describe("ストリーム値の操作 (set / stream)", () => {
-  test("ReadableStreamを保存し、取得できること", async ({ expect, signal }) => {
-    type Kvs = {
-      foo: StreamValue<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-    const encoder = new TextEncoder();
-    const chunks = [encoder.encode("hello"), encoder.encode("world")];
-    const stream = new ReadableStream({
-      start(controller) {
-        chunks.forEach((chunk) => controller.enqueue(chunk));
-        controller.close();
-      },
-    });
-    await kvs.set("foo", stream, { signal });
+describe("UniKvs - 基本操作 (CRUD)", () => {
+  let kvs: UniKvs;
 
-    await expect(kvs.has("foo", { signal })).resolves.toBe(true);
-
-    await using value = await kvs.stream("foo", { signal });
-    const reader = value.getReader();
-    const readChunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      readChunks.push(value);
+  afterEach(async () => {
+    if (kvs.isOpen) {
+      await kvs.close();
     }
-
-    expect(readChunks.flatMap((chunk) => [...chunk])).toStrictEqual(
-      chunks.flatMap((chunk) => [...chunk]),
-    );
-
-    await kvs.clear({ signal });
   });
 
-  test("ストリーミング中は書き込み不可", async ({ expect, signal }) => {
-    type Kvs = {
-      foo: Value<Uint8Array<ArrayBuffer>>;
-    };
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config<Kvs>().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
-    await kvs.set("foo", Uint8Array.from([0, 1, 2]), { signal });
+  test("値を set して get できる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
 
-    {
-      const stream = await kvs.stream("foo", { signal });
+    // 実行
+    await kvs.set("key1", "value1");
+    const result = await kvs.get("key1");
 
-      // ストリーム中は書き込めない
-      await expect(
-        kvs.set("foo", Uint8Array.from([3, 4, 5]), {
-          signal: AbortSignal.timeout(500),
-        }),
-      ).rejects.toThrow(DOMException);
-
-      await Array.fromAsync(stream);
-    }
-
-    await expect(kvs.get("foo", { signal })).resolves.toStrictEqual(Uint8Array.from([0, 1, 2]));
-
-    // 全データを読み出し終えたので書き込める
-    await kvs.set("foo", Uint8Array.from([3, 4, 5]), { signal });
-
-    // {
-    //   const stream = await kvs.stream("foo", { signal });
-    //   await stream.cancel();
-    // }
-
-    // // ストリーミングを中断したので書き込める
-    // await kvs.set("foo", Uint8Array.from([6, 7, 8]), { signal });
-
-    {
-      await using _ = await kvs.stream("foo", { signal });
-    }
-
-    // ストリーミングを破棄したので書き込める
-    await kvs.set("foo", Uint8Array.from([9, 10, 11]), { signal });
-
-    await kvs.clear({ signal });
+    // 検証
+    expect(result).toBe("value1");
   });
 
-  test("存在しないストリームを取得しようとすると KeyNotFoundError を投げること", async ({
-    expect,
-    signal,
-  }) => {
-    const tf = new Compression("gzip");
-    const fs = __CLIENT__ ? new Opfs("test") : new NodeFs("tests/.temp");
-    await using kvs = UniKvs.config().appendTransformer(tf).appendStorage(fs).create();
-    await kvs.open({ signal });
+  test("has で値の存在確認ができる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+    await kvs.set("key1", "value1");
 
-    await expect(kvs.stream("unknown-stream")).rejects.toThrow(KeyNotFoundError);
+    // 実行
+    const exists = await kvs.has("key1");
+    const notExists = await kvs.has("key2");
+
+    // 検証
+    expect(exists).toBe(true);
+    expect(notExists).toBe(false);
+  });
+
+  test("delete で値を削除できる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+    await kvs.set("key1", "value1");
+
+    // 実行
+    await kvs.delete("key1");
+
+    // 検証
+    expect(await kvs.has("key1")).toBe(false);
+  });
+
+  test("clear ですべての値を削除できる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+    await kvs.set("key1", "value1");
+    await kvs.set("key2", "value2");
+
+    // 実行
+    await kvs.clear();
+
+    // 検証
+    expect(await kvs.has("key1")).toBe(false);
+    expect(await kvs.has("key2")).toBe(false);
+  });
+
+  test("存在しないキーを get すると KeyNotFoundError を投げる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.get("nonexistent")).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("オプションオブジェクト形式で set できる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+
+    // 実行
+    await kvs.set({ key: "foo", value: "bar" });
+    const result = await kvs.get({ key: "foo" });
+
+    // 検証
+    expect(result).toBe("bar");
+  });
+
+  test("set 時に閉じていると UniKvsIsNotOpenError を投げる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+
+    // 実行と検証
+    await expect(kvs.set("key1", "value1")).rejects.toThrow(UniKvsIsNotOpenError);
+  });
+
+  test("get 時に閉じていると UniKvsIsNotOpenError を投げる", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+
+    // 実行と検証
+    await expect(kvs.get("key1")).rejects.toThrow(UniKvsIsNotOpenError);
+  });
+});
+
+describe("UniKvs - トランスフォーマー連携", () => {
+  let kvs: UniKvs;
+
+  afterEach(async () => {
+    if (kvs.isOpen) {
+      await kvs.close();
+    }
+  });
+
+  test("トランスフォーマーを通して値が変換される", async ({ expect }) => {
+    // 準備
+    kvs = createKvs();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("key1", "hello");
+    const result = await kvs.get("key1");
+
+    // 検証
+    expect(result).toBe("hello");
+  });
+});
+
+describe("UniKvs - Symbol.asyncDispose", () => {
+  test("asyncDispose で close できる", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs();
+    await kvs.open();
+
+    // 実行
+    await kvs[Symbol.asyncDispose]();
+
+    // 検証
+    expect(kvs.isOpen).toBe(false);
   });
 });

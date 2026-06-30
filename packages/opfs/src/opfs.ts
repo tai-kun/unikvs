@@ -5,6 +5,8 @@ import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
  * ブラウザーの OPFS (Origin Private File System) を永続化先として使用するストレージクラスです。
  *
  * ブラウザー環境（メインスレッド、または Web Worker）での動作を前提としています。
+ *
+ * 指定されたルートディレクトリー配下にキーをファイル名としてデータを保存します。
  */
 export default class Opfs implements IStorage {
   /**
@@ -19,12 +21,15 @@ export default class Opfs implements IStorage {
    */
   private root: string;
 
+  /**
+   * ストレージの名前です。デバッグやエラーメッセージなどに使用されます。
+   */
   public readonly name: string;
 
   /**
    * Opfs インスタンスを初期化します。
    *
-   * @param root OPFS 内でデータを保存するディレクトリー名またはハンドルです。
+   * @param root データを保存する OPFS 内のディレクトリー名、または既存のディレクトリーハンドルです。デフォルトは `".unikvs"` です。
    */
   public constructor(root: string | FileSystemDirectoryHandle = ".unikvs") {
     this.name = "Opfs";
@@ -52,10 +57,16 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * ストレージがオープンされているかどうかを示します。
+   */
   public get isOpen(): boolean {
     return this.rootHandle !== null;
   }
 
+  /**
+   * ストレージをオープンし、OPFS 内のルートディレクトリーを作成または取得します。
+   */
   public async open(): Promise<void> {
     if (this.rootHandle) {
       return;
@@ -70,6 +81,12 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * 指定されたデータを、対応するキーでストレージに保存します。
+   *
+   * @param args.key 保存先のキーです。
+   * @param args.data 保存するバイト配列です。
+   */
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data">,
   ): Promise<void> {
@@ -87,6 +104,12 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから取得します。
+   *
+   * @param args.key 取得元のキーです。
+   * @returns キーに対応するバイト配列です。
+   */
   public async read(args: Pick<IStorage.ReadArgs, "key">): Promise<Uint8Array<ArrayBuffer>> {
     const { key } = args;
 
@@ -99,6 +122,12 @@ export default class Opfs implements IStorage {
     return new Uint8Array(buff);
   }
 
+  /**
+   * 指定されたキーがストレージ内に存在するかどうかを確認します。
+   *
+   * @param args.key 存在確認するキーです。
+   * @returns キーが存在する場合は `true`、それ以外は `false` です。
+   */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { key } = args;
 
@@ -116,6 +145,11 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * 指定されたキーに対応するデータをストレージから削除します。
+   *
+   * @param args.key 削除するキーです。
+   */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { key } = args;
 
@@ -124,6 +158,11 @@ export default class Opfs implements IStorage {
     await this.rootHandle!.removeEntry(key);
   }
 
+  /**
+   * ストレージ内の全てのデータを消去します。
+   *
+   * ルートディレクトリー直下を使用している場合は個別にエントリーを削除し、サブディレクトリーを使用している場合はディレクトリーごと削除して再作成します。
+   */
   public async clear(): Promise<void> {
     if (this.root === "") {
       // ルートディレクトリー直下を使用している場合は、全てのエントリーを個別に削除します。
@@ -146,6 +185,12 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * 指定されたキーに対応する書き込み可能ストリームを取得します。
+   *
+   * @param args.key 書き込み先のキーです。
+   * @returns 書き込み可能ストリームです。
+   */
   public async getWritable(
     args: Pick<IStorage.GetWritableArgs, "key">,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
@@ -159,6 +204,12 @@ export default class Opfs implements IStorage {
     return writable;
   }
 
+  /**
+   * 指定されたキーに対応する読み取り可能ストリームを取得します。
+   *
+   * @param args.key 読み取り元のキーです。
+   * @returns 読み取り可能ストリームです。
+   */
   public async getReadable(
     args: Pick<IStorage.GetReadableArgs, "key">,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
