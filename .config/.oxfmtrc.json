@@ -3,7 +3,6 @@
   "ignorePatterns": [
     "**/.history/**",
     "**/.Trash/**",
-    "**/docs/**",
     "**/node_modules/**",
     "**/packages/**",
     "**/unikvs/**",

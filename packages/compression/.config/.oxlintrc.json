@@ -1,22 +1,16 @@
 {
   "$schema": "../../../node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": [
-    "**/.history/**",
-    "**/.Trash/**",
-    "**/dist/**",
-    "**/docs/**",
-    "**/node_modules/**"
-  ],
+  "ignorePatterns": ["**/.history/**", "**/.Trash/**", "**/dist/**", "**/node_modules/**"],
   "plugins": [
+    "eslint",
+    "typescript",
     "unicorn",
     "oxc",
-    "typescript",
     "import",
-    "react",
     "jsdoc",
-    "vitest",
+    "node",
     "promise",
-    "node"
+    "vitest"
   ],
   "categories": {
     "correctness": "error"

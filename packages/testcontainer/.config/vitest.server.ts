@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-import isDebugMode from "./_is-debug-mode";
+import isDebugMode from "./_is-debug-mode.js";
 
 export default defineConfig({
   oxc: {
