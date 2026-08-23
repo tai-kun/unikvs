@@ -28,32 +28,32 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@tai-kun/valibot-extra-lab": "^0.0.5",
+    "@tai-kun/valibot-extra-lab": "0.0.5",
     "@unikvs/core": "workspace:*",
-    "abort-signal-utils": "^0.0.2",
-    "asyncmux": "^0.0.8",
-    "call-fn-once": "^0.0.6",
-    "try-capture-stack-trace": "^0.0.3"
+    "abort-signal-utils": "0.0.3",
+    "asyncmux": "0.0.8",
+    "call-fn-once": "0.0.6",
+    "try-capture-stack-trace": "0.0.3"
   },
   "devDependencies": {
-    "@tsconfig/node24": "^24.0.4",
-    "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.12.4",
+    "@tsconfig/node24": "24.0.5",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/node": "24.13.3",
     "@unikvs/checksum": "workspace:*",
     "@unikvs/compression": "workspace:*",
     "@unikvs/fs.node": "workspace:*",
     "@unikvs/memory": "workspace:*",
     "@unikvs/opfs": "workspace:*",
     "@unikvs/utils": "workspace:*",
-    "@vitest/browser": "^4.1.6",
-    "@vitest/browser-playwright": "^4.1.6",
-    "npm-check-updates": "^20.0.2",
-    "playwright": "^1.60.0",
-    "vite": "^8.0.12",
-    "vitest": "^4.1.6"
+    "@vitest/browser": "4.1.10",
+    "@vitest/browser-playwright": "4.1.10",
+    "npm-check-updates": "20.0.2",
+    "playwright": "1.62.1",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
   },
   "peerDependencies": {
-    "@logtape/logtape": "^2.0.0",
-    "valibot": "^1.0.0"
+    "@logtape/logtape": "2.0.0",
+    "valibot": "1.0.0"
   }
 }

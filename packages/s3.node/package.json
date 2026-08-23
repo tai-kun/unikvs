@@ -28,20 +28,20 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "~3.1045.0",
-    "@aws-sdk/lib-storage": "~3.1045.0",
+    "@aws-sdk/client-s3": "~3.1111.0",
+    "@aws-sdk/lib-storage": "~3.1111.0",
     "@unikvs/core": "workspace:*"
   },
   "devDependencies": {
-    "@tsconfig/node24": "^24.0.4",
-    "@tsconfig/strictest": "^2.0.8",
-    "@types/node": "^24.12.4",
+    "@tsconfig/node24": "24.0.5",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/node": "24.13.3",
     "@unikvs/testcontainer": "workspace:*",
-    "npm-check-updates": "^20.0.2",
-    "vite": "^8.0.12",
-    "vitest": "^4.1.6"
+    "npm-check-updates": "20.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10"
   },
   "peerDependencies": {
-    "@logtape/logtape": "^2.0.0"
+    "@logtape/logtape": "2.0.0"
   }
 }

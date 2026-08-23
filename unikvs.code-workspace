@@ -2,52 +2,52 @@
   "folders": [
     {
       "name": ".",
-      "path": "."
+      "path": ".",
     },
     {
       "name": "unikvs",
-      "path": "unikvs"
+      "path": "unikvs",
     },
     {
       "name": "@unikvs/core",
-      "path": "packages/core"
+      "path": "packages/core",
     },
     {
       "name": "@unikvs/utils",
-      "path": "packages/utils"
+      "path": "packages/utils",
     },
     {
       "name": "@unikvs/checksum",
-      "path": "packages/checksum"
+      "path": "packages/checksum",
     },
     {
       "name": "@unikvs/compression",
-      "path": "packages/compression"
+      "path": "packages/compression",
     },
     {
       "name": "@unikvs/memory",
-      "path": "packages/memory"
+      "path": "packages/memory",
     },
     {
       "name": "@unikvs/fs.node",
-      "path": "packages/fs.node"
+      "path": "packages/fs.node",
     },
     {
       "name": "@unikvs/s3.node",
-      "path": "packages/s3.node"
+      "path": "packages/s3.node",
     },
     {
       "name": "@unikvs/opfs",
-      "path": "packages/opfs"
+      "path": "packages/opfs",
     },
     {
       "name": "@unikvs/indexeddb",
-      "path": "packages/indexeddb"
+      "path": "packages/indexeddb",
     },
     {
       "name": "@unikvs/testcontainer",
-      "path": "packages/testcontainer"
-    }
+      "path": "packages/testcontainer",
+    },
   ],
   "settings": {
     // 一般
@@ -62,7 +62,7 @@
 
     // Oxc
 
-    "oxc.path.node": "/home/taikun/.local/share/mise/installs/node/22/bin/node",
+    "oxc.path.node": "/home/taikun/.local/share/mise/installs/node/24/bin/node",
 
     "oxc.path.oxfmt": "./node_modules/.bin/oxfmt",
     "oxc.path.oxlint": "./node_modules/.bin/oxlint",
