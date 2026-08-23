@@ -15,6 +15,8 @@ interface ReadableStreamWithFrom extends ReadableStream {
 }
 
 /**
+ * コールバック関数に非同期処理を渡すオーバーロードです。
+ *
  * @param cb 実行されるコールバック関数です。
  * @returns 返り値を使用するべきではありません。
  * @deprecated コールバック関数は同期関数である必要があります。

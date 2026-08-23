@@ -14,7 +14,9 @@ export type ChecksumSha512Options = ChecksumOptions;
  * コンテキストキー `@unikvs/checksum:sha512` に期待するハッシュ値を設定することで検証を行います。
  */
 export default class ChecksumSha512 extends Checksum implements ITransformer {
-  /** 期待するチェックサムを保持するコンテクストキーです。 */
+  /**
+   * 期待するチェックサムを保持するコンテクストキーです。
+   */
   public static override readonly CHECKSUM_CONTEXT_KEY: string = "@unikvs/checksum:sha512";
 
   /**

@@ -162,7 +162,7 @@ class StartedContainer implements AsyncDisposable {
   }
 
   /**
-   * リソースを解放しｍす。
+   * リソースを解放します。
    *
    * @returns クリーンアップが完了すると解決する Promise です。
    */

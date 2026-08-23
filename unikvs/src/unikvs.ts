@@ -665,6 +665,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
+  /**
+   * UniKvs が開いている場合にクローズします。
+   *
+   * `await using` 構文による自動クローズに使用されます。
+   *
+   * @returns 完了を通知する Promise です。
+   */
   async [Symbol.asyncDispose](): Promise<void> {
     if (!this.isOpen) {
       return;

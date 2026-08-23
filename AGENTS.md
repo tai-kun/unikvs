@@ -2,37 +2,6 @@
 
 unikvs は TypeScript で実装されたモジュラーでポータブルな KVS クライアントです。
 
-## 使用感
-
-```ts
-import { Compression } from "@unikvs/compression";
-import { FileSystem } from "@unikvs/fs.node";
-import { UniKvs, type Value } from "unikvs";
-
-const kvs = UniKvs.config<{
-  // キー "foo" に対して、バイト配列を単体またはストリーム形式で保存できることを型定義します。
-  foo: Value<Uint8Array<ArrayBuffer>>;
-}>()
-  // バイト配列を透過的に gzip 圧縮/展開するトランスフォーマープラグインを追加します。
-  .appendTransformer(new Compression("gzip"))
-  // バイト配列を ".tmp/" 配下に保存するストレージプラグインを追加します。
-  .appendStorage(new FileSystem(".tmp"))
-  // KVS クライントを作成します。
-  .create();
-
-// クライアントを開きます。
-await kvs.open();
-
-// キー "foo" に単一のバイト配列を保存します。
-await kvs.set("foo", Uint8Array.from([0, 1, 2]));
-
-// キー "foo" から単一のバイト配列を取得します。
-const bytes = await kvs.get("foo");
-
-// クライアントを閉じます。
-await kvs.close();
-```
-
 ## プロジェクトの構成
 
 - メインパッケージは `unikvs/` にあります。
@@ -60,28 +29,15 @@ mise run test:server      # npx vitest --config ./.config/vitest.server.ts
 mise run test:client      # npx vitest --config ./.config/vitest.client.ts
 mise run test:format      # npx oxfmt --check
 mise run test:lint        # npx oxlint
-mise run test:typecheck   # npx tsc --noEmit (5 つの tsconfig プロジェクト)
+mise run test:typecheck   # npx tsc --noEmit
 
 # フォーマット
 mise run format
 
 # ビルド
 npm run build
-
-# 依存関係の更新 (npm-check-upates → pnpm install → playwright install)
 mise run update
 ```
-
-## 言葉遣い
-
-- 日本語の文章は、テストケースを除き、「です・ます調」とし、必ず句点で終えます。
-- 不必要にカタカナ語を使いません。。例えば「スローする」は「投げる」とします。
-
-## コード規約
-
-- 高品質な TSDoc と必要最低限の実装コメントの付与を心がけます。`@param <パラメーター名>` の直後にハイフン（-）を付けません。
-- 必要に応じて、読み手がコードの背景、意図、ロジックを即座に理解できる、簡潔かつ丁寧な技術解説を提供します。
-- エディター上の視認性を理由に、文章の途中や句読点で改行しません。
 
 ## リンティング、型チェック、フォーマット
 
@@ -90,22 +46,11 @@ mise run update
 
 ## テスト
 
+- テストフレームワークに Vitest を使用します。
 - テストファイルのパターンは、`*.test.ts` (ブラウザー/サーバー共通)、`*.client.test.ts` (ブラウザー専用)、`*.server.test.ts` (サーバー専用) のいずれか 1 つです。
 - クライアントテストは、Vitest の Browser Mode を利用して実際の Playwright ブラウザー上で実行します。
 - CI がデバッグモードであれば コンパイル時定数 `__DEBUG__` は true になります。手動でデバッグモードにするには環境変数 `DEBUG` を `1` に設定します。
 - コンパイル時定数 `__CLIENT__` と `__SERVER__` はそれぞれ真偽値でテストのランタイムを示します。
-- テストケースは簡潔にまとめます。
-- テストは実装ではなく仕様・振る舞いを表現します。。
-- リファクタリング耐性を重視します。。
-- 1 test = 1 振る舞いです。
-- 失敗原因が分かりやすいテストを書きます。
-- テストコード自体が仕様書として読めます。
-- 機能のテスト以外にも、空の入力、境界値、エラー処理のテストも含めます。
-- 実際の実装に対してテストし、モジュールをモックしません。
-- Vitest を使用する。
-- `describe` は文脈、`test` は振る舞いを表現します。`it` は使用しません。
-- AAA（Arrange / Act / Assert）を基本とし、`// 準備`、`// 実行`、`// 検証`（または `// 準備と実行`、`// 実行と検証`）で区切ります。
-- テストのコールバックでは、トップレベルのインポートではなく、分割代入した `{ expect }` パラメーターを使用します。
 
 ## ビルドおよび型チェックに関する注意点
 

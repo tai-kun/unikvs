@@ -5,6 +5,9 @@ import getTypeName from "type-name";
  * 指定されたキーがストレージ内に存在しないことを示すエラーメタデータ型です。
  */
 export type KeyNotFoundErrorMeta = {
+  /**
+   * 存在しなかったキーです。
+   */
   readonly key: string;
 };
 
@@ -21,6 +24,12 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
     this.prototype.name = "MemoryKeyNotFoundError";
   }
 
+  /**
+   * KeyNotFoundError インスタンスを初期化します。
+   *
+   * @param args エラーメタデータです。
+   * @param options エラーの追加情報です。
+   */
   public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
     super(args, ({ key }) => `Key not found: ${key}`, options);
   }
@@ -32,8 +41,19 @@ setErrorMessage(KeyNotFoundError, ({ key }) => `キー ${key} が見つかりま
  * ストリーム書き込み時に無効なチャンク型が渡されたことを示すエラーメタデータ型です。
  */
 export type InvalidChunkTypeErrorMeta = {
+  /**
+   * 書き込み先または読み取り元のキーです。
+   */
   readonly key: string;
+
+  /**
+   * 型が無効だったチャンクの値です。
+   */
   readonly chunk: unknown;
+
+  /**
+   * 実際に渡されたチャンク値の型名です。
+   */
   readonly chunkType: string;
 };
 
@@ -52,6 +72,12 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
     this.prototype.name = "MemoryInvalidChunkTypeError";
   }
 
+  /**
+   * InvalidChunkTypeError インスタンスを初期化します。
+   *
+   * @param args エラーメタデータです。
+   * @param options エラーの追加情報です。
+   */
   public constructor(args: InvalidChunkTypeErrorArgs, options?: ErrorOptions) {
     super(
       {

@@ -13,24 +13,55 @@ import type { BaseIssue } from "valibot";
 //
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * 無効な入出力を表すエラーの基底クラスです。
+ *
+ * @template TMeta エラーのメタデータの型です。
+ */
 export class InvalidUsageErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends ErrorBase<TMeta> {}
 
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * バリデーションの問題を表す valibot のイシューです。
+ */
 export type Issue = BaseIssue<unknown>;
 
+/**
+ * InvalidInputError に付与されるメタデータです。
+ */
 export type InvalidInputErrorMeta = {
+  /**
+   * 検証に失敗した入力値です。
+   */
   readonly input: unknown;
+
+  /**
+   * 検証で検出されたイシューのリストです。
+   */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
+/**
+ * InvalidInputError のコンストラクター引数です。
+ */
 export type InvalidInputErrorArgs = {
+  /**
+   * 検証の対象となった値です。
+   */
   readonly value: unknown;
+
+  /**
+   * 検証で検出されたイシューのリストです。
+   */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
+/**
+ * 入力値が期待するスキーマに適合しない場合に投げられるエラーです。
+ */
 export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMeta> {
   static {
     this.prototype.name = "UniKvsInvalidInputError";
@@ -44,16 +75,39 @@ export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMe
 
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * InvalidOutputError に付与されるメタデータです。
+ */
 export type InvalidOutputErrorMeta = {
+  /**
+   * 検証に失敗した出力値です。
+   */
   readonly output: unknown;
+
+  /**
+   * 検証で検出されたイシューのリストです。
+   */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
+/**
+ * InvalidOutputError のコンストラクター引数です。
+ */
 export type InvalidOutputErrorArgs = {
+  /**
+   * 検証の対象となった値です。
+   */
   readonly value: unknown;
+
+  /**
+   * 検証で検出されたイシューのリストです。
+   */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
+/**
+ * 出力値が期待するスキーマに適合しない場合に投げられるエラーです。
+ */
 export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputErrorMeta> {
   static {
     this.prototype.name = "UniKvsInvalidOutputError";
@@ -71,6 +125,9 @@ export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputError
 //
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * すでに開いている UniKvs に対して再度オープン操作が行われた場合に投げられるエラーです。
+ */
 export class UniKvsIsOpenError extends ErrorBase<undefined> {
   static {
     this.prototype.name = "UniKvsIsOpenError";
@@ -83,6 +140,9 @@ export class UniKvsIsOpenError extends ErrorBase<undefined> {
 
 setErrorMessage(UniKvsIsOpenError, "UniKvs は開いています", "ja");
 
+/**
+ * UniKvs が開かれていない状態で操作が行われた場合に投げられるエラーです。
+ */
 export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
   static {
     this.prototype.name = "UniKvsIsNotOpenError";
@@ -95,12 +155,24 @@ export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
 
 setErrorMessage(UniKvsIsNotOpenError, "UniKvs は開いていません", "ja");
 
+/**
+ * KeyNotFoundError に付与されるメタデータです。
+ */
 export type KeyNotFoundErrorMeta = {
+  /**
+   * 見つからなかったキーです。
+   */
   readonly key: IStorage.Key;
 };
 
+/**
+ * KeyNotFoundError のコンストラクター引数です。
+ */
 export type KeyNotFoundErrorArgs = KeyNotFoundErrorMeta;
 
+/**
+ * 指定したキーのデータがどのストレージにも存在しない場合に投げられるエラーです。
+ */
 export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   static {
     this.prototype.name = "UniKvsKeyNotFoundError";
@@ -141,12 +213,24 @@ setErrorMessage(
 
 // setErrorMessage(StorageIsOpenError, ({ name }) => `ストレージ "${name}" は開いています`, "ja");
 
+/**
+ * StorageIsNotOpenError に付与されるメタデータです。
+ */
 export type StorageIsNotOpenErrorMeta = {
+  /**
+   * 開かれていないストレージの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * StorageIsNotOpenError のコンストラクター引数です。
+ */
 export type StorageIsNotOpenErrorArgs = StorageIsNotOpenErrorMeta;
 
+/**
+ * ストレージが開かれていない状態で操作が行われた場合に投げられるエラーです。
+ */
 export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> {
   static {
     this.prototype.name = "UniKvsStorageIsNotOpenError";
@@ -159,12 +243,24 @@ export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> 
 
 setErrorMessage(StorageIsNotOpenError, ({ name }) => `ストレージ "${name}" は開いていません`, "ja");
 
+/**
+ * WritableStreamNotSupportedError に付与されるメタデータです。
+ */
 export type WritableStreamNotSupportedErrorMeta = {
+  /**
+   * 対象のストレージの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * WritableStreamNotSupportedError のコンストラクター引数です。
+ */
 export type WritableStreamNotSupportedErrorArgs = WritableStreamNotSupportedErrorMeta;
 
+/**
+ * ストレージが書き込み可能なストリームをサポートしていない場合に投げられるエラーです。
+ */
 export class WritableStreamNotSupportedError extends ErrorBase<WritableStreamNotSupportedErrorMeta> {
   static {
     this.prototype.name = "UniKvsWritableStreamNotSupportedError";
@@ -181,12 +277,24 @@ setErrorMessage(
   "ja",
 );
 
+/**
+ * ReadableStreamNotSupportedError に付与されるメタデータです。
+ */
 export type ReadableStreamNotSupportedErrorMeta = {
+  /**
+   * 対象のストレージの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * ReadableStreamNotSupportedError のコンストラクター引数です。
+ */
 export type ReadableStreamNotSupportedErrorArgs = ReadableStreamNotSupportedErrorMeta;
 
+/**
+ * ストレージが読み取り可能なストリームをサポートしていない場合に投げられるエラーです。
+ */
 export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNotSupportedErrorMeta> {
   static {
     this.prototype.name = "UniKvsReadableStreamNotSupportedError";
@@ -203,12 +311,24 @@ setErrorMessage(
   "ja",
 );
 
+/**
+ * MultipartWriteNotSupportedError に付与されるメタデータです。
+ */
 export type MultipartWriteNotSupportedErrorMeta = {
+  /**
+   * 対象のストレージの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * MultipartWriteNotSupportedError のコンストラクター引数です。
+ */
 export type MultipartWriteNotSupportedErrorArgs = MultipartWriteNotSupportedErrorMeta;
 
+/**
+ * ストレージがマルチパート書き込みをサポートしていない場合に投げられるエラーです。
+ */
 export class MultipartWriteNotSupportedError extends ErrorBase<MultipartWriteNotSupportedErrorMeta> {
   static {
     this.prototype.name = "UniKvsMultipartWriteNotSupportedError";
@@ -249,12 +369,24 @@ setErrorMessage(
 
 // setErrorMessage(TransformerIsOpenError, ({ name }) => `トランスフォーマー "${name}" は開いています`, "ja");
 
+/**
+ * TransformerIsNotOpenError に付与されるメタデータです。
+ */
 export type TransformerIsNotOpenErrorMeta = {
+  /**
+   * 開かれていないトランスフォーマーの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * TransformerIsNotOpenError のコンストラクター引数です。
+ */
 export type TransformerIsNotOpenErrorArgs = TransformerIsNotOpenErrorMeta;
 
+/**
+ * トランスフォーマーが開かれていない状態で操作が行われた場合に投げられるエラーです。
+ */
 export class TransformerIsNotOpenError extends ErrorBase<TransformerIsNotOpenErrorMeta> {
   static {
     this.prototype.name = "UniKvsTransformerIsNotOpenError";
@@ -271,12 +403,24 @@ setErrorMessage(
   "ja",
 );
 
+/**
+ * EncodableStreamNotSupportedError に付与されるメタデータです。
+ */
 export type EncodableStreamNotSupportedErrorMeta = {
+  /**
+   * 対象のトランスフォーマーの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * EncodableStreamNotSupportedError のコンストラクター引数です。
+ */
 export type EncodableStreamNotSupportedErrorArgs = EncodableStreamNotSupportedErrorMeta;
 
+/**
+ * トランスフォーマーがエンコード可能なストリームをサポートしていない場合に投げられるエラーです。
+ */
 export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamNotSupportedErrorMeta> {
   static {
     this.prototype.name = "UniKvsEncodableStreamNotSupportedError";
@@ -293,12 +437,24 @@ setErrorMessage(
   "ja",
 );
 
+/**
+ * DecodableStreamNotSupportedError に付与されるメタデータです。
+ */
 export type DecodableStreamNotSupportedErrorMeta = {
+  /**
+   * 対象のトランスフォーマーの名前です。
+   */
   readonly name: string;
 };
 
+/**
+ * DecodableStreamNotSupportedError のコンストラクター引数です。
+ */
 export type DecodableStreamNotSupportedErrorArgs = DecodableStreamNotSupportedErrorMeta;
 
+/**
+ * トランスフォーマーがデコード可能なストリームをサポートしていない場合に投げられるエラーです。
+ */
 export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamNotSupportedErrorMeta> {
   static {
     this.prototype.name = "UniKvsDecodableStreamNotSupportedError";
@@ -321,24 +477,75 @@ setErrorMessage(
 //
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * PluginOperationAggregateError に付与されるメタデータです。
+ */
 export type PluginOperationAggregateErrorMeta = {
+  /**
+   * 失敗した操作の対象となったプラグインの種別です。
+   *
+   * - `"plugin"`: 複数の種別のプラグインが混在しています。
+   * - `"storage"`: ストレージです。
+   * - `"transformer"`: トランスフォーマーです。
+   */
   readonly plugin: "plugin" | "storage" | "transformer";
+
+  /**
+   * 失敗した操作の種類です。
+   */
   readonly action: "open" | "close" | "write" | "delete" | "clear";
+
+  /**
+   * 失敗した各プラグインの操作と原因のリストです。
+   */
   readonly errors: readonly {
+    /**
+     * 失敗したプラグインの種別です。
+     */
     readonly plugin: "storage" | "transformer";
+
+    /**
+     * 操作が失敗した原因です。
+     */
     readonly reason: unknown;
   }[];
 };
 
+/**
+ * PluginOperationAggregateError のコンストラクター引数です。
+ */
 export type PluginOperationAggregateErrorArgs = {
+  /**
+   * 失敗したプラグインの既定の種別です。
+   *
+   * 個々のエラーで種別が指定されていない場合に使用されます。
+   */
   readonly plugin?: "storage" | "transformer";
+
+  /**
+   * 失敗した操作の種類です。
+   */
   readonly action: "open" | "close" | "write" | "delete" | "clear";
+
+  /**
+   * 失敗した各プラグインの操作と原因のリストです。
+   */
   readonly errors: readonly {
+    /**
+     * 失敗したプラグインの種別です。
+     */
     readonly plugin?: "storage" | "transformer";
+
+    /**
+     * 操作が失敗した原因です。
+     */
     readonly reason: unknown;
   }[];
 };
 
+/**
+ * 複数のストレージやトランスフォーマーの操作が失敗した場合に投げられる、個々の失敗を集約したエラーです。
+ */
 export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggregateErrorMeta> {
   static {
     this.prototype.name = "UniKvsPluginOperationAggregateError";
@@ -375,6 +582,9 @@ setErrorMessage(
 //
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * ストレージが一つも登録されていない状態で UniKvs を作成しようとした場合に投げられるエラーです。
+ */
 export class MissingStorageError extends ErrorBase<undefined> {
   static {
     this.prototype.name = "UniKvsMissingStorageError";
@@ -393,6 +603,9 @@ setErrorMessage(
 
 // -------------------------------------------------------------------------------------------------
 
+/**
+ * ストレージが登録された後にトランスフォーマーを追加しようとした場合に投げられるエラーです。
+ */
 export class TransformerRegistrationError extends ErrorBase<undefined> {
   static {
     this.prototype.name = "UniKvsTransformerRegistrationError";

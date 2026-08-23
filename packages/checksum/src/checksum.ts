@@ -28,7 +28,7 @@ const MAX_CHUNK_SIZE = 4 * GB;
  */
 export interface IHasher {
   /**
-   * チャンクデータを使ってハッシュ値計算の内需状態を更新します。
+   * チャンクデータを使ってハッシュ値計算の内部状態を更新します。
    *
    * @param data ハッシュ値を計算するチャンクデータです。
    */

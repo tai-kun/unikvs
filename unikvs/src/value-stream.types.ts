@@ -10,5 +10,10 @@ export interface ValueStream<T = any>
     Omit<ReadableStream, keyof AsyncDisposable | keyof AsyncIterable<unknown>>,
     AsyncDisposable,
     AsyncIterable<T, void, unknown> {
+  /**
+   * ストリームを閉じ、関連するリソースを解放します。
+   *
+   * @returns リソースの解放が完了したときに解決される Promise です。
+   */
   dispose(): Promise<void>;
 }
