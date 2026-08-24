@@ -46,6 +46,9 @@ export default function toValueStream<T>(
           controller.enqueue(value);
         }
       } catch (ex) {
+        // ソースエラー時も dispose (ロック解放など) を行わないと、ストリームを放棄した consumer に対してキーの I/O ロックがリークします。
+        // dispose 自体が失敗しても元の例外の伝播を壊さないように、失敗はログに残すだけにします。
+        await disposeValueStream().catch((e) => logger.error`Failed to dispose value stream: ${e}`);
         controller.error(ex);
       }
     },

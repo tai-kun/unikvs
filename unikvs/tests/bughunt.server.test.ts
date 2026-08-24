@@ -293,10 +293,9 @@ describe("バグ調査: 複数ストレージの部分失敗", () => {
 // -------------------------------------------------------------------------------------------------
 
 describe("バグ調査: ストリームとロック", () => {
-  // BUG-001: ValueStream の読み取り中にエラーが発生し、consumer が reader.cancel() を呼ばずに
-  // 放棄した場合、キーのロックが解放されず同一キーへの以降の書き込み/削除/クローズが永久にブロックされる。
-  // 修正までこのテストは失敗し続けることを期待するため test.fails を使用している。
-  test.fails("ValueStream エラー後に cancel/releaseLock のみで放棄すると同一キーへの set がブロックされる", async () => {
+  // BUG-002: ValueStream の読み取り中にエラーが発生し、consumer が reader.cancel() を呼ばずに
+  // 放棄した場合でも、pull の catch 節で dispose されるためキーのロックはリークしない。
+  test("ValueStream エラー後に cancel/releaseLock のみで放棄しても同一キーへの set がブロックされない", async () => {
     const storage = new ErrorMidwayReadableStorage();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
     await kvs.open();
@@ -318,7 +317,7 @@ describe("バグ調査: ストリームとロック", () => {
     await kvs.close();
   });
 
-  test("参考: 放棄されたエラーストリームは delete / stream / close もブロックする", async () => {
+  test("参考: 放棄されたエラーストリームでもロックは解放され、delete / stream / close はブロックされない", async () => {
     const storage = new ErrorMidwayReadableStorage();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
     await kvs.open();
@@ -330,18 +329,18 @@ describe("バグ調査: ストリームとロック", () => {
     await expect(reader.read()).rejects.toThrow("boom");
     reader.releaseLock(); // cancel せずに放棄
 
-    await expect(withTimeout(kvs.delete("logs"), 1500, "delete-after-abandon")).rejects.toThrow(
-      "TIMEOUT",
-    );
-    await expect(withTimeout(kvs.stream("logs"), 1500, "stream-after-abandon")).rejects.toThrow(
-      "TIMEOUT",
-    );
-    // close も同一キーのロック解放を待ち続ける (タイムアウト後にベストエフォートで破棄される)
-    const ac = new AbortController();
-    setTimeout(() => ac.abort(new Error("close timeout")), 500);
-    await expect(kvs.close({ signal: ac.signal })).rejects.toThrow(/close timeout/);
+    // エラー時に dispose されるためロックは解放済みで、後続操作はブロックされない
+    const vs2 = await withTimeout(kvs.stream("logs"), 1500, "stream-after-abandon");
+    const reader2 = vs2.getReader();
+    expect((await reader2.read()).done).toBe(false);
+    await expect(reader2.read()).rejects.toThrow("boom");
+    await vs2.dispose();
+    await expect(
+      withTimeout(kvs.delete("logs"), 1500, "delete-after-abandon"),
+    ).resolves.toBeUndefined();
+    // close もロック解放を待たずに完了する
+    await withTimeout(kvs.close(), 1500, "close-after-abandon");
     expect(kvs.isOpen).toBe(false);
-    await vs.dispose();
   });
 
   test("未破棄の ValueStream を残したまま close するとタイムアウト後に強制破棄される", async () => {
