@@ -11,7 +11,7 @@ import type {
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
 import type { ContextSource } from "./context.types.js";
-import { MissingStorageError } from "./errors.js";
+import { MissingStorageError, TransformerRegistrationError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
 
@@ -416,7 +416,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public appendTransformer(transformer: ITransformer): IUniKvsConfigBuilder {
     // パイプラインの順序を守るため、終端であるストレージが登録済みでないか確認します。
     if (this.#destinations.length > 0) {
-      throw new TransformStreamDefaultController();
+      throw new TransformerRegistrationError();
     }
 
     this.#transformers.push(transformer);
