@@ -1,0 +1,83 @@
+---
+title: unikvs
+description: TypeScript で実装されたモジュラーでポータブルな KVS クライアントの本体パッケージです。
+---
+
+## 概要
+
+`unikvs` は UniKVS の本体パッケージです。
+
+キーと値のマッピングを型として定義し、トランスフォーマー (Transformer) とストレージ (Storage) を組み合わせた KVS クライアントを構築します。クライアントは `open()` から `close()` までのライフサイクルを持ち、その間に限り読み書きが可能です。
+
+UniKVS 全体の位置づけについては[トップページ](/ja/docs/)を参照してください。
+
+## インストール
+
+```package-install
+pnpm add unikvs
+```
+
+ストレージやトランスフォーマーは用途に応じて別途インストールします。例えばローカルファイルシステムへ保存して gzip 圧縮する場合は次のようになります。
+
+<Tabs>
+  <Tab title="npm">
+    ```
+    npm install unikvs @unikvs/compression @unikvs/fs.node
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```
+    pnpm add unikvs @unikvs/compression @unikvs/fs.node
+    ```
+  </Tab>
+</Tabs>
+
+対応ランタイムは Node.js とモダンなブラウザーです。ただし、組み込むプラグインごとに対応環境が異なります。
+
+- Storage プラグインの対応環境は各パッケージのドキュメントを参照してください。
+- Transformer プラグイン (`@unikvs/compression` など) は Web 標準 API に依存する場合があります。
+
+## クイックスタート
+
+Node.js のローカルファイルシステムに gzip 圧縮しながら保存する例です。
+
+```ts quickstart.ts
+import { Compression } from "@unikvs/compression";
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  // キー "foo" に対して、バイト配列を単体またはストリーム形式で保存できることを型定義します。
+  foo: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  // バイト配列を透過的に gzip 圧縮/展開するトランスフォーマーを追加します。
+  .appendTransformer(new Compression("gzip"))
+  // バイト配列を ".unikvs/" 配下に保存するストレージを追加します。
+  .appendStorage(new NodeFs(".tmp"))
+  // KVS クライアントを作成します。
+  .create();
+
+// クライアントを開きます。
+await kvs.open();
+
+// キー "foo" に単一のバイト配列を保存します。
+await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+// キー "foo" から単一のバイト配列を取得します。
+const bytes = await kvs.get("foo");
+
+// クライアントを閉じます。
+await kvs.close();
+```
+
+## 次のステップ
+
+- [ガイド](/ja/docs/unikvs/guide)：設定ビルダー、ライフサイクル、各操作の詳細な挙動
+- [型システム](/ja/docs/unikvs/types)：`Value` / `PlainValue` / `StreamValue` による型安全なキー定義
+- [API リファレンス](/ja/docs/unikvs/api)：公開 API の一覧
+- [エラー](/ja/docs/unikvs/errors)：スローされるエラークラスの一覧
+
+## 関連パッケージ
+
+- Transformer：[@unikvs/compression](/ja/docs/compression/)、[@unikvs/checksum](/ja/docs/checksum/)
+- Storage：[@unikvs/memory](/ja/docs/memory/)、[@unikvs/fs.node](/ja/docs/fs.node/)、[@unikvs/s3.node](/ja/docs/s3.node/)、[@unikvs/opfs](/ja/docs/opfs/)、[@unikvs/indexeddb](/ja/docs/indexeddb/)

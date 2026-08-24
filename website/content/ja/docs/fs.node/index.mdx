@@ -1,0 +1,85 @@
+---
+title: @unikvs/fs.node
+description: バイト配列を Node.js のローカルファイルシステムに保存するストレージプラグインです。
+---
+
+## 概要
+
+`@unikvs/fs.node` は、指定されたルートディレクトリー配下にキーをファイル名としてデータを保存するストレージです。
+
+Node.js 専用です。`node:fs`、`node:path`、`node:stream` を `open()` 時に動的に読み込むため、バンドラーとの相性も考慮されています。ネイティブのファイルストリームを Web ストリームに変換して提供するため、大きなデータもメモリーに載せずに扱えます。
+
+```package-install
+pnpm add @unikvs/fs.node
+```
+
+## 使い方
+
+```ts fs.ts
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  avatar: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  // 第 1 引数はルートディレクトリー。省略時は ".unikvs"
+  .appendStorage(new NodeFs(".unikvs"))
+  .create();
+
+await kvs.open(); // ルートディレクトリーがなければ再帰的に作成される
+
+await kvs.set("avatar", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+// .unikvs/avatar ファイルとして保存される
+
+await kvs.close();
+```
+
+相対パスを渡した場合はカレントワーキングディレクトリーから解決されます。
+
+:::warning[open() が必要]
+このストレージは `open()` を呼び出すまで利用できません。UniKVS 本体の `open()` が自動的に呼び出すため、通常は意識する必要はありませんが、単体で使う場合は必須です。
+:::
+
+## キーの制約
+
+キーはそのままファイル名として使われます。次の条件を満たす文字列のみ受け付け、違反すると `InvalidFilenameError` が投げられます。
+
+- 空文字列、`.`、`..` ではない。
+- パス区切り (`/`) や `:` などを含まない。
+- UTF-8 で 255 バイト以内。
+- NFC / NFD 正規化と矛盾しない。
+- Windows の予約名 (`CON`、`LPT1` など) ではない。
+
+つまり 1 キー = ルート直下の 1 ファイルであり、キーでディレクトリー階層を作ることはできません。
+
+## clear() の挙動
+
+`clear()` はルートディレクトリーごと削除したあと、空のディレクトリーを再作成します。ストレージ管理外のファイルがルート配下に混入している場合も消えるため、専用ディレクトリーを指定してください。
+
+## API
+
+### NodeFs クラス
+
+```ts
+new NodeFs(root?: string) // 既定値 ".unikvs"
+```
+
+| メンバー                                                | 説明                                                     |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                          | 常に `"NodeFs"`。                                        |
+| `get isOpen(): boolean`                                 | オープン済みかどうか。                                   |
+| `open()`                                                | モジュールを読み込み、ルートディレクトリーを作成します。 |
+| `write(args)`                                           | データをファイルへ書き込みます。                         |
+| `read(args): Promise<Uint8Array>`                       | ファイルを読み込みます。                                 |
+| `exists(args): Promise<boolean>`                        | ファイルの存在を確認します。                             |
+| `delete(args)`                                          | ファイルを削除します。                                   |
+| `clear()`                                               | ルートディレクトリーを空にします。                       |
+| `getWritable(args): WritableStream<Uint8Array>`         | ファイルへの書き込みストリームを返します。               |
+| `getReadable(args): ReadableStream<Uint8Array>`         | ファイルからの読み取りストリームを返します。             |
+
+書き込みと読み取りには操作オプションの `AbortSignal` が反映されます。
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/s3.node](/ja/docs/s3.node/)：Node.js 向けのもう 1 つのストレージ

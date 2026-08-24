@@ -1,0 +1,79 @@
+---
+title: @unikvs/opfs
+description: バイト配列をブラウザーの OPFS (Origin Private File System) に保存するストレージプラグインです。
+---
+
+## 概要
+
+`@unikvs/opfs` は、ブラウザーの OPFS (Origin Private File System) を永続化先として使うストレージです。
+
+OPFS はオリジンごとに分離されたファイルシステムで、ネイティブのファイルストリームを持つため、ブラウザー上でも大きなバイナリーデータを効率的に扱えます。メインスレッドと Web Worker のどちらでも動作します。キーはルートディレクトリー直下のファイル名として保存されます。
+
+```package-install
+pnpm add @unikvs/opfs
+```
+
+:::note
+`navigator.storage.getDirectory()` を含む OPFS / File System Access API をサポートするブラウザーが必要です。
+:::
+
+## 使い方
+
+コンストラクターには OPFS 内のルートディレクトリー名、または既存の `FileSystemDirectoryHandle` を渡せます。省略時は `".unikvs"` です。
+
+```ts opfs.ts
+import { Opfs } from "@unikvs/opfs";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  cache: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendStorage(new Opfs(".unikvs"))
+  .create();
+
+await kvs.open(); // OPFS 内に .unikvs/ ディレクトリーを作成または取得する
+await kvs.set("cache", new Uint8Array([1, 2, 3]));
+// .unikvs/cache ファイルとして保存される
+await kvs.close();
+```
+
+ルート名にはスラッシュ区切りでサブディレクトリーを指定できます (`"a/b/c"` など)。空文字列、`"."`、`"/"` を渡した場合は OPFS のルート直下を使用します。ディレクトリー名が不正な場合は `InvalidDirnameError` が投げられます。
+
+## キーの制約
+
+キーはファイル名として検証されます ([@unikvs/utils](/ja/docs/utils/) の `assertValidFilename`)。パス区切りや Windows 予約名を含むキーは `InvalidFilenameError` になります。1 キー = ルート直下の 1 ファイルです。
+
+## ストリームの扱い
+
+OPFS のネイティブストリーム (`FileSystemFileHandle.createWritable()`、`file.stream()`) をそのまま返すため、大きなデータもメモリーに載せずに入出力できます。
+
+## clear() の挙動
+
+- ルート直下を使用している場合: エントリーを個別に削除します。
+- サブディレクトリーを使用している場合: ディレクトリーごと削除して再作成します。
+
+## API
+
+### Opfs クラス
+
+```ts
+new Opfs(root?: string | FileSystemDirectoryHandle) // 既定値 ".unikvs"
+```
+
+| メンバー                                                | 説明                                                     |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                          | 常に `"Opfs"`。                                          |
+| `get isOpen(): boolean`                                 | ルートハンドルを保持しているかどうか。                   |
+| `open()`                                                | ルートディレクトリーを作成または取得します。             |
+| `write(args)`                                           | データをファイルへ書き込みます。                         |
+| `read(args): Promise<Uint8Array>`                       | ファイルを読み込みます。                                 |
+| `exists(args): Promise<boolean>`                        | ファイルハンドルの取得可否で判定します。                 |
+| `delete(args)`                                          | ファイルを削除します。                                   |
+| `clear()`                                               | 全エントリーを消去します。                               |
+| `getWritable(args): Promise<WritableStream<Uint8Array>>`| 書き込み用ストリームを返します。                         |
+| `getReadable(args): Promise<ReadableStream<Uint8Array>>`| 読み取り用ストリームを返します。                         |
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/indexeddb](/ja/docs/indexeddb/)：ブラウザー向けのもう 1 つのストレージ

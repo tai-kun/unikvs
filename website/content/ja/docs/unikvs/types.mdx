@@ -1,0 +1,168 @@
+---
+title: unikvs の型システム
+description: Value / PlainValue / StreamValue によるキーと値の型マッピングと、ValueStream の使い方を説明します。
+---
+
+## キーと値のマッピング
+
+`UniKvs.config()` の型引数には、キー名から値の型定義へのマッピングを渡します。値の型定義には `PlainValue<T>`、`StreamValue<T>`、`Value<T>` のいずれかを使います。
+
+```ts mapping.ts
+const kvs = UniKvs.config<{
+  message: PlainValue<string>;
+  logs: StreamValue<Uint8Array>;
+  data: Value<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+```
+
+これらは実行時には存在しない型レベルのブランドです。マッピングでキーごとに使える値の形を宣言すると、そのキーに対して `set()`、`get()`、`stream()` のどれが利用可能かがコンパイル時に決まります。
+
+| 型                | 書き込み                            | 読み取り      | ストリーム読み取り             |
+| ----------------- | ----------------------------------- | ------------- | ------------------------------ |
+| `PlainValue<T>`   | `set(key, T)`                       | `get(key): T` | 不可                           |
+| `StreamValue<T>`  | `set(key, T \| ReadableStream<T>)` | 不可          | `stream(key): ValueStream<T>` |
+| `Value<T>`        | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
+
+## PlainValue&lt;T&gt;
+
+**PlainValue** は単一の値として保存・取得するキーの型定義です。`set()` には値そのものを渡し、`get()` で値を取得します。
+
+```ts plain.ts
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{
+  message: PlainValue<string>;
+  avatar: PlainValue<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("message", "hello");
+const msg = await kvs.get("message");
+// msg は string 型
+
+await kvs.set("avatar", new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+const img = await kvs.get("avatar");
+// img は Uint8Array 型
+```
+
+`PlainValue<T>` のキーに対して `stream()` を呼ぼうとすると、型エラーになります。
+
+```ts
+// ❌ 型エラー
+kvs.stream("message");
+```
+
+## StreamValue&lt;T&gt;
+
+**StreamValue** はストリームとして読み取るキーの型定義です。大規模なデータや逐次処理が必要なデータに適しています。`set()` には値そのものか `ReadableStream` を渡せます。
+
+`get()` は利用できません。代わりに `stream()` で `ValueStream<T>` を取得します。
+
+```ts stream-value.ts
+import { UniKvs, type StreamValue } from "unikvs";
+
+const kvs = UniKvs.config<{
+  logs: StreamValue<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+// ReadableStream での書き込み
+const input = new ReadableStream({
+  start(controller) {
+    controller.enqueue(new Uint8Array([0x01]));
+    controller.enqueue(new Uint8Array([0x02]));
+    controller.close();
+  },
+});
+await kvs.set("logs", input);
+
+// ストリームとして読み取り
+const reader = (await kvs.stream("logs")).getReader();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  console.log(value); // Uint8Array
+}
+```
+
+`StreamValue<T>` のキーに対して `get()` を呼ぼうとすると、型エラーになります。
+
+```ts
+// ❌ 型エラー
+kvs.get("logs");
+```
+
+## Value&lt;T&gt;
+
+**Value** は `PlainValue<T> | StreamValue<T>` の糖衣構文です。同じキーに対して単一値での読み書きとストリーム読み取りの両方を許可したい場合に使います。
+
+```ts value.ts
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+// 単一値での保存・取得
+await kvs.set("data", new Uint8Array([1, 2, 3]));
+const all = await kvs.get("data");
+// all は Uint8Array 型
+
+// ストリームでの保存・読み取り
+const src = new ReadableStream({
+  start(controller) {
+    controller.enqueue(new Uint8Array([4]));
+    controller.close();
+  },
+});
+await kvs.set("data", src);
+const valueStream = await kvs.stream("data");
+```
+
+:::note
+保存形式が単一値かストリームかは、`set()` に渡した値によって決まります。`ReadableStream` を渡した場合はストリームパイプラインで書き込まれ、それ以外は単一値として各トランスフォーマーの `encode()` を通ります。
+:::
+
+## ValueStream&lt;T&gt;
+
+**ValueStream** は `stream()` が返す読み取り専用ストリームです。
+
+標準の `ReadableStream` と互換性があり、`getReader()` などの操作がそのまま使えます。加えて次の機能を持ちます。
+
+- **非同期イテレーション**: `for await` でチャンクを順に取り出せます。
+- **`dispose()`**: ストリームを閉じ、内部で保持しているロックなどのリソースを解放します。
+- **`Symbol.asyncDispose`**: `await using` 構文でスコープ終了時に自動的に破棄されます。
+
+```ts value-stream.ts
+// for await による反復。最後まで読むと自動的に破棄される。
+for await (const chunk of await kvs.stream("logs")) {
+  processChunk(chunk);
+}
+
+// await using による確定的な破棄
+{
+  await using vs = await kvs.stream("logs");
+  // ...必要な分だけ読む...
+} // ここで dispose() される
+
+// 明示的な破棄
+const vs = await kvs.stream("logs");
+const first = await vs.getReader().read();
+await vs.dispose();
+```
+
+:::warning[早めの中断にも対応]
+`break` による途中脱出や `dispose()` を呼ばずに参照を失った場合でも、ガベージコレクションのタイミングで内部ロックは解放されます。ただし解放時期は実行環境任せなので、使い終わったら `dispose()` を呼ぶのが確実です。
+:::

@@ -1,0 +1,178 @@
+---
+title: unikvs ガイド
+description: 設定ビルダー、ライフサイクル、各操作の挙動、AbortSignal と context の使い方を説明します。
+---
+
+## 設定ビルダー
+
+`UniKvs.config()` を呼び出すと設定ビルダーが返ります。次の順序で設定を積み上げ、`create()` で KVS クライアントを作成します。
+
+1. `setContext(context)` — 実行時コンテキストを設定します (省略可能)。
+2. `appendTransformer(transformer)` — トランスフォーマーを追加します (省略可能、複数追加可能)。
+3. `appendStorage(storage)` — ストレージを追加します (必須、複数追加可能)。
+4. `create()` — クライアントを作成します。
+
+```ts builder.ts
+import { UniKvs, type Value } from "unikvs";
+import { Memory } from "@unikvs/memory";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array>;
+}>()
+  .setContext({ app: "my-app" }) // 省略可能
+  .appendStorage(new Memory()) // 必須
+  .create();
+```
+
+### 追加の順序に制約がある
+
+トランスフォーマーはパイプラインの中継地点であり、ストレージは終端です。そのためストレージを登録した後にトランスフォーマーを追加することはできません。型の上では `appendStorage()` の戻り値に `appendTransformer()` が存在せず、実行時にもエラーになります。
+
+ストレージは複数回追加できます。2 回目以降の `appendStorage()` はファイナライザーインターフェースから呼び出します。
+
+```ts multi-storage.ts
+const kvs = UniKvs.config<{ data: Value<Uint8Array> }>()
+  .appendStorage(new Memory())
+  .appendStorage(new Opfs(".cache")) // 2 個目以降
+  .create();
+```
+
+ストレージが 1 つも登録されていない状態で `create()` を呼び出すと [`MissingStorageError`](/ja/docs/unikvs/errors) が投げられます。
+
+## ライフサイクル
+
+### open()
+
+`open()` はすべてのストレージとトランスフォーマーの `open()` を並列に呼び出し、読み書き可能な状態にします。
+
+- すでに開いている場合、[`UniKvsIsOpenError`](/ja/docs/unikvs/errors) が投げられます。
+- いずれかのプラグインの初期化に失敗した場合、開いたプラグインを閉じたうえで [`PluginOperationAggregateError`](/ja/docs/unikvs/errors) が投げられます。
+
+### close()
+
+`close()` はすべてのストレージとトランスフォーマーを並列にクローズします。
+
+- 開いていない場合、[`UniKvsIsNotOpenError`](/ja/docs/unikvs/errors) が投げられます。
+- オプションでシグナルを指定しなかった場合、10 秒のタイムアウト付きシグナルが使われます。
+- クローズすると進行中の操作も中断されます。
+
+### await using
+
+`UniKvs` は `Symbol.asyncDispose` を実装しています。`await using` 構文を使うとスコープを抜けるときに自動的にクローズされます。
+
+```ts dispose.ts
+{
+  await using kvs = UniKvs.config<{ data: Value<Uint8Array> }>()
+    .appendStorage(new Memory())
+    .create();
+
+  await kvs.open();
+  await kvs.set("data", new Uint8Array([1]));
+} // ここで自動的に close() される
+```
+
+## 操作
+
+作成したクライアントは次の操作を提供します。すべて開いている間のみ呼び出せており、開いていない場合は `UniKvsIsNotOpenError` が投げられます。
+
+| メソッド          | 説明                                       |
+| ----------------- | ------------------------------------------ |
+| `set(key, value)` | キーに値を保存します。                     |
+| `get(key)`        | キーから値を取得します。                   |
+| `stream(key)`     | キーからストリームを取得します。           |
+| `has(key)`        | キーが存在するかを確認します。             |
+| `delete(key)`     | キーを削除します。                         |
+| `clear()`         | すべてのストレージのデータを全削除します。 |
+
+どのキーに対してどのメソッドが呼べるかは、[型システム](/ja/docs/unikvs/types)によって制御されます。
+
+各メソッドは位置引数形式に加えて、オプション一式を 1 つのオブジェクトで渡す形式も利用できます。
+
+```ts forms.ts
+// 位置引数形式
+await kvs.set("foo", bytes, { signal });
+
+// オブジェクト形式
+await kvs.set({ key: "foo", value: bytes, signal });
+```
+
+### set()
+
+`set()` は値をエンコードしたうえで、登録されたすべてのストレージへ並列に書き込みます。
+
+書き込む値として `ReadableStream` を渡すと、ストリームのまま各トランスフォーマーのエンコードストリームを通過し、複数のストレージがある場合はストリームが分岐 (tee) されてそれぞれへ流し込まれます。
+
+一部のストレージで書き込みが失敗した場合、成功したストレージには `onOtherWriteError()` フックが通知され、必要に応じてロールバックできます。そのうえで失敗内容を集約した `PluginOperationAggregateError` が投げられます。
+
+### get()
+
+`get()` は登録順にストレージを探索し、最初にキーが見つかったストレージからデータを読み取り、トランスフォーマーを逆順に適用してデコードします。
+
+どのストレージにも存在しない場合は [`KeyNotFoundError`](/ja/docs/unikvs/errors) が投げられます。
+
+### stream()
+
+`stream()` は `get()` と同じ探索順序でデータを見つけ、読み取り専用の [`ValueStream`](/ja/docs/unikvs/types) を返します。ストリームの途中でトランスフォーマーのデコードストリームが連結されるため、大きなデータでも全体をメモリーに載せずに処理できます。
+
+```ts stream-read.ts
+const valueStream = await kvs.stream("logs");
+
+for await (const chunk of valueStream) {
+  console.log(chunk);
+}
+```
+
+### has() / delete() / clear()
+
+- `has()`：いずれかのストレージにキーが存在すれば `true` を返します。
+- `delete()`：キーを持つすべてのストレージから削除します。
+- `clear()`：すべてのストレージの全データを消去します。
+
+削除系の操作で一部のストレージが失敗した場合も、失敗を集約した `PluginOperationAggregateError` が投げられます。
+
+## AbortSignal
+
+すべての非同期操作はオプションで `AbortSignal` を受け付けます。キャンセルすると処理が中断されます。
+
+```ts abort.ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("key", value, { signal: ac.signal });
+```
+
+`open()` に渡したシグナルは接続全体にも作用します。`open()` 以降にシグナルが中止されると、以後の操作は失敗します。
+
+## context
+
+context はプラグインへ実行時の情報を受け渡すための `Record<string, unknown>` 型のオブジェクトです。詳細は [@unikvs/core のドキュメント](/ja/docs/core/#context)を参照してください。
+
+コンテキストは次の場所で指定でき、操作時に指定したものが優先されます。
+
+- ビルダーの `setContext()`: すべての操作に適用される基本値です。
+- 各操作のオプション: 基本値をマージしたうえで、同名のキーを上書きします。
+
+```ts context.ts
+const kvs = UniKvs.config<{ data: Value<Uint8Array> }>()
+  .setContext({ region: "ap-northeast-1" })
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+// この操作では partSize を上書きする
+await kvs.set("data", bytes, {
+  context: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 },
+});
+```
+
+UniKVS 本体も操作ごとに内部キーを設定します。プラグインはこれらを読むことで現在の操作を把握できます。
+
+| キー          | 説明                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| `unikvs:action` | 現在の操作種別 (`open` / `close` / `set` / `get` / `stream` / `has` / `delete` / `clear`) |
+| `unikvs:key`    | 操作対象のキー (`set` / `get` / `stream` / `has` / `delete` 時)                          |
+
+:::tip
+UniKVS は [LogTape](https://logtape.org/) カテゴリー `"unikvs"` でデバッグログを出力します。LogTape を設定するとプラグインの動作を観察できます。
+:::

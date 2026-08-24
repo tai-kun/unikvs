@@ -1,0 +1,68 @@
+---
+title: unikvs のエラー
+description: unikvs パッケージが投げるエラークラスの一覧と、エラーメッセージのカスタマイズ方法を説明します。
+---
+
+## エラーの設計
+
+UniKVS のすべての公開パッケージのエラーは、`@unikvs/core` が提供する `ErrorBase` を継承しています。
+
+- エラーメッセージは「何が起こったか」「なぜ問題か」「どう解決するか」を含みます。
+- メタ情報 (`ErrorMeta`) を保持し、`error.meta` から参照できます。
+- `setErrorMessage()` による言語ごとのメッセージ登録 (i18n) に対応しています。日本語メッセージはあらかじめ登録されています。
+
+## エラークラス一覧
+
+| クラス名                          | 投げられる場面                                                                     |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `MissingStorageError`             | ストレージ未登録のまま `create()` を呼び出した。                                   |
+| `TransformerRegistrationError`    | ストレージ登録後にトランスフォーマーを追加しようとした。                           |
+| `UniKvsIsOpenError`               | 開いているクライアントに対して再度 `open()` を呼び出した。                         |
+| `UniKvsIsNotOpenError`            | 開いていない状態で操作を行った。                                                   |
+| `KeyNotFoundError`                | `get()` / `stream()` の対象キーがどのストレージにも存在しない。                     |
+| `InvalidInputError`               | 操作に渡した入力がスキーマに適合しない。                                           |
+| `InvalidOutputError`              | プラグインから受け取った出力がスキーマに適合しない。                               |
+| `PluginOperationAggregateError`   | 複数のストレージやトランスフォーマーの操作で失敗が発生した。個々の原因を集約する。 |
+| `StorageIsNotOpenError`           | 開かれていないストレージに対して操作が行われた。                                   |
+| `WritableStreamNotSupportedError` | 書き込みストリーム非対応のストレージにストリーム書き込みを行った。                 |
+| `ReadableStreamNotSupportedError` | 読み取りストリーム非対応のストレージからストリーム読み取りを行った。               |
+| `TransformerIsNotOpenError`       | 開かれていないトランスフォーマーに対して操作が行われた。                           |
+| `EncodableStreamNotSupportedError` | エンコードストリーム非対応のトランスフォーマーでストリーム書き込みを行った。      |
+| `DecodableStreamNotSupportedError` | デコードストリーム非対応のトランスフォーマーでストリーム読み取りを行った。        |
+
+## PluginOperationAggregateError
+
+複数のプラグインへの並列処理の一部が失敗したときに投げられます。`meta` プロパティーから次の情報を参照できます。
+
+```ts aggregate.ts
+try {
+  await kvs.set("key", value);
+} catch (ex) {
+  if (ex instanceof PluginOperationAggregateError) {
+    for (const e of ex.meta.errors) {
+      console.error(e.plugin, e.reason); // "storage" | "transformer" と原因
+    }
+  }
+}
+```
+
+| プロパティー | 型                                                       | 説明                                     |
+| ------------ | -------------------------------------------------------- | ---------------------------------------- |
+| `meta.plugin` | `"plugin" \| "storage" \| "transformer"`                 | 失敗したプラグイン種別。混在時は `"plugin"`。 |
+| `meta.action` | `"open" \| "close" \| "write" \| "delete" \| "clear"`   | 失敗した操作の種類。                     |
+| `meta.errors` | `{ plugin, reason }[]`                                   | 個々の失敗のプラグイン種別と原因。       |
+
+## メッセージのカスタマイズ
+
+`@unikvs/core` が再エクスポートしている `setErrorMessage()` で、言語タグごとにメッセージを上書きできます。
+
+```ts i18n.ts
+import { KeyNotFoundError } from "unikvs";
+import { setErrorMessage } from "@unikvs/core";
+
+setErrorMessage(
+  KeyNotFoundError,
+  ({ key }) => `キー ${JSON.stringify(key)} が見つかりません`,
+  "ja",
+);
+```

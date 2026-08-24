@@ -1,0 +1,73 @@
+---
+title: @unikvs/indexeddb
+description: 任意のデータをブラウザーの IndexedDB に保存するストレージプラグインです。
+---
+
+## 概要
+
+`@unikvs/indexeddb` は、ブラウザーの IndexedDB を永続化先として使うストレージです。
+
+IndexedDB は構造化データを保存できるブラウザー標準のストレージで、OPFS より広い環境で利用できます。内部では [`idb`](https://github.com/jakearchibald/idb) ラッパーを使用しています。キーはオブジェクトストアのキーとして保存されます。
+
+```package-install
+pnpm add @unikvs/indexeddb
+```
+
+## 使い方
+
+```ts indexeddb.ts
+import { Indexeddb } from "@unikvs/indexeddb";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  session: Value<Uint8Array>;
+}>()
+  // 第 1 引数はデータベース名 (既定 "unikvs_db")、第 2 引数はオブジェクトストア名 (既定 "kvs_store")
+  .appendStorage(new Indexeddb())
+  .create();
+
+await kvs.open(); // DB 接続を確立し、ストアがなければ作成する
+await kvs.set("session", new Uint8Array([1]));
+await kvs.close();
+```
+
+`open()` 時にデータベースバージョン 1 で接続し、指定した名前のオブジェクトストアが存在しなければ作成します。すでにオープン済みの場合は再接続しません。
+
+## ストリームの扱い
+
+IndexedDB 自体にはストリーム API がないため、エミュレーションで対応します。
+
+- **書き込み**: チャンクをメモリー上に蓄積し、クローズ時に結合して 1 レコードとして保存します。
+- **読み取り**: データ全体をメモリーにロードしてから単一チャンクとして送出します。
+
+:::warning[巨大データには不向き]
+ストリーム操作でもデータ全体がメモリーに載ります。動画のような大規模なバイナリーを扱う場合は [@unikvs/opfs](/ja/docs/opfs/) を検討してください。
+:::
+
+存在しないキーへの `read()` は `DOMException` (`NotFoundError`) を投げます。
+
+## API
+
+### Indexeddb クラス
+
+```ts
+new Indexeddb(dbName?: string, storeName?: string)
+// 既定値: dbName "unikvs_db", storeName "kvs_store"
+```
+
+| メンバー                                        | 説明                                                     |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                  | 常に `"Indexeddb"`。                                     |
+| `get isOpen(): boolean`                         | 接続済みかどうか。                                       |
+| `open()`                                        | データベースへ接続します。                               |
+| `close()`                                       | 接続を閉じます。                                         |
+| `write(args)` / `read(args)`                    | レコードの保存・取得を行います。                         |
+| `exists(args): Promise<boolean>`                | キーの存在を確認します。                                 |
+| `delete(args)` / `clear()`                      | 指定キーの削除、ストア全体の消去を行います。             |
+| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。                         |
+| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。                         |
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/opfs](/ja/docs/opfs/)：ブラウザー向けのもう 1 つのストレージ

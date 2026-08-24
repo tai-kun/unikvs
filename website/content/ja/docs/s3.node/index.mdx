@@ -1,0 +1,115 @@
+---
+title: @unikvs/s3.node
+description: バイト配列を S3 互換のオブジェクトストレージに保存するストレージプラグインです。
+---
+
+## 概要
+
+`@unikvs/s3.node` は、AWS S3 および互換のオブジェクトストレージ (MinIO、RustFS など) にデータを保存するストレージです。
+
+Node.js 専用です。内部で AWS SDK for JavaScript v3 (`@aws-sdk/client-s3`) と `@aws-sdk/lib-storage` を使用し、キーがそのままオブジェクトキーになります。マルチパートアップロードによるストリーム書き込みに対応しています。
+
+```package-install
+pnpm add @unikvs/s3.node
+```
+
+## 使い方
+
+コンストラクターにはバケット名と、S3 クライアントに渡す設定を指定します。
+
+```ts s3.ts
+import { S3 } from "@unikvs/s3.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  backup: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendStorage(
+    new S3("my-bucket", {
+      region: "ap-northeast-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    }),
+  )
+  .create();
+
+await kvs.open();
+await kvs.set("backup", new Uint8Array([1, 2, 3]));
+await kvs.close();
+```
+
+### S3 互換サービスへの接続
+
+エンドポイント指定とパス形式アクセスを有効にすると、MinIO などの互換サービスにも接続できます。
+
+```ts compatible.ts
+import { S3 } from "@unikvs/s3.node";
+
+const storage = new S3("test-bucket", {
+  endpoint: "http://localhost:9000",
+  region: "ap-northeast-1",
+  credentials: {
+    accessKeyId: "minioadmin",
+    secretAccessKey: "minioadmin",
+  },
+  forcePathStyle: true,
+});
+```
+
+:::warning[open() / close() の管理]
+`open()` で S3 クライアントを生成し、`close()` で破棄 (destroy) します。UniKVS 本体経由で使う場合はライフサイクルが自動管理されます。
+:::
+
+## マルチパートアップロードと partSize
+
+`ReadableStream` を `set()` すると、`@aws-sdk/lib-storage` のマルチパートアップロードで書き込まれます。
+
+パートサイズは操作時の context で変更できます。
+
+```ts multipart.ts
+await kvs.set("backup", stream, {
+  context: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 }, // 8 MiB
+});
+```
+
+後方互換のため、`@unikvs/s3:partSize` というキーも同じ意味で読み取られます。
+
+## clear() の挙動
+
+`clear()` はバケット内のすべてのオブジェクトをページネーションで列挙し、一括削除します。
+
+:::danger[バケット全体が消える]
+このストレージにはプレフィックスの概念がなく、`clear()` はバケット内の全オブジェクトを対象にします。他のアプリケーションと共有するバケットは指定しないでください。
+:::
+
+## API
+
+### S3 クラス
+
+```ts
+new S3(bucket: string, config?: S3ClientConfig)
+```
+
+| メンバー                                                | 説明                                                     |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                          | 常に `"S3"`。                                            |
+| `get isOpen(): boolean`                                 | オープン済みかどうか。                                   |
+| `open()`                                                | S3 クライアントを生成します。                            |
+| `close()`                                               | S3 クライアントを破棄します。                            |
+| `write(args)`                                           | オブジェクトを PutObject で保存します。                  |
+| `read(args): Promise<Uint8Array>`                       | GetObject で取得したボディーをバイト配列化します。       |
+| `exists(args): Promise<boolean>`                        | HeadObject の結果で判定します (404 は false)。           |
+| `delete(args)`                                          | DeleteObject で削除します。                              |
+| `clear(args)`                                           | バケット内の全オブジェクトを削除します。                 |
+| `getWritable(args): WritableStream<Uint8Array>`         | マルチパートアップロードへの書き込みストリームです。     |
+| `getReadable(args): Promise<ReadableStream<Uint8Array>>`| GetObject のボディーを Web ストリームとして返します。    |
+
+各操作の `signal` は AWS SDK の `abortSignal` として転送されます。
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/fs.node](/ja/docs/fs.node/)：ローカルファイルシステム版
+- [@unikvs/testcontainer](https://github.com/tai-kun/unikvs)：テスト用コンテナー (内部パッケージ)

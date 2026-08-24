@@ -1,0 +1,77 @@
+---
+title: @unikvs/compression
+description: バイト配列を指定の形式で透過的に圧縮/展開するトランスフォーマープラグインです。
+---
+
+## 概要
+
+`@unikvs/compression` は、Web 標準の `CompressionStream` / `DecompressionStream` をラップしたトランスフォーマーを提供します。
+
+UniKVS に組み込むと、`set()` で保存するときに圧縮し、`get()` / `stream()` で読み取るときに自動的に展開します。利用者のコードは圧縮を意識せずに済みます。
+
+```package-install
+pnpm add @unikvs/compression
+```
+
+:::note
+Web 標準 API を使用するため、`CompressionStream` と `DecompressionStream` が利用可能なランタイム (モダンなブラウザー、Node.js など) が必要です。
+:::
+
+## 使い方
+
+コンストラクターに圧縮形式を渡してインスタンスを作成し、ビルダーの `appendTransformer()` で追加します。
+
+```ts compression.ts
+import { Compression } from "@unikvs/compression";
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new NodeFs(".tmp"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+const bytes = await kvs.get("foo"); // 自動的に展開される
+
+await kvs.close();
+```
+
+トランスフォーマーは常にオープン状態のため、このプラグイン自体には `open()` や `close()` は不要です。
+
+## 対応形式
+
+`CompressionFormat` 型は Web 標準が受け付ける次の文字列リテラルです。
+
+| 形式             | 説明                                                       |
+| ---------------- | ---------------------------------------------------------- |
+| `"gzip"`         | gzip 形式。互換性が高く、一般的な用途に推奨されます。      |
+| `"deflate"`      | zlib 形式の deflate。                                      |
+| `"deflate-raw"`  | ヘッダーなしの生 deflate。                                 |
+
+## API
+
+### Compression クラス
+
+```ts
+new Compression(format: CompressionFormat)
+```
+
+| メンバー                              | 説明                                                                 |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| `name: string`                        | 常に `"Compression"`。                                               |
+| `encode(args): Promise<Uint8Array>`   | 受け取ったバイト配列を圧縮します。                                   |
+| `decode(args): Promise<Uint8Array>`   | 圧縮されたバイト配列を展開します。                                   |
+| `getEncodable(): TransformStream`     | `new CompressionStream(format)` を返します。                         |
+| `getDecodable(): TransformStream`     | `new DecompressionStream(format)` を返します。                       |
+
+ストリーム変換をサポートしているため、[`StreamValue`](/ja/docs/unikvs/types) を含むキーへのストリーム書き込みや `stream()` 読み取りでも、展開は逐次的に行われます。
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/checksum](/ja/docs/checksum/)：圧縮と併用できるチェックサム検証

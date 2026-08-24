@@ -1,0 +1,115 @@
+---
+title: unikvs API リファレンス
+description: unikvs パッケージの公開 API、設定ビルダー、UniKvs クラスのメソッドシグネチャーの一覧です。
+---
+
+## エクスポート一覧
+
+`"unikvs"` パッケージからエクスポートされる主なシンボルは次のとおりです。
+
+- 値: `UniKvs` (既定エクスポートの再エクスポート)、`UniKvsConfig`
+- 型: `Value`、`PlainValue`、`StreamValue`、`KeyValueMapping`、`KeyofKeyValueMapping`、`SetValue`、`ValueStream`、`Context`、`ContextSource`、各種オプション型 (`OpenOptions` など)
+- エラー: [`エラーページ`](/ja/docs/unikvs/errors)を参照
+
+## UniKvs.config()
+
+KVS クライアントを構築するための静的メソッドです。
+
+```ts
+static config<TKeyValueMapping extends KeyValueMapping>(): IUniKvsConfigBuilder<TKeyValueMapping>;
+```
+
+戻り値のビルダーには次のメソッドがあります。
+
+| メソッド                     | 戻り値                        | 説明                                                                 |
+| ---------------------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `setContext(context)`        | `this`                        | 基本の実行時コンテキストを設定します。既存のコンテキストは上書きされます。 |
+| `appendTransformer(t)`       | ビルダー                      | トランスフォーマーをパイプラインに追加します。                       |
+| `appendStorage(storage)`     | ファイナライザー              | ストレージを追加します。呼び出し後は `appendTransformer()` を呼べません。 |
+| `create()`                   | `UniKvs<TKeyValueMapping>`    | クライアントを作成します。ストレージ未登録の場合はエラーになります。 |
+
+ファイナライザー (2 回目以降の `appendStorage()` の戻り値) は `create()`、`setContext()`、`appendStorage()` のみを持ちます。
+
+## UniKvs クラス
+
+### プロパティー
+
+| メンバー             | 型        | 説明                                                     |
+| -------------------- | --------- | -------------------------------------------------------- |
+| `get isOpen(): boolean` | `boolean` | クライアントが利用可能な状態かどうか。               |
+
+### open()
+
+```ts
+open(options?: OpenOptions): Promise<void>;
+```
+
+すべてのストレージとトランスフォーマーを初期化します。
+
+### close()
+
+```ts
+close(options?: CloseOptions): Promise<void>;
+```
+
+すべてのストレージとトランスフォーマーをクローズします。オプションでシグナルを指定しない場合、10 秒のタイムアウトが適用されます。
+
+### set()
+
+```ts
+// 位置引数形式
+set(key: TKey, value: SetValue<TKeyValueMapping[TKey]>, options?: { signal?: AbortSignal; context?: ContextSource }): Promise<void>;
+
+// オブジェクト形式
+set(options: SetOptions<TKeyValueMapping, TKey>): Promise<void>;
+```
+
+キーに値を保存します。`TKey` はマッピングに定義した任意のキーです。値として `ReadableStream` を渡せるかどうかはキーの型定義 ([`StreamValue`](/ja/docs/unikvs/types) を含むかどうか) で決まります。
+
+### get()
+
+```ts
+get(key: TKey, options?): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
+get(options: GetOptions<TKey>): Promise<...>;
+```
+
+`TKey` は `PlainValue` を含むキーのみです。`StreamValue` 専用のキーを渡すと型エラーになります。
+
+### stream()
+
+```ts
+stream(key: TKey, options?): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
+stream(options: StreamOptions<TKey>): Promise<ValueStream<...>>;
+```
+
+`TKey` は `StreamValue` を含むキーのみです。
+
+### has() / delete() / clear()
+
+```ts
+has(key: TKey, options?): Promise<boolean>;
+delete(key: TKey, options?): Promise<void>;
+clear(options?: ClearOptions): Promise<void>;
+```
+
+`has()` と `delete()` の `TKey` はマッピングに定義した任意のキーです。
+
+## 共通オプション
+
+<TypeTable
+  type={{
+    signal: {
+      type: "AbortSignal",
+      description: "処理の中断を通知するためのシグナルです。",
+    },
+    context: {
+      type: "ContextSource",
+      description:
+        "実行時コンテキストです。オブジェクトまたはキーと値のペア配列を受け付け、基本のコンテキストにマージされます。",
+    },
+  }}
+/>
+
+## Symbol.asyncDispose
+
+`await using` 構文のためのメソッドです。クライアントが開いている場合はクローズし、開いていない場合は何もしません。

@@ -1,0 +1,178 @@
+---
+title: @unikvs/core
+description: Transformer と Storage のインターフェース、Context、エラーの基底クラスを提供するコアパッケージです。
+---
+
+## 概要
+
+`@unikvs/core` は UniKVS を構成するすべてのパッケージで共有されるコアパッケージです。
+
+KVS の利用者は通常このパッケージを直接インポートしません。独自のトランスフォーマーやストレージを実装する開発者が対象です。
+
+```package-install
+pnpm add @unikvs/core
+```
+
+## エクスポート一覧
+
+- `.`: `Context` 型、`IStorage` 関連の型、`ITransformer` 関連の型、エラー基底クラス
+- `./storage`: ストレージ関連の型のみ
+- `./transformer`: トランスフォーマー関連の型のみ
+
+## Context
+
+**Context** はプラグインへ実行時の情報を受け渡すための汎用的なオブジェクトで、`Record<string, unknown>` 型です。
+
+キーにはプラグインごとの慣習として、パッケージ名を前置した名前空間形式が使われます。
+
+```ts context.ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+import type { Context } from "@unikvs/core";
+
+const context: Context = {
+  // チェックサム検証で期待するハッシュ値を指定する例。
+  "@unikvs/checksum:sha256": "abc123...",
+};
+```
+
+UniKVS 本体と各プラグインが読む主なキーは次のとおりです。
+
+| キー                          | 設定する主体   | 説明                                                                                     |
+| ----------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
+| `unikvs:action`               | unikvs 本体    | 現在の操作種別 (`open` / `close` / `set` / `get` / `stream` / `has` / `delete` / `clear`) |
+| `unikvs:key`                  | unikvs 本体    | 操作対象のキー。                                                                         |
+| `@unikvs/checksum:<algo>`     | チェックサム   | 検証に使うハッシュ値の 16 進数文字列。                                                   |
+| `@unikvs/s3.node:partSize`    | S3 ストレージ  | マルチパートアップロードのパートサイズ (バイト単位)。                                   |
+
+## ITransformer
+
+**ITransformer** はデータの双方向変換 (エンコード・デコード) を担うインターフェースです。単発データの変換に加え、ストリーム変換も任意でサポートできます。
+
+```ts transformer.ts
+import type { ITransformer } from "@unikvs/core";
+
+class MyTransformer implements ITransformer<Uint8Array, Uint8Array, Uint8Array, Uint8Array> {
+  public readonly name = "MyTransformer";
+
+  public get isOpen(): boolean {
+    return true;
+  }
+
+  // 単発データのエンコード (必須)
+  public encode(args: Pick<ITransformer.EncodeArgs<Uint8Array>, "data">): Uint8Array {
+    return transform(args.data);
+  }
+
+  // 単発データのデコード (必須)
+  public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array>, "data">): Uint8Array {
+    return restore(args.data);
+  }
+
+  // ストリーム書き込みをサポートする場合のみ実装します。
+  public getEncodable(): TransformStream<Uint8Array, Uint8Array> {
+    return new TransformStream({ transform(chunk, c) { c.enqueue(transform(chunk)); } });
+  }
+
+  // ストリーム読み取りをサポートする場合のみ実装します。
+  public getDecodable(): TransformStream<Uint8Array, Uint8Array> {
+    return new TransformStream({ transform(chunk, c) { c.enqueue(restore(chunk)); } });
+  }
+}
+```
+
+### メンバー
+
+| メンバー                            | 必須 | 説明                                                                       |
+| ----------------------------------- | ---- | -------------------------------------------------------------------------- |
+| `name: string`                      | ○   | プラグイン名。デバッグメッセージなどに使用されます。                       |
+| `get isOpen(): boolean`             | ○   | 利用可能な状態かどうか。                                                   |
+| `open?(args)` / `close?(args)`      |      | リソースの確保と解放。引数には `context` と `signal` が渡ります。          |
+| `encode(args): MaybePromise<TOut>` | ○   | 単発データをエンコードします。引数は `{ context, data, signal }` です。    |
+| `decode(args): MaybePromise<TOut>` | ○   | 単発データをデコードします。                                               |
+| `getEncodable?(args)`               |      | `TransformStream` を返します。ストリーム書き込み時に使われます。           |
+| `getDecodable?(args)`               |      | `TransformStream` を返します。ストリーム読み取り時に使われます。           |
+
+:::note
+ストリーム用メソッド (`getEncodable()` / `getDecodable()`) は省略可能ですが、省略したトランスフォーマーを含む構成で `set()` に `ReadableStream` を渡す、または `stream()` を呼び出すと `EncodableStreamNotSupportedError` / `DecodableStreamNotSupportedError` になります。
+:::
+
+## IStorage
+
+**IStorage** はデータの永続化を担うインターフェースです。単発の読み書きに加え、ストリーム入出力を任意でサポートできます。
+
+```ts storage.ts
+import type { IStorage } from "@unikvs/core";
+
+class Memory implements IStorage {
+  private readonly map = new Map<string, any>();
+
+  public readonly name = "Memory";
+
+  public get isOpen(): boolean {
+    return true;
+  }
+
+  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+    this.map.set(args.key, args.data);
+  }
+
+  public read(args: Pick<IStorage.ReadArgs, "key">): any {
+    return this.map.get(args.key);
+  }
+
+  public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
+    return this.map.has(args.key);
+  }
+
+  public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
+    this.map.delete(args.key);
+  }
+
+  public clear(): void {
+    this.map.clear();
+  }
+}
+```
+
+### メンバー
+
+| メンバー                                  | 必須 | 説明                                                                 |
+| ----------------------------------------- | ---- | -------------------------------------------------------------------- |
+| `name: string`                            | ○   | ストレージ名。デバッグメッセージなどに使用されます。                 |
+| `get isOpen(): boolean`                   | ○   | 利用可能な状態かどうか。                                             |
+| `open?(args)` / `close?(args)`            |      | 接続確立や初期化、フラッシュと切断。                                 |
+| `write(args): MaybePromise<void>`         | ○   | データを保存します。引数は `{ context, key, data, signal }` です。   |
+| `read(args): MaybePromise<TData>`        | ○   | データを読み取ります。                                               |
+| `exists(args): MaybePromise<boolean>`    | ○   | キーの存在を確認します。                                             |
+| `delete(args): MaybePromise<void>`       | ○   | キーを削除します。                                                   |
+| `clear(args): MaybePromise<void>`        | ○   | 全データを消去します。                                               |
+| `getWritable?(args)`                      |      | `WritableStream` を返します。ストリーム書き込み時に使われます。      |
+| `getReadable?(args)`                      |      | `ReadableStream` を返します。ストリーム読み取り時に使われます。      |
+| `onOtherWriteError?(args)`                |      | マルチキャスト書き込みで他のストレージが失敗したときのフックです。ロールバックなどを実装できます。 |
+
+すべての操作系メソッドの引数オブジェクト (`IStorage.WriteArgs` など) は `context`、`key`、`signal` を含みます。必要なプロパティーだけを受け取る場合は `Pick<>` を使うパターンが推奨されます。
+
+## エラー
+
+独自プラグインから投げるエラーは `ErrorBase` を継承して定義します。`ErrorBase` は i18n ライブラリー `i18n-error-base` のラッパーで、メタ情報と言語別メッセージ登録をサポートします。
+
+```ts error.ts
+import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+
+type KeyNotFoundErrorMeta = { readonly key: string };
+
+class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
+  static {
+    this.prototype.name = "MyKeyNotFoundError";
+  }
+
+  public constructor(args: KeyNotFoundErrorMeta, options?: ErrorOptions) {
+    super(args, ({ key }) => `Key not found: ${key}`, options);
+  }
+}
+
+// 日本語メッセージを登録します。
+setErrorMessage(KeyNotFoundError, ({ key }) => `キー ${key} が見つかりません`, "ja");
+```
+
+API 契約違反 (利用者側の誤用) を表すエラーは `InvalidUsageErrorBase` を継承します。

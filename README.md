@@ -12,7 +12,7 @@ pnpm add unikvs
 
 ```typescript
 import { Compression } from "@unikvs/compression";
-import { FileSystem } from "@unikvs/fs.node";
+import { NodeFs } from "@unikvs/fs.node";
 import { UniKvs, type Value } from "unikvs";
 
 const kvs = UniKvs.config<{
@@ -22,7 +22,7 @@ const kvs = UniKvs.config<{
   // バイト配列を透過的に gzip 圧縮/展開するトランスフォーマープラグインを追加します。
   .appendTransformer(new Compression("gzip"))
   // バイト配列を ".tmp/" 配下に保存するストレージプラグインを追加します。
-  .appendStorage(new FileSystem(".tmp"))
+  .appendStorage(new NodeFs(".tmp"))
   // KVS クライントを作成します。
   .create();
 

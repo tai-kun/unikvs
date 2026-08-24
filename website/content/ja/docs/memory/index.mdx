@@ -1,0 +1,80 @@
+---
+title: @unikvs/memory
+description: 任意のデータをメモリー上に保存するストレージプラグインです。
+---
+
+## 概要
+
+`@unikvs/memory` は、データをプロセスのメモリー上 (`Map`) に保存するストレージです。
+
+すべての操作が同期で完了し、非同期処理のオーバーヘッドがありません。単体テストや一時的なキャッシュに適しています。データはアプリケーションの実行中のみ保持され、プロセス終了時に破棄されます。
+
+```package-install
+pnpm add @unikvs/memory
+```
+
+## 使い方
+
+コンストラクター引数はありません。
+
+```ts memory.ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  message: Value<string>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("message", "hello");
+console.log(await kvs.get("message")); // "hello"
+
+await kvs.close();
+```
+
+メモリーストレージは常にオープン状態として動作します。`open()` / `close()` を呼んでも実質的な初期化は行われません。
+
+## ストリームの扱い
+
+IndexedDB と同様、ネイティブなストリームを持たない環境向けのエミュレーションを実装しています。
+
+- **書き込み**: チャンクをメモリー上に蓄積し、ストリームのクローズ時に結合して保存します。
+- **読み取り**: 保存された値を単一チャンクとして送出する `ReadableStream` を返します。
+
+チャンクは `Uint8Array<ArrayBuffer>` のみを受け付けます。それ以外の型が流れてくると `InvalidChunkTypeError` が投げられます。
+
+:::note
+ストリーム書き込みではデータ全体がメモリーに載ります。巨大なデータをストリーミングしたい場合は [@unikvs/fs.node](/ja/docs/fs.node/) や [@unikvs/opfs](/ja/docs/opfs/) など、ネイティブストリーム対応のストレージを検討してください。
+:::
+
+## API
+
+### Memory クラス
+
+```ts
+new Memory()
+```
+
+| メンバー                                        | 説明                                                     |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                  | 常に `"Memory"`。                                        |
+| `get isOpen(): boolean`                         | 常に `true`。                                            |
+| `write(args)` / `read(args)`                    | キーと値を保存・取得します。                             |
+| `exists(args): boolean`                         | キーの存在を確認します。                                 |
+| `delete(args)` / `clear()`                      | 指定キーの削除、全削除を行います。                       |
+| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。                         |
+| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。                         |
+
+存在しないキーへの `read()` / `delete()`、および `getReadable()` は `KeyNotFoundError` を投げます。
+
+## エラー
+
+| クラス名               | 投げられる場面                                       |
+| ---------------------- | ---------------------------------------------------- |
+| `KeyNotFoundError`     | 存在しないキーを読み取ろうとした、または削除しようとした。 |
+| `InvalidChunkTypeError` | ストリームに `Uint8Array<ArrayBuffer>` 以外を書き込んだ。 |
+
+両クラスとも `@unikvs/memory` パッケージからエクスポートされています。

@@ -1,0 +1,119 @@
+---
+title: @unikvs/checksum
+description: MD5 / SHA-1 / SHA-2 ファミリーのハッシュ値でデータの整合性を検証するトランスフォーマープラグインです。
+---
+
+## 概要
+
+`@unikvs/checksum` は、データのハッシュ値を計算し、context に指定された期待値と一致するかを検証するトランスフォーマー群を提供します。
+
+ハッシュ計算には [@noble/hashes](https://github.com/paulmillr/noble-hashes) を使用しており、Node.js とブラウザーの両方で動作します。圧縮のような変換は行わず、データは常にそのまま透過させます。
+
+```package-install
+pnpm add @unikvs/checksum
+```
+
+:::note
+パッケージ本体は `@noble/hashes` をピア依存として宣言しています。利用するプロジェクト側にも `@noble/hashes` をインストールしてください。
+:::
+
+## 対応アルゴリズム
+
+| クラス           | アルゴリズム | context キー                 |
+| ---------------- | ------------ | ---------------------------- |
+| `ChecksumMd5`    | MD5          | `@unikvs/checksum:md5`       |
+| `ChecksumSha1`   | SHA-1        | `@unikvs/checksum:sha1`      |
+| `ChecksumSha224` | SHA-224      | `@unikvs/checksum:sha224`    |
+| `ChecksumSha256` | SHA-256      | `@unikvs/checksum:sha256`    |
+| `ChecksumSha384` | SHA-384      | `@unikvs/checksum:sha384`    |
+| `ChecksumSha512` | SHA-512      | `@unikvs/checksum:sha512`    |
+
+各クラスは静的プロパティー `CHECKSUM_CONTEXT_KEY` で対応する context キーを公開しています。文字列リテラルを直接書くより、このプロパティーを参照するほうが確実です。
+
+## 使い方
+
+### UniKVS に組み込む
+
+ビルダーの `appendTransformer()` で追加し、操作時の context に期待するハッシュ値 (16 進数文字列) を指定します。
+
+```ts checksum.ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array>;
+}>()
+  .appendTransformer(new ChecksumSha256())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+// SHA-256(Uint8Array.of(0)) の値です。
+const expected = "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d";
+
+// 書き込み時に検証される
+await kvs.set("data", new Uint8Array([0]), {
+  context: { "@unikvs/checksum:sha256": expected },
+});
+
+// 読み取り時にも検証される
+const bytes = await kvs.get("data", {
+  context: { "@unikvs/checksum:sha256": expected },
+});
+```
+
+context に期待値がない場合、既定では検証を行わずデータを透過させます。
+
+### 単体で使う
+
+トランスフォーマーは UniKVS 本体なしでも直接呼び出せます。
+
+```ts standalone.ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+
+const transformer = new ChecksumSha256();
+transformer.encode({
+  data: new Uint8Array([0]),
+  context: { "@unikvs/checksum:sha256": expected },
+});
+```
+
+## 検証の挙動
+
+エンコード時とデコード時のどちらも、同じ検証ロジックが走ります。
+
+1. context から対応するキー (`CHECKSUM_CONTEXT_KEY`) の値を取得します。
+2. 値が 16 進数文字列なら、実データのハッシュ値と比較します。
+3. 一致しなければ `ChecksumMismatchError` が投げられます。
+
+期待値が存在しない場合の扱いはオプションで切り替えられます。
+
+| オプション            | 既定   | 挙動                                                       |
+| --------------------- | ------ | ---------------------------------------------------------- |
+| `{}`                  | 必須化しない | 期待値がなければ検証せず透過させる。                       |
+| `{ required: true }`  |        | 期待値がなければ `ChecksumRequiredError` が投げられる。    |
+
+:::tip
+単発データの一括処理ではデータ全体を一度にハッシュ化します。ストリーム処理ではチャンクごとにハッシュ状態を更新し、終端で一致確認するため、大きなデータでもメモリー効率よく検証できます。4 GB を超える単一チャンクは noble-hashes の制限に従って自動的に分割されます。
+:::
+
+:::warning[MD5 と SHA-1 の利用]
+MD5 と SHA-1 は衝突耐性が破られています。意図的な改ざんへの防御が必要な場面では SHA-2 ファミリーを使用してください。
+:::
+
+## エラー
+
+| クラス名                        | 投げられる場面                                       |
+| ------------------------------- | ---------------------------------------------------- |
+| `ChecksumMismatchError`         | 計算したハッシュ値が期待値と一致しない。             |
+| `ChecksumRequiredError`         | `required: true` なのに context に期待値がない。     |
+| `ChecksumInvalidContextKeyError` | 内部不整合によりコンテクストキーが不正になった。     |
+
+いずれも `@unikvs/checksum` パッケージからエクスポートされています。`ChecksumMismatchError` のメタ情報からは `meta.actual` (実際のハッシュ値) と `meta.expected` (期待値) を参照できます。
+
+## 関連パッケージ
+
+- [unikvs](/ja/docs/unikvs/)：本体
+- [@unikvs/compression](/ja/docs/compression/)：組み合わせて「保存時に圧縮 + 検証」も可能です。
