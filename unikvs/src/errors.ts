@@ -272,7 +272,7 @@ export class WritableStreamNotSupportedError extends ErrorBase<WritableStreamNot
 }
 
 setErrorMessage(
-  StorageIsNotOpenError,
+  WritableStreamNotSupportedError,
   ({ name }) => `ストレージ "${name}" は書き込み可能なストリームをサポートしていません`,
   "ja",
 );
@@ -306,7 +306,7 @@ export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNot
 }
 
 setErrorMessage(
-  StorageIsNotOpenError,
+  ReadableStreamNotSupportedError,
   ({ name }) => `ストレージ "${name}" は読み取り可能なストリームをサポートしていません`,
   "ja",
 );
@@ -340,7 +340,7 @@ export class MultipartWriteNotSupportedError extends ErrorBase<MultipartWriteNot
 }
 
 setErrorMessage(
-  StorageIsNotOpenError,
+  MultipartWriteNotSupportedError,
   ({ name }) => `ストレージ "${name}" はマルチパート書き込みをサポートしていません`,
   "ja",
 );
@@ -432,7 +432,7 @@ export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamN
 }
 
 setErrorMessage(
-  TransformerIsNotOpenError,
+  EncodableStreamNotSupportedError,
   ({ name }) => `トランスフォーマー "${name}" はエンコード可能なストリームをサポートしていません`,
   "ja",
 );
@@ -466,7 +466,7 @@ export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamN
 }
 
 setErrorMessage(
-  TransformerIsNotOpenError,
+  DecodableStreamNotSupportedError,
   ({ name }) => `トランスフォーマー "${name}" はデコード可能なストリームをサポートしていません`,
   "ja",
 );
@@ -617,7 +617,7 @@ export class TransformerRegistrationError extends ErrorBase<undefined> {
 }
 
 setErrorMessage(
-  MissingStorageError,
+  TransformerRegistrationError,
   "ストレージが登録された後にトランスフォーマーを追加することはできません",
   "ja",
 );
