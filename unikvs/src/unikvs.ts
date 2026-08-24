@@ -1128,10 +1128,40 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await io.rLock({ key, signal });
       try {
         // いずれかのストレージに存在すれば true を返します。
+        // あるストレージの存在確認に失敗しても、他のストレージで
+        // 存在を確認できるようにフォールバックします。
+        const errors: { reason: unknown }[] = [];
         for (const storage of this.#destinations) {
-          if (await storage.exists(context, signal, key)) {
-            return true;
+          try {
+            if (await storage.exists(context, signal, key)) {
+              return true;
+            }
+          } catch (ex) {
+            if (signal.aborted) {
+              throw ex;
+            }
+            errors.push({ reason: ex });
+            logger.error`Failed to check existence in a storage: ${ex}`;
           }
+        }
+
+        // すべてのストレージで存在を確認できなかった場合は結果が不明のため、
+        // get() と同様にエラーとして報告します。
+        if (errors.length > 0) {
+          const args: KeyNotFoundErrorArgs = { key };
+          switch (errors.length) {
+            case 1:
+              args.cause = errors[0]!.reason;
+              break;
+            default:
+              args.cause = new PluginOperationAggregateError({
+                plugin: "storage",
+                action: "read",
+                errors,
+              });
+          }
+
+          throw new KeyNotFoundError(args);
         }
 
         return false;

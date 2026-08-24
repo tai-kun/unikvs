@@ -228,10 +228,9 @@ describe("バグ調査: 複数ストレージの部分失敗", () => {
     await kvs.close();
   });
 
-  // BUG-003: get() はストレージの読み取り失敗時に他のストレージへフォールバックするが、
-  // has() は fallback せず最初の exists() エラーで全体が失敗する。
-  // 修正までこのテストは失敗し続けることを期待するため test.fails を使用している。
-  test.fails("has: 最初のストレージの exists 失敗でもフォールバックして結果を返す", async () => {
+  // BUG-003: get() はストレージの読み取り失敗時に他のストレージへフォールバックする。
+  // has() も同様に exists() 失敗時は fallback して結果を返す。
+  test("has: 最初のストレージの exists 失敗でもフォールバックして結果を返す", async () => {
     class ExplodingExistsStorage extends Memory {
       override exists(_args: IStorage.ExistsArgs): boolean {
         throw new Error("exists failed");
@@ -246,7 +245,7 @@ describe("バグ調査: 複数ストレージの部分失敗", () => {
     await kvs.open();
     // get はフォールバックする
     await expect(kvs.get("foo")).resolves.toBe("v");
-    // has はフォールバックせず失敗する (不整合)
+    // has も get と同様にフォールバックして true を返す
     await expect(withTimeout(kvs.has("foo"), 1500, "has-fallback")).resolves.toBe(true);
     await kvs.close();
   });
