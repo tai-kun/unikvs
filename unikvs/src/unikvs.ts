@@ -650,7 +650,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const { ac } = this.#con;
+      const con = this.#con;
+      const { ac } = con;
       const acArr = [ac, ...this.#acSet];
       this.#acSet.clear();
       for (const ac of acArr) {
@@ -659,7 +660,28 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
       }
 
-      return this.#close(context, signal, this.#con);
+      return this.#close(context, signal, con).catch(async (ex) => {
+        // #close が失敗した場合、コネクションの AbortController は既に abort 済みであり
+        // 以降の操作がすべて即座に失敗する壊れた状態になります。
+        // そこで接続を破棄して isOpen=false の一貫した状態にし、
+        // ベストエフォートでプラグインのクローズ処理を実行します。
+        if (this.#con === con) {
+          this.#con = null;
+
+          const disposeSignal = AbortSignal.timeout(10e3);
+          await Promise.all(
+            [...this.#destinations, ...this.#transformers].map(async (plugin) => {
+              try {
+                await plugin.close(context, disposeSignal);
+              } catch (reason) {
+                logger.error`Failed to close plugin after close failure: ${reason}`;
+              }
+            }),
+          );
+        }
+
+        throw ex;
+      });
     } catch (ex) {
       return Promise.reject(ex);
     }

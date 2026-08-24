@@ -20,10 +20,12 @@ class MockStorage implements IStorage {
   readonly map = new Map<string, unknown>();
 
   private readonly openError: { error: unknown } | undefined;
+  private readonly closeError: { error: unknown } | undefined;
 
-  constructor(name = "MockStorage", options: { openError?: unknown } = {}) {
+  constructor(name = "MockStorage", options: { openError?: unknown; closeError?: unknown } = {}) {
     this.name = name;
     this.openError = "openError" in options ? { error: options.openError } : undefined;
+    this.closeError = "closeError" in options ? { error: options.closeError } : undefined;
   }
 
   async open(): Promise<void> {
@@ -38,6 +40,9 @@ class MockStorage implements IStorage {
   async close(): Promise<void> {
     this.closeCallCount++;
     this.isOpen = false;
+    if (this.closeError !== undefined) {
+      throw this.closeError.error;
+    }
   }
 
   async write(args: IStorage.WriteArgs): Promise<void> {
@@ -204,6 +209,38 @@ describe("UniKvs - オープン / クローズ", () => {
 
     // 実行と検証
     await expect(kvs.close()).rejects.toThrow(UniKvsIsNotOpenError);
+  });
+
+  test("close が失敗したとき、インスタンスは一貫してクローズ済みの状態になる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new MockStorage("ng", { closeError: new Error("close failed") });
+    const kvs = await createOpenedKvs(storage);
+
+    // 実行と検証
+    await expect(kvs.close()).rejects.toThrow(PluginOperationAggregateError);
+
+    // 検証
+    expect(kvs.isOpen).toBe(false);
+    await expect(kvs.get("foo")).rejects.toThrow(UniKvsIsNotOpenError);
+    await expect(kvs.close()).rejects.toThrow(UniKvsIsNotOpenError);
+  });
+
+  test("abort 済み signal で close に失敗したときも、インスタンスは一貫してクローズ済みの状態になる", async ({
+    expect,
+  }) => {
+    // 準備
+    const kvs = await createOpenedKvs(new MockStorage());
+    const controller = new AbortController();
+    controller.abort();
+
+    // 実行と検証
+    await expect(kvs.close({ signal: controller.signal })).rejects.toThrow();
+
+    // 検証
+    expect(kvs.isOpen).toBe(false);
+    await expect(kvs.get("foo")).rejects.toThrow(UniKvsIsNotOpenError);
   });
 
   test("close 後に再 open できる", async ({ expect }) => {
