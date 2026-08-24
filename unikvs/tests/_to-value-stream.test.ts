@@ -155,4 +155,48 @@ describe("toValueStream", () => {
     }).rejects.toThrow(error);
     expect(disposed).toBe(true);
   });
+
+  test("リーダーを releaseLock のみで放棄しても、ソースエラー時にはストリームが破棄される", async ({
+    expect,
+  }) => {
+    // 準備
+    const error = new Error("boom");
+    const readable = new ReadableStream({
+      start(controller) {
+        controller.enqueue(1);
+        controller.error(error);
+      },
+    });
+    let disposed = false;
+    const stream = toValueStream(readable, async () => {
+      disposed = true;
+    });
+
+    // 実行と検証
+    const reader = stream.getReader();
+    await expect(reader.read()).rejects.toThrow(error);
+    reader.releaseLock();
+
+    // 検証: pull の catch 節で dispose 済みであること
+    expect(disposed).toBe(true);
+  });
+
+  test("ソースエラー時に dispose が失敗しても元の例外が伝播する", async ({ expect }) => {
+    // 準備
+    const error = new Error("boom");
+    const disposeError = new Error("dispose failed");
+    const readable = new ReadableStream({
+      start(controller) {
+        controller.enqueue(1);
+        controller.error(error);
+      },
+    });
+    const stream = toValueStream(readable, async () => {
+      throw disposeError;
+    });
+
+    // 実行と検証: dispose の失敗は握り潰され、元の例外が伝播する
+    const reader = stream.getReader();
+    await expect(reader.read()).rejects.toThrow(error);
+  });
 });
