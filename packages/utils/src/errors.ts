@@ -12,8 +12,10 @@ export type InvalidFilenameErrorMeta = {
 
 /**
  * {@link InvalidFilenameError} のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type InvalidFilenameErrorArgs = InvalidFilenameErrorMeta;
+export type InvalidFilenameErrorArgs = ErrorOptions & InvalidFilenameErrorMeta;
 
 /**
  * ファイル名として使用できない文字列が指定された場合に投げられるエラーです。
@@ -26,11 +28,12 @@ export class InvalidFilenameError extends ErrorBase<InvalidFilenameErrorMeta> {
   /**
    * InvalidFilenameError の新しいインスタンスを初期化します。
    *
-   * @param args 無効だったファイル名を含む引数です。
-   * @param options エラーオプションです。
+   * @param args 無効だったファイル名とエラーの追加情報を含む引数です。
    */
-  public constructor(args: InvalidFilenameErrorArgs, options?: ErrorOptions) {
-    super(args, ({ filename }) => `Invalid file name: ${filename}`, options);
+  public constructor(args: InvalidFilenameErrorArgs) {
+    const { filename, ...options } = args;
+    const meta: InvalidFilenameErrorMeta = { filename };
+    super(meta, ({ filename }) => `Invalid file name: ${filename}`, options);
   }
 }
 
@@ -48,8 +51,10 @@ export type InvalidDirnameErrorMeta = {
 
 /**
  * {@link InvalidDirnameError} のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type InvalidDirnameErrorArgs = InvalidDirnameErrorMeta;
+export type InvalidDirnameErrorArgs = ErrorOptions & InvalidDirnameErrorMeta;
 
 /**
  * ディレクトリー名として使用できない文字列が指定された場合に投げられるエラーです。
@@ -62,11 +67,12 @@ export class InvalidDirnameError extends ErrorBase<InvalidDirnameErrorMeta> {
   /**
    * InvalidDirnameError の新しいインスタンスを初期化します。
    *
-   * @param args 無効だったディレクトリー名を含む引数です。
-   * @param options エラーオプションです。
+   * @param args 無効だったディレクトリー名とエラーの追加情報を含む引数です。
    */
-  public constructor(args: InvalidDirnameErrorArgs, options?: ErrorOptions) {
-    super(args, ({ dirname }) => `Invalid directory name: ${dirname}`, options);
+  public constructor(args: InvalidDirnameErrorArgs) {
+    const { dirname, ...options } = args;
+    const meta: InvalidDirnameErrorMeta = { dirname };
+    super(meta, ({ dirname }) => `Invalid directory name: ${dirname}`, options);
   }
 }
 

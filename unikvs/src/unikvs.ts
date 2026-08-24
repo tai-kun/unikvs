@@ -10,6 +10,7 @@ import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
 import type { ContextSource } from "./context.types.js";
 import {
+  type KeyNotFoundErrorArgs,
   KeyNotFoundError,
   UniKvsIsOpenError,
   PluginOperationAggregateError,
@@ -917,22 +918,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       if (data === NONE) {
-        const options: ErrorOptions = {};
+        const args: KeyNotFoundErrorArgs = { key };
         switch (errors.length) {
           case 0:
             break;
           case 1:
-            options.cause = errors[0]!.reason;
+            args.cause = errors[0]!.reason;
             break;
           default:
-            options.cause = new PluginOperationAggregateError({
+            args.cause = new PluginOperationAggregateError({
               plugin: "storage",
               action: "read",
               errors,
             });
         }
 
-        throw new KeyNotFoundError({ key }, options);
+        throw new KeyNotFoundError(args);
       }
 
       // トランスフォーマーを逆順に適用してデータをデコードします。
@@ -1022,22 +1023,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         if (r === NONE) {
-          const options: ErrorOptions = {};
+          const args: KeyNotFoundErrorArgs = { key };
           switch (errors.length) {
             case 0:
               break;
             case 1:
-              options.cause = errors[0]!.reason;
+              args.cause = errors[0]!.reason;
               break;
             default:
-              options.cause = new PluginOperationAggregateError({
+              args.cause = new PluginOperationAggregateError({
                 plugin: "storage",
                 action: "read",
                 errors,
               });
           }
 
-          throw new KeyNotFoundError({ key }, options);
+          throw new KeyNotFoundError(args);
         }
 
         // トランスフォーマーを逆順に適用し、デコード用トランスフォームを連結します。

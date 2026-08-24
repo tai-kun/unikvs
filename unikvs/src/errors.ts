@@ -46,8 +46,10 @@ export type InvalidInputErrorMeta = {
 
 /**
  * InvalidInputError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type InvalidInputErrorArgs = {
+export type InvalidInputErrorArgs = ErrorOptions & {
   /**
    * 検証の対象となった値です。
    */
@@ -67,9 +69,10 @@ export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMe
     this.prototype.name = "UniKvsInvalidInputError";
   }
 
-  public constructor(args: InvalidInputErrorArgs, options?: ErrorOptions) {
-    const { value: input, issues } = args;
-    super({ input, issues }, ({ issues }) => issues.map((i) => i.message).join(": "), options);
+  public constructor(args: InvalidInputErrorArgs) {
+    const { value: input, issues, ...options } = args;
+    const meta: InvalidInputErrorMeta = { input, issues };
+    super(meta, ({ issues }) => issues.map((i) => i.message).join(": "), options);
   }
 }
 
@@ -92,8 +95,10 @@ export type InvalidOutputErrorMeta = {
 
 /**
  * InvalidOutputError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type InvalidOutputErrorArgs = {
+export type InvalidOutputErrorArgs = ErrorOptions & {
   /**
    * 検証の対象となった値です。
    */
@@ -113,9 +118,10 @@ export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputError
     this.prototype.name = "UniKvsInvalidOutputError";
   }
 
-  public constructor(args: InvalidOutputErrorArgs, options?: ErrorOptions) {
-    const { value: output, issues } = args;
-    super({ output, issues }, ({ issues }) => issues.map((i) => i.message).join(": "), options);
+  public constructor(args: InvalidOutputErrorArgs) {
+    const { value: output, issues, ...options } = args;
+    const meta: InvalidOutputErrorMeta = { output, issues };
+    super(meta, ({ issues }) => issues.map((i) => i.message).join(": "), options);
   }
 }
 
@@ -167,8 +173,10 @@ export type KeyNotFoundErrorMeta = {
 
 /**
  * KeyNotFoundError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type KeyNotFoundErrorArgs = KeyNotFoundErrorMeta;
+export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
  * 指定したキーのデータがどのストレージにも存在しない場合に投げられるエラーです。
@@ -178,8 +186,10 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
     this.prototype.name = "UniKvsKeyNotFoundError";
   }
 
-  public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `IStorage.Key ${JSON.stringify(key)} not found`, options);
+  public constructor(args: KeyNotFoundErrorArgs) {
+    const { key, ...options } = args;
+    const meta: KeyNotFoundErrorMeta = { key };
+    super(meta, ({ key }) => `IStorage.Key ${JSON.stringify(key)} not found`, options);
   }
 }
 
@@ -225,8 +235,10 @@ export type StorageIsNotOpenErrorMeta = {
 
 /**
  * StorageIsNotOpenError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type StorageIsNotOpenErrorArgs = StorageIsNotOpenErrorMeta;
+export type StorageIsNotOpenErrorArgs = ErrorOptions & StorageIsNotOpenErrorMeta;
 
 /**
  * ストレージが開かれていない状態で操作が行われた場合に投げられるエラーです。
@@ -236,8 +248,10 @@ export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> 
     this.prototype.name = "UniKvsStorageIsNotOpenError";
   }
 
-  public constructor(args: StorageIsNotOpenErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Storage "${name}" is not open`, options);
+  public constructor(args: StorageIsNotOpenErrorArgs) {
+    const { name, ...options } = args;
+    const meta: StorageIsNotOpenErrorMeta = { name };
+    super(meta, ({ name }) => `Storage "${name}" is not open`, options);
   }
 }
 
@@ -255,8 +269,11 @@ export type WritableStreamNotSupportedErrorMeta = {
 
 /**
  * WritableStreamNotSupportedError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type WritableStreamNotSupportedErrorArgs = WritableStreamNotSupportedErrorMeta;
+export type WritableStreamNotSupportedErrorArgs = ErrorOptions &
+  WritableStreamNotSupportedErrorMeta;
 
 /**
  * ストレージが書き込み可能なストリームをサポートしていない場合に投げられるエラーです。
@@ -266,8 +283,10 @@ export class WritableStreamNotSupportedError extends ErrorBase<WritableStreamNot
     this.prototype.name = "UniKvsWritableStreamNotSupportedError";
   }
 
-  public constructor(args: WritableStreamNotSupportedErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Storage "${name}" does not support writable stream`, options);
+  public constructor(args: WritableStreamNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: WritableStreamNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Storage "${name}" does not support writable stream`, options);
   }
 }
 
@@ -289,8 +308,11 @@ export type ReadableStreamNotSupportedErrorMeta = {
 
 /**
  * ReadableStreamNotSupportedError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type ReadableStreamNotSupportedErrorArgs = ReadableStreamNotSupportedErrorMeta;
+export type ReadableStreamNotSupportedErrorArgs = ErrorOptions &
+  ReadableStreamNotSupportedErrorMeta;
 
 /**
  * ストレージが読み取り可能なストリームをサポートしていない場合に投げられるエラーです。
@@ -300,8 +322,10 @@ export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNot
     this.prototype.name = "UniKvsReadableStreamNotSupportedError";
   }
 
-  public constructor(args: ReadableStreamNotSupportedErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Storage "${name}" does not support readable stream`, options);
+  public constructor(args: ReadableStreamNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: ReadableStreamNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Storage "${name}" does not support readable stream`, options);
   }
 }
 
@@ -323,8 +347,11 @@ export type MultipartWriteNotSupportedErrorMeta = {
 
 /**
  * MultipartWriteNotSupportedError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type MultipartWriteNotSupportedErrorArgs = MultipartWriteNotSupportedErrorMeta;
+export type MultipartWriteNotSupportedErrorArgs = ErrorOptions &
+  MultipartWriteNotSupportedErrorMeta;
 
 /**
  * ストレージがマルチパート書き込みをサポートしていない場合に投げられるエラーです。
@@ -334,8 +361,10 @@ export class MultipartWriteNotSupportedError extends ErrorBase<MultipartWriteNot
     this.prototype.name = "UniKvsMultipartWriteNotSupportedError";
   }
 
-  public constructor(args: MultipartWriteNotSupportedErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Storage "${name}" does not support multipart-write`, options);
+  public constructor(args: MultipartWriteNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: MultipartWriteNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Storage "${name}" does not support multipart-write`, options);
   }
 }
 
@@ -381,8 +410,10 @@ export type TransformerIsNotOpenErrorMeta = {
 
 /**
  * TransformerIsNotOpenError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type TransformerIsNotOpenErrorArgs = TransformerIsNotOpenErrorMeta;
+export type TransformerIsNotOpenErrorArgs = ErrorOptions & TransformerIsNotOpenErrorMeta;
 
 /**
  * トランスフォーマーが開かれていない状態で操作が行われた場合に投げられるエラーです。
@@ -392,8 +423,10 @@ export class TransformerIsNotOpenError extends ErrorBase<TransformerIsNotOpenErr
     this.prototype.name = "UniKvsTransformerIsNotOpenError";
   }
 
-  public constructor(args: TransformerIsNotOpenErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Transformer "${name}" is not open`, options);
+  public constructor(args: TransformerIsNotOpenErrorArgs) {
+    const { name, ...options } = args;
+    const meta: TransformerIsNotOpenErrorMeta = { name };
+    super(meta, ({ name }) => `Transformer "${name}" is not open`, options);
   }
 }
 
@@ -415,8 +448,11 @@ export type EncodableStreamNotSupportedErrorMeta = {
 
 /**
  * EncodableStreamNotSupportedError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type EncodableStreamNotSupportedErrorArgs = EncodableStreamNotSupportedErrorMeta;
+export type EncodableStreamNotSupportedErrorArgs = ErrorOptions &
+  EncodableStreamNotSupportedErrorMeta;
 
 /**
  * トランスフォーマーがエンコード可能なストリームをサポートしていない場合に投げられるエラーです。
@@ -426,8 +462,10 @@ export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamN
     this.prototype.name = "UniKvsEncodableStreamNotSupportedError";
   }
 
-  public constructor(args: EncodableStreamNotSupportedErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Transformer "${name}" does not support encodable stream`, options);
+  public constructor(args: EncodableStreamNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: EncodableStreamNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Transformer "${name}" does not support encodable stream`, options);
   }
 }
 
@@ -449,8 +487,11 @@ export type DecodableStreamNotSupportedErrorMeta = {
 
 /**
  * DecodableStreamNotSupportedError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type DecodableStreamNotSupportedErrorArgs = DecodableStreamNotSupportedErrorMeta;
+export type DecodableStreamNotSupportedErrorArgs = ErrorOptions &
+  DecodableStreamNotSupportedErrorMeta;
 
 /**
  * トランスフォーマーがデコード可能なストリームをサポートしていない場合に投げられるエラーです。
@@ -460,8 +501,10 @@ export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamN
     this.prototype.name = "UniKvsDecodableStreamNotSupportedError";
   }
 
-  public constructor(args: DecodableStreamNotSupportedErrorArgs, options?: ErrorOptions) {
-    super(args, ({ name }) => `Transformer "${name}" does not support decodable stream`, options);
+  public constructor(args: DecodableStreamNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: DecodableStreamNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Transformer "${name}" does not support decodable stream`, options);
   }
 }
 
@@ -513,8 +556,10 @@ export type PluginOperationAggregateErrorMeta = {
 
 /**
  * PluginOperationAggregateError のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type PluginOperationAggregateErrorArgs = {
+export type PluginOperationAggregateErrorArgs = ErrorOptions & {
   /**
    * 失敗したプラグインの既定の種別です。
    *
@@ -551,18 +596,21 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
     this.prototype.name = "UniKvsPluginOperationAggregateError";
   }
 
-  public constructor(args: PluginOperationAggregateErrorArgs, options?: ErrorOptions) {
-    const errors = args.errors.map((error) => ({
-      plugin: error.plugin ?? args.plugin ?? ("" as never),
+  public constructor(args: PluginOperationAggregateErrorArgs) {
+    const { plugin, action, errors, ...options } = args;
+    // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
+    const normalizedErrors = errors.map((error) => ({
+      plugin: error.plugin ?? plugin ?? ("" as never),
       reason: error.reason,
     }));
-    const plugins = [...new Set(errors.map((error) => error.plugin))];
+    const plugins = [...new Set(normalizedErrors.map((error) => error.plugin))];
+    const meta: PluginOperationAggregateErrorMeta = {
+      plugin: plugins.length === 1 ? plugins[0]! : "plugin",
+      action,
+      errors: normalizedErrors,
+    };
     super(
-      {
-        plugin: plugins.length === 1 ? plugins[0]! : "plugin",
-        action: args.action,
-        errors,
-      },
+      meta,
       ({ action, errors, plugin }) => `${errors.length} ${plugin}(s) fail ${action} operation`,
       options,
     );

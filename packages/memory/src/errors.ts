@@ -13,8 +13,10 @@ export type KeyNotFoundErrorMeta = {
 
 /**
  * {@link KeyNotFoundError} のコンストラクター引数型です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type KeyNotFoundErrorArgs = KeyNotFoundErrorMeta;
+export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
  * 読み取りまたは削除を実行しようとしたキーがストレージ内に存在しない場合に投げられるエラーです。
@@ -27,11 +29,12 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   /**
    * KeyNotFoundError インスタンスを初期化します。
    *
-   * @param args エラーメタデータです。
-   * @param options エラーの追加情報です。
+   * @param args エラーメタデータとエラーの追加情報です。
    */
-  public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key not found: ${key}`, options);
+  public constructor(args: KeyNotFoundErrorArgs) {
+    const { key, ...options } = args;
+    const meta: KeyNotFoundErrorMeta = { key };
+    super(meta, ({ key }) => `Key not found: ${key}`, options);
   }
 }
 
@@ -61,8 +64,9 @@ export type InvalidChunkTypeErrorMeta = {
  * {@link InvalidChunkTypeError} のコンストラクター引数型です。
  *
  * `chunkType` はコンストラクター内部で自動的に設定されるため、引数からは除外されています。
+ * また、エラーの追加情報 (`cause`) も含みます。
  */
-export type InvalidChunkTypeErrorArgs = Omit<InvalidChunkTypeErrorMeta, "chunkType">;
+export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
  * `getWritable` が返すストリームに `Uint8Array<ArrayBuffer>` 以外の値が書き込まれた場合に投げられるエラーです。
@@ -75,15 +79,13 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   /**
    * InvalidChunkTypeError インスタンスを初期化します。
    *
-   * @param args エラーメタデータです。
-   * @param options エラーの追加情報です。
+   * @param args エラーメタデータとエラーの追加情報です。
    */
-  public constructor(args: InvalidChunkTypeErrorArgs, options?: ErrorOptions) {
+  public constructor(args: InvalidChunkTypeErrorArgs) {
+    const { key, chunk, ...options } = args;
+    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
     super(
-      {
-        ...args,
-        chunkType: getTypeName(args.chunk),
-      },
+      meta,
       ({ key, chunkType }) =>
         `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,

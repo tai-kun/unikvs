@@ -45,18 +45,20 @@ export type { ErrorOptions };
  * メタ情報を持つエラーを定義します。
  *
  * ```ts
- * import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
+ * import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
  *
  * type KeyNotFoundErrorMeta = { readonly key: string };
- * type KeyNotFoundErrorArgs = KeyNotFoundErrorMeta;
+ * type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
  *
  * class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
  *   static {
  *     this.prototype.name = "MemoryKeyNotFoundError";
  *   }
  *
- *   public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
- *     super(args, ({ key }) => `Key not found: ${key}`, options);
+ *   public constructor(args: KeyNotFoundErrorArgs) {
+ *     const { key, ...options } = args;
+ *     const meta: KeyNotFoundErrorMeta = { key };
+ *     super(meta, ({ key }) => `Key not found: ${key}`, options);
  *   }
  * }
  *
@@ -104,15 +106,17 @@ export class ErrorBase<
  * import { InvalidUsageErrorBase, type ErrorOptions } from "@unikvs/core";
  *
  * type InvalidInputErrorMeta = { readonly key: string; readonly actual: unknown };
- * type InvalidInputErrorArgs = InvalidInputErrorMeta;
+ * type InvalidInputErrorArgs = ErrorOptions & InvalidInputErrorMeta;
  *
  * class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMeta> {
  *   static {
  *     this.prototype.name = "UniKvsInvalidInputError";
  *   }
  *
- *   public constructor(args: InvalidInputErrorArgs, options?: ErrorOptions) {
- *     super(args, ({ key, actual }) => `Invalid input for key "${key}": ${actual}`, options);
+ *   public constructor(args: InvalidInputErrorArgs) {
+ *     const { key, actual, ...options } = args;
+ *     const meta: InvalidInputErrorMeta = { key, actual };
+ *     super(meta, ({ key, actual }) => `Invalid input for key "${key}": ${actual}`, options);
  *   }
  * }
  *

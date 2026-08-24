@@ -18,8 +18,10 @@ export type ChecksumMismatchErrorMeta = {
 
 /**
  * {@link ChecksumMismatchError} のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type ChecksumMismatchErrorArgs = ChecksumMismatchErrorMeta;
+export type ChecksumMismatchErrorArgs = ErrorOptions & ChecksumMismatchErrorMeta;
 
 /**
  * 計算されたハッシュ値が期待されたハッシュ値と一致しない場合に投げられるエラーです。
@@ -32,11 +34,12 @@ export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> 
   /**
    * ChecksumMismatchError の新しいインスタンスを初期化します。
    *
-   * @param args 実際のハッシュ値と期待されたハッシュ値を含む引数です。
-   * @param options エラーオプションです。
+   * @param args 実際のハッシュ値、期待されたハッシュ値、エラーの追加情報を含む引数です。
    */
-  public constructor(args: ChecksumMismatchErrorArgs, options?: ErrorOptions) {
-    super(args, ({ actual, expected }) => `Expected ${expected}, but got ${actual}`, options);
+  public constructor(args: ChecksumMismatchErrorArgs) {
+    const { actual, expected, ...options } = args;
+    const meta: ChecksumMismatchErrorMeta = { actual, expected };
+    super(meta, ({ actual, expected }) => `Expected ${expected}, but got ${actual}`, options);
   }
 }
 
@@ -58,8 +61,10 @@ export type ChecksumInvalidContextKeyErrorMeta = {
 
 /**
  * {@link ChecksumInvalidContextKeyError} のコンストラクター引数です。
+ *
+ * エラーの追加情報 (`cause`) も含みます。
  */
-export type ChecksumInvalidContextKeyErrorArgs = ChecksumInvalidContextKeyErrorMeta;
+export type ChecksumInvalidContextKeyErrorArgs = ErrorOptions & ChecksumInvalidContextKeyErrorMeta;
 
 /**
  * コンテクストキーが不正な場合に投げられるエラーです。
@@ -74,11 +79,12 @@ export class ChecksumInvalidContextKeyError extends ErrorBase<ChecksumInvalidCon
   /**
    * ChecksumInvalidContextKeyError の新しいインスタンスを初期化します。
    *
-   * @param args 実際のキー値を含む引数です。
-   * @param options エラーオプションです。
+   * @param args 実際のキー値とエラーの追加情報を含む引数です。
    */
-  public constructor(args: ChecksumInvalidContextKeyErrorArgs, options?: ErrorOptions) {
-    super(args, ({ actual }) => `Invalid context key: ${inspect(actual)}`, options);
+  public constructor(args: ChecksumInvalidContextKeyErrorArgs) {
+    const { actual, ...options } = args;
+    const meta: ChecksumInvalidContextKeyErrorMeta = { actual };
+    super(meta, ({ actual }) => `Invalid context key: ${inspect(actual)}`, options);
   }
 }
 

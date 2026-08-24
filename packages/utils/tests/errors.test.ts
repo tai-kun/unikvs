@@ -26,7 +26,7 @@ describe("InvalidFilenameError", () => {
     const cause = new Error("原因");
 
     // 実行
-    const error = new InvalidFilenameError({ filename: "test" }, { cause });
+    const error = new InvalidFilenameError({ filename: "test", cause });
 
     // 検証
     expect(error.cause).toBe(cause);
@@ -57,7 +57,7 @@ describe("InvalidDirnameError", () => {
     const cause = new Error("原因");
 
     // 実行
-    const error = new InvalidDirnameError({ dirname: "test" }, { cause });
+    const error = new InvalidDirnameError({ dirname: "test", cause });
 
     // 検証
     expect(error.cause).toBe(cause);

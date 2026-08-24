@@ -1,4 +1,3 @@
-import type { ErrorOptions } from "@unikvs/core";
 import { tryCaptureStackTrace } from "try-capture-stack-trace";
 import { type InferOutput, safeParse } from "valibot";
 
@@ -29,14 +28,14 @@ export { array, tuple, object, record, transform } from "@tai-kun/valibot-extra-
 
 type BaseSchema = typeof safeParse extends (schema: infer S, ...args: any) => any ? S : never;
 
-export interface ParseInputErrorConstructor {
-  new (args: InvalidInputErrorArgs, options?: ErrorOptions): Error;
+export interface IParseInputErrorConstructor {
+  new (args: InvalidInputErrorArgs): Error;
 }
 
 export function parseInput<const TSchema extends BaseSchema>(
   schema: TSchema,
   value: unknown,
-  Error: ParseInputErrorConstructor = InvalidInputError,
+  Error: IParseInputErrorConstructor = InvalidInputError,
 ): InferOutput<TSchema> {
   const result = safeParse(schema, value);
   if (result.success) {
@@ -49,7 +48,7 @@ export function parseInput<const TSchema extends BaseSchema>(
 }
 
 export interface ParseOutputErrorConstructor {
-  new (args: InvalidOutputErrorArgs, options?: ErrorOptions): Error;
+  new (args: InvalidOutputErrorArgs): Error;
 }
 
 export function parseOutput<const TSchema extends BaseSchema>(
