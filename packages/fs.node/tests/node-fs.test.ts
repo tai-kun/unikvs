@@ -1,4 +1,4 @@
-import { rm, access, readFile } from "node:fs/promises";
+import { rm, access, readFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -151,7 +151,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
-    const writable = storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
 
     // 実行
     const writer = writable.getWriter();
@@ -161,6 +161,51 @@ describe("ストリーム操作", () => {
     // 検証
     const savedData = await storage.read({ key, signal });
     expect(new Uint8Array(savedData)).toStrictEqual(data);
+  });
+
+  test("ストリームによる書き込みを中断したとき、既存のデータが保たれ一時ファイルも残らない", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    const key = "atomic-stream.txt";
+    const original = new Uint8Array([1, 2, 3, 4, 5]);
+    await storage.write({ key, data: original, signal });
+
+    const controller = new AbortController();
+    const writable = await storage.getWritable({ key, signal: controller.signal });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.close()).rejects.toThrow();
+
+    const savedData = await storage.read({ key, signal });
+    expect(new Uint8Array(savedData)).toStrictEqual(original);
+
+    const entries = await readdir(TEST_ROOT);
+    expect(entries.filter((entry) => entry.endsWith(".tmp"))).toStrictEqual([]);
+  });
+
+  test("ストリームによる書き込みを中断したとき、新規キーのファイルは作成されない", async ({
+    expect,
+  }) => {
+    // 準備
+    const key = "atomic-stream-new.txt";
+    const controller = new AbortController();
+    const writable = await storage.getWritable({ key, signal: controller.signal });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.close()).rejects.toThrow();
+    await expect(storage.exists({ key })).resolves.toBe(false);
   });
 
   test("getReadable で取得したストリームを使用したとき、ファイルの内容を正しく読み取れる", async ({
