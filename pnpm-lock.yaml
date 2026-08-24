@@ -331,34 +331,6 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
-      '@unikvs/testcontainer':
-        specifier: workspace:*
-        version: link:../testcontainer
-      npm-check-updates:
-        specifier: 20.0.2
-        version: 20.0.2
-      vite:
-        specifier: 8.2.1
-        version: 8.2.1(@types/node@24.13.3)(yaml@2.8.3)
-      vitest:
-        specifier: 4.1.10
-        version: 4.1.10(@types/node@24.13.3)(@vitest/browser-playwright@4.1.10)(vite@8.2.1(@types/node@24.13.3)(yaml@2.8.3))
-
-  packages/testcontainer:
-    dependencies:
-      '@logtape/logtape':
-        specifier: 2.0.0
-        version: 2.0.0
-    devDependencies:
-      '@tsconfig/node24':
-        specifier: 24.0.5
-        version: 24.0.5
-      '@tsconfig/strictest':
-        specifier: 2.0.8
-        version: 2.0.8
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2

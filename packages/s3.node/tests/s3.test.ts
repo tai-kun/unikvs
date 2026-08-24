@@ -1,22 +1,93 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { createServer, Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
-import { TestContainer, type StartedContainer } from "@unikvs/testcontainer";
 import { afterAll, beforeAll, describe, test as vitest } from "vitest";
 
 import S3 from "../src/s3.js";
 
-const rustfsVersion = process.env["_RUSTFS_VERSION"] ?? "1.0.0-alpha.98";
-
 let bucketId = 0;
-let container: StartedContainer;
+let server: ChildProcess;
+let volumeDir: string;
+let portNumber: number;
+
+/**
+ * OS から空きポートを 1 つ取得します。
+ *
+ * @returns 空きポート番号で解決する Promise です。
+ */
+async function acquireFreePort(): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (typeof address === "object" && address !== null) {
+        const port = address.port;
+        server.close(() => {
+          resolve(port);
+        });
+      } else {
+        server.close(() => {
+          reject(new Error("空きポートの取得に失敗しました"));
+        });
+      }
+    });
+  });
+}
+
+/**
+ * 指定されたポートが接続可能になるまで待機します。
+ *
+ * @param port 接続先のポート番号です。
+ * @returns ポートが開放された場合に解決する Promise です。
+ * @throws タイムアウト時間内に接続できなかった場合にエラーを投げます。
+ */
+async function waitForPort(port: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const startTime = Date.now();
+
+    const tryConnect = (): void => {
+      const socket: Socket = new Socket();
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve();
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        if (Date.now() - startTime > 10e3) {
+          reject(new Error(`タイムアウト: 127.0.0.1:${port}`));
+        } else {
+          setTimeout(tryConnect, 250);
+        }
+      });
+      socket.connect(port, "127.0.0.1");
+    };
+
+    tryConnect();
+  });
+}
 
 beforeAll(async () => {
-  container = await new TestContainer("rustfs/rustfs:" + rustfsVersion)
-    .withExposedPorts(9000)
-    .start();
+  portNumber = await acquireFreePort();
+  volumeDir = mkdtempSync(join(tmpdir(), "unikvs-s3-node-"));
+
+  server = spawn("rustfs", ["server", "--address", `127.0.0.1:${portNumber}`, volumeDir], {
+    stdio: "ignore",
+  });
+
+  await waitForPort(portNumber);
 });
 
 afterAll(async () => {
-  await container.dispose();
+  if (!server.killed) {
+    server.kill();
+  }
+  rmSync(volumeDir, { recursive: true, force: true });
 });
 
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
@@ -26,7 +97,7 @@ const test = vitest.extend<{
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const bucket = `test-bucket-${bucketId++}`;
-    const endpoint = `http://${container.getHost()}:${container.getMappedPort(9000)}`;
+    const endpoint = `http://127.0.0.1:${portNumber}`;
 
     const config: S3ClientConfig = {
       endpoint,
@@ -182,7 +253,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行と検証
-    await expect(storage.read({ key, signal })).rejects.toThrow(/NoSuchKey/);
+    await expect(storage.read({ key, signal })).rejects.toThrow(/NoSuchKey|does not exist/);
   });
 
   test("オブジェクトを削除したとき、以降は存在確認が false になる", async ({
@@ -268,7 +339,9 @@ describe("ストリーム操作", () => {
     await writer.close();
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    const result = await storage.read({ key, signal });
+    // toStrictEqual は大きな配列の比較に極端に時間がかかるため、Buffer.equals を使用する。
+    expect(Buffer.from(result).equals(Buffer.from(data))).toBe(true);
   });
 
   test("最小値未満の partSize をコンテキストに指定したとき、書き込みストリームの取得時にエラーが投げられる", ({

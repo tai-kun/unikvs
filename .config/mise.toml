@@ -4,7 +4,7 @@ minimum_release_age = "7d"
 [tools]
 node = "24"
 pnpm = "10"
-opencode = "1"
+rustfs = "1.0.0-rc.3"
 
 [tasks.test]
 run = [{ task = "test:format" }]

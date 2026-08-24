@@ -36,7 +36,6 @@
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.13.3",
-    "@unikvs/testcontainer": "workspace:*",
     "npm-check-updates": "20.0.2",
     "vite": "8.2.1",
     "vitest": "4.1.10"

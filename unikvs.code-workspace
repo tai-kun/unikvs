@@ -44,10 +44,6 @@
       "name": "@unikvs/indexeddb",
       "path": "packages/indexeddb",
     },
-    {
-      "name": "@unikvs/testcontainer",
-      "path": "packages/testcontainer",
-    },
   ],
   "settings": {
     // 一般

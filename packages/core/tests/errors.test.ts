@@ -16,6 +16,7 @@ import {
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
+  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });

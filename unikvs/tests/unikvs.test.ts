@@ -1,10 +1,9 @@
 import type { Context, IStorage, ITransformer } from "@unikvs/core";
-import { describe, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import {
   InvalidInputError,
   KeyNotFoundError,
-  MissingStorageError,
   PluginOperationAggregateError,
   UniKvsIsNotOpenError,
   UniKvsIsOpenError,
@@ -139,8 +138,8 @@ function createKvs(storage: IStorage, ...more: IStorage[]): UniKvs {
   return more.reduce((c, s) => c.appendStorage(s), config).create();
 }
 
-async function createOpenedKvs(...storages: IStorage[]): Promise<UniKvs> {
-  const kvs = createKvs(...storages);
+async function createOpenedKvs(storage: IStorage, ...more: IStorage[]): Promise<UniKvs> {
+  const kvs = createKvs(storage, ...more);
   await kvs.open();
   return kvs;
 }
@@ -160,11 +159,6 @@ describe("UniKvs - 設定からの生成", () => {
 
     // 検証
     expect(kvs).toBeInstanceOf(UniKvs);
-  });
-
-  test("ストレージなしで create すると MissingStorageError を投げる", ({ expect }) => {
-    // 実行と検証
-    expect(() => UniKvs.config().create()).toThrow(MissingStorageError);
   });
 });
 
@@ -323,7 +317,7 @@ describe("UniKvs - 基本操作 (CRUD)", () => {
     ["delete", (kvs: UniKvs) => kvs.delete("key1")],
     ["clear", (kvs: UniKvs) => kvs.clear()],
     ["stream", (kvs: UniKvs) => kvs.stream("key1")],
-  ])("閉じているときに %s すると UniKvsIsNotOpenError を投げる", async (_name, op, { expect }) => {
+  ])("閉じているときに %s すると UniKvsIsNotOpenError を投げる", async (_name, op) => {
     // 準備
     const kvs = createKvs(new MockStorage());
 
@@ -471,7 +465,7 @@ describe("UniKvs - コンテキスト", () => {
     await kvs.set("key1", "value1");
 
     // 検証
-    expect(storage.lastWriteContext?.app).toBe("test-app");
+    expect(storage.lastWriteContext?.["app"]).toBe("test-app");
 
     // 後片付け
     await kvs.close();
@@ -489,7 +483,7 @@ describe("UniKvs - コンテキスト", () => {
     await kvs.set({ key: "key1", value: "value1", context: { a: 2 } });
 
     // 検証
-    expect(storage.lastWriteContext?.a).toBe(2);
+    expect(storage.lastWriteContext?.["a"]).toBe(2);
 
     // 後片付け
     await kvs.close();

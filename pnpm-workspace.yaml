@@ -13,7 +13,6 @@ blockExoticSubdeps: true
 trustPolicy: no-downgrade
 packages:
   [
-    "packages/testcontainer",
     "packages/core",
     "packages/utils",
     "packages/checksum",

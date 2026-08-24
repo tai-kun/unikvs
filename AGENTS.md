@@ -14,7 +14,6 @@ unikvs は TypeScript で実装されたモジュラーでポータブルな KVS
 - 任意のデータをメモリー上に保存するストレージプラグインは `packages/memory` にあります。
 - バイト配列をブラウザーの OPFS に保存するストレージプラグインは `packages/opfs` にあります。
 - バイト配列を Node.js で S3 互換のオブジェクトストレージに保存するストレージプラグインは `packages/s3.node` にあります。
-- テスト用の一時コンテナーを作成する内部パッケージは `packages/testcontainer` にあります。
 - モノレポルートの設定ファイル (oxfmt, mise) は `.config/` にあります。
 - 各パッケージのほとんどの設定ファイル (tsconfig, vitest, oxlint, oxfmt, mise) は、パッケージディレクトリーから見て `.config/` にあります。
 

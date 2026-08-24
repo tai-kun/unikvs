@@ -9,7 +9,6 @@
     "url": "https://github.com/tai-kun/unikvs"
   },
   "workspaces": [
-    "packages/testcontainer",
     "packages/core",
     "packages/utils",
     "packages/checksum",
