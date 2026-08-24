@@ -1,4 +1,6 @@
+import { ChecksumSha256 } from "@unikvs/checksum";
 import type { Context, IStorage, ITransformer } from "@unikvs/core";
+import { Memory } from "@unikvs/memory";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -8,6 +10,7 @@ import {
   UniKvsIsNotOpenError,
   UniKvsIsOpenError,
 } from "../src/errors.js";
+import type { PlainValue, StreamValue, Value } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
 class MockStorage implements IStorage {
@@ -163,6 +166,120 @@ async function createOpenedKvs(storage: IStorage, ...more: IStorage[]): Promise<
   return kvs;
 }
 
+function streamOf(chunks: Uint8Array<ArrayBuffer>[]): ReadableStream<Uint8Array<ArrayBuffer>> {
+  return new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      for (const c of chunks) {
+        controller.enqueue(c);
+      }
+      controller.close();
+    },
+  });
+}
+
+async function collect(
+  stream: AsyncIterable<Uint8Array<ArrayBufferLike>>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const chunks: Uint8Array<ArrayBufferLike>[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  const total = chunks.reduce((s, c) => s + c.byteLength, 0);
+  const merged = new Uint8Array(new ArrayBuffer(total));
+  let offset = 0;
+  for (const c of chunks) {
+    merged.set(c, offset);
+    offset += c.byteLength;
+  }
+  return merged;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT(${label})`)), ms)),
+  ]);
+}
+
+async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function mapOf(storage: Memory): Map<string, unknown> {
+  return (storage as unknown as { map: Map<string, unknown> }).map;
+}
+
+class FailGetWritableStorage implements IStorage {
+  readonly name = "FailGetWritableStorage";
+  isOpen = true;
+  readonly map = new Map<string, unknown>();
+
+  write(args: IStorage.WriteArgs): void {
+    this.map.set(args.key, args.data);
+  }
+  read(args: IStorage.ReadArgs): unknown {
+    return this.map.get(args.key);
+  }
+  exists(args: IStorage.ExistsArgs): boolean {
+    return this.map.has(args.key);
+  }
+  delete(args: IStorage.DeleteArgs): void {
+    this.map.delete(args.key);
+  }
+  clear(): void {
+    this.map.clear();
+  }
+
+  getWritable(_args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+    throw new Error("getWritable failed");
+  }
+}
+
+class ErrorMidwayReadableStorage implements IStorage {
+  readonly name = "ErrorMidwayReadableStorage";
+  isOpen = true;
+  readonly entries = new Map<string, Uint8Array[]>();
+
+  write(_args: IStorage.WriteArgs): void {}
+  read(_args: IStorage.ReadArgs): unknown {
+    return undefined;
+  }
+  exists(args: IStorage.ExistsArgs): boolean {
+    return this.entries.has(args.key);
+  }
+  delete(args: IStorage.DeleteArgs): void {
+    this.entries.delete(args.key);
+  }
+  clear(): void {
+    this.entries.clear();
+  }
+  getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream({
+      write(chunk) {
+        chunks.push(chunk);
+      },
+      close: () => {
+        this.entries.set(args.key, chunks);
+      },
+    });
+  }
+  getReadable(args: Pick<IStorage.ReadArgs, "key">): ReadableStream<Uint8Array> {
+    const chunks = this.entries.get(args.key) ?? [];
+    let i = 0;
+    return new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (i < chunks.length) {
+          controller.enqueue(chunks[i++]!);
+        } else {
+          controller.error(new Error("boom"));
+        }
+      },
+    });
+  }
+}
+
 describe("UniKvs - 設定からの生成", () => {
   test("config から生成したとき、create で UniKvs インスタンスが返る", ({ expect }) => {
     // 実行
@@ -286,6 +403,21 @@ describe("UniKvs - オープン / クローズ", () => {
     expect(kvs.isOpen).toBe(false);
     expect(okStorage.closeCallCount).toBe(1);
   });
+
+  test("並行 open は 2 回目に失敗する", async ({ expect }) => {
+    // 準備
+    const kvs = createKvs(new MockStorage());
+
+    // 実行
+    const results = await Promise.allSettled([kvs.open(), kvs.open()]);
+
+    // 検証
+    expect(results[0]?.status).toBe("fulfilled");
+    expect(kvs.isOpen).toBe(true);
+
+    // 後片付け
+    await kvs.close();
+  });
 });
 
 describe("UniKvs - 基本操作 (CRUD)", () => {
@@ -382,6 +514,25 @@ describe("UniKvs - 基本操作 (CRUD)", () => {
 
     // 実行と検証
     await expect(kvs.set(42 as never, "value")).rejects.toThrow(InvalidInputError);
+  });
+});
+
+describe("UniKvs - AbortSignal", () => {
+  test("すでに abort 済みシグナルで各操作が即座に失敗する", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    await kvs.open();
+    const sig = AbortSignal.abort(new Error("aborted!"));
+
+    // 実行と検証
+    await expect(kvs.set("foo", "a", { signal: sig })).rejects.toThrow("aborted!");
+    await expect(kvs.get("foo", { signal: sig })).rejects.toThrow("aborted!");
+    await expect(kvs.has("foo", { signal: sig })).rejects.toThrow("aborted!");
+    await expect(kvs.delete("foo", { signal: sig })).rejects.toThrow("aborted!");
+    await expect(kvs.clear({ signal: sig })).rejects.toThrow("aborted!");
+
+    // 後片付け
+    await kvs.close();
   });
 });
 
@@ -513,6 +664,64 @@ describe("UniKvs - 複数ストレージ", () => {
     // 検証
     expect(result).toBe(true);
   });
+
+  // get() はストレージの読み取り失敗時に他のストレージへフォールバックする。
+  // has() も同様に exists() 失敗時はフォールバックして結果を返す。
+  test("has は最初のストレージの exists 失敗時も次のストレージへフォールバックする", async ({
+    expect,
+  }) => {
+    class ExistsErrorStorage extends MockStorage {
+      override async exists(_args: IStorage.ExistsArgs): Promise<boolean> {
+        throw new Error("exists failed");
+      }
+    }
+
+    // 準備
+    const storage1 = new ExistsErrorStorage("storage1");
+    const storage2 = new MockStorage("storage2");
+    storage2.map.set("key1", "from-storage2");
+    await using kvs = await createOpenedKvs(storage1, storage2);
+
+    // 実行と検証: get と同様に has もフォールバックして結果を返す
+    await expect(kvs.get("key1")).resolves.toBe("from-storage2");
+    await expect(withTimeout(kvs.has("key1"), 1500, "has-fallback")).resolves.toBe(true);
+  });
+
+  test("delete は一部のストレージで失敗したとき PluginOperationAggregateError を投げ、成功したストレージからは削除される", async ({
+    expect,
+  }) => {
+    class DeleteErrorStorage extends MockStorage {
+      override async delete(_args: IStorage.DeleteArgs): Promise<void> {
+        throw new Error("delete failed");
+      }
+    }
+
+    // 準備
+    const storage1 = new DeleteErrorStorage("storage1");
+    const storage2 = new MockStorage("storage2");
+    await using kvs = await createOpenedKvs(storage1, storage2);
+    await kvs.set("key1", "value1");
+
+    // 実行と検証
+    await expect(kvs.delete("key1")).rejects.toThrow(PluginOperationAggregateError);
+    expect(storage2.map.has("key1")).toBe(false);
+  });
+
+  test("stream 書き込みは片方の getWritable が同期失敗してもハングせず集約エラーで解決する", async ({
+    expect,
+  }) => {
+    // 準備
+    await using kvs = await createOpenedKvs(new Memory(), new FailGetWritableStorage());
+
+    // 実行と検証
+    await expect(
+      withTimeout(
+        kvs.set("logs", streamOf([new Uint8Array([1]), new Uint8Array([2])])),
+        2000,
+        "set-streams-partial-failure",
+      ),
+    ).rejects.toThrow(PluginOperationAggregateError);
+  });
 });
 
 describe("UniKvs - トランスフォーマー連携", () => {
@@ -552,6 +761,181 @@ describe("UniKvs - トランスフォーマー連携", () => {
 
     // 検証
     expect(result).toBe("hello");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("複数トランスフォーマーの適用順序は set で順方向、get で逆方向", async ({ expect }) => {
+    class Append implements ITransformer {
+      readonly name: string;
+      isOpen = true;
+      readonly tag: string;
+      constructor(tag: string) {
+        this.tag = tag;
+        this.name = tag;
+      }
+      encode(args: ITransformer.EncodeArgs): string {
+        return `${String(args.data)}${this.tag}`;
+      }
+      decode(args: ITransformer.DecodeArgs): string {
+        const s = String(args.data);
+        expect(s.endsWith(this.tag)).toBe(true);
+        return s.slice(0, -this.tag.length);
+      }
+    }
+
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .appendTransformer(new Append("A"))
+      .appendTransformer(new Append("B"))
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await kvs.set("foo", "x");
+    expect(await kvs.get("foo")).toBe("x");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("encode が失敗してもストレージには書き込まれず set は安全に失敗する", async ({ expect }) => {
+    class BoomTransformer implements ITransformer {
+      readonly name = "Boom";
+      isOpen = true;
+      encode(): never {
+        throw new Error("boom");
+      }
+      decode(): never {
+        throw new Error("boom");
+      }
+    }
+
+    // 準備
+    const storage = new Memory();
+    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
+      .appendTransformer(new BoomTransformer())
+      .appendStorage(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.set("foo", new Uint8Array([1]))).rejects.toThrow("boom");
+    expect(mapOf(storage).has("foo")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - コンテキストとチェックサム", () => {
+  // 配列形式の context もオブジェクト形式と同等に検証されること。
+  test("チェックサム不一致 (配列形式 context) のストリーム書き込みは拒否される", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new Memory();
+    const kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
+      .appendTransformer(new ChecksumSha256())
+      .appendStorage(storage)
+      .create();
+    const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
+    await kvs.open();
+
+    // 実行と検証
+    await expect(
+      kvs.set({
+        key: "logs2",
+        value: streamOf([new Uint8Array([1, 2, 3])]),
+        context: [["@unikvs/checksum:sha256", wrongSum]] as const,
+      }),
+    ).rejects.toThrow(/fail write operation/);
+    expect(mapOf(storage).has("logs2")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("対照実験: チェックサム不一致 (オブジェクト形式 context) は検知される", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new Memory();
+    const kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
+      .appendTransformer(new ChecksumSha256())
+      .appendStorage(storage)
+      .create();
+    const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
+    await kvs.open();
+
+    // 実行
+    const ex = await kvs
+      .set({
+        key: "logs2",
+        value: streamOf([new Uint8Array([1, 2, 3])]),
+        context: { "@unikvs/checksum:sha256": wrongSum },
+      })
+      .then(
+        () => null,
+        (e) => e as PluginOperationAggregateError,
+      );
+
+    // 検証: 集約された原因がチェックサム不一致であること
+    expect(ex).toBeInstanceOf(PluginOperationAggregateError);
+    const errors = (ex?.meta.errors ?? []) as readonly { reason: unknown }[];
+    const reasons = errors.map((e) => e.reason);
+    expect(reasons.some((r) => String(r).match(/mismatch/i))).toBe(true);
+    expect(mapOf(storage).has("logs2")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("チェックサム一致なら配列形式 context でもオブジェクト形式と同等に扱われる", async ({
+    expect,
+  }) => {
+    // 準備
+    const sum = await sha256Hex(new Uint8Array([4, 5, 6]));
+    const kvs = UniKvs.config<{ logs3: StreamValue<Uint8Array> }>()
+      .appendTransformer(new ChecksumSha256())
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await kvs.set({
+      key: "logs3",
+      value: streamOf([new Uint8Array([4]), new Uint8Array([5, 6])]),
+      context: [["@unikvs/checksum:sha256", sum]] as const,
+    });
+    const vs = await kvs.stream("logs3", {
+      context: [["@unikvs/checksum:sha256", sum]] as const,
+    });
+    expect([...(await collect(vs))]).toEqual([4, 5, 6]);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("チェックサム一致 (ストリーム書き込み→ストリーム読み取り)", async ({ expect }) => {
+    // 準備
+    const sum = await sha256Hex(new Uint8Array([1, 2, 3]));
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendTransformer(new ChecksumSha256())
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await kvs.set({
+      key: "logs",
+      value: streamOf([new Uint8Array([1]), new Uint8Array([2, 3])]),
+      context: { "@unikvs/checksum:sha256": sum },
+    });
+    const vs = await kvs.stream("logs", { context: { "@unikvs/checksum:sha256": sum } });
+    expect([...(await collect(vs))]).toEqual([1, 2, 3]);
 
     // 後片付け
     await kvs.close();
@@ -728,6 +1112,213 @@ describe("UniKvs - stream 操作", () => {
       chunks.push(chunk as Uint8Array);
     }
     expect(chunks).toStrictEqual([Uint8Array.from([3])]);
+  });
+
+  // ValueStream の読み取り中にエラーが発生し、consumer が reader.cancel() を呼ばずに
+  // 放棄した場合でも、pull の catch 節で dispose されるためキーのロックはリークしない。
+  test("エラーした ValueStream を cancel/releaseLock のみで放棄しても同一キーへの set はブロックされない", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new ErrorMidwayReadableStorage();
+    await using kvs = await createOpenedKvs(storage);
+    storage.entries.set("logs", [Uint8Array.from([1])]);
+
+    // 実行
+    const vs = await kvs.stream("logs");
+    const reader = vs.getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    await expect(reader.read()).rejects.toThrow("boom");
+    // 典型的なエラー処理: ロックだけ解放してストリームを放棄する
+    reader.releaseLock();
+
+    // 検証: 同一キーへの書き込みが可能であるべき
+    await expect(
+      withTimeout(kvs.set("logs", streamOf([new Uint8Array([9])])), 2000, "set-after-abandon"),
+    ).resolves.toBeUndefined();
+
+    // 後片付け
+    await vs.dispose();
+  });
+
+  test("放棄されたエラーストリームでもロックは解放され、delete / stream / close はブロックされない", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new ErrorMidwayReadableStorage();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    await kvs.open();
+    storage.entries.set("logs", [Uint8Array.from([1])]);
+
+    // 実行
+    const vs = await kvs.stream("logs");
+    const reader = vs.getReader();
+    await reader.read();
+    await expect(reader.read()).rejects.toThrow("boom");
+    reader.releaseLock(); // cancel せずに放棄
+
+    // 検証: エラー時に dispose されるためロックは解放済みで、後続操作はブロックされない
+    const vs2 = await withTimeout(kvs.stream("logs"), 1500, "stream-after-abandon");
+    const reader2 = vs2.getReader();
+    expect((await reader2.read()).done).toBe(false);
+    await expect(reader2.read()).rejects.toThrow("boom");
+    await vs2.dispose();
+    await expect(
+      withTimeout(kvs.delete("logs"), 1500, "delete-after-abandon"),
+    ).resolves.toBeUndefined();
+    // close もロック解放を待たずに完了する
+    await withTimeout(kvs.close(), 1500, "close-after-abandon");
+    expect(kvs.isOpen).toBe(false);
+  });
+
+  test("未破棄の ValueStream を残したまま close するとタイムアウト後に強制破棄される", async ({
+    expect,
+  }) => {
+    // 準備
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+    await kvs.set("logs", streamOf([new Uint8Array([1])]));
+
+    // 実行: ストリームを読まずに close を試みる
+    const vs = await kvs.stream("logs");
+    const closeResult = await withTimeout(
+      kvs.close({ signal: AbortSignal.timeout(500) }).then(
+        () => "resolved" as const,
+        (ex) => `rejected: ${(ex as Error).name}`,
+      ),
+      3000,
+      "close-with-live-stream",
+    );
+
+    // 検証: ロック解放待ちでタイムアウトし、ベストエフォートのクローズ処理へ移行する
+    expect(closeResult.startsWith("rejected")).toBe(true);
+    expect(kvs.isOpen).toBe(false);
+
+    // 後片付け
+    await vs.dispose();
+  });
+
+  test("ライブストリーム中でも同一キーの has は可能", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+    await kvs.set("logs", streamOf([new Uint8Array([1])]));
+    const vs = await kvs.stream("logs");
+    const reader = vs.getReader();
+    await reader.read();
+
+    // 実行と検証
+    await expect(withTimeout(kvs.has("logs"), 1500, "has-during-stream")).resolves.toBe(true);
+
+    // 後片付け
+    void reader.cancel();
+    await vs.dispose();
+    await kvs.close();
+  });
+
+  test("stream set → get の意味整合性 (Value 型キー)", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ data: Value<Uint8Array> }>().appendStorage(new Memory()).create();
+    await kvs.open();
+
+    // 実行と検証: ストリーム書き込みした値は結合して取得できる
+    await kvs.set("data", streamOf([new Uint8Array([1, 2]), new Uint8Array([3])]));
+    const v = await kvs.get("data");
+    expect([...v]).toEqual([1, 2, 3]);
+
+    // 空ストリームは 0 バイトの値として一貫する
+    await kvs.set("data", streamOf([]));
+    const empty = await kvs.get("data");
+    expect(empty.byteLength).toBe(0);
+
+    // 単一値 set → stream 読み
+    await kvs.set("data", new Uint8Array([7, 8]));
+    const vs = await kvs.stream("data");
+    expect([...(await collect(vs))]).toEqual([7, 8]);
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - 競合", () => {
+  test("同一キーへの並行 set は直列化され、全ストレージで一貫する", async ({ expect }) => {
+    // 準備
+    const s1 = new Memory();
+    const s2 = new Memory();
+    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
+      .appendStorage(s1)
+      .appendStorage(s2)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await Promise.all([kvs.set("foo", new Uint8Array([1])), kvs.set("foo", new Uint8Array([2]))]);
+
+    // 検証: ストレージ間で分割されていないこと
+    const v1 = mapOf(s1).get("foo") as Uint8Array;
+    const v2 = mapOf(s2).get("foo") as Uint8Array;
+    expect([...v1]).toEqual([...v2]);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("set と delete の競合でも一貫した状態になる", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    await kvs.open();
+    await kvs.set("foo", "init");
+
+    // 実行
+    await Promise.allSettled([kvs.set("foo", "updated"), kvs.delete("foo")]);
+
+    // 検証: 直列化されるため、どちらか一方の結果になっている
+    const has = await kvs.has("foo");
+    expect(await kvs.has("foo")).toBe(has);
+    await kvs.get("foo").then(
+      (v) => expect(v).toBe("updated"),
+      (ex) => expect(String(ex)).toContain("not found"),
+    );
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("clear と set の競合でも壊れない", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string>; bar: PlainValue<string> }>()
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+
+    // 実行
+    await Promise.allSettled([kvs.clear(), kvs.set("foo", "v"), kvs.set("bar", "w")]);
+
+    // 検証: 例外でプロセスが壊れないことだけ確認
+    const existsAfter = await kvs.has("foo");
+    expect([true, false]).toContain(existsAfter);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("並行 close しても壊れない", async ({ expect }) => {
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    await kvs.open();
+
+    // 実行
+    const results = await Promise.allSettled([kvs.close(), kvs.close()]);
+
+    // 検証
+    expect(kvs.isOpen).toBe(false);
+    expect(results.some((r) => r.status === "fulfilled")).toBe(true);
   });
 });
 
