@@ -236,30 +236,27 @@ export default class S3 implements IStorage {
       partSize: partSize as number,
     });
 
+    const writer = writable.getWriter();
     const uploadPromise = upload.done();
-    const writableProxy = new WritableStream({
+    void uploadPromise.catch(async (reason: unknown) => {
+      try {
+        await writer.abort(reason);
+      } catch {}
+    });
+
+    return new WritableStream({
       async write(chunk) {
-        const writer = writable.getWriter();
         await writer.write(chunk);
-        writer.releaseLock();
       },
       async close() {
-        const writer = writable.getWriter();
         await writer.close();
-        writer.releaseLock();
-
         await uploadPromise;
       },
       async abort(reason) {
-        const writer = writable.getWriter();
         await writer.abort(reason);
-        writer.releaseLock();
-
-        await upload.abort();
+        await upload.abort().catch(() => {});
       },
     });
-
-    return writableProxy;
   }
 
   /**

@@ -90,36 +90,64 @@ afterAll(async () => {
   rmSync(volumeDir, { recursive: true, force: true });
 });
 
+function createClientConfig(endpoint: string): S3ClientConfig {
+  return {
+    endpoint,
+    region: "ap-northeast-1",
+    credentials: {
+      accessKeyId: "rustfsadmin",
+      secretAccessKey: "rustfsadmin",
+    },
+    forcePathStyle: true,
+  };
+}
+
+async function createBucket(endpoint: string, bucket: string): Promise<void> {
+  const client = new S3Client(createClientConfig(endpoint));
+  await client.send(
+    new CreateBucketCommand({
+      Bucket: bucket,
+      CreateBucketConfiguration: {
+        LocationConstraint: "ap-northeast-1",
+      },
+    }),
+  );
+  client.destroy();
+}
+
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 const test = vitest.extend<{
   storage: S3;
+  unauthorizedStorage: S3;
 }>({
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const bucket = `test-bucket-${bucketId++}`;
     const endpoint = `http://127.0.0.1:${portNumber}`;
+    await createBucket(endpoint, bucket);
 
-    const config: S3ClientConfig = {
-      endpoint,
-      region: "ap-northeast-1",
+    const storage = new S3(bucket, createClientConfig(endpoint));
+
+    await use(storage);
+
+    if (storage.isOpen) {
+      storage.close();
+    }
+  },
+  // oxlint-disable-next-line no-empty-pattern
+  async unauthorizedStorage({}, use) {
+    const bucket = `test-bucket-${bucketId++}`;
+    const endpoint = `http://127.0.0.1:${portNumber}`;
+    await createBucket(endpoint, bucket);
+
+    const config = createClientConfig(endpoint);
+    const storage = new S3(bucket, {
+      ...config,
       credentials: {
-        accessKeyId: "rustfsadmin",
-        secretAccessKey: "rustfsadmin",
+        accessKeyId: "unauthorized",
+        secretAccessKey: "unauthorized",
       },
-      forcePathStyle: true,
-    };
-    const client = new S3Client(config);
-    await client.send(
-      new CreateBucketCommand({
-        Bucket: bucket,
-        CreateBucketConfiguration: {
-          LocationConstraint: "ap-northeast-1",
-        },
-      }),
-    );
-    client.destroy();
-
-    const storage = new S3(bucket, config);
+    });
 
     await use(storage);
 
@@ -482,5 +510,49 @@ describe("境界値・異常系テスト", () => {
         signal: controller.signal,
       });
     }).rejects.toThrow();
+  });
+});
+
+describe("書き込みストリームのエラーハンドリング", () => {
+  test("アップロードが失敗したとき、ストリームを閉じるとアップロードの失敗理由で拒否される", async ({
+    expect,
+    unauthorizedStorage,
+  }) => {
+    // 準備
+    const key = "upload-failure.bin";
+    // デフォルトのパートサイズ (5 MiB) を超えてマルチパートアップロードが開始するサイズを使用する。
+    const data = new Uint8Array(1024 * 1024 * 6);
+    unauthorizedStorage.open();
+    const writable = unauthorizedStorage.getWritable({ key, context: {} });
+    const writer = writable.getWriter();
+    await writer.write(data);
+
+    // 実行と検証
+    await expect(writer.close()).rejects.toThrow(Error);
+  });
+
+  test("書き込みストリームを中断したとき、unhandled rejection が発生しない", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    storage.open();
+    const writable = storage.getWritable({ key: "abort-stream.bin", context: {} });
+    const writer = writable.getWriter();
+    const unhandledRejections: unknown[] = [];
+    const listener = (reason: unknown): void => {
+      unhandledRejections.push(reason);
+    };
+    process.on("unhandledRejection", listener);
+
+    // 実行
+    await writer.write(new Uint8Array(1024));
+    await writer.abort(new Error("中断"));
+    // upload.done() の拒否が伝播するまで待機する。
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // 検証
+    process.off("unhandledRejection", listener);
+    expect(unhandledRejections).toStrictEqual([]);
   });
 });
