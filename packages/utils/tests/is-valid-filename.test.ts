@@ -60,12 +60,17 @@ describe("isValidFilename", () => {
     expect(isValidFilename("あ".repeat(86))).toBe(false);
   });
 
-  test("NFD正規化されていない文字を含むファイル名を拒否する", ({ expect }) => {
-    expect(isValidFilename("\u00e9")).toBe(false);
+  test("NFC 正規化されたマルチバイト文字を含むファイル名を受け入れる", ({ expect }) => {
+    expect(isValidFilename("\u00e9")).toBe(true);
+    expect(isValidFilename("café")).toBe(true);
+    expect(isValidFilename("が")).toBe(true);
+    expect(isValidFilename("ばいと")).toBe(true);
+    expect(isValidFilename("日本語")).toBe(true);
   });
 
   test("NFC正規化されていない文字を含むファイル名を拒否する", ({ expect }) => {
     expect(isValidFilename("e\u0301")).toBe(false);
+    expect(isValidFilename("か\u3099")).toBe(false);
   });
 
   test("制御文字を含むファイル名を拒否する", ({ expect }) => {
