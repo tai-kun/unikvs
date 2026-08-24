@@ -29,6 +29,15 @@ describe("bytesToHex", () => {
     expect(bytesToHex(bytes)).toBe(expected);
   });
 
+  test("バッファーの一部を参照するビューを変換する", ({ expect }) => {
+    // 準備
+    const buffer = new Uint8Array([0x00, 0x01, 0x02]).buffer;
+    const view = new Uint8Array(buffer, 1, 2);
+
+    // 実行と検証: オフセットや長さが元のバッファーと異なるビューでも参照先のバイトだけを変換する
+    expect(bytesToHex(view)).toBe("0102");
+  });
+
   test("単一バイトを変換する", ({ expect }) => {
     // 実行と検証
     expect(bytesToHex(new Uint8Array([0x00]))).toBe("00");

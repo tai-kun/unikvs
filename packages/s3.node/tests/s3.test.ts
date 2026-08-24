@@ -6,8 +6,6 @@ import S3 from "../src/s3.js";
 
 const rustfsVersion = process.env["_RUSTFS_VERSION"] ?? "1.0.0-alpha.98";
 
-console.log("rustfs version: " + rustfsVersion);
-
 let bucketId = 0;
 let container: StartedContainer;
 
@@ -62,7 +60,7 @@ const test = vitest.extend<{
 
 describe("ライフサイクル管理", () => {
   test("インスタンス化した直後は、isOpen が false である", ({ expect, storage }) => {
-    // 準備 & Act は constructor で完了している。
+    // 準備と実行は constructor で完了している。
 
     // 検証
     expect(storage.isOpen).toBe(false);
@@ -86,10 +84,33 @@ describe("ライフサイクル管理", () => {
     // 検証
     expect(storage.isOpen).toBe(false);
   });
+
+  test("close 後に再び open すると、データの書き込みと読み取りができる", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    const key = "reopen.txt";
+    const data = new TextEncoder().encode("Reopen");
+    storage.open();
+    storage.close();
+    storage.open();
+
+    // 実行
+    await storage.write({ key, data, signal });
+
+    // 検証
+    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+  });
 });
 
 describe("基本データ操作 (CRUD)", () => {
-  test("データを書き込んだとき、正常に保存される", async ({ expect, storage, signal }) => {
+  test("データを書き込んだとき、キーの存在確認が true になる", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
     // 準備
     const key = "test.txt";
     const data = new TextEncoder().encode("Hello S3");
@@ -99,11 +120,10 @@ describe("基本データ操作 (CRUD)", () => {
     await storage.write({ key, data, signal });
 
     // 検証
-    const exists = await storage.exists({ key, signal });
-    expect(exists).toBe(true);
+    await expect(storage.exists({ key, signal })).resolves.toBe(true);
   });
 
-  test("データを読み込んだとき、保存したデータと一致する Uint8Array が返る", async ({
+  test("書き込んだデータを読み戻したとき、元のデータと一致する Uint8Array が返る", async ({
     expect,
     storage,
     signal,
@@ -121,6 +141,25 @@ describe("基本データ操作 (CRUD)", () => {
     expect(result).toStrictEqual(expectedData);
   });
 
+  test("同じキーに上書きしたとき、読み戻すと最後に書き込んだデータになる", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    const key = "overwrite.txt";
+    const firstData = new TextEncoder().encode("first version");
+    const secondData = new TextEncoder().encode("second version");
+    storage.open();
+    await storage.write({ key, data: firstData, signal });
+
+    // 実行
+    await storage.write({ key, data: secondData, signal });
+
+    // 検証
+    await expect(storage.read({ key, signal })).resolves.toStrictEqual(secondData);
+  });
+
   test("存在しないキーを確認したとき、false が返る", async ({ expect, storage, signal }) => {
     // 準備
     const key = "non-existent.txt";
@@ -131,6 +170,19 @@ describe("基本データ操作 (CRUD)", () => {
 
     // 検証
     expect(result).toBe(false);
+  });
+
+  test("存在しないキーを読み取ろうとしたとき、エラーが投げられる", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    const key = "missing-read-target.txt";
+    storage.open();
+
+    // 実行と検証
+    await expect(storage.read({ key, signal })).rejects.toThrow(/NoSuchKey/);
   });
 
   test("オブジェクトを削除したとき、以降は存在確認が false になる", async ({
@@ -147,57 +199,131 @@ describe("基本データ操作 (CRUD)", () => {
     await storage.delete({ key, signal });
 
     // 検証
-    const exists = await storage.exists({ key, signal });
-    expect(exists).toBe(false);
+    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+  });
+
+  test("存在しないキーを削除しても、エラーにならず完了する", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    const key = "non-existent-delete-target.txt";
+    storage.open();
+
+    // 実行と検証
+    await expect(storage.delete({ key, signal })).resolves.toBeUndefined();
   });
 });
 
 describe("ストリーム操作", () => {
-  test("書き込みストリームを使用してデータを保存したとき、その内容を読み取ることができる", async ({
+  test("複数のチャンクを書き込みストリームに流し込んだとき、連結された内容が保存される", async ({
     expect,
     storage,
     signal,
   }) => {
     // 準備
     const key = "stream-write.dat";
-    const data = new Uint8Array([10, 20, 30]);
+    const chunks = [
+      new Uint8Array([10, 20, 30]),
+      new TextEncoder().encode("middle chunk"),
+      new Uint8Array([200, 201]),
+    ];
+    const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
     storage.open();
     const writable = storage.getWritable({ key, context: {} });
+    const writer = writable.getWriter();
 
     // 実行
-    const writer = writable.getWriter();
-    await writer.write(data);
+    for (const chunk of chunks) {
+      await writer.write(chunk);
+    }
     await writer.close();
 
     // 検証
-    const result = await storage.read({ key, signal });
-    expect(result).toStrictEqual(data);
+    await expect(storage.read({ key, signal })).resolves.toStrictEqual(expected);
   });
 
-  test("読み込みストリームを使用してデータを取得したとき、全データを正常に読み取れる", async ({
+  test("パートサイズより大きいデータを書き込みストリームで保存したとき、全データが正しく保存される", async ({
     expect,
     storage,
     signal,
   }) => {
     // 準備
+    // デフォルトのパートサイズ (5 MiB) をまたいで複数パートになるサイズを使用する。
+    const chunkSize = 1024 * 1024;
+    const data = new Uint8Array(chunkSize * 11 + 123456);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = i % 251;
+    }
+    const key = "multipart-write.dat";
+    storage.open();
+    const writable = storage.getWritable({ key, context: {} });
+    const writer = writable.getWriter();
+
+    // 実行
+    for (let offset = 0; offset < data.length; offset += chunkSize) {
+      await writer.write(data.subarray(offset, offset + chunkSize));
+    }
+    await writer.close();
+
+    // 検証
+    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+  });
+
+  test("最小値未満の partSize をコンテキストに指定したとき、書き込みストリームの取得時にエラーが投げられる", ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    const key = "too-small-part-size.dat";
+    storage.open();
+
+    // 実行と検証
+    expect(() =>
+      storage.getWritable({
+        key,
+        context: { "@unikvs/s3.node:partSize": 1024 },
+      }),
+    ).toThrow(/EntityTooSmall/);
+  });
+
+  test("読み込みストリームを使用したとき、複数チャンクに分かれた全データを正しく読み取れる", async ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    // ストリームが複数チャンクに分割されるよう、十分な大きさのデータを使用する。
+    const expectedData = new Uint8Array(1536 * 1024);
+    for (let i = 0; i < expectedData.length; i++) {
+      expectedData[i] = (i * 31) % 256;
+    }
     const key = "stream-read.dat";
-    const expectedData = new Uint8Array([100, 200]);
     storage.open();
     await storage.write({ key, data: expectedData, signal });
 
     // 実行
     const readable = await storage.getReadable({ key, signal });
     const reader = readable.getReader();
-    const chunks: number[] = [];
+    const buffers: Uint8Array[] = [];
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      chunks.push(...value);
+      buffers.push(value);
     }
 
     // 検証
-    expect(new Uint8Array(chunks)).toStrictEqual(expectedData);
+    const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const buffer of buffers) {
+      result.set(buffer, offset);
+      offset += buffer.length;
+    }
+    expect(buffers.length).toBeGreaterThan(1);
+    expect(result).toStrictEqual(expectedData);
   });
 });
 
@@ -216,23 +342,16 @@ describe("バケット一括削除 (clear)", () => {
     await storage.clear({ signal });
 
     // 検証
-    const exists1 = await storage.exists({ key: "file1.txt", signal });
-    const exists2 = await storage.exists({ key: "file2.txt", signal });
-    expect(exists1).toBe(false);
-    expect(exists2).toBe(false);
+    await expect(storage.exists({ key: "file1.txt", signal })).resolves.toBe(false);
+    await expect(storage.exists({ key: "file2.txt", signal })).resolves.toBe(false);
   });
 
-  test("オブジェクトが一つも存在しない状態で clear を実行しても、エラーが発生せず終了する", async ({
-    expect,
-    storage,
-    signal,
-  }) => {
+  test("オブジェクトが一つも存在しない状態でも clear を実行できる", async ({ storage, signal }) => {
     // 準備
     storage.open();
-    await storage.clear({ signal }); // 一旦空にする
 
     // 実行と検証
-    await expect(storage.clear({ signal })).resolves.not.toThrow();
+    await storage.clear({ signal });
   });
 });
 
@@ -251,9 +370,7 @@ describe("境界値・異常系テスト", () => {
     await storage.write({ key, data: emptyData, signal });
 
     // 検証
-    const result = await storage.read({ key, signal });
-    expect(result.length).toBe(0);
-    expect(result).toStrictEqual(emptyData);
+    await expect(storage.read({ key, signal })).resolves.toStrictEqual(emptyData);
   });
 
   test("特殊文字を含むキー名を使用した場合でも、正しく保存および取得ができる", async ({

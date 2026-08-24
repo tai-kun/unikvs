@@ -10,17 +10,22 @@ describe("assertValidDirname", () => {
 
   test("無効なディレクトリー名で InvalidDirnameError を投げる", ({ expect }) => {
     expect(() => assertValidDirname("")).toThrow(InvalidDirnameError);
+    expect(() => assertValidDirname(".")).toThrow(InvalidDirnameError);
+    expect(() => assertValidDirname("..")).toThrow(InvalidDirnameError);
     expect(() => assertValidDirname("foo<bar")).toThrow(InvalidDirnameError);
   });
 
-  test("エラーメッセージに無効なディレクトリー名を含む", ({ expect }) => {
+  test("投げられたエラーに無効だったディレクトリー名が格納される", ({ expect }) => {
+    // 実行と検証
     try {
-      assertValidDirname("");
+      assertValidDirname("foo/bar");
+      expect.unreachable("InvalidDirnameError が投げられるべきです");
     } catch (error: unknown) {
+      // 検証
       expect(error).toBeInstanceOf(InvalidDirnameError);
       const err = error as InvalidDirnameError;
-      expect(err.meta.dirname).toBe("");
-      expect(err.message).toContain("");
+      expect(err.meta.dirname).toBe("foo/bar");
+      expect(err.message).toBe("Invalid directory name: foo/bar");
     }
   });
 });

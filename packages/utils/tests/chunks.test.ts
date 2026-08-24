@@ -93,7 +93,18 @@ describe("chunks", () => {
     expect(result[3]).toEqual(new Uint8Array([10]));
   });
 
-  test("int8Array を最大チャンクサイズぴったりで分割する", ({ expect }) => {
+  test("maxChunkByteSize が 0 以下の場合でも最低 1 要素ずつ返す", ({ expect }) => {
+    // 準備
+    const data = new Uint8Array([1, 2, 3]);
+
+    // 実行
+    const result = [...chunks(data, 0)];
+
+    // 検証
+    expect(result).toStrictEqual([new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])]);
+  });
+
+  test("チャンクサイズでちょうど割り切れる場合は余りのチャンクを作らない", ({ expect }) => {
     // 準備
     const data = new Uint8Array([1, 2, 3, 4, 5, 6]);
 
@@ -101,8 +112,6 @@ describe("chunks", () => {
     const result = [...chunks(data, 3)];
 
     // 検証
-    expect(result).toHaveLength(2);
-    expect(result[0]).toEqual(new Uint8Array([1, 2, 3]));
-    expect(result[1]).toEqual(new Uint8Array([4, 5, 6]));
+    expect(result).toStrictEqual([new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])]);
   });
 });

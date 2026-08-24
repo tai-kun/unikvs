@@ -16,9 +16,20 @@ describe("InvalidFilenameError", () => {
     expect(error.meta.filename).toBe("foo<bar");
   });
 
-  test("エラーメッセージにファイル名を含む", ({ expect }) => {
+  test("英語のエラーメッセージにファイル名を含む", ({ expect }) => {
     const error = new InvalidFilenameError({ filename: "foo<bar" });
-    expect(error.message).toContain("foo<bar");
+    expect(error.message).toBe("Invalid file name: foo<bar");
+  });
+
+  test("options.cause を Error の cause に伝達する", ({ expect }) => {
+    // 準備
+    const cause = new Error("原因");
+
+    // 実行
+    const error = new InvalidFilenameError({ filename: "test" }, { cause });
+
+    // 検証
+    expect(error.cause).toBe(cause);
   });
 });
 
@@ -36,8 +47,19 @@ describe("InvalidDirnameError", () => {
     expect(error.meta.dirname).toBe("foo<bar");
   });
 
-  test("エラーメッセージにディレクトリー名を含む", ({ expect }) => {
+  test("英語のエラーメッセージにディレクトリー名を含む", ({ expect }) => {
     const error = new InvalidDirnameError({ dirname: "foo<bar" });
-    expect(error.message).toContain("foo<bar");
+    expect(error.message).toBe("Invalid directory name: foo<bar");
+  });
+
+  test("options.cause を Error の cause に伝達する", ({ expect }) => {
+    // 準備
+    const cause = new Error("原因");
+
+    // 実行
+    const error = new InvalidDirnameError({ dirname: "test" }, { cause });
+
+    // 検証
+    expect(error.cause).toBe(cause);
   });
 });

@@ -40,6 +40,14 @@ describe("isValidFilename", () => {
     expect(isValidFilename("COM9")).toBe(false);
     expect(isValidFilename("LPT1")).toBe(false);
     expect(isValidFilename("LPT9")).toBe(false);
+    expect(isValidFilename("com1")).toBe(false);
+    // 予約名の範囲外 (COM0 や COM10 など) は有効
+    expect(isValidFilename("COM10")).toBe(true);
+  });
+
+  test("末尾のドットや空白を含むファイル名を拒否する", ({ expect }) => {
+    expect(isValidFilename("foo.")).toBe(false);
+    expect(isValidFilename("foo ")).toBe(false);
   });
 
   test("255バイトを超えるファイル名を拒否する", ({ expect }) => {

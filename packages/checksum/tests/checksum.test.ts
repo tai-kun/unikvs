@@ -1,383 +1,443 @@
-import { afterEach, beforeEach, describe, test, vi } from "vitest";
+import { afterEach, describe, test, vi } from "vitest";
 
 import Checksum, { type IHash, type IHasher } from "../src/checksum.js";
 import {
+  ChecksumInvalidContextKeyError,
   ChecksumMismatchError,
   ChecksumRequiredError,
-  ChecksumInvalidContextKeyError,
 } from "../src/errors.js";
 
+const CONTEXT_KEY = "x-test-checksum";
+const CHECKSUM_BYTES = new Uint8Array([0xab, 0xcd, 0xef]);
+const CHECKSUM_HEX = "abcdef";
+
 class TestChecksum extends Checksum {
-  public static override CHECKSUM_CONTEXT_KEY: string = "x-test-checksum";
+  public static override CHECKSUM_CONTEXT_KEY: string = CONTEXT_KEY;
 }
 
-let mockHash: IHash;
-let mockHasher: IHasher;
+function createHashMock() {
+  const update = vi.fn<IHasher["update"]>();
+  const digest = vi.fn<IHasher["digest"]>().mockReturnValue(CHECKSUM_BYTES);
+  const create = vi.fn<IHash["create"]>(() => ({ update, digest }));
+  const hash = vi.fn<IHash>().mockReturnValue(CHECKSUM_BYTES);
+  hash.create = create;
 
-beforeEach(() => {
-  const checksum = new Uint8Array([0xab, 0xcd, 0xef]);
-  mockHasher = {
-    update: vi.fn<IHasher["update"]>(),
-    digest: vi.fn<IHasher["digest"]>().mockReturnValue(checksum),
-  };
-  mockHash = vi.fn<IHash>().mockReturnValue(checksum);
-  mockHash.create = vi.fn<IHash["create"]>(() => mockHasher);
-});
+  return { hash, create, update, digest };
+}
+
+/**
+ * 変換ストリームにチャンクを順に書き込み、読み取れるデータをすべて読み取る補助関数です。
+ * バックプレッシャーによるデッドロックを避けるため、書き込みと読み取りを並行して行います。
+ */
+async function runTransform(
+  stream: TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+  inputChunks: Uint8Array<ArrayBuffer>[],
+): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  let closeError: unknown;
+  const reader = stream.readable.getReader();
+  const writer = stream.writable.getWriter();
+
+  const pumping = (async () => {
+    for (const chunk of inputChunks) {
+      await writer.write(chunk);
+    }
+
+    try {
+      await writer.close();
+    } catch (error) {
+      closeError = error;
+    }
+  })();
+
+  while (true) {
+    try {
+      const { done, value } = await reader.read();
+      if (done) break;
+      outputChunks.push(value);
+    } catch (error) {
+      closeError ??= error;
+      break;
+    }
+  }
+
+  await pumping;
+
+  return { outputChunks, closeError };
+}
 
 afterEach(() => {
-  TestChecksum.CHECKSUM_CONTEXT_KEY = "x-test-checksum";
+  TestChecksum.CHECKSUM_CONTEXT_KEY = CONTEXT_KEY;
 });
 
-describe("初期化と基本プロパティの検証", () => {
-  test("インスタンスを作成したとき、指定した名前が name プロパティに正しく設定される", ({
-    expect,
-  }) => {
+describe("初期化と基本プロパティ", () => {
+  test("指定した名前が name プロパティに設定される", ({ expect }) => {
     // 準備
-    const dummyHash = vi.fn<IHash>();
+    const { hash } = createHashMock();
 
     // 実行
-    const checksum = new TestChecksum("sha256", dummyHash);
+    const checksum = new TestChecksum("sha256", hash);
 
     // 検証
     expect(checksum.name).toBe("sha256");
   });
 
-  test("isOpen プロパティを参照したとき、常に true が返される", ({ expect }) => {
+  test("isOpen プロパティは常に true を返す", ({ expect }) => {
     // 準備
-    const dummyHash = vi.fn<IHash>() as any;
-    const checksum = new TestChecksum("sha256", dummyHash);
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
 
-    // 実行
-    const result = checksum.isOpen;
+    // 実行と検証
+    expect(checksum.isOpen).toBe(true);
+  });
+
+  test("required オプションの指定内容が required プロパティに反映される", ({ expect }) => {
+    // 準備と実行
+    const { hash } = createHashMock();
+    const defaultValue = new TestChecksum("sha256", hash);
+    const requiredValue = new TestChecksum("sha256", hash, { required: true });
 
     // 検証
-    expect(result).toBe(true);
+    expect(defaultValue.required).toBe(false);
+    expect(requiredValue.required).toBe(true);
   });
 });
 
-describe("一括データ検証における挙動の検証", () => {
-  test("context に正確なハッシュ値が含まれるとき、encode 処理で例外が発生せずにデータが透過される", ({
+describe("一括データの検証", () => {
+  test("期待値と一致するチェックサムを指定して encode すると、ハッシュを計算してデータをそのまま返す", ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const context = { "x-test-checksum": "abcdef" };
+    const context = { [CONTEXT_KEY]: CHECKSUM_HEX };
 
     // 実行
     const result = checksum.encode({ context, data });
 
     // 検証
     expect(result).toStrictEqual(data);
-    expect(mockHash).toHaveBeenCalledTimes(1);
+    expect(hash).toHaveBeenCalledTimes(1);
   });
 
-  test("context にチェックサムキーが存在しないとき、ハッシュ計算を行わずにデータをそのまま返す", ({
+  test("チェックサムが指定されていなければ encode はハッシュを計算せずにデータをそのまま返す", ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const context = {};
+
+    // 実行
+    const result = checksum.encode({ context: {}, data });
+
+    // 検証
+    expect(result).toStrictEqual(data);
+    expect(hash).not.toHaveBeenCalled();
+  });
+
+  test("チェックサムの値が文字列以外であれば encode はハッシュを計算せずにデータをそのまま返す", ({
+    expect,
+  }) => {
+    // 準備
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const data = new Uint8Array([1, 2, 3]);
+    const context = { [CONTEXT_KEY]: 12345 };
 
     // 実行
     const result = checksum.encode({ context, data });
 
     // 検証
     expect(result).toStrictEqual(data);
-    expect(mockHash).not.toHaveBeenCalled();
+    expect(hash).not.toHaveBeenCalled();
   });
 
-  test("チェックサムを必須にして context にチェックサムキーが存在しないときに encode すると ChecksumRequiredError を投げる", ({
+  test("検証が必須のときにチェックサムが指定されていなければ encode は ChecksumRequiredError を投げる", ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash, { required: true });
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash, { required: true });
     const data = new Uint8Array([1, 2, 3]);
-    const context = {};
 
     // 実行と検証
-    expect(() => {
-      checksum.encode({ context, data });
-    }).toThrow(ChecksumRequiredError);
+    expect(() => checksum.encode({ context: {}, data })).toThrow(ChecksumRequiredError);
   });
 
-  test("context のチェックサム値が文字列以外であるとき、ハッシュ計算を行わずにデータをそのまま返す", ({
+  test("検証が必須のときにチェックサムの値が文字列以外であれば encode は ChecksumRequiredError を投げる", ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash, { required: true });
     const data = new Uint8Array([1, 2, 3]);
-    const context = { "x-test-checksum": 12345 };
-
-    // 実行
-    const result = checksum.encode({ context, data });
-
-    // 検証
-    expect(result).toStrictEqual(data);
-    expect(mockHash).not.toHaveBeenCalled();
-  });
-
-  test("context に不正なハッシュ値が含まれるとき、encode で ChecksumMismatchError が発生する", ({
-    expect,
-  }) => {
-    // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const data = new Uint8Array([1, 2, 3]);
-    const context = { "x-test-checksum": "incorrecthash" };
+    const context = { [CONTEXT_KEY]: 12345 };
 
     // 実行と検証
-    expect(() => {
-      checksum.encode({ context, data });
-    }).toThrow(ChecksumMismatchError);
+    expect(() => checksum.encode({ context, data })).toThrow(ChecksumRequiredError);
+  });
 
+  test("期待値と一致しないチェックサムを指定して encode すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const data = new Uint8Array([1, 2, 3]);
+    const context = { [CONTEXT_KEY]: "incorrect" };
+
+    // 実行
+    let thrown: unknown;
     try {
       checksum.encode({ context, data });
-    } catch (ex) {
-      expect((ex as ChecksumMismatchError).meta).toStrictEqual({
-        actual: "abcdef",
-        expected: "incorrecthash",
-      });
+    } catch (error) {
+      thrown = error;
     }
+
+    // 検証
+    expect(thrown).toBeInstanceOf(ChecksumMismatchError);
+    expect((thrown as ChecksumMismatchError).meta).toStrictEqual({
+      actual: CHECKSUM_HEX,
+      expected: "incorrect",
+    });
   });
 
-  test("CHECKSUM_CONTEXT_KEY が未定義のとき、encode 実行時に ChecksumInvalidContextKeyError が発生する", ({
+  test("期待値と一致するチェックサムを指定して decode すると、データをそのまま返す", ({
     expect,
   }) => {
     // 準備
-    // @ts-expect-error
-    TestChecksum.CHECKSUM_CONTEXT_KEY = undefined;
-    const checksum = new TestChecksum("sha256", mockHash);
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const context = { "x-test-checksum": "abcdef" };
+    const context = { [CONTEXT_KEY]: CHECKSUM_HEX };
+
+    // 実行
+    const result = checksum.decode({ context, data });
+
+    // 検証
+    expect(result).toStrictEqual(data);
+    expect(hash).toHaveBeenCalledTimes(1);
+  });
+
+  test("期待値と一致しないチェックサムを指定して decode すると ChecksumMismatchError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const data = new Uint8Array([1, 2, 3]);
+    const context = { [CONTEXT_KEY]: "incorrect" };
 
     // 実行と検証
-    expect(() => {
-      checksum.encode({ context, data });
-    }).toThrow(ChecksumInvalidContextKeyError);
+    expect(() => checksum.decode({ context, data })).toThrow(ChecksumMismatchError);
+  });
+
+  test("検証が必須のときにチェックサムが指定されていなければ decode は ChecksumRequiredError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash, { required: true });
+    const data = new Uint8Array([1, 2, 3]);
+
+    // 実行と検証
+    expect(() => checksum.decode({ context: {}, data })).toThrow(ChecksumRequiredError);
+  });
+
+  test("CHECKSUM_CONTEXT_KEY が文字列でなければ encode は ChecksumInvalidContextKeyError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    // @ts-expect-error テストのために静的プロパティーを書き換える。
+    TestChecksum.CHECKSUM_CONTEXT_KEY = undefined;
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const data = new Uint8Array([1, 2, 3]);
+    const context = { [CONTEXT_KEY]: CHECKSUM_HEX };
+
+    // 実行と検証
+    expect(() => checksum.encode({ context, data })).toThrow(ChecksumInvalidContextKeyError);
   });
 });
 
-describe("ストリーム検証における挙動の検証", () => {
-  test("getEncodable に正確なハッシュ値が渡されたとき、ストリーム書き込みが正常終了し、データが透過される", async ({
+describe("ストリームによる検証", () => {
+  test("期待値と一致するチェックサムを指定して getEncodable すると、全チャンクを透過させて正常に閉じる", async ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": "abcdef" };
-    const transformStream = checksum.getEncodable({ context });
-
+    const { hash, update, digest } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({ context: { [CONTEXT_KEY]: CHECKSUM_HEX } });
     const chunk1 = new Uint8Array([1, 2]);
     const chunk2 = new Uint8Array([3, 4]);
 
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
-
     // 実行
-    const writePromise = (async () => {
-      await writer.write(chunk1);
-      await writer.write(chunk2);
-      await writer.close();
-    })();
-
-    const outputChunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      outputChunks.push(value);
-    }
-
-    await writePromise;
+    const { outputChunks, closeError } = await runTransform(transformStream, [chunk1, chunk2]);
 
     // 検証
+    expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual([chunk1, chunk2]);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHasher.update).toHaveBeenCalledTimes(2);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHasher.digest).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(digest).toHaveBeenCalledTimes(1);
   });
 
-  test("getEncodable にチェックサムキーが存在しないとき、IHasher を作成せずに透過ストリームを返す", async ({
+  test("チェックサムが指定されていなければ getEncodable はハッシュ関数を使わない透過ストリームを返す", async ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = {};
-    const transformStream = checksum.getEncodable({ context });
-
+    const { hash, create } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({ context: {} });
     const chunk = new Uint8Array([1, 2, 3]);
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
 
     // 実行
-    const writePromise = (async () => {
-      await writer.write(chunk);
-      await writer.close();
-    })();
-
-    const outputChunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      outputChunks.push(value);
-    }
-
-    await writePromise;
+    const { outputChunks, closeError } = await runTransform(transformStream, [chunk]);
 
     // 検証
+    expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual([chunk]);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHash.create).not.toHaveBeenCalledTimes(1);
+    expect(create).not.toHaveBeenCalled();
   });
 
-  test("チェックサムを必須にして context にチェックサムキーが存在しないときに getEncodable すると ChecksumRequiredError を投げる", ({
+  test("チェックサムの値が文字列以外であれば getEncodable はハッシュ関数を使わない透過ストリームを返す", async ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash, { required: true });
-    const context = {};
+    const { hash, create } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({ context: { [CONTEXT_KEY]: 123 } });
+    const chunk = new Uint8Array([1, 2, 3]);
+
+    // 実行
+    const { outputChunks, closeError } = await runTransform(transformStream, [chunk]);
+
+    // 検証
+    expect(closeError).toBeUndefined();
+    expect(outputChunks).toStrictEqual([chunk]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  test("検証が必須のときにチェックサムが指定されていなければ getEncodable は ChecksumRequiredError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash, { required: true });
 
     // 実行と検証
-    expect(() => {
-      checksum.getEncodable({ context });
-    }).toThrow(ChecksumRequiredError);
+    expect(() => checksum.getEncodable({ context: {} })).toThrow(ChecksumRequiredError);
   });
 
-  test("getEncodable のチェックサム値が文字列以外であるとき、IHasher を作成せずに透過ストリームを返す", async ({
+  test("期待値と一致しないチェックサムを指定して getEncodable すると、ストリームを閉じたときに ChecksumMismatchError で失敗する", async ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": 123 };
-    const transformStream = checksum.getEncodable({ context });
-
-    const chunk = new Uint8Array([1, 2, 3]);
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({
+      context: { [CONTEXT_KEY]: "incorrect" },
+    });
 
     // 実行
-    const writePromise = (async () => {
-      await writer.write(chunk);
-      await writer.close();
-    })();
-
-    const outputChunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      outputChunks.push(value);
-    }
-
-    await writePromise;
+    const { closeError } = await runTransform(transformStream, [new Uint8Array([1, 2, 3])]);
 
     // 検証
-    expect(outputChunks).toStrictEqual([chunk]);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHash.create).not.toHaveBeenCalledTimes(1);
+    expect(closeError).toBeInstanceOf(ChecksumMismatchError);
   });
 
-  test("getEncodable に不正なハッシュ値が含まれるとき、ストリームのフラッシュ時に ChecksumMismatchError が発生する", async ({
+  test("期待値と一致するチェックサムを指定して getDecodable すると、全チャンクを透過させて正常に閉じる", async ({
     expect,
   }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": "incorrecthash" };
-    const transformStream = checksum.getEncodable({ context });
-
-    const chunk = new Uint8Array([1, 2, 3]);
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getDecodable({ context: { [CONTEXT_KEY]: CHECKSUM_HEX } });
+    const chunk1 = new Uint8Array([1, 2]);
+    const chunk2 = new Uint8Array([3, 4]);
 
     // 実行
-    const writePromise = (async () => {
-      await writer.write(chunk);
-    })();
-    await reader.read();
-    await writePromise;
+    const { outputChunks, closeError } = await runTransform(transformStream, [chunk1, chunk2]);
 
     // 検証
-    await expect(async () => {
-      await writer.close();
-    }).rejects.toThrow(ChecksumMismatchError);
+    expect(closeError).toBeUndefined();
+    expect(outputChunks).toStrictEqual([chunk1, chunk2]);
   });
 
-  test("getEncodable 呼び出し時に CHECKSUM_CONTEXT_KEY が未定義のとき、ストリーム作成時に ChecksumInvalidContextKeyError が発生する", ({
+  test("期待値と一致しないチェックサムを指定して getDecodable すると、ストリームを閉じたときに ChecksumMismatchError で失敗する", async ({
     expect,
   }) => {
     // 準備
-    // @ts-expect-error
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getDecodable({
+      context: { [CONTEXT_KEY]: "incorrect" },
+    });
+
+    // 実行
+    const { closeError } = await runTransform(transformStream, [new Uint8Array([1, 2, 3])]);
+
+    // 検証
+    expect(closeError).toBeInstanceOf(ChecksumMismatchError);
+  });
+
+  test("CHECKSUM_CONTEXT_KEY が文字列でなければ getEncodable は ChecksumInvalidContextKeyError を投げる", ({
+    expect,
+  }) => {
+    // 準備
+    // @ts-expect-error テストのために静的プロパティーを書き換える。
     TestChecksum.CHECKSUM_CONTEXT_KEY = undefined;
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": "abcdef" };
+    const { hash } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
 
     // 実行と検証
-    expect(() => {
-      checksum.getEncodable({ context });
-    }).toThrow(ChecksumInvalidContextKeyError);
+    expect(() => checksum.getEncodable({ context: { [CONTEXT_KEY]: CHECKSUM_HEX } })).toThrow(
+      ChecksumInvalidContextKeyError,
+    );
   });
 });
 
-describe("ストリーム処理における境界値・特殊ケースの検証", () => {
-  test("チャンクサイズが 4 GB と等しいとき、hasher.update が 1 回のみ呼び出される", async ({
-    expect,
-  }) => {
+describe("大きなチャンクの分割処理", () => {
+  test("4 GB ちょうどのチャンクは分割せずに 1 回の更新処理に渡される", async ({ expect }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": "abcdef" };
-    const transformStream = checksum.getEncodable({ context });
-
+    const { hash, update } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({ context: { [CONTEXT_KEY]: CHECKSUM_HEX } });
     // メモリーの枯渇を避けるため、length を偽装した Uint8Array のようなオブジェクトを使用する。
-    const fakeChunk = {
-      length: 4_000_000_000, // 4 GB
-      subarray: vi.fn<() => Uint8Array>().mockImplementation(() => new Uint8Array([1])),
-    } as unknown as Uint8Array<ArrayBuffer>;
-
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
+    const subarray = vi.fn<(start: number, end: number) => Uint8Array<ArrayBuffer>>(
+      () => new Uint8Array([1]),
+    );
+    const fakeChunk = { length: 4_000_000_000, subarray } as unknown as Uint8Array<ArrayBuffer>;
 
     // 実行
-    const writePromise = (async () => {
-      await writer.write(fakeChunk);
-      await writer.close();
-    })();
-    await reader.read();
-    await writePromise;
+    const { closeError } = await runTransform(transformStream, [fakeChunk]);
 
     // 検証
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHasher.update).toHaveBeenCalledTimes(1);
+    expect(closeError).toBeUndefined();
+    expect(update).toHaveBeenCalledTimes(1);
   });
 
-  test("チャンクサイズが 4 GB を超えるとき、データが 2 つに分割されて hasher.update が 2 回呼び出される", async ({
-    expect,
-  }) => {
+  test("4 GB を超えるチャンクは 4 GB ごとに分割されて更新処理に渡される", async ({ expect }) => {
     // 準備
-    const checksum = new TestChecksum("sha256", mockHash);
-    const context = { "x-test-checksum": "abcdef" };
-    const transformStream = checksum.getEncodable({ context });
-
+    const { hash, update } = createHashMock();
+    const checksum = new TestChecksum("sha256", hash);
+    const transformStream = checksum.getEncodable({ context: { [CONTEXT_KEY]: CHECKSUM_HEX } });
+    const subarray = vi.fn<(start: number, end: number) => Uint8Array<ArrayBuffer>>(
+      () => new Uint8Array([1]),
+    );
     const fakeChunk = {
-      length: 4_000_000_000 + 1, // 4 GB + 1 B
-      subarray: vi.fn<() => Uint8Array>().mockImplementation(() => new Uint8Array([1])),
+      length: 4_000_000_000 + 1,
+      subarray,
     } as unknown as Uint8Array<ArrayBuffer>;
 
-    const writer = transformStream.writable.getWriter();
-    const reader = transformStream.readable.getReader();
-
     // 実行
-    const writePromise = (async () => {
-      await writer.write(fakeChunk);
-      await writer.close();
-    })();
-    await reader.read();
-    await writePromise;
+    const { closeError } = await runTransform(transformStream, [fakeChunk]);
 
     // 検証
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(mockHasher.update).toHaveBeenCalledTimes(2);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(fakeChunk.subarray).toHaveBeenNthCalledWith(1, 0, 4_000_000_000);
-    // oxlint-disable-next-line typescript/unbound-method
-    expect(fakeChunk.subarray).toHaveBeenNthCalledWith(2, 4_000_000_000, 4_000_000_001);
+    expect(closeError).toBeUndefined();
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(subarray).toHaveBeenNthCalledWith(1, 0, 4_000_000_000);
+    expect(subarray).toHaveBeenNthCalledWith(2, 4_000_000_000, 4_000_000_001);
   });
 });

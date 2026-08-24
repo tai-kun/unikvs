@@ -19,4 +19,9 @@ describe("isValidDirname", () => {
     expect(isValidDirname("foo/bar")).toBe(false);
     expect(isValidDirname("foo<bar")).toBe(false);
   });
+
+  test("Windowsの予約名を拒否する", ({ expect }) => {
+    expect(isValidDirname("CON")).toBe(false);
+    expect(isValidDirname("LPT1")).toBe(false);
+  });
 });

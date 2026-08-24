@@ -80,6 +80,58 @@ describe("withReadableStreamFrom", () => {
     }
   });
 
+  test("ポリフィルでイテレーターのエラーがストリームに伝播する", async ({ expect }) => {
+    // 準備
+    const originalFrom = (ReadableStream as any).from;
+    delete (ReadableStream as any).from;
+
+    async function* failingGen() {
+      yield 1;
+      throw new Error("boom");
+    }
+
+    try {
+      // 実行
+      const stream = withReadableStreamFrom((RS) => RS.from(failingGen()));
+      const reader = stream.getReader();
+
+      // 検証: エラーまでのチャンクは読めて、その後の読み取りでエラーが再現される
+      expect(await reader.read()).toStrictEqual({ done: false, value: 1 });
+      await expect(reader.read()).rejects.toThrow("boom");
+    } finally {
+      (ReadableStream as any).from = originalFrom;
+    }
+  });
+
+  test("ポリフィルのストリームをキャンセルするとイテレーターも閉じられる", async ({ expect }) => {
+    // 準備
+    const originalFrom = (ReadableStream as any).from;
+    delete (ReadableStream as any).from;
+
+    let closed = false;
+    function* gen() {
+      try {
+        yield 1;
+        yield 2;
+      } finally {
+        closed = true;
+      }
+    }
+
+    try {
+      // 実行
+      const stream = withReadableStreamFrom((RS) => RS.from(gen()));
+      const reader = stream.getReader();
+      await reader.read();
+      await reader.cancel();
+
+      // 検証
+      expect(closed).toBe(true);
+    } finally {
+      (ReadableStream as any).from = originalFrom;
+    }
+  });
+
   test("ポリフィル使用後に ReadableStream.from が削除される", ({ expect }) => {
     // 準備
     const originalFrom = (ReadableStream as any).from;

@@ -10,18 +10,23 @@ describe("assertValidFilename", () => {
 
   test("無効なファイル名で InvalidFilenameError を投げる", ({ expect }) => {
     expect(() => assertValidFilename("")).toThrow(InvalidFilenameError);
+    expect(() => assertValidFilename(".")).toThrow(InvalidFilenameError);
+    expect(() => assertValidFilename("..")).toThrow(InvalidFilenameError);
     expect(() => assertValidFilename("foo/bar")).toThrow(InvalidFilenameError);
     expect(() => assertValidFilename("CON")).toThrow(InvalidFilenameError);
   });
 
-  test("エラーメッセージに無効なファイル名を含む", ({ expect }) => {
+  test("投げられたエラーに無効だったファイル名が格納される", ({ expect }) => {
+    // 実行と検証
     try {
-      assertValidFilename("");
+      assertValidFilename("foo<bar");
+      expect.unreachable("InvalidFilenameError が投げられるべきです");
     } catch (error: unknown) {
+      // 検証
       expect(error).toBeInstanceOf(InvalidFilenameError);
       const err = error as InvalidFilenameError;
-      expect(err.meta.filename).toBe("");
-      expect(err.message).toContain("");
+      expect(err.meta.filename).toBe("foo<bar");
+      expect(err.message).toBe("Invalid file name: foo<bar");
     }
   });
 });
