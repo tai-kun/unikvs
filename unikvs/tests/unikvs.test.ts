@@ -138,6 +138,20 @@ class MemoryStreamStorage implements IStorage {
   }
 }
 
+class ReadErrorStorage extends MockStorage {
+  constructor(name: string) {
+    super(name);
+  }
+
+  override async read(_args: IStorage.ReadArgs): Promise<unknown> {
+    throw new Error("read failed");
+  }
+
+  getReadable(_args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<unknown> {
+    throw new Error("read failed");
+  }
+}
+
 function createKvs(storage: IStorage, ...more: IStorage[]): UniKvs {
   const config = UniKvs.config().appendStorage(storage);
   return more.reduce((c, s) => c.appendStorage(s), config).create();
@@ -417,6 +431,59 @@ describe("UniKvs - 複数ストレージ", () => {
     expect(result).toBe("from-storage2");
   });
 
+  test("get は最初のストレージの読み取りに失敗しても次のストレージから取得する", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage1 = new ReadErrorStorage("storage1");
+    const storage2 = new MockStorage("storage2");
+    storage2.map.set("key1", "from-storage2");
+    await using kvs = await createOpenedKvs(storage1, storage2);
+
+    // 実行
+    const result = await kvs.get("key1");
+
+    // 検証
+    expect(result).toBe("from-storage2");
+  });
+
+  test("get はすべてのストレージの読み取りに失敗すると、失敗したすべてのエラーを cause に設定した KeyNotFoundError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage1 = new ReadErrorStorage("storage1");
+    const storage2 = new ReadErrorStorage("storage2");
+    storage1.map.set("key1", "value1");
+    storage2.map.set("key1", "value1");
+    await using kvs = await createOpenedKvs(storage1, storage2);
+
+    // 実行と検証
+    const error = await kvs.get("key1").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect((error as KeyNotFoundError).cause).toBeInstanceOf(PluginOperationAggregateError);
+    expect(
+      ((error as KeyNotFoundError).cause as PluginOperationAggregateError).meta.errors,
+    ).toStrictEqual([
+      { plugin: "storage", reason: new Error("read failed") },
+      { plugin: "storage", reason: new Error("read failed") },
+    ]);
+  });
+
+  test("get は 1 つのストレージの読み取りに失敗したとき、そのエラーを cause に設定した KeyNotFoundError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage1 = new ReadErrorStorage("storage1");
+    const storage2 = new MockStorage("storage2");
+    storage1.map.set("key1", "value1");
+    await using kvs = await createOpenedKvs(storage1, storage2);
+
+    // 実行と検証
+    const error = await kvs.get("key1").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect((error as KeyNotFoundError).cause).toStrictEqual(new Error("read failed"));
+  });
+
   test("delete ですべてのストレージから削除される", async ({ expect }) => {
     // 準備
     const storage1 = new MockStorage("storage1");
@@ -559,6 +626,29 @@ describe("UniKvs - stream 操作", () => {
 
     // 実行と検証
     await expect(kvs.stream("nonexistent")).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("stream は最初のストレージの読み取りに失敗しても次のストレージから取得する", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage1 = new ReadErrorStorage("storage1");
+    const storage2 = new MemoryStreamStorage();
+    const writable = storage2.getWritable({ key: "key1" });
+    const writer = writable.getWriter();
+    await writer.write(Uint8Array.from([1, 2]));
+    await writer.close();
+    await using kvs = await createOpenedKvs(storage1, storage2);
+
+    // 実行
+    const stream = await kvs.stream("key1");
+    const chunks: unknown[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    // 検証
+    expect(chunks).toStrictEqual([Uint8Array.from([1, 2])]);
   });
 
   test("stream をキャンセルした後も同じキーに書き込める", async ({ expect }) => {

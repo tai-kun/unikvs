@@ -890,14 +890,26 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const NONE = {};
       let data: any = NONE;
+      const errors: { reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
+        // あるストレージの読み取りに失敗しても、他のストレージから
+        // データを取得できるようにフォールバックします。
         for (const storage of this.#destinations) {
-          if (await storage.exists(context, signal, key)) {
+          try {
+            if (!(await storage.exists(context, signal, key))) {
+              continue;
+            }
             data = await storage.read(context, signal, key);
             break;
+          } catch (ex) {
+            if (signal.aborted) {
+              throw ex;
+            }
+            errors.push({ reason: ex });
+            logger.error`Failed to read from a storage: ${ex}`;
           }
         }
       } finally {
@@ -905,7 +917,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       if (data === NONE) {
-        throw new KeyNotFoundError({ key });
+        const options: ErrorOptions = {};
+        switch (errors.length) {
+          case 0:
+            break;
+          case 1:
+            options.cause = errors[0]!.reason;
+            break;
+          default:
+            options.cause = new PluginOperationAggregateError({
+              plugin: "storage",
+              action: "read",
+              errors,
+            });
+        }
+
+        throw new KeyNotFoundError({ key }, options);
       }
 
       // トランスフォーマーを逆順に適用してデータをデコードします。
@@ -969,19 +996,48 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const NONE: any = {};
       let r: IReadableStream = NONE;
+      const errors: { reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
+        // あるストレージの読み取りに失敗しても、他のストレージから
+        // データを取得できるようにフォールバックします。
         for (const storage of this.#destinations) {
-          if (await storage.exists(context, signal, key)) {
+          try {
+            if (!(await storage.exists(context, signal, key))) {
+              continue;
+            }
+
             r = await storage.getReadable(context, signal, key);
             break;
+          } catch (ex) {
+            if (signal.aborted) {
+              throw ex;
+            }
+
+            errors.push({ reason: ex });
+            logger.error`Failed to read from a storage: ${ex}`;
           }
         }
 
         if (r === NONE) {
-          throw new KeyNotFoundError({ key });
+          const options: ErrorOptions = {};
+          switch (errors.length) {
+            case 0:
+              break;
+            case 1:
+              options.cause = errors[0]!.reason;
+              break;
+            default:
+              options.cause = new PluginOperationAggregateError({
+                plugin: "storage",
+                action: "read",
+                errors,
+              });
+          }
+
+          throw new KeyNotFoundError({ key }, options);
         }
 
         // トランスフォーマーを逆順に適用し、デコード用トランスフォームを連結します。

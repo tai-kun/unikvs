@@ -493,7 +493,7 @@ export type PluginOperationAggregateErrorMeta = {
   /**
    * 失敗した操作の種類です。
    */
-  readonly action: "open" | "close" | "write" | "delete" | "clear";
+  readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
 
   /**
    * 失敗した各プラグインの操作と原因のリストです。
@@ -525,7 +525,7 @@ export type PluginOperationAggregateErrorArgs = {
   /**
    * 失敗した操作の種類です。
    */
-  readonly action: "open" | "close" | "write" | "delete" | "clear";
+  readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
 
   /**
    * 失敗した各プラグインの操作と原因のリストです。
