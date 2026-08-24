@@ -37,12 +37,12 @@ const context: Context = {
 
 UniKVS 本体と各プラグインが読む主なキーは次のとおりです。
 
-| キー                          | 設定する主体   | 説明                                                                                     |
-| ----------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
-| `unikvs:action`               | unikvs 本体    | 現在の操作種別 (`open` / `close` / `set` / `get` / `stream` / `has` / `delete` / `clear`) |
-| `unikvs:key`                  | unikvs 本体    | 操作対象のキー。                                                                         |
-| `@unikvs/checksum:<algo>`     | チェックサム   | 検証に使うハッシュ値の 16 進数文字列。                                                   |
-| `@unikvs/s3.node:partSize`    | S3 ストレージ  | マルチパートアップロードのパートサイズ (バイト単位)。                                   |
+| キー                       | 設定する主体  | 説明                                                                                      |
+| -------------------------- | ------------- | ----------------------------------------------------------------------------------------- |
+| `unikvs:action`            | unikvs 本体   | 現在の操作種別 (`open` / `close` / `set` / `get` / `stream` / `has` / `delete` / `clear`) |
+| `unikvs:key`               | unikvs 本体   | 操作対象のキー。                                                                          |
+| `@unikvs/checksum:<algo>`  | チェックサム  | 検証に使うハッシュ値の 16 進数文字列。                                                    |
+| `@unikvs/s3.node:partSize` | S3 ストレージ | マルチパートアップロードのパートサイズ (バイト単位)。                                     |
 
 ## ITransformer
 
@@ -70,27 +70,35 @@ class MyTransformer implements ITransformer<Uint8Array, Uint8Array, Uint8Array, 
 
   // ストリーム書き込みをサポートする場合のみ実装します。
   public getEncodable(): TransformStream<Uint8Array, Uint8Array> {
-    return new TransformStream({ transform(chunk, c) { c.enqueue(transform(chunk)); } });
+    return new TransformStream({
+      transform(chunk, c) {
+        c.enqueue(transform(chunk));
+      },
+    });
   }
 
   // ストリーム読み取りをサポートする場合のみ実装します。
   public getDecodable(): TransformStream<Uint8Array, Uint8Array> {
-    return new TransformStream({ transform(chunk, c) { c.enqueue(restore(chunk)); } });
+    return new TransformStream({
+      transform(chunk, c) {
+        c.enqueue(restore(chunk));
+      },
+    });
   }
 }
 ```
 
 ### メンバー
 
-| メンバー                            | 必須 | 説明                                                                       |
-| ----------------------------------- | ---- | -------------------------------------------------------------------------- |
-| `name: string`                      | ○   | プラグイン名。デバッグメッセージなどに使用されます。                       |
-| `get isOpen(): boolean`             | ○   | 利用可能な状態かどうか。                                                   |
-| `open?(args)` / `close?(args)`      |      | リソースの確保と解放。引数には `context` と `signal` が渡ります。          |
-| `encode(args): MaybePromise<TOut>` | ○   | 単発データをエンコードします。引数は `{ context, data, signal }` です。    |
-| `decode(args): MaybePromise<TOut>` | ○   | 単発データをデコードします。                                               |
-| `getEncodable?(args)`               |      | `TransformStream` を返します。ストリーム書き込み時に使われます。           |
-| `getDecodable?(args)`               |      | `TransformStream` を返します。ストリーム読み取り時に使われます。           |
+| メンバー                           | 必須 | 説明                                                                    |
+| ---------------------------------- | ---- | ----------------------------------------------------------------------- |
+| `name: string`                     | ○    | プラグイン名。デバッグメッセージなどに使用されます。                    |
+| `get isOpen(): boolean`            | ○    | 利用可能な状態かどうか。                                                |
+| `open?(args)` / `close?(args)`     |      | リソースの確保と解放。引数には `context` と `signal` が渡ります。       |
+| `encode(args): MaybePromise<TOut>` | ○    | 単発データをエンコードします。引数は `{ context, data, signal }` です。 |
+| `decode(args): MaybePromise<TOut>` | ○    | 単発データをデコードします。                                            |
+| `getEncodable?(args)`              |      | `TransformStream` を返します。ストリーム書き込み時に使われます。        |
+| `getDecodable?(args)`              |      | `TransformStream` を返します。ストリーム読み取り時に使われます。        |
 
 :::note
 ストリーム用メソッド (`getEncodable()` / `getDecodable()`) は省略可能ですが、省略したトランスフォーマーを含む構成で `set()` に `ReadableStream` を渡す、または `stream()` を呼び出すと `EncodableStreamNotSupportedError` / `DecodableStreamNotSupportedError` になります。
@@ -136,19 +144,19 @@ class Memory implements IStorage {
 
 ### メンバー
 
-| メンバー                                  | 必須 | 説明                                                                 |
-| ----------------------------------------- | ---- | -------------------------------------------------------------------- |
-| `name: string`                            | ○   | ストレージ名。デバッグメッセージなどに使用されます。                 |
-| `get isOpen(): boolean`                   | ○   | 利用可能な状態かどうか。                                             |
-| `open?(args)` / `close?(args)`            |      | 接続確立や初期化、フラッシュと切断。                                 |
-| `write(args): MaybePromise<void>`         | ○   | データを保存します。引数は `{ context, key, data, signal }` です。   |
-| `read(args): MaybePromise<TData>`        | ○   | データを読み取ります。                                               |
-| `exists(args): MaybePromise<boolean>`    | ○   | キーの存在を確認します。                                             |
-| `delete(args): MaybePromise<void>`       | ○   | キーを削除します。                                                   |
-| `clear(args): MaybePromise<void>`        | ○   | 全データを消去します。                                               |
-| `getWritable?(args)`                      |      | `WritableStream` を返します。ストリーム書き込み時に使われます。      |
-| `getReadable?(args)`                      |      | `ReadableStream` を返します。ストリーム読み取り時に使われます。      |
-| `onOtherWriteError?(args)`                |      | マルチキャスト書き込みで他のストレージが失敗したときのフックです。ロールバックなどを実装できます。 |
+| メンバー                              | 必須 | 説明                                                                                               |
+| ------------------------------------- | ---- | -------------------------------------------------------------------------------------------------- |
+| `name: string`                        | ○    | ストレージ名。デバッグメッセージなどに使用されます。                                               |
+| `get isOpen(): boolean`               | ○    | 利用可能な状態かどうか。                                                                           |
+| `open?(args)` / `close?(args)`        |      | 接続確立や初期化、フラッシュと切断。                                                               |
+| `write(args): MaybePromise<void>`     | ○    | データを保存します。引数は `{ context, key, data, signal }` です。                                 |
+| `read(args): MaybePromise<TData>`     | ○    | データを読み取ります。                                                                             |
+| `exists(args): MaybePromise<boolean>` | ○    | キーの存在を確認します。                                                                           |
+| `delete(args): MaybePromise<void>`    | ○    | キーを削除します。                                                                                 |
+| `clear(args): MaybePromise<void>`     | ○    | 全データを消去します。                                                                             |
+| `getWritable?(args)`                  |      | `WritableStream` を返します。ストリーム書き込み時に使われます。                                    |
+| `getReadable?(args)`                  |      | `ReadableStream` を返します。ストリーム読み取り時に使われます。                                    |
+| `onOtherWriteError?(args)`            |      | マルチキャスト書き込みで他のストレージが失敗したときのフックです。ロールバックなどを実装できます。 |
 
 すべての操作系メソッドの引数オブジェクト (`IStorage.WriteArgs` など) は `context`、`key`、`signal` を含みます。必要なプロパティーだけを受け取る場合は `Pick<>` を使うパターンが推奨されます。
 

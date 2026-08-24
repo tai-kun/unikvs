@@ -19,14 +19,14 @@ pnpm add @unikvs/checksum
 
 ## 対応アルゴリズム
 
-| クラス           | アルゴリズム | context キー                 |
-| ---------------- | ------------ | ---------------------------- |
-| `ChecksumMd5`    | MD5          | `@unikvs/checksum:md5`       |
-| `ChecksumSha1`   | SHA-1        | `@unikvs/checksum:sha1`      |
-| `ChecksumSha224` | SHA-224      | `@unikvs/checksum:sha224`    |
-| `ChecksumSha256` | SHA-256      | `@unikvs/checksum:sha256`    |
-| `ChecksumSha384` | SHA-384      | `@unikvs/checksum:sha384`    |
-| `ChecksumSha512` | SHA-512      | `@unikvs/checksum:sha512`    |
+| クラス           | アルゴリズム | context キー              |
+| ---------------- | ------------ | ------------------------- |
+| `ChecksumMd5`    | MD5          | `@unikvs/checksum:md5`    |
+| `ChecksumSha1`   | SHA-1        | `@unikvs/checksum:sha1`   |
+| `ChecksumSha224` | SHA-224      | `@unikvs/checksum:sha224` |
+| `ChecksumSha256` | SHA-256      | `@unikvs/checksum:sha256` |
+| `ChecksumSha384` | SHA-384      | `@unikvs/checksum:sha384` |
+| `ChecksumSha512` | SHA-512      | `@unikvs/checksum:sha512` |
 
 各クラスは静的プロパティー `CHECKSUM_CONTEXT_KEY` で対応する context キーを公開しています。文字列リテラルを直接書くより、このプロパティーを参照するほうが確実です。
 
@@ -90,10 +90,10 @@ transformer.encode({
 
 期待値が存在しない場合の扱いはオプションで切り替えられます。
 
-| オプション            | 既定   | 挙動                                                       |
-| --------------------- | ------ | ---------------------------------------------------------- |
-| `{}`                  | 必須化しない | 期待値がなければ検証せず透過させる。                       |
-| `{ required: true }`  |        | 期待値がなければ `ChecksumRequiredError` が投げられる。    |
+| オプション           | 既定         | 挙動                                                    |
+| -------------------- | ------------ | ------------------------------------------------------- |
+| `{}`                 | 必須化しない | 期待値がなければ検証せず透過させる。                    |
+| `{ required: true }` |              | 期待値がなければ `ChecksumRequiredError` が投げられる。 |
 
 :::tip
 単発データの一括処理ではデータ全体を一度にハッシュ化します。ストリーム処理ではチャンクごとにハッシュ状態を更新し、終端で一致確認するため、大きなデータでもメモリー効率よく検証できます。4 GB を超える単一チャンクは noble-hashes の制限に従って自動的に分割されます。
@@ -105,11 +105,11 @@ MD5 と SHA-1 は衝突耐性が破られています。意図的な改ざんへ
 
 ## エラー
 
-| クラス名                        | 投げられる場面                                       |
-| ------------------------------- | ---------------------------------------------------- |
-| `ChecksumMismatchError`         | 計算したハッシュ値が期待値と一致しない。             |
-| `ChecksumRequiredError`         | `required: true` なのに context に期待値がない。     |
-| `ChecksumInvalidContextKeyError` | 内部不整合によりコンテクストキーが不正になった。     |
+| クラス名                         | 投げられる場面                                   |
+| -------------------------------- | ------------------------------------------------ |
+| `ChecksumMismatchError`          | 計算したハッシュ値が期待値と一致しない。         |
+| `ChecksumRequiredError`          | `required: true` なのに context に期待値がない。 |
+| `ChecksumInvalidContextKeyError` | 内部不整合によりコンテクストキーが不正になった。 |
 
 いずれも `@unikvs/checksum` パッケージからエクスポートされています。`ChecksumMismatchError` のメタ情報からは `meta.actual` (実際のハッシュ値) と `meta.expected` (期待値) を参照できます。
 

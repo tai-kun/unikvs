@@ -55,26 +55,26 @@ IndexedDB と同様、ネイティブなストリームを持たない環境向�
 ### Memory クラス
 
 ```ts
-new Memory()
+new Memory();
 ```
 
-| メンバー                                        | 説明                                                     |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| `name: string`                                  | 常に `"Memory"`。                                        |
-| `get isOpen(): boolean`                         | 常に `true`。                                            |
-| `write(args)` / `read(args)`                    | キーと値を保存・取得します。                             |
-| `exists(args): boolean`                         | キーの存在を確認します。                                 |
-| `delete(args)` / `clear()`                      | 指定キーの削除、全削除を行います。                       |
-| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。                         |
-| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。                         |
+| メンバー                                        | 説明                               |
+| ----------------------------------------------- | ---------------------------------- |
+| `name: string`                                  | 常に `"Memory"`。                  |
+| `get isOpen(): boolean`                         | 常に `true`。                      |
+| `write(args)` / `read(args)`                    | キーと値を保存・取得します。       |
+| `exists(args): boolean`                         | キーの存在を確認します。           |
+| `delete(args)` / `clear()`                      | 指定キーの削除、全削除を行います。 |
+| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。   |
+| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。   |
 
 存在しないキーへの `read()` / `delete()`、および `getReadable()` は `KeyNotFoundError` を投げます。
 
 ## エラー
 
-| クラス名               | 投げられる場面                                       |
-| ---------------------- | ---------------------------------------------------- |
-| `KeyNotFoundError`     | 存在しないキーを読み取ろうとした、または削除しようとした。 |
-| `InvalidChunkTypeError` | ストリームに `Uint8Array<ArrayBuffer>` 以外を書き込んだ。 |
+| クラス名                | 投げられる場面                                             |
+| ----------------------- | ---------------------------------------------------------- |
+| `KeyNotFoundError`      | 存在しないキーを読み取ろうとした、または削除しようとした。 |
+| `InvalidChunkTypeError` | ストリームに `Uint8Array<ArrayBuffer>` 以外を書き込んだ。  |
 
 両クラスとも `@unikvs/memory` パッケージからエクスポートされています。

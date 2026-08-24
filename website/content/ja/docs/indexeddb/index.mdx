@@ -55,17 +55,17 @@ new Indexeddb(dbName?: string, storeName?: string)
 // 既定値: dbName "unikvs_db", storeName "kvs_store"
 ```
 
-| メンバー                                        | 説明                                                     |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| `name: string`                                  | 常に `"Indexeddb"`。                                     |
-| `get isOpen(): boolean`                         | 接続済みかどうか。                                       |
-| `open()`                                        | データベースへ接続します。                               |
-| `close()`                                       | 接続を閉じます。                                         |
-| `write(args)` / `read(args)`                    | レコードの保存・取得を行います。                         |
-| `exists(args): Promise<boolean>`                | キーの存在を確認します。                                 |
-| `delete(args)` / `clear()`                      | 指定キーの削除、ストア全体の消去を行います。             |
-| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。                         |
-| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。                         |
+| メンバー                                        | 説明                                         |
+| ----------------------------------------------- | -------------------------------------------- |
+| `name: string`                                  | 常に `"Indexeddb"`。                         |
+| `get isOpen(): boolean`                         | 接続済みかどうか。                           |
+| `open()`                                        | データベースへ接続します。                   |
+| `close()`                                       | 接続を閉じます。                             |
+| `write(args)` / `read(args)`                    | レコードの保存・取得を行います。             |
+| `exists(args): Promise<boolean>`                | キーの存在を確認します。                     |
+| `delete(args)` / `clear()`                      | 指定キーの削除、ストア全体の消去を行います。 |
+| `getWritable(args): WritableStream<Uint8Array>` | 書き込み用ストリームを返します。             |
+| `getReadable(args): ReadableStream<Uint8Array>` | 読み取り用ストリームを返します。             |
 
 ## 関連パッケージ
 

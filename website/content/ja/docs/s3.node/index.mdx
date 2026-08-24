@@ -92,19 +92,19 @@ await kvs.set("backup", stream, {
 new S3(bucket: string, config?: S3ClientConfig)
 ```
 
-| メンバー                                                | 説明                                                     |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| `name: string`                                          | 常に `"S3"`。                                            |
-| `get isOpen(): boolean`                                 | オープン済みかどうか。                                   |
-| `open()`                                                | S3 クライアントを生成します。                            |
-| `close()`                                               | S3 クライアントを破棄します。                            |
-| `write(args)`                                           | オブジェクトを PutObject で保存します。                  |
-| `read(args): Promise<Uint8Array>`                       | GetObject で取得したボディーをバイト配列化します。       |
-| `exists(args): Promise<boolean>`                        | HeadObject の結果で判定します (404 は false)。           |
-| `delete(args)`                                          | DeleteObject で削除します。                              |
-| `clear(args)`                                           | バケット内の全オブジェクトを削除します。                 |
-| `getWritable(args): WritableStream<Uint8Array>`         | マルチパートアップロードへの書き込みストリームです。     |
-| `getReadable(args): Promise<ReadableStream<Uint8Array>>`| GetObject のボディーを Web ストリームとして返します。    |
+| メンバー                                                 | 説明                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------- |
+| `name: string`                                           | 常に `"S3"`。                                         |
+| `get isOpen(): boolean`                                  | オープン済みかどうか。                                |
+| `open()`                                                 | S3 クライアントを生成します。                         |
+| `close()`                                                | S3 クライアントを破棄します。                         |
+| `write(args)`                                            | オブジェクトを PutObject で保存します。               |
+| `read(args): Promise<Uint8Array>`                        | GetObject で取得したボディーをバイト配列化します。    |
+| `exists(args): Promise<boolean>`                         | HeadObject の結果で判定します (404 は false)。        |
+| `delete(args)`                                           | DeleteObject で削除します。                           |
+| `clear(args)`                                            | バケット内の全オブジェクトを削除します。              |
+| `getWritable(args): WritableStream<Uint8Array>`          | マルチパートアップロードへの書き込みストリームです。  |
+| `getReadable(args): Promise<ReadableStream<Uint8Array>>` | GetObject のボディーを Web ストリームとして返します。 |
 
 各操作の `signal` は AWS SDK の `abortSignal` として転送されます。
 

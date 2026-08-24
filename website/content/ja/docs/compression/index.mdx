@@ -47,11 +47,11 @@ await kvs.close();
 
 `CompressionFormat` 型は Web 標準が受け付ける次の文字列リテラルです。
 
-| 形式             | 説明                                                       |
-| ---------------- | ---------------------------------------------------------- |
-| `"gzip"`         | gzip 形式。互換性が高く、一般的な用途に推奨されます。      |
-| `"deflate"`      | zlib 形式の deflate。                                      |
-| `"deflate-raw"`  | ヘッダーなしの生 deflate。                                 |
+| 形式            | 説明                                                  |
+| --------------- | ----------------------------------------------------- |
+| `"gzip"`        | gzip 形式。互換性が高く、一般的な用途に推奨されます。 |
+| `"deflate"`     | zlib 形式の deflate。                                 |
+| `"deflate-raw"` | ヘッダーなしの生 deflate。                            |
 
 ## API
 
@@ -61,13 +61,13 @@ await kvs.close();
 new Compression(format: CompressionFormat)
 ```
 
-| メンバー                              | 説明                                                                 |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| `name: string`                        | 常に `"Compression"`。                                               |
-| `encode(args): Promise<Uint8Array>`   | 受け取ったバイト配列を圧縮します。                                   |
-| `decode(args): Promise<Uint8Array>`   | 圧縮されたバイト配列を展開します。                                   |
-| `getEncodable(): TransformStream`     | `new CompressionStream(format)` を返します。                         |
-| `getDecodable(): TransformStream`     | `new DecompressionStream(format)` を返します。                       |
+| メンバー                            | 説明                                           |
+| ----------------------------------- | ---------------------------------------------- |
+| `name: string`                      | 常に `"Compression"`。                         |
+| `encode(args): Promise<Uint8Array>` | 受け取ったバイト配列を圧縮します。             |
+| `decode(args): Promise<Uint8Array>` | 圧縮されたバイト配列を展開します。             |
+| `getEncodable(): TransformStream`   | `new CompressionStream(format)` を返します。   |
+| `getDecodable(): TransformStream`   | `new DecompressionStream(format)` を返します。 |
 
 ストリーム変換をサポートしているため、[`StreamValue`](/ja/docs/unikvs/types) を含むキーへのストリーム書き込みや `stream()` 読み取りでも、展開は逐次的に行われます。
 

@@ -15,22 +15,22 @@ pnpm add @unikvs/utils
 
 ## 関数一覧
 
-| 関数                     | 説明                                                                                       |
-| ------------------------ | ------------------------------------------------------------------------------------------ |
-| `bytesToHex(bytes)`      | `Uint8Array` を 16 進数文字列へ変換します。`toHex()` 実装がある環境ではそれを利用します。   |
-| `chunks(data, maxSize)`  | バイナリーデータを指定バイトサイズ以下のチャンクへ分割するジェネレーターです。             |
-| `toReadableStream(iterable)` | 反復可能なデータから `ReadableStream` を作成します。                                    |
-| `withReadableStreamFrom(...)` | ソースから `ReadableStream` を構築し、破棄時の後処理を扱うヘルパーです。               |
-| `isValidFilename(name)`  | ファイル名として安全かどうか (255 バイト以内、予約語・制御文字なし、正規化整合など) を判定します。 |
-| `assertValidFilename(name)` | `isValidFilename()` が false の場合に `InvalidFilenameError` を投げます。                |
-| `isValidDirname(name)`   | ディレクトリー名として安全かどうかを判定します。                                           |
-| `assertValidDirname(name)` | `isValidDirname()` が false の場合に `InvalidDirnameError` を投げます。                   |
+| 関数                          | 説明                                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `bytesToHex(bytes)`           | `Uint8Array` を 16 進数文字列へ変換します。`toHex()` 実装がある環境ではそれを利用します。          |
+| `chunks(data, maxSize)`       | バイナリーデータを指定バイトサイズ以下のチャンクへ分割するジェネレーターです。                     |
+| `toReadableStream(iterable)`  | 反復可能なデータから `ReadableStream` を作成します。                                               |
+| `withReadableStreamFrom(...)` | ソースから `ReadableStream` を構築し、破棄時の後処理を扱うヘルパーです。                           |
+| `isValidFilename(name)`       | ファイル名として安全かどうか (255 バイト以内、予約語・制御文字なし、正規化整合など) を判定します。 |
+| `assertValidFilename(name)`   | `isValidFilename()` が false の場合に `InvalidFilenameError` を投げます。                          |
+| `isValidDirname(name)`        | ディレクトリー名として安全かどうかを判定します。                                                   |
+| `assertValidDirname(name)`    | `isValidDirname()` が false の場合に `InvalidDirnameError` を投げます。                            |
 
 ## エラー
 
-| クラス名               | 説明                                       |
-| ---------------------- | ------------------------------------------ |
-| `InvalidFilenameError` | ファイル名として無効な文字列が渡された。   |
+| クラス名               | 説明                                           |
+| ---------------------- | ---------------------------------------------- |
+| `InvalidFilenameError` | ファイル名として無効な文字列が渡された。       |
 | `InvalidDirnameError`  | ディレクトリー名として無効な文字列が渡された。 |
 
 ## 使用例

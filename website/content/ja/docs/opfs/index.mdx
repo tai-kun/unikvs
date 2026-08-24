@@ -60,18 +60,18 @@ OPFS のネイティブストリーム (`FileSystemFileHandle.createWritable()`�
 new Opfs(root?: string | FileSystemDirectoryHandle) // 既定値 ".unikvs"
 ```
 
-| メンバー                                                | 説明                                                     |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| `name: string`                                          | 常に `"Opfs"`。                                          |
-| `get isOpen(): boolean`                                 | ルートハンドルを保持しているかどうか。                   |
-| `open()`                                                | ルートディレクトリーを作成または取得します。             |
-| `write(args)`                                           | データをファイルへ書き込みます。                         |
-| `read(args): Promise<Uint8Array>`                       | ファイルを読み込みます。                                 |
-| `exists(args): Promise<boolean>`                        | ファイルハンドルの取得可否で判定します。                 |
-| `delete(args)`                                          | ファイルを削除します。                                   |
-| `clear()`                                               | 全エントリーを消去します。                               |
-| `getWritable(args): Promise<WritableStream<Uint8Array>>`| 書き込み用ストリームを返します。                         |
-| `getReadable(args): Promise<ReadableStream<Uint8Array>>`| 読み取り用ストリームを返します。                         |
+| メンバー                                                 | 説明                                         |
+| -------------------------------------------------------- | -------------------------------------------- |
+| `name: string`                                           | 常に `"Opfs"`。                              |
+| `get isOpen(): boolean`                                  | ルートハンドルを保持しているかどうか。       |
+| `open()`                                                 | ルートディレクトリーを作成または取得します。 |
+| `write(args)`                                            | データをファイルへ書き込みます。             |
+| `read(args): Promise<Uint8Array>`                        | ファイルを読み込みます。                     |
+| `exists(args): Promise<boolean>`                         | ファイルハンドルの取得可否で判定します。     |
+| `delete(args)`                                           | ファイルを削除します。                       |
+| `clear()`                                                | 全エントリーを消去します。                   |
+| `getWritable(args): Promise<WritableStream<Uint8Array>>` | 書き込み用ストリームを返します。             |
+| `getReadable(args): Promise<ReadableStream<Uint8Array>>` | 読み取り用ストリームを返します。             |
 
 ## 関連パッケージ
 

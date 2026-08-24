@@ -64,18 +64,18 @@ await kvs.close();
 new NodeFs(root?: string) // 既定値 ".unikvs"
 ```
 
-| メンバー                                                | 説明                                                     |
-| ------------------------------------------------------- | -------------------------------------------------------- |
-| `name: string`                                          | 常に `"NodeFs"`。                                        |
-| `get isOpen(): boolean`                                 | オープン済みかどうか。                                   |
-| `open()`                                                | モジュールを読み込み、ルートディレクトリーを作成します。 |
-| `write(args)`                                           | データをファイルへ書き込みます。                         |
-| `read(args): Promise<Uint8Array>`                       | ファイルを読み込みます。                                 |
-| `exists(args): Promise<boolean>`                        | ファイルの存在を確認します。                             |
-| `delete(args)`                                          | ファイルを削除します。                                   |
-| `clear()`                                               | ルートディレクトリーを空にします。                       |
-| `getWritable(args): WritableStream<Uint8Array>`         | ファイルへの書き込みストリームを返します。               |
-| `getReadable(args): ReadableStream<Uint8Array>`         | ファイルからの読み取りストリームを返します。             |
+| メンバー                                        | 説明                                                     |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `name: string`                                  | 常に `"NodeFs"`。                                        |
+| `get isOpen(): boolean`                         | オープン済みかどうか。                                   |
+| `open()`                                        | モジュールを読み込み、ルートディレクトリーを作成します。 |
+| `write(args)`                                   | データをファイルへ書き込みます。                         |
+| `read(args): Promise<Uint8Array>`               | ファイルを読み込みます。                                 |
+| `exists(args): Promise<boolean>`                | ファイルの存在を確認します。                             |
+| `delete(args)`                                  | ファイルを削除します。                                   |
+| `clear()`                                       | ルートディレクトリーを空にします。                       |
+| `getWritable(args): WritableStream<Uint8Array>` | ファイルへの書き込みストリームを返します。               |
+| `getReadable(args): ReadableStream<Uint8Array>` | ファイルからの読み取りストリームを返します。             |
 
 書き込みと読み取りには操作オプションの `AbortSignal` が反映されます。
 
