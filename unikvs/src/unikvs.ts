@@ -75,8 +75,7 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 const ContextKeySchema = v.string();
 
 // 配列形式の context も正当な入力であるため、record スキーマより先に判定する必要があります。
-// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、
-// 配列形式を先に処理しないと mergeContext での配列としてのマージが行われません。
+// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeContext での配列としてのマージが行われません。
 const ContextSourceSchema = v.union([
   v.array(v.tuple([ContextKeySchema, v.unknown()])),
   v.record(v.any(), v.unknown()),
@@ -665,10 +664,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       return this.#close(context, signal, con).catch(async (ex) => {
-        // #close が失敗した場合、コネクションの AbortController は既に abort 済みであり
-        // 以降の操作がすべて即座に失敗する壊れた状態になります。
-        // そこで接続を破棄して isOpen=false の一貫した状態にし、
-        // ベストエフォートでプラグインのクローズ処理を実行します。
+        // #close が失敗した場合、コネクションの AbortController は既に abort 済みであり、以降の操作がすべて即座に失敗する壊れた状態になります。
+        // そこで接続を破棄して isOpen=false の一貫した状態にし、ベストエフォートでプラグインのクローズ処理を実行します。
         if (this.#con === con) {
           this.#con = null;
 
@@ -1005,8 +1002,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
-        // あるストレージの読み取りに失敗しても、他のストレージから
-        // データを取得できるようにフォールバックします。
+        // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const storage of this.#destinations) {
           try {
             if (!(await storage.exists(context, signal, key))) {
@@ -1128,8 +1124,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await io.rLock({ key, signal });
       try {
         // いずれかのストレージに存在すれば true を返します。
-        // あるストレージの存在確認に失敗しても、他のストレージで
-        // 存在を確認できるようにフォールバックします。
+        // あるストレージの存在確認に失敗しても、他のストレージで存在を確認できるようにフォールバックします。
         const errors: { reason: unknown }[] = [];
         for (const storage of this.#destinations) {
           try {
@@ -1145,8 +1140,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           }
         }
 
-        // すべてのストレージで存在を確認できなかった場合は結果が不明のため、
-        // get() と同様にエラーとして報告します。
+        // すべてのストレージで存在を確認できなかった場合は結果が不明のため、get() と同様にエラーとして報告します。
         if (errors.length > 0) {
           const args: KeyNotFoundErrorArgs = { key };
           switch (errors.length) {

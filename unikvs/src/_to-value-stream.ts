@@ -31,15 +31,13 @@ export default function toValueStream<T>(
     });
   }
 
-  // cancel・エラー・早期 break であっても dispose されるように、
-  // readable 側のキャンセルを直接フックしたストリームを返します。
+  // cancel・エラー・早期 break であっても dispose されるように、readable 側のキャンセルを直接フックしたストリームを返します。
   const valueStream = new ReadableStream<T>({
     async pull(controller) {
       try {
         const { done, value } = await reader.read();
         if (done) {
-          // ストリームが正常に完了したことも dispose 対象とし、
-          // 完了を通知する前に破棄を完了させます。
+          // ストリームが正常に完了したことも dispose 対象とし、完了を通知する前に破棄を完了させます。
           await disposeValueStream();
           controller.close();
         } else {
