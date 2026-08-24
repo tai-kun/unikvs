@@ -523,6 +523,85 @@ describe("UniKvs - stream 操作", () => {
     // 実行と検証
     await expect(kvs.stream("nonexistent")).rejects.toThrow(KeyNotFoundError);
   });
+
+  test("stream をキャンセルした後も同じキーに書き込める", async ({ expect }) => {
+    // 準備
+    await using kvs = await createOpenedKvs(new MemoryStreamStorage());
+    await kvs.set(
+      "key1",
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([1]));
+          controller.close();
+        },
+      }),
+    );
+
+    // 実行
+    const stream = await kvs.stream("key1");
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    // 検証
+    await kvs.set(
+      "key1",
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([2]));
+          controller.close();
+        },
+      }),
+      { signal: AbortSignal.timeout(1000) },
+    );
+    const vs = await kvs.stream("key1");
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of vs) {
+      chunks.push(chunk as Uint8Array);
+    }
+    expect(chunks).toStrictEqual([Uint8Array.from([2])]);
+  });
+
+  test("stream の非同期イテレーションを途中で break しても同じキーに書き込める", async ({
+    expect,
+  }) => {
+    // 準備
+    await using kvs = await createOpenedKvs(new MemoryStreamStorage());
+    await kvs.set(
+      "key1",
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([1]));
+          controller.enqueue(Uint8Array.from([2]));
+          controller.close();
+        },
+      }),
+    );
+
+    // 実行
+    const stream = await kvs.stream("key1");
+    for await (const _chunk of stream) {
+      break;
+    }
+
+    // 検証
+    await kvs.set(
+      "key1",
+      new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([3]));
+          controller.close();
+        },
+      }),
+      { signal: AbortSignal.timeout(1000) },
+    );
+    const vs = await kvs.stream("key1");
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of vs) {
+      chunks.push(chunk as Uint8Array);
+    }
+    expect(chunks).toStrictEqual([Uint8Array.from([3])]);
+  });
 });
 
 describe("UniKvs - Symbol.asyncDispose", () => {

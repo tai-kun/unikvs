@@ -17,17 +17,46 @@ export default function toValueStream<T>(
   onAsyncDispose: () => Promise<void>,
 ): ValueStream<T> {
   const cacheMap = new Map();
+  const reader = readableStream.getReader();
+
   async function disposeValueStream(): Promise<void> {
-    await callAsyncableFnOnce(cacheMap, "dispose", onAsyncDispose);
+    await callAsyncableFnOnce(cacheMap, "dispose", async () => {
+      try {
+        await reader.cancel();
+      } catch (ex) {
+        logger.error`Failed to cancel the source stream: ${ex}`;
+      }
+
+      await onAsyncDispose();
+    });
   }
 
+  // cancel・エラー・早期 break であっても dispose されるように、
+  // readable 側のキャンセルを直接フックしたストリームを返します。
+  const valueStream = new ReadableStream<T>({
+    async pull(controller) {
+      try {
+        const { done, value } = await reader.read();
+        if (done) {
+          // ストリームが正常に完了したことも dispose 対象とし、
+          // 完了を通知する前に破棄を完了させます。
+          await disposeValueStream();
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (ex) {
+        controller.error(ex);
+      }
+    },
+
+    async cancel() {
+      await disposeValueStream();
+    },
+  });
+
   return Object.assign(
-    // ReadableStream
-    readableStream.pipeThrough(
-      new TransformStream({
-        flush: disposeValueStream,
-      }),
-    ),
+    valueStream,
 
     // AsyncDisposable
     {
@@ -63,6 +92,13 @@ export default function toValueStream<T>(
 
           throw ex;
         } finally {
+          // cancel・エラー・早期 break など完了方法に関係なくストリームを破棄し、キーの読み取りロックがリークしないようにします (2 回目以降は no-op)。
+          try {
+            await disposeValueStream();
+          } catch (ex) {
+            logger.error`Failed to dispose value stream: ${ex}`;
+          }
+
           // 最後に必ずリーダーのロックを解放し、ストリームを再利用可能な状態にします。
           try {
             r.releaseLock();

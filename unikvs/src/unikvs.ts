@@ -973,9 +973,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         if (!ioLockRegistry) {
           return toValueStream(r, async () => {
             try {
-              await r.cancel();
-            } catch {}
-            try {
               lock.release();
             } catch {}
           });
@@ -985,9 +982,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const valueStream = toValueStream(r, async () => {
           try {
             ioLockRegistry.unregister(unregisterToken);
-          } catch {}
-          try {
-            await r.cancel();
           } catch {}
           try {
             lock.release();
