@@ -74,9 +74,12 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 
 const ContextKeySchema = v.string();
 
+// 配列形式の context も正当な入力であるため、record スキーマより先に判定する必要があります。
+// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、
+// 配列形式を先に処理しないと mergeContext での配列としてのマージが行われません。
 const ContextSourceSchema = v.union([
-  v.record(v.any(), v.unknown()),
   v.array(v.tuple([ContextKeySchema, v.unknown()])),
+  v.record(v.any(), v.unknown()),
 ]);
 
 const OpenOptionsSchema = v.object({
