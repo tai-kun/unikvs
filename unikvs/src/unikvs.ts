@@ -5,7 +5,7 @@ import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 import logger from "./_logger.js";
 import mergeContext from "./_merge-context.js";
 import UniKvsStorage from "./_storage.js";
-import toValueStream from "./_to-value-stream.js";
+import toValueStream, { createValueStream } from "./_to-value-stream.js";
 import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
 import type { ContextSource } from "./context.types.js";
@@ -350,11 +350,30 @@ export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
 const ioLockRegistry =
   typeof FinalizationRegistry !== "function"
     ? null
-    : new FinalizationRegistry<AsyncmuxLock>((lock) => {
-        if (!lock.released) {
-          lock.release();
+    : new FinalizationRegistry<IoLockRegistryHeld>((held) => {
+        if (!held.lock.released) {
+          held.lock.release();
         }
+
+        // valueStream が読み取られないまま GC されたとき、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するために破棄します。
+        // 破棄ハンドルは valueStream 自身を参照しないため GC を妨げません。
+        // 失敗しても対処できないので無視します。
+        held.dispose().catch((ex) => {
+          logger.error`Failed to dispose value stream: ${ex}`;
+        });
       });
+
+type IoLockRegistryHeld = {
+  /**
+   * stream 操作で取得したキーの読み取りロックです。
+   */
+  readonly lock: AsyncmuxLock;
+
+  /**
+   * valueStream の破棄ハンドルです。ソースストリームのキャンセルとロック解放を行います。
+   */
+  readonly dispose: () => Promise<void>;
+};
 
 /**
  * 接続状態を管理する内部オブジェクトです。
@@ -1057,11 +1076,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         // トランスフォーマーを逆順に適用し、デコード用トランスフォームを連結します。
-        if (this.#transformers.length > 0) {
-          for (const transformer of this.#transformers.toReversed()) {
-            const d = await transformer.getDecodable(context, signal);
-            r = r.pipeThrough(d);
-          }
+        for (const transformer of this.#transformers.toReversed()) {
+          const d = await transformer.getDecodable(context, signal);
+          r = r.pipeThrough(d);
         }
 
         if (!ioLockRegistry) {
@@ -1073,7 +1090,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         const unregisterToken = {};
-        const valueStream = toValueStream(r, async () => {
+        const { valueStream, dispose } = createValueStream(r, async () => {
           try {
             ioLockRegistry.unregister(unregisterToken);
           } catch {}
@@ -1082,11 +1099,18 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           } catch {}
         });
 
-        // valueStream が GC されるタイミングでストリームが終了していなければロックを自動解放します。
-        ioLockRegistry.register(valueStream, lock, unregisterToken);
+        // valueStream が GC されるタイミングでストリームが終了していなければロックを自動解放するとともに、ソースストリームが保持するリソースを解放できるように破棄ハンドルを記録します。
+        ioLockRegistry.register(valueStream, { lock, dispose }, unregisterToken);
 
         return valueStream;
       } catch (ex) {
+        if (r !== NONE) {
+          // getReadable 成功後のセットアップ中に失敗した場合、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するためにキャンセルします。
+          try {
+            await r.cancel(ex);
+          } catch {}
+        }
+
         lock.release();
         throw ex;
       }

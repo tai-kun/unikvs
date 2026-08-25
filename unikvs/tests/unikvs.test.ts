@@ -178,6 +178,68 @@ class HangUntilAbortOpenStorage implements IStorage {
   async clear(_args: IStorage.ClearArgs): Promise<void> {}
 }
 
+class CancelObservableStorage implements IStorage {
+  readonly name = "CancelObservableStorage";
+  isOpen = true;
+  sourceCancelled = false;
+  readonly entries = new Map<string, Uint8Array[]>();
+
+  write(_args: IStorage.WriteArgs): void {}
+  read(_args: IStorage.ReadArgs): unknown {
+    return undefined;
+  }
+  exists(args: IStorage.ExistsArgs): boolean {
+    return this.entries.has(args.key);
+  }
+  delete(args: IStorage.DeleteArgs): void {
+    this.entries.delete(args.key);
+  }
+  clear(): void {
+    this.entries.clear();
+  }
+  getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream({
+      write(chunk) {
+        chunks.push(chunk);
+      },
+      close: () => {
+        this.entries.set(args.key, chunks);
+      },
+    });
+  }
+  getReadable(args: Pick<IStorage.ReadArgs, "key">): ReadableStream<Uint8Array> {
+    const chunks = this.entries.get(args.key) ?? [];
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+      },
+      cancel: () => {
+        this.sourceCancelled = true;
+      },
+    });
+  }
+}
+
+class FailGetDecodableTransformer implements ITransformer {
+  readonly name = "FailGetDecodable";
+  isOpen = true;
+
+  encode(args: ITransformer.EncodeArgs): unknown {
+    return args.data;
+  }
+
+  decode(args: ITransformer.DecodeArgs): unknown {
+    return args.data;
+  }
+
+  getDecodable(): never {
+    throw new Error("getDecodable failed");
+  }
+}
+
 class ReadErrorStorage extends MockStorage {
   constructor(name: string) {
     super(name);
@@ -1355,6 +1417,26 @@ describe("UniKvs - stream 操作", () => {
     // 後片付け
     void reader.cancel();
     await vs.dispose();
+    await kvs.close();
+  });
+
+  test("getReadable 成功後のセットアップで失敗したとき、ソースストリームはキャンセルされる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new CancelObservableStorage();
+    storage.entries.set("logs", [Uint8Array.from([1])]);
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendTransformer(new FailGetDecodableTransformer())
+      .appendStorage(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.stream("logs")).rejects.toThrow("getDecodable failed");
+    expect(storage.sourceCancelled).toBe(true);
+
+    // 後片付け
     await kvs.close();
   });
 
