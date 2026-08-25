@@ -1,4 +1,4 @@
-import { rm, access, readFile, readdir, mkdtemp } from "node:fs/promises";
+import { rm, access, readFile, readdir, mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -241,6 +241,21 @@ describe("ストリーム操作", () => {
     // 検証
     await expect(writer.close()).rejects.toThrow();
     await expect(storage.exists({ key })).resolves.toBe(false);
+  });
+
+  test("close 時の rename が失敗したとき、一時ファイルが残らない", async ({ expect }) => {
+    // 準備
+    const key = "rename-conflict.txt";
+    await mkdir(join(TEST_ROOT, key), { recursive: true });
+    const writable = await storage.getWritable({ key });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array([1, 2, 3]));
+
+    // 実行と検証
+    await expect(writer.close()).rejects.toThrow();
+
+    const entries = await readdir(TEST_ROOT);
+    expect(entries.filter((entry) => entry.endsWith(".tmp"))).toStrictEqual([]);
   });
 
   test("getReadable で取得したストリームを使用したとき、ファイルの内容を正しく読み取れる", async ({

@@ -279,7 +279,13 @@ export default class NodeFs implements IStorage {
           writeStream.end((err: Error | null | undefined) => (err ? reject(err) : resolve()));
         });
         // flush が完了した時点で初めて最終パスへ置き換えます (swap-on-close)。
-        await fs.promises.rename(file.tmp, file.dest);
+        try {
+          await fs.promises.rename(file.tmp, file.dest);
+        } catch (ex) {
+          // rename に失敗した場合も一時ファイルを削除し、既存のデータを保全します。
+          await removeTmp();
+          throw ex;
+        }
       },
       async abort(reason) {
         writeStream.destroy(reason instanceof Error ? reason : new Error(String(reason)));
