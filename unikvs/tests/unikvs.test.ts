@@ -141,6 +141,43 @@ class MemoryStreamStorage implements IStorage {
   }
 }
 
+class HangUntilAbortOpenStorage implements IStorage {
+  readonly name = "HangUntilAbortOpenStorage";
+  isOpen = false;
+  closeCallCount = 0;
+
+  async open(args: IStorage.OpenArgs): Promise<void> {
+    this.isOpen = true;
+    const { signal } = args;
+    await new Promise<never>((_, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    });
+  }
+
+  async close(): Promise<void> {
+    this.closeCallCount++;
+    this.isOpen = false;
+  }
+
+  async write(_args: IStorage.WriteArgs): Promise<void> {}
+
+  async read(_args: IStorage.ReadArgs): Promise<unknown> {
+    return undefined;
+  }
+
+  async exists(_args: IStorage.ExistsArgs): Promise<boolean> {
+    return false;
+  }
+
+  async delete(_args: IStorage.DeleteArgs): Promise<void> {}
+
+  async clear(_args: IStorage.ClearArgs): Promise<void> {}
+}
+
 class ReadErrorStorage extends MockStorage {
   constructor(name: string) {
     super(name);
@@ -402,6 +439,58 @@ describe("UniKvs - オープン / クローズ", () => {
     // 検証
     expect(kvs.isOpen).toBe(false);
     expect(okStorage.closeCallCount).toBe(1);
+  });
+
+  test("open 中に abort されたとき、PluginOperationAggregateError ではなく abort 理由をそのまま投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    const cancel = new Error("USER-CANCEL");
+    const kvs = createKvs(new HangUntilAbortOpenStorage());
+    const controller = new AbortController();
+
+    // 実行
+    const p = kvs.open({ signal: controller.signal });
+    controller.abort(cancel);
+
+    // 検証
+    await expect(p).rejects.toBe(cancel);
+  });
+
+  test("open 中に abort されたとき、複数ストレージでも abort 理由をそのまま投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    const cancel = new Error("USER-CANCEL");
+    const kvs = createKvs(new HangUntilAbortOpenStorage(), new HangUntilAbortOpenStorage());
+    const controller = new AbortController();
+
+    // 実行
+    const p = kvs.open({ signal: controller.signal });
+    controller.abort(cancel);
+
+    // 検証
+    await expect(p).rejects.toBe(cancel);
+  });
+
+  test("open 中の abort と通常の失敗が混在したとき、PluginOperationAggregateError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    const cancel = new Error("USER-CANCEL");
+    const failure = new Error("open failed");
+    const kvs = createKvs(
+      new MockStorage("ng", { openError: failure }),
+      new HangUntilAbortOpenStorage(),
+    );
+    const controller = new AbortController();
+
+    // 実行
+    const p = kvs.open({ signal: controller.signal });
+    controller.abort(cancel);
+
+    // 実行と検証
+    await expect(p).rejects.toThrow(PluginOperationAggregateError);
   });
 
   test("並行 open は 2 回目に失敗する", async ({ expect }) => {

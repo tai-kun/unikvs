@@ -545,6 +545,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }),
       );
       if (errors.length > 0) {
+        // 中断以外の失敗が混在しない場合は、abort 理由が集約エラーに埋もれないようにそのまま投げます。
+        if (signal.aborted && errors.every((error) => error.reason === signal.reason)) {
+          throw signal.reason;
+        }
+
         throw new PluginOperationAggregateError({ action: "open", errors });
       }
 
