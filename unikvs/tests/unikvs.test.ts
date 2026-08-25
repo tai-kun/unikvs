@@ -569,6 +569,60 @@ describe("UniKvs - オープン / クローズ", () => {
     // 後片付け
     await kvs.close();
   });
+
+  test("open 中に close を呼び出して abort された場合、open は失敗し開かれた状態にならない", async ({
+    expect,
+  }) => {
+    class SlowOpenStorage implements IStorage {
+      readonly name = "SlowOpenStorage";
+      isOpen = false;
+
+      async open(): Promise<void> {
+        // signal を無視して時間のかかるオープン処理を模倣します。
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        this.isOpen = true;
+      }
+
+      async close(): Promise<void> {
+        this.isOpen = false;
+      }
+
+      write(_args: IStorage.WriteArgs): void {}
+      read(_args: IStorage.ReadArgs): any {
+        return undefined;
+      }
+      exists(_args: IStorage.ExistsArgs): boolean {
+        return false;
+      }
+      delete(_args: IStorage.DeleteArgs): void {}
+      clear(_args: IStorage.ClearArgs): void {}
+    }
+
+    // 準備
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .appendStorage(new SlowOpenStorage())
+      .create();
+
+    // 実行: open の完了を待たずに close を呼び出す (#con はまだ null)
+    const openPromise = kvs.open();
+    const closeResult = await kvs.close().then(
+      () => "resolved" as const,
+      (ex) => `rejected: ${(ex as Error).name}`,
+    );
+    expect(closeResult.startsWith("rejected")).toBe(true);
+
+    // 検証: abort 済みの接続が開かれたままにならないこと
+    await expect(openPromise).rejects.toThrow(UniKvsIsNotOpenError);
+    expect(kvs.isOpen).toBe(false);
+    await expect(kvs.set("foo", "bar")).rejects.toThrow(UniKvsIsNotOpenError);
+
+    // 検証: 失敗後も再オープンできること
+    await kvs.open();
+    expect(kvs.isOpen).toBe(true);
+
+    // 後片付け
+    await kvs.close();
+  });
 });
 
 describe("UniKvs - 基本操作 (CRUD)", () => {

@@ -572,6 +572,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new PluginOperationAggregateError({ action: "open", errors });
       }
 
+      // すべてのプラグインのオープンが成功した後も、待機中に中断されていないか最終確認します。
+      // 中断済みのシグナルを持つ接続を作成すると、isOpen が true でありながら以降のすべての操作が即座に失敗する壊れた状態になります。
+      signal.throwIfAborted();
+
       this.#con = {
         ac,
         io: new Asyncmux(),
