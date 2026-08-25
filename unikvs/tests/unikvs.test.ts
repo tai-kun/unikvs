@@ -1313,8 +1313,7 @@ describe("UniKvs - stream 操作", () => {
     expect(chunks).toStrictEqual([Uint8Array.from([3])]);
   });
 
-  // ValueStream の読み取り中にエラーが発生し、consumer が reader.cancel() を呼ばずに
-  // 放棄した場合でも、pull の catch 節で dispose されるためキーのロックはリークしない。
+  // ValueStream の読み取り中にエラーが発生し、consumer が reader.cancel() を呼ばずに放棄した場合でも、pull の catch 節で dispose されるためキーのロックはリークしない。
   test("エラーした ValueStream を cancel/releaseLock のみで放棄しても同一キーへの set はブロックされない", async ({
     expect,
   }) => {

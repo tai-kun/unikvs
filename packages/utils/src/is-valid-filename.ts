@@ -39,8 +39,7 @@ export default function isValidFilename(filename: string): boolean {
 
   // Unicode 正規化形式のうち、Windows や Linux で一般的に利用される NFC 形式（正準結合）との整合性を確認します。
   // NFC と一致しない文字列（NFD 分解形や混在した正規化形式など）は拒否します。
-  // NFC 形式の文字列（濁点・半濁点付きのかな、アクセント付きラテン文字など）は
-  // APFS / NTFS / ext4 をはじめ主要なファイルシステムで正当なファイル名として扱えます。
+  // NFC 形式の文字列（濁点・半濁点付きのかな、アクセント付きラテン文字など）は APFS / NTFS / ext4 をはじめ主要なファイルシステムで正当なファイル名として扱えます。
   if (filename.normalize("NFC") !== filename) {
     return false;
   }

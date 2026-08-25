@@ -128,7 +128,7 @@ function isStringType(node: SchemaNode): boolean { ... }
 
 ### 改行ルール
 
-1文の途中で改行しないでください。
+1 文の途中で改行しないでください。
 
 正しい例:
 

@@ -931,8 +931,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
-        // あるストレージの読み取りに失敗しても、他のストレージから
-        // データを取得できるようにフォールバックします。
+        // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const storage of this.#destinations) {
           try {
             if (!(await storage.exists(context, signal, key))) {
