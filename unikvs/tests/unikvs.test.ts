@@ -13,6 +13,10 @@ import {
 import type { PlainValue, StreamValue, Value } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
+/**
+ * Map 上にデータを保存する汎用のストレージモックです。
+ * open/close の呼び出し回数の記録や、open/close 時のエラー注入ができます。
+ */
 class MockStorage implements IStorage {
   readonly name: string;
   isOpen = false;
@@ -70,6 +74,9 @@ class MockStorage implements IStorage {
   }
 }
 
+/**
+ * encode 時に "e:" 接頭辞を付与し、decode 時に除去するトランスフォーマーモックです。
+ */
 class MockTransformer implements ITransformer {
   readonly name = "MockTransformer";
   isOpen = true;
@@ -84,6 +91,10 @@ class MockTransformer implements ITransformer {
   }
 }
 
+/**
+ * ストリーム API (getWritable/getReadable) のみをサポートするストレージモックです。
+ * チャンク列をメモリー上に保持します。
+ */
 class MemoryStreamStorage implements IStorage {
   readonly name = "MemoryStreamStorage";
   isOpen = true;
@@ -141,6 +152,10 @@ class MemoryStreamStorage implements IStorage {
   }
 }
 
+/**
+ * open が AbortSignal の中断まで解決しないストレージモックです。
+ * open 中断時の挙動を検証するために使用します。
+ */
 class HangUntilAbortOpenStorage implements IStorage {
   readonly name = "HangUntilAbortOpenStorage";
   isOpen = false;
@@ -178,6 +193,9 @@ class HangUntilAbortOpenStorage implements IStorage {
   async clear(_args: IStorage.ClearArgs): Promise<void> {}
 }
 
+/**
+ * 読み取りストリームが cancel されたことを sourceCancelled で観測できるストレージモックです。
+ */
 class CancelObservableStorage implements IStorage {
   readonly name = "CancelObservableStorage";
   isOpen = true;
@@ -223,6 +241,9 @@ class CancelObservableStorage implements IStorage {
   }
 }
 
+/**
+ * getDecodable で常にエラーを投げるトランスフォーマーモックです。
+ */
 class FailGetDecodableTransformer implements ITransformer {
   readonly name = "FailGetDecodable";
   isOpen = true;
@@ -240,6 +261,9 @@ class FailGetDecodableTransformer implements ITransformer {
   }
 }
 
+/**
+ * read と getReadable が常に失敗するストレージモックです。
+ */
 class ReadErrorStorage extends MockStorage {
   constructor(name: string) {
     super(name);
@@ -254,6 +278,9 @@ class ReadErrorStorage extends MockStorage {
   }
 }
 
+/**
+ * 指定したストレージ群から UniKvs インスタンスを生成します。
+ */
 function createKvs(storage: IStorage, ...more: IStorage[]): UniKvs {
   const config = UniKvs.config().appendStorage(storage);
   return more.reduce((c, s) => c.appendStorage(s), config).create();
@@ -265,6 +292,9 @@ async function createOpenedKvs(storage: IStorage, ...more: IStorage[]): Promise<
   return kvs;
 }
 
+/**
+ * チャンク列を順に流す ReadableStream を作成します。
+ */
 function streamOf(chunks: Uint8Array<ArrayBuffer>[]): ReadableStream<Uint8Array<ArrayBuffer>> {
   return new ReadableStream<Uint8Array<ArrayBuffer>>({
     start(controller) {
@@ -276,6 +306,9 @@ function streamOf(chunks: Uint8Array<ArrayBuffer>[]): ReadableStream<Uint8Array<
   });
 }
 
+/**
+ * 非同期イテラブルの全チャンクを読み取り、1 つのバイト配列に連結して返します。
+ */
 async function collect(
   stream: AsyncIterable<Uint8Array<ArrayBufferLike>>,
 ): Promise<Uint8Array<ArrayBuffer>> {
@@ -293,6 +326,10 @@ async function collect(
   return merged;
 }
 
+/**
+ * 指定時間内に Promise が解決しなければ TIMEOUT エラーで拒否します。
+ * デッドロック時にテストが固まるのを防ぐために使用します。
+ */
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     p,
@@ -300,15 +337,24 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   ]);
 }
 
+/**
+ * データの SHA-256 ハッシュを 16 進文字列として計算します。
+ */
 async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Memory ストレージ内部の Map をテストから参照するためのアクセサーです。
+ */
 function mapOf(storage: Memory): Map<string, unknown> {
   return (storage as unknown as { map: Map<string, unknown> }).map;
 }
 
+/**
+ * getWritable で常にエラーを投げるストレージモックです。
+ */
 class FailGetWritableStorage implements IStorage {
   readonly name = "FailGetWritableStorage";
   isOpen = true;
@@ -335,6 +381,9 @@ class FailGetWritableStorage implements IStorage {
   }
 }
 
+/**
+ * 全チャンクの読み取り後にエラーになる読み取りストリームを返すストレージモックです。
+ */
 class ErrorMidwayReadableStorage implements IStorage {
   readonly name = "ErrorMidwayReadableStorage";
   isOpen = true;

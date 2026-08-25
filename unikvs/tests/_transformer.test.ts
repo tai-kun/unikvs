@@ -11,6 +11,9 @@ import {
 const TEST_CONTEXT: Context = {};
 const TEST_SIGNAL = new AbortController().signal;
 
+/**
+ * encode 時に "encoded:" 接頭辞を付与し、decode 時に除去するトランスフォーマーモックです。
+ */
 class MockTransformer implements ITransformer {
   readonly name = "MockTransformer";
   isOpen = true;

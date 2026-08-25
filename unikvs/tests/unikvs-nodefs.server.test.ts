@@ -16,6 +16,10 @@ afterEach(() => {
   }
 });
 
+/**
+ * 一時ディレクトリーをルートとする NodeFs ストレージを持つ UniKvs を生成します。
+ * 生成したルートディレクトリーは afterEach で削除されます。
+ */
 function createKvs(rootSuffix = "") {
   const root = `.tmp-unikvs-nodefs-${Date.now()}${rootSuffix}`;
   roots.push(root);

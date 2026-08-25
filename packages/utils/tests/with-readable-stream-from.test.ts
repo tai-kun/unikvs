@@ -2,6 +2,9 @@ import { describe, test } from "vitest";
 
 import withReadableStreamFrom from "../src/with-readable-stream-from.js";
 
+/**
+ * ストリームからすべての値を読み取り、配列として返します。
+ */
 async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
   const reader = stream.getReader();
   const values: T[] = [];

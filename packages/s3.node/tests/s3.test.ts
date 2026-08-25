@@ -91,6 +91,9 @@ afterAll(async () => {
   rmSync(volumeDir, { recursive: true, force: true });
 });
 
+/**
+ * ローカルの rustfs サーバーに接続する S3 クライアント設定を作成します。
+ */
 function createClientConfig(endpoint: string): S3ClientConfig {
   return {
     endpoint,
@@ -103,6 +106,9 @@ function createClientConfig(endpoint: string): S3ClientConfig {
   };
 }
 
+/**
+ * テスト用のバケットを作成します。
+ */
 async function createBucket(endpoint: string, bucket: string): Promise<void> {
   const client = new S3Client(createClientConfig(endpoint));
   await client.send(
@@ -116,6 +122,10 @@ async function createBucket(endpoint: string, bucket: string): Promise<void> {
   client.destroy();
 }
 
+/**
+ * 各テストに新規バケット付きの S3 ストレージを提供するフィクスチャーです。
+ * unauthorizedStorage は権限のない認証情報を持つストレージを提供します。
+ */
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 const test = vitest.extend<{
   storage: S3;

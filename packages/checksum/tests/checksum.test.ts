@@ -11,10 +11,16 @@ const CONTEXT_KEY = "x-test-checksum";
 const CHECKSUM_BYTES = new Uint8Array([0xab, 0xcd, 0xef]);
 const CHECKSUM_HEX = "abcdef";
 
+/**
+ * 抽象クラスの Checksum をインスタンス化できるようにするための具象クラスです。
+ */
 class TestChecksum extends Checksum {
   public static override CHECKSUM_CONTEXT_KEY: string = CONTEXT_KEY;
 }
 
+/**
+ * IHash と IHasher の呼び出しを記録するモックを作成します。
+ */
 function createHashMock() {
   const update = vi.fn<IHasher["update"]>();
   const digest = vi.fn<IHasher["digest"]>().mockReturnValue(CHECKSUM_BYTES);

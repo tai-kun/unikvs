@@ -11,6 +11,9 @@ import {
 const TEST_CONTEXT: Context = {};
 const TEST_SIGNAL = new AbortController().signal;
 
+/**
+ * Map 上にデータを保存し、open/close の呼び出し回数を記録するストレージモックです。
+ */
 class MockStorage implements IStorage {
   readonly name = "MockStorage";
   isOpen = true;

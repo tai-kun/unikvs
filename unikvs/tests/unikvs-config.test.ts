@@ -5,6 +5,9 @@ import { MissingStorageError } from "../src/errors.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
+/**
+ * create の動作確認に使用する、Map 上にデータを保存するだけのストレージモックです。
+ */
 class MockStorage implements IStorage {
   readonly name = "MockStorage";
   isOpen = true;
@@ -31,6 +34,9 @@ class MockStorage implements IStorage {
   }
 }
 
+/**
+ * encode 時に "e:" 接頭辞を付与し、decode 時に除去するトランスフォーマーモックです。
+ */
 class MockTransformer implements ITransformer {
   readonly name = "MockTransformer";
   readonly isOpen = true;

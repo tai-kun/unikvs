@@ -17,6 +17,9 @@ function createPseudoRandomBytes(size: number): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/**
+ * ストリームからすべてのチャンクを読み取ります。
+ */
 async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Uint8Array[]> {
   const reader = stream.getReader();
   const outputChunks: Uint8Array[] = [];
@@ -30,6 +33,9 @@ async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise
   return outputChunks;
 }
 
+/**
+ * 複数のチャンクを 1 つのバイト配列に連結します。
+ */
 function concatBytes(chunks: Uint8Array[]): Uint8Array {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
   const result = new Uint8Array(totalLength);

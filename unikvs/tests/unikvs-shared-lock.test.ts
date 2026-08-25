@@ -3,6 +3,10 @@ import { describe, test } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
 
+/**
+ * gate() で指定したキーの exists 処理を保留状態にできるストレージモックです。
+ * 共有ロックの動作検証のために使用します。
+ */
 class GatedExistsStorage implements IStorage {
   readonly name = "GatedExistsStorage";
   isOpen = true;
@@ -69,6 +73,10 @@ class GatedExistsStorage implements IStorage {
   }
 }
 
+/**
+ * 指定時間内に Promise が解決しなければ TIMEOUT エラーで拒否します。
+ * デッドロック時にテストが固まるのを防ぐために使用します。
+ */
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     p,

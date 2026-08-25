@@ -29,6 +29,9 @@ type KeyNotFoundErrorArgs = {
   readonly key: string;
 };
 
+/**
+ * ErrorBase の動作検証に使用するサンプルのエラークラスです。
+ */
 class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorArgs> {
   static {
     this.prototype.name = "KeyNotFoundError";
