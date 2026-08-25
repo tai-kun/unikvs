@@ -1,7 +1,7 @@
 import { ChecksumSha256 } from "@unikvs/checksum";
 import type { Context, IStorage, ITransformer } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   InvalidInputError,
@@ -721,6 +721,54 @@ describe("UniKvs - 複数ストレージ", () => {
         "set-streams-partial-failure",
       ),
     ).rejects.toThrow(PluginOperationAggregateError);
+  });
+
+  test("set は getWritable に失敗したストレージ向けの tee ブランチをキャンセルする", async ({
+    expect,
+  }) => {
+    // 準備
+    const memory = new Memory();
+    await using kvs = await createOpenedKvs(new FailGetWritableStorage(), memory);
+
+    using cancelSpy = vi.spyOn(ReadableStream.prototype, "cancel");
+
+    // 実行と検証
+    await expect(
+      withTimeout(
+        kvs.set("logs", streamOf([new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])])),
+        2000,
+        "set-streams-cancel-failed-first",
+      ),
+    ).rejects.toThrow(PluginOperationAggregateError);
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+
+    // 健康側のストレージには全データが書き込まれる
+    const stream = await kvs.stream("logs");
+    await expect(collect(stream)).resolves.toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("set は最後のストレージの getWritable 失敗時も tee ブランチをキャンセルする", async ({
+    expect,
+  }) => {
+    // 準備
+    const memory = new Memory();
+    await using kvs = await createOpenedKvs(memory, new FailGetWritableStorage());
+
+    using cancelSpy = vi.spyOn(ReadableStream.prototype, "cancel");
+
+    // 実行と検証
+    await expect(
+      withTimeout(
+        kvs.set("logs", streamOf([new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])])),
+        2000,
+        "set-streams-cancel-failed-last",
+      ),
+    ).rejects.toThrow(PluginOperationAggregateError);
+    expect(cancelSpy).toHaveBeenCalledTimes(1);
+
+    // 健康側のストレージには全データが書き込まれる
+    const stream = await kvs.stream("logs");
+    await expect(collect(stream)).resolves.toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 });
 

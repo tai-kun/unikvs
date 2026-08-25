@@ -767,16 +767,27 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         try {
           await Promise.all(
             this.#destinations.map(async (storage, i) => {
+              // tee ブランチはキャンセルされるまで健康なブランチの読み取り分のチャンクを保持し続けるため、失敗時に放棄したブランチを確実にキャンセルできるよう参照を保持します。
+              let branch: ReadableStream | null = null;
               try {
                 // 複数のストレージがある場合は、tee メソッドを使用してストリームを分岐させます。
                 let r = data;
                 if (i !== this.#destinations.length - 1) {
                   [r, data] = data.tee();
                 }
+                branch = r;
 
                 const w = await storage.getWritable(context, signal, key);
                 await r.pipeTo(w, { signal });
               } catch (reason) {
+                if (branch !== null) {
+                  try {
+                    await branch.cancel(reason);
+                  } catch {
+                    // キャンセルに失敗してもエラー集約を優先します。
+                  }
+                }
+
                 errors.push({ reason });
                 errorStorageSet.add(storage);
               }
