@@ -16,42 +16,6 @@ export default function toValueStream<T>(
   readableStream: IReadableStream<T>,
   onAsyncDispose: () => Promise<void>,
 ): ValueStream<T> {
-  return createValueStream(readableStream, onAsyncDispose).valueStream;
-}
-
-/**
- * {@linkcode toValueStream} の戻り値に、破棄ハンドルを追加したものです。
- *
- * @template T ストリームが保持する値の型です。
- */
-export type ValueStreamHandle<T> = {
-  /**
-   * 非同期イテレーターが付与された `ValueStream` インスタンスです。
-   */
-  readonly valueStream: ValueStream<T>;
-
-  /**
-   * ストリームを破棄する関数です。
-   *
-   * ソースストリームのキャンセルと `onAsyncDispose` の実行を行います。
-   * `valueStream` 自身を参照しないため、この関数を保持しても
-   * `valueStream` のガベージコレクションを妨げません。
-   */
-  readonly dispose: () => Promise<void>;
-};
-
-/**
- * 与えられた `IReadableStream` を `ValueStream` と破棄ハンドルに変換します。
- *
- * @template T ストリームが保持する値の型です。
- * @param readableStream 変換対象となる `IReadableStream` インスタンスです。
- * @param onAsyncDispose ストリーム破棄時の処理です。
- * @returns `ValueStream` インスタンスと破棄ハンドルを返します。
- */
-export function createValueStream<T>(
-  readableStream: IReadableStream<T>,
-  onAsyncDispose: () => Promise<void>,
-): ValueStreamHandle<T> {
   const cacheMap = new Map();
   const reader = readableStream.getReader();
 
@@ -147,5 +111,5 @@ export function createValueStream<T>(
     },
   );
 
-  return { valueStream: stream, dispose: disposeValueStream };
+  return stream;
 }

@@ -15,5 +15,5 @@ export interface ValueStream<T = any>
    *
    * @returns リソースの解放が完了したときに解決される Promise です。
    */
-  dispose(): Promise<void>;
+  dispose: (this: void) => Promise<void>;
 }
