@@ -786,9 +786,21 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       if (value instanceof ReadableStream) {
         // 各トランスフォーマーを通してデータをエンコードストリームへ変換します。
         let data = value;
-        for (const transformer of this.#transformers) {
-          const e = await transformer.getEncodable(context, signal);
-          data = data.pipeThrough(e);
+        try {
+          for (const transformer of this.#transformers) {
+            const e = await transformer.getEncodable(context, signal);
+            data = data.pipeThrough(e);
+          }
+        } catch (ex) {
+          // チェーンの構築中に失敗した場合、パイプが保持するソースストリームのリソースを解放するためにキャンセルします。
+          // キャンセルしないとソースストリームはロックされたままリークします。
+          try {
+            await data.cancel(ex);
+          } catch {
+            // キャンセルに失敗しても元の例外の伝播を優先します。
+          }
+
+          throw ex;
         }
 
         const lock = await io.lock({ key, signal });

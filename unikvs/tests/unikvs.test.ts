@@ -1493,6 +1493,73 @@ describe("UniKvs - stream 操作", () => {
     await kvs.close();
   });
 
+  test("set(stream) 中に後段の getEncodable が失敗したとき、ソースストリームはキャンセルされる", async ({
+    expect,
+  }) => {
+    class PassThroughTransformer implements ITransformer {
+      readonly name = "PassThrough";
+      isOpen = true;
+
+      encode(args: ITransformer.EncodeArgs): unknown {
+        return args.data;
+      }
+
+      decode(args: ITransformer.DecodeArgs): unknown {
+        return args.data;
+      }
+
+      getEncodable(): TransformStream {
+        return new TransformStream();
+      }
+
+      getDecodable(): TransformStream {
+        return new TransformStream();
+      }
+    }
+
+    class BoomGetEncodableTransformer implements ITransformer {
+      readonly name = "BoomGetEncodable";
+      isOpen = true;
+
+      encode(args: ITransformer.EncodeArgs): unknown {
+        return args.data;
+      }
+
+      decode(args: ITransformer.DecodeArgs): unknown {
+        return args.data;
+      }
+
+      getEncodable(): never {
+        throw new Error("getEncodable failed");
+      }
+    }
+
+    // 準備
+    let cancelled = false;
+    const source = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendTransformer(new PassThroughTransformer())
+      .appendTransformer(new BoomGetEncodableTransformer())
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.set("logs", source)).rejects.toThrow("getEncodable failed");
+    // キャンセルしないとソースストリームはロックされたままリークします。
+    expect(cancelled).toBe(true);
+
+    // 後片付け
+    await kvs.close();
+  });
+
   test("stream set → get の意味整合性 (Value 型キー)", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ data: Value<Uint8Array> }>().appendStorage(new Memory()).create();
