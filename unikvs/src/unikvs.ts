@@ -1004,7 +1004,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     context["unikvs:action"] = "stream";
     context["unikvs:key"] = key;
 
-    const lock = await asyncmux(this, signal);
+    const lock = await asyncmux.readonly(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
       if (this.#con === null) {
@@ -1130,7 +1130,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     context["unikvs:action"] = "has";
     context["unikvs:key"] = key;
 
-    const lock = await asyncmux(this, signal);
+    const lock = await asyncmux.readonly(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
       if (this.#con === null) {
