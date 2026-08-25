@@ -1,4 +1,4 @@
-import { rm, access, readFile, readdir } from "node:fs/promises";
+import { rm, access, readFile, readdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -34,6 +34,41 @@ describe("初期化と接続管理", () => {
     // 検証
     expect(storage.isOpen).toBe(true);
     await expect(access(TEST_ROOT)).resolves.not.toThrow();
+  });
+
+  test("相対ルートで open した後にカレントディレクトリーが変更されたとき、データは open 時点のカレントディレクトリー配下に書き込まれる", async ({
+    expect,
+    signal,
+  }) => {
+    const originalCwd = process.cwd();
+    let cwdA: string | undefined;
+    let cwdB: string | undefined;
+    try {
+      // 準備
+      cwdA = await mkdtemp(join(tmpdir(), "unikvs-cwd-a-"));
+      cwdB = await mkdtemp(join(tmpdir(), "unikvs-cwd-b-"));
+      process.chdir(cwdA);
+      const storage = new NodeFs("rel-root");
+      await storage.open();
+
+      // 実行
+      process.chdir(cwdB);
+      const key = "test.txt";
+      const data = new TextEncoder().encode("Hello World");
+      await storage.write({ key, data, signal });
+
+      // 検証
+      const savedData = await readFile(join(cwdA, "rel-root", key));
+      expect(new Uint8Array(savedData)).toStrictEqual(data);
+    } finally {
+      process.chdir(originalCwd);
+      if (cwdA) {
+        await rm(cwdA, { recursive: true, force: true }).catch(() => {});
+      }
+      if (cwdB) {
+        await rm(cwdB, { recursive: true, force: true }).catch(() => {});
+      }
+    }
   });
 });
 

@@ -81,6 +81,7 @@ export default class NodeFs implements IStorage {
     ]);
     const root = path.resolve(this.root);
     await fs.promises.mkdir(root, { recursive: true });
+    this.root = root;
     this.con = { fs, path, crypto, stream: stream as any };
   }
 
