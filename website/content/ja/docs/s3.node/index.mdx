@@ -76,6 +76,10 @@ await kvs.set("backup", stream, {
 
 後方互換のため、`@unikvs/s3:partSize` というキーも同じ意味で読み取られます。
 
+:::warning[partSize は正の整数のみ]
+パートサイズには正の整数 (バイト単位) を指定してください。文字列や 0・負の値など正の整数以外を指定すると `getWritable()` の呼び出し時に `InvalidPartSizeError` が投げられます。
+:::
+
 ## clear() の挙動
 
 `clear()` はバケット内のすべてのオブジェクトをページネーションで列挙し、一括削除します。
@@ -106,7 +110,7 @@ new S3(bucket: string, config?: S3ClientConfig)
 | `getWritable(args): WritableStream<Uint8Array>`          | マルチパートアップロードへの書き込みストリームです。  |
 | `getReadable(args): Promise<ReadableStream<Uint8Array>>` | GetObject のボディーを Web ストリームとして返します。 |
 
-各操作の `signal` は AWS SDK の `abortSignal` として転送されます。
+各操作の `signal` は AWS SDK の `abortSignal` として転送されます。`getWritable()` も同様に `signal` の中断がマルチパートアップロードの中断へ伝播し、既に中断済みのシグナルを渡した場合は `StorageAbortedError` が投げられます。
 
 ## 関連パッケージ
 

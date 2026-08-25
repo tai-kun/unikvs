@@ -12,12 +12,16 @@ import {
 import { Upload } from "@aws-sdk/lib-storage";
 import type { IStorage } from "@unikvs/core";
 
+import { InvalidPartSizeError, StorageAbortedError } from "./errors.js";
+
 /**
  * AWS S3（または互換オブジェクトストレージ）を永続化先として使用するストレージクラスです。
  *
  * 指定されたバケットに対してオブジェクトの読み書き、存在確認、削除、一括消去の操作を提供します。また、ストリームを用いたアップロードおよびダウンロードにも対応しています。
  *
  * コンテキストに `@unikvs/s3.node:partSize` または `@unikvs/s3:partSize` を指定することで、パートサイズ（バイト単位）を変更できます。
+ *
+ * **警告:** {@link clear} はプレフィックスによる絞り込みを行わず、バケット内のすべてのオブジェクトを削除します。unikvs 専用のバケット、または他のアプリケーションが使用しないバケットを使用してください。
  */
 export default class S3 implements IStorage {
   /**
@@ -169,6 +173,8 @@ export default class S3 implements IStorage {
    *
    * バケット内のオブジェクトをページネーションで取得し、全て削除します。
    *
+   * **警告:** このメソッドはプレフィックスによる絞り込みを行わないため、指定されたバケット内のすべてのオブジェクトが削除されます。バケットを他のアプリケーションと共有している場合、それらのデータも削除されます。unikvs 専用のバケット、または専用のプレフィックスでキーを管理するバケットを使用してください。
+   *
    * @param args.signal 中断シグナルです。
    */
   public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
@@ -213,19 +219,44 @@ export default class S3 implements IStorage {
    * 指定されたキーに対応する書き込み可能なストリームを取得します。
    *
    * @param args.key 書き込み先のキーです。
-   * @param args.context パートサイズなどのオプションを含むコンテキストオブジェクトです。
+   * @param args.signal 中断シグナルです。シグナルが中断されるとアップロードも中断されます。
+   * @param args.context パートサイズなどのオプションを含むコンテキストオブジェクトです。パートサイズには正の整数 (バイト単位) を指定してください。
    * @returns 書き込み可能なストリームです。
+   * @throws コンテキストに正の整数ではないパートサイズが指定された場合に {@link InvalidPartSizeError} を投げます。
+   * @throws シグナルが既に中断されている場合に {@link StorageAbortedError} を投げます。
    */
   public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "context" | "key">,
+    args: Pick<IStorage.GetWritableArgs, "context" | "key" | "signal">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key, context } = args;
-    const partSize = context["@unikvs/s3.node:partSize"] ?? context["@unikvs/s3:partSize"];
+    const { key, context, signal } = args;
+
+    if (signal.aborted) {
+      throw new StorageAbortedError({ key });
+    }
+
+    let partSize: number | undefined = undefined;
+    const rawPartSize =
+      context["@unikvs/s3.node:partSize"] !== undefined
+        ? context["@unikvs/s3.node:partSize"]
+        : context["@unikvs/s3:partSize"];
+    if (rawPartSize !== undefined) {
+      if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
+        throw new InvalidPartSizeError({ actual: rawPartSize });
+      }
+
+      partSize = rawPartSize;
+    }
 
     const { writable, readable } = new TransformStream<
       Uint8Array<ArrayBuffer>,
       Uint8Array<ArrayBuffer>
     >();
+    const abortController = new AbortController();
+    const onAbort = (): void => {
+      abortController.abort(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+
     const upload = new Upload({
       client: this.client!,
       params: {
@@ -233,16 +264,22 @@ export default class S3 implements IStorage {
         Body: readable,
         Bucket: this.bucket,
       },
-      partSize: partSize as number,
+      abortController,
+      ...(partSize !== undefined && { partSize }),
     });
 
     const writer = writable.getWriter();
     const uploadPromise = upload.done();
-    void uploadPromise.catch(async (reason: unknown) => {
-      try {
-        await writer.abort(reason);
-      } catch {}
-    });
+    const removeAbortListener = (): void => {
+      signal.removeEventListener("abort", onAbort);
+    };
+    void uploadPromise
+      .catch(async (reason: unknown) => {
+        try {
+          await writer.abort(reason);
+        } catch {}
+      })
+      .finally(removeAbortListener);
 
     return new WritableStream({
       async write(chunk) {
@@ -251,10 +288,12 @@ export default class S3 implements IStorage {
       async close() {
         await writer.close();
         await uploadPromise;
+        removeAbortListener();
       },
       async abort(reason) {
         await writer.abort(reason);
         await upload.abort().catch(() => {});
+        removeAbortListener();
       },
     });
   }

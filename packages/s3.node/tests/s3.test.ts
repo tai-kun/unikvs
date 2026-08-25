@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
 import { afterAll, beforeAll, describe, test as vitest } from "vitest";
 
+import { InvalidPartSizeError, StorageAbortedError } from "../src/errors.js";
 import S3 from "../src/s3.js";
 
 let bucketId = 0;
@@ -330,7 +331,7 @@ describe("ストリーム操作", () => {
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
     storage.open();
-    const writable = storage.getWritable({ key, context: {} });
+    const writable = storage.getWritable({ key, context: {}, signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -357,7 +358,7 @@ describe("ストリーム操作", () => {
     }
     const key = "multipart-write.dat";
     storage.open();
-    const writable = storage.getWritable({ key, context: {} });
+    const writable = storage.getWritable({ key, context: {}, signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -375,6 +376,7 @@ describe("ストリーム操作", () => {
   test("最小値未満の partSize をコンテキストに指定したとき、書き込みストリームの取得時にエラーが投げられる", ({
     expect,
     storage,
+    signal,
   }) => {
     // 準備
     const key = "too-small-part-size.dat";
@@ -385,8 +387,67 @@ describe("ストリーム操作", () => {
       storage.getWritable({
         key,
         context: { "@unikvs/s3.node:partSize": 1024 },
+        signal,
       }),
     ).toThrow(/EntityTooSmall/);
+  });
+
+  test("正の整数ではない partSize をコンテキストに指定したとき、書き込みストリームの取得時に InvalidPartSizeError が投げられる", ({
+    expect,
+    storage,
+    signal,
+  }) => {
+    // 準備
+    storage.open();
+
+    for (const partSize of ["8 * 1024 * 1024", 0, -1, 1.5, null]) {
+      // 実行と検証
+      expect(() =>
+        storage.getWritable({
+          key: "invalid-part-size.dat",
+          context: { "@unikvs/s3.node:partSize": partSize },
+          signal,
+        }),
+      ).toThrow(InvalidPartSizeError);
+    }
+  });
+
+  test("中断済みの AbortSignal を渡したとき、書き込みストリームの取得時に StorageAbortedError が投げられる", ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    storage.open();
+    const controller = new AbortController();
+    controller.abort();
+
+    // 実行と検証
+    expect(() =>
+      storage.getWritable({
+        key: "aborted-writable.dat",
+        context: {},
+        signal: controller.signal,
+      }),
+    ).toThrow(StorageAbortedError);
+  });
+
+  test("書き込み中に AbortSignal が中断されたとき、ストリームを閉じるとアップロードの中断で拒否される", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    const key = "abort-mid-upload.dat";
+    const controller = new AbortController();
+    storage.open();
+    const writable = storage.getWritable({ key, context: {}, signal: controller.signal });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array(1024 * 1024 * 6));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.close()).rejects.toThrow(/abort/i);
   });
 
   test("読み込みストリームを使用したとき、複数チャンクに分かれた全データを正しく読み取れる", async ({
@@ -517,13 +578,14 @@ describe("書き込みストリームのエラーハンドリング", () => {
   test("アップロードが失敗したとき、ストリームを閉じるとアップロードの失敗理由で拒否される", async ({
     expect,
     unauthorizedStorage,
+    signal,
   }) => {
     // 準備
     const key = "upload-failure.bin";
     // デフォルトのパートサイズ (5 MiB) を超えてマルチパートアップロードが開始するサイズを使用する。
     const data = new Uint8Array(1024 * 1024 * 6);
     unauthorizedStorage.open();
-    const writable = unauthorizedStorage.getWritable({ key, context: {} });
+    const writable = unauthorizedStorage.getWritable({ key, context: {}, signal });
     const writer = writable.getWriter();
     await writer.write(data);
 
@@ -534,10 +596,11 @@ describe("書き込みストリームのエラーハンドリング", () => {
   test("書き込みストリームを中断したとき、unhandled rejection が発生しない", async ({
     expect,
     storage,
+    signal,
   }) => {
     // 準備
     storage.open();
-    const writable = storage.getWritable({ key: "abort-stream.bin", context: {} });
+    const writable = storage.getWritable({ key: "abort-stream.bin", context: {}, signal });
     const writer = writable.getWriter();
     const unhandledRejections: unknown[] = [];
     const listener = (reason: unknown): void => {
