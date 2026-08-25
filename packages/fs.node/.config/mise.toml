@@ -30,6 +30,5 @@ run = "npx oxfmt --config ./.config/.oxfmtrc.json"
 [tasks.lint]
 run = "npx oxlint --config ./.config/.oxlintrc.json"
 
-
 [tasks.update]
 run = ["npx npm-check-updates --target minor -u --cooldown 7", "pnpm install", "# pnpm audit"]
