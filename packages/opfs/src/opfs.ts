@@ -84,6 +84,8 @@ export default class Opfs implements IStorage {
   /**
    * 指定されたデータを、対応するキーでストレージに保存します。
    *
+   * 書き込みが失敗した場合は変更を破棄するため、既存のデータが部分書き込みによって破壊されることはありません。
+   *
    * @param args.key 保存先のキーです。
    * @param args.data 保存するバイト配列です。
    */
@@ -99,9 +101,13 @@ export default class Opfs implements IStorage {
 
     try {
       await writable.write(data);
-    } finally {
-      await writable.close();
+    } catch (ex) {
+      // 失敗時に close すると、書き込めた分の内容が既存データを上書きしてコミットされるため abort して変更を破棄します。
+      await writable.abort(ex).catch(() => {});
+      throw ex;
     }
+
+    await writable.close();
   }
 
   /**

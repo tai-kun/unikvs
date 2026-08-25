@@ -117,6 +117,56 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     // 検証
     expect(exists).toBe(false);
   });
+
+  test("書き込み途中で失敗したとき、既存データが破壊されない", async ({ expect }) => {
+    // 準備
+    const key = "atomic.bin";
+    const original = new Uint8Array([1, 2, 3, 4, 5]);
+    await storage.write({ key, data: original });
+    expect(await storage.read({ key })).toStrictEqual(original);
+
+    // createWritable を差し替え、write() が必ず失敗するが close() は成功する (＝ 部分的な書き込み内容がコミットされる) ストリームを返します。
+    // 実際の OPFS ではクォータ超過・I/O エラーなどで書き込み途中に失敗し得ます。
+    // oxlint-disable-next-line typescript/unbound-method
+    const originalCreateWritable = FileSystemFileHandle.prototype.createWritable;
+    class FailingWritableStream extends WritableStream<Uint8Array> {
+      readonly #real: FileSystemWritableFileStream;
+
+      constructor(real: FileSystemWritableFileStream) {
+        super();
+        this.#real = real;
+      }
+
+      write(): Promise<void> {
+        return Promise.reject(new DOMException("quota exceeded (simulated)", "QuotaExceededError"));
+      }
+
+      override close(): Promise<void> {
+        // 実ストリームへコミットします。
+        return this.#real.close();
+      }
+
+      override abort(reason?: unknown): Promise<void> {
+        return this.#real.abort(reason);
+      }
+    }
+    FileSystemFileHandle.prototype.createWritable = async function () {
+      const real: FileSystemWritableFileStream = await originalCreateWritable.call(this);
+      return new FailingWritableStream(real) as unknown as FileSystemWritableFileStream;
+    };
+
+    try {
+      // 実行と検証
+      await expect(storage.write({ key, data: new Uint8Array([9, 9, 9]) })).rejects.toThrow(
+        /quota exceeded/,
+      );
+    } finally {
+      FileSystemFileHandle.prototype.createWritable = originalCreateWritable;
+    }
+
+    // 検証: 失敗した書き込みによって既存データが破壊されていないこと
+    expect(await storage.read({ key })).toStrictEqual(original);
+  });
 });
 
 describe("ストリーム操作の振る舞い", () => {
