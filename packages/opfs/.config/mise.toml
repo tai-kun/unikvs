@@ -11,10 +11,10 @@ env = { CI = 1 }
 run = "npx vitest --config ./.config/vitest.client.ts"
 
 [tasks."test:format"]
-run = "npx oxfmt --config ./.config/.oxfmtrc.json --check"
+run = { task = "format", args = ["--check"] }
 
 [tasks."test:lint"]
-run = "npx oxlint --config ./.config/.oxlintrc.json"
+run = { task = "lint" }
 
 [tasks."test:typecheck"]
 run = [
@@ -25,10 +25,10 @@ run = [
 ]
 
 [tasks.format]
-run = "npx oxfmt --config ./.config/.oxfmtrc.json"
+run = "set -e; cp .config/.oxfmtrc.json .tmp-oxfmtrc.json; trap 'rm -f .tmp-oxfmtrc.json' EXIT; npx oxfmt --config .tmp-oxfmtrc.json"
 
 [tasks.lint]
-run = "npx oxlint --config ./.config/.oxlintrc.json"
+run = "set -e; cp .config/.oxlintrc.json .tmp-oxlintrc.json; trap 'rm -f .tmp-oxlintrc.json' EXIT; npx oxlint --config .tmp-oxlintrc.json"
 
 [tasks.update]
 run = [

@@ -68,7 +68,7 @@
 
     "[javascript][typescript][typescriptreact][css][html][json][jsonc][yaml][markdown][toml][sql]": {
       "editor.defaultFormatter": "oxc.oxc-vscode",
-      "editor.formatOnSave": false,
+      "editor.formatOnSave": true,
       "editor.codeActionsOnSave": {
         "source.fixAll.oxc": "always",
         "source.format.oxc": "always",
