@@ -114,4 +114,22 @@ describe("chunks", () => {
     // 検証
     expect(result).toStrictEqual([new Uint8Array([1, 2, 3]), new Uint8Array([4, 5, 6])]);
   });
+
+  test("DataView を指定サイズで分割する", ({ expect }) => {
+    // 準備
+    const buffer = new ArrayBuffer(8);
+    new Uint8Array(buffer).set([1, 2, 3, 4, 5, 6, 7, 8]);
+
+    // 実行
+    const result = [...chunks(new DataView(buffer), 3)].map(
+      (part) => new Uint8Array(part.buffer, part.byteOffset, part.byteLength),
+    );
+
+    // 検証
+    expect(result).toStrictEqual([
+      new Uint8Array([1, 2, 3]),
+      new Uint8Array([4, 5, 6]),
+      new Uint8Array([7, 8]),
+    ]);
+  });
 });
