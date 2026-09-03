@@ -1,7 +1,7 @@
 import type { MaybePromise } from "maypromise";
 
-import type { Variables } from "./variables.types.js";
 import type { ErrorBase } from "./errors.js";
+import type { Variables } from "./variables.types.js";
 
 /**
  * ストレージに関連する引数の型定義を格納する名前空間です。
