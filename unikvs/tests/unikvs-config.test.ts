@@ -71,23 +71,23 @@ describe("UniKvsConfig", () => {
     expect(() => config.create()).toThrow(MissingStorageError);
   });
 
-  test("setContext でコンテキストを設定できる", ({ expect }) => {
+  test("setVariables で変数を設定できる", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.setContext({ key1: "value1" });
+    const result = config.setVariables({ key1: "value1" });
 
     // 検証
     expect(result).toBe(config);
   });
 
-  test("setContext に配列を渡すとオブジェクトに変換される", ({ expect }) => {
+  test("setVariables に配列を渡すとオブジェクトに変換される", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.setContext([
+    const result = config.setVariables([
       ["a", 1],
       ["b", 2],
     ]);
@@ -110,12 +110,12 @@ describe("UniKvsConfig", () => {
     expect(result).toBeInstanceOf(UniKvs);
   });
 
-  test("appendStorage の戻り値で setContext を呼べる", ({ expect }) => {
+  test("appendStorage の戻り値で setVariables を呼べる", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.appendStorage(new MockStorage()).setContext({ foo: "bar" }).create();
+    const result = config.appendStorage(new MockStorage()).setVariables({ foo: "bar" }).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);

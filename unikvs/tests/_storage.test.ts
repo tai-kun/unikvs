@@ -1,4 +1,4 @@
-import type { Context, IStorage } from "@unikvs/core";
+import type { Variables, IStorage } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvsStorage from "../src/_storage.js";
@@ -8,7 +8,7 @@ import {
   WritableStreamNotSupportedError,
 } from "../src/errors.js";
 
-const TEST_CONTEXT: Context = {};
+const TEST_VARS: Variables = {};
 const TEST_SIGNAL = new AbortController().signal;
 
 /**
@@ -62,7 +62,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
     const storage = new UniKvsStorage(mock);
 
     // 実行
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.open(TEST_VARS, TEST_SIGNAL);
 
     // 検証
     expect(mock.openCallCount).toBe(0);
@@ -77,7 +77,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
     const storage = new UniKvsStorage(mock);
 
     // 実行
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.open(TEST_VARS, TEST_SIGNAL);
 
     // 検証
     expect(mock.openCallCount).toBe(1);
@@ -88,11 +88,11 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
   test("write / read でデータを保存および取得できる", async ({ expect }) => {
     // 準備
     const storage = new UniKvsStorage(new MockStorage());
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行
-    await storage.write(TEST_CONTEXT, TEST_SIGNAL, "k1", "v1");
-    const result = await storage.read(TEST_CONTEXT, TEST_SIGNAL, "k1");
+    await storage.write(TEST_VARS, TEST_SIGNAL, "k1", "v1");
+    const result = await storage.read(TEST_VARS, TEST_SIGNAL, "k1");
 
     // 検証
     expect(result).toBe("v1");
@@ -101,12 +101,12 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
   test("exists がデータの有無を正しく返す", async ({ expect }) => {
     // 準備
     const storage = new UniKvsStorage(new MockStorage());
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
-    await storage.write(TEST_CONTEXT, TEST_SIGNAL, "k1", "v1");
+    await storage.open(TEST_VARS, TEST_SIGNAL);
+    await storage.write(TEST_VARS, TEST_SIGNAL, "k1", "v1");
 
     // 実行
-    const exists = await storage.exists(TEST_CONTEXT, TEST_SIGNAL, "k1");
-    const notExists = await storage.exists(TEST_CONTEXT, TEST_SIGNAL, "k2");
+    const exists = await storage.exists(TEST_VARS, TEST_SIGNAL, "k1");
+    const notExists = await storage.exists(TEST_VARS, TEST_SIGNAL, "k2");
 
     // 検証
     expect(exists).toBe(true);
@@ -116,29 +116,29 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
   test("delete でデータが削除される", async ({ expect }) => {
     // 準備
     const storage = new UniKvsStorage(new MockStorage());
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
-    await storage.write(TEST_CONTEXT, TEST_SIGNAL, "k1", "v1");
+    await storage.open(TEST_VARS, TEST_SIGNAL);
+    await storage.write(TEST_VARS, TEST_SIGNAL, "k1", "v1");
 
     // 実行
-    await storage.delete(TEST_CONTEXT, TEST_SIGNAL, "k1");
+    await storage.delete(TEST_VARS, TEST_SIGNAL, "k1");
 
     // 検証
-    expect(await storage.exists(TEST_CONTEXT, TEST_SIGNAL, "k1")).toBe(false);
+    expect(await storage.exists(TEST_VARS, TEST_SIGNAL, "k1")).toBe(false);
   });
 
   test("clear で全データが削除される", async ({ expect }) => {
     // 準備
     const storage = new UniKvsStorage(new MockStorage());
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
-    await storage.write(TEST_CONTEXT, TEST_SIGNAL, "k1", "v1");
-    await storage.write(TEST_CONTEXT, TEST_SIGNAL, "k2", "v2");
+    await storage.open(TEST_VARS, TEST_SIGNAL);
+    await storage.write(TEST_VARS, TEST_SIGNAL, "k1", "v1");
+    await storage.write(TEST_VARS, TEST_SIGNAL, "k2", "v2");
 
     // 実行
-    await storage.clear(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.clear(TEST_VARS, TEST_SIGNAL);
 
     // 検証
-    expect(await storage.exists(TEST_CONTEXT, TEST_SIGNAL, "k1")).toBe(false);
-    expect(await storage.exists(TEST_CONTEXT, TEST_SIGNAL, "k2")).toBe(false);
+    expect(await storage.exists(TEST_VARS, TEST_SIGNAL, "k1")).toBe(false);
+    expect(await storage.exists(TEST_VARS, TEST_SIGNAL, "k2")).toBe(false);
   });
 });
 
@@ -150,7 +150,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     const storage = new UniKvsStorage(mock);
 
     // 実行と検証
-    await expect(storage.write(TEST_CONTEXT, TEST_SIGNAL, "k1", "v1")).rejects.toThrow(
+    await expect(storage.write(TEST_VARS, TEST_SIGNAL, "k1", "v1")).rejects.toThrow(
       StorageIsNotOpenError,
     );
   });
@@ -162,9 +162,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     const storage = new UniKvsStorage(mock);
 
     // 実行と検証
-    await expect(storage.read(TEST_CONTEXT, TEST_SIGNAL, "k1")).rejects.toThrow(
-      StorageIsNotOpenError,
-    );
+    await expect(storage.read(TEST_VARS, TEST_SIGNAL, "k1")).rejects.toThrow(StorageIsNotOpenError);
   });
 
   test("getReadable でストレージがサポートしていないとき ReadableStreamNotSupportedError を投げる", async ({
@@ -173,10 +171,10 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockStorage();
     const storage = new UniKvsStorage(mock);
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行と検証
-    await expect(storage.getReadable(TEST_CONTEXT, TEST_SIGNAL, "k1")).rejects.toThrow(
+    await expect(storage.getReadable(TEST_VARS, TEST_SIGNAL, "k1")).rejects.toThrow(
       ReadableStreamNotSupportedError,
     );
   });
@@ -187,10 +185,10 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockStorage();
     const storage = new UniKvsStorage(mock);
-    await storage.open(TEST_CONTEXT, TEST_SIGNAL);
+    await storage.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行と検証
-    await expect(storage.getWritable(TEST_CONTEXT, TEST_SIGNAL, "k1")).rejects.toThrow(
+    await expect(storage.getWritable(TEST_VARS, TEST_SIGNAL, "k1")).rejects.toThrow(
       WritableStreamNotSupportedError,
     );
   });

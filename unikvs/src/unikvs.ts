@@ -1,14 +1,13 @@
-import type { Context, IStorage, IReadableStream } from "@unikvs/core";
+import type { Variables, IStorage, IReadableStream } from "@unikvs/core";
 import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import logger from "./_logger.js";
-import mergeContext from "./_merge-context.js";
+import mergeVars from "./_merge-vars.js";
 import UniKvsStorage from "./_storage.js";
 import toValueStream from "./_to-value-stream.js";
 import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
-import type { ContextSource } from "./context.types.js";
 import {
   type KeyNotFoundErrorArgs,
   KeyNotFoundError,
@@ -28,6 +27,7 @@ import UniKvsConfig, {
 } from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
+import type { VariablesSource } from "./variables.types.js";
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -72,12 +72,12 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 //
 // -------------------------------------------------------------------------------------------------
 
-const ContextKeySchema = v.string();
+const VariablesKeySchema = v.string();
 
-// 配列形式の context も正当な入力であるため、record スキーマより先に判定する必要があります。
-// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeContext での配列としてのマージが行われません。
-const ContextSourceSchema = v.union([
-  v.array(v.tuple([ContextKeySchema, v.unknown()])),
+// 配列形式の vars も正当な入力であるため、record スキーマより先に判定する必要があります。
+// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeVars での配列としてのマージが行われません。
+const VariablesSourceSchema = v.union([
+  v.array(v.tuple([VariablesKeySchema, v.unknown()])),
   v.record(v.any(), v.unknown()),
 ]);
 
@@ -88,9 +88,9 @@ const OpenOptionsSchema = v.object({
   signal: v.optional(v.instance(AbortSignal)),
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const OpenArgsSchema = v.tuple([v.optional(OpenOptionsSchema)]);
@@ -102,9 +102,9 @@ const CloseOptionsSchema = v.object({
   signal: v.optional(v.instance(AbortSignal)),
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const CloseArgsSchema = v.tuple([v.optional(CloseOptionsSchema)]);
@@ -113,7 +113,7 @@ const SetOptionsSchema = v.object({
   key: v.string(),
   value: v.unknown(),
   signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const SetArgsSchema = v.union([
@@ -131,7 +131,7 @@ const SetArgsSchema = v.union([
 const GetOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const GetArgsSchema = v.union([
@@ -145,7 +145,7 @@ const GetArgsSchema = v.union([
 const StreamOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const StreamArgsSchema = v.union([
@@ -159,7 +159,7 @@ const StreamArgsSchema = v.union([
 const HasOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const HasArgsSchema = v.union([
@@ -173,7 +173,7 @@ const HasArgsSchema = v.union([
 const DeleteOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const DeleteArgsSchema = v.union([
@@ -191,9 +191,9 @@ const ClearOptionsSchema = v.object({
   signal: v.optional(v.instance(AbortSignal)),
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  context: v.optional(ContextSourceSchema),
+  vars: v.optional(VariablesSourceSchema),
 });
 
 const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
@@ -240,9 +240,9 @@ export type SetOptions<
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  readonly context?: ContextSource | undefined;
+  readonly vars?: VariablesSource | undefined;
 };
 
 /**
@@ -262,9 +262,9 @@ export type GetOptions<TKey = IStorage.Key> = {
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  readonly context?: ContextSource | undefined;
+  readonly vars?: VariablesSource | undefined;
 };
 
 /**
@@ -284,9 +284,9 @@ export type StreamOptions<TKey = IStorage.Key> = {
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  readonly context?: ContextSource | undefined;
+  readonly vars?: VariablesSource | undefined;
 };
 
 /**
@@ -306,9 +306,9 @@ export type HasOptions<TKey = IStorage.Key> = {
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  readonly context?: ContextSource | undefined;
+  readonly vars?: VariablesSource | undefined;
 };
 
 /**
@@ -328,9 +328,9 @@ export type DeleteOptions<TKey = IStorage.Key> = {
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時のコンテキスト情報です。
+   * 実行時の変数です。
    */
-  readonly context?: ContextSource | undefined;
+  readonly vars?: VariablesSource | undefined;
 };
 
 /**
@@ -452,9 +452,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #acSet: Set<AbortController>;
 
   /**
-   * 基本となる実行コンテキスト情報です。
+   * 基本となる実行変数情報です。
    */
-  readonly #context: Readonly<Context>;
+  readonly #vars: Readonly<Variables>;
 
   /**
    * データの永続化先となるストレージと前段パイプラインのリストです。
@@ -470,18 +470,18 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * インスタンスを初期化します。
    *
    * @internal UniKvs の設定ビルダー経由で使用します。
-   * @param context コンテキストです。
+   * @param vars 変数です。
    * @param destinations ストレージと前段パイプラインのリストです。
    * @param transformers トランスフォーマーのリストです。
    */
   public constructor(
-    context: Readonly<Context>,
+    vars: Readonly<Variables>,
     destinations: readonly [UniKvsDestination, ...UniKvsDestination[]],
     transformers: readonly UniKvsTransformer[],
   ) {
     this.#con = null;
     this.#acSet = new Set();
-    this.#context = { ...context };
+    this.#vars = { ...vars };
     this.#destinations = destinations;
     this.#transformers = transformers;
   }
@@ -509,13 +509,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options = {}] = v.parseInput(OpenArgsSchema, args);
-    const { signal: signalOption, context: contextOption } = options;
+    const { signal: signalOption, vars: varsOption } = options;
 
     const ac = new AbortController();
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "open";
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "open";
 
     signal.throwIfAborted();
 
@@ -535,11 +535,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       for (const { storage } of this.#destinations) {
         openFns.push([
           async () => {
-            await storage.open(context, signal);
+            await storage.open(vars, signal);
 
             dispose.push(async () => {
               try {
-                await storage.close(context, signal);
+                await storage.close(vars, signal);
               } catch (ex) {
                 logger.error`Failed to close storage: ${ex}`;
               }
@@ -553,11 +553,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       for (const transformer of this.#transformers) {
         openFns.push([
           async () => {
-            await transformer.open(context, signal);
+            await transformer.open(vars, signal);
 
             dispose.push(async () => {
               try {
-                await transformer.close(context, signal);
+                await transformer.close(vars, signal);
               } catch (ex) {
                 logger.error`Failed to close transformer: ${ex}`;
               }
@@ -611,7 +611,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  async #close(context: Context, signal: AbortSignal, con: Connection): Promise<void> {
+  async #close(vars: Variables, signal: AbortSignal, con: Connection): Promise<void> {
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
@@ -628,7 +628,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const { storage } of this.#destinations) {
           closeFns.push([
             async () => {
-              await storage.close(context, signal);
+              await storage.close(vars, signal);
             },
             "storage",
           ]);
@@ -638,7 +638,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const plugin of this.#transformers) {
           closeFns.push([
             async () => {
-              await plugin.close(context, signal);
+              await plugin.close(vars, signal);
             },
             "transformer",
           ]);
@@ -679,10 +679,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public close(...args: any): Promise<void> {
     try {
       const [options = {}] = v.parseInput(CloseArgsSchema, args);
-      const { signal = AbortSignal.timeout(10e3), context: contextOption } = options;
+      const { signal = AbortSignal.timeout(10e3), vars: varsOption } = options;
 
-      const context = mergeContext(this.#context, contextOption);
-      context["unikvs:action"] = "close";
+      const vars = mergeVars(this.#vars, varsOption);
+      vars["unikvs:action"] = "close";
 
       if (this.#con === null) {
         const acArr = [...this.#acSet];
@@ -706,7 +706,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
       }
 
-      return this.#close(context, signal, con).catch(async (ex) => {
+      return this.#close(vars, signal, con).catch(async (ex) => {
         // #close が失敗した場合、コネクションの AbortController は既に abort 済みであり、以降の操作がすべて即座に失敗する壊れた状態になります。
         // そこで接続を破棄して isOpen=false の一貫した状態にし、ベストエフォートでプラグインのクローズ処理を実行します。
         if (this.#con === con) {
@@ -717,7 +717,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             [...this.#destinations.map((dest) => dest.storage), ...this.#transformers].map(
               async (plugin) => {
                 try {
-                  await plugin.close(context, disposeSignal);
+                  await plugin.close(vars, disposeSignal);
                 } catch (reason) {
                   logger.error`Failed to close plugin after close failure: ${reason}`;
                 }
@@ -782,14 +782,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(SetArgsSchema, args);
-    const { key, value, signal: signalOption, context: contextOption } = options;
+    const { key, value, signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "set";
-    context["unikvs:key"] = key;
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "set";
+    vars["unikvs:key"] = key;
 
     const lock = await asyncmux(this, signal);
     try {
@@ -817,7 +817,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           for (let i = 0; i < this.#destinations.length; i++) {
             const dest = this.#destinations[i]!;
             while (applied < dest.transformers.length) {
-              const e = await longest[applied]!.getEncodable(context, signal);
+              const e = await longest[applied]!.getEncodable(vars, signal);
               cur = cur.pipeThrough(e);
               applied++;
             }
@@ -858,7 +858,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               // tee ブランチはキャンセルされるまで健康なブランチの読み取り分のチャンクを保持し続けるため、失敗時に放棄したブランチを確実にキャンセルできるよう参照を保持します。
               const branch = branches[i]!;
               try {
-                const w = await dest.storage.getWritable(context, signal, key);
+                const w = await dest.storage.getWritable(vars, signal, key);
                 await branch.pipeTo(w, { signal });
               } catch (reason) {
                 try {
@@ -885,7 +885,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
         const prefix: unknown[] = [value];
         for (const transformer of longest) {
-          prefix.push(await transformer.encode(context, signal, prefix[prefix.length - 1]));
+          prefix.push(await transformer.encode(vars, signal, prefix[prefix.length - 1]));
         }
         const encoded = this.#destinations.map((dest) => prefix[dest.transformers.length]);
 
@@ -894,7 +894,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           await Promise.all(
             this.#destinations.map(async (dest, i) => {
               try {
-                await dest.storage.write(context, signal, key, encoded[i]);
+                await dest.storage.write(vars, signal, key, encoded[i]);
               } catch (reason) {
                 errors.push({ reason });
                 errorStorageSet.add(dest);
@@ -922,7 +922,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               }
 
               try {
-                await dest.storage.onOtherWriteError(context, signal, key, error);
+                await dest.storage.onOtherWriteError(vars, signal, key, error);
               } catch (ex) {
                 errors.push(ex);
               }
@@ -970,14 +970,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(GetArgsSchema, args);
-    const { key, signal: signalOption, context: contextOption } = options;
+    const { key, signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "get";
-    context["unikvs:key"] = key;
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "get";
+    vars["unikvs:key"] = key;
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -997,10 +997,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const dest of this.#destinations) {
           try {
-            if (!(await dest.storage.exists(context, signal, key))) {
+            if (!(await dest.storage.exists(vars, signal, key))) {
               continue;
             }
-            data = await dest.storage.read(context, signal, key);
+            data = await dest.storage.read(vars, signal, key);
             transformers = dest.transformers;
             break;
           } catch (ex) {
@@ -1036,7 +1036,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       // 見つかったストレージ専用の前段パイプラインを逆順に適用してデータをデコードします。
       for (const transformer of transformers.toReversed()) {
-        data = await transformer.decode(context, signal, data);
+        data = await transformer.decode(vars, signal, data);
       }
 
       return data;
@@ -1075,14 +1075,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(StreamArgsSchema, args);
-    const { key, signal: signalOption, context: contextOption } = options;
+    const { key, signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "stream";
-    context["unikvs:key"] = key;
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "stream";
+    vars["unikvs:key"] = key;
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1102,11 +1102,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const dest of this.#destinations) {
           try {
-            if (!(await dest.storage.exists(context, signal, key))) {
+            if (!(await dest.storage.exists(vars, signal, key))) {
               continue;
             }
 
-            r = await dest.storage.getReadable(context, signal, key);
+            r = await dest.storage.getReadable(vars, signal, key);
             transformers = dest.transformers;
             break;
           } catch (ex) {
@@ -1140,7 +1140,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         // 見つかったストレージ専用の前段パイプラインを逆順に適用し、デコード用トランスフォームを連結します。
         for (const transformer of transformers.toReversed()) {
-          const d = await transformer.getDecodable(context, signal);
+          const d = await transformer.getDecodable(vars, signal);
           r = r.pipeThrough(d);
         }
 
@@ -1215,14 +1215,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(HasArgsSchema, args);
-    const { key, signal: signalOption, context: contextOption } = options;
+    const { key, signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "has";
-    context["unikvs:key"] = key;
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "has";
+    vars["unikvs:key"] = key;
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1238,7 +1238,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const errors: { reason: unknown }[] = [];
         for (const { storage } of this.#destinations) {
           try {
-            if (await storage.exists(context, signal, key)) {
+            if (await storage.exists(vars, signal, key)) {
               return true;
             }
           } catch (ex) {
@@ -1303,14 +1303,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(DeleteArgsSchema, args);
-    const { key, signal: signalOption, context: contextOption } = options;
+    const { key, signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "delete";
-    context["unikvs:key"] = key;
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "delete";
+    vars["unikvs:key"] = key;
 
     const lock = await asyncmux(this, signal);
     try {
@@ -1327,8 +1327,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         await Promise.all(
           this.#destinations.map(async ({ storage }) => {
             try {
-              if (await storage.exists(context, signal, key)) {
-                await storage.delete(context, signal, key);
+              if (await storage.exists(vars, signal, key)) {
+                await storage.delete(vars, signal, key);
               }
             } catch (reason) {
               errors.push({ reason });
@@ -1360,13 +1360,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options = {}] = v.parseInput(ClearArgsSchema, args);
-    const { signal: signalOption, context: contextOption } = options;
+    const { signal: signalOption, vars: varsOption } = options;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const context = mergeContext(this.#context, contextOption);
-    context["unikvs:action"] = "clear";
+    const vars = mergeVars(this.#vars, varsOption);
+    vars["unikvs:action"] = "clear";
 
     const lock = await asyncmux(this, signal);
     try {
@@ -1383,7 +1383,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         await Promise.all(
           this.#destinations.map(async ({ storage }) => {
             try {
-              await storage.clear(context, signal);
+              await storage.clear(vars, signal);
             } catch (reason) {
               errors.push({ reason });
             }

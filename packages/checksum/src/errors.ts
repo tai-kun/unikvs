@@ -50,52 +50,52 @@ setErrorMessage(
 );
 
 /**
- * {@link ChecksumInvalidContextKeyError} のメタデータです。
+ * {@link ChecksumInvalidVarNameError} のメタデータです。
  */
-export type ChecksumInvalidContextKeyErrorMeta = {
+export type ChecksumInvalidVarNameErrorMeta = {
   /**
-   * 無効なコンテクストキーの値です。
+   * 無効な変数キーの値です。
    */
   readonly actual: unknown;
 };
 
 /**
- * {@link ChecksumInvalidContextKeyError} のコンストラクター引数です。
+ * {@link ChecksumInvalidVarNameError} のコンストラクター引数です。
  *
  * エラーの追加情報 (`cause`) も含みます。
  */
-export type ChecksumInvalidContextKeyErrorArgs = ErrorOptions & ChecksumInvalidContextKeyErrorMeta;
+export type ChecksumInvalidVarNameErrorArgs = ErrorOptions & ChecksumInvalidVarNameErrorMeta;
 
 /**
- * コンテクストキーが不正な場合に投げられるエラーです。
+ * 変数キーが不正な場合に投げられるエラーです。
  *
- * CHECKSUM_CONTEXT_KEY が文字列ではない場合に発生します。
+ * CHECKSUM_VAR_NAME が文字列ではない場合に発生します。
  */
-export class ChecksumInvalidContextKeyError extends ErrorBase<ChecksumInvalidContextKeyErrorMeta> {
+export class ChecksumInvalidVarNameError extends ErrorBase<ChecksumInvalidVarNameErrorMeta> {
   static {
-    this.prototype.name = "UniKvsChecksumInvalidContextKeyError";
+    this.prototype.name = "UniKvsChecksumInvalidVarNameError";
   }
 
   /**
-   * ChecksumInvalidContextKeyError の新しいインスタンスを初期化します。
+   * ChecksumInvalidVarNameError の新しいインスタンスを初期化します。
    *
    * @param args 実際のキー値とエラーの追加情報を含む引数です。
    */
-  public constructor(args: ChecksumInvalidContextKeyErrorArgs) {
+  public constructor(args: ChecksumInvalidVarNameErrorArgs) {
     const { actual, ...options } = args;
-    const meta: ChecksumInvalidContextKeyErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid context key: ${inspect(actual)}`, options);
+    const meta: ChecksumInvalidVarNameErrorMeta = { actual };
+    super(meta, ({ actual }) => `Invalid vars key: ${inspect(actual)}`, options);
   }
 }
 
 setErrorMessage(
-  ChecksumInvalidContextKeyError,
-  ({ actual }) => `無効なコンテクストキー: ${inspect(actual)}`,
+  ChecksumInvalidVarNameError,
+  ({ actual }) => `無効な変数キー: ${inspect(actual)}`,
   "ja",
 );
 
 /**
- * チェックサムが必須であるにもかかわらず、コンテキストにチェックサムが指定されていない場合に投げられるエラーです。
+ * チェックサムが必須であるにもかかわらず、変数にチェックサムが指定されていない場合に投げられるエラーです。
  */
 export class ChecksumRequiredError extends ErrorBase<undefined> {
   static {

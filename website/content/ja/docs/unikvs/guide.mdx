@@ -1,13 +1,13 @@
 ---
 title: unikvs ガイド
-description: 設定ビルダー、ライフサイクル、各操作の挙動、AbortSignal と context の使い方を説明します。
+description: 設定ビルダー、ライフサイクル、各操作の挙動、AbortSignal と vars の使い方を説明します。
 ---
 
 ## 設定ビルダー
 
 `UniKvs.config()` を呼び出すと設定ビルダーが返ります。次の順序で設定を積み上げ、`create()` で KVS クライアントを作成します。
 
-1. `setContext(context)` — 実行時コンテキストを設定します (省略可能)。
+1. `setVariables(vars)` — 実行時変数を設定します (省略可能)。
 2. `appendTransformer(transformer)` — トランスフォーマーを追加します (省略可能、複数追加可能、ストレージの登録後にも追加可能)。
 3. `appendStorage(storage)` — ストレージを追加します (必須、複数追加可能)。
 4. `create()` — クライアントを作成します。
@@ -19,7 +19,7 @@ import { Memory } from "@unikvs/memory";
 const kvs = UniKvs.config<{
   data: Value<Uint8Array>;
 }>()
-  .setContext({ app: "my-app" }) // 省略可能
+  .setVariables({ app: "my-app" }) // 省略可能
   .appendStorage(new Memory()) // 必須
   .create();
 ```
@@ -147,18 +147,18 @@ await kvs.set("key", value, { signal: ac.signal });
 
 `open()` に渡したシグナルは接続全体にも作用します。`open()` 以降にシグナルが中止されると、以後の操作は失敗します。
 
-## context
+## vars
 
-context はプラグインへ実行時の情報を受け渡すための `Record<string, unknown>` 型のオブジェクトです。詳細は [@unikvs/core のドキュメント](/ja/docs/core/#context)を参照してください。
+vars はプラグインへ実行時の情報を受け渡すための `Record<string, unknown>` 型のオブジェクトです。詳細は [@unikvs/core のドキュメント](/ja/docs/core/#vars)を参照してください。
 
-コンテキストは次の場所で指定でき、操作時に指定したものが優先されます。
+変数は次の場所で指定でき、操作時に指定したものが優先されます。
 
-- ビルダーの `setContext()`: すべての操作に適用される基本値です。
+- ビルダーの `setVariables()`: すべての操作に適用される基本値です。
 - 各操作のオプション: 基本値をマージしたうえで、同名のキーを上書きします。
 
-```ts context.ts
+```ts vars.ts
 const kvs = UniKvs.config<{ data: Value<Uint8Array> }>()
-  .setContext({ region: "ap-northeast-1" })
+  .setVariables({ region: "ap-northeast-1" })
   .appendStorage(new Memory())
   .create();
 
@@ -166,7 +166,7 @@ await kvs.open();
 
 // この操作では partSize を上書きする
 await kvs.set("data", bytes, {
-  context: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 },
+  vars: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 },
 });
 ```
 

@@ -1,6 +1,6 @@
 import type { MaybePromise } from "maypromise";
 
-import type { Context } from "./context.types.js";
+import type { Variables } from "./variables.types.js";
 
 /**
  * トランスフォーマーに関連する引数の型定義を格納する名前空間です。
@@ -25,16 +25,16 @@ export namespace ITransformer {
    * エンコード可能なストリームを取得する際の引数定義です。
    *
    * @example
-   * コンテキストからチェックサムを読み取る実装です。
+   * 変数からチェックサムを読み取る実装です。
    *
    * ```ts
    * import type { ITransformer } from "@unikvs/core";
    *
    * class Checksum implements ITransformer {
    *   public getEncodable(
-   *     args: Pick<ITransformer.GetEncodableArgs, "context">,
+   *     args: Pick<ITransformer.GetEncodableArgs, "vars">,
    *   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-   *     const expected = args.context[CHECKSUM_CONTEXT_KEY];
+   *     const expected = args.vars[CHECKSUM_VAR_NAME];
    *     // ...
    *   }
    * }
@@ -42,9 +42,9 @@ export namespace ITransformer {
    */
   export type GetEncodableArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -61,9 +61,9 @@ export namespace ITransformer {
    *
    * class Checksum implements ITransformer {
    *   public getDecodable(
-   *     args: Pick<ITransformer.GetDecodableArgs, "context">,
+   *     args: Pick<ITransformer.GetDecodableArgs, "vars">,
    *   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-   *     const expected = args.context[CHECKSUM_CONTEXT_KEY];
+   *     const expected = args.vars[CHECKSUM_VAR_NAME];
    *     // ...
    *   }
    * }
@@ -71,9 +71,9 @@ export namespace ITransformer {
    */
   export type GetDecodableArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -86,9 +86,9 @@ export namespace ITransformer {
    */
   export type OpenArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -101,9 +101,9 @@ export namespace ITransformer {
    */
   export type CloseArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -135,9 +135,9 @@ export namespace ITransformer {
    */
   export type EncodeArgs<TData = any> = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * エンコードする対象のデータ本体です。
@@ -174,9 +174,9 @@ export namespace ITransformer {
    */
   export type DecodeArgs<TData = any> = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * デコードする対象のデータ本体です。
@@ -349,7 +349,7 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
  * 透過的チェックサム検証トランスフォーマーの実装です。
  *
  * ```ts
- * import type { Context, ITransformer } from "@unikvs/core";
+ * import type { Variables, ITransformer } from "@unikvs/core";
  * import { bytesToHex } from "@unikvs/utils";
  *
  * class ChecksumSha256 implements ITransformer {
@@ -357,9 +357,9 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
  *   public readonly isOpen = true;
  *
  *   public encode(
- *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+ *     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
  *   ): Uint8Array<ArrayBuffer> {
- *     const expected = args.context["@unikvs/checksum:sha256"];
+ *     const expected = args.vars["@unikvs/checksum:sha256"];
  *     if (typeof expected === "string") {
  *       const actual = bytesToHex(sha256(args.data));
  *       if (actual !== expected) {
@@ -371,7 +371,7 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
  *   }
  *
  *   public decode(
- *     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+ *     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
  *   ): Uint8Array<ArrayBuffer> {
  *     return this.encode(args);
  *   }
@@ -424,7 +424,7 @@ export interface ITransformer<
   /**
    * 指定された単一のデータをエンコードして返します。
    *
-   * @param args エンコード対象データとコンテキストを含む引数オブジェクトです。
+   * @param args エンコード対象データと変数を含む引数オブジェクトです。
    * @returns エンコードされた結果データ、またはそれを解決する Promise です。
    */
   encode(args: ITransformer.EncodeArgs<TEncodeDataInput>): MaybePromise<TEncodeDataOutput>;
@@ -432,7 +432,7 @@ export interface ITransformer<
   /**
    * 指定された単一のデータをデコードして返します。
    *
-   * @param args デコード対象データとコンテキストを含む引数オブジェクトです。
+   * @param args デコード対象データと変数を含む引数オブジェクトです。
    * @returns デコードされた結果データ、またはそれを解決する Promise です。
    */
   decode(args: ITransformer.DecodeArgs<TDecodeDataInput>): MaybePromise<TDecodeDataOutput>;

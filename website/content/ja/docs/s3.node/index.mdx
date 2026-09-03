@@ -66,11 +66,11 @@ const storage = new S3("test-bucket", {
 
 `ReadableStream` を `set()` すると、`@aws-sdk/lib-storage` のマルチパートアップロードで書き込まれます。
 
-パートサイズは操作時の context で変更できます。
+パートサイズは操作時の vars で変更できます。
 
 ```ts multipart.ts
 await kvs.set("backup", stream, {
-  context: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 }, // 8 MiB
+  vars: { "@unikvs/s3.node:partSize": 8 * 1024 * 1024 }, // 8 MiB
 });
 ```
 

@@ -1,6 +1,6 @@
 import type { MaybePromise } from "maypromise";
 
-import type { Context } from "./context.types.js";
+import type { Variables } from "./variables.types.js";
 import type { ErrorBase } from "./errors.js";
 
 /**
@@ -49,9 +49,9 @@ export namespace IStorage {
    */
   export type GetWritableArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -88,9 +88,9 @@ export namespace IStorage {
    */
   export type GetReadableArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -125,9 +125,9 @@ export namespace IStorage {
    */
   export type OpenArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -152,9 +152,9 @@ export namespace IStorage {
    */
   export type CloseArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -183,9 +183,9 @@ export namespace IStorage {
    */
   export type OnOtherWriteErrorArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -228,9 +228,9 @@ export namespace IStorage {
    */
   export type WriteArgs<TData = any> = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -269,9 +269,9 @@ export namespace IStorage {
    */
   export type ReadArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -300,9 +300,9 @@ export namespace IStorage {
    */
   export type ExistsArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -335,9 +335,9 @@ export namespace IStorage {
    */
   export type DeleteArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 操作対象を識別するためのキーです。
@@ -366,9 +366,9 @@ export namespace IStorage {
    */
   export type ClearArgs = {
     /**
-     * 実行時のコンテキスト情報です。
+     * 実行時の変数です。
      */
-    context: Context;
+    vars: Variables;
 
     /**
      * 処理の中断を通知するためのシグナルです。
@@ -673,7 +673,7 @@ export interface IStorage<
   /**
    * 指定されたデータを、対応するキーでストレージに保存します。
    *
-   * @param args 書き込み対象のデータ、キー、コンテキストを含む引数オブジェクトです。
+   * @param args 書き込み対象のデータ、キー、変数を含む引数オブジェクトです。
    * @returns 処理の完了を示す Promise、または void です。
    */
   write(args: IStorage.WriteArgs<TWriteDataInput>): MaybePromise<void>;
@@ -681,7 +681,7 @@ export interface IStorage<
   /**
    * 指定されたキーに対応するデータをストレージから取得します。
    *
-   * @param args 読み取り対象のキーとコンテキストを含む引数オブジェクトです。
+   * @param args 読み取り対象のキーと変数を含む引数オブジェクトです。
    * @returns 取得されたデータ、またはそれを解決する Promise です。
    */
   read(args: IStorage.ReadArgs): MaybePromise<TReadDataOutput>;
@@ -689,7 +689,7 @@ export interface IStorage<
   /**
    * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
    *
-   * @param args 確認対象のキーとコンテキストを含む引数オブジェクトです。
+   * @param args 確認対象のキーと変数を含む引数オブジェクトです。
    * @returns データが存在する場合は true、存在しない場合は false、またはそれらを解決する Promise です。
    */
   exists(args: IStorage.ExistsArgs): MaybePromise<boolean>;
@@ -697,7 +697,7 @@ export interface IStorage<
   /**
    * 指定されたキーに対応するデータをストレージから削除します。
    *
-   * @param args 削除対象のキーとコンテキストを含む引数オブジェクトです。
+   * @param args 削除対象のキーと変数を含む引数オブジェクトです。
    * @returns 処理の完了を示す Promise、または void です。
    */
   delete(args: IStorage.DeleteArgs): MaybePromise<void>;
@@ -705,7 +705,7 @@ export interface IStorage<
   /**
    * ストレージ内のすべてのデータを完全に消去します。
    *
-   * @param args 消去操作に必要なコンテキストを含む引数オブジェクトです。
+   * @param args 消去操作に必要な変数を含む引数オブジェクトです。
    * @returns 処理の完了を示す Promise、または void です。
    */
   clear(args: IStorage.ClearArgs): MaybePromise<void>;

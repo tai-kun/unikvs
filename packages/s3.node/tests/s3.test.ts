@@ -341,7 +341,7 @@ describe("ストリーム操作", () => {
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
     storage.open();
-    const writable = storage.getWritable({ key, context: {}, signal });
+    const writable = storage.getWritable({ key, vars: {}, signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -368,7 +368,7 @@ describe("ストリーム操作", () => {
     }
     const key = "multipart-write.dat";
     storage.open();
-    const writable = storage.getWritable({ key, context: {}, signal });
+    const writable = storage.getWritable({ key, vars: {}, signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -383,7 +383,7 @@ describe("ストリーム操作", () => {
     expect(Buffer.from(result).equals(Buffer.from(data))).toBe(true);
   });
 
-  test("最小値未満の partSize をコンテキストに指定したとき、書き込みストリームの取得時にエラーが投げられる", ({
+  test("最小値未満の partSize を変数に指定したとき、書き込みストリームの取得時にエラーが投げられる", ({
     expect,
     storage,
     signal,
@@ -396,13 +396,13 @@ describe("ストリーム操作", () => {
     expect(() =>
       storage.getWritable({
         key,
-        context: { "@unikvs/s3.node:partSize": 1024 },
+        vars: { "@unikvs/s3.node:partSize": 1024 },
         signal,
       }),
     ).toThrow(/EntityTooSmall/);
   });
 
-  test("正の整数ではない partSize をコンテキストに指定したとき、書き込みストリームの取得時に InvalidPartSizeError が投げられる", ({
+  test("正の整数ではない partSize を変数に指定したとき、書き込みストリームの取得時に InvalidPartSizeError が投げられる", ({
     expect,
     storage,
     signal,
@@ -415,7 +415,7 @@ describe("ストリーム操作", () => {
       expect(() =>
         storage.getWritable({
           key: "invalid-part-size.dat",
-          context: { "@unikvs/s3.node:partSize": partSize },
+          vars: { "@unikvs/s3.node:partSize": partSize },
           signal,
         }),
       ).toThrow(InvalidPartSizeError);
@@ -435,7 +435,7 @@ describe("ストリーム操作", () => {
     expect(() =>
       storage.getWritable({
         key: "aborted-writable.dat",
-        context: {},
+        vars: {},
         signal: controller.signal,
       }),
     ).toThrow(StorageAbortedError);
@@ -449,7 +449,7 @@ describe("ストリーム操作", () => {
     const key = "abort-mid-upload.dat";
     const controller = new AbortController();
     storage.open();
-    const writable = storage.getWritable({ key, context: {}, signal: controller.signal });
+    const writable = storage.getWritable({ key, vars: {}, signal: controller.signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024 * 6));
 
@@ -595,7 +595,7 @@ describe("書き込みストリームのエラーハンドリング", () => {
     // デフォルトのパートサイズ (5 MiB) を超えてマルチパートアップロードが開始するサイズを使用する。
     const data = new Uint8Array(1024 * 1024 * 6);
     unauthorizedStorage.open();
-    const writable = unauthorizedStorage.getWritable({ key, context: {}, signal });
+    const writable = unauthorizedStorage.getWritable({ key, vars: {}, signal });
     const writer = writable.getWriter();
     await writer.write(data);
 
@@ -610,7 +610,7 @@ describe("書き込みストリームのエラーハンドリング", () => {
   }) => {
     // 準備
     storage.open();
-    const writable = storage.getWritable({ key: "abort-stream.bin", context: {}, signal });
+    const writable = storage.getWritable({ key: "abort-stream.bin", vars: {}, signal });
     const writer = writable.getWriter();
     const unhandledRejections: unknown[] = [];
     const listener = (reason: unknown): void => {

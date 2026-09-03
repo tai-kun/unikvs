@@ -2,7 +2,7 @@ import type { MaybePromise } from "maypromise";
 import { expectTypeOf, test } from "vitest";
 
 import type {
-  Context,
+  Variables,
   IReadableStream,
   IStorage,
   ITransformer,
@@ -66,10 +66,10 @@ test("ITransformer はエンコードとデコードそれぞれの入出力型�
   >();
 });
 
-test("Context のプロパティーへのアクセス結果は unknown である", () => {
+test("Variables のプロパティーへのアクセス結果は unknown である", () => {
   // 準備
-  const context: Context = { "unikvs:key": "foo" };
+  const vars: Variables = { "unikvs:key": "foo" };
 
   // 検証
-  expectTypeOf(context["unikvs:key"]).toEqualTypeOf<unknown>();
+  expectTypeOf(vars["unikvs:key"]).toEqualTypeOf<unknown>();
 });

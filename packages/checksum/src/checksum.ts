@@ -1,10 +1,10 @@
-import type { Context, ITransformer } from "@unikvs/core";
+import type { Variables, ITransformer } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
   ChecksumMismatchError,
   ChecksumRequiredError,
-  ChecksumInvalidContextKeyError,
+  ChecksumInvalidVarNameError,
 } from "./errors.js";
 
 /** データのサイズ単位を定義する定数です。 */
@@ -77,13 +77,13 @@ export type ChecksumOptions = {
 /**
  * SHA-256 アルゴリズムを使用してデータの整合性を検証するトランスフォーマーです。
  *
- * コンテキストに含まれる期待値と、実際のデータのハッシュ値を比較します。
+ * 変数に含まれる期待値と、実際のデータのハッシュ値を比較します。
  */
 export default abstract class Checksum implements ITransformer {
   /**
-   * 期待するチェックサムを保持するコンテクストキーです。サブクラスで上書きして使用します。
+   * 期待するチェックサムを保持する変数キーです。サブクラスで上書きして使用します。
    */
-  public static readonly CHECKSUM_CONTEXT_KEY: string;
+  public static readonly CHECKSUM_VAR_NAME: string;
 
   /**
    * トランスフォーマーの名前です。
@@ -125,11 +125,11 @@ export default abstract class Checksum implements ITransformer {
   /**
    * エンコード処理（ハッシュ検証）を実行します。
    *
-   * @param args データとコンテキストを含むオブジェクトです。
+   * @param args データと変数を含むオブジェクトです。
    * @returns 検証後のバイナリーデータ（入力データと同一）です。
    */
   public encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
   ): Uint8Array<ArrayBuffer> {
     return this.#checksum(args);
   }
@@ -137,11 +137,11 @@ export default abstract class Checksum implements ITransformer {
   /**
    * デコード処理（ハッシュ検証）を実行します。
    *
-   * @param args データとコンテキストを含むオブジェクトです。
+   * @param args データと変数を含むオブジェクトです。
    * @returns 検証後のバイナリーデータ（入力データと同一）です。
    */
   public decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "context" | "data">,
+    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
   ): Uint8Array<ArrayBuffer> {
     return this.#checksum(args);
   }
@@ -149,11 +149,11 @@ export default abstract class Checksum implements ITransformer {
   /**
    * エンコード用の TransformStream を生成します。
    *
-   * @param args コンテキストを含むオブジェクトです。
+   * @param args 変数を含むオブジェクトです。
    * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
    */
   public getEncodable(
-    args: Pick<ITransformer.GetEncodableArgs, "context">,
+    args: Pick<ITransformer.GetEncodableArgs, "vars">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     return this.#checksumStream(args);
   }
@@ -161,11 +161,11 @@ export default abstract class Checksum implements ITransformer {
   /**
    * デコード用の TransformStream を生成します。
    *
-   * @param args コンテキストを含むオブジェクトです。
+   * @param args 変数を含むオブジェクトです。
    * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
    */
   public getDecodable(
-    args: Pick<ITransformer.GetDecodableArgs, "context">,
+    args: Pick<ITransformer.GetDecodableArgs, "vars">,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     return this.#checksumStream(args);
   }
@@ -173,17 +173,17 @@ export default abstract class Checksum implements ITransformer {
   /**
    * 一括データに対するハッシュ計算と検証を実行する内部メソッドです。
    *
-   * @param args データとコンテキストを含むオブジェクトです。
+   * @param args データと変数を含むオブジェクトです。
    * @returns 入力されたデータをそのまま返します。
    */
-  #checksum(args: { data: Uint8Array<ArrayBuffer>; context: Context }): Uint8Array<ArrayBuffer> {
-    const { data, context } = args;
-    const { CHECKSUM_CONTEXT_KEY } = this.constructor as typeof Checksum;
-    if (typeof CHECKSUM_CONTEXT_KEY !== "string") {
-      throw new ChecksumInvalidContextKeyError({ actual: CHECKSUM_CONTEXT_KEY });
+  #checksum(args: { data: Uint8Array<ArrayBuffer>; vars: Variables }): Uint8Array<ArrayBuffer> {
+    const { data, vars } = args;
+    const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
+    if (typeof CHECKSUM_VAR_NAME !== "string") {
+      throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = context[CHECKSUM_CONTEXT_KEY];
+    const checksum = vars[CHECKSUM_VAR_NAME];
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
       const hash = bytesToHex(this.hash(data));
@@ -201,19 +201,19 @@ export default abstract class Checksum implements ITransformer {
   /**
    * ストリーム形式で逐次的にハッシュ計算と検証を行う TransformStream を作成する内部メソッドです。
    *
-   * @param args コンテキストを含むオブジェクトです。
+   * @param args 変数を含むオブジェクトです。
    * @returns 変換処理を定義した TransformStream オブジェクトです。
    */
   #checksumStream(args: {
-    context: Context;
+    vars: Variables;
   }): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    const { context } = args;
-    const { CHECKSUM_CONTEXT_KEY } = this.constructor as typeof Checksum;
-    if (typeof CHECKSUM_CONTEXT_KEY !== "string") {
-      throw new ChecksumInvalidContextKeyError({ actual: CHECKSUM_CONTEXT_KEY });
+    const { vars } = args;
+    const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
+    if (typeof CHECKSUM_VAR_NAME !== "string") {
+      throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = context[CHECKSUM_CONTEXT_KEY];
+    const checksum = vars[CHECKSUM_VAR_NAME];
     if (typeof checksum !== "string") {
       if (this.required) {
         throw new ChecksumRequiredError();

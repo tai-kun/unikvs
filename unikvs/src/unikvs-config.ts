@@ -1,5 +1,5 @@
 import type {
-  Context,
+  Variables,
   IReadableStreamStorage,
   IStorage,
   IWritableStreamStorage,
@@ -10,10 +10,10 @@ import type {
 
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
-import type { ContextSource } from "./context.types.js";
 import { MissingStorageError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
+import type { VariablesSource } from "./variables.types.js";
 
 /**
  * トランスフォーマーから、デコード時の入力データの型を推論するユーティリティー型です。
@@ -162,12 +162,12 @@ export interface IUniKvsConfigBuilder<
   TLastTransformerEncodeChunkOutput = TUniKvsChunkInput,
 > {
   /**
-   * コンテキスト情報を設定します。
+   * 変数情報を設定します。
    *
-   * @param context 設定するコンテキストのソースです。
+   * @param vars 設定する変数のソースです。
    * @returns インスタンス自身を返します。
    */
-  setContext(context: ContextSource): this;
+  setVariables(vars: VariablesSource): this;
 
   /**
    * ストレージをパイプラインに追加します。
@@ -291,12 +291,12 @@ export interface IUniKvsConfigFinalizer<
   create(): UniKvs<TKeyValueMapping>;
 
   /**
-   * コンテキスト情報を設定します。
+   * 変数情報を設定します。
    *
-   * @param context 設定するコンテキストのソースです。
+   * @param vars 設定する変数のソースです。
    * @returns インスタンス自身を返します。
    */
-  setContext(context: ContextSource): this;
+  setVariables(vars: VariablesSource): this;
 
   /**
    * 追加のストレージを登録します。UniKvs は複数のストレージへのマルチキャスト書き込みをサポートします。
@@ -383,9 +383,9 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   readonly #UniKvs: typeof UniKvs;
 
   /**
-   * アプリケーションの実行時情報を保持するコンテキストオブジェクトです。
+   * アプリケーションの実行時情報を保持する変数オブジェクトです。
    */
-  #context: Context;
+  #vars: Variables;
 
   /**
    * データの永続化先となるストレージのリストです。各ストレージは登録時点のトランスフォーマー数を保持します。
@@ -404,7 +404,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   public constructor(UniKvsConstructor: typeof UniKvs) {
     this.#UniKvs = UniKvsConstructor;
-    this.#context = {};
+    this.#vars = {};
     this.#destinations = [];
     this.#transformers = [];
   }
@@ -428,18 +428,18 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
       throw new MissingStorageError();
     }
 
-    // コンテキストの参照を切り離すために浅いコピーを作成して UniKvs を初期化します。
-    return new this.#UniKvs(this.#context, [first, ...rest], transformers);
+    // 変数の参照を切り離すために浅いコピーを作成して UniKvs を初期化します。
+    return new this.#UniKvs(this.#vars, [first, ...rest], transformers);
   }
 
   /**
-   * コンテキスト情報を設定します。既存のコンテキストは上書きされます。
+   * 変数情報を設定します。既存の変数は上書きされます。
    *
-   * @param context 設定するコンテキストのソースデータです。
+   * @param vars 設定する変数のソースデータです。
    * @returns インスタンス自身を返します。
    */
-  public setContext(context: ContextSource): this {
-    this.#context = Array.isArray(context) ? Object.fromEntries(context) : { ...context };
+  public setVariables(vars: VariablesSource): this {
+    this.#vars = Array.isArray(vars) ? Object.fromEntries(vars) : { ...vars };
 
     return this;
   }

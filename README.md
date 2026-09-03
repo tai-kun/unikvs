@@ -86,7 +86,7 @@ flowchart LR
 
 `UniKvs.config()` でビルダーを作成し、以下の順序で設定します。
 
-1. `setContext(context)` — 実行時コンテキストを設定します（省略可能）。
+1. `setVariables(vars)` — 実行時変数を設定します（省略可能）。
 2. `appendTransformer(transformer)` — トランスフォーマーを追加します（省略可能、ストレージの登録後にも追加可能）。
 3. `appendStorage(storage)` — ストレージを追加します（必須、複数追加可能）。
 4. `create()` — KVS クライアントを作成します。
@@ -106,7 +106,7 @@ flowchart LR
 | `delete(key)`     | キーを削除します。                                       |
 | `clear()`         | すべてのデータを削除します。                             |
 
-すべての操作は `AbortSignal` によるキャンセルと、実行時コンテキストの受け渡しをサポートします。
+すべての操作は `AbortSignal` によるキャンセルと、実行時変数の受け渡しをサポートします。
 
 ```typescript
 const ac = new AbortController();

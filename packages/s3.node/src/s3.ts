@@ -19,7 +19,7 @@ import { InvalidPartSizeError, StorageAbortedError } from "./errors.js";
  *
  * 指定されたバケットに対してオブジェクトの読み書き、存在確認、削除、一括消去の操作を提供します。また、ストリームを用いたアップロードおよびダウンロードにも対応しています。
  *
- * コンテキストに `@unikvs/s3.node:partSize` または `@unikvs/s3:partSize` を指定することで、パートサイズ（バイト単位）を変更できます。
+ * 変数に `@unikvs/s3.node:partSize` または `@unikvs/s3:partSize` を指定することで、パートサイズ（バイト単位）を変更できます。
  *
  * **警告:** {@link clear} はプレフィックスによる絞り込みを行わず、バケット内のすべてのオブジェクトを削除します。unikvs 専用のバケット、または他のアプリケーションが使用しないバケットを使用してください。
  */
@@ -220,15 +220,15 @@ export default class S3 implements IStorage {
    *
    * @param args.key 書き込み先のキーです。
    * @param args.signal 中断シグナルです。シグナルが中断されるとアップロードも中断されます。
-   * @param args.context パートサイズなどのオプションを含むコンテキストオブジェクトです。パートサイズには正の整数 (バイト単位) を指定してください。
+   * @param args.vars パートサイズなどのオプションを含む変数オブジェクトです。パートサイズには正の整数 (バイト単位) を指定してください。
    * @returns 書き込み可能なストリームです。
-   * @throws コンテキストに正の整数ではないパートサイズが指定された場合に {@link InvalidPartSizeError} を投げます。
+   * @throws 変数に正の整数ではないパートサイズが指定された場合に {@link InvalidPartSizeError} を投げます。
    * @throws シグナルが既に中断されている場合に {@link StorageAbortedError} を投げます。
    */
   public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "context" | "key" | "signal">,
+    args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key, context, signal } = args;
+    const { key, vars, signal } = args;
 
     if (signal.aborted) {
       throw new StorageAbortedError({ key });
@@ -236,9 +236,9 @@ export default class S3 implements IStorage {
 
     let partSize: number | undefined = undefined;
     const rawPartSize =
-      context["@unikvs/s3.node:partSize"] !== undefined
-        ? context["@unikvs/s3.node:partSize"]
-        : context["@unikvs/s3:partSize"];
+      vars["@unikvs/s3.node:partSize"] !== undefined
+        ? vars["@unikvs/s3.node:partSize"]
+        : vars["@unikvs/s3:partSize"];
     if (rawPartSize !== undefined) {
       if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
         throw new InvalidPartSizeError({ actual: rawPartSize });

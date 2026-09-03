@@ -1,4 +1,4 @@
-import type { Context, ITransformer } from "@unikvs/core";
+import type { Variables, ITransformer } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvsTransformer from "../src/_transformer.js";
@@ -8,7 +8,7 @@ import {
   DecodableStreamNotSupportedError,
 } from "../src/errors.js";
 
-const TEST_CONTEXT: Context = {};
+const TEST_VARS: Variables = {};
 const TEST_SIGNAL = new AbortController().signal;
 
 /**
@@ -50,7 +50,7 @@ describe("UniKvsTransformer - 初期化と接続管理", () => {
     const transformer = new UniKvsTransformer(mock);
 
     // 実行
-    await transformer.open(TEST_CONTEXT, TEST_SIGNAL);
+    await transformer.open(TEST_VARS, TEST_SIGNAL);
 
     // 検証
     expect(mock.openCallCount).toBe(0);
@@ -65,7 +65,7 @@ describe("UniKvsTransformer - 初期化と接続管理", () => {
     const transformer = new UniKvsTransformer(mock);
 
     // 実行
-    await transformer.open(TEST_CONTEXT, TEST_SIGNAL);
+    await transformer.open(TEST_VARS, TEST_SIGNAL);
 
     // 検証
     expect(mock.openCallCount).toBe(1);
@@ -76,11 +76,11 @@ describe("UniKvsTransformer - エンコード / デコード", () => {
   test("エンコードしたデータをデコードすると元の値に戻る", async ({ expect }) => {
     // 準備
     const transformer = new UniKvsTransformer(new MockTransformer());
-    await transformer.open(TEST_CONTEXT, TEST_SIGNAL);
+    await transformer.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行
-    const encoded = await transformer.encode(TEST_CONTEXT, TEST_SIGNAL, "hello");
-    const decoded = await transformer.decode(TEST_CONTEXT, TEST_SIGNAL, encoded);
+    const encoded = await transformer.encode(TEST_VARS, TEST_SIGNAL, "hello");
+    const decoded = await transformer.decode(TEST_VARS, TEST_SIGNAL, encoded);
 
     // 検証
     expect(decoded).toBe("hello");
@@ -97,7 +97,7 @@ describe("UniKvsTransformer - 異常系・エラーハンドリング", () => {
     const transformer = new UniKvsTransformer(mock);
 
     // 実行と検証
-    await expect(transformer.encode(TEST_CONTEXT, TEST_SIGNAL, "data")).rejects.toThrow(
+    await expect(transformer.encode(TEST_VARS, TEST_SIGNAL, "data")).rejects.toThrow(
       TransformerIsNotOpenError,
     );
   });
@@ -111,7 +111,7 @@ describe("UniKvsTransformer - 異常系・エラーハンドリング", () => {
     const transformer = new UniKvsTransformer(mock);
 
     // 実行と検証
-    await expect(transformer.decode(TEST_CONTEXT, TEST_SIGNAL, "data")).rejects.toThrow(
+    await expect(transformer.decode(TEST_VARS, TEST_SIGNAL, "data")).rejects.toThrow(
       TransformerIsNotOpenError,
     );
   });
@@ -121,10 +121,10 @@ describe("UniKvsTransformer - 異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const transformer = new UniKvsTransformer(new MockTransformer());
-    await transformer.open(TEST_CONTEXT, TEST_SIGNAL);
+    await transformer.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行と検証
-    await expect(transformer.getEncodable(TEST_CONTEXT, TEST_SIGNAL)).rejects.toThrow(
+    await expect(transformer.getEncodable(TEST_VARS, TEST_SIGNAL)).rejects.toThrow(
       EncodableStreamNotSupportedError,
     );
   });
@@ -134,10 +134,10 @@ describe("UniKvsTransformer - 異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const transformer = new UniKvsTransformer(new MockTransformer());
-    await transformer.open(TEST_CONTEXT, TEST_SIGNAL);
+    await transformer.open(TEST_VARS, TEST_SIGNAL);
 
     // 実行と検証
-    await expect(transformer.getDecodable(TEST_CONTEXT, TEST_SIGNAL)).rejects.toThrow(
+    await expect(transformer.getDecodable(TEST_VARS, TEST_SIGNAL)).rejects.toThrow(
       DecodableStreamNotSupportedError,
     );
   });

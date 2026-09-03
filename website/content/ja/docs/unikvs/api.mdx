@@ -8,7 +8,7 @@ description: unikvs パッケージの公開 API、設定ビルダー、UniKvs �
 `"unikvs"` パッケージからエクスポートされる主なシンボルは次のとおりです。
 
 - 値: `UniKvs` (既定エクスポートの再エクスポート)、`UniKvsConfig`
-- 型: `Value`、`PlainValue`、`StreamValue`、`KeyValueMapping`、`KeyofKeyValueMapping`、`SetValue`、`ValueStream`、`Context`、`ContextSource`、各種オプション型 (`OpenOptions` など)
+- 型: `Value`、`PlainValue`、`StreamValue`、`KeyValueMapping`、`KeyofKeyValueMapping`、`SetValue`、`ValueStream`、`Variables`、`VariablesSource`、各種オプション型 (`OpenOptions` など)
 - エラー: [`エラーページ`](/ja/docs/unikvs/errors)を参照
 
 ## UniKvs.config()
@@ -23,12 +23,12 @@ static config<TKeyValueMapping extends KeyValueMapping>(): IUniKvsConfigBuilder<
 
 | メソッド                 | 戻り値                     | 説明                                                                                     |
 | ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------- |
-| `setContext(context)`    | `this`                     | 基本の実行時コンテキストを設定します。既存のコンテキストは上書きされます。               |
+| `setVariables(vars)`     | `this`                     | 基本の実行時変数を設定します。既存の変数は上書きされます。                               |
 | `appendTransformer(t)`   | ビルダー                   | トランスフォーマーをパイプラインに追加します。以降に登録するストレージの前段になります。 |
 | `appendStorage(storage)` | ファイナライザー           | ストレージを追加します。登録時点までのトランスフォーマーが前段パイプラインになります。   |
 | `create()`               | `UniKvs<TKeyValueMapping>` | クライアントを作成します。ストレージ未登録の場合はエラーになります。                     |
 
-ファイナライザー (2 回目以降の `appendStorage()` の戻り値) は `create()`、`setContext()`、`appendStorage()`、`appendTransformer()` を持ちます。`appendTransformer()` で追加したトランスフォーマーは、それ以降に登録するストレージの前段になります。
+ファイナライザー (2 回目以降の `appendStorage()` の戻り値) は `create()`、`setVariables()`、`appendStorage()`、`appendTransformer()` を持ちます。`appendTransformer()` で追加したトランスフォーマーは、それ以降に登録するストレージの前段になります。
 
 ## UniKvs クラス
 
@@ -58,7 +58,7 @@ close(options?: CloseOptions): Promise<void>;
 
 ```ts
 // 位置引数形式
-set(key: TKey, value: SetValue<TKeyValueMapping[TKey]>, options?: { signal?: AbortSignal; context?: ContextSource }): Promise<void>;
+set(key: TKey, value: SetValue<TKeyValueMapping[TKey]>, options?: { signal?: AbortSignal; vars?: VariablesSource }): Promise<void>;
 
 // オブジェクト形式
 set(options: SetOptions<TKeyValueMapping, TKey>): Promise<void>;
@@ -102,10 +102,10 @@ clear(options?: ClearOptions): Promise<void>;
       type: "AbortSignal",
       description: "処理の中断を通知するためのシグナルです。",
     },
-    context: {
-      type: "ContextSource",
+    vars: {
+      type: "VariablesSource",
       description:
-        "実行時コンテキストです。オブジェクトまたはキーと値のペア配列を受け付け、基本のコンテキストにマージされます。",
+        "実行時変数です。オブジェクトまたはキーと値のペア配列を受け付け、基本の変数にマージされます。",
     },
   }}
 />

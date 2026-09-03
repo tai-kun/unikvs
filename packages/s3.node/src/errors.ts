@@ -1,7 +1,7 @@
 import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
 
 /**
- * コンテキストに指定されたパートサイズが正の整数ではないことを示すエラーメタデータ型です。
+ * 変数に指定されたパートサイズが正の整数ではないことを示すエラーメタデータ型です。
  */
 export type InvalidPartSizeErrorMeta = {
   /**
@@ -18,7 +18,7 @@ export type InvalidPartSizeErrorMeta = {
 export type InvalidPartSizeErrorArgs = ErrorOptions & InvalidPartSizeErrorMeta;
 
 /**
- * コンテキストに正の整数ではないパートサイズが指定された場合に投げられるエラーです。
+ * 変数に正の整数ではないパートサイズが指定された場合に投げられるエラーです。
  */
 export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
   static {
@@ -36,7 +36,7 @@ export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
     super(
       meta,
       ({ actual }) =>
-        `Invalid part size ${String(actual)} was specified in the context. A non-integer or non-positive value cannot be used as a multipart upload part size, causing unpredictable upload behavior. Specify a positive integer in bytes such as ${5 * 1024 * 1024}.`,
+        `Invalid part size ${String(actual)} was specified in the vars. A non-integer or non-positive value cannot be used as a multipart upload part size, causing unpredictable upload behavior. Specify a positive integer in bytes such as ${5 * 1024 * 1024}.`,
       options,
     );
   }
@@ -45,7 +45,7 @@ export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
 setErrorMessage(
   InvalidPartSizeError,
   ({ actual }) =>
-    `コンテキストに無効なパートサイズ ${String(actual)} が指定されました。整数でも正数でもない値はマルチパートアップロードのパートサイズとして使用できず、予測できない挙動を引き起こします。${5 * 1024 * 1024} などの正の整数 (バイト単位) を指定してください`,
+    `変数に無効なパートサイズ ${String(actual)} が指定されました。整数でも正数でもない値はマルチパートアップロードのパートサイズとして使用できず、予測できない挙動を引き起こします。${5 * 1024 * 1024} などの正の整数 (バイト単位) を指定してください`,
   "ja",
 );
 

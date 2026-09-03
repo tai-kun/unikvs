@@ -1,5 +1,5 @@
 import { ChecksumSha256 } from "@unikvs/checksum";
-import type { Context, IStorage, ITransformer } from "@unikvs/core";
+import type { Variables, IStorage, ITransformer } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { describe, expect, test, vi } from "vitest";
 
@@ -22,7 +22,7 @@ class MockStorage implements IStorage {
   isOpen = false;
   openCallCount = 0;
   closeCallCount = 0;
-  lastWriteContext: Context | undefined;
+  lastWriteVars: Variables | undefined;
 
   readonly map = new Map<string, unknown>();
 
@@ -53,7 +53,7 @@ class MockStorage implements IStorage {
   }
 
   async write(args: IStorage.WriteArgs): Promise<void> {
-    this.lastWriteContext = args.context;
+    this.lastWriteVars = args.vars;
     this.map.set(args.key, args.data);
   }
 
@@ -1292,9 +1292,9 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
   });
 });
 
-describe("UniKvs - コンテキストとチェックサム", () => {
-  // 配列形式の context もオブジェクト形式と同等に検証されること。
-  test("チェックサム不一致 (配列形式 context) のストリーム書き込みは拒否される", async ({
+describe("UniKvs - 変数とチェックサム", () => {
+  // 配列形式の vars もオブジェクト形式と同等に検証されること。
+  test("チェックサム不一致 (配列形式 vars) のストリーム書き込みは拒否される", async ({
     expect,
   }) => {
     // 準備
@@ -1311,7 +1311,7 @@ describe("UniKvs - コンテキストとチェックサム", () => {
       kvs.set({
         key: "logs2",
         value: streamOf([new Uint8Array([1, 2, 3])]),
-        context: [["@unikvs/checksum:sha256", wrongSum]] as const,
+        vars: [["@unikvs/checksum:sha256", wrongSum]] as const,
       }),
     ).rejects.toThrow(/fail write operation/);
     expect(mapOf(storage).has("logs2")).toBe(false);
@@ -1320,9 +1320,7 @@ describe("UniKvs - コンテキストとチェックサム", () => {
     await kvs.close();
   });
 
-  test("対照実験: チェックサム不一致 (オブジェクト形式 context) は検知される", async ({
-    expect,
-  }) => {
+  test("対照実験: チェックサム不一致 (オブジェクト形式 vars) は検知される", async ({ expect }) => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
@@ -1337,7 +1335,7 @@ describe("UniKvs - コンテキストとチェックサム", () => {
       .set({
         key: "logs2",
         value: streamOf([new Uint8Array([1, 2, 3])]),
-        context: { "@unikvs/checksum:sha256": wrongSum },
+        vars: { "@unikvs/checksum:sha256": wrongSum },
       })
       .then(
         () => null,
@@ -1355,7 +1353,7 @@ describe("UniKvs - コンテキストとチェックサム", () => {
     await kvs.close();
   });
 
-  test("チェックサム一致なら配列形式 context でもオブジェクト形式と同等に扱われる", async ({
+  test("チェックサム一致なら配列形式 vars でもオブジェクト形式と同等に扱われる", async ({
     expect,
   }) => {
     // 準備
@@ -1370,10 +1368,10 @@ describe("UniKvs - コンテキストとチェックサム", () => {
     await kvs.set({
       key: "logs3",
       value: streamOf([new Uint8Array([4]), new Uint8Array([5, 6])]),
-      context: [["@unikvs/checksum:sha256", sum]] as const,
+      vars: [["@unikvs/checksum:sha256", sum]] as const,
     });
     const vs = await kvs.stream("logs3", {
-      context: [["@unikvs/checksum:sha256", sum]] as const,
+      vars: [["@unikvs/checksum:sha256", sum]] as const,
     });
     expect([...(await collect(vs))]).toEqual([4, 5, 6]);
 
@@ -1394,9 +1392,9 @@ describe("UniKvs - コンテキストとチェックサム", () => {
     await kvs.set({
       key: "logs",
       value: streamOf([new Uint8Array([1]), new Uint8Array([2, 3])]),
-      context: { "@unikvs/checksum:sha256": sum },
+      vars: { "@unikvs/checksum:sha256": sum },
     });
-    const vs = await kvs.stream("logs", { context: { "@unikvs/checksum:sha256": sum } });
+    const vs = await kvs.stream("logs", { vars: { "@unikvs/checksum:sha256": sum } });
     expect([...(await collect(vs))]).toEqual([1, 2, 3]);
 
     // 後片付け
@@ -1404,36 +1402,34 @@ describe("UniKvs - コンテキストとチェックサム", () => {
   });
 });
 
-describe("UniKvs - コンテキスト", () => {
-  test("setContext で設定したコンテキストが操作時にストレージへ渡される", async ({ expect }) => {
+describe("UniKvs - 変数", () => {
+  test("setVariables で設定した変数が操作時にストレージへ渡される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().setContext({ app: "test-app" }).appendStorage(storage).create();
+    const kvs = UniKvs.config().setVariables({ app: "test-app" }).appendStorage(storage).create();
     await kvs.open();
 
     // 実行
     await kvs.set("key1", "value1");
 
     // 検証
-    expect(storage.lastWriteContext?.["app"]).toBe("test-app");
+    expect(storage.lastWriteVars?.["app"]).toBe("test-app");
 
     // 後片付け
     await kvs.close();
   });
 
-  test("操作時の context オプションで setContext のコンテキストを上書きできる", async ({
-    expect,
-  }) => {
+  test("操作時の vars オプションで setVariables の変数を上書きできる", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().setContext({ a: 1 }).appendStorage(storage).create();
+    const kvs = UniKvs.config().setVariables({ a: 1 }).appendStorage(storage).create();
     await kvs.open();
 
     // 実行
-    await kvs.set({ key: "key1", value: "value1", context: { a: 2 } });
+    await kvs.set({ key: "key1", value: "value1", vars: { a: 2 } });
 
     // 検証
-    expect(storage.lastWriteContext?.["a"]).toBe(2);
+    expect(storage.lastWriteVars?.["a"]).toBe(2);
 
     // 後片付け
     await kvs.close();

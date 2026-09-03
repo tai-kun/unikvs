@@ -4,13 +4,13 @@ export { default as Checksum } from "./checksum.js";
 export type {
   ChecksumMismatchErrorArgs,
   ChecksumMismatchErrorMeta,
-  ChecksumInvalidContextKeyErrorArgs,
-  ChecksumInvalidContextKeyErrorMeta,
+  ChecksumInvalidVarNameErrorArgs,
+  ChecksumInvalidVarNameErrorMeta,
 } from "./errors.js";
 export {
   ChecksumMismatchError,
   ChecksumRequiredError,
-  ChecksumInvalidContextKeyError,
+  ChecksumInvalidVarNameError,
 } from "./errors.js";
 
 export type * from "./md5.js";

@@ -5,7 +5,7 @@ description: MD5 / SHA-1 / SHA-2 ファミリーのハッシュ値でデータ�
 
 ## 概要
 
-`@unikvs/checksum` は、データのハッシュ値を計算し、context に指定された期待値と一致するかを検証するトランスフォーマー群を提供します。
+`@unikvs/checksum` は、データのハッシュ値を計算し、vars に指定された期待値と一致するかを検証するトランスフォーマー群を提供します。
 
 ハッシュ計算には [@noble/hashes](https://github.com/paulmillr/noble-hashes) を使用しており、Node.js とブラウザーの両方で動作します。圧縮のような変換は行わず、データは常にそのまま透過させます。
 
@@ -19,7 +19,7 @@ pnpm add @unikvs/checksum
 
 ## 対応アルゴリズム
 
-| クラス           | アルゴリズム | context キー              |
+| クラス           | アルゴリズム | vars キー                 |
 | ---------------- | ------------ | ------------------------- |
 | `ChecksumMd5`    | MD5          | `@unikvs/checksum:md5`    |
 | `ChecksumSha1`   | SHA-1        | `@unikvs/checksum:sha1`   |
@@ -28,13 +28,13 @@ pnpm add @unikvs/checksum
 | `ChecksumSha384` | SHA-384      | `@unikvs/checksum:sha384` |
 | `ChecksumSha512` | SHA-512      | `@unikvs/checksum:sha512` |
 
-各クラスは静的プロパティー `CHECKSUM_CONTEXT_KEY` で対応する context キーを公開しています。文字列リテラルを直接書くより、このプロパティーを参照するほうが確実です。
+各クラスは静的プロパティー `CHECKSUM_VAR_NAME` で対応する vars キーを公開しています。文字列リテラルを直接書くより、このプロパティーを参照するほうが確実です。
 
 ## 使い方
 
 ### UniKVS に組み込む
 
-ビルダーの `appendTransformer()` で追加し、操作時の context に期待するハッシュ値 (16 進数文字列) を指定します。
+ビルダーの `appendTransformer()` で追加し、操作時の vars に期待するハッシュ値 (16 進数文字列) を指定します。
 
 ```ts checksum.ts
 import { ChecksumSha256 } from "@unikvs/checksum";
@@ -55,16 +55,16 @@ const expected = "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa0
 
 // 書き込み時に検証される
 await kvs.set("data", new Uint8Array([0]), {
-  context: { "@unikvs/checksum:sha256": expected },
+  vars: { "@unikvs/checksum:sha256": expected },
 });
 
 // 読み取り時にも検証される
 const bytes = await kvs.get("data", {
-  context: { "@unikvs/checksum:sha256": expected },
+  vars: { "@unikvs/checksum:sha256": expected },
 });
 ```
 
-context に期待値がない場合、既定では検証を行わずデータを透過させます。
+vars に期待値がない場合、既定では検証を行わずデータを透過させます。
 
 ### 単体で使う
 
@@ -76,7 +76,7 @@ import { ChecksumSha256 } from "@unikvs/checksum";
 const transformer = new ChecksumSha256();
 transformer.encode({
   data: new Uint8Array([0]),
-  context: { "@unikvs/checksum:sha256": expected },
+  vars: { "@unikvs/checksum:sha256": expected },
 });
 ```
 
@@ -84,7 +84,7 @@ transformer.encode({
 
 エンコード時とデコード時のどちらも、同じ検証ロジックが走ります。
 
-1. context から対応するキー (`CHECKSUM_CONTEXT_KEY`) の値を取得します。
+1. vars から対応するキー (`CHECKSUM_VAR_NAME`) の値を取得します。
 2. 値が 16 進数文字列なら、実データのハッシュ値と比較します。
 3. 一致しなければ `ChecksumMismatchError` が投げられます。
 
@@ -105,11 +105,11 @@ MD5 と SHA-1 は衝突耐性が破られています。意図的な改ざんへ
 
 ## エラー
 
-| クラス名                         | 投げられる場面                                   |
-| -------------------------------- | ------------------------------------------------ |
-| `ChecksumMismatchError`          | 計算したハッシュ値が期待値と一致しない。         |
-| `ChecksumRequiredError`          | `required: true` なのに context に期待値がない。 |
-| `ChecksumInvalidContextKeyError` | 内部不整合によりコンテクストキーが不正になった。 |
+| クラス名                      | 投げられる場面                                |
+| ----------------------------- | --------------------------------------------- |
+| `ChecksumMismatchError`       | 計算したハッシュ値が期待値と一致しない。      |
+| `ChecksumRequiredError`       | `required: true` なのに vars に期待値がない。 |
+| `ChecksumInvalidVarNameError` | 内部不整合により変数キーが不正になった。      |
 
 いずれも `@unikvs/checksum` パッケージからエクスポートされています。`ChecksumMismatchError` のメタ情報からは `meta.actual` (実際のハッシュ値) と `meta.expected` (期待値) を参照できます。
 

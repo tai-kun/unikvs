@@ -8,9 +8,9 @@ const VALID_HASH = "90a3ed9e32b2aaf4c61c410eb925426119e1a9dc53d4286ade99a809";
 const EMPTY_HASH = "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f";
 const INVALID_HASH = "0".repeat(VALID_HASH.length);
 
-test("CHECKSUM_CONTEXT_KEY が定義されている", ({ expect }) => {
+test("CHECKSUM_VAR_NAME が定義されている", ({ expect }) => {
   // 検証
-  expect(ChecksumSha224.CHECKSUM_CONTEXT_KEY).toBe("@unikvs/checksum:sha224");
+  expect(ChecksumSha224.CHECKSUM_VAR_NAME).toBe("@unikvs/checksum:sha224");
 });
 
 test("指定した名前が name プロパティに設定される", ({ expect }) => {
@@ -26,10 +26,10 @@ test("期待値と一致するチェックサムを指定して encode すると
 }) => {
   // 準備
   const checksum = new ChecksumSha224();
-  const context = { [ChecksumSha224.CHECKSUM_CONTEXT_KEY]: VALID_HASH };
+  const vars = { [ChecksumSha224.CHECKSUM_VAR_NAME]: VALID_HASH };
 
   // 実行
-  const result = checksum.encode({ context, data: TEST_DATA });
+  const result = checksum.encode({ vars, data: TEST_DATA });
 
   // 検証
   expect(result).toStrictEqual(TEST_DATA);
@@ -39,10 +39,10 @@ test("空のデータを SHA-224 のハッシュ値で検証できる", ({ expec
   // 準備
   const checksum = new ChecksumSha224();
   const data = new Uint8Array(0);
-  const context = { [ChecksumSha224.CHECKSUM_CONTEXT_KEY]: EMPTY_HASH };
+  const vars = { [ChecksumSha224.CHECKSUM_VAR_NAME]: EMPTY_HASH };
 
   // 実行
-  const result = checksum.encode({ context, data });
+  const result = checksum.encode({ vars, data });
 
   // 検証
   expect(result).toStrictEqual(data);
@@ -53,11 +53,11 @@ test("期待値と一致しないチェックサムを指定すると、実際�
 }) => {
   // 準備
   const checksum = new ChecksumSha224();
-  const context = { [ChecksumSha224.CHECKSUM_CONTEXT_KEY]: INVALID_HASH };
+  const vars = { [ChecksumSha224.CHECKSUM_VAR_NAME]: INVALID_HASH };
 
   // 実行と検証
   try {
-    checksum.encode({ context, data: TEST_DATA });
+    checksum.encode({ vars, data: TEST_DATA });
     expect.unreachable();
   } catch (error) {
     expect(error).toBeInstanceOf(ChecksumMismatchError);
@@ -72,5 +72,5 @@ test("検証が必須のときにチェックサムが指定されていなけ�
   const checksum = new ChecksumSha224({ required: true });
 
   // 実行と検証
-  expect(() => checksum.encode({ context: {}, data: TEST_DATA })).toThrow(ChecksumRequiredError);
+  expect(() => checksum.encode({ vars: {}, data: TEST_DATA })).toThrow(ChecksumRequiredError);
 });
