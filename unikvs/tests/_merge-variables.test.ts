@@ -1,6 +1,6 @@
 import { describe, test } from "vitest";
 
-import mergeVariables from "../src/_merge-vars.js";
+import mergeVariables from "../src/_merge-variables.js";
 
 describe("mergeVariables", () => {
   test("2 つのオブジェクトをマージする", ({ expect }) => {
