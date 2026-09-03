@@ -35,7 +35,6 @@ export {
   ReadableStreamNotSupportedError,
   StorageIsNotOpenError,
   TransformerIsNotOpenError,
-  TransformerRegistrationError,
   UniKvsIsNotOpenError,
   UniKvsIsOpenError,
   WritableStreamNotSupportedError,

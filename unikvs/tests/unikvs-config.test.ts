@@ -120,4 +120,38 @@ describe("UniKvsConfig", () => {
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
   });
+
+  test("ストレージを追加した後でもトランスフォーマーを追加できる", ({ expect }) => {
+    // 準備
+    const config = new UniKvsConfig(UniKvs);
+
+    // 実行
+    const result = config
+      .appendStorage(new MockStorage())
+      .appendTransformer(new MockTransformer())
+      .appendStorage(new MockStorage())
+      .create();
+
+    // 検証
+    expect(result).toBeInstanceOf(UniKvs);
+  });
+
+  test("トランスフォーマーとストレージを交互に追加できる", ({ expect }) => {
+    // 準備
+    const config = new UniKvsConfig(UniKvs);
+
+    // 実行
+    const result = config
+      .appendTransformer(new MockTransformer())
+      .appendTransformer(new MockTransformer())
+      .appendStorage(new MockStorage())
+      .appendTransformer(new MockTransformer())
+      .appendStorage(new MockStorage())
+      .appendTransformer(new MockTransformer())
+      .appendStorage(new MockStorage())
+      .create();
+
+    // 検証
+    expect(result).toBeInstanceOf(UniKvs);
+  });
 });

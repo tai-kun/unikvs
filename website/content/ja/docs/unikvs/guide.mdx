@@ -8,7 +8,7 @@ description: 設定ビルダー、ライフサイクル、各操作の挙動、A
 `UniKvs.config()` を呼び出すと設定ビルダーが返ります。次の順序で設定を積み上げ、`create()` で KVS クライアントを作成します。
 
 1. `setContext(context)` — 実行時コンテキストを設定します (省略可能)。
-2. `appendTransformer(transformer)` — トランスフォーマーを追加します (省略可能、複数追加可能)。
+2. `appendTransformer(transformer)` — トランスフォーマーを追加します (省略可能、複数追加可能、ストレージの登録後にも追加可能)。
 3. `appendStorage(storage)` — ストレージを追加します (必須、複数追加可能)。
 4. `create()` — クライアントを作成します。
 
@@ -24,16 +24,20 @@ const kvs = UniKvs.config<{
   .create();
 ```
 
-### 追加の順序に制約がある
+### ストレージごとの前段パイプライン
 
-トランスフォーマーはパイプラインの中継地点であり、ストレージは終端です。そのためストレージを登録した後にトランスフォーマーを追加することはできません。型の上では `appendStorage()` の戻り値に `appendTransformer()` が存在せず、実行時にもエラーになります。
-
-ストレージは複数回追加できます。2 回目以降の `appendStorage()` はファイナライザーインターフェースから呼び出します。
+各ストレージは、登録時点までに追加されたトランスフォーマーを前段パイプラインとして使います。
+トランスフォーマーとストレージは交互に追加でき、ストレージごとに異なるパイプラインを構成できます。
 
 ```ts multi-storage.ts
 const kvs = UniKvs.config<{ data: Value<Uint8Array> }>()
-  .appendStorage(new Memory())
-  .appendStorage(new Opfs(".cache")) // 2 個目以降
+  .appendTransformer(new Transformer1())
+  .appendTransformer(new Transformer2())
+  .appendStorage(new Storage1()) // Transformer1、Transformer2 を経由する
+  .appendTransformer(new Transformer3())
+  .appendStorage(new Storage2()) // Transformer1、Transformer2、Transformer3 を経由する
+  .appendTransformer(new Transformer4())
+  .appendStorage(new Storage3()) // Transformer1、Transformer2、Transformer3、Transformer4 を経由する
   .create();
 ```
 
@@ -98,21 +102,21 @@ await kvs.set({ key: "foo", value: bytes, signal });
 
 ### set()
 
-`set()` は値をエンコードしたうえで、登録されたすべてのストレージへ並列に書き込みます。
+`set()` はストレージごとの前段パイプラインで値をエンコードしたうえで、登録されたすべてのストレージへ並列に書き込みます。
 
-書き込む値として `ReadableStream` を渡すと、ストリームのまま各トランスフォーマーのエンコードストリームを通過し、複数のストレージがある場合はストリームが分岐 (tee) されてそれぞれへ流し込まれます。
+書き込む値として `ReadableStream` を渡すと、ストリームのまま各ストレージの前段パイプラインのエンコードストリームを通過し、複数のストレージがある場合はストリームが分岐 (tee) されてそれぞれへ流し込まれます。
 
 一部のストレージで書き込みが失敗した場合、成功したストレージには `onOtherWriteError()` フックが通知され、必要に応じてロールバックできます。そのうえで失敗内容を集約した `PluginOperationAggregateError` が投げられます。
 
 ### get()
 
-`get()` は登録順にストレージを探索し、最初にキーが見つかったストレージからデータを読み取り、トランスフォーマーを逆順に適用してデコードします。
+`get()` は登録順にストレージを探索し、最初にキーが見つかったストレージからデータを読み取り、そのストレージの前段パイプラインのトランスフォーマーを逆順に適用してデコードします。
 
 どのストレージにも存在しない場合は [`KeyNotFoundError`](/ja/docs/unikvs/errors) が投げられます。
 
 ### stream()
 
-`stream()` は `get()` と同じ探索順序でデータを見つけ、読み取り専用の [`ValueStream`](/ja/docs/unikvs/types) を返します。ストリームの途中でトランスフォーマーのデコードストリームが連結されるため、大きなデータでも全体をメモリーに載せずに処理できます。
+`stream()` は `get()` と同じ探索順序でデータを見つけ、読み取り専用の [`ValueStream`](/ja/docs/unikvs/types) を返します。ストリームの途中で、見つかったストレージの前段パイプラインのデコードストリームが連結されるため、大きなデータでも全体をメモリーに載せずに処理できます。
 
 ```ts stream-read.ts
 const valueStream = await kvs.stream("logs");

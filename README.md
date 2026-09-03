@@ -54,12 +54,40 @@ flowchart LR
 1. **トランスフォーマー (Transformer)** — データのエンコード・デコードを透過的に行います。
 2. **ストレージ (Storage)** — データの永続化先です。複数のストレージを指定すると、すべてのストレージに並列で書き込まれます。
 
+各ストレージは、登録時点までに追加されたトランスフォーマーを前段パイプラインとして使います。
+そのためトランスフォーマーとストレージを交互に追加すると、ストレージごとに異なるパイプラインを構成できます。
+
+```typescript
+const kvs = UniKvs.config()
+  .appendTransformer(new Transformer1())
+  .appendTransformer(new Transformer2())
+  .appendStorage(new Storage1())
+  .appendTransformer(new Transformer3())
+  .appendStorage(new Storage2())
+  .appendTransformer(new Transformer4())
+  .appendStorage(new Storage3())
+  .create();
+```
+
+```mermaid
+flowchart LR
+  Input --> Transformer1
+  Transformer1 --> Transformer2
+  Transformer2 --> Storage1
+  Transformer2 --> Transformer3
+  Transformer3 --> Storage2
+  Transformer3 --> Transformer4
+  Transformer4 --> Storage3
+```
+
+読み取り時は、キーが見つかったストレージの前段パイプラインを逆順に適用してデコードします。
+
 ### 設定ビルダー
 
 `UniKvs.config()` でビルダーを作成し、以下の順序で設定します。
 
 1. `setContext(context)` — 実行時コンテキストを設定します（省略可能）。
-2. `appendTransformer(transformer)` — トランスフォーマーを追加します（省略可能）。
+2. `appendTransformer(transformer)` — トランスフォーマーを追加します（省略可能、ストレージの登録後にも追加可能）。
 3. `appendStorage(storage)` — ストレージを追加します（必須、複数追加可能）。
 4. `create()` — KVS クライアントを作成します。
 

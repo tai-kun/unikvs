@@ -648,24 +648,3 @@ setErrorMessage(
   "UniKvs を使用するためには最低 1 つのストレージが必要です",
   "ja",
 );
-
-// -------------------------------------------------------------------------------------------------
-
-/**
- * ストレージが登録された後にトランスフォーマーを追加しようとした場合に投げられるエラーです。
- */
-export class TransformerRegistrationError extends ErrorBase<undefined> {
-  static {
-    this.prototype.name = "UniKvsTransformerRegistrationError";
-  }
-
-  public constructor(options?: ErrorOptions) {
-    super("Cannot add transformers after storage has already been registered", options);
-  }
-}
-
-setErrorMessage(
-  TransformerRegistrationError,
-  "ストレージが登録された後にトランスフォーマーを追加することはできません",
-  "ja",
-);

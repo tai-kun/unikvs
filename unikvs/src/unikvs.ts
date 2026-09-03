@@ -391,6 +391,21 @@ type Connection = {
 };
 
 /**
+ * 永続化先ストレージと、その前段パイプラインであるトランスフォーマー群の組み合わせです。
+ */
+export type UniKvsDestination = {
+  /**
+   * データの永続化先となるストレージです。
+   */
+  readonly storage: UniKvsStorage;
+
+  /**
+   * このストレージ専用の前段パイプラインです。登録順に保持します。
+   */
+  readonly transformers: readonly UniKvsTransformer[];
+};
+
+/**
  * UniKvs メインクラスです。
  *
  * 複数のストレージとトランスフォーマーを統合して KVS 操作を提供します。
@@ -442,12 +457,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #context: Readonly<Context>;
 
   /**
-   * データの永続化先となるストレージのリストです。
+   * データの永続化先となるストレージと前段パイプラインのリストです。
    */
-  readonly #destinations: readonly [UniKvsStorage, ...UniKvsStorage[]];
+  readonly #destinations: readonly [UniKvsDestination, ...UniKvsDestination[]];
 
   /**
-   * データの変換を行うトランスフォーマーのリストです。
+   * データの変換を行うトランスフォーマーのリストです。open/close の管理用に全件を保持します。
    */
   readonly #transformers: readonly UniKvsTransformer[];
 
@@ -456,12 +471,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    *
    * @internal UniKvs の設定ビルダー経由で使用します。
    * @param context コンテキストです。
-   * @param destinations ストレージのリストです。
+   * @param destinations ストレージと前段パイプラインのリストです。
    * @param transformers トランスフォーマーのリストです。
    */
   public constructor(
     context: Readonly<Context>,
-    destinations: readonly [UniKvsStorage, ...UniKvsStorage[]],
+    destinations: readonly [UniKvsDestination, ...UniKvsDestination[]],
     transformers: readonly UniKvsTransformer[],
   ) {
     this.#con = null;
@@ -517,7 +532,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const openFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
 
       // 各ストレージのオープン処理をリストに追加します。
-      for (const storage of this.#destinations) {
+      for (const { storage } of this.#destinations) {
         openFns.push([
           async () => {
             await storage.open(context, signal);
@@ -610,10 +625,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const closeFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
 
         // ストレージのクローズ処理を登録します。
-        for (const plugin of this.#destinations) {
+        for (const { storage } of this.#destinations) {
           closeFns.push([
             async () => {
-              await plugin.close(context, signal);
+              await storage.close(context, signal);
             },
             "storage",
           ]);
@@ -699,13 +714,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
           const disposeSignal = AbortSignal.timeout(10e3);
           await Promise.all(
-            [...this.#destinations, ...this.#transformers].map(async (plugin) => {
-              try {
-                await plugin.close(context, disposeSignal);
-              } catch (reason) {
-                logger.error`Failed to close plugin after close failure: ${reason}`;
-              }
-            }),
+            [...this.#destinations.map((dest) => dest.storage), ...this.#transformers].map(
+              async (plugin) => {
+                try {
+                  await plugin.close(context, disposeSignal);
+                } catch (reason) {
+                  logger.error`Failed to close plugin after close failure: ${reason}`;
+                }
+              },
+            ),
           );
         }
 
@@ -782,23 +799,54 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       const errors: { reason: unknown }[] = [];
-      const errorStorageSet = new Set<UniKvsStorage>();
+      const errorStorageSet = new Set<UniKvsDestination>();
       if (value instanceof ReadableStream) {
-        // 各トランスフォーマーを通してデータをエンコードストリームへ変換します。
-        let data = value;
+        // 各ストレージ専用の前段パイプラインを通すため、tee で分岐しながらエンコードストリームを構築します。
+        // 最長の前段パイプラインを基準にし、ストレージの登録順に分岐点を作ります。
+        let longest: readonly UniKvsTransformer[] = [];
+        for (const dest of this.#destinations) {
+          if (dest.transformers.length > longest.length) {
+            longest = dest.transformers;
+          }
+        }
+        let cur: ReadableStream = value;
+        const branches: ReadableStream[] = [];
+        const built: ReadableStream[] = [];
         try {
-          for (const transformer of this.#transformers) {
-            const e = await transformer.getEncodable(context, signal);
-            data = data.pipeThrough(e);
+          let applied = 0;
+          for (let i = 0; i < this.#destinations.length; i++) {
+            const dest = this.#destinations[i]!;
+            while (applied < dest.transformers.length) {
+              const e = await longest[applied]!.getEncodable(context, signal);
+              cur = cur.pipeThrough(e);
+              applied++;
+            }
+            if (i === this.#destinations.length - 1) {
+              branches[i] = cur;
+            } else {
+              const [branch, rest] = cur.tee();
+              branches[i] = branch;
+              built.push(branch);
+              cur = rest;
+            }
           }
         } catch (ex) {
           // チェーンの構築中に失敗した場合、パイプが保持するソースストリームのリソースを解放するためにキャンセルします。
           // キャンセルしないとソースストリームはロックされたままリークします。
           try {
-            await data.cancel(ex);
+            await cur.cancel(ex);
           } catch {
             // キャンセルに失敗しても元の例外の伝播を優先します。
           }
+          await Promise.all(
+            built.map(async (branch) => {
+              try {
+                await branch.cancel(ex);
+              } catch {
+                // キャンセルに失敗しても元の例外の伝播を優先します。
+              }
+            }),
+          );
 
           throw ex;
         }
@@ -806,30 +854,21 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const lock = await io.lock({ key, signal });
         try {
           await Promise.all(
-            this.#destinations.map(async (storage, i) => {
+            this.#destinations.map(async (dest, i) => {
               // tee ブランチはキャンセルされるまで健康なブランチの読み取り分のチャンクを保持し続けるため、失敗時に放棄したブランチを確実にキャンセルできるよう参照を保持します。
-              let branch: ReadableStream | null = null;
+              const branch = branches[i]!;
               try {
-                // 複数のストレージがある場合は、tee メソッドを使用してストリームを分岐させます。
-                let r = data;
-                if (i !== this.#destinations.length - 1) {
-                  [r, data] = data.tee();
-                }
-                branch = r;
-
-                const w = await storage.getWritable(context, signal, key);
-                await r.pipeTo(w, { signal });
+                const w = await dest.storage.getWritable(context, signal, key);
+                await branch.pipeTo(w, { signal });
               } catch (reason) {
-                if (branch !== null) {
-                  try {
-                    await branch.cancel(reason);
-                  } catch {
-                    // キャンセルに失敗してもエラー集約を優先します。
-                  }
+                try {
+                  await branch.cancel(reason);
+                } catch {
+                  // キャンセルに失敗してもエラー集約を優先します。
                 }
 
                 errors.push({ reason });
-                errorStorageSet.add(storage);
+                errorStorageSet.add(dest);
               }
             }),
           );
@@ -837,21 +876,28 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           lock.release();
         }
       } else {
-        // 登録されているトランスフォーマーを順番に適用してデータをエンコードします。
-        let data = value;
-        for (const transformer of this.#transformers) {
-          data = await transformer.encode(context, signal, data);
+        // 各ストレージ専用の前段パイプラインでデータをエンコードします。共有プレフィックスは使い回します。
+        let longest: readonly UniKvsTransformer[] = [];
+        for (const dest of this.#destinations) {
+          if (dest.transformers.length > longest.length) {
+            longest = dest.transformers;
+          }
         }
+        const prefix: unknown[] = [value];
+        for (const transformer of longest) {
+          prefix.push(await transformer.encode(context, signal, prefix[prefix.length - 1]));
+        }
+        const encoded = this.#destinations.map((dest) => prefix[dest.transformers.length]);
 
         const lock = await io.lock({ key, signal });
         try {
           await Promise.all(
-            this.#destinations.map(async (storage) => {
+            this.#destinations.map(async (dest, i) => {
               try {
-                await storage.write(context, signal, key, data);
+                await dest.storage.write(context, signal, key, encoded[i]);
               } catch (reason) {
                 errors.push({ reason });
-                errorStorageSet.add(storage);
+                errorStorageSet.add(dest);
               }
             }),
           );
@@ -870,13 +916,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         {
           const errors: unknown[] = [];
           await Promise.all(
-            this.#destinations.map(async (storage) => {
-              if (errorStorageSet.has(storage)) {
+            this.#destinations.map(async (dest) => {
+              if (errorStorageSet.has(dest)) {
                 return;
               }
 
               try {
-                await storage.onOtherWriteError(context, signal, key, error);
+                await dest.storage.onOtherWriteError(context, signal, key, error);
               } catch (ex) {
                 errors.push(ex);
               }
@@ -942,18 +988,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const NONE = {};
       let data: any = NONE;
+      let transformers: readonly UniKvsTransformer[] = [];
       const errors: { reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const storage of this.#destinations) {
+        for (const dest of this.#destinations) {
           try {
-            if (!(await storage.exists(context, signal, key))) {
+            if (!(await dest.storage.exists(context, signal, key))) {
               continue;
             }
-            data = await storage.read(context, signal, key);
+            data = await dest.storage.read(context, signal, key);
+            transformers = dest.transformers;
             break;
           } catch (ex) {
             if (signal.aborted) {
@@ -986,11 +1034,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new KeyNotFoundError(args);
       }
 
-      // トランスフォーマーを逆順に適用してデータをデコードします。
-      if (this.#transformers.length > 0) {
-        for (const transformer of this.#transformers.toReversed()) {
-          data = await transformer.decode(context, signal, data);
-        }
+      // 見つかったストレージ専用の前段パイプラインを逆順に適用してデータをデコードします。
+      for (const transformer of transformers.toReversed()) {
+        data = await transformer.decode(context, signal, data);
       }
 
       return data;
@@ -1047,19 +1093,21 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const NONE: any = {};
       let r: IReadableStream = NONE;
+      let transformers: readonly UniKvsTransformer[] = [];
       const errors: { reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const storage of this.#destinations) {
+        for (const dest of this.#destinations) {
           try {
-            if (!(await storage.exists(context, signal, key))) {
+            if (!(await dest.storage.exists(context, signal, key))) {
               continue;
             }
 
-            r = await storage.getReadable(context, signal, key);
+            r = await dest.storage.getReadable(context, signal, key);
+            transformers = dest.transformers;
             break;
           } catch (ex) {
             if (signal.aborted) {
@@ -1090,8 +1138,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           throw new KeyNotFoundError(args);
         }
 
-        // トランスフォーマーを逆順に適用し、デコード用トランスフォームを連結します。
-        for (const transformer of this.#transformers.toReversed()) {
+        // 見つかったストレージ専用の前段パイプラインを逆順に適用し、デコード用トランスフォームを連結します。
+        for (const transformer of transformers.toReversed()) {
           const d = await transformer.getDecodable(context, signal);
           r = r.pipeThrough(d);
         }
@@ -1188,7 +1236,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // いずれかのストレージに存在すれば true を返します。
         // あるストレージの存在確認に失敗しても、他のストレージで存在を確認できるようにフォールバックします。
         const errors: { reason: unknown }[] = [];
-        for (const storage of this.#destinations) {
+        for (const { storage } of this.#destinations) {
           try {
             if (await storage.exists(context, signal, key)) {
               return true;
@@ -1277,7 +1325,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
         const errors: { reason: unknown }[] = [];
         await Promise.all(
-          this.#destinations.map(async (storage) => {
+          this.#destinations.map(async ({ storage }) => {
             try {
               if (await storage.exists(context, signal, key)) {
                 await storage.delete(context, signal, key);
@@ -1333,7 +1381,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
         const errors: { reason: unknown }[] = [];
         await Promise.all(
-          this.#destinations.map(async (storage) => {
+          this.#destinations.map(async ({ storage }) => {
             try {
               await storage.clear(context, signal);
             } catch (reason) {

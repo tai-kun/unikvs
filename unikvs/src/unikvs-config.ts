@@ -11,7 +11,7 @@ import type {
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
 import type { ContextSource } from "./context.types.js";
-import { MissingStorageError, TransformerRegistrationError } from "./errors.js";
+import { MissingStorageError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
 
@@ -170,8 +170,9 @@ export interface IUniKvsConfigBuilder<
   setContext(context: ContextSource): this;
 
   /**
-   * ストレージをパイプラインの終端に追加します。
+   * ストレージをパイプラインに追加します。
    *
+   * 登録時点までに追加されたトランスフォーマーが、このストレージ専用の前段パイプラインになります。
    * ストレージが追加されると、設定はファイナライズ段階に移行します。
    *
    * @template TStorage 追加するストレージの型です。
@@ -200,7 +201,11 @@ export interface IUniKvsConfigBuilder<
       ? never
       : [$InferReadChunkOutput<TStorage>] extends [never]
         ? never
-        : TLastTransformerDecodeChunkInput
+        : TLastTransformerDecodeChunkInput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
   >;
 
   /**
@@ -258,10 +263,14 @@ export interface IUniKvsConfigBuilder<
  * UniKvs の設定を完了させるためのファイナライザーインターフェースです。
  *
  * @template TKeyValueMapping キーと値のマッピング型です。
- * @template TWriteDataInput ストレージへの書き込み入力データの型です。
- * @template TReadDataOutput ストレージからの読み込み出力データの型です。
+ * @template TWriteDataInput 最初に登録されたストレージへの書き込み入力データの型です。
+ * @template TReadDataOutput 最初に登録されたストレージからの読み込み出力データの型です。
  * @template TWriteChunkInput ストレージへの書き込みチャンクデータの型です。
  * @template TReadChunkOutput ストレージからの読み込みチャンクデータの型です。
+ * @template TLastTransformerDecodeDataInput 最後に適用されたトランスフォーマーのデコード入力データの型です。
+ * @template TLastTransformerEncodeDataOutput 最後に適用されたトランスフォーマーのエンコード出力データの型です。
+ * @template TLastTransformerDecodeChunkInput 最後に適用されたトランスフォーマーのデコード入力チャンクデータの型です。
+ * @template TLastTransformerEncodeChunkOutput 最後に適用されたトランスフォーマーのエンコード出力チャンクデータの型です。
  */
 export interface IUniKvsConfigFinalizer<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
@@ -269,6 +278,10 @@ export interface IUniKvsConfigFinalizer<
   TReadDataOutput = any,
   TWriteChunkInput = any,
   TReadChunkOutput = any,
+  TLastTransformerDecodeDataInput = TReadDataOutput,
+  TLastTransformerEncodeDataOutput = TWriteDataInput,
+  TLastTransformerDecodeChunkInput = TReadChunkOutput,
+  TLastTransformerEncodeChunkOutput = TWriteChunkInput,
 > {
   /**
    * 設定に基づいて UniKvs インスタンスを作成します。
@@ -288,16 +301,18 @@ export interface IUniKvsConfigFinalizer<
   /**
    * 追加のストレージを登録します。UniKvs は複数のストレージへのマルチキャスト書き込みをサポートします。
    *
+   * 登録時点までに追加されたトランスフォーマーが、このストレージ専用の前段パイプラインになります。
+   *
    * @template TStorage 追加するストレージの型です。
    * @param storage ストレージのインスタンスです。
    * @returns ファイナライザーインターフェースを返します。
    */
   appendStorage<
     TStorage extends IStorage<
-      [TWriteDataInput] extends [never] ? any : TWriteDataInput,
-      [TReadDataOutput] extends [never] ? any : TReadDataOutput,
-      [TWriteChunkInput] extends [never] ? any : TWriteChunkInput,
-      [TReadChunkOutput] extends [never] ? any : TReadChunkOutput
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
     >,
   >(
     storage: TStorage,
@@ -314,14 +329,52 @@ export interface IUniKvsConfigFinalizer<
       ? never
       : [$InferReadChunkOutput<TStorage>] extends [never]
         ? never
-        : TReadChunkOutput
+        : TReadChunkOutput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
+  >;
+
+  /**
+   * トランスフォーマーをパイプラインに追加します。
+   *
+   * ストレージ登録後に追加されたトランスフォーマーは、それ以降に登録されるストレージの前段パイプラインになります。
+   *
+   * @template TTransformer 追加するトランスフォーマーの型です。
+   * @param transformer トランスフォーマーのインスタンスです。
+   * @returns 新しい型情報を持つファイナライザーを返します。
+   */
+  appendTransformer<
+    TTransformer extends ITransformer<
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      any,
+      any,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      any,
+      any,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+    >,
+  >(
+    transformer: TTransformer,
+  ): IUniKvsConfigFinalizer<
+    TKeyValueMapping,
+    TWriteDataInput,
+    TReadDataOutput,
+    TWriteChunkInput,
+    TReadChunkOutput,
+    $InferDecodeDataInput<TTransformer>,
+    $InferEncodeDataOutput<TTransformer>,
+    $InferDecodeChunkInput<TTransformer>,
+    $InferEncodeChunkOutput<TTransformer>
   >;
 }
 
 /**
  * UniKvs の構成を管理する設定クラスです。
  *
- * ビルダーパターンを用いて、コンテキスト、トランスフォーマー、ストレージの順で設定を積み上げます。
+ * トランスフォーマーとストレージを登録順に積み上げ、各ストレージは登録時点までのトランスフォーマーを前段パイプラインにします。
  */
 export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfigFinalizer {
   /**
@@ -335,12 +388,12 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   #context: Context;
 
   /**
-   * データの永続化先となるストレージのリストです。
+   * データの永続化先となるストレージのリストです。各ストレージは登録時点のトランスフォーマー数を保持します。
    */
-  readonly #destinations: IStorage[];
+  readonly #destinations: { readonly storage: IStorage; readonly transformerCount: number }[];
 
   /**
-   * データを変換するためのトランスフォーマーのリストです。
+   * データを変換するためのトランスフォーマーのリストです。登録順に保持します。
    */
   readonly #transformers: ITransformer[];
 
@@ -363,21 +416,20 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * @throws ストレージが一つも登録されていない場合にエラーを投げます。
    */
   public create(): UniKvs {
-    // 登録されたストレージから先頭の要素を取得します。
-    const [dest, ...destinations] = this.#destinations.map((io) => new UniKvsStorage(io));
+    const transformers = this.#transformers.map((tf) => new UniKvsTransformer(tf));
+
+    const [first, ...rest] = this.#destinations.map(({ storage, transformerCount }) => ({
+      storage: new UniKvsStorage(storage),
+      transformers: transformers.slice(0, transformerCount),
+    }));
 
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
-    if (!dest) {
+    if (!first) {
       throw new MissingStorageError();
     }
 
     // コンテキストの参照を切り離すために浅いコピーを作成して UniKvs を初期化します。
-    // トランスフォーマーの配列もスライスしてコピーを渡し、内部状態の安全性を確保します。
-    return new this.#UniKvs(
-      this.#context,
-      [dest, ...destinations],
-      this.#transformers.map((tf) => new UniKvsTransformer(tf)),
-    );
+    return new this.#UniKvs(this.#context, [first, ...rest], transformers);
   }
 
   /**
@@ -393,32 +445,24 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   /**
-   * ストレージを登録リストに追加します。
+   * ストレージを登録リストに追加します。登録時点までのトランスフォーマーが前段パイプラインになります。
    *
    * @param storage 追加するストレージインスタンスです。
    * @returns ファイナライザーとして自身を返します。
    */
-  public appendStorage(storage: IStorage): IUniKvsConfigFinalizer {
-    this.#destinations.push(storage);
+  public appendStorage(storage: IStorage): this {
+    this.#destinations.push({ storage, transformerCount: this.#transformers.length });
 
     return this;
   }
 
   /**
-   * トランスフォーマーを変換パイプラインに追加します。
-   *
-   * ストレージが登録された後には追加できない制約があります。
+   * トランスフォーマーを変換パイプラインに追加します。以降に登録されるストレージの前段になります。
    *
    * @param transformer 追加するトランスフォーマーインスタンスです。
-   * @returns ビルダーとして自身を返します。
-   * @throws すでにストレージが登録されている状態で呼び出された場合にエラーを投げます。
+   * @returns 自身を返します。
    */
-  public appendTransformer(transformer: ITransformer): IUniKvsConfigBuilder {
-    // パイプラインの順序を守るため、終端であるストレージが登録済みでないか確認します。
-    if (this.#destinations.length > 0) {
-      throw new TransformerRegistrationError();
-    }
-
+  public appendTransformer(transformer: ITransformer): this {
     this.#transformers.push(transformer);
 
     return this;

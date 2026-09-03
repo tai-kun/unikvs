@@ -21,14 +21,14 @@ static config<TKeyValueMapping extends KeyValueMapping>(): IUniKvsConfigBuilder<
 
 戻り値のビルダーには次のメソッドがあります。
 
-| メソッド                 | 戻り値                     | 説明                                                                       |
-| ------------------------ | -------------------------- | -------------------------------------------------------------------------- |
-| `setContext(context)`    | `this`                     | 基本の実行時コンテキストを設定します。既存のコンテキストは上書きされます。 |
-| `appendTransformer(t)`   | ビルダー                   | トランスフォーマーをパイプラインに追加します。                             |
-| `appendStorage(storage)` | ファイナライザー           | ストレージを追加します。呼び出し後は `appendTransformer()` を呼べません。  |
-| `create()`               | `UniKvs<TKeyValueMapping>` | クライアントを作成します。ストレージ未登録の場合はエラーになります。       |
+| メソッド                 | 戻り値                     | 説明                                                                                     |
+| ------------------------ | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `setContext(context)`    | `this`                     | 基本の実行時コンテキストを設定します。既存のコンテキストは上書きされます。               |
+| `appendTransformer(t)`   | ビルダー                   | トランスフォーマーをパイプラインに追加します。以降に登録するストレージの前段になります。 |
+| `appendStorage(storage)` | ファイナライザー           | ストレージを追加します。登録時点までのトランスフォーマーが前段パイプラインになります。   |
+| `create()`               | `UniKvs<TKeyValueMapping>` | クライアントを作成します。ストレージ未登録の場合はエラーになります。                     |
 
-ファイナライザー (2 回目以降の `appendStorage()` の戻り値) は `create()`、`setContext()`、`appendStorage()` のみを持ちます。
+ファイナライザー (2 回目以降の `appendStorage()` の戻り値) は `create()`、`setContext()`、`appendStorage()`、`appendTransformer()` を持ちます。`appendTransformer()` で追加したトランスフォーマーは、それ以降に登録するストレージの前段になります。
 
 ## UniKvs クラス
 

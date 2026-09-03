@@ -1132,6 +1132,166 @@ describe("UniKvs - トランスフォーマー連携", () => {
   });
 });
 
+describe("UniKvs - ストレージ間のトランスフォーマー", () => {
+  test("set すると各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
+    class Append implements ITransformer {
+      readonly name: string;
+      isOpen = true;
+      readonly tag: string;
+      constructor(tag: string) {
+        this.tag = tag;
+        this.name = tag;
+      }
+      encode(args: ITransformer.EncodeArgs): string {
+        return `${String(args.data)}${this.tag}`;
+      }
+      decode(args: ITransformer.DecodeArgs): string {
+        const s = String(args.data);
+        return s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+      }
+    }
+
+    // 準備
+    const storage1 = new Memory();
+    const storage2 = new Memory();
+    const storage3 = new Memory();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .appendTransformer(new Append("1"))
+      .appendTransformer(new Append("2"))
+      .appendStorage(storage1)
+      .appendTransformer(new Append("3"))
+      .appendStorage(storage2)
+      .appendTransformer(new Append("4"))
+      .appendStorage(storage3)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("foo", "x");
+
+    // 検証
+    expect(mapOf(storage1).get("foo")).toBe("x12");
+    expect(mapOf(storage2).get("foo")).toBe("x123");
+    expect(mapOf(storage3).get("foo")).toBe("x1234");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("get はヒットしたストレージの専用パイプラインでデコードする", async ({ expect }) => {
+    class Append implements ITransformer {
+      readonly name: string;
+      isOpen = true;
+      readonly tag: string;
+      constructor(tag: string) {
+        this.tag = tag;
+        this.name = tag;
+      }
+      encode(args: ITransformer.EncodeArgs): string {
+        return `${String(args.data)}${this.tag}`;
+      }
+      decode(args: ITransformer.DecodeArgs): string {
+        const s = String(args.data);
+        return s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+      }
+    }
+
+    // 準備
+    const storage1 = new Memory();
+    const storage2 = new Memory();
+    const storage3 = new Memory();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .appendTransformer(new Append("1"))
+      .appendTransformer(new Append("2"))
+      .appendStorage(storage1)
+      .appendTransformer(new Append("3"))
+      .appendStorage(storage2)
+      .appendTransformer(new Append("4"))
+      .appendStorage(storage3)
+      .create();
+    await kvs.open();
+    await kvs.set("foo", "x");
+
+    // 実行と検証
+    expect(await kvs.get("foo")).toBe("x");
+    mapOf(storage1).delete("foo");
+    expect(await kvs.get("foo")).toBe("x");
+    mapOf(storage2).delete("foo");
+    expect(await kvs.get("foo")).toBe("x");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("stream も各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
+    class Suffix implements ITransformer {
+      readonly name: string;
+      isOpen = true;
+      readonly tag: number;
+      constructor(tag: number) {
+        this.tag = tag;
+        this.name = `suffix-${tag}`;
+      }
+      encode(args: ITransformer.EncodeArgs): Uint8Array {
+        const data = args.data as Uint8Array;
+        const out = new Uint8Array(data.byteLength + 1);
+        out.set(data, 0);
+        out[data.byteLength] = this.tag;
+        return out;
+      }
+      decode(args: ITransformer.DecodeArgs): Uint8Array {
+        const data = args.data as Uint8Array;
+        return data[data.byteLength - 1] === this.tag ? data.slice(0, -1) : data;
+      }
+      getEncodable(): TransformStream<Uint8Array, Uint8Array> {
+        const tag = this.tag;
+        return new TransformStream({
+          transform(chunk, controller) {
+            const out = new Uint8Array(chunk.byteLength + 1);
+            out.set(chunk, 0);
+            out[chunk.byteLength] = tag;
+            controller.enqueue(out);
+          },
+        });
+      }
+      getDecodable(): TransformStream<Uint8Array, Uint8Array> {
+        const tag = this.tag;
+        return new TransformStream({
+          transform(chunk, controller) {
+            controller.enqueue(chunk[chunk.byteLength - 1] === tag ? chunk.slice(0, -1) : chunk);
+          },
+        });
+      }
+    }
+
+    // 準備
+    const storage1 = new Memory();
+    const storage2 = new Memory();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendTransformer(new Suffix(1))
+      .appendTransformer(new Suffix(2))
+      .appendStorage(storage1)
+      .appendTransformer(new Suffix(3))
+      .appendStorage(storage2)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("logs", streamOf([new Uint8Array([7])]));
+
+    // 検証
+    const stored1 = [...(mapOf(storage1).get("logs") as Uint8Array)];
+    const stored2 = [...(mapOf(storage2).get("logs") as Uint8Array)];
+    expect(stored1).toStrictEqual([7, 1, 2]);
+    expect(stored2).toStrictEqual([7, 1, 2, 3]);
+    const vs = await kvs.stream("logs");
+    await expect(collect(vs)).resolves.toStrictEqual(new Uint8Array([7]));
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
 describe("UniKvs - コンテキストとチェックサム", () => {
   // 配列形式の context もオブジェクト形式と同等に検証されること。
   test("チェックサム不一致 (配列形式 context) のストリーム書き込みは拒否される", async ({

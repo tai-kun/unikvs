@@ -16,7 +16,6 @@ import {
   DecodableStreamNotSupportedError,
   PluginOperationAggregateError,
   MissingStorageError,
-  TransformerRegistrationError,
 } from "../src/errors.js";
 
 describe("InvalidUsageErrorBase", () => {
@@ -194,14 +193,5 @@ describe("MissingStorageError", () => {
     expect(() => {
       throw new MissingStorageError();
     }).toThrow(/At least one storage is required/);
-  });
-});
-
-describe("TransformerRegistrationError", () => {
-  test("エラーメッセージがトランスフォーマー追加不可を伝える", ({ expect }) => {
-    // 実行と検証
-    expect(() => {
-      throw new TransformerRegistrationError();
-    }).toThrow(/Cannot add transformers after storage/);
   });
 });

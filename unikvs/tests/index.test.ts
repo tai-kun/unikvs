@@ -15,7 +15,6 @@ import {
   DecodableStreamNotSupportedError,
   PluginOperationAggregateError,
   MissingStorageError,
-  TransformerRegistrationError,
 } from "../src/errors.js";
 import * as index from "../src/index.js";
 import UniKvsConfig from "../src/unikvs-config.js";
@@ -45,6 +44,5 @@ describe("index のエクスポート", () => {
     expect(index.DecodableStreamNotSupportedError).toBe(DecodableStreamNotSupportedError);
     expect(index.PluginOperationAggregateError).toBe(PluginOperationAggregateError);
     expect(index.MissingStorageError).toBe(MissingStorageError);
-    expect(index.TransformerRegistrationError).toBe(TransformerRegistrationError);
   });
 });
