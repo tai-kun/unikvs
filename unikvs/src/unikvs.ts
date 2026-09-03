@@ -3,7 +3,7 @@ import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import logger from "./_logger.js";
-import mergeVars from "./_merge-vars.js";
+import mergeVariables from "./_merge-variables.js";
 import UniKvsStorage from "./_storage.js";
 import toValueStream from "./_to-value-stream.js";
 import UniKvsTransformer from "./_transformer.js";
@@ -75,7 +75,7 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 const VariablesKeySchema = v.string();
 
 // 配列形式の vars も正当な入力であるため、record スキーマより先に判定する必要があります。
-// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeVars での配列としてのマージが行われません。
+// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeVariables での配列としてのマージが行われません。
 const VariablesSourceSchema = v.union([
   v.array(v.tuple([VariablesKeySchema, v.unknown()])),
   v.record(v.any(), v.unknown()),
@@ -514,7 +514,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const ac = new AbortController();
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "open";
 
     signal.throwIfAborted();
@@ -681,7 +681,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const [options = {}] = v.parseInput(CloseArgsSchema, args);
       const { signal = AbortSignal.timeout(10e3), vars: varsOption } = options;
 
-      const vars = mergeVars(this.#vars, varsOption);
+      const vars = mergeVariables(this.#vars, varsOption);
       vars["unikvs:action"] = "close";
 
       if (this.#con === null) {
@@ -787,7 +787,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "set";
     vars["unikvs:key"] = key;
 
@@ -975,7 +975,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "get";
     vars["unikvs:key"] = key;
 
@@ -1080,7 +1080,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "stream";
     vars["unikvs:key"] = key;
 
@@ -1220,7 +1220,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "has";
     vars["unikvs:key"] = key;
 
@@ -1308,7 +1308,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "delete";
     vars["unikvs:key"] = key;
 
@@ -1365,7 +1365,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVars(this.#vars, varsOption);
+    const vars = mergeVariables(this.#vars, varsOption);
     vars["unikvs:action"] = "clear";
 
     const lock = await asyncmux(this, signal);

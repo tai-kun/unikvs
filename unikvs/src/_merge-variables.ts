@@ -11,7 +11,7 @@ import type { VariablesSource } from "./variables.types.js";
  * @param b 結合する読み取り専用の Variables、または VariablesSource、あるいは undefined です。
  * @returns 結合された新しい Variables オブジェクトです。
  */
-export default function mergeVars(
+export default function mergeVariables(
   a: Readonly<Variables>,
   b: Readonly<Variables> | VariablesSource | undefined,
 ): Variables {

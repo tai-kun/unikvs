@@ -1,15 +1,15 @@
 import { describe, test } from "vitest";
 
-import mergeVars from "../src/_merge-vars.js";
+import mergeVariables from "../src/_merge-vars.js";
 
-describe("mergeVars", () => {
+describe("mergeVariables", () => {
   test("2 つのオブジェクトをマージする", ({ expect }) => {
     // 準備
     const a = { x: 1, y: 2 };
     const b = { y: 3, z: 4 };
 
     // 実行
-    const result = mergeVars(a, b);
+    const result = mergeVariables(a, b);
 
     // 検証
     expect(result).toStrictEqual({ x: 1, y: 3, z: 4 });
@@ -20,7 +20,7 @@ describe("mergeVars", () => {
     const a = { x: 1 };
 
     // 実行
-    const result = mergeVars(a, undefined);
+    const result = mergeVariables(a, undefined);
 
     // 検証
     expect(result).toStrictEqual({ x: 1 });
@@ -35,7 +35,7 @@ describe("mergeVars", () => {
     ] as readonly [string, unknown][];
 
     // 実行
-    const result = mergeVars(a, b);
+    const result = mergeVariables(a, b);
 
     // 検証
     expect(result).toStrictEqual({ x: 1, y: 2, z: 3 });
@@ -47,7 +47,7 @@ describe("mergeVars", () => {
     const b = { y: 2 };
 
     // 実行
-    const result = mergeVars(a, b);
+    const result = mergeVariables(a, b);
 
     // 検証
     expect(a).toStrictEqual({ x: 1 });
