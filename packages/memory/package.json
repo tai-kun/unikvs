@@ -36,12 +36,12 @@
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.13.3",
     "@types/type-name": "1.0.32",
-    "@vitest/browser": "4.1.10",
-    "@vitest/browser-playwright": "4.1.10",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
     "npm-check-updates": "20.0.2",
     "playwright": "1.62.1",
-    "vite": "8.2.1",
-    "vitest": "4.1.10"
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "@logtape/logtape": "2.0.0"

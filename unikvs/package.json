@@ -31,7 +31,7 @@
     "@tai-kun/valibot-extra-lab": "0.0.5",
     "@unikvs/core": "workspace:*",
     "abort-signal-utils": "0.0.3",
-    "asyncmux": "0.0.8",
+    "asyncmux": "0.0.9",
     "call-fn-once": "0.0.6",
     "try-capture-stack-trace": "0.0.3"
   },
@@ -45,12 +45,12 @@
     "@unikvs/memory": "workspace:*",
     "@unikvs/opfs": "workspace:*",
     "@unikvs/utils": "workspace:*",
-    "@vitest/browser": "4.1.10",
-    "@vitest/browser-playwright": "4.1.10",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
     "npm-check-updates": "20.0.2",
     "playwright": "1.62.1",
-    "vite": "8.2.1",
-    "vitest": "4.1.10"
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
   },
   "peerDependencies": {
     "@logtape/logtape": "2.0.0",
