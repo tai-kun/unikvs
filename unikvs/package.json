@@ -31,7 +31,7 @@
     "@tai-kun/valibot-extra-lab": "0.0.5",
     "@unikvs/core": "workspace:*",
     "abort-signal-utils": "0.0.3",
-    "asyncmux": "0.0.9",
+    "asyncmux": "0.0.10",
     "call-fn-once": "0.0.6",
     "try-capture-stack-trace": "0.0.3"
   },
