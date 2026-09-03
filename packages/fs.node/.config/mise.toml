@@ -25,10 +25,10 @@ run = [
 ]
 
 [tasks.format]
-run = "set -e; cp .config/.oxfmtrc.json .tmp-oxfmtrc.json; trap 'rm -f .tmp-oxfmtrc.json' EXIT; npx oxfmt --config .tmp-oxfmtrc.json"
+run = "set -e; cp ./.config/.oxfmtrc.json ./.tmp-oxfmtrc.json; trap 'rm -f ./.tmp-oxfmtrc.json' EXIT; npx oxfmt --config ./.tmp-oxfmtrc.json"
 
 [tasks.lint]
-run = "set -e; cp .config/.oxlintrc.json .tmp-oxlintrc.json; trap 'rm -f .tmp-oxlintrc.json' EXIT; npx oxlint --config .tmp-oxlintrc.json"
+run = "set -e; cp ./.config/.oxlintrc.json ./.tmp-oxlintrc.json; trap 'rm -f ./.tmp-oxlintrc.json' EXIT; npx oxlint --config ./.tmp-oxlintrc.json"
 
 [tasks.update]
 run = [
