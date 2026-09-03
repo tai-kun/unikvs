@@ -6,7 +6,7 @@ import type { PlainValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
 describe("UniKvs + Memory", () => {
-  test("set した値は参照共有される (ミューテーションが反映される)", async ({ expect }) => {
+  test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
       .appendStorage(new Memory())
@@ -19,8 +19,8 @@ describe("UniKvs + Memory", () => {
     arr[0] = 99;
     const got = await kvs.get("foo");
 
-    // 検証: コピーなら 1 のまま
-    expect(got[0]).toBe(99);
+    // 検証: Memory は structuredClone で複製するため 1 のまま
+    expect(got[0]).toBe(1);
 
     // 後片付け
     await kvs.close();
