@@ -3,6 +3,18 @@ import type { IStorage } from "@unikvs/core";
 import { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
 
 /**
+ * {@link Memory} の初期化オプションです。
+ */
+export type MemoryOptions = {
+  /**
+   * データの複製に使用する関数です。
+   *
+   * @default structuredClone
+   */
+  readonly clone?: (<T>(value: T) => T) | undefined;
+};
+
+/**
  * メモリーを永続化先として使用するストレージクラスです。
  *
  * アプリケーションの実行中のみデータを保持し、プロセス終了時に破棄されます。
@@ -20,13 +32,21 @@ export default class Memory implements IStorage {
   public readonly name: string;
 
   /**
+   * データの複製に使用する関数です。
+   */
+  private readonly clone: <T>(value: T) => T;
+
+  /**
    * Memory インスタンスを初期化します。
    *
    * 内部のマップを初期化し、常にオープン状態として動作します。
+   *
+   * @param options 初期化オプションです。
    */
-  public constructor() {
+  public constructor(options: MemoryOptions = {}) {
     this.name = "Memory";
     this.map = new Map();
+    this.clone = options.clone ?? ((v) => structuredClone(v));
   }
 
   /**
@@ -44,7 +64,7 @@ export default class Memory implements IStorage {
    */
   public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
     const { key, data } = args;
-    this.map.set(key, data);
+    this.map.set(key, this.clone(data));
   }
 
   /**
@@ -62,7 +82,7 @@ export default class Memory implements IStorage {
 
     const value = this.map.get(key);
 
-    return value;
+    return this.clone(value);
   }
 
   /**
@@ -120,7 +140,7 @@ export default class Memory implements IStorage {
           throw new InvalidChunkTypeError({ key, chunk });
         }
 
-        chunks.push(chunk);
+        chunks.push(this.clone(chunk));
       },
       close: () => {
         const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
@@ -164,7 +184,7 @@ export default class Memory implements IStorage {
           throw new InvalidChunkTypeError({ key, chunk: value });
         }
 
-        controller.enqueue(value as Uint8Array<ArrayBuffer>);
+        controller.enqueue(this.clone(value) as Uint8Array<ArrayBuffer>);
         controller.close();
       },
     });

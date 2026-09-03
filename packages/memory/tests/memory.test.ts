@@ -267,3 +267,70 @@ describe("境界値・特殊ケース", () => {
     expect(result?.[size - 1]).toBe(1);
   });
 });
+
+describe("データの隔離", () => {
+  test("書き込んだバッファを変更したとき、保存値は変わらない", ({ expect }) => {
+    // 準備
+    const storage = new Memory();
+    const source = new Uint8Array([1, 2, 3]);
+    storage.write({ key: "k1", data: source });
+
+    // 実行
+    source[0] = 99;
+
+    // 検証
+    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("読み取った値を変更したとき、保存値は変わらない", ({ expect }) => {
+    // 準備
+    const storage = new Memory();
+    storage.write({ key: "k1", data: new Uint8Array([1, 2, 3]) });
+
+    // 実行
+    storage.read({ key: "k1" })[0] = 99;
+
+    // 検証
+    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("ストリームで読み取ったチャンクを変更したとき、保存値は変わらない", async ({ expect }) => {
+    // 準備
+    const storage = new Memory();
+    storage.write({ key: "s1", data: new Uint8Array([1, 2, 3]) });
+    const reader = storage.getReadable({ key: "s1" }).getReader();
+
+    // 実行
+    const { value } = await reader.read();
+    value![0] = 99;
+    reader.releaseLock();
+
+    // 検証
+    expect(storage.read({ key: "s1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("入れ子の値を変更したとき、保存値は変わらない", ({ expect }) => {
+    // 準備
+    const storage = new Memory();
+    const source = { nested: { list: [1, 2, 3] } };
+    storage.write({ key: "k1", data: source });
+
+    // 実行
+    source.nested.list[0] = 99;
+
+    // 検証
+    expect(storage.read({ key: "k1" })).toStrictEqual({ nested: { list: [1, 2, 3] } });
+  });
+
+  test("clone に関数を指定したとき、その関数で複製する", ({ expect }) => {
+    // 準備
+    const storage = new Memory({ clone: <T>(value: T): T => value });
+    const source = new Uint8Array([1, 2, 3]);
+
+    // 実行
+    storage.write({ key: "k1", data: source });
+
+    // 検証
+    expect(storage.read({ key: "k1" })).toBe(source);
+  });
+});
