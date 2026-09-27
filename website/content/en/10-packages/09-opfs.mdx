@@ -1,0 +1,137 @@
+---
+title: "@unikvs/opfs — OPFS Storage"
+description: "Learn how to use the storage plugin that saves byte sequences to the browser's OPFS."
+---
+
+## Overview [#overview]
+
+`@unikvs/opfs` is a storage plugin that uses the browser's OPFS (Origin Private File System) as its persistence layer. It handles byte sequences (`Uint8Array<ArrayBuffer>`) only.<Badge variant="warning">Browser only</Badge>
+
+Per the implementation comments, it is intended to run in a browser environment (on the main thread or in a Web Worker).
+
+:::warning[About the runtime environment]
+OPFS availability depends on the runtime environment (browser type and version, settings, and so on). OPFS is commonly used with Secure Contexts and Workers, but check your browser's documentation for the exact requirements.
+:::
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/opfs
+```
+
+## Usage [#usage]
+
+The class is named `Opfs` and is available as both a default and a named export. In the implementation, the constructor arguments are defined as follows.
+
+<Steps>
+  <Step title="Create an instance">
+    ```ts
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    ```
+
+    The constructor argument `root` is typed `string | FileSystemDirectoryHandle` and defaults to `".unikvs"`. When a string is passed, it is treated as the root directory name inside OPFS; when a `FileSystemDirectoryHandle` is passed, that handle itself becomes the working directory. Passing a handle is treated as already open.
+  </Step>
+  <Step title="Open the storage">
+    Call `open()` before use to open the storage. Check the open state with `isOpen`. When combined with `UniKvs`, register it with `appendStorage` and then call `kvs.open()`. `kvs.open()` internally calls `Opfs.open()`.
+
+    ```ts
+    import { UniKvs } from "unikvs";
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    const kvs = UniKvs.config().appendStorage(storage).create();
+
+    await kvs.open();
+    // Read and write byte sequences.
+    await kvs.close();
+    ```
+  </Step>
+  <Step title="Read and write data">
+    When operating `Opfs` directly, use the `write`, `read`, `exists`, `delete`, and `clear` methods. All of them require `open()` first.
+
+    ```ts
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    await storage.open();
+
+    await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
+    const data = await storage.read({ key: "data.bin" });
+    const found = await storage.exists({ key: "data.bin" });
+    await storage.delete({ key: "data.bin" });
+    ```
+  </Step>
+</Steps>
+
+## File Layout [#layout]
+
+Keys are treated as file names and stored one-to-one directly under the specified root directory. No subdirectories are created from keys. Keys are validated with `assertValidFilename`, so invalid file names raise an error.
+
+When a string is passed to the constructor, the root directory name is normalized by the following rules.
+
+- Passing `""`, `"."`, or `"/"` is treated as an empty string, targeting the OPFS root directly.
+- Consecutive `/` characters are collapsed into one, and leading and trailing `/` characters are removed.
+- Each `/`-separated segment is validated with `assertValidDirname`.
+
+`open()` obtains the OPFS origin via `navigator.storage.getDirectory()` and creates or retrieves each level of the root name with `create: true`. `clear()` deletes each entry individually when using the OPFS root directly, or removes and recreates the directory when using a subdirectory.
+
+## Streams [#streams]
+
+`Opfs` supports both writable and readable streams.
+
+- `getWritable({ key })` returns a `WritableStream<Uint8Array<ArrayBuffer>>`. Internally it returns the stream obtained via `createWritable()` from the file handle as-is.
+- `getReadable({ key })` returns a `ReadableStream<Uint8Array<ArrayBuffer>>`. Internally it fetches the file and returns the result of `File.stream()`.
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+const writable = await storage.getWritable({ key: "large.bin" });
+const writer = writable.getWriter();
+await writer.write(new Uint8Array([1, 2, 3]));
+await writer.close();
+
+const readable = await storage.getReadable({ key: "large.bin" });
+await readable.cancel();
+```
+
+## Notes [#notes]
+
+Notes that can be determined from the implementation are as follows.
+
+- Operating with `read`, `write`, and others before calling `open()` causes a runtime error. Always open first.
+- If a `write` fails, changes are discarded via `abort`. Existing data is therefore never corrupted by a partial write.
+- `exists` returns `false` for missing keys. This is determined by catching a `DOMException` named `NotFoundError`. Other errors are rethrown.
+- Keys and root directory names are subject to file-name constraints. Invalid names raise a validation error.
+
+As general guidance, also note the following.
+
+:::note[About persistence and origins]
+- OPFS is a private file system isolated per origin. It is not a location users can see through normal file operations.
+- The persistence of stored data is subject to the browser's storage management (such as eviction under storage pressure). Back up important data separately as needed.
+- OPFS behavior may vary between browsers. Testing in your target browsers is recommended.
+:::
+
+## Examples [#examples]
+
+A minimal example using `Opfs` directly in the browser.
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+const key = "hello.bin";
+await storage.write({ key, data: new TextEncoder().encode("hello") });
+
+const loaded = await storage.read({ key });
+console.log(new TextDecoder().decode(loaded));
+console.log(await storage.exists({ key }));
+
+await storage.delete({ key });
+```

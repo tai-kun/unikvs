@@ -1,0 +1,108 @@
+---
+title: "Custom Plugins"
+description: "Explains how to implement Storage and Transformer and what to watch for."
+---
+
+## Plugin interface overview [#overview]
+
+Implement plugins following the `@unikvs/core` types. Storages handle data destinations, while Transformers handle transparent conversion.
+
+<Steps>
+  <Step title="Storages implement IStorage">
+    These are data destinations. Implement `write`, `read`, `exists`, `delete`, and `clear`.
+  </Step>
+  <Step title="Transformers implement ITransformer">
+    These are transparent conversions. Implement the encode/decode correspondence.
+  </Step>
+  <Step title="Add stream support as needed">
+    If stream support is required, additionally implement the separate input/output stream interfaces.
+  </Step>
+  <Step title="Errors extend ErrorBase">
+    Define messages that include a description, cause, and resolution.
+  </Step>
+</Steps>
+
+See the `@unikvs/core` package reference for detailed signatures.
+
+## Implementing Storage [#storage]
+
+The required points are as follows.
+
+1. Implement the exact semantics of `write`, `read`, `exists`, `delete`, and `clear`.
+2. Throw a key-not-found error for `read` and `delete` on missing keys.
+3. If a lifecycle is needed, implement `open`, `close`, and `isOpen`. Otherwise, treat the Storage as always open. Memory Storage is an always-open example.
+4. If stream writes are needed, add stream acquisition for writing and reading. Clarify how non-byte input is handled.
+5. If file names or keys have constraints, reuse the validation functions from `@unikvs/utils`.
+
+```ts
+import type { IStorage } from "@unikvs/core";
+
+export default class MyStorage implements IStorage {
+  public readonly name = "MyStorage";
+
+  public get isOpen(): boolean {
+    return true;
+  }
+
+  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+    // Implement the write logic
+  }
+
+  public read(args: Pick<IStorage.ReadArgs, "key">): unknown {
+    // Implement the read logic
+  }
+
+  public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
+    // Implement the existence check
+    return false;
+  }
+
+  public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
+    // Implement the delete logic
+  }
+
+  public clear(): void {
+    // Implement the clear logic
+  }
+}
+```
+
+The above is a structural example; follow the core type definitions for method arguments and return values.
+
+<Expandable title="Example plugin scaffold">
+<FileTree>
+
+- my-plugin/
+  - src/
+    - index.ts
+    - my-storage.ts
+    - errors.ts
+  - package.json
+  - tsconfig.json
+
+</FileTree>
+</Expandable>
+
+:::tip
+If keys or file names have constraints, reuse the validation functions from `@unikvs/utils` for error messages consistent with file-based Storages.
+:::
+
+## Implementing Transformers [#transformer]
+
+The required points are as follows.
+
+1. Define a clear encode/decode correspondence. Verify with unit tests that round-trips restore the original.
+2. Clarify whether stream conversion is supported. Throw the corresponding error when it is not supported.
+3. If extra information is needed, accept it via runtime variables (vars). The checksum hash specification is an example.
+4. If a lifecycle is needed, implement `open` and `close`.
+
+## Defining errors [#errors]
+
+Extend `ErrorBase` and define messages that include a description, cause, and resolution. Messages support i18n. The existing `InvalidFilenameError` and checksum mismatch errors are good references.
+
+## Testing [#testing]
+
+- As a round-trip test, verify that a stored value matches the retrieved value.
+- Check boundaries for missing keys, empty data, and large data.
+- If stream support exists, verify multi-chunk concatenation and behavior on interruption.
+- Verify behavior in multi-Storage configurations.

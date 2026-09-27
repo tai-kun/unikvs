@@ -1,0 +1,117 @@
+---
+title: "Streaming"
+description: "Explains how to store and read large data with streams."
+---
+
+## Choosing types [#select-types]
+
+Keys used with streams are defined with `StreamValue<T>` or `Value<T>`. Keys defined with `PlainValue<T>` cannot use `stream()`.
+
+```ts
+const kvs = UniKvs.config<{
+  logs: StreamValue<Uint8Array>;
+  blob: Value<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+```
+
+| Type | `set` | `get` | `stream` |
+| --- | --- | --- | --- |
+| `PlainValue<T>` | Supported | Supported | Not supported |
+| `StreamValue<T>` | Supports values or streams | Not supported | Supported |
+| `Value<T>` | Supports values or streams | Supported | Supported |
+
+## Writing [#write]
+
+You can pass either a plain value or a `ReadableStream`.
+
+<Steps>
+  <Step title="Save a single value">
+    Pass a plain value for small data.
+
+    ```ts
+    await kvs.set("logs", new Uint8Array([1, 2, 3]));
+    ```
+  </Step>
+  <Step title="Save with a stream">
+    Pass a `ReadableStream` to write large data incrementally.
+
+    ```ts
+    const src = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+        controller.enqueue(new Uint8Array([2]));
+        controller.close();
+      },
+    });
+    await kvs.set("logs", src);
+    ```
+  </Step>
+</Steps>
+
+## Reading [#read]
+
+`stream()` returns a `ValueStream`. Choose one of three patterns depending on your use case.
+
+<Tabs>
+  <Tab title="getReader">
+    Use this when you want fine-grained control over each chunk.
+
+    ```ts
+    const reader = (await kvs.stream("logs")).getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      console.log(value);
+    }
+    ```
+  </Tab>
+  <Tab title="for-await">
+    Use this when you want concise code.
+
+    ```ts
+    for await (const chunk of await kvs.stream("logs")) {
+      console.log(chunk);
+    }
+    ```
+  </Tab>
+  <Tab title="await-using">
+    Use this when you want automatic release of the read lock.
+
+    ```ts
+    await using (const valueStream = await kvs.stream("logs")) {
+      const reader = valueStream.getReader();
+      const { value } = await reader.read();
+      console.log(value);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+:::warning
+To release the read lock, dispose of streams when you are done with them. `await using` releases the lock automatically.
+:::
+
+## Notes by Storage [#storages]
+
+:::warning
+Memory Storage streams are implemented by concatenating chunks. They are not suitable for sequential processing of very large data.
+:::
+
+- Files, S3, and OPFS are suitable for streaming byte data. See each package reference for details.
+- IndexedDB supports storing arbitrary data, but check the implementation constraints for stream handling.
+- Some Transformers do not support stream conversion. See each package reference for compression and checksum support.
+
+## Cancellation [#cancellation]
+
+Long transfers can be interrupted with an `AbortSignal`.
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("logs", src, { signal: ac.signal });
+```

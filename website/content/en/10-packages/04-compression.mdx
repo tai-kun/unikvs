@@ -1,0 +1,192 @@
+---
+title: "@unikvs/compression — Compression Transformer"
+description: "Explains how to use the Transformer plugin that transparently compresses and decompresses byte sequences with gzip / deflate / deflate-raw."
+---
+
+## Overview [#overview]
+
+`@unikvs/compression` is a Transformer plugin that transparently compresses and decompresses byte sequences. <Badge>Transformer</Badge> It wraps the Web standard `CompressionStream` and `DecompressionStream` to fit the `ITransformer` interface.
+
+:::tip
+Because writes compress with `encode` and reads expand with `decode`, you can read and write the original byte sequences without thinking about compression.
+:::
+
+This transformer is always open, so no explicit `open` or `close` is needed. Also, `isOpen` always returns `true`, and `name` is always `"Compression"`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/compression
+```
+
+## Supported Formats [#formats]
+
+The formats you can specify in the constructor are represented by the `CompressionFormat` type. This type is limited to the string literals accepted by both the `CompressionStream` and `DecompressionStream` constructors. The three values confirmed by tests are as follows.
+
+| Format | Value | Characteristics |
+| --- | --- | --- |
+| gzip | `"gzip"` | A versatile format with a header and footer. |
+| deflate | `"deflate"` | A deflate format with a zlib wrapper. |
+| deflate-raw | `"deflate-raw"` | A raw deflate format with no wrapper. |
+
+A guide for choosing is as follows.
+
+<Tabs>
+  <Tab title="gzip">
+Choose `"gzip"` when you prioritize compatibility. It is a versatile format with a header and footer.
+
+```ts
+import { Compression } from "@unikvs/compression";
+
+const compression = new Compression("gzip");
+```
+  </Tab>
+  <Tab title="deflate">
+A deflate format with a zlib wrapper. If you have an agreement with another system, choose the format that matches it.
+
+```ts
+import { Compression } from "@unikvs/compression";
+
+const compression = new Compression("deflate");
+```
+  </Tab>
+  <Tab title="deflate-raw">
+A raw deflate format with no wrapper. If you have an agreement with another system, choose the format that matches it.
+
+```ts
+import { Compression } from "@unikvs/compression";
+
+const compression = new Compression("deflate-raw");
+```
+  </Tab>
+</Tabs>
+
+Mixing formats fails to decompress, so use a single format per KVS.
+
+If you specify a format the runtime does not support, a `TypeError` is thrown when constructing the `CompressionStream` or `DecompressionStream`.
+
+## Usage [#usage]
+
+The `Compression` class constructor takes exactly one compression format. There is no options object.
+
+```ts
+import { Compression } from "@unikvs/compression";
+
+const compression = new Compression("gzip");
+```
+
+Its main members are as follows.
+
+| Member | Summary |
+| --- | --- |
+| `new Compression(format)` | Initializes with the compression format to use. |
+| `name` | Always returns `"Compression"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Compresses a `Uint8Array<ArrayBuffer>` and returns a `Promise<Uint8Array<ArrayBuffer>>`. |
+| `decode({ data })` | Decompresses a compressed `Uint8Array<ArrayBuffer>` and returns a `Promise<Uint8Array<ArrayBuffer>>`. |
+| `getEncodable()` | Returns a `TransformStream` for compression. |
+| `getDecodable()` | Returns a `TransformStream` for decompression. |
+
+Register it with `UniKvs` via `appendTransformer`. The transformer becomes the upstream of subsequently registered storages.
+
+<Steps>
+  <Step title="Add the Transformer">
+Register `Compression` with `appendTransformer`.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import UniKvs from "unikvs";
+
+const builder = UniKvs.config()
+  .appendTransformer(new Compression("gzip"));
+```
+  </Step>
+  <Step title="Add a Storage">
+Register a storage with `appendStorage`. The transformer becomes the upstream of subsequently registered storages.
+
+```ts
+const builderWithStorage = builder.appendStorage(storage);
+```
+  </Step>
+  <Step title="Call create">
+Create a client with `create()`.
+
+```ts
+const kvs = builderWithStorage.create();
+```
+  </Step>
+  <Step title="Call open">
+Initialize with `open()`.
+
+```ts
+await kvs.open();
+```
+  </Step>
+  <Step title="Call set / get">
+Write with `set` and read with `get`. Written values are stored compressed and automatically decompressed on reads.
+
+```ts
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+```
+  </Step>
+</Steps>
+
+```ts
+import { Compression } from "@unikvs/compression";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(storage)
+  .create();
+```
+
+## Streams and Byte Sequences [#streams]
+
+`@unikvs/compression` supports both single values and streams.
+
+- Single values are converted with `encode` and `decode`. An empty `Uint8Array` or a byte sequence of about 1 MiB round-trips as is.
+- Stream values are converted with the `TransformStream` returned by `getEncodable` and `getDecodable`. Even if you stream multiple chunks of uneven sizes, compression followed by decompression restores the original byte sequence.
+
+The limitations are as follows.
+
+- Passing a byte sequence that is not compressed data to `decode` is rejected.
+- If the compression and decompression formats differ, it cannot be decompressed correctly. Round-trip with instances of the same format.
+- For data with no room for compression, such as random byte sequences, the compressed size may not shrink. Even in that case, decompression restores the original data.
+
+## Notes [#notes]
+
+The relationship between compression ratio and speed varies with the nature of the data. Generally, repetitive text tends to shrink well, while already compressed or random-like data tends to shrink poorly. Even when it does not shrink, round-trip accuracy is not impaired.
+
+:::warning
+When combining multiple Transformers, the result changes with the registration order. For example, when using it together with other Transformers such as Checksum, decide the registration order with an awareness of the order in which you want compression and verification to run. We recommend verifying a round-trip with small data before applying it to production data to confirm the order is as expected.
+:::
+
+## Examples [#examples]
+
+A minimal working example combined with the `Memory` storage is shown below. Written values are stored compressed and automatically decompressed on reads.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = new TextEncoder().encode(
+  "Repeat this text multiple times to ensure compression efficiency. ".repeat(100),
+);
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+console.log(output.length === input.length);
+
+await kvs.close();
+```

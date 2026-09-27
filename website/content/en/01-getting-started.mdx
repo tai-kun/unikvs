@@ -1,0 +1,109 @@
+---
+title: "Getting started"
+description: "The shortest path from installing unikvs to basic operations."
+---
+
+## Installation [#install]
+
+Install the `unikvs` package plus the Storage and Transformer packages you plan to use.
+
+<Tabs>
+  <Tab title="Try with memory">
+    ```package-install
+    npm i unikvs @unikvs/memory
+    ```
+  </Tab>
+  <Tab title="Save to files">
+    ```package-install
+    npm i unikvs @unikvs/fs.node @unikvs/compression
+    ```
+  </Tab>
+</Tabs>
+
+## Basic usage [#basic-usage]
+
+A minimal example using in-memory Storage. The steps are always the same: configure, create, open, operate, then close.
+
+<Steps>
+  <Step title="Create a builder">
+    Create a builder with `UniKvs.config()`. The type parameter is a mapping of keys to Values.
+
+    ```ts
+    import { UniKvs, type Value } from "unikvs";
+
+    const builder = UniKvs.config<{
+      foo: Value<Uint8Array>;
+    }>();
+    ```
+  </Step>
+  <Step title="Add a storage backend and create">
+    Add a storage backend with `appendStorage()`, then create the client with `create()`. Transformers can be omitted when you don't need them.
+
+    ```ts
+    import { Memory } from "@unikvs/memory";
+
+    const kvs = builder.appendStorage(new Memory()).create();
+    ```
+  </Step>
+  <Step title="Open and operate">
+    Initialize with `open()`, then use operations such as `set`, `get`, `has`, and `delete`.
+
+    ```ts
+    await kvs.open();
+
+    await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes);
+
+    console.log(await kvs.has("foo"));
+
+    await kvs.delete("foo");
+    ```
+  </Step>
+  <Step title="Close">
+    Call `close()` when you are done.
+
+    ```ts
+    await kvs.close();
+    ```
+  </Step>
+</Steps>
+
+:::tip
+`appendTransformer()` can be added either before or after `appendStorage()`. A Transformer added after a Storage is registered applies only to Storages registered after it. See the pipeline explanation in concepts for details.
+:::
+
+## Add a Transformer [#add-transformer]
+
+An example of transparent compression.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new Memory())
+  .create();
+```
+
+The `set` and `get` code stays the same, while compression on write and decompression on read happen automatically.
+
+:::warning
+Calling `create()` without any `appendStorage()` call throws a `MissingStorageError`. Registering at least one Storage is required.
+:::
+
+## Next steps [#next-steps]
+
+<CardGroup cols={2}>
+  <Card title="Concepts" href="./concepts" icon="book-open">
+    Understand the architecture and how Value types work.
+  </Card>
+  <Card title="Storage comparison" href="./reference/comparison" icon="database">
+    See how to choose a storage backend.
+  </Card>
+</CardGroup>

@@ -1,0 +1,152 @@
+---
+title: "@unikvs/s3.node — S3 Storage"
+description: "Learn how to use @unikvs/s3.node to store data in S3-compatible object storage from Node.js."
+---
+
+## Overview [#overview]
+
+`@unikvs/s3.node` is a Node.js-only storage plugin that saves byte arrays to S3-compatible object storage. It depends on AWS SDK for JavaScript v3, using `@aws-sdk/client-s3` for object operations and `Upload` from `@aws-sdk/lib-storage` for stream uploads.
+
+<Badge variant="warning">Node.js only</Badge>
+
+The only supported runtime is Node.js. It cannot be used in browsers.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/s3.node @aws-sdk/client-s3 @aws-sdk/lib-storage
+```
+
+In `package.json`, `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` are included as dependencies. The versions used follow the ranges specified in `package.json`.
+
+## Usage [#usage]
+
+The storage class is named `S3` and is provided as a named export.
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+```
+
+The constructor has the following signature.
+
+```ts
+new S3(bucket: string, config: S3ClientConfig = {})
+```
+
+| Argument | Type | Description |
+| ---- | -- | ---- |
+| `bucket` | `string` | The name of the bucket where data is stored. All operations use this bucket. |
+| `config` | `S3ClientConfig` | Settings passed to `S3Client`. Defaults to an empty object. Includes items such as the region and credentials. |
+
+There is no argument for specifying a prefix or for passing a pre-built `S3Client`. If you need key mapping or separate buckets, include it in the key on the caller side or create separate instances per bucket.
+
+:::note
+Credential resolution is delegated to the standard AWS SDK mechanisms. This package has no proprietary authentication options. You can pass `credentials`, `region`, and `endpoint` via `config`, or use any standard AWS SDK method such as environment variables or shared config files.
+:::
+
+The lifecycle is as follows. Immediately after instantiation, `isOpen` is `false`. Calling `open()` creates an internal `S3Client` and sets `isOpen` to `true`. Calling `close()` destroys the internal client and resets `isOpen` to `false`. The implemented `open()` and `close()` take no arguments.
+
+```ts
+import { UniKvs } from "unikvs";
+import { S3 } from "@unikvs/s3.node";
+
+const storage = new S3("my-bucket", {
+  region: "ap-northeast-1",
+});
+
+const kvs = UniKvs.config()
+  .appendStorage(storage)
+  .create();
+```
+
+:::warning
+Creating the bucket itself is not this package's responsibility. Create it beforehand via the AWS console or your S3-compatible storage tooling.
+:::
+
+## Object Layout [#layout]
+
+Keys map directly to object keys. No transformation such as prefixing or escaping is applied.
+
+| unikvs key | S3 object key |
+| ------------- | --------------------- |
+| `test.txt` | `test.txt` |
+| `folder/テスト #123.dat` | `folder/テスト #123.dat` |
+
+Single writes use `PutObjectCommand`, reads use `GetObjectCommand`, existence checks use `HeadObjectCommand`, and deletions use `DeleteObjectCommand`.
+
+`clear` deletes all objects in the bucket. No prefix filtering is applied. Internally it paginates with `ListObjectsV2Command` and deletes with `DeleteObjectsCommand`. Use a dedicated bucket for unikvs. If you share the bucket with other applications, their data will also be deleted.
+
+## Streams and Multipart [#multipart]
+
+A single `write` saves with `PutObjectCommand`, and a single `read` converts the `GetObjectCommand` result to a byte array with `transformToByteArray`.
+
+Writable streams use `Upload` from `@aws-sdk/lib-storage`, so large payloads benefit from multipart upload. Obtain one as follows.
+
+```ts
+const writable = storage.getWritable({ key, vars, signal });
+```
+
+The arguments are `vars`, `key`, and `signal`. The part size is read from `vars`. The `@unikvs/s3.node:partSize` key takes precedence, falling back to `@unikvs/s3:partSize` when undefined. Specify the value as a positive integer in bytes. When omitted, the `Upload` defaults apply.
+
+:::tip
+When writing large data, use a writable stream instead of a single `write`. It supports multipart upload via `Upload`, and when no part size is specified the `Upload` defaults apply.
+:::
+
+If `signal` is already aborted, it throws `StorageAbortedError` without starting the upload. If `signal` aborts during the write, the abort reason is forwarded to the internal `AbortController` and the upload is aborted. The stream's `close()` waits for the upload to complete, while `abort()` attempts to cancel the upload.
+
+Obtain a readable stream as follows.
+
+```ts
+const readable = await storage.getReadable({ key, signal });
+```
+
+Internally it sends a `GetObjectCommand` and converts the result to a `ReadableStream` with `transformToWebStream`. Large objects can be read in multiple chunks.
+
+## Errors [#errors]
+
+`src/errors.ts` defines the following two errors.
+
+| Class | `name` | Metadata | When thrown |
+| ------ | ------ | ---------- | -------------- |
+| `InvalidPartSizeError` | `S3InvalidPartSizeError` | `actual: unknown` | Thrown by `getWritable` when `@unikvs/s3.node:partSize` or `@unikvs/s3:partSize` in `vars` is not a positive integer number. |
+| `StorageAbortedError` | `S3StorageAbortedError` | `key: string` | Thrown when the `signal` passed to `getWritable` is already aborted. |
+
+Both classes extend `ErrorBase` from `@unikvs/core`, and their constructor arguments are `InvalidPartSizeErrorArgs` and `StorageAbortedErrorArgs` — the metadata plus `ErrorOptions` fields such as `cause`. Japanese messages are registered with `setErrorMessage`.
+
+S3-specific failures are handled as follows.
+
+- `exists` returns `false` when `HeadObjectCommand` fails with an error named `NotFound` or with HTTP status 404. Other errors are rethrown as-is.
+- `read` on a missing key fails with an AWS SDK error. Use `exists` beforehand when you need to check existence.
+- `delete` on a missing key does not fail. It follows the idempotency of S3's `DeleteObjectCommand`.
+- A `signal` passed to `write`, `read`, `delete`, or `clear` is forwarded to `client.send` as the `abortSignal` option. An already-aborted or aborting signal aborts the corresponding SDK request.
+- Failures such as authentication errors during upload reject the stream's `close()` with the upload failure reason.
+
+## Examples [#examples]
+
+A minimal example against S3-compatible storage. The endpoint and credentials are dummy values illustrating a connection to common S3-compatible storage (such as MinIO). Create the bucket beforehand.
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+
+const storage = new S3("my-bucket", {
+  endpoint: "http://127.0.0.1:9000",
+  region: "ap-northeast-1",
+  credentials: {
+    accessKeyId: "minioadmin",
+    secretAccessKey: "minioadmin",
+  },
+  forcePathStyle: true,
+});
+
+storage.open();
+
+const signal = AbortSignal.timeout(30_000);
+const key = "hello.txt";
+const data = new TextEncoder().encode("Hello S3");
+
+await storage.write({ key, data, signal });
+const loaded = await storage.read({ key, signal });
+console.log(new TextDecoder().decode(loaded));
+
+storage.close();
+```

@@ -1,0 +1,413 @@
+---
+title: "@unikvs/utils — Shared Utilities"
+description: "Reference for @unikvs/utils, which provides shared helpers for plugin authors. Explains filename and dirname validation, byte operations, stream conversion, and error specifications."
+---
+
+## Overview [#overview]
+
+`@unikvs/utils` is a package that provides shared helpers for plugin authors. It collects processing commonly needed across plugins, such as validating filenames and dirnames, converting and splitting byte sequences, and converting iterables into `ReadableStream`.
+
+<Badge>For plugin authors</Badge>
+
+You can install it with the following command.
+
+```package-install
+npm install @unikvs/utils
+```
+
+Use it with named imports as follows.
+
+```ts
+import {
+  assertValidFilename,
+  assertValidDirname,
+  bytesToHex,
+  chunks,
+  isValidFilename,
+  isValidDirname,
+  toReadableStream,
+  withReadableStreamFrom,
+  InvalidDirnameError,
+  InvalidFilenameError,
+} from "@unikvs/utils";
+```
+
+## Filename Validation [#filename]
+
+Validates whether a filename is usable on the major OSes: Windows, macOS, and Linux.
+
+### isValidFilename [#is-valid-filename]
+
+The signature is as follows.
+
+```ts
+function isValidFilename(filename: string): boolean;
+```
+
+It returns `true` for a valid filename and `false` otherwise. It never throws. It returns `false` if any of the following applies.
+
+- It is an empty string, `"."`, or `".."`.
+- Its byte length after UTF-8 encoding exceeds 255 bytes.
+- The result of decoding after encoding does not match the original string, for example because it contains a BOM.
+- The result of NFC normalization does not match the original string.
+- It contains control or reserved characters.
+- It matches a Windows reserved name.
+- It contains `":"`.
+
+An example is as follows.
+
+```ts
+import { isValidFilename } from "@unikvs/utils";
+
+if (isValidFilename("report.txt")) {
+  console.log("Valid filename.");
+}
+```
+
+### assertValidFilename [#assert-valid-filename]
+
+Its arguments and return value are as follows.
+
+```ts
+function assertValidFilename(filename: string): void;
+```
+
+It simply returns for a valid filename. For an invalid filename, it throws `InvalidFilenameError`. Its return value is `void`.
+
+Call it as follows.
+
+```ts
+import { assertValidFilename } from "@unikvs/utils";
+
+assertValidFilename("report.txt");
+```
+
+:::tip
+Use `isValidFilename` when you want to pre-check with a boolean, and `assertValidFilename` when you want to abort with a reason on invalid input.
+:::
+
+Use them by purpose as follows.
+
+<Tabs>
+  <Tab title="When you only want to check">
+
+Use this when you want a boolean check without throwing.
+
+```ts
+import { isValidFilename } from "@unikvs/utils";
+
+if (isValidFilename("report.txt")) {
+  console.log("Valid filename.");
+}
+```
+  </Tab>
+  <Tab title="When you want to throw on invalid input">
+
+Use this when you want to simply return on valid input and throw `InvalidFilenameError` on invalid input.
+
+```ts
+import { assertValidFilename } from "@unikvs/utils";
+
+assertValidFilename("report.txt");
+```
+  </Tab>
+</Tabs>
+
+## Dirname Validation [#dirname]
+
+Validates whether a dirname is usable on the major OSes: Windows, macOS, and Linux. The implementation delegates to filename validation.
+
+### isValidDirname [#is-valid-dirname]
+
+The function signature is as follows.
+
+```ts
+function isValidDirname(dirname: string): boolean;
+```
+
+Because it internally calls `isValidFilename(dirname)`, the check conditions are the same as `isValidFilename`. It returns `true` for a valid name and `false` for an invalid one. It never throws.
+
+An example is as follows.
+
+```ts
+import { isValidDirname } from "@unikvs/utils";
+
+if (!isValidDirname("my-dir")) {
+  console.log("Invalid dirname.");
+}
+```
+
+### assertValidDirname [#assert-valid-dirname]
+
+Its definition is as follows.
+
+```ts
+function assertValidDirname(dirname: string): void;
+```
+
+It simply returns for a valid dirname. For an invalid dirname, it throws `InvalidDirnameError`. Its return value is `void`.
+
+Call it as follows.
+
+```ts
+import { assertValidDirname } from "@unikvs/utils";
+
+assertValidDirname("my-dir");
+```
+
+Use them by purpose as follows.
+
+<Tabs>
+  <Tab title="When you only want to check">
+
+Use this when you want a boolean check without throwing.
+
+```ts
+import { isValidDirname } from "@unikvs/utils";
+
+if (!isValidDirname("my-dir")) {
+  console.log("Invalid dirname.");
+}
+```
+  </Tab>
+  <Tab title="When you want to throw on invalid input">
+
+Use this when you want to simply return on valid input and throw `InvalidDirnameError` on invalid input.
+
+```ts
+import { assertValidDirname } from "@unikvs/utils";
+
+assertValidDirname("my-dir");
+```
+  </Tab>
+</Tabs>
+
+## Byte Operations [#bytes]
+
+Converts and splits binary data.
+
+### bytesToHex [#bytes-to-hex]
+
+The signature is as follows.
+
+```ts
+function bytesToHex(bytes: Uint8Array): string;
+```
+
+It converts the contents of a `Uint8Array` into a lowercase hexadecimal string and returns it. It uses `Uint8Array.prototype.toHex` where available, and otherwise converts with a precomputed table for values 0 to 255. It never throws.
+
+An example is as follows.
+
+```ts
+import { bytesToHex } from "@unikvs/utils";
+
+const hex = bytesToHex(new Uint8Array([0, 255, 16]));
+console.log(hex); // "00ff10"
+```
+
+### chunks [#chunks]
+
+Its arguments and return value are as follows.
+
+```ts
+function chunks<TData extends DataView | ITypedArray>(
+  data: TData,
+  maxChunkByteSize: number,
+): Generator<TData, void, unknown>;
+```
+
+It splits a `DataView` or TypedArray so that each chunk is at most `maxChunkByteSize` bytes, and returns a generator that yields the chunks in order. `maxChunkByteSize` is truncated toward zero and treated as at least 1.
+
+For a `DataView` it returns a new `DataView` sliced from the buffer range, and for a TypedArray it returns a view via `subarray`. The split position for a `TypedArray` is computed as an element count based on `maxChunkByteSize / BYTES_PER_ELEMENT`. It does not copy the original data.
+
+Call it as follows.
+
+```ts
+import { chunks } from "@unikvs/utils";
+
+const data = new Uint8Array([1, 2, 3, 4, 5]);
+
+for (const chunk of chunks(data, 2)) {
+  console.log(chunk);
+}
+```
+
+:::warning
+The returned chunks are views that do not copy the original data. Writes to a chunk are reflected in the original data, so copy it separately if you want to keep the original data.
+:::
+
+Use them by purpose as follows.
+
+<CodeGroup>
+
+```ts Convert to hex
+import { bytesToHex } from "@unikvs/utils";
+
+const hex = bytesToHex(new Uint8Array([0, 255, 16]));
+console.log(hex); // "00ff10"
+```
+
+```ts Split into chunks
+import { chunks } from "@unikvs/utils";
+
+const data = new Uint8Array([1, 2, 3, 4, 5]);
+
+for (const chunk of chunks(data, 2)) {
+  console.log(chunk);
+}
+```
+
+</CodeGroup>
+
+## Stream Conversion [#streams]
+
+Converts iterables into Web Streams `ReadableStream`.
+
+### toReadableStream [#to-readable-stream]
+
+The function signature is as follows.
+
+```ts
+function toReadableStream<T>(
+  iterable: Iterable<T> | AsyncIterable<T>,
+): ReadableStream<T>;
+```
+
+It generates and returns a `ReadableStream` from a synchronous or asynchronous iterable. It internally uses `withReadableStreamFrom`, applying a temporary polyfill in environments where `ReadableStream.from` is not implemented.
+
+An example is as follows.
+
+```ts
+import { toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+
+for await (const value of stream) {
+  console.log(value);
+}
+```
+
+### withReadableStreamFrom [#with-readable-stream-from]
+
+Its definition is as follows.
+
+```ts
+function withReadableStreamFrom<T>(
+  cb: (ReadableStream: ReadableStreamWithFrom) => T,
+): T;
+```
+
+In environments where `ReadableStream.from` exists, it runs the callback as is; in environments where it does not, it temporarily defines a `from` method, runs the callback, and then always removes the `from` method. The callback must be a synchronous function. The overload that takes an async function is deprecated, and its return value should not be used.
+
+Call it as follows.
+
+```ts
+import { withReadableStreamFrom } from "@unikvs/utils";
+
+const stream = withReadableStreamFrom((ReadableStream) =>
+  ReadableStream.from([1, 2, 3]),
+);
+```
+
+:::warning
+Make the callback a synchronous function. The overload that takes an async function is deprecated, and its return value should not be used. Also, in environments where `from` is not implemented, the temporarily defined `from` method is always removed after execution.
+:::
+
+Use them by purpose as follows.
+
+<Tabs>
+  <Tab title="When you want to convert an iterable">
+Use this when you want to generate a `ReadableStream` from a synchronous or asynchronous iterable.
+
+```ts
+import { toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+
+for await (const value of stream) {
+  console.log(value);
+}
+```
+  </Tab>
+  <Tab title="When you want to absorb from support">
+Use this when you want to run a callback in a way that also works in environments where `ReadableStream.from` is not implemented.
+
+```ts
+import { withReadableStreamFrom } from "@unikvs/utils";
+
+const stream = withReadableStreamFrom((ReadableStream) =>
+  ReadableStream.from([1, 2, 3]),
+);
+```
+  </Tab>
+</Tabs>
+
+## Errors [#errors]
+
+Errors used for filename and dirname validation.
+
+### InvalidFilenameError [#invalid-filename-error]
+
+An error thrown when a string that cannot be used as a filename is specified. Its `name` is `"UniKvsInvalidFilenameError"`. It holds the invalid `filename` as metadata.
+
+```ts
+import { InvalidFilenameError } from "@unikvs/utils";
+
+throw new InvalidFilenameError({ filename: "../evil" });
+```
+
+<Accordion>
+  <AccordionItem title="Constructor arguments and message">
+The constructor argument type is `InvalidFilenameErrorArgs`, which combines `ErrorOptions` and `InvalidFilenameErrorMeta`. You can also pass additional details such as `cause`. The message is ``Invalid file name: ...`` in English and ``無効なファイル名: ...`` in Japanese.
+  </AccordionItem>
+</Accordion>
+
+### InvalidDirnameError [#invalid-dirname-error]
+
+An error thrown when a string that cannot be used as a dirname is specified. Its `name` is `"UniKvsInvalidDirnameError"`. It holds the invalid `dirname` as metadata.
+
+```ts
+import { InvalidDirnameError } from "@unikvs/utils";
+
+throw new InvalidDirnameError({ dirname: ".." });
+```
+
+<Accordion>
+  <AccordionItem title="Constructor arguments and message">
+The constructor argument type is `InvalidDirnameErrorArgs`, which combines `ErrorOptions` and `InvalidDirnameErrorMeta`. You can also pass additional details such as `cause`. The message is ``Invalid directory name: ...`` in English and ``無効なディレクトリー名: ...`` in Japanese.
+  </AccordionItem>
+</Accordion>
+
+## Examples [#examples]
+
+An example that combines filename validation, binary splitting, and stream conversion in a plugin implementation.
+
+```ts
+import {
+  assertValidFilename,
+  chunks,
+  InvalidFilenameError,
+  toReadableStream,
+} from "@unikvs/utils";
+
+async function saveChunks(filename: string, data: Uint8Array): Promise<void> {
+  try {
+    assertValidFilename(filename);
+  } catch (error) {
+    if (error instanceof InvalidFilenameError) {
+      console.error(`Invalid filename: ${error.meta.filename}`);
+    }
+    throw error;
+  }
+
+  const stream = toReadableStream(chunks(data, 64 * 1024));
+
+  for await (const chunk of stream) {
+    await writeChunk(filename, chunk);
+  }
+}
+
+async function writeChunk(filename: string, chunk: Uint8Array): Promise<void> {
+  console.log(`${filename}: writing ${chunk.byteLength} bytes.`);
+}
+```

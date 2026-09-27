@@ -1,0 +1,80 @@
+---
+title: "Errors and Diagnostics"
+description: "Explains error classification, troubleshooting, and internationalization."
+---
+
+## Policy [#policy]
+
+All errors provide messages that include a description, cause, and resolution. Errors extend `ErrorBase` and support i18n. Start by discriminating the kind with `instanceof`. The starting point is deciding whether to retry or fix the configuration.
+
+```ts
+import { KeyNotFoundError } from "unikvs";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+## Client operation errors [#client-errors]
+
+<Accordion>
+  <AccordionItem title="Key and open-state errors">
+    | Error | Main condition | Resolution |
+    | --- | --- | --- |
+    | `KeyNotFoundError` | The key does not exist in any Storage | Check the key name and whether it was stored |
+    | `UniKvsIsNotOpenError` | Operated before opening | Call `open()` first |
+    | `UniKvsIsOpenError` | Called `open()` while already open | Avoid double-opening |
+    | `MissingStorageError` | Called `create()` with no Storage registered | Add `appendStorage()` |
+    | `StorageIsNotOpenError` | A Storage is not open | Check the `open()` call and implementation |
+    | `TransformerIsNotOpenError` | A Transformer is not open | Check the `open()` call and implementation |
+  </AccordionItem>
+  <AccordionItem title="Conversion and stream-support errors">
+    | Error | Main condition | Resolution |
+    | --- | --- | --- |
+    | `PluginOperationAggregateError` | Multiple plugin operations failed | Inspect the wrapped individual errors |
+    | `InvalidInputError` | The input format is invalid | Check the value type and key definition |
+    | `InvalidOutputError` | The output format is invalid | Check the conversion order and stored data |
+    | `ReadableStreamNotSupportedError` | Read streams are not supported | Check Storage support |
+    | `WritableStreamNotSupportedError` | Write streams are not supported | Check Storage support |
+    | `EncodableStreamNotSupportedError` | Encode streams are not supported | Check Transformer support |
+    | `DecodableStreamNotSupportedError` | Decode streams are not supported | Check Transformer support |
+  </AccordionItem>
+</Accordion>
+
+## Plugin-specific errors [#plugin-errors]
+
+<Accordion>
+  <AccordionItem title="Storage and utility errors">
+    | Package | Error | Main condition |
+    | --- | --- | --- |
+    | `@unikvs/memory` | `MemoryKeyNotFoundError` | Referenced a missing key |
+    | `@unikvs/memory` | `MemoryInvalidChunkTypeError` | Handled a non-byte chunk |
+    | `@unikvs/utils` | `InvalidFilenameError` | The file name is invalid |
+    | `@unikvs/utils` | `InvalidDirnameError` | The directory name is invalid |
+  </AccordionItem>
+  <AccordionItem title="Checksum errors">
+    | Package | Error | Main condition |
+    | --- | --- | --- |
+    | `@unikvs/checksum` | `ChecksumMismatchError` | Hashes do not match |
+    | `@unikvs/checksum` | `ChecksumRequiredError` | The hash for verification is missing |
+    | `@unikvs/checksum` | `ChecksumInvalidVarNameError` | The variable name is invalid |
+  </AccordionItem>
+</Accordion>
+
+:::danger
+Checksum mismatches are mainly caused by corrupted stored data, wrong variable (vars) specification, or wrong conversion order. Check the conversion order and variables before and after storing.
+:::
+
+## Aggregate errors [#aggregate]
+
+Partial failures such as writes to multiple Storages are grouped into an aggregate error. Inspect each wrapped error one by one to identify the failed destination.
+
+## Internationalization [#i18n]
+
+Error messages support i18n. The `ErrorBase` and `setErrorMessage` mechanism lets you define locale-specific messages. Use the same mechanism for custom plugins. See the `@unikvs/core` package reference for details.

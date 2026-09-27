@@ -1,0 +1,117 @@
+---
+title: "unikvs — Modular and portable KVS client"
+description: "Overview and documentation guide for unikvs, a modular KVS client built with TypeScript."
+---
+
+## What is unikvs [#what-is-unikvs]
+
+unikvs is a modular and portable KVS client implemented in TypeScript. It combines Transformers, which perform transparent data conversion, with Storages, which support writes to multiple backends, using a builder pattern.
+
+Its main features are:
+
+- Transparent encoding and decoding via Transformers.
+- Parallel writes to multiple Storages.
+- Per-key Value types that control available operations at the type level.
+- Support for both single values and streams.
+- Cancellation via `AbortSignal` and passing of runtime variables.
+- Storages for both Node.js and browsers.
+
+## Quickstart [#quickstart]
+
+```package-install
+npm i unikvs @unikvs/compression @unikvs/fs.node
+```
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new NodeFs(".tmp"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+
+await kvs.close();
+```
+
+The example above transparently compresses the byte sequence stored under the key `foo` with gzip and saves it under `.tmp/`.
+
+:::tip
+Start with the minimal in-memory example in getting started, then check the concepts page for how everything works.
+:::
+
+## How to read the docs [#how-to-read]
+
+<CardGroup cols={2}>
+  <Card title="Getting started" href="./getting-started" icon="rocket">
+    Try the shortest path from installation to basic operations.
+  </Card>
+  <Card title="Concepts" href="./concepts" icon="book-open">
+    Understand pipelines, Value types, and variables.
+  </Card>
+  <Card title="Guides" href="./guides" icon="layers">
+    See usage patterns for specific goals.
+  </Card>
+  <Card title="Storage comparison" href="./reference/comparison" icon="database">
+    Guidance for choosing a storage backend.
+  </Card>
+</CardGroup>
+
+## Packages [#packages]
+
+<CardGroup cols={2}>
+  <Card title="unikvs" href="./packages/unikvs" icon="package">
+    The config builder and KVS client itself.
+  </Card>
+  <Card title="@unikvs/core" href="./packages/core" icon="cpu">
+    Shared types and error foundation for all packages.
+  </Card>
+  <Card title="@unikvs/utils" href="./packages/utils" icon="wrench">
+    Shared helpers for plugin authors.
+  </Card>
+  <Card title="@unikvs/compression" href="./packages/compression" icon="archive">
+    Compresses and decompresses with gzip, deflate, and deflate-raw.
+  </Card>
+  <Card title="@unikvs/checksum" href="./packages/checksum" icon="shield-check">
+    Validates MD5, SHA-1, SHA-224, SHA-256, SHA-384, and SHA-512.
+  </Card>
+  <Card title="@unikvs/memory" href="./packages/memory" icon="zap">
+    Stores arbitrary data in memory.
+  </Card>
+  <Card title="@unikvs/fs.node" href="./packages/fs-node" icon="hard-drive">
+    Stores data in the Node.js local filesystem.
+  </Card>
+  <Card title="@unikvs/s3.node" href="./packages/s3-node" icon="cloud">
+    Stores data in S3-compatible object storage.
+  </Card>
+  <Card title="@unikvs/opfs" href="./packages/opfs" icon="globe">
+    Stores data in the browser OPFS.
+  </Card>
+  <Card title="@unikvs/indexeddb" href="./packages/indexeddb" icon="table">
+    Stores data in the browser IndexedDB.
+  </Card>
+</CardGroup>
+
+## Environments [#environments]
+
+| Package | Node.js | Browser |
+| --- | --- | --- |
+| `unikvs` | Supported | Supported |
+| `@unikvs/core` | Supported | Supported |
+| `@unikvs/utils` | Supported | Supported |
+| `@unikvs/compression` | Supported | Supported |
+| `@unikvs/checksum` | Supported | Supported |
+| `@unikvs/memory` | Supported | Supported |
+| `@unikvs/fs.node` | Supported | Not supported |
+| `@unikvs/s3.node` | Supported | Not supported |
+| `@unikvs/opfs` | Not supported | Supported |
+| `@unikvs/indexeddb` | Not supported | Supported |
