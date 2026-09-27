@@ -3,121 +3,112 @@ import type { MaybePromise } from "maypromise";
 import type { Variables } from "./variables.types.js";
 
 /**
- * トランスフォーマーに関連する引数の型定義を格納する名前空間です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
  */
 export namespace ITransformer {
   /**
-   * エンコード可能なストリームを取得する際の引数定義です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
    */
   export type GetEncodableArgs = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
      */
     vars: Variables;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
      */
     signal: AbortSignal;
   };
 
   /**
-   * デコード可能なストリームを取得する際の引数定義です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
    */
   export type GetDecodableArgs = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
      */
     vars: Variables;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
      */
     signal: AbortSignal;
   };
 
   /**
-   * トランスフォーマーをオープンする際の引数定義です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
    */
   export type OpenArgs = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
      */
     vars: Variables;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
      */
     signal: AbortSignal;
   };
 
   /**
-   * トランスフォーマーをクローズする際の引数定義です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
    */
   export type CloseArgs = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
      */
     vars: Variables;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
      */
     signal: AbortSignal;
   };
 
   /**
-   * データをエンコードする際の引数定義です。
-   *
-   * @template TData エンコード対象となるデータの型です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
    */
   export type EncodeArgs<TData = any> = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     vars: Variables;
 
     /**
-     * エンコードする対象のデータ本体です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     data: TData;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     signal: AbortSignal;
   };
 
   /**
-   * データをデコードする際の引数定義です。
-   *
-   * @template TData デコード対象となるデータの型です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
    */
   export type DecodeArgs<TData = any> = {
     /**
-     * 実行時の変数です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     vars: Variables;
 
     /**
-     * デコードする対象のデータ本体です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     data: TData;
 
     /**
-     * 処理の中断を通知するためのシグナルです。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
     signal: AbortSignal;
   };
 }
 
 /**
- * エンコード処理を行うストリームのインターフェースです。
- *
- * `TransformStream` を継承し、ストリーミングパイプラインの一部として機能します。
- *
- * @template TChunkInput 入力されるチャンクの型です。
- * @template TChunkOutput 出力されるチャンクの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
  */
 export interface IEncodable<TChunkInput = any, TChunkOutput = any> extends TransformStream<
   TChunkInput,
@@ -125,17 +116,11 @@ export interface IEncodable<TChunkInput = any, TChunkOutput = any> extends Trans
 > {}
 
 /**
- * エンコード可能なストリームを生成・提供するトランスフォーマーのインターフェースです。
- *
- * @template TChunkInput 入力されるチャンクの型です。
- * @template TChunkOutput 出力されるチャンクの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
  */
 export interface IEncodableStreamTransformer<TChunkInput = any, TChunkOutput = any> {
   /**
-   * エンコード処理のための `IEncodable` ストリームインスタンスを返します。
-   *
-   * @param args ストリーム取得に必要な引数オブジェクトです。
-   * @returns エンコード可能なストリーム、またはそれを解決する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
    */
   getEncodable(
     args: ITransformer.GetEncodableArgs,
@@ -143,12 +128,7 @@ export interface IEncodableStreamTransformer<TChunkInput = any, TChunkOutput = a
 }
 
 /**
- * デコード処理を行うストリームのインターフェースです。
- *
- * `TransformStream` を継承し、ストリーミングパイプラインの一部として機能します。
- *
- * @template TChunkInput 入力されるチャンクの型です。
- * @template TChunkOutput 出力されるチャンクの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
  */
 export interface IDecodable<TChunkInput = any, TChunkOutput = any> extends TransformStream<
   TChunkInput,
@@ -156,17 +136,11 @@ export interface IDecodable<TChunkInput = any, TChunkOutput = any> extends Trans
 > {}
 
 /**
- * デコード可能なストリームを生成・提供するトランスフォーマーのインターフェースです。
- *
- * @template TChunkInput 入力されるチャンクの型です。
- * @template TChunkOutput 出力されるチャンクの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
  */
 export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = any> {
   /**
-   * デコード処理のための `IDecodable` ストリームインスタンスを返します。
-   *
-   * @param args ストリーム取得に必要な引数オブジェクトです。
-   * @returns デコード可能なストリーム、またはそれを解決する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-streams)
    */
   getDecodable(
     args: ITransformer.GetDecodableArgs,
@@ -174,18 +148,7 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
 }
 
 /**
- * データの双方向（エンコード・デコード）変換を管理する総合トランスフォーマーインターフェースです。
- *
- * ストリームベースの処理と、単発のデータ変換処理の両方をサポートします。
- *
- * @template TEncodeDataInput エンコード入力データの型です。
- * @template TDecodeDataInput デコード入力データの型です。
- * @template TEncodeDataOutput エンコード出力データの型です。
- * @template TDecodeDataOutput デコード出力データの型です。
- * @template TEncodeChunkInput ストリームエンコード時の入力チャンク型です。
- * @template TDecodeChunkInput ストリームデコード時の入力チャンク型です。
- * @template TEncodeChunkOutput ストリームエンコード時の出力チャンク型です。
- * @template TDecodeChunkOutput ストリームデコード時の出力チャンク型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
  */
 export interface ITransformer<
   TEncodeDataInput = any,
@@ -201,48 +164,32 @@ export interface ITransformer<
     Partial<IEncodableStreamTransformer<TEncodeChunkInput, TEncodeChunkOutput>>,
     Partial<IDecodableStreamTransformer<TDecodeChunkInput, TDecodeChunkOutput>> {
   /**
-   * トランスフォーマーの名前です。デバッグメッセージなどに使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */
   readonly name: string;
 
   /**
-   * トランスフォーマーが現在利用可能な状態であるかを示します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */
   readonly isOpen: boolean;
 
   /**
-   * トランスフォーマーを使用可能な状態に準備します。
-   *
-   * リソースの確保や外部接続の初期化などをここで行います。
-   *
-   * @param args オープンに必要な引数オブジェクトです。
-   * @returns 処理の完了を示す Promise、または void です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
    */
   open?(args: ITransformer.OpenArgs): MaybePromise<void>;
 
   /**
-   * トランスフォーマーを安全に停止します。
-   *
-   * 確保したリソースの解放や、接続の終了処理をここで行います。
-   *
-   * @param args クローズに必要な引数オブジェクトです。
-   * @returns 処理の完了を示す Promise、または void です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-lifecycle)
    */
   close?(args: ITransformer.CloseArgs): MaybePromise<void>;
 
   /**
-   * 指定された単一のデータをエンコードして返します。
-   *
-   * @param args エンコード対象データと変数を含む引数オブジェクトです。
-   * @returns エンコードされた結果データ、またはそれを解決する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
    */
   encode(args: ITransformer.EncodeArgs<TEncodeDataInput>): MaybePromise<TEncodeDataOutput>;
 
   /**
-   * 指定された単一のデータをデコードして返します。
-   *
-   * @param args デコード対象データと変数を含む引数オブジェクトです。
-   * @returns デコードされた結果データ、またはそれを解決する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
    */
   decode(args: ITransformer.DecodeArgs<TDecodeDataInput>): MaybePromise<TDecodeDataOutput>;
 }

@@ -73,9 +73,7 @@ type $InferReadChunkOutput<TStorage extends IStorage> =
 declare const PLAIN_VALUE: unique symbol;
 
 /**
- * ストリームではない通常の値を表す型定義です。
- *
- * @template TData 保持するデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type PlainValue<TData = any> = [Type: typeof PLAIN_VALUE, Data: TData];
 
@@ -85,23 +83,17 @@ export type PlainValue<TData = any> = [Type: typeof PLAIN_VALUE, Data: TData];
 declare const STREAM_VALUE: unique symbol;
 
 /**
- * ストリームとして扱われる値を表す型定義です。
- *
- * @template TChunkData ストリームのチャンクデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type StreamValue<TChunkData = any> = [Type: typeof STREAM_VALUE, ChunkData: TChunkData];
 
 /**
- * UniKvs で扱う値の抽象型です。プレーンな値かストリーム値のいずれかになります。
- *
- * @template TData データまたはチャンクデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type Value<TData = any> = PlainValue<TData> | StreamValue<TData>;
 
 /**
- * キーと値のマッピングを定義するオブジェクトの型です。
- *
- * @template T マッピングされる値の型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> };
 
@@ -122,27 +114,13 @@ export type $InferStreamValueChunkData<TStremValue> =
   TStremValue extends StreamValue<infer TChunkData> ? TChunkData : never;
 
 /**
- * KeyValueMapping から有効なキーの型を抽出します。
- *
- * @template TKeyValueMapping 対象となるマッピング型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyofKeyValueMapping<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> =
   Extract<keyof TKeyValueMapping, IStorage.Key>;
 
 /**
- * UniKvs の設定を構築するためのビルダーインターフェースです。
- *
- * トランスフォーマーの追加やストレージの登録を型安全に行うための流暢なインターフェースを提供します。
- *
- * @template TKeyValueMapping キーと値のマッピング型です。
- * @template TUniKvsDataInput UniKvs への入力データの型です。
- * @template TUniKvsDataOutput UniKvs からの出力データの型です。
- * @template TUniKvsChunkInput UniKvs への入力チャンクデータの型です。
- * @template TUniKvsChunkOutput UniKvs からのストリーム出力チャンクデータの型です。
- * @template TLastTransformerDecodeDataInput 最後に適用されたトランスフォーマーのデコード入力データの型です。
- * @template TLastTransformerEncodeDataOutput 最後に適用されたトランスフォーマーのエンコード出力データの型です。
- * @template TLastTransformerDecodeChunkInput 最後に適用されたトランスフォーマーのデコード入力チャンクデータの型です。
- * @template TLastTransformerEncodeChunkOutput 最後に適用されたトランスフォーマーのエンコード出力チャンクデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export interface IUniKvsConfigBuilder<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
@@ -162,22 +140,12 @@ export interface IUniKvsConfigBuilder<
   TLastTransformerEncodeChunkOutput = TUniKvsChunkInput,
 > {
   /**
-   * 変数情報を設定します。
-   *
-   * @param vars 設定する変数のソースです。
-   * @returns インスタンス自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   setVariables(vars: VariablesSource): this;
 
   /**
-   * ストレージをパイプラインに追加します。
-   *
-   * 登録時点までに追加されたトランスフォーマーが、このストレージ専用の前段パイプラインになります。
-   * ストレージが追加されると、設定はファイナライズ段階に移行します。
-   *
-   * @template TStorage 追加するストレージの型です。
-   * @param storage ストレージのインスタンスです。
-   * @returns ファイナライザーインターフェースを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   appendStorage<
     TStorage extends IStorage<
@@ -209,13 +177,7 @@ export interface IUniKvsConfigBuilder<
   >;
 
   /**
-   * トランスフォーマーをパイプラインに追加します。
-   *
-   * データ変換の層を積み重ねることで、シリアライズなどの処理を定義できます。
-   *
-   * @template TTransformer 追加するトランスフォーマーの型です。
-   * @param transformer トランスフォーマーのインスタンスです。
-   * @returns 新しい型情報を持つビルダーを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   appendTransformer<
     TTransformer extends ITransformer<
@@ -260,17 +222,7 @@ export interface IUniKvsConfigBuilder<
 }
 
 /**
- * UniKvs の設定を完了させるためのファイナライザーインターフェースです。
- *
- * @template TKeyValueMapping キーと値のマッピング型です。
- * @template TWriteDataInput 最初に登録されたストレージへの書き込み入力データの型です。
- * @template TReadDataOutput 最初に登録されたストレージからの読み込み出力データの型です。
- * @template TWriteChunkInput ストレージへの書き込みチャンクデータの型です。
- * @template TReadChunkOutput ストレージからの読み込みチャンクデータの型です。
- * @template TLastTransformerDecodeDataInput 最後に適用されたトランスフォーマーのデコード入力データの型です。
- * @template TLastTransformerEncodeDataOutput 最後に適用されたトランスフォーマーのエンコード出力データの型です。
- * @template TLastTransformerDecodeChunkInput 最後に適用されたトランスフォーマーのデコード入力チャンクデータの型です。
- * @template TLastTransformerEncodeChunkOutput 最後に適用されたトランスフォーマーのエンコード出力チャンクデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export interface IUniKvsConfigFinalizer<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
@@ -284,28 +236,17 @@ export interface IUniKvsConfigFinalizer<
   TLastTransformerEncodeChunkOutput = TWriteChunkInput,
 > {
   /**
-   * 設定に基づいて UniKvs インスタンスを作成します。
-   *
-   * @returns 作成された UniKvs のインスタンスです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   create(): UniKvs<TKeyValueMapping>;
 
   /**
-   * 変数情報を設定します。
-   *
-   * @param vars 設定する変数のソースです。
-   * @returns インスタンス自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   setVariables(vars: VariablesSource): this;
 
   /**
-   * 追加のストレージを登録します。UniKvs は複数のストレージへのマルチキャスト書き込みをサポートします。
-   *
-   * 登録時点までに追加されたトランスフォーマーが、このストレージ専用の前段パイプラインになります。
-   *
-   * @template TStorage 追加するストレージの型です。
-   * @param storage ストレージのインスタンスです。
-   * @returns ファイナライザーインターフェースを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   appendStorage<
     TStorage extends IStorage<
@@ -337,13 +278,7 @@ export interface IUniKvsConfigFinalizer<
   >;
 
   /**
-   * トランスフォーマーをパイプラインに追加します。
-   *
-   * ストレージ登録後に追加されたトランスフォーマーは、それ以降に登録されるストレージの前段パイプラインになります。
-   *
-   * @template TTransformer 追加するトランスフォーマーの型です。
-   * @param transformer トランスフォーマーのインスタンスです。
-   * @returns 新しい型情報を持つファイナライザーを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   appendTransformer<
     TTransformer extends ITransformer<
@@ -372,9 +307,7 @@ export interface IUniKvsConfigFinalizer<
 }
 
 /**
- * UniKvs の構成を管理する設定クラスです。
- *
- * トランスフォーマーとストレージを登録順に積み上げ、各ストレージは登録時点までのトランスフォーマーを前段パイプラインにします。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfigFinalizer {
   /**
@@ -398,9 +331,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   readonly #transformers: ITransformer[];
 
   /**
-   * UniKvsConfig インスタンスを初期化します。
-   *
-   * @param UniKvsConstructor UniKvs のクラスコンストラクターです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public constructor(UniKvsConstructor: typeof UniKvs) {
     this.#UniKvs = UniKvsConstructor;
@@ -410,10 +341,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   /**
-   * 現在の設定を使用して UniKvs インスタンスを作成します。
-   *
-   * @returns 作成された UniKvs インスタンスです。
-   * @throws ストレージが一つも登録されていない場合にエラーを投げます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public create(): UniKvs {
     const transformers = this.#transformers.map((tf) => new UniKvsTransformer(tf));
@@ -433,10 +361,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   /**
-   * 変数情報を設定します。既存の変数は上書きされます。
-   *
-   * @param vars 設定する変数のソースデータです。
-   * @returns インスタンス自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public setVariables(vars: VariablesSource): this {
     this.#vars = Array.isArray(vars) ? Object.fromEntries(vars) : { ...vars };
@@ -445,10 +370,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   /**
-   * ストレージを登録リストに追加します。登録時点までのトランスフォーマーが前段パイプラインになります。
-   *
-   * @param storage 追加するストレージインスタンスです。
-   * @returns ファイナライザーとして自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public appendStorage(storage: IStorage): this {
     this.#destinations.push({ storage, transformerCount: this.#transformers.length });
@@ -457,10 +379,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   /**
-   * トランスフォーマーを変換パイプラインに追加します。以降に登録されるストレージの前段になります。
-   *
-   * @param transformer 追加するトランスフォーマーインスタンスです。
-   * @returns 自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public appendTransformer(transformer: ITransformer): this {
     this.#transformers.push(transformer);

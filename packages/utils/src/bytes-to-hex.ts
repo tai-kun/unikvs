@@ -2,10 +2,7 @@
 let byte2hex: string[];
 
 /**
- * Uint8Array のバイト配列を 16 進数の文字列に変換します。
- *
- * @param bytes 変換対象の Uint8Array インスタンスです。
- * @returns 16 進数に変換された文字列です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#bytes-to-hex)
  */
 export default function bytesToHex(bytes: Uint8Array): string {
   if (typeof bytes.toHex === "function") {

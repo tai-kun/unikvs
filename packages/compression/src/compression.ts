@@ -2,9 +2,7 @@ import type { ITransformer } from "@unikvs/core";
 import { toReadableStream } from "@unikvs/utils";
 
 /**
- * 圧縮アルゴリズムの形式を表す型です。
- *
- * Web 標準の CompressionStream と DecompressionStream の両コンストラクターで受け入れ可能な文字列リテラルのみを抽出しています。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#formats)
  */
 export type CompressionFormat = Extract<
   ConstructorParameters<typeof CompressionStream>[0],
@@ -12,9 +10,7 @@ export type CompressionFormat = Extract<
 >;
 
 /**
- * Web 標準の CompressionStream および DecompressionStream をラップし、{@link ITransformer} インターフェースに適合させるトランスフォーマーです。
- *
- * コンストラクターで指定した圧縮形式に従い、バイナリデータの透過的な圧縮と展開を行います。このトランスフォーマーは常にオープン状態であり、明示的な open や close は不要です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
  */
 export default class Compression implements ITransformer {
   /**
@@ -23,14 +19,12 @@ export default class Compression implements ITransformer {
   private readonly format: CompressionFormat;
 
   /**
-   * トランスフォーマーを識別する固定名です。値は常に `"Compression"` です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public readonly name: string;
 
   /**
-   * Compression クラスのインスタンスを初期化します。
-   *
-   * @param format 使用する圧縮アルゴリズムの形式を指定します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public constructor(format: CompressionFormat) {
     this.name = "Compression";
@@ -38,19 +32,14 @@ export default class Compression implements ITransformer {
   }
 
   /**
-   * トランスフォーマーが利用可能な状態かどうかを示します。
-   *
-   * この実装では常に `true` を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public get isOpen(): boolean {
     return true;
   }
 
   /**
-   * 指定されたバイナリデータを圧縮します。
-   *
-   * @param args 圧縮対象のデータを含む引数です。
-   * @returns 圧縮されたバイナリデータを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public async encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
@@ -59,10 +48,7 @@ export default class Compression implements ITransformer {
   }
 
   /**
-   * 指定されたバイナリデータを展開します。
-   *
-   * @param args 展開対象のデータを含む引数です。
-   * @returns 展開されたバイナリデータを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public async decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
@@ -71,18 +57,14 @@ export default class Compression implements ITransformer {
   }
 
   /**
-   * 圧縮用の TransformStream を取得します。
-   *
-   * @returns コンストラクターで指定された形式で圧縮を行うストリームを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#streams)
    */
   public getEncodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     return new CompressionStream(this.format);
   }
 
   /**
-   * 展開用の TransformStream を取得します。
-   *
-   * @returns コンストラクターで指定された形式で展開を行うストリームを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#streams)
    */
   public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     return new DecompressionStream(this.format);

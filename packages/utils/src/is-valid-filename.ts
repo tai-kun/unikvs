@@ -14,11 +14,7 @@ const utf8 = /*#__PURE__*/ new FastUtf8({
 });
 
 /**
- * 与えられた文字列が、主要なオペレーティングシステム（Windows, macOS, Linux）において正当なファイル名として使用可能かどうかを判定します。
- *
- * @param filename 検証対象となるファイル名の文字列です。
- * @returns ファイル名として妥当な場合は true、そうでない場合は false を返します。
- * @see https://github.com/sindresorhus/valid-filename/blob/main/index.js
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#is-valid-filename)
  */
 export default function isValidFilename(filename: string): boolean {
   // 文字列そのものがファイル名として成立しない特定のパターン（空文字、カレントディレクトリー、親ディレクトリー）を拒否します。

@@ -27,9 +27,7 @@ type Connection = {
 };
 
 /**
- * ローカルのファイルシステムを永続化先として使用するストレージクラスです。
- *
- * Node.js 環境での動作を前提としています。指定されたルートディレクトリー配下にキーをファイル名としてデータを保存します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
  */
 export default class NodeFs implements IStorage {
   /**
@@ -45,14 +43,12 @@ export default class NodeFs implements IStorage {
   private root: string;
 
   /**
-   * ストレージの名前です。デバッグメッセージなどに使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public readonly name: string;
 
   /**
-   * NodeFs インスタンスを初期化します。
-   *
-   * @param root データを保存するルートディレクトリーのパスです。相対パスの場合はカレントワーキングディレクトリーからの相対として解決されます。デフォルトは `".unikvs"` です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public constructor(root: string = ".unikvs") {
     this.name = "NodeFs";
@@ -61,16 +57,14 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * ストレージが現在利用可能な状態であるかを示します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public get isOpen(): boolean {
     return !!this.con;
   }
 
   /**
-   * ストレージをオープンし、読み書きが可能な状態に準備します。
-   *
-   * ルートディレクトリーが存在しない場合は再帰的に作成します。すでにオープンされている場合も再度初期化を行います。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async open(): Promise<void> {
     const [fs, path, stream, crypto] = await Promise.all([
@@ -100,13 +94,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたデータを、対応するキーでストレージに保存します。
-   *
-   * データは一時ファイルへ書き出した後に最終パスへ rename されるため、書き込みが失敗または中断された場合でも既存のデータが破壊されることはありません。
-   *
-   * @param args.key 保存先のキーです。
-   * @param args.data 保存するバイト配列です。
-   * @param args.signal 中断シグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
@@ -129,11 +117,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから取得します。
-   *
-   * @param args.key 取得元のキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns キーに対応するバイト配列です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async read(
     args: Pick<IStorage.ReadArgs, "key" | "signal">,
@@ -150,10 +134,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
-   *
-   * @param args.key 確認するキーです。
-   * @returns キーに対応するデータが存在する場合は true、それ以外は false です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { fs, path } = this.con!;
@@ -171,9 +152,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから削除します。
-   *
-   * @param args.key 削除するキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { fs, path } = this.con!;
@@ -186,9 +165,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * ストレージ内のすべてのデータを完全に消去します。
-   *
-   * ルートディレクトリー自体を削除したあと、空のディレクトリーを再作成します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
   public async clear(): Promise<void> {
     const { fs } = this.con!;
@@ -198,15 +175,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する書き込み可能なストリームを取得します。
-   *
-   * ストリームは一時ファイルへ書き出し、正常に close された場合のみ最終パスへ rename (swap-on-close) します。
-   * 中断シグナルが abort するとストリームは破棄され、一時ファイルが削除されます。
-   * 書き込みの失敗・中断時に既存のデータが破壊されることはありません。
-   *
-   * @param args.key 書き込み先のキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns 書き込み可能なストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
    */
   public async getWritable(
     args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
@@ -295,11 +264,7 @@ export default class NodeFs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する読み取り可能なストリームを取得します。
-   *
-   * @param args.key 読み取り元のキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns 読み取り可能なストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
    */
   public getReadable(
     args: Pick<IStorage.GetReadableArgs, "key" | "signal">,

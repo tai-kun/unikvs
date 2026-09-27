@@ -4,25 +4,21 @@ import type { ITransformer } from "@unikvs/core";
 import Checksum, { type ChecksumOptions } from "./checksum.js";
 
 /**
- * {@link ChecksumMd5} のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export type ChecksumMd5Options = ChecksumOptions;
 
 /**
- * MD5 アルゴリズムを使用してデータの整合性を検証するトランスフォーマーです。
- *
- * 変数キー `@unikvs/checksum:md5` に期待するハッシュ値を設定することで検証を行います。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export default class ChecksumMd5 extends Checksum implements ITransformer {
   /**
-   * 期待するチェックサムを保持する変数キーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public static override readonly CHECKSUM_VAR_NAME: string = "@unikvs/checksum:md5";
 
   /**
-   * ChecksumMd5 の新しいインスタンスを初期化します。
-   *
-   * @param options オプションです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public constructor(options?: ChecksumMd5Options) {
     super("ChecksumMd5", md5, options);

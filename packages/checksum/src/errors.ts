@@ -2,29 +2,27 @@ import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
 /**
- * {@link ChecksumMismatchError} のメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export type ChecksumMismatchErrorMeta = {
   /**
-   * 実際に計算されたハッシュ値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   readonly actual: string;
 
   /**
-   * 期待されたハッシュ値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   readonly expected: string;
 };
 
 /**
- * {@link ChecksumMismatchError} のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export type ChecksumMismatchErrorArgs = ErrorOptions & ChecksumMismatchErrorMeta;
 
 /**
- * 計算されたハッシュ値が期待されたハッシュ値と一致しない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> {
   static {
@@ -32,9 +30,7 @@ export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> 
   }
 
   /**
-   * ChecksumMismatchError の新しいインスタンスを初期化します。
-   *
-   * @param args 実際のハッシュ値、期待されたハッシュ値、エラーの追加情報を含む引数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   public constructor(args: ChecksumMismatchErrorArgs) {
     const { actual, expected, ...options } = args;
@@ -50,26 +46,22 @@ setErrorMessage(
 );
 
 /**
- * {@link ChecksumInvalidVarNameError} のメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export type ChecksumInvalidVarNameErrorMeta = {
   /**
-   * 無効な変数キーの値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   readonly actual: unknown;
 };
 
 /**
- * {@link ChecksumInvalidVarNameError} のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export type ChecksumInvalidVarNameErrorArgs = ErrorOptions & ChecksumInvalidVarNameErrorMeta;
 
 /**
- * 変数キーが不正な場合に投げられるエラーです。
- *
- * CHECKSUM_VAR_NAME が文字列ではない場合に発生します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export class ChecksumInvalidVarNameError extends ErrorBase<ChecksumInvalidVarNameErrorMeta> {
   static {
@@ -77,9 +69,7 @@ export class ChecksumInvalidVarNameError extends ErrorBase<ChecksumInvalidVarNam
   }
 
   /**
-   * ChecksumInvalidVarNameError の新しいインスタンスを初期化します。
-   *
-   * @param args 実際のキー値とエラーの追加情報を含む引数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   public constructor(args: ChecksumInvalidVarNameErrorArgs) {
     const { actual, ...options } = args;
@@ -95,7 +85,7 @@ setErrorMessage(
 );
 
 /**
- * チェックサムが必須であるにもかかわらず、変数にチェックサムが指定されていない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
 export class ChecksumRequiredError extends ErrorBase<undefined> {
   static {
@@ -103,9 +93,7 @@ export class ChecksumRequiredError extends ErrorBase<undefined> {
   }
 
   /**
-   * ChecksumRequiredError の新しいインスタンスを初期化します。
-   *
-   * @param options エラーオプションです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
    */
   public constructor(options?: ErrorOptions) {
     super("Checksum is required", options);

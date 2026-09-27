@@ -15,22 +15,14 @@ interface ReadableStreamWithFrom extends ReadableStream {
 }
 
 /**
- * コールバック関数に非同期処理を渡すオーバーロードです。
- *
- * @param cb 実行されるコールバック関数です。
- * @returns 返り値を使用するべきではありません。
- * @deprecated コールバック関数は同期関数である必要があります。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#with-readable-stream-from)
  */
 function withReadableStreamFrom(
   cb: (ReadableStream: ReadableStreamWithFrom) => PromiseLike<any>,
 ): never;
 
 /**
- * `ReadableStream.from` が未実装の環境において、一時的にポリフィルを適用してコールバックを実行します。
- *
- * @template T コールバックの戻り値の型です。
- * @param cb 実行されるコールバック関数です。
- * @returns コールバック関数の実行結果です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#with-readable-stream-from)
  */
 function withReadableStreamFrom<T>(cb: (ReadableStream: ReadableStreamWithFrom) => T): T;
 

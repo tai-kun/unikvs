@@ -4,25 +4,21 @@ import type { ITransformer } from "@unikvs/core";
 import Checksum, { type ChecksumOptions } from "./checksum.js";
 
 /**
- * {@link ChecksumSha384} のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export type ChecksumSha384Options = ChecksumOptions;
 
 /**
- * SHA-384 アルゴリズムを使用してデータの整合性を検証するトランスフォーマーです。
- *
- * 変数キー `@unikvs/checksum:sha384` に期待するハッシュ値を設定することで検証を行います。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export default class ChecksumSha384 extends Checksum implements ITransformer {
   /**
-   * 期待するチェックサムを保持する変数キーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public static override readonly CHECKSUM_VAR_NAME: string = "@unikvs/checksum:sha384";
 
   /**
-   * ChecksumSha384 の新しいインスタンスを初期化します。
-   *
-   * @param options オプションです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public constructor(options?: ChecksumSha384Options) {
     super("ChecksumSha384", sha384, options);

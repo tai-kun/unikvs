@@ -1,24 +1,22 @@
 import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
 
 /**
- * 変数に指定されたパートサイズが正の整数ではないことを示すエラーメタデータ型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export type InvalidPartSizeErrorMeta = {
   /**
-   * 実際に指定されたパートサイズの値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
    */
   readonly actual: unknown;
 };
 
 /**
- * {@link InvalidPartSizeError} のコンストラクター引数型です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export type InvalidPartSizeErrorArgs = ErrorOptions & InvalidPartSizeErrorMeta;
 
 /**
- * 変数に正の整数ではないパートサイズが指定された場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
   static {
@@ -26,9 +24,7 @@ export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
   }
 
   /**
-   * InvalidPartSizeError インスタンスを初期化します。
-   *
-   * @param args エラーメタデータとエラーの追加情報です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
    */
   public constructor(args: InvalidPartSizeErrorArgs) {
     const { actual, ...options } = args;
@@ -50,24 +46,22 @@ setErrorMessage(
 );
 
 /**
- * 書き込みストリームの取得前に操作が中断されたことを示すエラーメタデータ型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export type StorageAbortedErrorMeta = {
   /**
-   * 書き込み先のキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
    */
   readonly key: string;
 };
 
 /**
- * {@link StorageAbortedError} のコンストラクター引数型です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export type StorageAbortedErrorArgs = ErrorOptions & StorageAbortedErrorMeta;
 
 /**
- * 中断済みのシグナルと共に書き込みストリームが要求された場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
  */
 export class StorageAbortedError extends ErrorBase<StorageAbortedErrorMeta> {
   static {
@@ -75,9 +69,7 @@ export class StorageAbortedError extends ErrorBase<StorageAbortedErrorMeta> {
   }
 
   /**
-   * StorageAbortedError インスタンスを初期化します。
-   *
-   * @param args エラーメタデータとエラーの追加情報です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#errors)
    */
   public constructor(args: StorageAbortedErrorArgs) {
     const { key, ...options } = args;

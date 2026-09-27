@@ -48,15 +48,7 @@ function* chunkRanges(totalSize: number, maxSize: number): Generator<readonly [n
 }
 
 /**
- * バイナリーデータを指定された最大バイトサイズで分割して返します。
- *
- * DataView と TypedArray のいずれも受け付けます。
- *
- * @template TData 分割対象となるデータの型です。
- * @param data 分割対象となる元のデータです。
- * @param maxChunkByteSize 1 つのチャンクあたりの最大バイトサイズです。
- * @yields 指定された最大バイトサイズに収まるように分割されたデータのチャンクを順次生成します。
- * @returns 分割されたデータのチャンクを順次生成するジェネレーターを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#chunks)
  */
 export default function* chunks<TData extends DataView | ITypedArray>(
   data: TData,

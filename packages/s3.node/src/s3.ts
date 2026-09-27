@@ -15,13 +15,7 @@ import type { IStorage } from "@unikvs/core";
 import { InvalidPartSizeError, StorageAbortedError } from "./errors.js";
 
 /**
- * AWS S3（または互換オブジェクトストレージ）を永続化先として使用するストレージクラスです。
- *
- * 指定されたバケットに対してオブジェクトの読み書き、存在確認、削除、一括消去の操作を提供します。また、ストリームを用いたアップロードおよびダウンロードにも対応しています。
- *
- * 変数に `@unikvs/s3.node:partSize` または `@unikvs/s3:partSize` を指定することで、パートサイズ（バイト単位）を変更できます。
- *
- * **警告:** {@link clear} はプレフィックスによる絞り込みを行わず、バケット内のすべてのオブジェクトを削除します。unikvs 専用のバケット、または他のアプリケーションが使用しないバケットを使用してください。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
  */
 export default class S3 implements IStorage {
   /**
@@ -44,15 +38,12 @@ export default class S3 implements IStorage {
   private readonly config: S3ClientConfig;
 
   /**
-   * ストレージの名前です。デバッグメッセージなどに使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public readonly name: string;
 
   /**
-   * S3 インスタンスを初期化します。
-   *
-   * @param bucket データを保存する対象のバケット名です。
-   * @param config リージョンや認証情報など、S3Client に渡す設定です。デフォルトは空オブジェクトです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public constructor(bucket: string, config: S3ClientConfig = {}) {
     this.name = "S3";
@@ -62,21 +53,21 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * ストレージが現在利用可能な状態であるかを示します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public get isOpen(): boolean {
     return !!this.client;
   }
 
   /**
-   * ストレージをオープンし、読み書きが可能な状態に準備します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public open(): void {
     this.client = new S3Client(this.config);
   }
 
   /**
-   * ストレージを安全にクローズします。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public close(): void {
     this.client!.destroy();
@@ -84,11 +75,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたデータを、対応するキーでストレージに保存します。
-   *
-   * @param args.key 保存先のキーです。
-   * @param args.data 保存するバイト配列です。
-   * @param args.signal 中断シグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
@@ -104,11 +91,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから取得します。
-   *
-   * @param args.key 取得元のキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns キーに対応するバイト配列です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public async read(
     args: Pick<IStorage.ReadArgs, "key" | "signal">,
@@ -126,11 +109,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
-   *
-   * @param args.key 確認するキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns キーに対応するデータが存在する場合は true、それ以外は false です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
     const { key, signal: abortSignal } = args;
@@ -153,10 +132,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから削除します。
-   *
-   * @param args.key 削除するキーです。
-   * @param args.signal 中断シグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
     const { key, signal: abortSignal } = args;
@@ -169,13 +145,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * ストレージ内のすべてのデータを完全に消去します。
-   *
-   * バケット内のオブジェクトをページネーションで取得し、すべて削除します。
-   *
-   * **警告:** このメソッドはプレフィックスによる絞り込みを行わないため、指定されたバケット内のすべてのオブジェクトが削除されます。バケットを他のアプリケーションと共有している場合、それらのデータも削除されます。unikvs 専用のバケット、または専用のプレフィックスでキーを管理するバケットを使用してください。
-   *
-   * @param args.signal 中断シグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
   public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
     const { signal: abortSignal } = args;
@@ -216,14 +186,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する書き込み可能なストリームを取得します。
-   *
-   * @param args.key 書き込み先のキーです。
-   * @param args.signal 中断シグナルです。シグナルが中断されるとアップロードも中断されます。
-   * @param args.vars パートサイズなどのオプションを含む変数オブジェクトです。パートサイズには正の整数 (バイト単位) を指定してください。
-   * @returns 書き込み可能なストリームです。
-   * @throws 変数に正の整数ではないパートサイズが指定された場合に {@link InvalidPartSizeError} を投げます。
-   * @throws シグナルがすでに中断されている場合に {@link StorageAbortedError} を投げます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
    */
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
@@ -299,11 +262,7 @@ export default class S3 implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する読み取り可能なストリームを取得します。
-   *
-   * @param args.key 読み取り元のキーです。
-   * @param args.signal 中断シグナルです。
-   * @returns 読み取り可能なストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
    */
   public async getReadable(
     args: Pick<IStorage.GetReadableArgs, "key" | "signal">,

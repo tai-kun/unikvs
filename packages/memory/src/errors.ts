@@ -2,24 +2,22 @@ import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
 import getTypeName from "type-name";
 
 /**
- * 指定されたキーがストレージ内に存在しないことを示すエラーメタデータ型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export type KeyNotFoundErrorMeta = {
   /**
-   * 存在しなかったキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   readonly key: string;
 };
 
 /**
- * {@link KeyNotFoundError} のコンストラクター引数型です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
- * 読み取りまたは削除を実行しようとしたキーがストレージ内に存在しない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   static {
@@ -27,9 +25,7 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   }
 
   /**
-   * KeyNotFoundError インスタンスを初期化します。
-   *
-   * @param args エラーメタデータとエラーの追加情報です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   public constructor(args: KeyNotFoundErrorArgs) {
     const { key, ...options } = args;
@@ -41,35 +37,32 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
 setErrorMessage(KeyNotFoundError, ({ key }) => `キー ${key} が見つかりません`, "ja");
 
 /**
- * ストリーム書き込み時に無効なチャンク型が渡されたことを示すエラーメタデータ型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * 書き込み先または読み取り元のキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   readonly key: string;
 
   /**
-   * 型が無効だったチャンクの値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   readonly chunk: unknown;
 
   /**
-   * 実際に渡されたチャンク値の型名です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   readonly chunkType: string;
 };
 
 /**
- * {@link InvalidChunkTypeError} のコンストラクター引数型です。
- *
- * `chunkType` はコンストラクター内部で自動的に設定されるため、引数からは除外されています。
- * また、エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * `getWritable` が返すストリームに `Uint8Array<ArrayBuffer>` 以外の値が書き込まれた場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -77,9 +70,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * InvalidChunkTypeError インスタンスを初期化します。
-   *
-   * @param args エラーメタデータとエラーの追加情報です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;

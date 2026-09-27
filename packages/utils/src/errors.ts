@@ -1,24 +1,22 @@
 import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
 
 /**
- * {@link InvalidFilenameError} のメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
  */
 export type InvalidFilenameErrorMeta = {
   /**
-   * 無効だったファイル名です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
    */
   readonly filename: string;
 };
 
 /**
- * {@link InvalidFilenameError} のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
  */
 export type InvalidFilenameErrorArgs = ErrorOptions & InvalidFilenameErrorMeta;
 
 /**
- * ファイル名として使用できない文字列が指定された場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
  */
 export class InvalidFilenameError extends ErrorBase<InvalidFilenameErrorMeta> {
   static {
@@ -26,9 +24,7 @@ export class InvalidFilenameError extends ErrorBase<InvalidFilenameErrorMeta> {
   }
 
   /**
-   * InvalidFilenameError の新しいインスタンスを初期化します。
-   *
-   * @param args 無効だったファイル名とエラーの追加情報を含む引数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
    */
   public constructor(args: InvalidFilenameErrorArgs) {
     const { filename, ...options } = args;
@@ -40,24 +36,22 @@ export class InvalidFilenameError extends ErrorBase<InvalidFilenameErrorMeta> {
 setErrorMessage(InvalidFilenameError, ({ filename }) => `無効なファイル名: ${filename}`, "ja");
 
 /**
- * {@link InvalidDirnameError} のメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
  */
 export type InvalidDirnameErrorMeta = {
   /**
-   * 無効だったディレクトリー名です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
    */
   readonly dirname: string;
 };
 
 /**
- * {@link InvalidDirnameError} のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
  */
 export type InvalidDirnameErrorArgs = ErrorOptions & InvalidDirnameErrorMeta;
 
 /**
- * ディレクトリー名として使用できない文字列が指定された場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
  */
 export class InvalidDirnameError extends ErrorBase<InvalidDirnameErrorMeta> {
   static {
@@ -65,9 +59,7 @@ export class InvalidDirnameError extends ErrorBase<InvalidDirnameErrorMeta> {
   }
 
   /**
-   * InvalidDirnameError の新しいインスタンスを初期化します。
-   *
-   * @param args 無効だったディレクトリー名とエラーの追加情報を含む引数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
    */
   public constructor(args: InvalidDirnameErrorArgs) {
     const { dirname, ...options } = args;

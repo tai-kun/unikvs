@@ -4,11 +4,7 @@ import { InvalidDirnameError } from "./errors.js";
 import isValidDirname from "./is-valid-dirname.js";
 
 /**
- * ディレクトリー名が有効かどうかを検証します。
- *
- * 無効なディレクトリー名の場合は {@link InvalidDirnameError} を投げます。
- *
- * @param dirname 検証対象のディレクトリー名です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#assert-valid-dirname)
  */
 export default function assertValidDirname(dirname: string): void {
   if (isValidDirname(dirname)) {

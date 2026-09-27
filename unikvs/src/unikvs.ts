@@ -36,18 +36,14 @@ import type { VariablesSource } from "./variables.types.js";
 // -------------------------------------------------------------------------------------------------
 
 /**
- * 設定可能な値の型定義です。
- *
- * @template TValue 値の型定義です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type SetValue<TValue extends Value> =
   | $InferPlainValueData<TValue>
   | (TValue extends StreamValue<infer TChunkData> ? ReadableStream<TChunkData> : never);
 
 /**
- * プレーンな値を持つキーのみを抽出する型定義です。
- *
- * @template TKeyValueMapping キーと値のマッピング定義です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyofKeyValueMappingHasPlainValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
   [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: PlainValue extends TKeyValueMapping[TKey]
@@ -56,9 +52,7 @@ export type KeyofKeyValueMappingHasPlainValue<TKeyValueMapping extends KeyValueM
 }>;
 
 /**
- * ストリーム形式の値を持つキーのみを抽出する型定義です。
- *
- * @template TKeyValueMapping キーと値のマッピング定義です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
   [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: StreamValue extends TKeyValueMapping[TKey]
@@ -205,136 +199,125 @@ const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
 // -------------------------------------------------------------------------------------------------
 
 /**
- * オープン操作時のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type OpenOptions = v.InferInput<typeof OpenOptionsSchema>;
 
 /**
- * クローズ操作時のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
 
 /**
- * 保存操作時のオプションです。
- *
- * @template TKeyValueMapping キーと値のマッピング定義です。
- * @template TKey 対象となるキーの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type SetOptions<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
   TKey extends KeyofKeyValueMapping<TKeyValueMapping> = KeyofKeyValueMapping<TKeyValueMapping>,
 > = {
   /**
-   * 操作対象を識別するためのキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   readonly key: TKey;
 
   /**
-   * 保存する値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   readonly value: SetValue<TKeyValueMapping[TKey]>;
 
   /**
-   * 処理の中断を通知するためのシグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時の変数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly vars?: VariablesSource | undefined;
 };
 
 /**
- * 取得操作時のオプションです。
- *
- * @template TKey 対象となるキーの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type GetOptions<TKey = IStorage.Key> = {
   /**
-   * 操作対象を識別するためのキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   readonly key: TKey;
 
   /**
-   * 処理の中断を通知するためのシグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時の変数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly vars?: VariablesSource | undefined;
 };
 
 /**
- * ストリーム取得操作時のオプションです。
- *
- * @template TKey 対象となるキーの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
  */
 export type StreamOptions<TKey = IStorage.Key> = {
   /**
-   * 操作対象を識別するためのキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
   readonly key: TKey;
 
   /**
-   * 処理の中断を通知するためのシグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時の変数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly vars?: VariablesSource | undefined;
 };
 
 /**
- * 存在確認操作時のオプションです。
- *
- * @template TKey 対象となるキーの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type HasOptions<TKey = IStorage.Key> = {
   /**
-   * 操作対象を識別するためのキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   readonly key: TKey;
 
   /**
-   * 処理の中断を通知するためのシグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時の変数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly vars?: VariablesSource | undefined;
 };
 
 /**
- * 削除操作時のオプションです。
- *
- * @template TKey 対象となるキーの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type DeleteOptions<TKey = IStorage.Key> = {
   /**
-   * 操作対象を識別するためのキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   readonly key: TKey;
 
   /**
-   * 処理の中断を通知するためのシグナルです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
-   * 実行時の変数です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly vars?: VariablesSource | undefined;
 };
 
 /**
- * すべてのデータを削除する操作時のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
 
@@ -391,33 +374,26 @@ type Connection = {
 };
 
 /**
- * 永続化先ストレージと、その前段パイプラインであるトランスフォーマー群の組み合わせです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export type UniKvsDestination = {
   /**
-   * データの永続化先となるストレージです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   readonly storage: UniKvsStorage;
 
   /**
-   * このストレージ専用の前段パイプラインです。登録順に保持します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   readonly transformers: readonly UniKvsTransformer[];
 };
 
 /**
- * UniKvs メインクラスです。
- *
- * 複数のストレージとトランスフォーマーを統合して KVS 操作を提供します。
- *
- * @template TKeyValueMapping キーと値のマッピング定義です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> {
   /**
-   * UniKvs の設定ビルダーを作成します。
-   *
-   * @template TKeyValueMapping マッピング定義です。
-   * @returns 設定ビルダーのインスタンスです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public static config<
     TKeyValueMapping extends KeyValueMapping,
@@ -448,12 +424,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #transformers: readonly UniKvsTransformer[];
 
   /**
-   * インスタンスを初期化します。
-   *
-   * @internal UniKvs の設定ビルダー経由で使用します。
-   * @param vars 基本となる変数です。
-   * @param destinations ストレージと前段パイプラインのリストです。
-   * @param transformers トランスフォーマーのリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public constructor(
     vars: Readonly<Variables>,
@@ -468,19 +439,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * UniKvs が利用可能であるかを確認します。
-   *
-   * @returns 利用可能である場合は true、そうでない場合は false を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
   /**
-   * すべてのストレージとトランスフォーマーを初期化します。
-   *
-   * @param options オープン時のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public open(options?: OpenOptions): Promise<void>;
 
@@ -650,10 +616,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * ストレージをクローズします。
-   *
-   * @param options クローズ時のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public close(options?: CloseOptions): Promise<void>;
 
@@ -715,11 +678,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * UniKvs が開いている場合にクローズします。
-   *
-   * `await using` 構文による自動クローズに使用されます。
-   *
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   async [Symbol.asyncDispose](): Promise<void> {
     if (!this.isOpen) {
@@ -732,24 +691,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定したオプションで値を保存します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options セット操作のオプション一式です。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
     options: SetOptions<TKeyValueMapping, TKey>,
   ): Promise<void>;
 
   /**
-   * 指定したキーに値を保存します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param key 操作対象を識別するためのキーです。
-   * @param value 保存する値です。
-   * @param options 追加のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
     key: TKey,
@@ -922,23 +871,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定したオプションで値を取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options 取得操作のオプション一式です。
-   * @returns 取得した値を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
     options: GetOptions<TKey>,
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
 
   /**
-   * 指定したキーから値を取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param key 操作対象を識別するためのキーです。
-   * @param options 追加のオプションです。
-   * @returns 取得した値を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
     key: TKey,
@@ -1027,23 +967,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定したオプションでストリームを取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param options ストリーム取得操作のオプション一式です。
-   * @returns 取得したストリームを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     options: StreamOptions<TKey>,
   ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
   /**
-   * 指定したキーからストリームを取得します。
-   *
-   * @template TKey 対象キーの型定義です。
-   * @param key 操作対象を識別するためのキーです。
-   * @param options 追加のオプションです。
-   * @returns 取得したストリームを返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     key: TKey,
@@ -1171,19 +1102,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定したオプションでキーの存在を確認します。
-   *
-   * @param options 存在確認操作のオプションです。
-   * @returns 存在する場合は true、そうでない場合は false を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
 
   /**
-   * 指定したキーが存在するかを確認します。
-   *
-   * @param key 操作対象を識別するためのキーです。
-   * @param options 追加のオプションです。
-   * @returns 存在する場合は true、そうでない場合は false を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public has(
     key: KeyofKeyValueMapping<TKeyValueMapping>,
@@ -1259,19 +1183,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定したオプションでキーを削除します。
-   *
-   * @param options 削除操作のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
 
   /**
-   * 指定したキーを削除します。
-   *
-   * @param key 操作対象を識別するためのキーです。
-   * @param options 追加のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public delete(
     key: KeyofKeyValueMapping<TKeyValueMapping>,
@@ -1328,10 +1245,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * すべてのストレージ内のデータを完全に消去します。
-   *
-   * @param options クリア操作のオプションです。
-   * @returns 完了を通知する Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public async clear(options?: ClearOptions): Promise<void>;
 

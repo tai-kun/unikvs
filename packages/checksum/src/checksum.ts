@@ -32,72 +32,61 @@ const GB = 1000 * MB;
 const MAX_CHUNK_SIZE = 4 * GB;
 
 /**
- * ハッシュ値を逐次計算するオブジェクトのインターフェースです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
  */
 export interface IHasher {
   /**
-   * チャンクデータを使ってハッシュ値計算の内部状態を更新します。
-   *
-   * @param data ハッシュ値を計算するチャンクデータです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
    */
   update(data: Uint8Array<ArrayBuffer>): void;
 
   /**
-   * ハッシュ値を計算します。
-   *
-   * @returns ハッシュ値を表す Uint8Array です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
    */
   digest(): Uint8Array;
 }
 
 /**
- * ハッシュ値を計算する関数のインターフェースです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
  */
 export interface IHash {
   /**
-   * ハッシュ値を計算します。
-   *
-   * @param data ハッシュ値を計算するデータです。
-   * @returns ハッシュ値を表す Uint8Array です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
    */
   (data: Uint8Array<ArrayBuffer>): Uint8Array;
 
   /**
-   * ハッシュ値を逐次計算する IHasher を作成します。
-   *
-   * @returns ハッシュ値を逐次計算する IHasher です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
    */
   create(): IHasher;
 }
 
 /**
- * {@link Checksum} のオプションです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export type ChecksumOptions = {
   /**
-   * ハッシュ値の検証を必須にするかどうかです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
    */
   readonly required?: boolean | undefined;
 };
 
 /**
- * ハッシュアルゴリズムを使用してデータの整合性を検証するトランスフォーマーの基底クラスです。
- *
- * 変数に含まれる期待値と、実際のデータのハッシュ値を比較します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
 export default abstract class Checksum implements ITransformer {
   /**
-   * 期待するチェックサムを保持する変数キーです。サブクラスで上書きして使用します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public static readonly CHECKSUM_VAR_NAME: string;
 
   /**
-   * トランスフォーマーの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
    */
   public readonly name: string;
 
   /**
-   * ハッシュ値の検証を必須にするかどうかです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
    */
   public readonly required: boolean;
 
@@ -107,11 +96,7 @@ export default abstract class Checksum implements ITransformer {
   private readonly hash: IHash;
 
   /**
-   * Checksum の新しいインスタンスを初期化します。
-   *
-   * @param name トランスフォーマーの名前です。デバッグメッセージなどに使用されます。
-   * @param hash ハッシュ値を計算する関数です。
-   * @param options オプションです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public constructor(name: string, hash: IHash, options: ChecksumOptions = {}) {
     this.name = name;
@@ -120,19 +105,14 @@ export default abstract class Checksum implements ITransformer {
   }
 
   /**
-   * トランスフォーマーが開かれているかどうかを示します。
-   *
-   * Checksum トランスフォーマーは常に開かれていると見なされます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
    */
   public get isOpen(): boolean {
     return true;
   }
 
   /**
-   * エンコード処理（ハッシュ検証）を実行します。
-   *
-   * @param args データと変数を含むオブジェクトです。
-   * @returns 検証後のバイナリーデータ（入力データと同一）です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
   public encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
@@ -141,10 +121,7 @@ export default abstract class Checksum implements ITransformer {
   }
 
   /**
-   * デコード処理（ハッシュ検証）を実行します。
-   *
-   * @param args データと変数を含むオブジェクトです。
-   * @returns 検証後のバイナリーデータ（入力データと同一）です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
   public decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
@@ -153,10 +130,7 @@ export default abstract class Checksum implements ITransformer {
   }
 
   /**
-   * エンコード用の TransformStream を生成します。
-   *
-   * @param args 変数を含むオブジェクトです。
-   * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
   public getEncodable(
     args: Pick<ITransformer.GetEncodableArgs, "vars">,
@@ -165,10 +139,7 @@ export default abstract class Checksum implements ITransformer {
   }
 
   /**
-   * デコード用の TransformStream を生成します。
-   *
-   * @param args 変数を含むオブジェクトです。
-   * @returns 入力データを透過させながらハッシュを計算する TransformStream です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
   public getDecodable(
     args: Pick<ITransformer.GetDecodableArgs, "vars">,

@@ -1,9 +1,5 @@
 /**
- * 値を非同期に流すための読み取り専用ストリームを定義するインターフェースです。
- *
- * `ReadableStream` を拡張しており、標準的なストリーム操作に加えて非同期イテレーターによる反復処理をサポートします。
- *
- * @template T ストリームを流れるデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
  */
 export interface ValueStream<T = any>
   extends
@@ -11,9 +7,7 @@ export interface ValueStream<T = any>
     AsyncDisposable,
     AsyncIterable<T, void, unknown> {
   /**
-   * ストリームを閉じ、関連するリソースを解放します。
-   *
-   * @returns リソースの解放が完了したときに解決される Promise です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
   dispose: (this: void) => Promise<void>;
 }

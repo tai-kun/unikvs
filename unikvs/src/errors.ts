@@ -14,9 +14,7 @@ import type { BaseIssue } from "valibot";
 // -------------------------------------------------------------------------------------------------
 
 /**
- * 無効な入出力を表すエラーの基底クラスです。
- *
- * @template TMeta エラーのメタデータの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class InvalidUsageErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
@@ -25,44 +23,42 @@ export class InvalidUsageErrorBase<
 // -------------------------------------------------------------------------------------------------
 
 /**
- * バリデーションの問題を表す valibot のイシューです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type Issue = BaseIssue<unknown>;
 
 /**
- * InvalidInputError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type InvalidInputErrorMeta = {
   /**
-   * 検証に失敗した入力値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly input: unknown;
 
   /**
-   * 検証で検出されたイシューのリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
 /**
- * InvalidInputError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type InvalidInputErrorArgs = ErrorOptions & {
   /**
-   * 検証の対象となった値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly value: unknown;
 
   /**
-   * 検証で検出されたイシューのリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
 /**
- * 入力値が期待するスキーマに適合しない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMeta> {
   static {
@@ -79,39 +75,37 @@ export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMe
 // -------------------------------------------------------------------------------------------------
 
 /**
- * InvalidOutputError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type InvalidOutputErrorMeta = {
   /**
-   * 検証に失敗した出力値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly output: unknown;
 
   /**
-   * 検証で検出されたイシューのリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
 /**
- * InvalidOutputError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type InvalidOutputErrorArgs = ErrorOptions & {
   /**
-   * 検証の対象となった値です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly value: unknown;
 
   /**
-   * 検証で検出されたイシューのリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly issues: readonly [Issue, ...Issue[]];
 };
 
 /**
- * 出力値が期待するスキーマに適合しない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputErrorMeta> {
   static {
@@ -132,7 +126,7 @@ export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputError
 // -------------------------------------------------------------------------------------------------
 
 /**
- * すでに開いている UniKvs に対して再度オープン操作が行われた場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class UniKvsIsOpenError extends ErrorBase<undefined> {
   static {
@@ -147,7 +141,7 @@ export class UniKvsIsOpenError extends ErrorBase<undefined> {
 setErrorMessage(UniKvsIsOpenError, "UniKvs は開いています", "ja");
 
 /**
- * UniKvs が開かれていない状態で操作が行われた場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
   static {
@@ -162,24 +156,22 @@ export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
 setErrorMessage(UniKvsIsNotOpenError, "UniKvs は開いていません", "ja");
 
 /**
- * KeyNotFoundError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type KeyNotFoundErrorMeta = {
   /**
-   * 見つからなかったキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly key: IStorage.Key;
 };
 
 /**
- * KeyNotFoundError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
- * 指定したキーのデータがどのストレージにも存在しない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   static {
@@ -224,24 +216,22 @@ setErrorMessage(
 // setErrorMessage(StorageIsOpenError, ({ name }) => `ストレージ "${name}" は開いています`, "ja");
 
 /**
- * StorageIsNotOpenError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type StorageIsNotOpenErrorMeta = {
   /**
-   * 開かれていないストレージの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * StorageIsNotOpenError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type StorageIsNotOpenErrorArgs = ErrorOptions & StorageIsNotOpenErrorMeta;
 
 /**
- * ストレージが開かれていない状態で操作が行われた場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> {
   static {
@@ -258,25 +248,23 @@ export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> 
 setErrorMessage(StorageIsNotOpenError, ({ name }) => `ストレージ "${name}" は開いていません`, "ja");
 
 /**
- * WritableStreamNotSupportedError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type WritableStreamNotSupportedErrorMeta = {
   /**
-   * 対象のストレージの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * WritableStreamNotSupportedError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type WritableStreamNotSupportedErrorArgs = ErrorOptions &
   WritableStreamNotSupportedErrorMeta;
 
 /**
- * ストレージが書き込み可能なストリームをサポートしていない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class WritableStreamNotSupportedError extends ErrorBase<WritableStreamNotSupportedErrorMeta> {
   static {
@@ -297,25 +285,23 @@ setErrorMessage(
 );
 
 /**
- * ReadableStreamNotSupportedError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type ReadableStreamNotSupportedErrorMeta = {
   /**
-   * 対象のストレージの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * ReadableStreamNotSupportedError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type ReadableStreamNotSupportedErrorArgs = ErrorOptions &
   ReadableStreamNotSupportedErrorMeta;
 
 /**
- * ストレージが読み取り可能なストリームをサポートしていない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNotSupportedErrorMeta> {
   static {
@@ -399,24 +385,22 @@ setErrorMessage(
 // setErrorMessage(TransformerIsOpenError, ({ name }) => `トランスフォーマー "${name}" は開いています`, "ja");
 
 /**
- * TransformerIsNotOpenError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type TransformerIsNotOpenErrorMeta = {
   /**
-   * 開かれていないトランスフォーマーの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * TransformerIsNotOpenError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type TransformerIsNotOpenErrorArgs = ErrorOptions & TransformerIsNotOpenErrorMeta;
 
 /**
- * トランスフォーマーが開かれていない状態で操作が行われた場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class TransformerIsNotOpenError extends ErrorBase<TransformerIsNotOpenErrorMeta> {
   static {
@@ -437,25 +421,23 @@ setErrorMessage(
 );
 
 /**
- * EncodableStreamNotSupportedError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type EncodableStreamNotSupportedErrorMeta = {
   /**
-   * 対象のトランスフォーマーの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * EncodableStreamNotSupportedError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type EncodableStreamNotSupportedErrorArgs = ErrorOptions &
   EncodableStreamNotSupportedErrorMeta;
 
 /**
- * トランスフォーマーがエンコード可能なストリームをサポートしていない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamNotSupportedErrorMeta> {
   static {
@@ -476,25 +458,23 @@ setErrorMessage(
 );
 
 /**
- * DecodableStreamNotSupportedError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type DecodableStreamNotSupportedErrorMeta = {
   /**
-   * 対象のトランスフォーマーの名前です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
 };
 
 /**
- * DecodableStreamNotSupportedError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type DecodableStreamNotSupportedErrorArgs = ErrorOptions &
   DecodableStreamNotSupportedErrorMeta;
 
 /**
- * トランスフォーマーがデコード可能なストリームをサポートしていない場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamNotSupportedErrorMeta> {
   static {
@@ -521,75 +501,67 @@ setErrorMessage(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * PluginOperationAggregateError に付与されるメタデータです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type PluginOperationAggregateErrorMeta = {
   /**
-   * 失敗した操作の対象となったプラグインの種別です。
-   *
-   * - `"plugin"`: 複数の種別のプラグインが混在しています。
-   * - `"storage"`: ストレージです。
-   * - `"transformer"`: トランスフォーマーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly plugin: "plugin" | "storage" | "transformer";
 
   /**
-   * 失敗した操作の種類です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
 
   /**
-   * 失敗した各プラグインの操作と原因のリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly errors: readonly {
     /**
-     * 失敗したプラグインの種別です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
     readonly plugin: "storage" | "transformer";
 
     /**
-     * 操作が失敗した原因です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
     readonly reason: unknown;
   }[];
 };
 
 /**
- * PluginOperationAggregateError のコンストラクター引数です。
- *
- * エラーの追加情報 (`cause`) も含みます。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type PluginOperationAggregateErrorArgs = ErrorOptions & {
   /**
-   * 失敗したプラグインの既定の種別です。
-   *
-   * 個々のエラーで種別が指定されていない場合に使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly plugin?: "storage" | "transformer";
 
   /**
-   * 失敗した操作の種類です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
 
   /**
-   * 失敗した各プラグインの操作と原因のリストです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly errors: readonly {
     /**
-     * 失敗したプラグインの種別です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
     readonly plugin?: "storage" | "transformer";
 
     /**
-     * 操作が失敗した原因です。
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
     readonly reason: unknown;
   }[];
 };
 
 /**
- * 複数のストレージやトランスフォーマーの操作が失敗した場合に投げられる、個々の失敗を集約したエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggregateErrorMeta> {
   static {
@@ -631,7 +603,7 @@ setErrorMessage(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * ストレージが一つも登録されていない状態で UniKvs を作成しようとした場合に投げられるエラーです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class MissingStorageError extends ErrorBase<undefined> {
   static {

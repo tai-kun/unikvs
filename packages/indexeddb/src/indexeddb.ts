@@ -2,7 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { openDB, type IDBPDatabase } from "idb";
 
 /**
- * ブラウザーの IndexedDB を永続化先として使用するストレージクラスです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
  */
 export default class Indexeddb implements IStorage {
   /**
@@ -23,15 +23,12 @@ export default class Indexeddb implements IStorage {
   private readonly storeName: string;
 
   /**
-   * ストレージの名前です。デバッグメッセージなどに使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public readonly name: string;
 
   /**
-   * Indexeddb インスタンスを初期化します。
-   *
-   * @param dbName データベース名です。デフォルトは `"unikvs_db"` です。
-   * @param storeName データを保存するオブジェクトストア名です。デフォルトは `"kvs_store"` です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public constructor(dbName: string = "unikvs_db", storeName: string = "kvs_store") {
     this.name = "Indexeddb";
@@ -41,16 +38,14 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * ストレージが現在利用可能な状態であるかを示します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public get isOpen(): boolean {
     return this.db !== null;
   }
 
   /**
-   * ストレージをオープンし、IndexedDB データベースへの接続を確立します。
-   *
-   * すでにオープンされている場合は何も行いません。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public async open(): Promise<void> {
     if (this.db) {
@@ -68,9 +63,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * ストレージを安全にクローズします。
-   *
-   * データベース接続を閉じ、内部状態を初期化します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public async close(): Promise<void> {
     this.db!.close();
@@ -78,10 +71,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * 指定されたデータを、対応するキーでストレージに保存します。
-   *
-   * @param args.key 保存先のキーです。
-   * @param args.data 保存するデータです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
   public async write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): Promise<void> {
     const { key, data } = args;
@@ -89,10 +79,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから取得します。
-   *
-   * @param args.key 取得元のキーです。
-   * @returns キーに対応するデータです。存在しない場合は DOMException (NotFoundError) を投げます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
   public async read(args: Pick<IStorage.ReadArgs, "key">): Promise<any> {
     const { key } = args;
@@ -108,10 +95,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータがストレージ内に存在するかを確認します。
-   *
-   * @param args.key 確認するキーです。
-   * @returns キーに対応するデータが存在する場合は true、それ以外は false です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { key } = args;
@@ -122,9 +106,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから削除します。
-   *
-   * @param args.key 削除するキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { key } = args;
@@ -133,19 +115,14 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * ストレージ内のすべてのデータを完全に消去します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
   public async clear(): Promise<void> {
     await this.db!.clear(this.storeName);
   }
 
   /**
-   * 指定されたキーに対応する書き込み可能なストリームを取得します。
-   *
-   * IndexedDB にはネイティブなストリームがないため、書き込まれたチャンクをメモリー上に保持し、ストリームがクローズされたときにまとめて保存します。
-   *
-   * @param args.key 書き込み先のキーです。
-   * @returns 書き込み可能なストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
   public getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
     const { key } = args;
@@ -171,12 +148,7 @@ export default class Indexeddb implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する読み取り可能なストリームを取得します。
-   *
-   * IndexedDB にはネイティブなストリームがないため、データ全体をメモリーにロードしてから単一チャンクとしてストリームで送出します。
-   *
-   * @param args.key 読み取り元のキーです。
-   * @returns 読み取り可能なストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
   public getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<Uint8Array> {
     const { key } = args;

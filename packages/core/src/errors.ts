@@ -7,28 +7,17 @@ import { type ErrorMeta, I18nErrorBase, setErrorMessage, type ErrorOptions } fro
 // -------------------------------------------------------------------------------------------------
 
 /**
- * エラークラスに、言語ごとのエラーメッセージを登録します。
- *
- * 登録できるメッセージは固定文字列か、メタ情報を受け取って文字列を返す関数です。
- * 言語は 1 つの言語タグか、複数の言語タグを列挙した反復可能オブジェクトで指定します。
- *
- * @param reference メッセージを登録する対象のエラークラスです。
- * @param message 登録するメッセージ、またはメタ情報からメッセージを生成する関数です。
- * @param lang メッセージを使用する言語タグ、または言語タグの反復可能オブジェクトです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-message)
  */
 export { setErrorMessage };
 
 /**
- * エラーが保持するメタ情報の型定義です。
- *
- * キーを string、値を unknown として扱う読み取り専用のオブジェクトです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
  */
 export type { ErrorMeta };
 
 /**
- * エラーのコンストラクターに渡せるオプションの型定義です。
- *
- * - `cause`: エラーの原因となった値です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
  */
 export type { ErrorOptions };
 
@@ -39,7 +28,7 @@ export type { ErrorOptions };
 // -------------------------------------------------------------------------------------------------
 
 /**
- * unikvs のすべてのエラーの基底クラスです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-base)
  */
 export class ErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
@@ -52,7 +41,7 @@ export class ErrorBase<
 // -------------------------------------------------------------------------------------------------
 
 /**
- * 無効な使用方法（API 契約違反）を示すエラーの基底クラスです。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-invalid-usage)
  */
 export class InvalidUsageErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,

@@ -1,6 +1,4 @@
 /**
- * オブジェクトのプロパティー値の型のユニオン型を抽出するユーティリティー型です。
- *
- * @template T 対象となるオブジェクトの型です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs)
  */
 export type ValueOf<T> = T[keyof T];

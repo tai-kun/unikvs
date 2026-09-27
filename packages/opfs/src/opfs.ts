@@ -2,11 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
- * ブラウザーの OPFS (Origin Private File System) を永続化先として使用するストレージクラスです。
- *
- * ブラウザー環境（メインスレッド、または Web Worker）での動作を前提としています。
- *
- * 指定されたルートディレクトリー配下にキーをファイル名としてデータを保存します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
  */
 export default class Opfs implements IStorage {
   /**
@@ -22,14 +18,12 @@ export default class Opfs implements IStorage {
   private root: string;
 
   /**
-   * ストレージの名前です。デバッグやエラーメッセージなどに使用されます。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public readonly name: string;
 
   /**
-   * Opfs インスタンスを初期化します。
-   *
-   * @param root データを保存する OPFS 内のディレクトリー名、または既存のディレクトリーハンドルです。デフォルトは `".unikvs"` です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public constructor(root: string | FileSystemDirectoryHandle = ".unikvs") {
     this.name = "Opfs";
@@ -58,14 +52,14 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * ストレージがオープンされているかどうかを示します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public get isOpen(): boolean {
     return this.rootHandle !== null;
   }
 
   /**
-   * ストレージをオープンし、OPFS 内のルートディレクトリーを作成または取得します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async open(): Promise<void> {
     if (this.rootHandle) {
@@ -82,12 +76,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたデータを、対応するキーでストレージに保存します。
-   *
-   * 書き込みが失敗した場合は変更を破棄するため、既存のデータが部分書き込みによって破壊されることはありません。
-   *
-   * @param args.key 保存先のキーです。
-   * @param args.data 保存するバイト配列です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data">,
@@ -111,10 +100,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから取得します。
-   *
-   * @param args.key 取得元のキーです。
-   * @returns キーに対応するバイト配列です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async read(args: Pick<IStorage.ReadArgs, "key">): Promise<Uint8Array<ArrayBuffer>> {
     const { key } = args;
@@ -129,10 +115,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたキーがストレージ内に存在するかどうかを確認します。
-   *
-   * @param args.key 存在確認するキーです。
-   * @returns キーが存在する場合は `true`、それ以外は `false` です。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
     const { key } = args;
@@ -152,9 +135,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応するデータをストレージから削除します。
-   *
-   * @param args.key 削除するキーです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
     const { key } = args;
@@ -165,9 +146,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * ストレージ内のすべてのデータを消去します。
-   *
-   * ルートディレクトリー直下を使用している場合は個別にエントリーを削除し、サブディレクトリーを使用している場合はディレクトリーごと削除して再作成します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
   public async clear(): Promise<void> {
     if (this.root === "") {
@@ -192,10 +171,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する書き込み可能ストリームを取得します。
-   *
-   * @param args.key 書き込み先のキーです。
-   * @returns 書き込み可能ストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
    */
   public async getWritable(
     args: Pick<IStorage.GetWritableArgs, "key">,
@@ -211,10 +187,7 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定されたキーに対応する読み取り可能ストリームを取得します。
-   *
-   * @param args.key 読み取り元のキーです。
-   * @returns 読み取り可能ストリームです。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
    */
   public async getReadable(
     args: Pick<IStorage.GetReadableArgs, "key">,
