@@ -1,0 +1,80 @@
+---
+title: "エラーと診断"
+description: "エラーの分類、対処方法、国際化対応について説明します。"
+---
+
+## 基本方針 [#policy]
+
+すべてのエラーは説明と原因と解決方法を含むメッセージを提供します。エラーは `ErrorBase` を継承しており、i18n対応しています。まずは `instanceof` で種類を判別し、再試行すべきか、設定を修正すべきかを切り分けます。
+
+```ts
+import { KeyNotFoundError } from "unikvs";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+## クライアント操作のエラー [#client-errors]
+
+<Accordion>
+  <AccordionItem title="キーとオープン状態のエラー">
+    | エラー | 主な発生条件 | 対処 |
+    | --- | --- | --- |
+    | `KeyNotFoundError` | キーがどのストレージにも存在しません | キー名と保存済みかを確認します |
+    | `UniKvsIsNotOpenError` | 未オープンで操作しました | `open()` を先に呼びます |
+    | `UniKvsIsOpenError` | オープン済みで再度 `open()` しました | 二重オープンを避けます |
+    | `MissingStorageError` | ストレージ未登録で `create()` しました | `appendStorage()` を追加します |
+    | `StorageIsNotOpenError` | ストレージが未オープンです | `open()` の呼び出しと実装を確認します |
+    | `TransformerIsNotOpenError` | トランスフォーマーが未オープンです | `open()` の呼び出しと実装を確認します |
+  </AccordionItem>
+  <AccordionItem title="変換とストリーム対応のエラー">
+    | エラー | 主な発生条件 | 対処 |
+    | --- | --- | --- |
+    | `PluginOperationAggregateError` | 複数プラグイン操作が失敗しました | 内包された個別エラーを確認します |
+    | `InvalidInputError` | 入力形式が不正です | 値の型とキー定義を確認します |
+    | `InvalidOutputError` | 出力形式が不正です | 変換順序と保存データを確認します |
+    | `ReadableStreamNotSupportedError` | 読み取りストリーム未対応です | ストレージの対応状況を確認します |
+    | `WritableStreamNotSupportedError` | 書き込みストリーム未対応です | ストレージの対応状況を確認します |
+    | `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です | トランスフォーマーの対応状況を確認します |
+    | `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です | トランスフォーマーの対応状況を確認します |
+  </AccordionItem>
+</Accordion>
+
+## プラグイン固有のエラー [#plugin-errors]
+
+<Accordion>
+  <AccordionItem title="ストレージとユーティリティーのエラー">
+    | パッケージ | エラー | 主な発生条件 |
+    | --- | --- | --- |
+    | `@unikvs/memory` | `MemoryKeyNotFoundError` | 存在しないキーを参照しました |
+    | `@unikvs/memory` | `MemoryInvalidChunkTypeError` | バイト列以外のチャンクを扱いました |
+    | `@unikvs/utils` | `InvalidFilenameError` | ファイル名が不正です |
+    | `@unikvs/utils` | `InvalidDirnameError` | ディレクトリ名が不正です |
+  </AccordionItem>
+  <AccordionItem title="チェックサムのエラー">
+    | パッケージ | エラー | 主な発生条件 |
+    | --- | --- | --- |
+    | `@unikvs/checksum` | `ChecksumMismatchError` | ハッシュが一致しません |
+    | `@unikvs/checksum` | `ChecksumRequiredError` | 検証用ハッシュが不足しています |
+    | `@unikvs/checksum` | `ChecksumInvalidVarNameError` | 変数名の指定が不正です |
+  </AccordionItem>
+</Accordion>
+
+:::danger
+チェックサム不一致は、保存データの破損、変数指定の誤り、変換順序の誤りが主な原因です。保存前後の変換順序と変数を確認してください。
+:::
+
+## 集約エラー [#aggregate]
+
+複数ストレージへの書き込みなどで部分的な失敗が起きると、集約エラーにまとめられます。内包された個別エラーを1つずつ確認し、失敗した保存先を特定してください。
+
+## 国際化 [#i18n]
+
+エラーメッセージはi18n対応しています。`ErrorBase` と `setErrorMessage` の仕組みにより、ロケールに応じたメッセージを定義できます。自作プラグインでも同じ仕組みを使ってください。詳細は `@unikvs/core` のパッケージリファレンスを参照してください。

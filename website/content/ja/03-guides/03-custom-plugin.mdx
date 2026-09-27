@@ -1,0 +1,108 @@
+---
+title: "自作プラグイン"
+description: "StorageとTransformerの自作方法と実装時の注意点を説明します。"
+---
+
+## インターフェースの全体像 [#overview]
+
+プラグインは `@unikvs/core` の型に従って実装します。ストレージはデータの保存先、トランスフォーマーは透過的な変換処理を担当します。
+
+<Steps>
+  <Step title="ストレージは IStorage を実装する">
+    データの保存先です。`write`・`read`・`exists`・`delete`・`clear` を実装します。
+  </Step>
+  <Step title="トランスフォーマーは ITransformer を実装する">
+    透過的な変換処理です。エンコードとデコードの対応関係を実装します。
+  </Step>
+  <Step title="必要に応じてストリーム対応を追加する">
+    ストリーム対応が必要な場合は、入出力別のストリーム用インターフェースを追加で実装します。
+  </Step>
+  <Step title="エラーは ErrorBase を継承する">
+    説明・原因・解決方法を含むメッセージを定義します。
+  </Step>
+</Steps>
+
+詳細なシグネチャは、`@unikvs/core` のパッケージリファレンスを参照してください。
+
+## ストレージの実装 [#storage]
+
+必須の観点は次のとおりです。
+
+1. `write`・`read`・`exists`・`delete`・`clear` の意味を正確に実装します。
+2. 存在しないキーの `read` と `delete` ではキー未検出エラーを投げます。
+3. ライフサイクルが必要な場合は `open` と `close`、`isOpen` を実装します。不要な場合は常時オープンとして扱えます。メモリーストレージは常時オープンの例です。
+4. ストリーム保存が必要な場合は、書き込み用と読み込み用のストリーム取得処理を追加します。バイト列以外を受け取った場合の扱いを明確にします。
+5. ファイル名やキーに制約がある場合は、`@unikvs/utils` の検証関数を再利用します。
+
+```ts
+import type { IStorage } from "@unikvs/core";
+
+export default class MyStorage implements IStorage {
+  public readonly name = "MyStorage";
+
+  public get isOpen(): boolean {
+    return true;
+  }
+
+  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+    // 保存処理を実装します
+  }
+
+  public read(args: Pick<IStorage.ReadArgs, "key">): unknown {
+    // 取得処理を実装します
+  }
+
+  public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
+    // 存在確認を実装します
+    return false;
+  }
+
+  public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
+    // 削除処理を実装します
+  }
+
+  public clear(): void {
+    // 全削除処理を実装します
+  }
+}
+```
+
+上記は構造の例であり、メソッドの引数と戻り値の詳細はコアの型定義に従ってください。
+
+<Expandable title="プラグインの足場の例">
+<FileTree>
+
+- my-plugin/
+  - src/
+    - index.ts
+    - my-storage.ts
+    - errors.ts
+  - package.json
+  - tsconfig.json
+
+</FileTree>
+</Expandable>
+
+:::tip
+キーやファイル名の制約がある場合は、`@unikvs/utils` の検証関数を再利用すると、ファイル系ストレージと一貫したエラーメッセージになります。
+:::
+
+## トランスフォーマーの実装 [#transformer]
+
+必須の観点は次のとおりです。
+
+1. エンコードとデコードの対応関係を明確にします。往復で元に戻ることを単体テストで確認します。
+2. ストリーム変換の対応可否を明確にします。未対応の場合は対応するエラーを投げます。
+3. 追加情報が必要な場合は実行時変数で受け取ります。チェックサムのハッシュ指定がその例です。
+4. ライフサイクルが必要な場合は `open` と `close` を実装します。
+
+## エラー定義 [#errors]
+
+`ErrorBase` を継承し、説明と原因と解決方法を含むメッセージを定義します。メッセージはi18n対応が可能です。既存の `InvalidFilenameError` やチェックサム不一致エラーが参考になります。
+
+## テストの観点 [#testing]
+
+- 往復テストとして、保存して取得した値が一致することを確認します。
+- 未検出キー、空データ、大容量データの境界を確認します。
+- ストリーム対応がある場合は、複数チャンクの結合と中断時の挙動を確認します。
+- 複数ストレージ構成での動作を確認します。

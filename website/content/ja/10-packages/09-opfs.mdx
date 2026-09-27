@@ -1,0 +1,137 @@
+---
+title: "@unikvs/opfs — OPFSストレージ"
+description: "ブラウザーの OPFS にバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/opfs` は、ブラウザーの OPFS（Origin Private File System）を永続化先として使用するストレージプラグインです。読み書きするデータはバイト列（`Uint8Array<ArrayBuffer>`）専用です。<Badge variant="warning">ブラウザー専用</Badge>
+
+実装のコメントでは、ブラウザー環境（メインスレッド、または Web Worker）での動作を前提としています。
+
+:::warning[実行環境について]
+OPFS の利用可否は実行環境（ブラウザーの種類やバージョン、設定など）に依存します。一般的に、OPFS は Secure Context や Worker と組み合わせて利用されることが多い機能ですが、詳細な対応条件はご利用のブラウザーのドキュメントでご確認ください。
+:::
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/opfs
+```
+
+## 使い方 [#usage]
+
+クラス名は `Opfs` です。デフォルトエクスポートと名前付きエクスポートのどちらでも取得できます。コンストラクターの引数は実装では次のように定義されています。
+
+<Steps>
+  <Step title="インスタンスを作成します">
+    ```ts
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    ```
+
+    コンストラクター引数 `root` の型は `string | FileSystemDirectoryHandle` で、既定値は `".unikvs"` です。文字列を渡した場合は OPFS 内のルートディレクトリー名として扱われ、`FileSystemDirectoryHandle` を渡した場合はそのハンドル自体が作業対象になります。ハンドルを渡した場合は、すでにオープン済みとして扱われます。
+  </Step>
+  <Step title="ストレージをオープンします">
+    使用する前に `open()` を呼び出してストレージをオープンします。オープン状態は `isOpen` で確認できます。`UniKvs` と組み合わせる場合は、`appendStorage` で登録してから `kvs.open()` を呼び出します。`kvs.open()` の内部で `Opfs.open()` が呼び出されます。
+
+    ```ts
+    import { UniKvs } from "unikvs";
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    const kvs = UniKvs.config().appendStorage(storage).create();
+
+    await kvs.open();
+    // バイト列の読み書きを行います。
+    await kvs.close();
+    ```
+  </Step>
+  <Step title="データを読み書きします">
+    `Opfs` を直接操作する場合は、`write`・`read`・`exists`・`delete`・`clear` メソッドを使用します。いずれも操作前に `open()` が必要です。
+
+    ```ts
+    import { Opfs } from "@unikvs/opfs";
+
+    const storage = new Opfs(".unikvs");
+    await storage.open();
+
+    await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
+    const data = await storage.read({ key: "data.bin" });
+    const found = await storage.exists({ key: "data.bin" });
+    await storage.delete({ key: "data.bin" });
+    ```
+  </Step>
+</Steps>
+
+## ファイル配置 [#layout]
+
+キーはファイル名として扱われ、指定されたルートディレクトリーの直下に 1 対 1 で保存されます。キーからサブディレクトリーが作られることはありません。キーは `assertValidFilename` で検証されるため、ファイル名として無効なキーではエラーになります。
+
+コンストラクターに文字列を渡した場合、ルートディレクトリー名は次の規則で正規化されます。
+
+- `""`、`"."`、`"/"` を指定した場合は空文字として扱われ、OPFS のルート直下が作業対象になります。
+- 連続する `/` は 1 つにまとめられ、先頭と末尾の `/` は取り除かれます。
+- `/` で分割した各階層は `assertValidDirname` で検証されます。
+
+`open()` では `navigator.storage.getDirectory()` で OPFS の起点を取得し、ルート名の各階層を `create: true` で作成または取得します。`clear()` では、ルート直下を使用している場合は各エントリーを個別に削除し、サブディレクトリーを使用している場合はディレクトリーごと削除して再作成します。
+
+## ストリーム [#streams]
+
+`Opfs` は書き込みストリームと読み取りストリームの両方に対応しています。
+
+- `getWritable({ key })` は `WritableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルハンドルから `createWritable()` で取得したストリームをそのまま返します。
+- `getReadable({ key })` は `ReadableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルを取得し、`File.stream()` の結果を返します。
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+const writable = await storage.getWritable({ key: "large.bin" });
+const writer = writable.getWriter();
+await writer.write(new Uint8Array([1, 2, 3]));
+await writer.close();
+
+const readable = await storage.getReadable({ key: "large.bin" });
+await readable.cancel();
+```
+
+## 注意点 [#notes]
+
+実装から分かる範囲の注意点は次のとおりです。
+
+- `open()` を呼び出す前に `read`・`write` などの操作を行うと実行時エラーになります。使用前に必ずオープンしてください。
+- `write` は書き込みに失敗した場合、`abort` によって変更を破棄します。そのため、既存のデータが部分書き込みによって破壊されることはありません。
+- `exists` は、存在しないキーに対して `false` を返します。これは `NotFoundError` という名前の `DOMException` を捕捉して判定しています。それ以外のエラーはそのまま投げられます。
+- キーとルートディレクトリー名にはファイル名としての制約があります。無効な名前を指定すると検証エラーになります。
+
+一般的な注意として、次の点にもご留意ください。
+
+:::note[永続性とオリジンについて]
+- OPFS はオリジンごとに隔離されたプライベートなファイルシステムです。ユーザーが通常のファイル操作で直接見る場所ではありません。
+- 保存したデータの永続性はブラウザーのストレージ管理（空き容量の逼迫時の削除など）の影響を受けます。重要なデータは必要に応じて別途バックアップをご検討ください。
+- OPFS の挙動にはブラウザーによる差異が生じる可能性があります。対象ブラウザーでの動作確認をおすすめします。
+:::
+
+## 使用例 [#examples]
+
+ブラウザーで `Opfs` を直接使用する最小例を示します。
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+const key = "hello.bin";
+await storage.write({ key, data: new TextEncoder().encode("hello") });
+
+const loaded = await storage.read({ key });
+console.log(new TextDecoder().decode(loaded));
+console.log(await storage.exists({ key }));
+
+await storage.delete({ key });
+```

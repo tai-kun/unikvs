@@ -1,0 +1,117 @@
+---
+title: "ストリーミング"
+description: "大容量データのストリーム保存と読み取り方法を説明します。"
+---
+
+## 型の選択 [#select-types]
+
+ストリームを使うキーは、`StreamValue<T>` または `Value<T>` で定義します。`PlainValue<T>` のキーでは `stream()` を使えません。
+
+```ts
+const kvs = UniKvs.config<{
+  logs: StreamValue<Uint8Array>;
+  blob: Value<Uint8Array>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+```
+
+| 型 | `set` | `get` | `stream` |
+| --- | --- | --- | --- |
+| `PlainValue<T>` | 対応します | 対応します | 対応しません |
+| `StreamValue<T>` | 値またはストリームに対応します | 対応しません | 対応します |
+| `Value<T>` | 値またはストリームに対応します | 対応します | 対応します |
+
+## 書き込み [#write]
+
+値そのものか `ReadableStream` を渡せます。
+
+<Steps>
+  <Step title="単一値で保存する">
+    小さなデータは値そのものを渡します。
+
+    ```ts
+    await kvs.set("logs", new Uint8Array([1, 2, 3]));
+    ```
+  </Step>
+  <Step title="ストリームで保存する">
+    大きなデータは `ReadableStream` を渡して逐次書き込みします。
+
+    ```ts
+    const src = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+        controller.enqueue(new Uint8Array([2]));
+        controller.close();
+      },
+    });
+    await kvs.set("logs", src);
+    ```
+  </Step>
+</Steps>
+
+## 読み取り [#read]
+
+`stream()` は `ValueStream` を返します。用途に合わせて3つの方法から選べます。
+
+<Tabs>
+  <Tab title="getReader">
+    チャンクごとに細かく制御したい場合に使います。
+
+    ```ts
+    const reader = (await kvs.stream("logs")).getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      console.log(value);
+    }
+    ```
+  </Tab>
+  <Tab title="for-await">
+    記述を短くしたい場合に使います。
+
+    ```ts
+    for await (const chunk of await kvs.stream("logs")) {
+      console.log(chunk);
+    }
+    ```
+  </Tab>
+  <Tab title="await-using">
+    読み取りロックの解放を自動化したい場合に使います。
+
+    ```ts
+    await using (const valueStream = await kvs.stream("logs")) {
+      const reader = valueStream.getReader();
+      const { value } = await reader.read();
+      console.log(value);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+:::warning
+読み取りロックの解放のため、使い終わったストリームは破棄してください。`await using` を使うと自動で解放されます。
+:::
+
+## ストレージ別の注意 [#storages]
+
+:::warning
+メモリーストレージのストリームはチャンク結合による実装です。大規模データの逐次処理には適していません。
+:::
+
+- ファイル、S3、OPFSはバイト列のストリーム保存に適しています。詳細は各パッケージリファレンスを参照してください。
+- IndexedDBは任意データの保存に対応しますが、ストリームの扱いは実装の制約を確認してください。
+- トランスフォーマーによってはストリーム変換に対応しない場合があります。圧縮とチェックサムの対応状況は各パッケージリファレンスを参照してください。
+
+## キャンセル [#cancellation]
+
+長時間の転送は `AbortSignal` で中断できます。
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("logs", src, { signal: ac.signal });
+```

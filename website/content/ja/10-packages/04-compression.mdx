@@ -1,0 +1,192 @@
+---
+title: "@unikvs/compression — 圧縮トランスフォーマー"
+description: "gzip / deflate / deflate-raw でバイト列を透過的に圧縮・展開する Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/compression` は、バイト列を透過的に圧縮・展開する Transformer プラグインです。<Badge>Transformer</Badge> Web 標準の `CompressionStream` と `DecompressionStream` をラップし、`ITransformer` インターフェースに適合させています。
+
+:::tip
+書き込み時は `encode` で圧縮し、読み取り時は `decode` で展開するため、利用者は圧縮を意識せずに元のバイト列を読み書きできます。
+:::
+
+このトランスフォーマーは常にオープン状態であり、明示的な `open` や `close` は不要です。また、`isOpen` は常に `true` を返し、`name` は常に `"Compression"` です。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/compression
+```
+
+## 対応フォーマット [#formats]
+
+コンストラクターで指定できる形式は `CompressionFormat` 型で表されます。この型は、`CompressionStream` と `DecompressionStream` の両方のコンストラクターで受け入れ可能な文字列リテラルに限定した型です。テストで確認されている値は次の 3 つです。
+
+| フォーマット | 値 | 特徴 |
+| --- | --- | --- |
+| gzip | `"gzip"` | ヘッダーとフッターを持ち、汎用性が高い形式です。 |
+| deflate | `"deflate"` | zlib ラッパーを持つ deflate 形式です。 |
+| deflate-raw | `"deflate-raw"` | ラッパーを持たない素の deflate 形式です。 |
+
+選択の目安は次のとおりです。
+
+<Tabs>
+  <Tab title="gzip">
+    互換性を重視する場合は `"gzip"` を選択してください。ヘッダーとフッターを持ち、汎用性が高い形式です。
+
+    ```ts
+    import { Compression } from "@unikvs/compression";
+
+    const compression = new Compression("gzip");
+    ```
+  </Tab>
+  <Tab title="deflate">
+    zlib ラッパーを持つ deflate 形式です。他システムとの取り決めがある場合は、その取り決めに合わせた形式を選択してください。
+
+    ```ts
+    import { Compression } from "@unikvs/compression";
+
+    const compression = new Compression("deflate");
+    ```
+  </Tab>
+  <Tab title="deflate-raw">
+    ラッパーを持たない素の deflate 形式です。他システムとの取り決めがある場合は、その取り決めに合わせた形式を選択してください。
+
+    ```ts
+    import { Compression } from "@unikvs/compression";
+
+    const compression = new Compression("deflate-raw");
+    ```
+  </Tab>
+</Tabs>
+
+形式を混在させると展開に失敗するため、1 つの KVS では 1 つの形式に統一してください。
+
+実行環境が対応していない形式を指定した場合、`CompressionStream` または `DecompressionStream` の構築時に `TypeError` が投げられます。
+
+## 使い方 [#usage]
+
+`Compression` クラスのコンストラクターは、圧縮形式を 1 つだけ受け取ります。オプションオブジェクトは存在しません。
+
+```ts
+import { Compression } from "@unikvs/compression";
+
+const compression = new Compression("gzip");
+```
+
+主なメンバーは次のとおりです。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new Compression(format)` | 使用する圧縮形式を指定して初期化します。 |
+| `name` | 常に `"Compression"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | `Uint8Array<ArrayBuffer>` を圧縮し、`Promise<Uint8Array<ArrayBuffer>>` を返します。 |
+| `decode({ data })` | 圧縮済みの `Uint8Array<ArrayBuffer>` を展開し、`Promise<Uint8Array<ArrayBuffer>>` を返します。 |
+| `getEncodable()` | 圧縮用の `TransformStream` を返します。 |
+| `getDecodable()` | 展開用の `TransformStream` を返します。 |
+
+`UniKvs` には `appendTransformer` で登録します。トランスフォーマーは、以降に登録されるストレージの前段になります。
+
+<Steps>
+  <Step title="Transformer を追加する">
+    `appendTransformer` で `Compression` を登録します。
+
+    ```ts
+    import { Compression } from "@unikvs/compression";
+    import UniKvs from "unikvs";
+
+    const builder = UniKvs.config()
+      .appendTransformer(new Compression("gzip"));
+    ```
+  </Step>
+  <Step title="Storage を追加する">
+    `appendStorage` でストレージを登録します。トランスフォーマーは、以降に登録されるストレージの前段になります。
+
+    ```ts
+    const builderWithStorage = builder.appendStorage(storage);
+    ```
+  </Step>
+  <Step title="create する">
+    `create()` でクライアントを作成します。
+
+    ```ts
+    const kvs = builderWithStorage.create();
+    ```
+  </Step>
+  <Step title="open する">
+    `open()` で初期化します。
+
+    ```ts
+    await kvs.open();
+    ```
+  </Step>
+  <Step title="set / get する">
+    `set` で書き込み、`get` で読み取ります。書き込んだ値は圧縮されて保存され、読み取り時に自動的に展開されます。
+
+    ```ts
+    await kvs.set("data", input);
+
+    const output = await kvs.get("data");
+    ```
+  </Step>
+</Steps>
+
+```ts
+import { Compression } from "@unikvs/compression";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(storage)
+  .create();
+```
+
+## ストリームとバイト列 [#streams]
+
+`@unikvs/compression` は、単体値とストリームの両方に対応しています。
+
+- 単体値は `encode` と `decode` で変換します。空の `Uint8Array` や 1 MiB 程度のバイト列も、そのまま往復できます。
+- ストリーム値は `getEncodable` と `getDecodable` が返す `TransformStream` で変換します。不揃いな大きさの複数チャンクを流しても、圧縮と展開の往復後は元のバイト列に戻ります。
+
+制限事項は次のとおりです。
+
+- `decode` に圧縮データではないバイト列を渡すと、処理は拒否されます。
+- 圧縮時と展開時で形式が異なると、正しく展開できません。同じ形式のインスタンスで往復してください。
+- ランダムなバイト列のように圧縮の余地がないデータでは、圧縮後のサイズが小さくならない場合があります。この場合でも、展開すれば元のデータに戻ります。
+
+## 注意点 [#notes]
+
+圧縮率と速度の関係は、データの性質によって変わります。一般に、反復的なテキストは小さくなりやすく、すでに圧縮済みや乱数的なデータは小さくなりにくい傾向があります。小さくならない場合でも、往復の正確さが損なわれることはありません。
+
+:::warning
+複数の Transformer を組み合わせる場合、登録順序によって結果が変わります。たとえば Checksum などのほかの Transformer と併用する場合は、どの順序で圧縮と検証を行いたいのかを意識して登録順序を決めてください。期待どおりの順序になっているかは、小さいデータで往復を確認してから本番データに適用することをおすすめします。
+:::
+
+## 使用例 [#examples]
+
+`Memory` ストレージと組み合わせた最小完動例を示します。書き込んだ値は圧縮されて保存され、読み取り時に自動的に展開されます。
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = new TextEncoder().encode(
+  "Repeat this text multiple times to ensure compression efficiency. ".repeat(100),
+);
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+console.log(output.length === input.length);
+
+await kvs.close();
+```

@@ -1,0 +1,117 @@
+---
+title: "unikvs — モジュラーでポータブルな KVS クライアント"
+description: "TypeScript製のモジュラーなKVSクライアントunikvsの概要とドキュメント案内です。"
+---
+
+## unikvsとは [#what-is-unikvs]
+
+unikvsはTypeScriptで実装されたモジュラーでポータブルなKVSクライアントです。透過的なデータ変換を行うトランスフォーマーと、複数のバックエンドへの書き込みに対応したストレージを、ビルダーパターンで組み合わせます。
+
+主な特徴は次のとおりです。
+
+- トランスフォーマーによる透過的なエンコード・デコードに対応します。
+- 複数のストレージへの並列書き込みに対応します。
+- キーごとに値の型を定義し、利用可能な操作を型レベルで制御します。
+- 単一値とストリームの両方に対応します。
+- `AbortSignal`によるキャンセルと実行時変数の受け渡しに対応します。
+- Node.jsとブラウザーの両方に対応したストレージを用意しています。
+
+## クイックスタート [#quickstart]
+
+```package-install
+npm i unikvs @unikvs/compression @unikvs/fs.node
+```
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new NodeFs(".tmp"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+
+await kvs.close();
+```
+
+上記の例では、キー `foo` に保存するバイト列を透過的にgzip圧縮し、`.tmp/` 配下に保存します。
+
+:::tip
+まずははじめにのページでメモリーストレージを使った最小例から試し、全体の仕組みは基本概念のページで確認するのがおすすめです。
+:::
+
+## ドキュメントの読み進め方 [#how-to-read]
+
+<CardGroup cols={2}>
+  <Card title="はじめに" href="./getting-started" icon="rocket">
+    インストールから基本操作までの最短手順を試します。
+  </Card>
+  <Card title="基本概念" href="./concepts" icon="book-open">
+    パイプライン、値の型、変数の仕組みを理解します。
+  </Card>
+  <Card title="ガイド" href="./guides" icon="layers">
+    目的別の使い方を確認します。
+  </Card>
+  <Card title="ストレージ比較" href="./reference/comparison" icon="database">
+    保存先の選択に迷った場合の指針です。
+  </Card>
+</CardGroup>
+
+## パッケージ一覧 [#packages]
+
+<CardGroup cols={2}>
+  <Card title="unikvs" href="./packages/unikvs" icon="package">
+    設定ビルダーとKVSクライアント本体です。
+  </Card>
+  <Card title="@unikvs/core" href="./packages/core" icon="cpu">
+    全パッケージ共有の型とエラー基盤です。
+  </Card>
+  <Card title="@unikvs/utils" href="./packages/utils" icon="wrench">
+    プラグイン実装者向けの共有関数群です。
+  </Card>
+  <Card title="@unikvs/compression" href="./packages/compression" icon="archive">
+    gzip・deflate・deflate-rawによる圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/checksum" href="./packages/checksum" icon="shield-check">
+    MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512の検証を行います。
+  </Card>
+  <Card title="@unikvs/memory" href="./packages/memory" icon="zap">
+    メモリー上に任意のデータを保存します。
+  </Card>
+  <Card title="@unikvs/fs.node" href="./packages/fs-node" icon="hard-drive">
+    Node.jsのローカルファイルシステムに保存します。
+  </Card>
+  <Card title="@unikvs/s3.node" href="./packages/s3-node" icon="cloud">
+    S3互換のオブジェクトストレージに保存します。
+  </Card>
+  <Card title="@unikvs/opfs" href="./packages/opfs" icon="globe">
+    ブラウザーのOPFSに保存します。
+  </Card>
+  <Card title="@unikvs/indexeddb" href="./packages/indexeddb" icon="table">
+    ブラウザーのIndexedDBに保存します。
+  </Card>
+</CardGroup>
+
+## 動作環境 [#environments]
+
+| パッケージ | Node.js | ブラウザー |
+| --- | --- | --- |
+| `unikvs` | 対応します | 対応します |
+| `@unikvs/core` | 対応します | 対応します |
+| `@unikvs/utils` | 対応します | 対応します |
+| `@unikvs/compression` | 対応します | 対応します |
+| `@unikvs/checksum` | 対応します | 対応します |
+| `@unikvs/memory` | 対応します | 対応します |
+| `@unikvs/fs.node` | 対応します | 対応しません |
+| `@unikvs/s3.node` | 対応します | 対応しません |
+| `@unikvs/opfs` | 対応しません | 対応します |
+| `@unikvs/indexeddb` | 対応しません | 対応します |

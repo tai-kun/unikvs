@@ -1,0 +1,163 @@
+---
+title: "@unikvs/fs.node — Node.jsファイルストレージ"
+description: "Node.jsのローカルファイルシステムにバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/fs.node` は、Node.js のローカルファイルシステムにデータを保存するストレージプラグインです。指定したルートディレクトリー配下にキーをファイル名として保存します。<Badge variant="warning">Node.js専用</Badge>
+
+扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付け、`read` は `Uint8Array<ArrayBuffer>` を返します。
+
+対応環境は Node.js です。実装は `node:fs`、`node:path`、`node:crypto`、`node:stream` を動的インポートして使用します。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/fs.node
+```
+
+依存関係として `@unikvs/core` と `@unikvs/utils` を使用します。
+
+## 使い方 [#usage]
+
+中心となるクラスは `NodeFs` です。`src/index.ts` から名前付きエクスポートされています。
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+```
+
+コンストラクタのシグネチャは次のとおりです。引数名と既定値は実装と一致しています。
+
+```ts
+public constructor(root: string = ".unikvs")
+```
+
+`root` はデータを保存するルートディレクトリーのパスです。相対パスの場合は `open()` の実行時にカレントワーキングディレクトリーからの相対として解決されます。既定値は `".unikvs"` です。
+
+主なプロパティとメソッドは次のとおりです。
+
+- `public readonly name: string` は `"NodeFs"` です。
+- `public get isOpen: boolean` はストレージがオープン済みかどうかを示します。
+- `public async open(): Promise<void>` はルートディレクトリーを再帰的に作成し、読み書き可能な状態にします。
+- `public async write(args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">): Promise<void>`
+- `public async read(args: Pick<IStorage.ReadArgs, "key" | "signal">): Promise<Uint8Array<ArrayBuffer>>`
+- `public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean>`
+- `public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void>`
+- `public async clear(): Promise<void>`
+
+使用する際は、インスタンスを作成して `open()` を呼び出してから読み書きします。
+
+<Steps>
+  <Step title="インスタンスを作成します">
+    保存先のルートディレクトリーを指定して `new NodeFs(...)` でインスタンスを作成します。相対パスを指定した場合は `open()` の実行時に解決されます。
+  </Step>
+  <Step title="`open()` で準備します">
+    `open()` を呼び出してルートディレクトリーを再帰的に作成し、読み書き可能な状態にします。`isOpen` でオープン状態を確認できます。
+  </Step>
+  <Step title="読み書きします">
+    `write` で `Uint8Array<ArrayBuffer>` を保存し、`read` で取得します。
+  </Step>
+</Steps>
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+
+const storage = new NodeFs("./.tmp/unikvs-fs");
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+```
+
+## ファイル配置 [#layout]
+
+キーからファイルパスへのマッピング規則は次のとおりです。
+
+次の例は、ルート直下にキーがそのままファイル名として並ぶ一般的な構造例です。実際のキー名は利用状況により異なります。
+
+<FileTree>
+
+- .unikvs/
+  - hello.bin
+  - greeting.bin
+
+</FileTree>
+
+- 最終パスは `path.join(this.root, key)` です。サブディレクトリーは作成しません。キーはそのままルート直下のファイル名になります。
+- 書き込み時の一時ファイルパスは `` `${dest}.${crypto.randomUUID()}.tmp` `` です。最終パスと同じディレクトリーに作成し、`rename` が同じファイルシステム上でアトミックに行われることを保証します。
+- `open()` では `path.resolve(this.root)` で絶対パスに変換し、`fs.promises.mkdir(root, { recursive: true })` でルートディレクトリーを再帰的に作成します。
+- `clear()` ではルートディレクトリー自体を `fs.promises.rm(this.root, { recursive: true, force: true })` で削除したあと、空のディレクトリーを再作成します。
+
+ファイル名のバリデーションには `@unikvs/utils` の `assertValidFilename` を使用します。`write`、`read`、`exists`、`delete`、`getWritable`、`getReadable` のいずれも、最初に `assertValidFilename(key)` を呼び出します。無効なファイル名の場合は `InvalidFilenameError` が投げられます。空文字、`.`、`..`、255 バイト超、NFC と一致しない文字列、予約文字や Windows 予約名を含むキーなどは使用できません。
+
+## ストリーム [#streams]
+
+大容量データ向けに、読み書きどちらのストリームにも対応しています。
+
+書き込み用ストリームは次のメソッドで取得します。
+
+```ts
+public async getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
+): Promise<WritableStream<Uint8Array<ArrayBuffer>>>
+```
+
+一時ファイルへ書き出し、正常に `close` された場合のみ最終パスへ `rename` する swap-on-close 方式です。`AbortSignal` が中断されるとストリームは破棄され、一時ファイルが削除されます。バッファーが一杯の場合は `drain` まで待機するバックプレッシャーに対応しています。書き込みの失敗や中断時に既存のデータが破壊されることはありません。
+
+読み取り用ストリームは次のメソッドで取得します。
+
+```ts
+public getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+): ReadableStream<Uint8Array<ArrayBuffer>>
+```
+
+`fs.createReadStream(file)` を `stream.Readable.toWeb(readStream)` で Web ストリームに変換して返します。キーから `path.join(this.root, key)` を解決し、`assertValidFilename(key)` で検証します。
+
+## 注意点 [#notes]
+
+実装から分かる範囲の注意点は次のとおりです。
+
+- `open()` を呼び出す前に `write` や `read` を実行しないでください。内部の `con` が `null` のままのため処理できません。`isOpen` でオープン状態を確認できます。
+- `open()` はすでにオープンされている場合も再度初期化を行います。`root` は絶対パスに解決されて保持されます。
+- `write` は一時ファイルへの `writeFile` 後に `rename` します。失敗や中断時は一時ファイルを `rm(file.tmp, { force: true })` で削除し、既存のデータを保全します。
+- 同一キーへの並行書き込みでは、一意なサフィックス付きの一時ファイルを使うため衝突しません。最後に `rename` が完了した書き込みが残ります。
+- `exists` は `fs.promises.access(file)` の成否で判定し、エラー時は `false` を返します。
+- `delete` は `fs.promises.unlink(file)` を直接呼び出します。ファイルが存在しない場合はエラーになります。
+- パーミッションや所有者の明示的な変更は行いません。作成されるファイルとディレクトリーの権限は OS と Node.js の既定値に従います。
+- `close()` メソッドは実装されていません。`IStorage` の `close` は任意のため、リソースの後始末が必要な場合は各自で管理してください。
+
+:::warning
+パーミッションや所有者の明示的な変更は行いません。作成されるファイルとディレクトリーの権限は OS と Node.js の既定値に従います。また、同一キーへの並行書き込みでは最後に `rename` が完了した書き込みが残りますので、必要に応じてアプリケーション側で排他制御を検討してください。
+:::
+
+## 使用例 [#examples]
+
+`.tmp/` 配下に保存する最小完動例です。
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+
+const storage = new NodeFs("./.tmp/unikvs-fs-node-example");
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, NodeFs"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key });
+await storage.clear();
+```

@@ -1,0 +1,109 @@
+---
+title: "はじめに"
+description: "unikvsのインストールから基本操作までの最短手順を説明します。"
+---
+
+## インストール [#install]
+
+`unikvs` 本体に加えて、利用するストレージやトランスフォーマーのパッケージをインストールします。
+
+<Tabs>
+  <Tab title="メモリーで試す">
+    ```package-install
+    npm i unikvs @unikvs/memory
+    ```
+  </Tab>
+  <Tab title="ファイルに保存する">
+    ```package-install
+    npm i unikvs @unikvs/fs.node @unikvs/compression
+    ```
+  </Tab>
+</Tabs>
+
+## 基本的な使い方 [#basic-usage]
+
+メモリーストレージを使った最小例です。手順は常に同じです。設定して作成し、開いて操作し、閉じます。
+
+<Steps>
+  <Step title="ビルダーを作成する">
+    `UniKvs.config()` でビルダーを作成します。型パラメーターにはキーと値のマッピングを指定します。
+
+    ```ts
+    import { UniKvs, type Value } from "unikvs";
+
+    const builder = UniKvs.config<{
+      foo: Value<Uint8Array>;
+    }>();
+    ```
+  </Step>
+  <Step title="保存先を追加して作成する">
+    `appendStorage()` で保存先を追加し、`create()` でクライアントを作成します。トランスフォーマーは不要な場合は省略できます。
+
+    ```ts
+    import { Memory } from "@unikvs/memory";
+
+    const kvs = builder.appendStorage(new Memory()).create();
+    ```
+  </Step>
+  <Step title="開いて操作する">
+    `open()` で初期化し、`set`・`get`・`has`・`delete` などを操作します。
+
+    ```ts
+    await kvs.open();
+
+    await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes);
+
+    console.log(await kvs.has("foo"));
+
+    await kvs.delete("foo");
+    ```
+  </Step>
+  <Step title="閉じる">
+    使い終わったら `close()` で終了します。
+
+    ```ts
+    await kvs.close();
+    ```
+  </Step>
+</Steps>
+
+:::tip
+`appendTransformer()` は `appendStorage()` の前後どちらにも追加できます。ストレージの登録後に追加したトランスフォーマーは、その後に登録するストレージにだけ適用されます。詳しくは基本概念のパイプラインの説明を参照してください。
+:::
+
+## トランスフォーマーを足す [#add-transformer]
+
+圧縮を透過的に行う例です。
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new Memory())
+  .create();
+```
+
+利用側の `set` と `get` のコードは変えずに、保存時の圧縮と取得時の展開が自動で行われます。
+
+:::warning
+`appendStorage()` を1つも呼ばずに `create()` すると `MissingStorageError` が投げられます。ストレージの登録は必須です。
+:::
+
+## 次の手順 [#next-steps]
+
+<CardGroup cols={2}>
+  <Card title="基本概念" href="./concepts" icon="book-open">
+    アーキテクチャーと値の型の仕組みを理解します。
+  </Card>
+  <Card title="ストレージ比較" href="./reference/comparison" icon="database">
+    保存先の選び方を確認します。
+  </Card>
+</CardGroup>
