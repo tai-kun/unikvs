@@ -36,7 +36,7 @@ function withReadableStreamFrom<T>(cb: (ReadableStream: ReadableStreamWithFrom) 
 
 function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => unknown) {
   if ("from" in ReadableStream) {
-    // 既に ReadableStream.from が存在する場合は、そのままコールバックを実行します。
+    // すでに ReadableStream.from が存在する場合は、そのままコールバックを実行します。
     return cb(ReadableStream as any);
   }
 
@@ -53,7 +53,7 @@ function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => 
           : // @ts-expect-error
             iterable[Symbol.asyncIterator]();
 
-      /** ストリームの終了状態を管理するフラグです。 */
+      // ストリームの終了状態を管理するフラグです。
       let done = false;
 
       return new ReadableStream<T>({

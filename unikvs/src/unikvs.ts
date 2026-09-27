@@ -334,7 +334,7 @@ export type DeleteOptions<TKey = IStorage.Key> = {
 };
 
 /**
- * 全削除操作時のオプションです。
+ * すべてのデータを削除する操作時のオプションです。
  */
 export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
 
@@ -418,25 +418,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    *
    * @template TKeyValueMapping マッピング定義です。
    * @returns 設定ビルダーのインスタンスです。
-   * @example
-   * ```typescript
-   * import { Compression } from "@unikvs/compression";
-   * import { FileSystem } from "@unikvs/fs.node";
-   * import { UniKvs, type Value } from "unikvs";
-   *
-   * const kvs = UniKvs.config<{
-   *   foo: Value<Uint8Array<ArrayBuffer>>;
-   * }>()
-   *   .appendTransformer(new Compression("gzip"))
-   *   .appendStorage(new FileSystem(".tmp"))
-   *   .create();
-   *
-   * await kvs.open();
-   *
-   * await kvs.set("foo", Uint8Array.from([0, 1, 2]));
-   *
-   * await kvs.close();
-   * ```
    */
   public static config<
     TKeyValueMapping extends KeyValueMapping,
@@ -470,7 +451,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * インスタンスを初期化します。
    *
    * @internal UniKvs の設定ビルダー経由で使用します。
-   * @param vars 変数です。
+   * @param vars 基本となる変数です。
    * @param destinations ストレージと前段パイプラインのリストです。
    * @param transformers トランスフォーマーのリストです。
    */
@@ -707,7 +688,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       return this.#close(vars, signal, con).catch(async (ex) => {
-        // #close が失敗した場合、コネクションの AbortController は既に abort 済みであり、以降の操作がすべて即座に失敗する壊れた状態になります。
+        // #close が失敗した場合、コネクションの AbortController はすでに abort 済みであり、以降の操作がすべて即座に失敗する壊れた状態になります。
         // そこで接続を破棄して isOpen=false の一貫した状態にし、ベストエフォートでプラグインのクローズ処理を実行します。
         if (this.#con === con) {
           this.#con = null;
@@ -1347,7 +1328,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * すべてのストレージ内のデータを全削除します。
+   * すべてのストレージ内のデータを完全に消去します。
    *
    * @param options クリア操作のオプションです。
    * @returns 完了を通知する Promise です。

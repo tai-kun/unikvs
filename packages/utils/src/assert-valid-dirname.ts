@@ -4,11 +4,11 @@ import { InvalidDirnameError } from "./errors.js";
 import isValidDirname from "./is-valid-dirname.js";
 
 /**
- * 有効なディレクトリー名であるか検証します。
+ * ディレクトリー名が有効かどうかを検証します。
  *
  * 無効なディレクトリー名の場合は {@link InvalidDirnameError} を投げます。
  *
- * @param dirname ディレクトリー名です。
+ * @param dirname 検証対象のディレクトリー名です。
  */
 export default function assertValidDirname(dirname: string): void {
   if (isValidDirname(dirname)) {

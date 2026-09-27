@@ -40,7 +40,9 @@ export default class Indexeddb implements IStorage {
     this.storeName = storeName;
   }
 
-  /** ストレージが現在利用可能な状態であるかを示します。 */
+  /**
+   * ストレージが現在利用可能な状態であるかを示します。
+   */
   public get isOpen(): boolean {
     return this.db !== null;
   }
@@ -48,7 +50,7 @@ export default class Indexeddb implements IStorage {
   /**
    * ストレージをオープンし、IndexedDB データベースへの接続を確立します。
    *
-   * 既にオープンされている場合は何も行いません。
+   * すでにオープンされている場合は何も行いません。
    */
   public async open(): Promise<void> {
     if (this.db) {

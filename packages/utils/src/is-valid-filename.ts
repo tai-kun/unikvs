@@ -57,7 +57,7 @@ export default function isValidFilename(filename: string): boolean {
     return false;
   }
 
-  // macOS の Finder 等の UI 上では、ファイル名に含まれる「:」が「/」として扱われる、あるいはその逆の変換が発生し、予期せぬ動作を招く恐れがあるため「:」を明示的に拒否します。
+  // macOS の Finder などの UI 上では、ファイル名に含まれる「:」が「/」として扱われる、あるいはその逆の変換が発生し、予期せぬ動作を招く恐れがあるため「:」を明示的に拒否します。
   if (filename.indexOf(":") >= 0) {
     return false;
   }

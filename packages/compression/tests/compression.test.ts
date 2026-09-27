@@ -4,7 +4,9 @@ import Compression from "../src/compression.js";
 
 const FORMATS = ["gzip", "deflate", "deflate-raw"] as const;
 
-/** 疑似乱数ジェネレーター (線形合同法) で、実行ごとに同じバイト列を生成します。 */
+/**
+ * 疑似乱数ジェネレーター (線形合同法) で、実行ごとに同じバイト列を生成します。
+ */
 function createPseudoRandomBytes(size: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(size);
   let state = 0x12345678;

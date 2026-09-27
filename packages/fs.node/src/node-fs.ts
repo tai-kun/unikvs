@@ -70,7 +70,7 @@ export default class NodeFs implements IStorage {
   /**
    * ストレージをオープンし、読み書きが可能な状態に準備します。
    *
-   * ルートディレクトリーが存在しない場合は再帰的に作成します。既にオープンされている場合も再度初期化を行います。
+   * ルートディレクトリーが存在しない場合は再帰的に作成します。すでにオープンされている場合も再度初期化を行います。
    */
   public async open(): Promise<void> {
     const [fs, path, stream, crypto] = await Promise.all([

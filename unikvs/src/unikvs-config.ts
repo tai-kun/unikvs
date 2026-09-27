@@ -132,7 +132,7 @@ export type KeyofKeyValueMapping<TKeyValueMapping extends KeyValueMapping = KeyV
 /**
  * UniKvs の設定を構築するためのビルダーインターフェースです。
  *
- * トランスフォーマーの追加やストレージの登録を型安全に行うための流れるようなインターフェースを提供します。
+ * トランスフォーマーの追加やストレージの登録を型安全に行うための流暢なインターフェースを提供します。
  *
  * @template TKeyValueMapping キーと値のマッピング型です。
  * @template TUniKvsDataInput UniKvs への入力データの型です。

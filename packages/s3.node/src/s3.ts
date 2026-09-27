@@ -171,7 +171,7 @@ export default class S3 implements IStorage {
   /**
    * ストレージ内のすべてのデータを完全に消去します。
    *
-   * バケット内のオブジェクトをページネーションで取得し、全て削除します。
+   * バケット内のオブジェクトをページネーションで取得し、すべて削除します。
    *
    * **警告:** このメソッドはプレフィックスによる絞り込みを行わないため、指定されたバケット内のすべてのオブジェクトが削除されます。バケットを他のアプリケーションと共有している場合、それらのデータも削除されます。unikvs 専用のバケット、または専用のプレフィックスでキーを管理するバケットを使用してください。
    *
@@ -223,7 +223,7 @@ export default class S3 implements IStorage {
    * @param args.vars パートサイズなどのオプションを含む変数オブジェクトです。パートサイズには正の整数 (バイト単位) を指定してください。
    * @returns 書き込み可能なストリームです。
    * @throws 変数に正の整数ではないパートサイズが指定された場合に {@link InvalidPartSizeError} を投げます。
-   * @throws シグナルが既に中断されている場合に {@link StorageAbortedError} を投げます。
+   * @throws シグナルがすでに中断されている場合に {@link StorageAbortedError} を投げます。
    */
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,

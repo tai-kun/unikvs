@@ -165,13 +165,13 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * ストレージ内の全てのデータを消去します。
+   * ストレージ内のすべてのデータを消去します。
    *
    * ルートディレクトリー直下を使用している場合は個別にエントリーを削除し、サブディレクトリーを使用している場合はディレクトリーごと削除して再作成します。
    */
   public async clear(): Promise<void> {
     if (this.root === "") {
-      // ルートディレクトリー直下を使用している場合は、全てのエントリーを個別に削除します。
+      // ルートディレクトリー直下を使用している場合は、すべてのエントリーを個別に削除します。
 
       for await (const name of this.rootHandle!.keys()) {
         await this.rootHandle!.removeEntry(name, { recursive: true });

@@ -7,17 +7,25 @@ import {
   ChecksumInvalidVarNameError,
 } from "./errors.js";
 
-/** データのサイズ単位を定義する定数です。 */
+/**
+ * データのサイズ単位を定義する定数です。
+ */
 const B = 1;
-/** キロバイト（1000 バイト）を表す定数です。 */
+/**
+ * キロバイト（1000 バイト）を表す定数です。
+ */
 const KB = 1000 * B;
-/** メガバイト（1000 KB）を表す定数です。 */
+/**
+ * メガバイト（1000 KB）を表す定数です。
+ */
 const MB = 1000 * KB;
-/** ギガバイト（1000 MB）を表す定数です。 */
+/**
+ * ギガバイト（1000 MB）を表す定数です。
+ */
 const GB = 1000 * MB;
 
 /**
- * ライブラリーの制限に基づく、 1 回のハッシュ更新処理で扱える最大チャンクサイズです。noble-hashes の制限に従い、 4 GB を上限としています。
+ * ライブラリーの制限に基づく、1 回のハッシュ更新処理で扱える最大チャンクサイズです。noble-hashes の制限に従い、4 GB を上限としています。
  *
  * @see https://github.com/paulmillr/noble-hashes/blob/31de71a033ea5b5d1f1084fa6532c840be1ed425/README.md?plain=1#L97
  */
@@ -68,14 +76,12 @@ export interface IHash {
 export type ChecksumOptions = {
   /**
    * ハッシュ値の検証を必須にするかどうかです。
-   *
-   * @default false
    */
   readonly required?: boolean | undefined;
 };
 
 /**
- * SHA-256 アルゴリズムを使用してデータの整合性を検証するトランスフォーマーです。
+ * ハッシュアルゴリズムを使用してデータの整合性を検証するトランスフォーマーの基底クラスです。
  *
  * 変数に含まれる期待値と、実際のデータのハッシュ値を比較します。
  */
