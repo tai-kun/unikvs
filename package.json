@@ -2,12 +2,6 @@
   "name": "unikvs-monorepo",
   "version": "0.0.0",
   "private": true,
-  "homepage": "https://github.com/tai-kun/unikvs",
-  "license": "MIT",
-  "author": "tai-kun",
-  "repository": {
-    "url": "https://github.com/tai-kun/unikvs"
-  },
   "workspaces": [
     "packages/core",
     "packages/utils",
@@ -22,10 +16,10 @@
   ],
   "type": "module",
   "devDependencies": {
-    "npm-check-updates": "22.2.9",
-    "oxfmt": "0.65.0",
-    "oxlint": "1.80.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "npm-check-updates": "23.1.0",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "oxlint-tsgolint": "7.0.2002",
     "typescript": "7.0.2"
   }
 }

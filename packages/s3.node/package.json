@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/s3.node",
   "version": "0.0.0",
-  "description": "",
+  "description": "Storage plugin that stores byte arrays in S3-compatible object storage on Node.js.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -28,16 +28,16 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "~3.1119.0",
-    "@aws-sdk/lib-storage": "~3.1119.0",
+    "@aws-sdk/client-s3": "~3.1136.0",
+    "@aws-sdk/lib-storage": "~3.1136.0",
     "@unikvs/core": "workspace:*"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.6",
     "npm-check-updates": "20.0.2",
-    "vite": "8.2.2",
+    "vite": "8.3.0",
     "vitest": "4.1.11"
   },
   "peerDependencies": {

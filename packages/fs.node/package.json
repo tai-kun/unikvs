@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/fs.node",
   "version": "0.0.0",
-  "description": "",
+  "description": "Storage plugin that stores byte arrays locally on Node.js.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -34,9 +34,9 @@
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.6",
     "npm-check-updates": "20.0.2",
-    "vite": "8.2.2",
+    "vite": "8.3.0",
     "vitest": "4.1.11"
   },
   "peerDependencies": {

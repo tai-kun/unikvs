@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/compression",
   "version": "0.0.0",
-  "description": "バイト配列を指定の形式で透過的に圧縮/展開するトランスフォーマープラグインです。",
+  "description": "Transformer plugin that transparently compresses and decompresses byte arrays in the specified format.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -34,12 +34,12 @@
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.6",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "npm-check-updates": "20.0.2",
-    "playwright": "1.62.1",
-    "vite": "8.2.2",
+    "playwright": "1.63.0",
+    "vite": "8.3.0",
     "vitest": "4.1.11"
   },
   "peerDependencies": {

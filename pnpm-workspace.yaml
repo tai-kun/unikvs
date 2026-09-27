@@ -1,16 +1,27 @@
-minimumReleaseAge: 10080
+minimumReleaseAge: 10080 # 7 日
 minimumReleaseAgeExclude:
-  - asyncmux
-  - fast-utf8
-  - maypromise
-  - call-fn-once
-  - inspect-lite
-  - abort-signal-utils
-  - "@tai-kun/valibot-extra-lab"
-onlyBuiltDependencies: []
-strictDepBuilds: false
+  - blume
+  - "@scalar/astro@0.4.21"
+  - "@scalar/client-side-rendering@0.4.3"
+  - "@scalar/helpers@0.13.0"
+  - "@scalar/schemas@0.11.0"
+  - "@scalar/types@0.21.0"
+  - "@scalar/validation@0.6.4"
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
+trustPolicyExclude:
+  - "@pierre/theme"
+  - "@vercel/*"
+  - chokidar
+  - semver
+  - undici-types
+strictDepBuilds: true
+onlyBuiltDependencies: []
+allowBuilds:
+  esbuild: true
+update:
+  ignoreDeps:
+    - "*" # パッケージの更新は ncu に任せます。
 packages:
   [
     "packages/core",
@@ -23,4 +34,5 @@ packages:
     "packages/opfs",
     "packages/indexeddb",
     "unikvs",
+    "website",
   ]

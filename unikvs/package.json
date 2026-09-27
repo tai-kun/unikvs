@@ -1,7 +1,7 @@
 {
   "name": "unikvs",
   "version": "0.0.0",
-  "description": "unikvs は TypeScript で実装されたモジュラーでポータブルな KVS クライアントです。",
+  "description": "A modular and portable KVS client implemented in TypeScript.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -38,7 +38,7 @@
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.6",
     "@unikvs/checksum": "workspace:*",
     "@unikvs/compression": "workspace:*",
     "@unikvs/fs.node": "workspace:*",
@@ -48,8 +48,8 @@
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "npm-check-updates": "20.0.2",
-    "playwright": "1.62.1",
-    "vite": "8.2.2",
+    "playwright": "1.63.0",
+    "vite": "8.3.0",
     "vitest": "4.1.11"
   },
   "peerDependencies": {

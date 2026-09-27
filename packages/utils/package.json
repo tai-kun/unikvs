@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/utils",
   "version": "0.0.0",
-  "description": "一部のプラグインなどで使用される可能性のある共有ユーティリティーです。",
+  "description": "Shared utilities that may be used by some plugins.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -30,19 +30,19 @@
   "dependencies": {
     "@unikvs/core": "workspace:*",
     "fast-utf8": "0.0.7",
-    "filename-reserved-regex": "4.0.0",
+    "filename-reserved-regex": "4.0.1",
     "i18n-error-base": "0.0.7",
     "try-capture-stack-trace": "0.0.3"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.13.3",
+    "@types/node": "24.13.6",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "npm-check-updates": "20.0.2",
-    "playwright": "1.62.1",
-    "vite": "8.2.2",
+    "playwright": "1.63.0",
+    "vite": "8.3.0",
     "vitest": "4.1.11"
   },
   "peerDependencies": {
