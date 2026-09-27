@@ -1,6 +1,6 @@
 ---
 title: "自作プラグイン"
-description: "StorageとTransformerの自作方法と実装時の注意点を説明します。"
+description: "Storage と Transformer の自作方法と実装時の注意点を説明します。"
 ---
 
 ## インターフェースの全体像 [#overview]
@@ -98,7 +98,7 @@ export default class MyStorage implements IStorage {
 
 ## エラー定義 [#errors]
 
-`ErrorBase` を継承し、説明と原因と解決方法を含むメッセージを定義します。メッセージはi18n対応が可能です。既存の `InvalidFilenameError` やチェックサム不一致エラーが参考になります。
+`ErrorBase` を継承し、説明と原因と解決方法を含むメッセージを定義します。メッセージは i18n 対応が可能です。既存の `InvalidFilenameError` やチェックサム不一致エラーが参考になります。
 
 ## テストの観点 [#testing]
 

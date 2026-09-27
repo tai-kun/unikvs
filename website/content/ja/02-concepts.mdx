@@ -5,7 +5,7 @@ description: "トランスフォーマーとストレージのパイプライン
 
 ## アーキテクチャー [#architecture]
 
-unikvsはビルダーパターンで構成されます。入力はトランスフォーマーの列を通過し、ストレージに到達します。
+unikvs はビルダーパターンで構成されます。入力はトランスフォーマーの列を通過し、ストレージに到達します。
 
 ```mermaid
 flowchart LR
@@ -15,7 +15,7 @@ flowchart LR
   Transformer2 --> Storage2
 ```
 
-役割は次の2つです。
+役割は次の 2 つです。
 
 - トランスフォーマーは、データのエンコードとデコードを透過的に行います。
 - ストレージは、データの永続化先です。複数指定すると、すべてのストレージに並列で書き込まれます。
@@ -66,7 +66,7 @@ flowchart LR
     ストレージを追加します。必須であり、複数追加できます。
   </Step>
   <Step title="create()">
-    KVSクライアントを作成します。
+    KVS クライアントを作成します。
   </Step>
 </Steps>
 
@@ -177,13 +177,13 @@ await kvs.set("foo", new Uint8Array([1]), {
 
 | 種別 | パッケージ | 説明 |
 | --- | --- | --- |
-| トランスフォーマー | `@unikvs/compression` | gzip・deflate・deflate-rawによる圧縮と展開を行います。 |
-| トランスフォーマー | `@unikvs/checksum` | MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512の検証を行います。 |
+| トランスフォーマー | `@unikvs/compression` | gzip・deflate・deflate-raw による圧縮と展開を行います。 |
+| トランスフォーマー | `@unikvs/checksum` | MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の検証を行います。 |
 | ストレージ | `@unikvs/memory` | メモリー上に保存します。すべての環境に対応します。 |
-| ストレージ | `@unikvs/fs.node` | ローカルファイルシステムに保存します。Node.js専用です。 |
-| ストレージ | `@unikvs/s3.node` | S3互換のオブジェクトストレージに保存します。Node.js専用です。 |
-| ストレージ | `@unikvs/indexeddb` | ブラウザーのIndexedDBに保存します。 |
-| ストレージ | `@unikvs/opfs` | ブラウザーのOPFSに保存します。 |
+| ストレージ | `@unikvs/fs.node` | ローカルファイルシステムに保存します。Node.js 専用です。 |
+| ストレージ | `@unikvs/s3.node` | S3 互換のオブジェクトストレージに保存します。Node.js 専用です。 |
+| ストレージ | `@unikvs/indexeddb` | ブラウザーの IndexedDB に保存します。 |
+| ストレージ | `@unikvs/opfs` | ブラウザーの OPFS に保存します。 |
 
 :::tip
 プラグインの自作方法は、自作プラグインのガイドを参照してください。ストレージは `IStorage`、トランスフォーマーは `ITransformer` の実装から始めます。

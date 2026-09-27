@@ -113,7 +113,7 @@ export type OnOtherWriteErrorArgs = {
 
 ### CRUD操作 [#storage-crud]
 
-必須の CRUD メソッドは次の 5 つです。戻り値はすべて `MaybePromise` であり、同期値または `Promise` のどちらでも返すことができます。
+必須の CRUD メソッドは次の 5 つです。戻り値はすべて `MaybePromise` であり、同期値または `Promise` のどちらでも返します。
 
 ```ts
 write(args: IStorage.WriteArgs<TWriteDataInput>): MaybePromise<void>;

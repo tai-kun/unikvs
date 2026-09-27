@@ -1,5 +1,5 @@
 ---
-title: "@unikvs/s3.node — S3ストレージ"
+title: "@unikvs/s3.node — S3 ストレージ"
 description: "Node.js で S3 互換オブジェクトストレージに保存する @unikvs/s3.node の使い方を説明します。"
 ---
 
@@ -7,7 +7,7 @@ description: "Node.js で S3 互換オブジェクトストレージに保存す
 
 `@unikvs/s3.node` は、S3 互換オブジェクトストレージにバイト配列を保存する Node.js 専用ストレージプラグインです。AWS SDK for JavaScript v3 に依存しており、`@aws-sdk/client-s3` でオブジェクト操作を行い、`@aws-sdk/lib-storage` の `Upload` でストリームアップロードを行います。
 
-<Badge variant="warning">Node.js専用</Badge>
+<Badge variant="warning">Node.js 専用</Badge>
 
 対応するランタイムは Node.js のみです。ブラウザーでは使用できません。
 
@@ -123,7 +123,7 @@ S3 固有の失敗は次のように扱います。
 
 ## 使用例 [#examples]
 
-S3 互換ストレージに対する最小構成の例です。エンドポイントや認証情報はダミー値であり、一般的な S3 互換ストレージ (MinIO など) への接続を想定した書き方です。バケットは事前に作成しておきます。
+S3 互換ストレージに対する最小構成の例です。エンドポイントや認証情報はダミー値で、一般的な S3 互換ストレージ (MinIO など) への接続を想定した書き方です。バケットは事前に作成しておきます。
 
 ```ts
 import { S3 } from "@unikvs/s3.node";

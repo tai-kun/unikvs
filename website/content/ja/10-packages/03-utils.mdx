@@ -1,5 +1,5 @@
 ---
-title: "@unikvs/utils — 共有ユーティリティ"
+title: "@unikvs/utils — 共有ユーティリティー"
 description: "プラグイン実装者向けの共有関数群を提供する @unikvs/utils のリファレンスです。ファイル名・ディレクトリ名の検証、バイト列操作、ストリーム変換、エラーの仕様を解説します。"
 ---
 
@@ -38,7 +38,7 @@ import {
 
 ### isValidFilename [#is-valid-filename]
 
-シグネチャは次のとおりです。
+シグネチャを示します。
 
 ```ts
 function isValidFilename(filename: string): boolean;
@@ -54,7 +54,7 @@ function isValidFilename(filename: string): boolean;
 - Windows の予約名に一致する場合
 - `":"` を含む場合
 
-使用例は次のとおりです。
+使用例を示します。
 
 ```ts
 import { isValidFilename } from "@unikvs/utils";
@@ -66,7 +66,7 @@ if (isValidFilename("report.txt")) {
 
 ### assertValidFilename [#assert-valid-filename]
 
-シグネチャは次のとおりです。
+引数と戻り値は次のとおりです。
 
 ```ts
 function assertValidFilename(filename: string): void;
@@ -74,7 +74,7 @@ function assertValidFilename(filename: string): void;
 
 有効なファイル名の場合は何もせずに戻ります。無効なファイル名の場合は `InvalidFilenameError` を投げます。戻り値は `void` です。
 
-使用例は次のとおりです。
+次のように呼び出します。
 
 ```ts
 import { assertValidFilename } from "@unikvs/utils";
@@ -117,7 +117,7 @@ assertValidFilename("report.txt");
 
 ### isValidDirname [#is-valid-dirname]
 
-シグネチャは次のとおりです。
+関数シグネチャは以下のとおりです。
 
 ```ts
 function isValidDirname(dirname: string): boolean;
@@ -125,7 +125,7 @@ function isValidDirname(dirname: string): boolean;
 
 内部で `isValidFilename(dirname)` を呼び出すため、判定条件は `isValidFilename` と同じです。有効な場合は `true` を、無効な場合は `false` を返します。例外は投げません。
 
-使用例は次のとおりです。
+使い方の例を示します。
 
 ```ts
 import { isValidDirname } from "@unikvs/utils";
@@ -137,7 +137,7 @@ if (!isValidDirname("my-dir")) {
 
 ### assertValidDirname [#assert-valid-dirname]
 
-シグネチャは次のとおりです。
+定義は次のとおりです。
 
 ```ts
 function assertValidDirname(dirname: string): void;
@@ -145,7 +145,7 @@ function assertValidDirname(dirname: string): void;
 
 有効なディレクトリ名の場合は何もせずに戻ります。無効なディレクトリ名の場合は `InvalidDirnameError` を投げます。戻り値は `void` です。
 
-使用例は次のとおりです。
+呼び出し例は次のとおりです。
 
 ```ts
 import { assertValidDirname } from "@unikvs/utils";
@@ -184,7 +184,7 @@ assertValidDirname("my-dir");
 
 ### bytesToHex [#bytes-to-hex]
 
-シグネチャは次のとおりです。
+シグネチャを示します。
 
 ```ts
 function bytesToHex(bytes: Uint8Array): string;
@@ -192,7 +192,7 @@ function bytesToHex(bytes: Uint8Array): string;
 
 `Uint8Array` の内容を小文字の 16 進数文字列に変換して返します。`Uint8Array.prototype.toHex` が利用できる環境ではそれを使い、利用できない環境では 0 から 255 までの事前計算テーブルで変換します。例外は投げません。
 
-使用例は次のとおりです。
+使用例を示します。
 
 ```ts
 import { bytesToHex } from "@unikvs/utils";
@@ -203,7 +203,7 @@ console.log(hex); // "00ff10"
 
 ### chunks [#chunks]
 
-シグネチャは次のとおりです。
+引数と戻り値は次のとおりです。
 
 ```ts
 function chunks<TData extends DataView | ITypedArray>(
@@ -216,7 +216,7 @@ function chunks<TData extends DataView | ITypedArray>(
 
 `DataView` の場合はバッファー範囲で切り出した新しい `DataView` を返し、TypedArray の場合は `subarray` によるビューを返します。`TypedArray` の分割位置は `maxChunkByteSize / BYTES_PER_ELEMENT` をもとに要素数で計算します。元のデータをコピーしません。
 
-使用例は次のとおりです。
+次のように呼び出します。
 
 ```ts
 import { chunks } from "@unikvs/utils";
@@ -261,7 +261,7 @@ for (const chunk of chunks(data, 2)) {
 
 ### toReadableStream [#to-readable-stream]
 
-シグネチャは次のとおりです。
+関数シグネチャは以下のとおりです。
 
 ```ts
 function toReadableStream<T>(
@@ -271,7 +271,7 @@ function toReadableStream<T>(
 
 同期または非同期の反復可能オブジェクトから `ReadableStream` を生成して返します。内部で `withReadableStreamFrom` を使い、`ReadableStream.from` が未実装の環境では一時的なポリフィルを適用します。
 
-使用例は次のとおりです。
+使い方の例を示します。
 
 ```ts
 import { toReadableStream } from "@unikvs/utils";
@@ -285,7 +285,7 @@ for await (const value of stream) {
 
 ### withReadableStreamFrom [#with-readable-stream-from]
 
-シグネチャは次のとおりです。
+定義は次のとおりです。
 
 ```ts
 function withReadableStreamFrom<T>(
@@ -295,7 +295,7 @@ function withReadableStreamFrom<T>(
 
 `ReadableStream.from` が存在する環境ではそのままコールバックを実行し、存在しない環境では一時的に `from` メソッドを定義してコールバックを実行したあと、必ず `from` メソッドを削除します。コールバックは同期関数である必要があります。非同期関数を渡すオーバーロードは非推奨であり、戻り値を使うべきではありません。
 
-使用例は次のとおりです。
+呼び出し例は次のとおりです。
 
 ```ts
 import { withReadableStreamFrom } from "@unikvs/utils";
