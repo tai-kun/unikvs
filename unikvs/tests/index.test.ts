@@ -29,6 +29,12 @@ describe("index のエクスポート", () => {
     expect(index.UniKvsConfig).toBe(UniKvsConfig);
   });
 
+  test("値のスキーマ定義がエクスポートされている", ({ expect }) => {
+    expect(index.PlainValue).toBeTypeOf("function");
+    expect(index.StreamValue).toBeTypeOf("function");
+    expect(index.Value).toBeTypeOf("function");
+  });
+
   test("エラークラスがエクスポートされている", ({ expect }) => {
     expect(index.InvalidUsageErrorBase).toBe(InvalidUsageErrorBase);
     expect(index.InvalidInputError).toBe(InvalidInputError);

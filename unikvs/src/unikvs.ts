@@ -12,17 +12,23 @@ import {
   type KeyNotFoundErrorArgs,
   KeyNotFoundError,
   UniKvsIsOpenError,
-  PluginOperationAggregateError,
   UniKvsIsNotOpenError,
+  PluginOperationAggregateError,
 } from "./errors.js";
 import UniKvsConfig, {
   type Value,
   type PlainValue,
   type StreamValue,
+  type UniKvsSchema,
   type KeyValueMapping,
+  type ValueSchemaInfo,
+  type UniKvsConfigOptions,
   type $InferPlainValueData,
   type IUniKvsConfigBuilder,
+  type IValueSchemaResolver,
   type KeyofKeyValueMapping,
+  type $InferKeyValueMapping,
+  type $InferPlainValueInput,
   type $InferStreamValueChunkData,
 } from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
@@ -39,8 +45,8 @@ import type { VariablesSource } from "./variables.types.js";
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type SetValue<TValue extends Value> =
-  | $InferPlainValueData<TValue>
-  | (TValue extends StreamValue<infer TChunkData> ? ReadableStream<TChunkData> : never);
+  | $InferPlainValueInput<TValue>
+  | (TValue extends StreamValue<any, infer TChunkInput> ? ReadableStream<TChunkInput> : never);
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
@@ -59,6 +65,68 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
     ? TKey
     : never;
 }>;
+
+// -------------------------------------------------------------------------------------------------
+//
+// 値の検証
+//
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * プレーン値専用のスキーマに ReadableStream が渡されたことを報告するためのスキーマです。
+ */
+const PlainValueInputSchema = v.pipe(
+  v.unknown(),
+  v.check(
+    (input) => !(input instanceof ReadableStream),
+    "Expected a plain value, but received a ReadableStream",
+  ),
+);
+
+/**
+ * ストリーム専用のスキーマにプレーン値が渡されたことを報告するためのスキーマです。
+ */
+const StreamValueInputSchema = v.pipe(
+  v.unknown(),
+  v.check(
+    (input) => input instanceof ReadableStream,
+    "Expected a ReadableStream, but received a plain value",
+  ),
+);
+
+/**
+ * スキーマ情報に基づいて `set` の入力値を検証します。
+ *
+ * プレーン値はその場で検証し、ストリームはチャンクごとに検証するストリームに変換します。
+ *
+ * @param info キーに対応するスキーマ情報です。
+ * @param value 検証する入力値です。
+ * @returns 検証済みの入力値を返します。
+ */
+function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
+  if (value instanceof ReadableStream) {
+    if (info.kind === "plain") {
+      // 必ず検証に失敗するため、InvalidInputError が投げられます。
+      v.parseInput(PlainValueInputSchema, value);
+    }
+
+    // 入力チャンクを検証し、変換後の値を後続のパイプラインへ流します。
+    return value.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          controller.enqueue(v.parseInput(info.schema, chunk));
+        },
+      }),
+    );
+  }
+
+  if (info.kind === "stream") {
+    // 必ず検証に失敗するため、InvalidInputError が投げられます。
+    v.parseInput(StreamValueInputSchema, value);
+  }
+
+  return v.parseInput(info.schema, value);
+}
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -397,8 +465,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   public static config<
     TKeyValueMapping extends KeyValueMapping,
-  >(): IUniKvsConfigBuilder<TKeyValueMapping> {
-    return new UniKvsConfig(this);
+  >(): IUniKvsConfigBuilder<TKeyValueMapping>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public static config<const TSchema extends UniKvsSchema>(options: {
+    readonly schema: TSchema;
+  }): IUniKvsConfigBuilder<$InferKeyValueMapping<TSchema>>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder;
+
+  public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder<any> {
+    return new UniKvsConfig(this, options);
   }
 
   /**
@@ -424,18 +506,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #transformers: readonly UniKvsTransformer[];
 
   /**
+   * キーに対応する値のスキーマ情報を解決するリゾルバーです。スキーマ未設定時は null となります。
+   */
+  readonly #valueSchemaResolver: IValueSchemaResolver | null;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public constructor(
     vars: Readonly<Variables>,
     destinations: readonly [UniKvsDestination, ...UniKvsDestination[]],
     transformers: readonly UniKvsTransformer[],
+    valueSchemaResolver: IValueSchemaResolver | null = null,
   ) {
     this.#con = null;
     this.#acSet = new Set();
     this.#vars = { ...vars };
     this.#destinations = destinations;
     this.#transformers = transformers;
+    this.#valueSchemaResolver = valueSchemaResolver;
+  }
+
+  /**
+   * キーに対応する値のスキーマ情報を解決します。
+   *
+   * @param key 解決するキーです。
+   * @returns 対応するスキーマ情報を返します。スキーマ未設定または対応する定義がない場合は `undefined` を返します。
+   */
+  #resolveValueSchema(key: string): ValueSchemaInfo | undefined {
+    return this.#valueSchemaResolver?.resolve(key);
   }
 
   /**
@@ -712,7 +811,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(SetArgsSchema, args);
-    const { key, value, signal: signalOption, vars: varsOption } = options;
+    const { key, signal: signalOption, vars: varsOption } = options;
+
+    const valueSchema = this.#resolveValueSchema(key);
+    const value = valueSchema ? parseSetValue(valueSchema, options.value) : options.value;
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
@@ -893,6 +995,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const [options] = v.parseInput(GetArgsSchema, args);
     const { key, signal: signalOption, vars: varsOption } = options;
 
+    const valueSchema = this.#resolveValueSchema(key);
+
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
@@ -960,6 +1064,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         data = await transformer.decode(vars, signal, data);
       }
 
+      // デコード後のデータを検証します。
+      if (valueSchema) {
+        data = v.parseOutput(valueSchema.schema, data);
+      }
+
       return data;
     } finally {
       lock.release();
@@ -988,6 +1097,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const [options] = v.parseInput(StreamArgsSchema, args);
     const { key, signal: signalOption, vars: varsOption } = options;
+
+    const valueSchema = this.#resolveValueSchema(key);
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
@@ -1056,6 +1167,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           r = r.pipeThrough(d);
         }
 
+        // デコード後のチャンクを検証します。
+        if (valueSchema) {
+          r = r.pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                controller.enqueue(v.parseOutput(valueSchema.schema, chunk));
+              },
+            }),
+          );
+        }
+
         if (!ioLockRegistry) {
           return toValueStream(r, async () => {
             try {
@@ -1121,6 +1243,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const [options] = v.parseInput(HasArgsSchema, args);
     const { key, signal: signalOption, vars: varsOption } = options;
+
+    // キーがキースキーマに一致するかを検証します。
+    this.#resolveValueSchema(key);
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
@@ -1202,6 +1327,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const [options] = v.parseInput(DeleteArgsSchema, args);
     const { key, signal: signalOption, vars: varsOption } = options;
+
+    // キーがキースキーマに一致するかを検証します。
+    this.#resolveValueSchema(key);
 
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);

@@ -1,19 +1,45 @@
 import type {
-  Variables,
-  IReadableStreamStorage,
   IStorage,
+  Variables,
+  ITransformer,
+  IReadableStreamStorage,
   IWritableStreamStorage,
   IDecodableStreamTransformer,
   IEncodableStreamTransformer,
-  ITransformer,
 } from "@unikvs/core";
 
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
+import * as v from "./_valibot.js";
+import {
+  type Value,
+  type UniKvsSchema,
+  type $InferPlainValueData,
+  type IValueSchemaResolver,
+  type $InferStreamValueChunkData,
+  UniKvsSchemaSchema,
+  createValueSchemaResolver,
+} from "./_value-schemas.js";
 import { MissingStorageError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
 import type { VariablesSource } from "./variables.types.js";
+
+export {
+  type UniKvsSchema,
+  type ValueSchemaInfo,
+  type UniKvsSchemaRecord,
+  type UniKvsSchemaEntries,
+  type $InferPlainValueData,
+  type IValueSchemaResolver,
+  type $InferKeyValueMapping,
+  type $InferPlainValueInput,
+  type $InferStreamValueChunkData,
+  type $InferStreamValueChunkInput,
+  Value,
+  PlainValue,
+  StreamValue,
+} from "./_value-schemas.js";
 
 /**
  * トランスフォーマーから、デコード時の入力データの型を推論するユーティリティー型です。
@@ -68,50 +94,9 @@ type $InferReadChunkOutput<TStorage extends IStorage> =
   TStorage extends IReadableStreamStorage<infer TReadChunkOutput> ? TReadChunkOutput : never;
 
 /**
- * プレーンな値を識別するための固有のシンボルです。
- */
-declare const PLAIN_VALUE: unique symbol;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type PlainValue<TData = any> = [Type: typeof PLAIN_VALUE, Data: TData];
-
-/**
- * ストリーム形式の値を識別するための固有のシンボルです。
- */
-declare const STREAM_VALUE: unique symbol;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type StreamValue<TChunkData = any> = [Type: typeof STREAM_VALUE, ChunkData: TChunkData];
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type Value<TData = any> = PlainValue<TData> | StreamValue<TData>;
-
-/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> };
-
-/**
- * PlainValue 型から内部のデータ型を抽出します。
- *
- * @template TPlainValue 対象となる PlainValue 型です。
- */
-export type $InferPlainValueData<TPlainValue> =
-  TPlainValue extends PlainValue<infer TData> ? TData : never;
-
-/**
- * StreamValue 型から内部のチャンクデータ型を抽出します。
- *
- * @template TStremValue 対象となる StreamValue 型です。
- */
-export type $InferStreamValueChunkData<TStremValue> =
-  TStremValue extends StreamValue<infer TChunkData> ? TChunkData : never;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
@@ -309,6 +294,25 @@ export interface IUniKvsConfigFinalizer<
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
+export type UniKvsConfigOptions = {
+  /**
+   * キーと値のスキーマ定義です。指定すると入出力値が検証されます。
+   */
+  readonly schema?: UniKvsSchema | undefined;
+};
+
+const UniKvsConfigOptionsSchema = v.object({
+  /**
+   * キーと値のスキーマ定義です。
+   */
+  schema: v.optional(UniKvsSchemaSchema),
+});
+
+const UniKvsConfigArgsSchema = v.tuple([v.optional(UniKvsConfigOptionsSchema)]);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ */
 export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfigFinalizer {
   /**
    * UniKvs のコンストラクターです。
@@ -331,13 +335,21 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   readonly #transformers: ITransformer[];
 
   /**
+   * キーに対応する値のスキーマ情報を解決するリゾルバーです。スキーマ未設定時は null となります。
+   */
+  readonly #valueSchemaResolver: IValueSchemaResolver | null;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public constructor(UniKvsConstructor: typeof UniKvs) {
+  public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions) {
+    const [parsed = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
+
     this.#UniKvs = UniKvsConstructor;
     this.#vars = {};
     this.#destinations = [];
     this.#transformers = [];
+    this.#valueSchemaResolver = parsed.schema ? createValueSchemaResolver(parsed.schema) : null;
   }
 
   /**
@@ -357,7 +369,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     }
 
     // 変数の参照を切り離すために浅いコピーを作成して UniKvs を初期化します。
-    return new this.#UniKvs(this.#vars, [first, ...rest], transformers);
+    return new this.#UniKvs(this.#vars, [first, ...rest], transformers, this.#valueSchemaResolver);
   }
 
   /**

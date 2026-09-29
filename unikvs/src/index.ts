@@ -41,7 +41,7 @@ export {
 } from "./errors.js";
 
 export type * from "./unikvs-config.js";
-export { default as UniKvsConfig } from "./unikvs-config.js";
+export { PlainValue, StreamValue, Value, default as UniKvsConfig } from "./unikvs-config.js";
 
 export type * from "./unikvs.js";
 export { default as UniKvs } from "./unikvs.js";

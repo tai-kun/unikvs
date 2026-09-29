@@ -8,9 +8,11 @@ import {
   InvalidOutputError,
 } from "./errors.js";
 
-export type { InferInput, InferOutput } from "valibot";
+export type { GenericSchema, InferInput, InferOutput } from "valibot";
 export {
   any,
+  check,
+  custom,
   omit,
   pipe,
   union,
@@ -22,6 +24,7 @@ export {
   minValue,
   optional,
   safeInteger,
+  safeParse,
 } from "valibot";
 
 export { array, tuple, object, record, transform } from "@tai-kun/valibot-extra-lab";
