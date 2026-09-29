@@ -1462,6 +1462,37 @@ describe("UniKvs - stream 操作", () => {
     expect(chunks).toStrictEqual([Uint8Array.from([1]), Uint8Array.from([2, 3])]);
   });
 
+  test("ReadableStream を継承しない互換オブジェクトもストリームとして set できる", async ({
+    expect,
+  }) => {
+    // 準備
+    await using kvs = await createOpenedKvs(new MemoryStreamStorage());
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.from([1, 2]));
+        controller.close();
+      },
+    });
+    const compatible = {
+      getReader: source.getReader.bind(source),
+      pipeThrough: source.pipeThrough.bind(source),
+      pipeTo: source.pipeTo.bind(source),
+      tee: source.tee.bind(source),
+      cancel: source.cancel.bind(source),
+    } as unknown as ReadableStream<Uint8Array>;
+
+    // 実行
+    await kvs.set("key1", compatible);
+    const stream = await kvs.stream("key1");
+    const chunks: unknown[] = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+
+    // 検証
+    expect(chunks).toStrictEqual([Uint8Array.from([1, 2])]);
+  });
+
   test("存在しないキーを stream すると KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備
     await using kvs = await createOpenedKvs(new MemoryStreamStorage());

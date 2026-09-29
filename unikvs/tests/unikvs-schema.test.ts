@@ -211,6 +211,35 @@ describe("UniKvs - schema による入出力検証", () => {
     await kvs.close();
   });
 
+  test("ReadableStream を継承しない互換オブジェクトもストリームとして検証する", async ({
+    expect,
+  }) => {
+    // 準備
+    const kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
+      .appendStorage(new Memory())
+      .create();
+    await kvs.open();
+    const source = streamOf([new Uint8Array([1, 2])]);
+    const compatible = {
+      getReader: source.getReader.bind(source),
+      pipeThrough: source.pipeThrough.bind(source),
+      pipeTo: source.pipeTo.bind(source),
+      tee: source.tee.bind(source),
+      cancel: source.cancel.bind(source),
+    } as unknown as ReadableStream<Uint8Array<ArrayBuffer>>;
+
+    // 実行
+    await kvs.set("logs", compatible);
+
+    // 検証
+    await expect(collect(await kvs.stream("logs"))).resolves.toStrictEqual([
+      new Uint8Array([1, 2]),
+    ]);
+
+    // 後片付け
+    await kvs.close();
+  });
+
   test("Value のスキーマはプレーン値とストリームのどちらも扱える", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config({ schema: { data: Value(v.instance(Uint8Array)) } })

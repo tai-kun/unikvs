@@ -1,4 +1,4 @@
-import type { Variables, IStorage } from "@unikvs/core";
+import type { Variables, IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvsStorage from "../src/_storage.js";
@@ -191,5 +191,74 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     await expect(storage.getWritable(TEST_VARS, TEST_SIGNAL, "k1")).rejects.toThrow(
       WritableStreamNotSupportedError,
     );
+  });
+});
+
+describe("UniKvsStorage - ストリーム", () => {
+  test("getReadable は ReadableStream を継承しない互換オブジェクトも受け入れる", async ({
+    expect,
+  }) => {
+    // 準備
+    const source = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.from([1]));
+        controller.close();
+      },
+    });
+    const compatible = {
+      getReader: source.getReader.bind(source),
+      pipeThrough: source.pipeThrough.bind(source),
+      pipeTo: source.pipeTo.bind(source),
+      tee: source.tee.bind(source),
+      cancel: source.cancel.bind(source),
+    } as unknown as IReadableStream<Uint8Array>;
+    class StreamStorage extends MockStorage {
+      getReadable(): IReadableStream {
+        return compatible;
+      }
+    }
+    const storage = new UniKvsStorage(new StreamStorage());
+    await storage.open(TEST_VARS, TEST_SIGNAL);
+
+    // 実行
+    const readable = await storage.getReadable(TEST_VARS, TEST_SIGNAL, "k1");
+
+    // 検証
+    const reader = readable.getReader();
+    expect(await reader.read()).toStrictEqual({ done: false, value: Uint8Array.from([1]) });
+    await reader.cancel();
+  });
+
+  test("getWritable は WritableStream を継承しない互換オブジェクトも受け入れる", async ({
+    expect,
+  }) => {
+    // 準備
+    const chunks: Uint8Array[] = [];
+    const target = new WritableStream<Uint8Array>({
+      write(chunk) {
+        chunks.push(chunk);
+      },
+    });
+    const compatible = {
+      getWriter: target.getWriter.bind(target),
+      abort: target.abort.bind(target),
+      close: target.close.bind(target),
+    } as unknown as IWritableStream<Uint8Array>;
+    class StreamStorage extends MockStorage {
+      getWritable(): IWritableStream {
+        return compatible;
+      }
+    }
+    const storage = new UniKvsStorage(new StreamStorage());
+    await storage.open(TEST_VARS, TEST_SIGNAL);
+
+    // 実行
+    const writable = await storage.getWritable(TEST_VARS, TEST_SIGNAL, "k1");
+    const writer = writable.getWriter();
+    await writer.write(Uint8Array.from([1]));
+    await writer.close();
+
+    // 検証
+    expect(chunks).toStrictEqual([Uint8Array.from([1])]);
   });
 });

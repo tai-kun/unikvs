@@ -6,6 +6,7 @@ import type {
   IWritableStream,
 } from "@unikvs/core";
 
+import { isReadableStream, isWritableStream } from "./_streams.js";
 import * as v from "./_valibot.js";
 import {
   type PluginOperationAggregateError,
@@ -13,6 +14,22 @@ import {
   ReadableStreamNotSupportedError,
   WritableStreamNotSupportedError,
 } from "./errors.js";
+
+/**
+ * `ReadableStream` のインターフェースを満たすかを検証するためのスキーマです。
+ */
+const ReadableStreamSchema = v.custom<IReadableStream>(
+  isReadableStream,
+  "Expected a ReadableStream",
+);
+
+/**
+ * `WritableStream` のインターフェースを満たすかを検証するためのスキーマです。
+ */
+const WritableStreamSchema = v.custom<IWritableStream>(
+  isWritableStream,
+  "Expected a WritableStream",
+);
 
 export default class UniKvsStorage {
   private readonly io: IStorage;
@@ -109,7 +126,7 @@ export default class UniKvsStorage {
     }
 
     const output = await this.io.getReadable({ key, vars, signal });
-    const parsed = v.parseOutput(v.instance(ReadableStream), output);
+    const parsed = v.parseOutput(ReadableStreamSchema, output);
 
     return parsed;
   }
@@ -128,7 +145,7 @@ export default class UniKvsStorage {
     }
 
     const output = await this.io.getWritable({ key, vars, signal });
-    const parsed = v.parseOutput(v.instance(WritableStream), output);
+    const parsed = v.parseOutput(WritableStreamSchema, output);
 
     return parsed;
   }

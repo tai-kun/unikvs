@@ -5,6 +5,7 @@ import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 import logger from "./_logger.js";
 import mergeVariables from "./_merge-variables.js";
 import UniKvsStorage from "./_storage.js";
+import { isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
 import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
@@ -78,7 +79,7 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 const PlainValueInputSchema = v.pipe(
   v.unknown(),
   v.check(
-    (input) => !(input instanceof ReadableStream),
+    (input) => !isReadableStream(input),
     "Expected a plain value, but received a ReadableStream",
   ),
 );
@@ -88,10 +89,7 @@ const PlainValueInputSchema = v.pipe(
  */
 const StreamValueInputSchema = v.pipe(
   v.unknown(),
-  v.check(
-    (input) => input instanceof ReadableStream,
-    "Expected a ReadableStream, but received a plain value",
-  ),
+  v.check(isReadableStream, "Expected a ReadableStream, but received a plain value"),
 );
 
 /**
@@ -104,7 +102,7 @@ const StreamValueInputSchema = v.pipe(
  * @returns 検証済みの入力値を返します。
  */
 function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
-  if (value instanceof ReadableStream) {
+  if (isReadableStream(value)) {
     if (info.kind === "plain") {
       // 必ず検証に失敗するため、InvalidInputError が投げられます。
       v.parseInput(PlainValueInputSchema, value);
@@ -832,7 +830,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const errors: { reason: unknown }[] = [];
       const errorStorageSet = new Set<UniKvsDestination>();
-      if (value instanceof ReadableStream) {
+      if (isReadableStream(value)) {
         // 各ストレージ専用の前段パイプラインを通すため、tee で分岐しながらエンコードストリームを構築します。
         // 最長の前段パイプラインを基準にし、ストレージの登録順に分岐点を作ります。
         let longest: readonly UniKvsTransformer[] = [];
