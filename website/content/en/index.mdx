@@ -5,7 +5,7 @@ description: "Overview and documentation guide for unikvs, a modular KVS client 
 
 ## What is unikvs [#what-is-unikvs]
 
-unikvs is a modular and portable KVS client implemented in TypeScript. It combines Transformers, which perform transparent data conversion, with Storages, which support writes to multiple backends, using a builder pattern.
+unikvs is a modular and portable KVS client built with TypeScript. It combines Transformers that transparently convert data with Storages that write to multiple backends, using a builder pattern.
 
 Its main features are:
 
@@ -43,10 +43,10 @@ const bytes = await kvs.get("foo");
 await kvs.close();
 ```
 
-The example above transparently compresses the byte sequence stored under the key `foo` with gzip and saves it under `.tmp/`.
+The example above transparently compresses the bytes for key `foo` with gzip and saves them under `.tmp/`.
 
 :::tip
-Start with the minimal in-memory example in getting started, then check the concepts page for how everything works.
+Start with the minimal memory example, then see concepts for how it works.
 :::
 
 ## How to read the docs [#how-to-read]
@@ -105,13 +105,13 @@ Start with the minimal in-memory example in getting started, then check the conc
 
 | Package | Node.js | Browser |
 | --- | --- | --- |
-| `unikvs` | Supported | Supported |
-| `@unikvs/core` | Supported | Supported |
-| `@unikvs/utils` | Supported | Supported |
-| `@unikvs/compression` | Supported | Supported |
-| `@unikvs/checksum` | Supported | Supported |
-| `@unikvs/memory` | Supported | Supported |
-| `@unikvs/fs.node` | Supported | Not supported |
-| `@unikvs/s3.node` | Supported | Not supported |
-| `@unikvs/opfs` | Not supported | Supported |
-| `@unikvs/indexeddb` | Not supported | Supported |
+| `unikvs` | Supported. | Supported. |
+| `@unikvs/core` | Supported. | Supported. |
+| `@unikvs/utils` | Supported. | Supported. |
+| `@unikvs/compression` | Supported. | Supported. |
+| `@unikvs/checksum` | Supported. | Supported. |
+| `@unikvs/memory` | Supported. | Supported. |
+| `@unikvs/fs.node` | Supported. | Not supported. |
+| `@unikvs/s3.node` | Supported. | Not supported. |
+| `@unikvs/opfs` | Not supported. | Supported. |
+| `@unikvs/indexeddb` | Not supported. | Supported. |

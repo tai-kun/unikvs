@@ -9,7 +9,7 @@ description: "Learn how to use the storage plugin that saves arbitrary data to t
 
 `@unikvs/indexeddb` is a storage plugin that uses the browser's IndexedDB as its persistence layer. It stores arbitrary data keyed by name.
 
-Internal IndexedDB operations use the `idb` package (`8.0.3`). It implements `IStorage` from `@unikvs/core`.
+It uses the `idb` package (`8.0.3`) internally and implements `IStorage` from `@unikvs/core`.
 
 Install it as follows.
 
@@ -19,18 +19,18 @@ npm install @unikvs/indexeddb
 
 ## Usage [#usage]
 
-The storage class is named `Indexeddb` and is provided as a default export. Its `name` property is `"Indexeddb"`.
+The storage class is `Indexeddb`, provided as a default export. Its `name` is `"Indexeddb"`.
 
 ```ts
 import Indexeddb from "@unikvs/indexeddb";
 ```
 
-The constructor arguments are as follows. Both are optional.
+Both constructor arguments are optional.
 
 | Argument | Type | Default | Description |
 | ---- | -- | ------ | ---- |
-| `dbName` | `string` | `"unikvs_db"` | The database name to use. |
-| `storeName` | `string` | `"kvs_store"` | The object store name where data is saved. |
+| `dbName` | `string` | `"unikvs_db"` | The database name. |
+| `storeName` | `string` | `"kvs_store"` | The object store name. |
 
 ```ts
 import Indexeddb from "@unikvs/indexeddb";
@@ -38,15 +38,11 @@ import Indexeddb from "@unikvs/indexeddb";
 // Using the defaults (unikvs_db / kvs_store)
 const storage = new Indexeddb();
 
-// Specifying the database and store names
+// Specifying names
 const customStorage = new Indexeddb("my-app-db", "my-store");
 ```
 
-<Expandable title="Defaults and open behavior">
-When `dbName` is omitted, `"unikvs_db"` is used; when `storeName` is omitted, `"kvs_store"` is used. Call `open()` before use. `open()` connects with database version `1` and creates the store when missing. It does nothing when already open. Check the open state with `isOpen` and close the connection with `close()`.
-</Expandable>
-
-Call `open()` before use. `open()` connects with database version `1` and creates the store when missing. It does nothing when already open. Check the open state with `isOpen` and close the connection with `close()`.
+Call `open()` before use. It connects with version `1` and creates the store when missing. It does nothing when already open. Check with `isOpen` and close with `close()`.
 
 Registering with `UniKvs` looks like this.
 
@@ -66,39 +62,32 @@ await kvs.close();
 
 ## Data Format [#data]
 
-`write` accepts data of type `any`, and `read` returns data of type `any`. Passed values are forwarded to `idb`'s `put` as-is, and `get` results are returned as-is. Byte sequences and other values alike can therefore be stored.
+`write` accepts `any`, and `read` returns `any`. Values are forwarded to `idb`'s `put`/`get` as is, so non-byte values can be stored too.
 
-:::note
-`write` accepts data of type `any`, and passed values are forwarded to `idb`'s `put` as-is. `get` results are returned as-is on retrieval. Byte sequences and other values alike can therefore be stored.
-:::
+Streams are also supported, but IndexedDB has no native streaming, so they are emulated in memory.
 
-Streams are also supported. However, IndexedDB has no native streaming, so they are emulated in memory as follows.
-
-- `getWritable` returns a `WritableStream<Uint8Array>`. Written chunks are buffered in memory and concatenated into a single `Uint8Array` when the stream closes.
-- `getReadable` returns a `ReadableStream<Uint8Array>`. The entire value is loaded into memory, then emitted as a single chunk before closing the stream.
+- `getWritable` buffers chunks in memory and concatenates them into a single `Uint8Array` on close.
+- `getReadable` loads the whole value into memory, then emits it as a single chunk before closing.
 
 :::warning
-`getWritable` and `getReadable` hold the entire value in memory. Watch memory usage when handling large data.
+`getWritable` and `getReadable` hold the whole value in memory. Watch usage with large data.
 :::
 
-Existence checks use the `count()` result, deletion uses `delete()`, and full clearing uses `clear()`.
+Existence checks use `count()`, deletion uses `delete()`, and full clearing uses `clear()`.
 
 ## Notes [#notes]
 
-- All read/write methods are asynchronous. Do not call `write`, `read`, `exists`, `delete`, or `clear` before `open()` completes. The internal database connection is `null` until `open()` finishes.
-- `read` throws a `DOMException` (`NotFoundError`) for a missing key. This matches the behavior of the Opfs plugin. Check beforehand with `exists()`.
-- `getWritable` and `getReadable` hold the entire value in memory. Watch memory usage when handling large data.
-- The database version is fixed at `1`, and the store is created automatically when missing. No logic for migrating an existing database structure is included.
-- Browser only. It uses IndexedDB, `DOMException`, `WritableStream`, and `ReadableStream`. Development dependencies include packages for browser testing.
-- Available capacity and quota handling depend on the browser. Data may not persist in private mode and similar contexts.
+- All methods are async. Don't call `write`, `read`, `exists`, `delete`, or `clear` before `open()` completes. The connection is `null` until then.
+- `read` throws a `DOMException` (`NotFoundError`) for a missing key. This matches the Opfs plugin. Check beforehand with `exists()`.
+- The database version is fixed at `1`, and the store is auto-created when missing. No migration logic is included.
+- Browser only. It uses IndexedDB, `DOMException`, `WritableStream`, and `ReadableStream`.
+- Capacity and quota depend on the browser. Data may not persist in private mode.
 
 ## Examples [#examples]
 
-A minimal browser example is shown below.
-
 <Steps>
-  <Step title="Open the storage">
-    Create an `Indexeddb` with the defaults (unikvs_db / kvs_store) and connect with `open()`.
+  <Step title="Open">
+    Create with defaults and connect with `open()`.
 
     ```ts
     import Indexeddb from "@unikvs/indexeddb";
@@ -108,16 +97,12 @@ A minimal browser example is shown below.
     await storage.open();
     ```
   </Step>
-  <Step title="Write data">
-    Save arbitrary data under a key with `write`.
-
+  <Step title="Write">
     ```ts
     await storage.write({ key: "greeting", data: "hello" });
     ```
   </Step>
-  <Step title="Read data">
-    Check with `exists`, then retrieve with `read`.
-
+  <Step title="Read">
     ```ts
     if (await storage.exists({ key: "greeting" })) {
       const value = await storage.read({ key: "greeting" });
@@ -125,9 +110,7 @@ A minimal browser example is shown below.
     }
     ```
   </Step>
-  <Step title="Delete data and close">
-    Delete with `delete` and close the connection with `close()`.
-
+  <Step title="Delete and close">
     ```ts
     await storage.delete({ key: "greeting" });
     await storage.close();

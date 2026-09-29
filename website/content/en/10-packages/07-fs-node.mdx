@@ -7,9 +7,7 @@ description: "Learn how to use the storage plugin that saves byte sequences to t
 
 `@unikvs/fs.node` is a storage plugin that saves data to the local file system in Node.js. Keys are stored as file names under the specified root directory.<Badge variant="warning">Node.js only</Badge>
 
-It handles byte sequences only. `write` accepts a `Uint8Array<ArrayBuffer>` and `read` returns a `Uint8Array<ArrayBuffer>`.
-
-The supported runtime is Node.js. The implementation dynamically imports `node:fs`, `node:path`, `node:crypto`, and `node:stream`.
+It handles byte sequences only. `write` accepts a `Uint8Array<ArrayBuffer>` and `read` returns a `Uint8Array<ArrayBuffer>`. The implementation dynamically imports `node:fs`, `node:path`, `node:crypto`, and `node:stream`.
 
 Install it as follows.
 
@@ -21,44 +19,24 @@ It depends on `@unikvs/core` and `@unikvs/utils`.
 
 ## Usage [#usage]
 
-The central class is `NodeFs`, exported as a named export from `src/index.ts`.
+The central class is `NodeFs`.
 
 ```ts
 import { NodeFs } from "@unikvs/fs.node";
 ```
 
-The constructor signature is as follows. Argument names and default values match the implementation.
-
 ```ts
 public constructor(root: string = ".unikvs")
 ```
 
-`root` is the path of the root directory where data is stored. Relative paths are resolved against the current working directory when `open()` runs. The default is `".unikvs"`.
+`root` is the root directory for data. Relative paths are resolved against the current working directory when `open()` runs. The default is `".unikvs"`.
 
-The main properties and methods are as follows.
+The main members are as follows.
 
-- `public readonly name: string` is `"NodeFs"`.
-- `public get isOpen: boolean` indicates whether the storage is open.
-- `public async open(): Promise<void>` recursively creates the root directory and makes the storage ready for reads and writes.
-- `public async write(args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">): Promise<void>`
-- `public async read(args: Pick<IStorage.ReadArgs, "key" | "signal">): Promise<Uint8Array<ArrayBuffer>>`
-- `public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean>`
-- `public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void>`
-- `public async clear(): Promise<void>`
-
-To use it, create an instance, call `open()`, and then read and write.
-
-<Steps>
-  <Step title="Create an instance">
-    Create an instance with `new NodeFs(...)`, specifying the root directory. Relative paths are resolved when `open()` runs.
-  </Step>
-  <Step title="Prepare with `open()`">
-    Call `open()` to recursively create the root directory and make it ready for reads and writes. You can check the open state with `isOpen`.
-  </Step>
-  <Step title="Read and write">
-    Save a `Uint8Array<ArrayBuffer>` with `write` and retrieve it with `read`.
-  </Step>
-</Steps>
+- `name` is `"NodeFs"`.
+- `isOpen` indicates whether the storage is open.
+- `open()` recursively creates the root directory and makes it ready for reads and writes.
+- `write`, `read`, `exists`, `delete`, and `clear` handle data.
 
 ```ts
 import { NodeFs } from "@unikvs/fs.node";
@@ -77,9 +55,7 @@ console.log(new TextDecoder().decode(data));
 
 ## File Layout [#layout]
 
-The rules for mapping keys to file paths are as follows.
-
-The following example shows a typical layout where keys appear as file names directly under the root. Actual key names vary by usage.
+Keys map to file paths as follows. Keys sit directly under the root with no subdirectories.
 
 <FileTree>
 
@@ -89,16 +65,16 @@ The following example shows a typical layout where keys appear as file names dir
 
 </FileTree>
 
-- The final path is `path.join(this.root, key)`. No subdirectories are created; the key becomes a file name directly under the root.
-- The temporary file path used during writes is `` `${dest}.${crypto.randomUUID()}.tmp` ``. It is created in the same directory as the final path so that `rename` is atomic on the same file system.
-- `open()` converts `root` to an absolute path with `path.resolve(this.root)` and recursively creates the root directory with `fs.promises.mkdir(root, { recursive: true })`.
-- `clear()` removes the root directory itself with `fs.promises.rm(this.root, { recursive: true, force: true })` and then recreates an empty directory.
+- The final path is `path.join(this.root, key)`.
+- The temporary write path is `` `${dest}.${crypto.randomUUID()}.tmp` ``. It is created in the same directory so `rename` stays atomic.
+- `open()` absolutizes with `path.resolve(this.root)` and creates the root with `mkdir(root, { recursive: true })`.
+- `clear()` removes the root with `rm(this.root, { recursive: true, force: true })` and recreates it.
 
-File names are validated with `assertValidFilename` from `@unikvs/utils`. Each of `write`, `read`, `exists`, `delete`, `getWritable`, and `getReadable` calls `assertValidFilename(key)` first. An `InvalidFilenameError` is thrown for invalid file names. Keys such as empty strings, `.`, `..`, names over 255 bytes, strings that do not match NFC, or names containing reserved characters or Windows reserved names cannot be used.
+File names are validated with `assertValidFilename` from `@unikvs/utils`. Each of `write`, `read`, `exists`, `delete`, `getWritable`, and `getReadable` validates first. Invalid names throw `InvalidFilenameError`. Empty strings, `.`, `..`, names over 255 bytes, non-NFC strings, and reserved/Windows-reserved names cannot be used.
 
 ## Streams [#streams]
 
-Both readable and writable streams are supported for large data.
+Both readable and writable streams are supported.
 
 Obtain a writable stream with the following method.
 
@@ -108,7 +84,7 @@ public async getWritable(
 ): Promise<WritableStream<Uint8Array<ArrayBuffer>>>
 ```
 
-It uses a swap-on-close approach: data is written to a temporary file and renamed to the final path only when closed successfully. If the `AbortSignal` is aborted, the stream is discarded and the temporary file is removed. Backpressure is supported by waiting for `drain` when the buffer is full. Existing data is never destroyed by a failed or aborted write.
+It uses swap-on-close: data is written to a temporary file and renamed to the final path only on successful close. If the `AbortSignal` aborts, the stream is discarded and the temp file is removed. It supports backpressure and never destroys existing data on failure or abort.
 
 Obtain a readable stream with the following method.
 
@@ -118,28 +94,26 @@ public getReadable(
 ): ReadableStream<Uint8Array<ArrayBuffer>>
 ```
 
-It converts `fs.createReadStream(file)` to a web stream with `stream.Readable.toWeb(readStream)` and returns it. The key is resolved to `path.join(this.root, key)` and validated with `assertValidFilename(key)`.
+It converts `fs.createReadStream(file)` to a web stream with `stream.Readable.toWeb(readStream)`.
 
 ## Notes [#notes]
 
-Notes that can be determined from the implementation are as follows.
-
-- Do not call `write` or `read` before calling `open()`. The internal `con` remains `null` and cannot process requests. Check the open state with `isOpen`.
-- `open()` re-initializes even when already open. `root` is resolved to an absolute path and retained.
-- `write` performs a `writeFile` to a temporary file followed by a `rename`. On failure or abort, the temporary file is removed with `rm(file.tmp, { force: true })`, preserving existing data.
-- Concurrent writes to the same key do not collide because each uses a temporary file with a unique suffix. The write whose `rename` finishes last wins.
-- `exists` is determined by whether `fs.promises.access(file)` succeeds, returning `false` on error.
-- `delete` calls `fs.promises.unlink(file)` directly. It fails when the file does not exist.
-- Permissions and ownership are not changed explicitly. Permissions for created files and directories follow the OS and Node.js defaults.
-- The `close()` method is not implemented. Since `close` in `IStorage` is optional, manage resource cleanup yourself when needed.
+- Don't call `write` or `read` before `open()`. The internal connection is `null` until then. Check with `isOpen`.
+- `open()` re-initializes even when already open. `root` is kept as an absolute path.
+- `write` writes to a temp file then renames. On failure or abort, the temp file is removed, preserving existing data.
+- Concurrent writes to the same key don't collide thanks to unique suffixes. The last `rename` wins.
+- `exists` returns `false` on `access(file)` errors.
+- `delete` fails for missing files.
+- Permissions follow OS and Node.js defaults.
+- `close()` is not implemented. Since `close` in `IStorage` is optional, manage cleanup yourself when needed.
 
 :::warning
-Permissions and ownership are not changed explicitly; created files and directories follow the OS and Node.js defaults. Also, concurrent writes to the same key resolve to whichever `rename` finishes last, so consider application-level locking when needed.
+Permissions follow OS and Node.js defaults. Concurrent writes to the same key resolve to the last `rename`, so add app-level locking when needed.
 :::
 
 ## Examples [#examples]
 
-A minimal working example that stores data under `.tmp/`.
+A minimal example storing under `.tmp/`.
 
 ```ts
 import { NodeFs } from "@unikvs/fs.node";

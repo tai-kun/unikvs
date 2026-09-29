@@ -5,18 +5,12 @@ description: "Learn how to use the storage plugin that keeps arbitrary data in m
 
 ## Overview [#overview]
 
-`@unikvs/memory` is a storage plugin that keeps data in memory. As its package description states, it stores arbitrary data in memory.
+`@unikvs/memory` is a storage plugin that keeps data in memory. It stores arbitrary data as is.
 
-The main features are as follows.
-
-- Because data is stored in memory, reads and writes complete synchronously.
+- Reads and writes complete synchronously; no `open` or `close` is needed.
 - You can store arbitrary values such as strings and objects.
-- It runs in any environment where `Map`, `structuredClone`, and Web Streams are available, such as Node.js and browsers.
-- It is well suited as a test double or a temporary cache.
-
-:::tip
-No open step is required, and reads and writes complete synchronously, so it is well suited as a test double or a temporary cache.
-:::
+- It runs where `Map`, `structuredClone`, and Web Streams are available.
+- It suits test doubles and temporary caches.
 
 Install it with the following command.
 
@@ -26,9 +20,7 @@ npm i @unikvs/memory
 
 ## Usage [#usage]
 
-`Memory` is a storage class that implements `IStorage`. To use it as a `UniKvs` backend, pass it to `appendStorage()`.
-
-You can also operate it directly on its own.
+`Memory` implements `IStorage`. Pass it to `appendStorage()` for `UniKvs`, or operate it directly.
 
 <Tabs>
   <Tab title="Via UniKvs">
@@ -62,7 +54,7 @@ The constructor arguments are as follows.
 
 | Argument | Type | Required | Description |
 | --- | --- | --- | --- |
-| `options` | `MemoryOptions` | No | Initialization options. When omitted, it behaves as if an empty object was passed. |
+| `options` | `MemoryOptions` | No | When omitted, behaves as an empty object. |
 | `options.clone` | `<T>(value: T) => T` | No | Function used to clone data. Defaults to `structuredClone`. |
 
 The following example changes how values are cloned.
@@ -75,9 +67,7 @@ const storage = new Memory({
 });
 ```
 
-The `open` and `close` methods are not implemented. The `isOpen` property always returns `true`, so no open or teardown step is required.
-
-Basic operations look like this.
+`open` and `close` are not implemented. `isOpen` always returns `true`.
 
 ```ts
 import { Memory } from "@unikvs/memory";
@@ -95,22 +85,18 @@ storage.delete({ key: "k1" });
 storage.clear();
 ```
 
-`write`, `read`, `exists`, `delete`, and `clear` are all synchronous methods. `write` and `clear` return nothing. `read` returns the stored value. `exists` returns a boolean.
+`write`, `read`, `exists`, `delete`, and `clear` are all synchronous.
 
 ## Supported Data [#data]
 
-`write` and `read` accept arbitrary values, not just byte sequences. You can store strings, objects, `null`, `undefined`, `Uint8Array`, and more as-is.
+`write` and `read` accept arbitrary values, not just bytes. You can store strings, objects, `null`, `undefined`, `Uint8Array`, and more as-is.
 
-Values are cloned with the `clone` function both when stored and when retrieved. With the default `structuredClone`, mutating the original object after writing does not affect the stored value. Likewise, mutating a retrieved value does not affect the stored value.
+Values are cloned with `clone` on store and retrieval. With the default `structuredClone`, mutating the original after writing leaves the stored value unaffected, and vice versa.
 
-Stream operations support only `Uint8Array<ArrayBuffer>`.
+Stream operations support only `Uint8Array<ArrayBuffer>`. They use chunk concatenation and single-chunk emission, not native streaming.
 
-- `getWritable` buffers written chunks in an in-memory array and concatenates them into a single `Uint8Array` when the stream closes.
-- `getReadable` emits the stored value as a single chunk. Reading fails if the stored value is not a `Uint8Array`.
-
-:::note
-Streams are not a native feature; they are implemented by concatenating chunks and emitting a single chunk. `getWritable` buffers written chunks in an in-memory array and concatenates them on close. `getReadable` emits the stored value as a single chunk.
-:::
+- `getWritable` buffers chunks in a memory array and concatenates them into a single `Uint8Array` on close.
+- `getReadable` emits the stored value as a single chunk. Reading fails if the value is not a `Uint8Array`.
 
 Stream usage looks like this.
 
@@ -135,27 +121,17 @@ console.log(result.value);
 
 ## Limitations [#limitations]
 
-- Data is not persisted. It is kept only while the application runs and is discarded when the process exits.
-- Data is held in an internal `Map`. Storing large amounts of data or large binaries increases memory usage. Remove unneeded data with `delete` or `clear`.
-- The default clone function is `structuredClone`. To store values that cannot be cloned, pass a custom function via the `clone` option.
-- Streams are not a native feature; they are implemented by concatenating chunks and emitting a single chunk. They are not suited for streaming large datasets incrementally.
-
-:::warning
-Data is not persisted. It is kept only while the application runs and is discarded when the process exits.
-:::
-
-:::warning
-Data is held in an internal `Map`. Storing large amounts of data or large binaries increases memory usage. Remove unneeded data with `delete` or `clear`.
-:::
+- Data is not persisted. It is discarded when the process exits.
+- Data is held in an internal `Map`. Large volumes increase memory usage. Remove unneeded data with `delete` or `clear`.
+- The default clone function is `structuredClone`. For unclonable values, pass a custom `clone` function.
+- Streams use chunk concatenation. They do not suit incremental processing of large data.
 
 ## Errors [#errors]
 
-This package defines the following errors.
-
 | Error | Error name | When thrown |
 | --- | --- | --- |
-| `KeyNotFoundError` | `MemoryKeyNotFoundError` | Thrown when the key passed to `read`, `delete`, or `getReadable` does not exist. |
-| `InvalidChunkTypeError` | `MemoryInvalidChunkTypeError` | Thrown when a non-`Uint8Array<ArrayBuffer>` value is written to the stream returned by `getWritable`, or when `getReadable` reads a key whose stored value is not a `Uint8Array`. |
+| `KeyNotFoundError` | `MemoryKeyNotFoundError` | Thrown when the key for `read`, `delete`, or `getReadable` does not exist. |
+| `InvalidChunkTypeError` | `MemoryInvalidChunkTypeError` | Thrown for non-`Uint8Array<ArrayBuffer>` writes, or reads of a key whose value is not a `Uint8Array`. |
 
 The metadata for each error is as follows.
 
@@ -167,7 +143,7 @@ Holds `key`. The Japanese message is「キー \{key\} が見つかりません�
   </AccordionItem>
   <AccordionItem title="InvalidChunkTypeError">
 
-Holds `key`, `chunk`, and `chunkType`. `chunkType` is set automatically inside the constructor. The Japanese message is as follows.
+Holds `key`, `chunk`, and `chunkType`. `chunkType` is set automatically. The Japanese message is as follows.
 
 ```txt
 キー {key} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、{chunkType} を得ました
@@ -175,8 +151,6 @@ Holds `key`, `chunk`, and `chunkType`. `chunkType` is set automatically inside t
 
   </AccordionItem>
 </Accordion>
-
-Error handling looks like this.
 
 ```ts
 import { KeyNotFoundError, Memory } from "@unikvs/memory";
@@ -194,11 +168,9 @@ try {
 }
 ```
 
-`KeyNotFoundError` and `InvalidChunkTypeError`, along with their related metadata types, can be imported from `@unikvs/memory`.
-
 ## Examples [#examples]
 
-A minimal working example is shown below.
+A minimal example is shown below.
 
 ```ts
 import { Memory } from "@unikvs/memory";

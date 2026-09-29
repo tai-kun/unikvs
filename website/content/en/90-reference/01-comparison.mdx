@@ -8,27 +8,27 @@ description: "Explains the storage comparison table and selection guide for choo
 | Feature | `@unikvs/memory` | `@unikvs/fs.node` | `@unikvs/s3.node` | `@unikvs/opfs` | `@unikvs/indexeddb` |
 | --- | --- | --- | --- | --- | --- |
 | Environment | <Badge>All</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="warning">Browser</Badge> | <Badge variant="warning">Browser</Badge> |
-| Persistence | None | Yes | Yes | Yes | Yes |
-| Supported data | Any value | Bytes | Bytes | Bytes | Any value |
-| Streams | Limited | Supported | Supported | Supported | Check limitations |
-| Primary use | Test / temporary | Single server persistence | Shared / large-scale persistence | Large-scale browser persistence | Structured browser persistence |
+| Persistence | None. | Yes. | Yes. | Yes. | Yes. |
+| Supported data | Any value. | Bytes. | Bytes. | Bytes. | Any value. |
+| Streams | Limited. | Supported. | Supported. | Supported. | Check limitations. |
+| Primary use | Test / temporary. | Single server. | Shared / large-scale. | Large-scale browser. | Structured browser. |
 
-See the individual package reference pages for details on each storage backend.
+See each package reference for details.
 
 ## Selection guide [#guide]
 
 <Tabs>
   <Tab title="Test / temporary">
-    Use memory. It is the simplest option and works in all environments.
+    Use memory. It is the simplest and works everywhere.
   </Tab>
   <Tab title="Single server">
-    Use files. It requires minimal setup and suits small to medium-scale persistence.
+    Use files. Minimal setup, good for small to medium data.
   </Tab>
   <Tab title="Shared / large-scale">
     Use S3-compatible storage. It supports multipart transfers.
   </Tab>
   <Tab title="Browser">
-    Use OPFS for handling large volumes of bytes, and IndexedDB for structured data such as strings and objects.
+    Use OPFS for large bytes, and IndexedDB for structured data such as strings and objects.
   </Tab>
 </Tabs>
 
@@ -47,13 +47,13 @@ See the individual package reference pages for details on each storage backend.
 </CardGroup>
 
 :::tip
-See the multiple storages guide for how to design with multiple storages. Read priority follows registration order, so register the fastest backend first.
+See the multi-storage guide for design. Read priority follows registration order, so register the fastest backend first.
 :::
 
 ## Environment notes [#environments]
 
 :::warning
-Node.js-only packages cannot be used from browsers, and browser-only packages cannot be used from Node.js. When sharing code with the browser, build clients per environment.
+Node.js-only packages don't work in browsers, and browser-only packages don't work in Node.js. To share code, build clients per environment.
 :::
 
-- Persistent storages require capacity, permission, and network considerations. See the notes in each package reference for details.
+- Persistent storages need capacity, permission, and network planning. See each package reference for details.

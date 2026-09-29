@@ -7,10 +7,10 @@ description: "Learn how to use the storage plugin that saves byte sequences to t
 
 `@unikvs/opfs` is a storage plugin that uses the browser's OPFS (Origin Private File System) as its persistence layer. It handles byte sequences (`Uint8Array<ArrayBuffer>`) only.<Badge variant="warning">Browser only</Badge>
 
-Per the implementation comments, it is intended to run in a browser environment (on the main thread or in a Web Worker).
+It assumes a browser environment (main thread or Web Worker).
 
 :::warning[About the runtime environment]
-OPFS availability depends on the runtime environment (browser type and version, settings, and so on). OPFS is commonly used with Secure Contexts and Workers, but check your browser's documentation for the exact requirements.
+OPFS availability depends on the browser type, version, and settings. It is commonly used with Secure Contexts and Workers; check your browser docs for requirements.
 :::
 
 Install it as follows.
@@ -21,68 +21,62 @@ npm install @unikvs/opfs
 
 ## Usage [#usage]
 
-The class is named `Opfs` and is available as both a default and a named export. In the implementation, the constructor arguments are defined as follows.
+The class is named `Opfs`, available as both a default and a named export.
 
-<Steps>
-  <Step title="Create an instance">
-    ```ts
-    import { Opfs } from "@unikvs/opfs";
+```ts
+import { Opfs } from "@unikvs/opfs";
 
-    const storage = new Opfs(".unikvs");
-    ```
+const storage = new Opfs(".unikvs");
+```
 
-    The constructor argument `root` is typed `string | FileSystemDirectoryHandle` and defaults to `".unikvs"`. When a string is passed, it is treated as the root directory name inside OPFS; when a `FileSystemDirectoryHandle` is passed, that handle itself becomes the working directory. Passing a handle is treated as already open.
-  </Step>
-  <Step title="Open the storage">
-    Call `open()` before use to open the storage. Check the open state with `isOpen`. When combined with `UniKvs`, register it with `appendStorage` and then call `kvs.open()`. `kvs.open()` internally calls `Opfs.open()`.
+The constructor argument `root` is typed `string | FileSystemDirectoryHandle` and defaults to `".unikvs"`. A string is the root name inside OPFS; a handle itself becomes the working directory. Passing a handle counts as already open.
 
-    ```ts
-    import { UniKvs } from "unikvs";
-    import { Opfs } from "@unikvs/opfs";
+Call `open()` before use. With `UniKvs`, register with `appendStorage` then call `kvs.open()`. It internally calls `Opfs.open()`.
 
-    const storage = new Opfs(".unikvs");
-    const kvs = UniKvs.config().appendStorage(storage).create();
+```ts
+import { UniKvs } from "unikvs";
+import { Opfs } from "@unikvs/opfs";
 
-    await kvs.open();
-    // Read and write byte sequences.
-    await kvs.close();
-    ```
-  </Step>
-  <Step title="Read and write data">
-    When operating `Opfs` directly, use the `write`, `read`, `exists`, `delete`, and `clear` methods. All of them require `open()` first.
+const storage = new Opfs(".unikvs");
+const kvs = UniKvs.config().appendStorage(storage).create();
 
-    ```ts
-    import { Opfs } from "@unikvs/opfs";
+await kvs.open();
+// Read and write byte sequences.
+await kvs.close();
+```
 
-    const storage = new Opfs(".unikvs");
-    await storage.open();
+When operating `Opfs` directly, use `write`, `read`, `exists`, `delete`, and `clear`. All require `open()` first.
 
-    await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
-    const data = await storage.read({ key: "data.bin" });
-    const found = await storage.exists({ key: "data.bin" });
-    await storage.delete({ key: "data.bin" });
-    ```
-  </Step>
-</Steps>
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
+const data = await storage.read({ key: "data.bin" });
+const found = await storage.exists({ key: "data.bin" });
+await storage.delete({ key: "data.bin" });
+```
 
 ## File Layout [#layout]
 
-Keys are treated as file names and stored one-to-one directly under the specified root directory. No subdirectories are created from keys. Keys are validated with `assertValidFilename`, so invalid file names raise an error.
+Keys are treated as file names and stored one-to-one directly under the root. No subdirectories are created. Keys are validated with `assertValidFilename`.
 
-When a string is passed to the constructor, the root directory name is normalized by the following rules.
+When a string is passed, the root name is normalized as follows.
 
-- Passing `""`, `"."`, or `"/"` is treated as an empty string, targeting the OPFS root directly.
-- Consecutive `/` characters are collapsed into one, and leading and trailing `/` characters are removed.
-- Each `/`-separated segment is validated with `assertValidDirname`.
+- `""`, `"."`, or `"/"` targets the OPFS root directly.
+- Consecutive `/` collapse into one; leading/trailing `/` are removed.
+- Each segment is validated with `assertValidDirname`.
 
-`open()` obtains the OPFS origin via `navigator.storage.getDirectory()` and creates or retrieves each level of the root name with `create: true`. `clear()` deletes each entry individually when using the OPFS root directly, or removes and recreates the directory when using a subdirectory.
+`open()` obtains the origin via `navigator.storage.getDirectory()` and creates or retrieves each level with `create: true`. `clear()` deletes entries individually at the root, or removes and recreates a subdirectory.
 
 ## Streams [#streams]
 
 `Opfs` supports both writable and readable streams.
 
-- `getWritable({ key })` returns a `WritableStream<Uint8Array<ArrayBuffer>>`. Internally it returns the stream obtained via `createWritable()` from the file handle as-is.
-- `getReadable({ key })` returns a `ReadableStream<Uint8Array<ArrayBuffer>>`. Internally it fetches the file and returns the result of `File.stream()`.
+- `getWritable({ key })` returns a `WritableStream<Uint8Array<ArrayBuffer>>`. It returns the stream from `createWritable()` as is.
+- `getReadable({ key })` returns a `ReadableStream<Uint8Array<ArrayBuffer>>`. It fetches the file and returns `File.stream()`.
 
 ```ts
 import { Opfs } from "@unikvs/opfs";
@@ -101,19 +95,15 @@ await readable.cancel();
 
 ## Notes [#notes]
 
-Notes that can be determined from the implementation are as follows.
-
-- Operating with `read`, `write`, and others before calling `open()` causes a runtime error. Always open first.
-- If a `write` fails, changes are discarded via `abort`. Existing data is therefore never corrupted by a partial write.
-- `exists` returns `false` for missing keys. This is determined by catching a `DOMException` named `NotFoundError`. Other errors are rethrown.
-- Keys and root directory names are subject to file-name constraints. Invalid names raise a validation error.
-
-As general guidance, also note the following.
+- Operating before `open()` causes a runtime error. Always open first.
+- On `write` failure, changes are discarded via `abort`. Partial writes never corrupt existing data.
+- `exists` returns `false` for missing keys by catching a `NotFoundError` `DOMException`. Other errors are rethrown.
+- Keys and root names follow file-name constraints. Invalid names raise a validation error.
 
 :::note[About persistence and origins]
-- OPFS is a private file system isolated per origin. It is not a location users can see through normal file operations.
-- The persistence of stored data is subject to the browser's storage management (such as eviction under storage pressure). Back up important data separately as needed.
-- OPFS behavior may vary between browsers. Testing in your target browsers is recommended.
+- OPFS is a private file system isolated per origin. Users cannot see it via normal file operations.
+- Persistence is subject to browser storage management (e.g. eviction under pressure). Back up important data separately.
+- Behavior may vary between browsers. Test in your target browsers.
 :::
 
 ## Examples [#examples]

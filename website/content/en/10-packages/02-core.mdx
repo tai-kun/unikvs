@@ -5,9 +5,9 @@ description: "Specification of @unikvs/core, which provides the types and base e
 
 ## Overview [#overview]
 
-`@unikvs/core` is the package that provides the type definitions and base errors shared across all unikvs packages. It brings together the interfaces for storages (`IStorage`) and transformers (`ITransformer`), runtime variables (`Variables`), and the error foundation (`ErrorBase`).
+`@unikvs/core` is the package that provides the type definitions and base errors shared across all packages. It brings together storage (`IStorage`) and transformer (`ITransformer`) interfaces, runtime variables (`Variables`), and the error foundation (`ErrorBase`).
 
-Plugins and higher-level packages are implemented against the contracts defined in this package. Therefore, you normally do not need to touch this package directly, except when creating your own storage or transformer plugins.
+You normally do not need to touch this package directly, except when creating your own plugins.
 
 Install it with the following command.
 
@@ -27,7 +27,7 @@ export type * from "./transformer.types.js";
 
 ## Storage Interface [#storage]
 
-The storage contract is defined in `src/storage.types.ts`. At its center is the aggregate interface `IStorage`. In addition to one-shot reads and writes, large-scale data processing based on streams is handled through the same interface.
+The storage contract is defined in `src/storage.types.ts`. At its center is the aggregate interface `IStorage`. One-shot reads/writes and stream-based large data handling share the same interface.
 
 ### Type Parameters [#storage-type-params]
 
@@ -48,10 +48,10 @@ Each one means the following.
 
 | Type parameter | Meaning |
 | --- | --- |
-| `TWriteDataInput` | The type of input data written with `write`. |
-| `TReadDataOutput` | The type of output data obtained with `read`. Defaults to `TWriteDataInput`. |
-| `TWriteChunkInput` | The input chunk type for stream writes. If the written data is an `ArrayBufferLike` or `ArrayBufferView`, that type becomes the default; otherwise the default is `any`. |
-| `TReadChunkOutput` | The output chunk type for stream reads. Defaults to `TWriteChunkInput`. |
+| `TWriteDataInput` | The input data type for `write`. |
+| `TReadDataOutput` | The output data type for `read`. Defaults to `TWriteDataInput`. |
+| `TWriteChunkInput` | The chunk type for stream writes. If the data is `ArrayBufferLike` or `ArrayBufferView`, that type is the default; otherwise the default is `any`. |
+| `TReadChunkOutput` | The chunk type for stream reads. Defaults to `TWriteChunkInput`. |
 
 ### Lifecycle [#storage-lifecycle]
 
@@ -65,17 +65,9 @@ close?(args: IStorage.CloseArgs): MaybePromise<void>;
 onOtherWriteError?(args: IStorage.OnOtherWriteErrorArgs): MaybePromise<void>;
 ```
 
-`name` is the storage name used in debug messages and similar output. `isOpen` indicates whether it is currently available.
+`name` is the storage name for debugging, and `isOpen` indicates whether it is available. `open` and `close` are optional, returning `MaybePromise<void>`.
 
-`open` performs preparation before reads and writes, such as establishing a database connection or initializing a file system. `close` performs safe shutdown work, such as flushing unwritten data or disconnecting. Both are optional, and their return value is `MaybePromise<void>`.
-
-<Steps>
-  <Step title="Prepare with open">Establish a database connection, initialize a file system, and perform other preparation before reads and writes.</Step>
-  <Step title="Read and write">Perform the required data operations, such as CRUD operations or stream acquisition.</Step>
-  <Step title="Shut down with close">Flush unwritten data, disconnect, and perform other safe shutdown work.</Step>
-</Steps>
-
-`onOtherWriteError` is also optional. It performs follow-up work when a storage other than itself throws an error, and can delete data if needed. The aggregated error is passed in the arguments as an `ErrorBase`.
+`onOtherWriteError` is also optional. It handles follow-up when another storage fails, and can delete data if needed. The aggregated error is passed as an `ErrorBase`.
 
 The argument types are defined in the `IStorage` namespace.
 
@@ -92,7 +84,7 @@ export type CloseArgs = {
 ```
 
 <Expandable title="See the full OnOtherWriteErrorArgs">
-In addition to `vars`, `key`, and `signal`, `OnOtherWriteErrorArgs` holds the aggregated error in `error`. The meta information of `error` contains the aggregated details of the write operation.
+In addition to `vars`, `key`, and `signal`, it holds the aggregated error in `error`.
 
 ```ts
 export type OnOtherWriteErrorArgs = {
@@ -113,7 +105,7 @@ export type OnOtherWriteErrorArgs = {
 
 ### CRUD Operations [#storage-crud]
 
-The five required CRUD methods are as follows. Their return values are all `MaybePromise`, so they may return either a synchronous value or a `Promise`.
+The five required CRUD methods are as follows. All return `MaybePromise`, so either a sync value or a `Promise` works.
 
 ```ts
 write(args: IStorage.WriteArgs<TWriteDataInput>): MaybePromise<void>;
@@ -163,7 +155,7 @@ export type ClearArgs = {
 
 ### Stream Support [#storage-streams]
 
-Stream support is optional. `IStorage` inherits the following two interfaces via `Partial`, so storages that do not support them can omit the implementation.
+Stream support is optional. `IStorage` inherits the following two interfaces via `Partial`, so unsupported storages can omit the implementation.
 
 ```ts
 export interface IWritableStream<TData = any> extends WritableStream<TData> {}
@@ -194,32 +186,11 @@ export type GetReadableArgs = {
 };
 ```
 
-Whether to support streams is left to each implementation. If supported, implement `getWritable` or `getReadable`; if not, omit them. Callers must check for the presence of the methods before using them.
-
-<Expandable title="See the stream inheritance of IStorage">
-`IStorage` inherits the write and read stream capabilities via `Partial`. Therefore, storages that do not support them can omit `getWritable` and `getReadable`.
-
-```ts
-export interface IStorage<
-  TWriteDataInput = any,
-  TReadDataOutput = TWriteDataInput,
-  TWriteChunkInput = TWriteDataInput extends ArrayBufferLike | ArrayBufferView
-    ? TWriteDataInput
-    : any,
-  TReadChunkOutput = TWriteChunkInput,
->
-  extends
-    Partial<IWritableStreamStorage<TWriteChunkInput>>,
-    Partial<IReadableStreamStorage<TReadChunkOutput>> {
-  readonly name: string;
-  readonly isOpen: boolean;
-}
-```
-</Expandable>
+If supported, implement `getWritable` or `getReadable`; if not, omit them. Callers check for the presence of the methods before using them.
 
 ## Transformer Interface [#transformer]
 
-The transformer contract is defined in `src/transformer.types.ts`. At its center is the aggregate interface `ITransformer`, which manages bidirectional conversion. It supports both one-shot data conversion and stream-based conversion.
+The transformer contract is defined in `src/transformer.types.ts`. At its center is `ITransformer`, which manages bidirectional conversion. It handles both one-shot and stream conversion.
 
 ### Type Parameters [#transformer-type-params]
 
@@ -238,7 +209,7 @@ export interface ITransformer<
 >
 ```
 
-The first four are the input and output data types for one-shot `encode` and `decode`; the last four are the input and output chunk types for stream conversion.
+The first four are the inputs and outputs for one-shot `encode` and `decode`; the last four are the chunk inputs and outputs for stream conversion.
 
 ### Lifecycle [#transformer-lifecycle]
 
@@ -251,7 +222,7 @@ open?(args: ITransformer.OpenArgs): MaybePromise<void>;
 close?(args: ITransformer.CloseArgs): MaybePromise<void>;
 ```
 
-`name` is the name used in debug messages and similar output. `isOpen` indicates whether it is currently available. `open` acquires resources or initializes external connections, and `close` releases acquired resources or shuts down connections. Both are optional.
+`name` is the name for debugging, and `isOpen` indicates whether it is available. `open` and `close` are optional.
 
 ```ts
 export type OpenArgs = {
@@ -267,7 +238,7 @@ export type CloseArgs = {
 
 ### One-shot Conversion [#transformer-once]
 
-One-shot encoding and decoding are required methods.
+`encode` and `decode` are required.
 
 ```ts
 encode(args: ITransformer.EncodeArgs<TEncodeDataInput>): MaybePromise<TEncodeDataOutput>;
@@ -316,7 +287,7 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
 }
 ```
 
-Both `IEncodable` and `IDecodable` extend `TransformStream` and function as part of a streaming pipeline. Their argument types are as follows.
+Both `IEncodable` and `IDecodable` extend `TransformStream` and work as part of a streaming pipeline.
 
 ```ts
 export type GetEncodableArgs = {
@@ -332,23 +303,19 @@ export type GetDecodableArgs = {
 
 ### Implementation Notes [#transformer-notes]
 
-Note the following when implementing.
-
-- `encode` and `decode` are required, but `getEncodable` and `getDecodable` are optional. Implementations that do not need stream conversion can omit them.
-- Every method argument includes `vars: Variables` and `signal: AbortSignal`. Use `signal` to abort processing.
-- All return values are `MaybePromise`. You can return a value synchronously or return a `Promise`.
+- `encode` and `decode` are required; `getEncodable` and `getDecodable` are optional.
+- Every argument includes `vars` and `signal`. Use `signal` to abort.
+- All return values are `MaybePromise`. Either a sync value or a `Promise` works.
 
 ## Variable Type [#variables]
 
-`src/variables.types.ts` defines `Variables`, the generic variable object type for holding state and settings within unikvs.
+`src/variables.types.ts` defines `Variables`, a generic variable object for holding state and settings.
 
 ```ts
 export type Variables = Record<string, unknown>;
 ```
 
-Keys are treated as `string` and values as `unknown`. Every storage and transformer argument type includes `vars: Variables`, which is used to pass runtime context and settings.
-
-An example is as follows.
+Keys are `string` and values are `unknown`. Every storage and transformer argument includes `vars: Variables` for runtime context and settings.
 
 ```ts
 import type { Variables } from "@unikvs/core";
@@ -371,10 +338,10 @@ export class ErrorBase<
 > extends I18nErrorBase<TMeta> {}
 ```
 
-`ErrorBase` is the base class for all unikvs errors. It extends `I18nErrorBase` from the `i18n-error-base` package, so messages can switch per language. The type parameter `TMeta` specifies the type of meta information the error holds.
+`ErrorBase` is the base class for all errors. It extends `I18nErrorBase` from `i18n-error-base` for per-language messages. `TMeta` specifies the meta type.
 
 :::note
-Because `ErrorBase` extends `I18nErrorBase` from `i18n-error-base`, messages switch per language. For your own plugins, we recommend registering messages for each supported language with `setErrorMessage`.
+For your own plugins, register messages for each language with `setErrorMessage`.
 :::
 
 The related types are also re-exported.
@@ -384,7 +351,7 @@ export type { ErrorMeta };
 export type { ErrorOptions };
 ```
 
-`ErrorMeta` is a readonly object type whose keys are `string` and values are `unknown`. `ErrorOptions` is the type of options that can be passed to an error constructor, and it can hold the originating value in `cause`.
+`ErrorMeta` is a readonly object with `string` keys and `unknown` values. `ErrorOptions` holds constructor options, including `cause`.
 
 ### setErrorMessage [#errors-message]
 
@@ -392,7 +359,7 @@ export type { ErrorOptions };
 export { setErrorMessage };
 ```
 
-`setErrorMessage` is a function that registers per-language messages on an error class, re-exported from `i18n-error-base`. A registered message is either a fixed string or a function that receives meta information and returns a string. Specify the language as a single language tag or as an iterable listing multiple language tags.
+`setErrorMessage` registers per-language messages on an error class. Pass a fixed string or a function that builds a string from meta.
 
 ```ts
 import { MyPluginError, setErrorMessage } from "@unikvs/core";
@@ -409,18 +376,16 @@ export class InvalidUsageErrorBase<
 > extends ErrorBase<TMeta> {}
 ```
 
-`InvalidUsageErrorBase` is the base class for errors that indicate invalid usage, that is, API contract violations. It is used when there is a problem on the caller side, such as malformed arguments or incorrect usage steps.
+`InvalidUsageErrorBase` is the base class for API contract violations. Use it when the caller side has a problem, such as malformed arguments or wrong steps.
 
 ### Defining Errors in Custom Plugins [#errors-custom]
 
-The key points for defining errors in custom plugins are as follows.
-
-1. Create a class that extends `ErrorBase` or `InvalidUsageErrorBase`. Choose `InvalidUsageErrorBase` for contract violations.
-2. Specify the meta information type in `TMeta` as needed, and hold the information required to generate messages.
-3. Register per-language messages with `setErrorMessage`. If you need dynamic messages based on meta information, pass a function.
+1. Extend `ErrorBase` or `InvalidUsageErrorBase`. Choose `InvalidUsageErrorBase` for contract violations.
+2. Specify the meta type in `TMeta` as needed.
+3. Register per-language messages with `setErrorMessage`. Pass a function for dynamic messages.
 
 :::tip
-Choosing `InvalidUsageErrorBase` for errors that represent contract violations makes it easier to convey that the problem is on the caller side. If you need dynamic messages, pass a function that receives meta information to `setErrorMessage`, so you can compose messages containing details such as `key`.
+Using `InvalidUsageErrorBase` for contract violations makes it clear the problem is on the caller side.
 :::
 
 ```ts
@@ -459,25 +424,25 @@ setErrorMessage(MyStorageError, (meta) => `Failed to write key ${meta.key}.`, "e
 }
 ```
 
-A guide for choosing between them is as follows.
+A guide for choosing between them:
 
 <Tabs>
   <Tab title="@unikvs/core">
-The entry point for using everything. You can get `Variables`, `ErrorBase`, `setErrorMessage`, `InvalidUsageErrorBase`, `IStorage`, and `ITransformer` together.
+For using everything. You can get `Variables`, `ErrorBase`, `setErrorMessage`, `InvalidUsageErrorBase`, `IStorage`, and `ITransformer` together.
 
 ```ts
 import { ErrorBase, type IStorage, type Variables } from "@unikvs/core";
 ```
   </Tab>
   <Tab title="@unikvs/core/storage">
-Use this when you need only the storage types. It includes `IStorage`, `IWritableStream`, `IReadableStream`, `IWritableStreamStorage`, and `IReadableStreamStorage`.
+For storage types only. It includes `IStorage`, `IWritableStream`, `IReadableStream`, `IWritableStreamStorage`, and `IReadableStreamStorage`.
 
 ```ts
 import type { IStorage, IWritableStreamStorage } from "@unikvs/core/storage";
 ```
   </Tab>
   <Tab title="@unikvs/core/transformer">
-Use this when you need only the transformer types. It includes `ITransformer`, `IEncodable`, `IDecodable`, `IEncodableStreamTransformer`, and `IDecodableStreamTransformer`.
+For transformer types only. It includes `ITransformer`, `IEncodable`, `IDecodable`, `IEncodableStreamTransformer`, and `IDecodableStreamTransformer`.
 
 ```ts
 import type { ITransformer, IEncodableStreamTransformer } from "@unikvs/core/transformer";

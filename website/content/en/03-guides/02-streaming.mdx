@@ -18,9 +18,9 @@ const kvs = UniKvs.config<{
 
 | Type | `set` | `get` | `stream` |
 | --- | --- | --- | --- |
-| `PlainValue<T>` | Supported | Supported | Not supported |
-| `StreamValue<T>` | Supports values or streams | Not supported | Supported |
-| `Value<T>` | Supports values or streams | Supported | Supported |
+| `PlainValue<T>` | Supported. | Supported. | Not supported. |
+| `StreamValue<T>` | Supports values or streams. | Not supported. | Supported. |
+| `Value<T>` | Supports values or streams. | Supported. | Supported. |
 
 ## Writing [#write]
 
@@ -52,11 +52,11 @@ You can pass either a plain value or a `ReadableStream`.
 
 ## Reading [#read]
 
-`stream()` returns a `ValueStream`. Choose one of three patterns depending on your use case.
+`stream()` returns a `ValueStream`. Choose from three patterns for your use case.
 
 <Tabs>
   <Tab title="getReader">
-    Use this when you want fine-grained control over each chunk.
+    Use for fine-grained control over each chunk.
 
     ```ts
     const reader = (await kvs.stream("logs")).getReader();
@@ -70,7 +70,7 @@ You can pass either a plain value or a `ReadableStream`.
     ```
   </Tab>
   <Tab title="for-await">
-    Use this when you want concise code.
+    Use for concise code.
 
     ```ts
     for await (const chunk of await kvs.stream("logs")) {
@@ -79,7 +79,7 @@ You can pass either a plain value or a `ReadableStream`.
     ```
   </Tab>
   <Tab title="await-using">
-    Use this when you want automatic release of the read lock.
+    Use for automatic release of the read lock.
 
     ```ts
     await using (const valueStream = await kvs.stream("logs")) {
@@ -92,18 +92,18 @@ You can pass either a plain value or a `ReadableStream`.
 </Tabs>
 
 :::warning
-To release the read lock, dispose of streams when you are done with them. `await using` releases the lock automatically.
+Dispose of streams when you are done with them. `await using` releases the lock automatically.
 :::
 
 ## Notes by Storage [#storages]
 
 :::warning
-Memory Storage streams are implemented by concatenating chunks. They are not suitable for sequential processing of very large data.
+Memory streams are implemented by concatenating chunks. They are not suitable for sequential processing of very large data.
 :::
 
 - Files, S3, and OPFS are suitable for streaming byte data. See each package reference for details.
-- IndexedDB supports storing arbitrary data, but check the implementation constraints for stream handling.
-- Some Transformers do not support stream conversion. See each package reference for compression and checksum support.
+- IndexedDB can store arbitrary data, but check the implementation constraints for stream handling.
+- Some Transformers do not support stream conversion. See each package reference for support status.
 
 ## Cancellation [#cancellation]
 

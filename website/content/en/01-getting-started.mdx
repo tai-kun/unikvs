@@ -22,11 +22,11 @@ Install the `unikvs` package plus the Storage and Transformer packages you plan 
 
 ## Basic usage [#basic-usage]
 
-A minimal example using in-memory Storage. The steps are always the same: configure, create, open, operate, then close.
+A minimal example using memory Storage. Configure and create, then open, operate, and close.
 
 <Steps>
   <Step title="Create a builder">
-    Create a builder with `UniKvs.config()`. The type parameter is a mapping of keys to Values.
+    Create a builder with `UniKvs.config()`. Specify a key-to-value mapping in the type parameter.
 
     ```ts
     import { UniKvs, type Value } from "unikvs";
@@ -36,8 +36,8 @@ A minimal example using in-memory Storage. The steps are always the same: config
     }>();
     ```
   </Step>
-  <Step title="Add a storage backend and create">
-    Add a storage backend with `appendStorage()`, then create the client with `create()`. Transformers can be omitted when you don't need them.
+  <Step title="Add a storage and create">
+    Add a storage with `appendStorage()`, then create the client with `create()`. Omit Transformers if you don't need them.
 
     ```ts
     import { Memory } from "@unikvs/memory";
@@ -71,7 +71,7 @@ A minimal example using in-memory Storage. The steps are always the same: config
 </Steps>
 
 :::tip
-`appendTransformer()` can be added either before or after `appendStorage()`. A Transformer added after a Storage is registered applies only to Storages registered after it. See the pipeline explanation in concepts for details.
+`appendTransformer()` can be added either before or after `appendStorage()`. Transformers added after a Storage apply only to Storages registered later. See the pipeline in concepts for details.
 :::
 
 ## Add a Transformer [#add-transformer]
@@ -91,10 +91,10 @@ const kvs = UniKvs.config<{
   .create();
 ```
 
-The `set` and `get` code stays the same, while compression on write and decompression on read happen automatically.
+Keep `set` and `get` unchanged; compression on write and decompression on read happen automatically.
 
 :::warning
-Calling `create()` without any `appendStorage()` call throws a `MissingStorageError`. Registering at least one Storage is required.
+Calling `create()` without `appendStorage()` throws `MissingStorageError`. At least one Storage is required.
 :::
 
 ## Next steps [#next-steps]

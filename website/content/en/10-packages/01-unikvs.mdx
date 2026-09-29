@@ -5,9 +5,7 @@ description: "Explains how to use the main package unikvs, which provides the co
 
 ## Overview [#overview]
 
-The package `unikvs` provides the main client of this repository. <Badge>Main Client</Badge> Assemble transformers and storages with the configuration builder (`UniKvs.config()` / `UniKvsConfig`), then read and write with the generated client (`UniKvs`).
-
-Install with the following command.
+`unikvs` is the main client package. <Badge>Main Client</Badge> Assemble transformers and storages with the configuration builder (`UniKvs.config()` / `UniKvsConfig`), then read and write with the generated client (`UniKvs`).
 
 ```package-install
 npm i unikvs
@@ -15,7 +13,7 @@ npm i unikvs
 
 ## Configuration Builder [#config-builder]
 
-`UniKvs.config<T>()` creates a builder. The type parameter `T` is a mapping from keys to values (`{ [key]: PlainValue | StreamValue | Value }`), and controls which operations are available per key at the type level.
+`UniKvs.config<T>()` creates a builder. The type parameter `T` is a mapping from keys to values (`{ [key]: PlainValue | StreamValue | Value }`), and decides which operations are available per key at the type level.
 
 ```ts
 import { UniKvs, type Value } from "unikvs";
@@ -37,18 +35,18 @@ Configure in the following order.
     Adds a transformer (optional). You can also add transformers after registering storages.
   </Step>
   <Step title="`appendStorage(storage)`">
-    Adds a storage (required, and you can add more than one).
+    Adds a storage (required, multiple allowed).
   </Step>
   <Step title="`create()`">
     Creates a `UniKvs` client. It throws `MissingStorageError` if no storage is registered.
   </Step>
 </Steps>
 
-:::warning[Caution: no storage registered]
-Calling `create()` with no storage registered throws `MissingStorageError`. Call `appendStorage()` at least once before `create()`.
+:::warning[No storage registered]
+Call `appendStorage()` at least once before `create()`.
 :::
 
-Each storage uses the transformers added up to the point of registration as its dedicated upstream pipeline. Therefore, adding transformers and storages alternately builds a different pipeline per storage.
+Each storage uses the transformers added up to its registration as its dedicated upstream pipeline. Adding transformers and storages alternately builds a different pipeline per storage.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
@@ -60,7 +58,7 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .create();
 ```
 
-The configuration above results in the following pipelines.
+The configuration above results in the following pipeline.
 
 ```mermaid
 flowchart LR
@@ -71,15 +69,15 @@ flowchart LR
   Transformer3 --> Storage2
 ```
 
-:::note[Beware of pipeline branching]
-As shown above, adding transformers and storages alternately builds a different upstream pipeline per storage. Check the diagram to see which storage goes through which transformers before configuring.
+:::note[Pipeline branching]
+Adding alternately builds a different upstream pipeline per storage. Check the diagram to see which storage goes through which transformers.
 :::
 
-Writes are fanned out to all storages in parallel. Reads decode by applying the upstream pipeline of the storage where the key was found in reverse order.
+Writes go to all storages in parallel. Reads decode by applying the upstream pipeline of the found storage in reverse.
 
 ## Client Operations [#client-operations]
 
-The created client provides the following operations. Initialize it with `open()` and close it with `close()` when you are done (automatic closing via `await using` is also available).
+The created client provides the following operations. Initialize it with `open()` and close it with `close()` when you are done (`await using` also works).
 
 | Method          | Description                                        |
 | --------------- | -------------------------------------------------- |
@@ -92,7 +90,7 @@ The created client provides the following operations. Initialize it with `open()
 | `delete(key)`     | Deletes a key.                                       |
 | `clear()`         | Deletes all data.                                    |
 
-All operations support `AbortSignal` cancellation and passing runtime variables (`vars`). Arguments can be specified either as an options object or as positional key and value arguments.
+All operations support `AbortSignal` cancellation and passing runtime variables (`vars`). Arguments can be specified either as an options object or as positional arguments.
 
 ```ts
 const ac = new AbortController();
@@ -112,8 +110,8 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
 
 | Type               | Write                              | Read            | Stream read                   |
 | ------------------ | ---------------------------------- | --------------- | ----------------------------- |
-| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T` | Not available                 |
-| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available | `stream(key): ValueStream<T>` |
+| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T` | Not available.                |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available. | `stream(key): ValueStream<T>` |
 | `Value<T>`       | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
 
 ```ts
@@ -136,7 +134,7 @@ await kvs.set("logs", new Uint8Array([0x01]));
 const valueStream = await kvs.stream("logs");
 ```
 
-Combinations that are not allowed result in type errors.
+Combinations that are not allowed are type errors.
 
 ```ts
 // Type error: stream() cannot be used on a PlainValue key
@@ -148,13 +146,12 @@ kvs.get("logs");
 
 ## ValueStream [#value-stream]
 
-The return value of `stream()` is `ValueStream<T>`, a <Badge variant="success">Stream capable</Badge> wrapper around `ReadableStream`. In addition to standard stream operations, it supports async iteration (`for await...of`) and async disposal (`await using` / `dispose()`). Disposing a stream you no longer need releases the read lock on the key.
+The return value of `stream()` is `ValueStream<T>`, a <Badge variant="success">Stream capable</Badge> wrapper around `ReadableStream`. In addition to standard operations, it supports async iteration (`for await...of`) and async disposal (`await using` / `dispose()`). Dispose streams you no longer need to release the read lock.
 
 <Tabs>
   <Tab title="getReader">
 
 ```ts
-// Using getReader()
 const reader = (await kvs.stream("logs")).getReader();
 while (true) {
   const { done, value } = await reader.read();
@@ -169,7 +166,6 @@ while (true) {
   <Tab title="for-await">
 
 ```ts
-// Using an async iterator
 for await (const chunk of await kvs.stream("logs")) {
   console.log(chunk); // Uint8Array
 }
@@ -179,7 +175,6 @@ for await (const chunk of await kvs.stream("logs")) {
   <Tab title="await using">
 
 ```ts
-// Using automatic disposal
 await using (const valueStream = await kvs.stream("logs")) {
   const reader = valueStream.getReader();
   const { value } = await reader.read();
@@ -191,15 +186,14 @@ await using (const valueStream = await kvs.stream("logs")) {
 </Tabs>
 
 :::warning[Dispose streams when you are done]
-When you are done with a `ValueStream`, dispose it to release the read lock on the key. Do not forget automatic disposal via `await using` or calling `dispose()`.
+Don't forget automatic disposal via `await using` or calling `dispose()`.
 :::
 
 ## Variables and Cancellation [#variables-and-cancellation]
 
-`vars` can be specified either as an object or as an entry array (`readonly [key, value][]`). The `vars` passed per operation are merged over the values set with the builder's `setVariables()`. In addition, `unikvs:action` and `unikvs:key` are automatically attached as variables representing the operation type and the target key.
+`vars` can be specified either as an object or as an entry array (`readonly [key, value][]`). The `vars` passed per operation are merged over the values set with `setVariables()`. In addition, `unikvs:action` and `unikvs:key` are automatically attached as the operation type and the target key.
 
 ```ts
-// Set the base variables on the builder side
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .setVariables({ region: "ap-northeast-1" })
   .appendStorage(storage)
@@ -229,23 +223,21 @@ await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 
 ## Errors [#errors]
 
-The main error classes are as follows.
-
-| Error class                       | Description                                                              |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `KeyNotFoundError`                | Thrown when the specified key's data does not exist in any storage.        |
-| `UniKvsIsNotOpenError`            | Thrown when an operation is performed while the client is not open.        |
-| `UniKvsIsOpenError`               | Thrown when `open()` is called again on an already open client.            |
-| `MissingStorageError`             | Thrown when `create()` is called with no storage registered.               |
-| `StorageIsNotOpenError`           | Thrown when an operation is performed while the storage is not open.       |
-| `TransformerIsNotOpenError`       | Thrown when an operation is performed while the transformer is not open.   |
-| `PluginOperationAggregateError`   | Aggregate error when multiple plugin operations fail.                      |
-| `InvalidInputError`               | Thrown when the input does not match the expected format.                  |
-| `InvalidOutputError`              | Thrown when the output does not match the expected format.                 |
-| `ReadableStreamNotSupportedError` | Thrown when the storage does not support read streams.                     |
-| `WritableStreamNotSupportedError` | Thrown when the storage does not support write streams.                    |
-| `EncodableStreamNotSupportedError` | Thrown when the transformer does not support encode streams.               |
-| `DecodableStreamNotSupportedError` | Thrown when the transformer does not support decode streams.               |
+| Error class | Description |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `KeyNotFoundError` | The key does not exist in any storage. |
+| `UniKvsIsNotOpenError` | Operated before opening. |
+| `UniKvsIsOpenError` | Called `open()` while already open. |
+| `MissingStorageError` | Called `create()` with no storage registered. |
+| `StorageIsNotOpenError` | A storage is not open. |
+| `TransformerIsNotOpenError` | A transformer is not open. |
+| `PluginOperationAggregateError` | Aggregate error for multiple plugin operations. |
+| `InvalidInputError` | The input format is invalid. |
+| `InvalidOutputError` | The output format is invalid. |
+| `ReadableStreamNotSupportedError` | Read streams are not supported. |
+| `WritableStreamNotSupportedError` | Write streams are not supported. |
+| `EncodableStreamNotSupportedError` | Encode streams are not supported. |
+| `DecodableStreamNotSupportedError` | Decode streams are not supported. |
 
 ```ts
 import { KeyNotFoundError } from "unikvs";
@@ -261,11 +253,11 @@ try {
 }
 ```
 
-See the cross-cutting documentation for detailed error classification and handling.
+See the cross-cutting docs for error classification and handling.
 
 ## Examples [#examples]
 
-A minimal working example using `@unikvs/memory`.
+A minimal example using `@unikvs/memory`.
 
 ```ts
 import { Memory } from "@unikvs/memory";

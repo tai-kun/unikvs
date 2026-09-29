@@ -5,7 +5,7 @@ description: "Transformers and Storage pipelines, Value types, variables, and ca
 
 ## Architecture [#architecture]
 
-unikvs is built on the builder pattern. Input passes through a chain of Transformers and reaches Storages.
+unikvs uses the builder pattern. Input passes through Transformers to Storages.
 
 ```mermaid
 flowchart LR
@@ -17,10 +17,10 @@ flowchart LR
 
 There are two roles:
 
-- Transformers transparently encode and decode data.
-- Storages are persistence destinations. When multiple Storages are specified, writes go to all of them in parallel.
+- Transformers transparently encode/decode data.
+- Storages are persistence destinations. With multiple Storages, writes go to all of them in parallel.
 
-Each Storage uses the Transformers added up to the point of its registration as its upstream pipeline. So alternating Transformers and Storages lets you build a different pipeline per Storage.
+Each Storage uses the Transformers added up to its registration as its upstream pipeline. Alternating them builds a different pipeline per Storage.
 
 ```ts
 const kvs = UniKvs.config()
@@ -45,25 +45,25 @@ flowchart LR
   Transformer4 --> Storage3
 ```
 
-On reads, the upstream pipeline of the Storage where the key was found is applied in reverse to decode the data.
+On reads, the upstream pipeline of the found Storage is applied in reverse to decode the data.
 
 :::note
-Writes go to all Storages in parallel, while reads search in registration order and decode and return the first key found. Registering a fast storage backend first speeds up reads.
+Writes go to all Storages in parallel, while reads search in registration order and return the first key found. Register a fast backend first to speed up reads.
 :::
 
 ## Config builder [#config-builder]
 
-Create a builder with `UniKvs.config()` and configure it in the following order:
+Create a builder with `UniKvs.config()` in the following order:
 
 <Steps>
   <Step title="setVariables(vars)">
-    Sets runtime variables. Optional.
+    Sets runtime variables (optional).
   </Step>
   <Step title="appendTransformer(transformer)">
-    Adds a Transformer. Optional, and can also be added after registering Storages.
+    Adds a Transformer (optional). Can be added after registering Storages.
   </Step>
   <Step title="appendStorage(storage)">
-    Adds a Storage. Required, and can be added multiple times.
+    Adds a Storage (required, multiple allowed).
   </Step>
   <Step title="create()">
     Creates the KVS client.
@@ -85,26 +85,19 @@ Create a builder with `UniKvs.config()` and configure it in the following order:
 
 All operations support cancellation via `AbortSignal` and passing of runtime variables.
 
-```ts
-const ac = new AbortController();
-setTimeout(() => ac.abort(), 1000);
-
-await kvs.set("key", value, { signal: ac.signal });
-```
-
 ## Value types [#value-types]
 
-`Value`, `PlainValue`, and `StreamValue` are type-level markers that don't exist at runtime. Defining a key-to-Value mapping controls the available methods per key at the type level.
+`Value`, `PlainValue`, and `StreamValue` are type-level markers with no runtime presence. Defining a key-to-value mapping decides the available methods per key at the type level.
 
 | Type | Write | Read | Stream read |
 | --- | --- | --- | --- |
-| `PlainValue<T>` | `set(key, T)` | `get(key): T` | Not available |
-| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available | `stream(key): ValueStream<T>` |
+| `PlainValue<T>` | `set(key, T)` | `get(key): T` | Not available. |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available. | `stream(key): ValueStream<T>` |
 | `Value<T>` | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
 
 <Tabs>
   <Tab title="PlainValue">
-    Use for storing and getting a single Value. `stream()` is a type error.
+    Use for storing and getting a single value. `stream()` is a type error.
 
     ```ts
     import { UniKvs, type PlainValue } from "unikvs";
@@ -136,7 +129,7 @@ await kvs.set("key", value, { signal: ac.signal });
     ```
   </Tab>
   <Tab title="Value">
-    Syntactic sugar for supporting both, equivalent to `PlainValue<T> | StreamValue<T>`.
+    Sugar syntax for both, equivalent to `PlainValue<T> | StreamValue<T>`.
 
     ```ts
     import { UniKvs, type Value } from "unikvs";
@@ -156,7 +149,7 @@ await kvs.set("key", value, { signal: ac.signal });
 
 ## Runtime variables [#variables]
 
-Variables are a runtime context for switching operation behavior. Set initial values with the builder's `setVariables()`, and override them per operation with `vars`.
+Variables are a runtime context that switches operation behavior. Set initial values with `setVariables()`, and override them per operation with `vars`.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
@@ -170,7 +163,7 @@ await kvs.set("foo", new Uint8Array([1]), {
 ```
 
 <Expandable title="Automatically assigned variables">
-The operation kind and target key are automatically assigned as `unikvs:action` and `unikvs:key`. Some Transformers use variables, such as specifying a hash for checksums. See each package reference for details.
+The operation kind and target key are automatically assigned as `unikvs:action` and `unikvs:key`. Some Transformers use variables. See each package reference for details.
 </Expandable>
 
 ## Plugin kinds [#plugin-kinds]
@@ -186,5 +179,5 @@ The operation kind and target key are automatically assigned as `unikvs:action` 
 | Storage | `@unikvs/opfs` | Stores in the browser OPFS. |
 
 :::tip
-To write your own plugin, see the custom plugin guide. Start from the `IStorage` implementation for a Storage, or the `ITransformer` implementation for a Transformer.
+For custom plugins, see the custom plugin guide. Start from `IStorage` for a Storage or `ITransformer` for a Transformer.
 :::

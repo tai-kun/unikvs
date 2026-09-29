@@ -5,7 +5,7 @@ description: "Explains parallel writes to multiple destinations and pipeline bra
 
 ## Write and read principles [#principle]
 
-When multiple Storages are registered, writes go to all Storages in parallel. Reads search in registration order, decoding through the upstream pipeline of the Storage where the key was found before returning it.
+When multiple Storages are registered, writes go to all of them in parallel. Reads search in registration order, decoding through the upstream pipeline of the found Storage.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
@@ -14,7 +14,7 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .create();
 ```
 
-In the example above, `set` saves to both memory and files. `get` prefers memory.
+In the example above, `set` saves to both memory and files, while `get` prefers memory.
 
 ```mermaid
 flowchart LR
@@ -24,14 +24,14 @@ flowchart LR
 
 ## Pipeline branching [#branching]
 
-Each Storage uses the Transformers registered up to that point as its upstream pipeline. Adding them alternately lets you apply different transformations per Storage.
+Each Storage uses the Transformers registered up to that point as its upstream pipeline. Adding them alternately applies different transformations per Storage.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .appendTransformer(new Compression("gzip"))
-  .appendStorage(new Memory())
+  .appendStorage(new Memory()) // compression only
   .appendTransformer(new ChecksumSha256())
-  .appendStorage(new NodeFs(".tmp"))
+  .appendStorage(new NodeFs(".tmp")) // compression + checksum
   .create();
 ```
 
@@ -42,11 +42,6 @@ flowchart LR
   Compression --> Checksum
   Checksum --> NodeFs
 ```
-
-- The memory side applies compression only.
-- The file side applies compression and checksum verification.
-
-Typical use cases are as follows.
 
 <CodeGroup>
 
@@ -69,16 +64,16 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 
 </CodeGroup>
 
-- Combine a fast read cache with a persistent primary destination.
+- Combine a fast cache with a persistent primary destination.
 - Use memory only during development, and add files or S3 in production.
-- Add another destination for auditing to keep a recovery path in case of failure.
+- Add another destination for auditing to keep a recovery path.
 
 ## Design notes [#notes]
 
 :::warning
-`clear` and `delete` apply to all registered Storages. If you want different deletion scopes for the primary destination and the cache, use separate clients.
+`clear` and `delete` apply to all registered Storages. To scope deletion differently, use separate clients.
 :::
 
 - Read priority follows registration order. Register fast destinations first.
-- Transformer order affects the stored format. When combining compression and checksum, decide the order based on whether the checksum should cover data before or after compression.
+- When combining compression and checksum, decide the order based on whether the checksum should cover data before or after compression.
 - Partial write failures are reported as an aggregate error. See the errors and diagnostics page for details.
