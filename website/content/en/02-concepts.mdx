@@ -53,7 +53,23 @@ Writes go to all Storages in parallel, while reads search in registration order 
 
 ## Config builder [#config-builder]
 
-Create a builder with `UniKvs.config()` in the following order:
+Create a builder with `UniKvs.config()` in the following order. Passing `schema` enables input and output validation with Valibot schemas, and also infers the key-to-value mapping type automatically.
+
+```ts
+import { PlainValue, StreamValue, UniKvs } from "unikvs";
+import * as v from "valibot";
+
+const kvs = UniKvs.config({
+  schema: {
+    message: PlainValue(v.string()),
+    logs: StreamValue(v.instance(Uint8Array)),
+  },
+})
+  .appendStorage(storage)
+  .create();
+```
+
+Install `valibot` separately when using Valibot schemas. Omitting `schema` falls back to specifying the mapping with a type parameter, as before. In that case only type checking applies, with no runtime validation.
 
 <Steps>
   <Step title="setVariables(vars)">
@@ -87,13 +103,15 @@ All operations support cancellation via `AbortSignal` and passing of runtime var
 
 ## Value types [#value-types]
 
-`Value`, `PlainValue`, and `StreamValue` are type-level markers with no runtime presence. Defining a key-to-value mapping decides the available methods per key at the type level.
+`Value`, `PlainValue`, and `StreamValue` are both types and functions. Used as types, they decide the available methods per key at the type level; used as functions, they infer types from Valibot schemas and validate values at runtime.
 
 | Type | Write | Read | Stream read |
 | --- | --- | --- | --- |
 | `PlainValue<T>` | `set(key, T)` | `get(key): T` | Not available. |
 | `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available. | `stream(key): ValueStream<T>` |
 | `Value<T>` | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
+
+`Value<T>` is sugar for both, equivalent to `PlainValue<T> | StreamValue<T>`. For schemas whose input and output types differ, such as `v.transform()`, the second type parameter becomes the `set` input type (`PlainValue<TData, TInput>`).
 
 <Tabs>
   <Tab title="PlainValue">
@@ -146,6 +164,70 @@ All operations support cancellation via `AbortSignal` and passing of runtime var
     ```
   </Tab>
 </Tabs>
+
+### Schema definition [#schema-definition]
+
+Passing schemas to `UniKvs.config({ schema })` infers the mapping type from Valibot schemas and validates input and output values at runtime.
+
+<Tabs>
+  <Tab title="Object form">
+    Keys are used as-is. Use for fixed keys.
+
+    ```ts
+    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: {
+        message: PlainValue(v.pipe(v.string(), v.minLength(1))),
+        logs: StreamValue(v.instance(Uint8Array)),
+      },
+    })
+      .appendStorage(storage)
+      .create();
+
+    await kvs.set("message", "hello");
+    const msg = await kvs.get("message");
+    // msg is typed as string
+    ```
+  </Tab>
+  <Tab title="Array form">
+    List pairs of key and value schemas. Use for dynamic keys. The first matching definition wins.
+
+    ```ts
+    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: [
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
+      ],
+    })
+      .appendStorage(storage)
+      .create();
+
+    await kvs.set("msg-1", "hello");
+    ```
+  </Tab>
+</Tabs>
+
+:::warning[When the schema definition is invalid]
+Passing anything other than `PlainValue()`, `StreamValue()`, or `Value()` as a value, or any other malformed `schema`, throws `InvalidInputError` at the `config()` call.
+:::
+
+### Validation timing [#schema-validation]
+
+Validation happens outside the Transformers, at the UniKvs input and output boundary. `set` validates the input before encoding, while `get` and `stream` validate the decoded output.
+
+| Operation | What is validated | Error on failure |
+| --- | --- | --- |
+| `set` | Validates the input value or input chunks. Results of transforms such as `v.transform()` flow downstream. Streams are validated per chunk. | `InvalidInputError`. Bad chunks during stream writes are wrapped in `PluginOperationAggregateError`. |
+| `get` | Validates the decoded value. | `InvalidOutputError` |
+| `stream` | Validates each decoded chunk. | `InvalidOutputError` |
+| `has` / `delete` | Only in the array form, validates whether the key matches a key schema. | `InvalidInputError` |
+
+Passing a `ReadableStream` to a plain-only key, or a plain value to a stream-only key, throws `InvalidInputError` at runtime in addition to a type error. Keys matching no key schema in the array form are also `InvalidInputError`.
 
 ## Runtime variables [#variables]
 

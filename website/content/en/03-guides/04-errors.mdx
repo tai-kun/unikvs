@@ -37,9 +37,9 @@ try {
   <AccordionItem title="Conversion and stream-support errors">
     | Error | Main condition | Resolution |
     | --- | --- | --- |
-    | `PluginOperationAggregateError` | Multiple plugin operations failed. | Inspect the wrapped individual errors. |
-    | `InvalidInputError` | The input format is invalid. | Check the value type and key definition. |
-    | `InvalidOutputError` | The output format is invalid. | Check the conversion order and stored data. |
+    | `PluginOperationAggregateError` | Multiple plugin operations failed. Chunk validation failures during stream writes are also reported in this form. | Inspect the wrapped individual errors. |
+    | `InvalidInputError` | The input format is invalid. With `schema`, this also covers `set` input validation and key validation failures, as well as malformed `schema` definitions. | Check the value type, key definition, and `schema` contents. |
+    | `InvalidOutputError` | The output format is invalid. With `schema`, this also covers `get` and `stream` output validation failures. | Check the conversion order, stored data, and `schema` contents. |
     | `ReadableStreamNotSupportedError` | Read streams are not supported. | Check Storage support. |
     | `WritableStreamNotSupportedError` | Write streams are not supported. | Check Storage support. |
     | `EncodableStreamNotSupportedError` | Encode streams are not supported. | Check Transformer support. |

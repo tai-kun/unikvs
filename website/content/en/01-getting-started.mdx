@@ -97,6 +97,26 @@ Keep `set` and `get` unchanged; compression on write and decompression on read h
 Calling `create()` without `appendStorage()` throws `MissingStorageError`. At least one Storage is required.
 :::
 
+## Validate values [#validate-values]
+
+Pass Valibot schemas via `UniKvs.config({ schema })` to enable type inference and runtime validation. Install `valibot` separately when using Valibot schemas.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { PlainValue, UniKvs } from "unikvs";
+import * as v from "valibot";
+
+const kvs = UniKvs.config({
+  schema: {
+    foo: PlainValue(v.instance(Uint8Array)),
+  },
+})
+  .appendStorage(new Memory())
+  .create();
+```
+
+Failing input validation on `set` throws `InvalidInputError`, and failing output validation on `get` throws `InvalidOutputError`. The array form is also available for dynamic keys. See schema definition and validation timing in concepts for details.
+
 ## Next steps [#next-steps]
 
 <CardGroup cols={2}>

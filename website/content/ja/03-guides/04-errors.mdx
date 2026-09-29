@@ -37,9 +37,9 @@ try {
   <AccordionItem title="変換とストリーム対応のエラー">
     | エラー | 主な発生条件 | 対処 |
     | --- | --- | --- |
-    | `PluginOperationAggregateError` | 複数プラグイン操作が失敗しました。 | 内包された個別エラーを確認します。 |
-    | `InvalidInputError` | 入力形式が不正です。 | 値の型とキー定義を確認します。 |
-    | `InvalidOutputError` | 出力形式が不正です。 | 変換順序と保存データを確認します。 |
+    | `PluginOperationAggregateError` | 複数プラグイン操作が失敗しました。ストリーム書き込み時のチャンク検証失敗もこの形で報告します。 | 内包された個別エラーを確認します。 |
+    | `InvalidInputError` | 入力形式が不正です。`schema` 指定時は `set` の入力検証やキー検証の失敗、`schema` 自体の形式不良も含みます。 | 値の型とキー定義、`schema` の内容を確認します。 |
+    | `InvalidOutputError` | 出力形式が不正です。`schema` 指定時は `get`・`stream` の出力検証の失敗も含みます。 | 変換順序と保存データ、`schema` の内容を確認します。 |
     | `ReadableStreamNotSupportedError` | 読み取りストリーム未対応です。 | ストレージの対応状況を確認します。 |
     | `WritableStreamNotSupportedError` | 書き込みストリーム未対応です。 | ストレージの対応状況を確認します。 |
     | `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。 | トランスフォーマーの対応状況を確認します。 |

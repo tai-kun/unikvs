@@ -97,6 +97,26 @@ const kvs = UniKvs.config<{
 `appendStorage()` なしで `create()` すると `MissingStorageError` を投げます。ストレージ登録は必須です。
 :::
 
+## 入力値を検証する [#validate-values]
+
+`UniKvs.config({ schema })` に Valibot スキーマを渡すと、型推論と実行時検証が有効になります。Valibot スキーマを使う場合は `valibot` を別途インストールします。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { PlainValue, UniKvs } from "unikvs";
+import * as v from "valibot";
+
+const kvs = UniKvs.config({
+  schema: {
+    foo: PlainValue(v.instance(Uint8Array)),
+  },
+})
+  .appendStorage(new Memory())
+  .create();
+```
+
+`set` の入力検証に失敗すると `InvalidInputError` を投げ、`get` の出力検証に失敗すると `InvalidOutputError` を投げます。動的キーには配列形式も使えます。詳しくは基本概念のスキーマ定義と検証のタイミングを参照してください。
+
 ## 次の手順 [#next-steps]
 
 <CardGroup cols={2}>

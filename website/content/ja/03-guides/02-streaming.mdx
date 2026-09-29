@@ -22,6 +22,8 @@ const kvs = UniKvs.config<{
 | `StreamValue<T>` | 値またはストリームに対応します。 | 対応しません。 | 対応します。 |
 | `Value<T>` | 値またはストリームに対応します。 | 対応します。 | 対応します。 |
 
+`schema` を指定した場合はチャンクごとに検証します。書き込みチャンクの不良は `InvalidInputError` を含む `PluginOperationAggregateError` として報告し、読み取りチャンクの不良は `InvalidOutputError` として報告します。
+
 ## 書き込み [#write]
 
 値そのものか `ReadableStream` を渡せます。

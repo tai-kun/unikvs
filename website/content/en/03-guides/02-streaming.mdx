@@ -22,6 +22,8 @@ const kvs = UniKvs.config<{
 | `StreamValue<T>` | Supports values or streams. | Not supported. | Supported. |
 | `Value<T>` | Supports values or streams. | Supported. | Supported. |
 
+When `schema` is specified, each chunk is validated. Bad write chunks are reported as `PluginOperationAggregateError` containing `InvalidInputError`, and bad read chunks are reported as `InvalidOutputError`.
+
 ## Writing [#write]
 
 You can pass either a plain value or a `ReadableStream`.
