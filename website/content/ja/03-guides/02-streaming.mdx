@@ -5,7 +5,7 @@ description: "大容量データのストリーム保存と読み取り方法を
 
 ## 型の選択 [#select-types]
 
-ストリームを使うキーは、`StreamValue<T>` または `Value<T>` で定義します。`PlainValue<T>` のキーでは `stream()` を使えません。
+ストリームを使うキーは `StreamValue<T>` か `Value<T>` で定義します。`PlainValue<T>` では `stream()` を使えません。
 
 ```ts
 const kvs = UniKvs.config<{
@@ -18,9 +18,9 @@ const kvs = UniKvs.config<{
 
 | 型 | `set` | `get` | `stream` |
 | --- | --- | --- | --- |
-| `PlainValue<T>` | 対応します | 対応します | 対応しません |
-| `StreamValue<T>` | 値またはストリームに対応します | 対応しません | 対応します |
-| `Value<T>` | 値またはストリームに対応します | 対応します | 対応します |
+| `PlainValue<T>` | 対応します。 | 対応します。 | 対応しません。 |
+| `StreamValue<T>` | 値またはストリームに対応します。 | 対応しません。 | 対応します。 |
+| `Value<T>` | 値またはストリームに対応します。 | 対応します。 | 対応します。 |
 
 ## 書き込み [#write]
 
@@ -52,11 +52,11 @@ const kvs = UniKvs.config<{
 
 ## 読み取り [#read]
 
-`stream()` は `ValueStream` を返します。用途に合わせて 3 つの方法から選べます。
+`stream()` は `ValueStream` を返します。用途に合わせて 3 つから選べます。
 
 <Tabs>
   <Tab title="getReader">
-    チャンクごとに細かく制御したい場合に使います。
+    チャンクごとに細かく制御する場合に使います。
 
     ```ts
     const reader = (await kvs.stream("logs")).getReader();
@@ -70,7 +70,7 @@ const kvs = UniKvs.config<{
     ```
   </Tab>
   <Tab title="for-await">
-    記述を短くしたい場合に使います。
+    短く書く場合に使います。
 
     ```ts
     for await (const chunk of await kvs.stream("logs")) {
@@ -79,7 +79,7 @@ const kvs = UniKvs.config<{
     ```
   </Tab>
   <Tab title="await-using">
-    読み取りロックの解放を自動化したい場合に使います。
+    ロック解放を自動化する場合に使います。
 
     ```ts
     await using (const valueStream = await kvs.stream("logs")) {
@@ -92,18 +92,18 @@ const kvs = UniKvs.config<{
 </Tabs>
 
 :::warning
-読み取りロックの解放のため、使い終わったストリームは破棄してください。`await using` を使うと自動で解放されます。
+使い終わったストリームは破棄してください。`await using` なら自動で解放します。
 :::
 
 ## ストレージ別の注意 [#storages]
 
 :::warning
-メモリーストレージのストリームはチャンク結合による実装です。大規模データの逐次処理には適していません。
+メモリーのストリームはチャンク結合による実装です。大規模データの逐次処理には適していません。
 :::
 
-- ファイル、S3、OPFS はバイト列のストリーム保存に適しています。詳細は各パッケージリファレンスを参照してください。
-- IndexedDB は任意データの保存に対応しますが、ストリームの扱いは実装の制約を確認してください。
-- トランスフォーマーによってはストリーム変換に対応しない場合があります。圧縮とチェックサムの対応状況は各パッケージリファレンスを参照してください。
+- ファイル・S3・OPFS はバイト列のストリーム保存に適しています。詳細は各パッケージリファレンスを参照してください。
+- IndexedDB は任意データを保存できますが、ストリームの制約を確認してください。
+- トランスフォーマーによってはストリーム変換に未対応の場合があります。対応状況は各パッケージリファレンスを参照してください。
 
 ## キャンセル [#cancellation]
 

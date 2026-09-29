@@ -5,9 +5,7 @@ description: "設定ビルダーと KVS クライアントを提供するメイ�
 
 ## 概要 [#overview]
 
-パッケージ名 `unikvs` は、このリポジトリのメインクライアントを提供します。<Badge>メインクライアント</Badge> 設定ビルダー (`UniKvs.config()` / `UniKvsConfig`) でトランスフォーマーとストレージを組み立て、生成されたクライアント (`UniKvs`) で読み書きを行います。
-
-インストールは以下のコマンドで行います。
+`unikvs` はメインクライアントのパッケージです。<Badge>メインクライアント</Badge> 設定ビルダー (`UniKvs.config()` / `UniKvsConfig`) でトランスフォーマーとストレージを組み立て、生成したクライアント (`UniKvs`) で読み書きします。
 
 ```package-install
 npm i unikvs
@@ -15,7 +13,7 @@ npm i unikvs
 
 ## 設定ビルダー [#config-builder]
 
-`UniKvs.config<T>()` でビルダーを作成します。型パラメーター `T` はキーから値へのマッピング (`{ [key]: PlainValue | StreamValue | Value }`) であり、キーごとに利用できる操作が型レベルで制御されます。
+`UniKvs.config<T>()` でビルダーを作ります。`T` はキーから値へのマッピング (`{ [key]: PlainValue | StreamValue | Value }`) で、キーごとに使える操作が型レベルで決まります。
 
 ```ts
 import { UniKvs, type Value } from "unikvs";
@@ -31,24 +29,24 @@ const kvs = UniKvs.config<{
 
 <Steps>
   <Step title="`setVariables(vars)`">
-    実行時変数の初期値を設定します (省略可能です)。呼び出すたびに既存の値は置換されます。
+    実行時変数の初期値を設定します (任意)。呼ぶたびに置換します。
   </Step>
   <Step title="`appendTransformer(transformer)`">
-    トランスフォーマーを追加します (省略可能です)。ストレージの登録後にも追加できます。
+    トランスフォーマーを追加します (任意)。ストレージ登録後にも追加できます。
   </Step>
   <Step title="`appendStorage(storage)`">
-    ストレージを追加します (必須であり、複数追加できます)。
+    ストレージを追加します (必須、複数可)。
   </Step>
   <Step title="`create()`">
-    `UniKvs` クライアントを作成します。ストレージが 1 つも登録されていない場合は `MissingStorageError` が投げられます。
+    `UniKvs` クライアントを作ります。ストレージがなければ `MissingStorageError` を投げます。
   </Step>
 </Steps>
 
-:::warning[ストレージ未登録にご注意]
-ストレージが 1 つも登録されていない状態で `create()` を呼び出すと `MissingStorageError` が投げられます。`create()` の前に `appendStorage()` を少なくとも 1 回呼び出してください。
+:::warning[ストレージ未登録に注意]
+`create()` の前に `appendStorage()` を少なくとも 1 回呼んでください。
 :::
 
-各ストレージは、登録時点までに追加されたトランスフォーマーを専用の前段パイプラインとして使います。そのため、トランスフォーマーとストレージを交互に追加すると、ストレージごとに異なるパイプラインが構成されます。
+各ストレージは、登録時点までのトランスフォーマーを前段パイプラインとして使います。交互に追加すると、ストレージごとに異なるパイプラインになります。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
@@ -60,7 +58,7 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .create();
 ```
 
-上記の設定は、以下のパイプラインになります。
+上記の設定は、次のパイプラインになります。
 
 ```mermaid
 flowchart LR
@@ -71,15 +69,15 @@ flowchart LR
   Transformer3 --> Storage2
 ```
 
-:::note[パイプライン分岐にご注意]
-上記のようにトランスフォーマーとストレージを交互に追加すると、ストレージごとに異なる前段パイプラインが構成されます。どのストレージがどのトランスフォーマーを経由するか、図で確認してから設定してください。
+:::note[パイプライン分岐に注意]
+交互に追加すると、ストレージごとに異なる前段パイプラインになります。どのストレージがどのトランスフォーマーを経由するか、図で確認してください。
 :::
 
-書き込み時はすべてのストレージに並列で書き込まれます。読み取り時は、キーが見つかったストレージの前段パイプラインを逆順に適用してデコードします。
+書き込みはすべてのストレージに並列で行い、読み取りは見つかったストレージの前段パイプラインを逆順に適用してデコードします。
 
 ## クライアント操作 [#client-operations]
 
-作成したクライアントは以下の操作を提供します。`open()` で初期化し、使い終わったら `close()` でクローズします (`await using` による自動クローズも利用できます)。
+作成したクライアントは次の操作を提供します。`open()` で初期化し、使い終わったら `close()` で閉じます (`await using` でも自動クローズできます)。
 
 | メソッド          | 説明                                                     |
 | ----------------- | -------------------------------------------------------- |
@@ -92,7 +90,7 @@ flowchart LR
 | `delete(key)`     | キーを削除します。                                       |
 | `clear()`         | すべてのデータを削除します。                             |
 
-すべての操作は `AbortSignal` によるキャンセルと、実行時変数 (`vars`) の受け渡しをサポートします。引数はオプションオブジェクト形式と、キー・値を位置引数で渡す形式のどちらでも指定できます。
+すべての操作は `AbortSignal` によるキャンセルと、実行時変数 (`vars`) の受け渡しに対応します。引数はオプションオブジェクト形式と位置引数形式のどちらでも指定できます。
 
 ```ts
 const ac = new AbortController();
@@ -108,12 +106,12 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
 
 ## 値の型 [#value-types]
 
-`PlainValue<T>` / `StreamValue<T>` / `Value<T>` は型レベルの目印であり、キーごとに利用可能なメソッドを制限します。
+`PlainValue<T>`・`StreamValue<T>`・`Value<T>` は型レベルの目印で、キーごとに使えるメソッドを制限します。
 
 | 型              | 書き込み                           | 読み取り      | ストリーム読み取り            |
 | --------------- | ---------------------------------- | ------------- | ----------------------------- |
-| `PlainValue<T>` | `set(key, T)`                      | `get(key): T` | 不可                          |
-| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | 不可          | `stream(key): ValueStream<T>` |
+| `PlainValue<T>` | `set(key, T)`                      | `get(key): T` | 不可。                          |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | 不可。          | `stream(key): ValueStream<T>` |
 | `Value<T>`      | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
 
 ```ts
@@ -136,25 +134,24 @@ await kvs.set("logs", new Uint8Array([0x01]));
 const valueStream = await kvs.stream("logs");
 ```
 
-許可されていない組み合わせは型エラーになります。
+許可されていない組み合わせは型エラーです。
 
 ```ts
-// 型エラーになります: PlainValue のキーには stream() を使えません
+// 型エラー: PlainValue のキーに stream() は使えません
 kvs.stream("message");
 
-// 型エラーになります: StreamValue のキーには get() を使えません
+// 型エラー: StreamValue のキーに get() は使えません
 kvs.get("logs");
 ```
 
 ## ValueStream [#value-stream]
 
-`stream()` の戻り値は `ValueStream<T>` であり、<Badge variant="success">ストリーム対応</Badge> `ReadableStream` のラッパーです。標準的なストリーム操作に加えて、非同期イテレーター (`for await...of`) と非同期破棄 (`await using` / `dispose()`) をサポートします。使い終わったストリームを破棄すると、キーの読み取りロックが解放されます。
+`stream()` の戻り値は `ValueStream<T>` で、<Badge variant="success">ストリーム対応</Badge> `ReadableStream` のラッパーです。標準操作に加えて非同期イテレーター (`for await...of`) と非同期破棄 (`await using`・`dispose()`) に対応します。使い終わったら破棄して読み取りロックを解放します。
 
 <Tabs>
   <Tab title="getReader">
 
 ```ts
-// getReader() を使う方法
 const reader = (await kvs.stream("logs")).getReader();
 while (true) {
   const { done, value } = await reader.read();
@@ -169,7 +166,6 @@ while (true) {
   <Tab title="for-await">
 
 ```ts
-// 非同期イテレーターを使う方法
 for await (const chunk of await kvs.stream("logs")) {
   console.log(chunk); // Uint8Array
 }
@@ -179,7 +175,6 @@ for await (const chunk of await kvs.stream("logs")) {
   <Tab title="await using">
 
 ```ts
-// 自動破棄を使う方法
 await using (const valueStream = await kvs.stream("logs")) {
   const reader = valueStream.getReader();
   const { value } = await reader.read();
@@ -191,15 +186,14 @@ await using (const valueStream = await kvs.stream("logs")) {
 </Tabs>
 
 :::warning[使い終わったストリームは破棄してください]
-`ValueStream` を使い終わったら破棄すると、キーの読み取りロックが解放されます。`await using` による自動破棄か `dispose()` の呼び出しを忘れないでください。
+`await using` による自動破棄か `dispose()` を忘れないでください。
 :::
 
 ## 変数とキャンセル [#variables-and-cancellation]
 
-`vars` はオブジェクト形式とエントリー配列形式 (`readonly [key, value][]`) のどちらでも指定できます。操作ごとに渡した `vars` は、ビルダーの `setVariables()` で設定した値を上書きする形で結合されます。また `unikvs:action` と `unikvs:key` は操作の種類と対象キーを表す変数として自動的に付与されます。
+`vars` はオブジェクト形式とエントリー配列形式 (`readonly [key, value][]`) のどちらでも指定できます。操作ごとの `vars` は、ビルダーの `setVariables()` を上書きする形で結合します。`unikvs:action` と `unikvs:key` は操作の種類と対象キーとして自動付与します。
 
 ```ts
-// ビルダー側で基本となる変数を設定します
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .setVariables({ region: "ap-northeast-1" })
   .appendStorage(storage)
@@ -218,7 +212,7 @@ await kvs.get("foo", {
 });
 ```
 
-キャンセルは `AbortSignal` で行います。中断された操作は、中断理由とともに失敗します。
+キャンセルは `AbortSignal` で行い、中断した操作は理由とともに失敗します。
 
 ```ts
 const ac = new AbortController();
@@ -229,23 +223,21 @@ await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 
 ## エラー [#errors]
 
-主なエラークラスは以下のとおりです。
-
-| エラークラス                      | 説明                                                                 |
+| エラークラス | 説明 |
 | --------------------------------- | -------------------------------------------------------------------- |
-| `KeyNotFoundError`                | 指定したキーのデータがどのストレージにも存在しない場合に投げられます。 |
-| `UniKvsIsNotOpenError`            | クライアントが開かれていない状態で操作が行われた場合に投げられます。 |
-| `UniKvsIsOpenError`               | すでに開いているクライアントに再度 `open()` した場合に投げられます。 |
-| `MissingStorageError`             | ストレージが 1 つも登録されていない状態で `create()` した場合に投げられます。 |
-| `StorageIsNotOpenError`           | ストレージが開かれていない状態で操作が行われた場合に投げられます。 |
-| `TransformerIsNotOpenError`       | トランスフォーマーが開かれていない状態で操作が行われた場合に投げられます。 |
-| `PluginOperationAggregateError`   | 複数のプラグイン操作が失敗した場合の集約エラーです。                 |
-| `InvalidInputError`               | 入力値が期待する形式に適合しない場合に投げられます。                 |
-| `InvalidOutputError`              | 出力値が期待する形式に適合しない場合に投げられます。                 |
-| `ReadableStreamNotSupportedError` | ストレージが読み取りストリームをサポートしない場合に投げられます。   |
-| `WritableStreamNotSupportedError` | ストレージが書き込みストリームをサポートしない場合に投げられます。   |
-| `EncodableStreamNotSupportedError` | トランスフォーマーがエンコード用ストリームをサポートしない場合に投げられます。 |
-| `DecodableStreamNotSupportedError` | トランスフォーマーがデコード用ストリームをサポートしない場合に投げられます。 |
+| `KeyNotFoundError` | キーがどのストレージにもありません。 |
+| `UniKvsIsNotOpenError` | 未オープンで操作しました。 |
+| `UniKvsIsOpenError` | オープン済みで再度 `open()` しました。 |
+| `MissingStorageError` | ストレージ未登録で `create()` しました。 |
+| `StorageIsNotOpenError` | ストレージが未オープンです。 |
+| `TransformerIsNotOpenError` | トランスフォーマーが未オープンです。 |
+| `PluginOperationAggregateError` | 複数プラグイン操作の集約エラーです。 |
+| `InvalidInputError` | 入力形式が不正です。 |
+| `InvalidOutputError` | 出力形式が不正です。 |
+| `ReadableStreamNotSupportedError` | 読み取りストリーム未対応です。 |
+| `WritableStreamNotSupportedError` | 書き込みストリーム未対応です。 |
+| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。 |
+| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。 |
 
 ```ts
 import { KeyNotFoundError } from "unikvs";
@@ -261,11 +253,11 @@ try {
 }
 ```
 
-エラーの詳細な分類や対処方法については、横断ドキュメントに譲ります。
+エラーの分類や対処は横断ドキュメントに譲ります。
 
 ## 使用例 [#examples]
 
-`@unikvs/memory` を使った最小完動例です。
+`@unikvs/memory` を使った最小例です。
 
 ```ts
 import { Memory } from "@unikvs/memory";

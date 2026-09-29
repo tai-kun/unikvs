@@ -7,9 +7,9 @@ description: "ブラウザーの IndexedDB に任意のデータを保存する�
 
 <Badge variant="warning">ブラウザー専用</Badge>
 
-`@unikvs/indexeddb` は、ブラウザーの IndexedDB を永続化先として使用するストレージプラグインです。任意のデータをキーとひも付けて保存できます。
+`@unikvs/indexeddb` は、ブラウザーの IndexedDB に保存するストレージプラグインです。任意のデータをキーとひも付けて保存できます。
 
-内部の IndexedDB 操作には `idb` パッケージ（`8.0.3`）を使用しています。`@unikvs/core` の `IStorage` を実装しています。
+内部操作には `idb` パッケージ（`8.0.3`）を使い、`@unikvs/core` の `IStorage` を実装しています。
 
 インストールは次のとおりです。
 
@@ -19,18 +19,18 @@ npm install @unikvs/indexeddb
 
 ## 使い方 [#usage]
 
-ストレージクラス名は `Indexeddb` で、デフォルトエクスポートとして提供されます。`name` プロパティは `"Indexeddb"` です。
+クラス名は `Indexeddb` で、デフォルトエクスポートです。`name` は `"Indexeddb"` です。
 
 ```ts
 import Indexeddb from "@unikvs/indexeddb";
 ```
 
-コンストラクターの引数は次のとおりです。どちらも省略できます。
+コンストラクターの引数はどちらも省略できます。
 
 | 引数 | 型 | 既定値 | 説明 |
 | ---- | -- | ------ | ---- |
-| `dbName` | `string` | `"unikvs_db"` | 使用するデータベース名です。 |
-| `storeName` | `string` | `"kvs_store"` | データを保存するオブジェクトストア名です。 |
+| `dbName` | `string` | `"unikvs_db"` | データベース名です。 |
+| `storeName` | `string` | `"kvs_store"` | オブジェクトストア名です。 |
 
 ```ts
 import Indexeddb from "@unikvs/indexeddb";
@@ -38,15 +38,11 @@ import Indexeddb from "@unikvs/indexeddb";
 // 既定値（unikvs_db / kvs_store）を使う場合
 const storage = new Indexeddb();
 
-// データベース名とストア名を指定する場合
+// 名前を指定する場合
 const customStorage = new Indexeddb("my-app-db", "my-store");
 ```
 
-<Expandable title="既定値とオープン時の動作">
-`dbName` を省略した場合は `"unikvs_db"`、`storeName` を省略した場合は `"kvs_store"` が使用されます。使用前に `open()` を呼び出します。`open()` はデータベースバージョン `1` で接続し、ストアが存在しない場合は作成します。すでにオープン済みの場合は何も行いません。`isOpen` でオープン状態を確認でき、`close()` で接続を閉じます。
-</Expandable>
-
-使用前に `open()` を呼び出します。`open()` はデータベースバージョン `1` で接続し、ストアが存在しない場合は作成します。すでにオープン済みの場合は何も行いません。`isOpen` でオープン状態を確認でき、`close()` で接続を閉じます。
+使う前に `open()` を呼びます。バージョン `1` で接続し、ストアがなければ作ります。オープン済みなら何もしません。`isOpen` で確認し、`close()` で閉じます。
 
 `UniKvs` に登録する例は次のとおりです。
 
@@ -66,39 +62,32 @@ await kvs.close();
 
 ## データ形式 [#data]
 
-`write` は `any` 型のデータを受け付け、`read` は `any` 型のデータを返します。渡された値はそのまま `idb` の `put` に渡され、取得時は `get` の結果がそのまま返されます。そのため、バイト列以外の値も保存できます。
+`write` は `any` を受け付け、`read` は `any` を返します。値はそのまま `idb` の `put`・`get` に渡すため、バイト列以外も保存できます。
 
-:::note
-`write` は `any` 型のデータを受け付け、渡された値はそのまま `idb` の `put` に渡されます。取得時は `get` の結果がそのまま返されます。そのため、バイト列以外の値も保存できます。
-:::
+ストリームにも対応していますが、IndexedDB にネイティブ機能はないためメモリー上でエミュレートします。
 
-ストリームにも対応しています。ただし、IndexedDB にネイティブなストリーム機能はないため、次のようにメモリー上でエミュレートされます。
-
-- `getWritable` は `WritableStream<Uint8Array>` を返します。書き込まれたチャンクをメモリー上に保持し、ストリームがクローズされたときに結合して単一の `Uint8Array` として保存します。
-- `getReadable` は `ReadableStream<Uint8Array>` を返します。データ全体をメモリーに読み込んでから、単一チャンクとして送出してストリームをクローズします。
+- `getWritable` はチャンクをメモリーにため、クローズ時に結合して 1 つの `Uint8Array` として保存します。
+- `getReadable` は全体をメモリーに読み込んでから、単一チャンクとして送出してクローズします。
 
 :::warning
-`getWritable` と `getReadable` はデータ全体をメモリーに保持します。大きなデータを扱う場合はメモリー使用量にご注意ください。
+`getWritable`・`getReadable` は全体をメモリーに保持します。大きなデータでは使用量に注意してください。
 :::
 
-存在確認は `count()` の結果で行い、削除は `delete()`、全消去は `clear()` を使用します。
+存在確認は `count()`、削除は `delete()`、全消去は `clear()` を使います。
 
 ## 注意点 [#notes]
 
-- すべての読み書きメソッドは非同期です。`open()` が完了する前に `write`・`read`・`exists`・`delete`・`clear` を呼び出さないでください。内部のデータベース接続は `open()` が完了するまで `null` です。
-- `read` はキーが存在しない場合、`DOMException`（`NotFoundError`）を投げます。これは Opfs プラグインの挙動に合わせたものです。事前に `exists()` で確認できます。
-- `getWritable` と `getReadable` はデータ全体をメモリーに保持します。大きなデータを扱う場合はメモリー使用量にご注意ください。
-- データベースバージョンは `1` に固定されており、ストアは不足時に自動作成されます。既存のデータベース構造を変更する処理は含まれていません。
-- ブラウザー専用です。IndexedDB、`DOMException`、`WritableStream`、`ReadableStream` を使用します。開発依存関係にはブラウザーテスト用のパッケージが含まれています。
-- 保存可能な容量やクォータの扱いはブラウザーに依存します。プライベートモードなどでは永続化されない場合があります。
+- すべて非同期です。`open()` 完了前に `write`・`read`・`exists`・`delete`・`clear` を呼ばないでください。接続は完了まで `null` です。
+- `read` はキーがないと `DOMException`（`NotFoundError`）を投げます。Opfs に合わせた挙動です。事前に `exists()` で確認できます。
+- データベースバージョンは `1` 固定で、ストアは不足時に自動作成します。既存構造の変更処理は含みません。
+- IndexedDB・`DOMException`・`WritableStream`・`ReadableStream` を使うブラウザー専用です。
+- 容量やクォータはブラウザー依存です。プライベートモードなどでは永続化されない場合があります。
 
 ## 使用例 [#examples]
 
-ブラウザーでの最小例を示します。
-
 <Steps>
-  <Step title="ストレージを開きます">
-    既定値（unikvs_db / kvs_store）で `Indexeddb` を作成し、`open()` で接続します。
+  <Step title="開く">
+    既定値で作り、`open()` で接続します。
 
     ```ts
     import Indexeddb from "@unikvs/indexeddb";
@@ -108,16 +97,12 @@ await kvs.close();
     await storage.open();
     ```
   </Step>
-  <Step title="データを書き込みます">
-    `write` で任意のデータをキーとひも付けて保存します。
-
+  <Step title="書き込む">
     ```ts
     await storage.write({ key: "greeting", data: "hello" });
     ```
   </Step>
-  <Step title="データを読み取ります">
-    `exists` で確認してから `read` で取得します。
-
+  <Step title="読み取る">
     ```ts
     if (await storage.exists({ key: "greeting" })) {
       const value = await storage.read({ key: "greeting" });
@@ -125,9 +110,7 @@ await kvs.close();
     }
     ```
   </Step>
-  <Step title="データを削除して閉じます">
-    `delete` で削除し、`close()` で接続を閉じます。
-
+  <Step title="削除して閉じる">
     ```ts
     await storage.delete({ key: "greeting" });
     await storage.close();

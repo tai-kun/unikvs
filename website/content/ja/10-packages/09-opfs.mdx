@@ -5,12 +5,12 @@ description: "ブラウザーの OPFS にバイト列を保存するストレー
 
 ## 概要 [#overview]
 
-`@unikvs/opfs` は、ブラウザーの OPFS（Origin Private File System）を永続化先として使用するストレージプラグインです。読み書きするデータはバイト列（`Uint8Array<ArrayBuffer>`）専用です。<Badge variant="warning">ブラウザー専用</Badge>
+`@unikvs/opfs` は、ブラウザーの OPFS（Origin Private File System）に保存するストレージプラグインです。データはバイト列（`Uint8Array<ArrayBuffer>`）専用です。<Badge variant="warning">ブラウザー専用</Badge>
 
-実装のコメントでは、ブラウザー環境（メインスレッド、または Web Worker）での動作を前提としています。
+メインスレッド・Web Worker での動作を前提としています。
 
 :::warning[実行環境について]
-OPFS の利用可否は実行環境（ブラウザーの種類やバージョン、設定など）に依存します。一般的に、OPFS は Secure Context や Worker と組み合わせて利用されることが多い機能ですが、詳細な対応条件はご利用のブラウザーのドキュメントでご確認ください。
+OPFS の利用可否はブラウザーの種類・バージョン・設定に依存します。Secure Context や Worker と組み合わせることが多い機能です。対応条件はブラウザーのドキュメントで確認してください。
 :::
 
 インストールは次のように行います。
@@ -21,65 +21,59 @@ npm install @unikvs/opfs
 
 ## 使い方 [#usage]
 
-クラス名は `Opfs` です。デフォルトエクスポートと名前付きエクスポートのどちらでも取得できます。コンストラクターの引数は実装では次のように定義されています。
+クラス名は `Opfs` です。デフォルト・名前付きのどちらでも取得できます。
 
-<Steps>
-  <Step title="インスタンスを作成します">
-    ```ts
-    import { Opfs } from "@unikvs/opfs";
+```ts
+import { Opfs } from "@unikvs/opfs";
 
-    const storage = new Opfs(".unikvs");
-    ```
+const storage = new Opfs(".unikvs");
+```
 
-    コンストラクター引数 `root` の型は `string | FileSystemDirectoryHandle` で、既定値は `".unikvs"` です。文字列を渡した場合は OPFS 内のルートディレクトリー名として扱われ、`FileSystemDirectoryHandle` を渡した場合はそのハンドル自体が作業対象になります。ハンドルを渡した場合は、すでにオープン済みとして扱われます。
-  </Step>
-  <Step title="ストレージをオープンします">
-    使用する前に `open()` を呼び出してストレージをオープンします。オープン状態は `isOpen` で確認できます。`UniKvs` と組み合わせる場合は、`appendStorage` で登録してから `kvs.open()` を呼び出します。`kvs.open()` の内部で `Opfs.open()` が呼び出されます。
+コンストラクター引数 `root` の型は `string | FileSystemDirectoryHandle` で、既定値は `".unikvs"` です。文字列は OPFS 内のルート名、ハンドルは作業対象そのものとして扱います。ハンドルを渡すとオープン済み扱いです。
 
-    ```ts
-    import { UniKvs } from "unikvs";
-    import { Opfs } from "@unikvs/opfs";
+使う前に `open()` を呼び出します。`UniKvs` と組み合わせる場合は、`appendStorage` で登録してから `kvs.open()` を呼びます。内部で `Opfs.open()` が呼ばれます。
 
-    const storage = new Opfs(".unikvs");
-    const kvs = UniKvs.config().appendStorage(storage).create();
+```ts
+import { UniKvs } from "unikvs";
+import { Opfs } from "@unikvs/opfs";
 
-    await kvs.open();
-    // バイト列の読み書きを行います。
-    await kvs.close();
-    ```
-  </Step>
-  <Step title="データを読み書きします">
-    `Opfs` を直接操作する場合は、`write`・`read`・`exists`・`delete`・`clear` メソッドを使用します。いずれも操作前に `open()` が必要です。
+const storage = new Opfs(".unikvs");
+const kvs = UniKvs.config().appendStorage(storage).create();
 
-    ```ts
-    import { Opfs } from "@unikvs/opfs";
+await kvs.open();
+// バイト列の読み書きを行います。
+await kvs.close();
+```
 
-    const storage = new Opfs(".unikvs");
-    await storage.open();
+直接操作する場合は、`write`・`read`・`exists`・`delete`・`clear` を使います。いずれも事前の `open()` が必要です。
 
-    await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
-    const data = await storage.read({ key: "data.bin" });
-    const found = await storage.exists({ key: "data.bin" });
-    await storage.delete({ key: "data.bin" });
-    ```
-  </Step>
-</Steps>
+```ts
+import { Opfs } from "@unikvs/opfs";
+
+const storage = new Opfs(".unikvs");
+await storage.open();
+
+await storage.write({ key: "data.bin", data: new Uint8Array([1, 2, 3]) });
+const data = await storage.read({ key: "data.bin" });
+const found = await storage.exists({ key: "data.bin" });
+await storage.delete({ key: "data.bin" });
+```
 
 ## ファイル配置 [#layout]
 
-キーはファイル名として扱われ、指定されたルートディレクトリーの直下に 1 対 1 で保存されます。キーからサブディレクトリーが作られることはありません。キーは `assertValidFilename` で検証されるため、ファイル名として無効なキーではエラーになります。
+キーはファイル名として、指定ルートの直下に 1 対 1 で保存します。サブディレクトリーは作りません。キーは `assertValidFilename` で検証し、無効ならエラーになります。
 
-コンストラクターに文字列を渡した場合、ルートディレクトリー名は次の規則で正規化されます。
+文字列ルートは次の規則で正規化します。
 
-- `""`、`"."`、`"/"` を指定した場合は空文字として扱われ、OPFS のルート直下が作業対象になります。
-- 連続する `/` は 1 つにまとめられ、先頭と末尾の `/` は取り除かれます。
-- `/` で分割した各階層は `assertValidDirname` で検証されます。
+- `""`・`"."`・`"/"` は空文字扱いで、OPFS ルート直下が作業対象になります。
+- 連続する `/` は 1 つにまとめ、先頭と末尾の `/` は取り除きます。
+- `/` で分割した各階層は `assertValidDirname` で検証します。
 
-`open()` では `navigator.storage.getDirectory()` で OPFS の起点を取得し、ルート名の各階層を `create: true` で作成または取得します。`clear()` では、ルート直下を使用している場合は各エントリーを個別に削除し、サブディレクトリーを使用している場合はディレクトリーごと削除して再作成します。
+`open()` では `navigator.storage.getDirectory()` で起点を取得し、各階層を `create: true` で作成・取得します。`clear()` では、ルート直下なら各エントリーを個別に削除し、サブディレクトリーならごと削除して作り直します。
 
 ## ストリーム [#streams]
 
-`Opfs` は書き込みストリームと読み取りストリームの両方に対応しています。
+書き込み・読み取りの両ストリームに対応しています。
 
 - `getWritable({ key })` は `WritableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルハンドルから `createWritable()` で取得したストリームをそのまま返します。
 - `getReadable({ key })` は `ReadableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルを取得し、`File.stream()` の結果を返します。
@@ -101,19 +95,15 @@ await readable.cancel();
 
 ## 注意点 [#notes]
 
-実装から分かる範囲の注意点は次のとおりです。
-
-- `open()` を呼び出す前に `read`・`write` などの操作を行うと実行時エラーになります。使用前に必ずオープンしてください。
-- `write` は書き込みに失敗した場合、`abort` によって変更を破棄します。そのため、既存のデータが部分書き込みによって破壊されることはありません。
-- `exists` は、存在しないキーに対して `false` を返します。これは `NotFoundError` という名前の `DOMException` を捕捉して判定しています。それ以外のエラーはそのまま投げられます。
-- キーとルートディレクトリー名にはファイル名としての制約があります。無効な名前を指定すると検証エラーになります。
-
-一般的な注意として、次の点にもご留意ください。
+- `open()` 前に `read`・`write` を行うと実行時エラーになります。必ず先にオープンしてください。
+- `write` は失敗時に `abort` で変更を破棄するため、部分書き込みで既存データを壊しません。
+- `exists` は存在しないキーに `false` を返します。`NotFoundError` の `DOMException` を捕捉して判定し、それ以外は投げます。
+- キーとルート名にはファイル名の制約があります。無効な名前は検証エラーになります。
 
 :::note[永続性とオリジンについて]
-- OPFS はオリジンごとに隔離されたプライベートなファイルシステムです。ユーザーが通常のファイル操作で直接見る場所ではありません。
-- 保存したデータの永続性はブラウザーのストレージ管理（空き容量の逼迫時の削除など）の影響を受けます。重要なデータは必要に応じて別途バックアップをご検討ください。
-- OPFS の挙動にはブラウザーによる差異が生じる可能性があります。対象ブラウザーでの動作確認をおすすめします。
+- OPFS はオリジンごとに隔離されたプライベートなファイルシステムです。通常のファイル操作で直接見る場所ではありません。
+- 永続性はブラウザーのストレージ管理（容量逼迫時の削除など）の影響を受けます。重要なデータは別途バックアップしてください。
+- ブラウザーによる差異があり得ます。対象ブラウザーで動作確認してください。
 :::
 
 ## 使用例 [#examples]

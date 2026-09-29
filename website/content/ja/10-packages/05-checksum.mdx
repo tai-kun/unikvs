@@ -5,18 +5,18 @@ description: "バイト配列のハッシュ値を検証するトランスフォ
 
 ## 概要 [#overview]
 
-`@unikvs/checksum` は、バイト配列のハッシュ値を計算し、変数に設定された期待値と照合するトランスフォーマーを提供します。データ自体は変更せず、検証に成功した場合は入力データをそのまま返します。
+`@unikvs/checksum` は、バイト配列のハッシュ値を計算し、変数に設定した期待値と照合するトランスフォーマーです。データ自体は変えず、検証に成功したら入力をそのまま返します。
 
-対応するアルゴリズムは次の 6 種類です。
+対応アルゴリズムは次の 6 種類です。
 
-| アルゴリズム | クラス | 変数キー |
-| --- | --- | --- |
-| MD5 | `ChecksumMd5` | `@unikvs/checksum:md5` |
-| SHA-1 | `ChecksumSha1` | `@unikvs/checksum:sha1` |
-| SHA-224 | `ChecksumSha224` | `@unikvs/checksum:sha224` |
-| SHA-256 | `ChecksumSha256` | `@unikvs/checksum:sha256` |
-| SHA-384 | `ChecksumSha384` | `@unikvs/checksum:sha384` |
-| SHA-512 | `ChecksumSha512` | `@unikvs/checksum:sha512` |
+| アルゴリズム | クラス | 変数キー | ハッシュ関数 |
+| --- | --- | --- | --- |
+| MD5 | `ChecksumMd5` | `@unikvs/checksum:md5` | `@noble/hashes/legacy.js` の `md5`。 |
+| SHA-1 | `ChecksumSha1` | `@unikvs/checksum:sha1` | `@noble/hashes/legacy.js` の `sha1`。 |
+| SHA-224 | `ChecksumSha224` | `@unikvs/checksum:sha224` | `@noble/hashes/sha2.js` の `sha224`。 |
+| SHA-256 | `ChecksumSha256` | `@unikvs/checksum:sha256` | `@noble/hashes/sha2.js` の `sha256`。 |
+| SHA-384 | `ChecksumSha384` | `@unikvs/checksum:sha384` | `@noble/hashes/sha2.js` の `sha384`。 |
+| SHA-512 | `ChecksumSha512` | `@unikvs/checksum:sha512` | `@noble/hashes/sha2.js` の `sha512`。 |
 
 インストールは次のとおりです。ハッシュ計算の実体はピア依存の `@noble/hashes` が提供します。
 
@@ -28,21 +28,21 @@ npm i @unikvs/checksum @noble/hashes@2.0.0
 
 ## クラス一覧 [#classes]
 
-基底クラスは抽象クラスの `Checksum` です。各アルゴリズム用のサブクラスは、名前とハッシュ関数と変数キーを固定したプリセットです。
+基底クラスは抽象クラスの `Checksum` です。各サブクラスは名前・ハッシュ関数・変数キーを固定したプリセットで、`new` で直接作る想定はありません。
 
-| クラス | 役割 | コンストラクターに渡す値 |
-| --- | --- | --- |
-| `Checksum` | 抽象基底クラスです。`name` と `hash` と `options` を受け取ります。 | `new` による直接生成は想定されていません。 |
-| `ChecksumMd5` | MD5 用のプリセットです。 | `options?: ChecksumMd5Options` のみです。 |
-| `ChecksumSha1` | SHA-1 用のプリセットです。 | `options?: ChecksumSha1Options` のみです。 |
-| `ChecksumSha224` | SHA-224 用のプリセットです。 | `options?: ChecksumSha224Options` のみです。 |
-| `ChecksumSha256` | SHA-256 用のプリセットです。 | `options?: ChecksumSha256Options` のみです。 |
-| `ChecksumSha384` | SHA-384 用のプリセットです。 | `options?: ChecksumSha384Options` のみです。 |
-| `ChecksumSha512` | SHA-512 用のプリセットです。 | `options?: ChecksumSha512Options` のみです。 |
+| クラス | コンストラクターに渡す値 |
+| --- | --- |
+| `Checksum` | 直接生成は想定していません。 |
+| `ChecksumMd5` | `options?: ChecksumMd5Options` のみです。 |
+| `ChecksumSha1` | `options?: ChecksumSha1Options` のみです。 |
+| `ChecksumSha224` | `options?: ChecksumSha224Options` のみです。 |
+| `ChecksumSha256` | `options?: ChecksumSha256Options` のみです。 |
+| `ChecksumSha384` | `options?: ChecksumSha384Options` のみです。 |
+| `ChecksumSha512` | `options?: ChecksumSha512Options` のみです。 |
 
-各サブクラスの実装は、`super` に固定値を渡すだけです。たとえば `ChecksumSha256` は `"ChecksumSha256"` という名前と `sha256` 関数を使い、`CHECKSUM_VAR_NAME` として `"@unikvs/checksum:sha256"` を定義します。`ChecksumMd5` と `ChecksumSha1` は `@noble/hashes/legacy.js` の `md5` と `sha1` を使い、`ChecksumSha224` と `ChecksumSha256` と `ChecksumSha384` と `ChecksumSha512` は `@noble/hashes/sha2.js` の各関数を使います。
+たとえば `ChecksumSha256` は名前 `"ChecksumSha256"` と `sha256` 関数、変数キー `"@unikvs/checksum:sha256"` を固定しています。
 
-オプション型は `ChecksumOptions` が基準です。各サブクラス用の `ChecksumMd5Options` などは `ChecksumOptions` と同じ内容です。
+オプション型は `ChecksumOptions` が基準です。各サブクラス用の型は同内容です。
 
 ```ts
 type ChecksumOptions = {
@@ -50,35 +50,11 @@ type ChecksumOptions = {
 };
 ```
 
-`required` を省略した場合は `false` として扱われます。`name` プロパティーにはサブクラスごとの固定名が入ります。`isOpen` は常に `true` を返します。
-
-<Accordion>
-  <AccordionItem title="Checksum">
-    抽象基底クラスです。`name` と `hash` と `options` を受け取ります。`new` による直接生成は想定されていません。
-  </AccordionItem>
-  <AccordionItem title="ChecksumMd5">
-    MD5 用のプリセットです。コンストラクターには `options?: ChecksumMd5Options` のみを渡します。変数キーは `@unikvs/checksum:md5` です。ハッシュ関数には `@noble/hashes/legacy.js` の `md5` を使います。
-  </AccordionItem>
-  <AccordionItem title="ChecksumSha1">
-    SHA-1 用のプリセットです。コンストラクターには `options?: ChecksumSha1Options` のみを渡します。変数キーは `@unikvs/checksum:sha1` です。ハッシュ関数には `@noble/hashes/legacy.js` の `sha1` を使います。
-  </AccordionItem>
-  <AccordionItem title="ChecksumSha224">
-    SHA-224 用のプリセットです。コンストラクターには `options?: ChecksumSha224Options` のみを渡します。変数キーは `@unikvs/checksum:sha224` です。ハッシュ関数には `@noble/hashes/sha2.js` の `sha224` を使います。
-  </AccordionItem>
-  <AccordionItem title="ChecksumSha256">
-    SHA-256 用のプリセットです。コンストラクターには `options?: ChecksumSha256Options` のみを渡します。変数キーは `@unikvs/checksum:sha256` です。ハッシュ関数には `@noble/hashes/sha2.js` の `sha256` を使います。
-  </AccordionItem>
-  <AccordionItem title="ChecksumSha384">
-    SHA-384 用のプリセットです。コンストラクターには `options?: ChecksumSha384Options` のみを渡します。変数キーは `@unikvs/checksum:sha384` です。ハッシュ関数には `@noble/hashes/sha2.js` の `sha384` を使います。
-  </AccordionItem>
-  <AccordionItem title="ChecksumSha512">
-    SHA-512 用のプリセットです。コンストラクターには `options?: ChecksumSha512Options` のみを渡します。変数キーは `@unikvs/checksum:sha512` です。ハッシュ関数には `@noble/hashes/sha2.js` の `sha512` を使います。
-  </AccordionItem>
-</Accordion>
+`required` を省略すると `false` 扱いです。`name` にはサブクラスごとの固定名が入り、`isOpen` は常に `true` を返します。
 
 ## 使い方 [#usage]
 
-サブクラスはオプションのみで生成できます。基底クラスの `Checksum` は `name` と `IHash` 準拠のハッシュ関数を要求するため、通常はサブクラスを使います。
+サブクラスはオプションのみで生成できます。通常はサブクラスを使います。
 
 ```ts
 import { ChecksumSha256 } from "@unikvs/checksum";
@@ -87,10 +63,10 @@ const optional = new ChecksumSha256();
 const required = new ChecksumSha256({ required: true });
 ```
 
-期待するハッシュ値は、実行時変数 `vars` の各キーに 16 進文字列として設定します。キーはクラスごとに決まっています。`ChecksumSha256` の場合は `ChecksumSha256.CHECKSUM_VAR_NAME` すなわち `"@unikvs/checksum:sha256"` を使います。
+期待するハッシュ値は、実行時変数 `vars` に 16 進文字列で設定します。キーはクラスごとに決まっています。`ChecksumSha256` なら `ChecksumSha256.CHECKSUM_VAR_NAME` (`"@unikvs/checksum:sha256"`) を使います。
 
 :::tip
-期待値を指定する際は、キー文字列を直接書くのではなく、`ChecksumSha256.CHECKSUM_VAR_NAME` のように静的プロパティーから参照してください。クラスと変数キーの対応誤りを防げます。
+キーは文字列を直書きせず、`ChecksumSha256.CHECKSUM_VAR_NAME` のように静的プロパティーから参照してください。対応誤りを防げます。
 :::
 
 ```ts
@@ -102,7 +78,7 @@ const vars = {
 const result = optional.encode({ vars, data });
 ```
 
-トランスフォーマーとして組み込む場合は、`ITransformer` としてビルダーに登録します。
+トランスフォーマーとして組み込む場合は、ビルダーに登録します。
 
 ```ts
 import { ChecksumSha256 } from "@unikvs/checksum";
@@ -112,25 +88,25 @@ const transformer = new ChecksumSha256({ required: true });
 builder.appendTransformer(transformer);
 ```
 
-上記の `builder` は `UniKvs.config()` が返す設定ビルダーを指します。ストレージの登録方法などはビルダーの仕様に従ってください。検証に使う変数は実行時に `vars` として渡します。
+`builder` は `UniKvs.config()` が返す設定ビルダーです。検証用の変数は実行時に `vars` で渡します。
 
 ## 検証の仕組み [#verification]
 
-`encode` と `decode` はどちらも同じ一括検証を行います。`getEncodable` と `getDecodable` はどちらも同じストリーム検証を行います。書き込みと読み取りで処理を区別しません。
+`encode`・`decode` は同じ一括検証、`getEncodable`・`getDecodable` は同じストリーム検証を行います。書き込みと読み取りで処理は変わりません。
 
 一括検証の流れは次のとおりです。
 
-1. サブクラスが定義した `CHECKSUM_VAR_NAME` に対応する値を `vars` から取得します。
-2. 値が文字列の場合は `this.hash(data)` を計算し、`bytesToHex` で 16 進文字列に変換して比較します。一致しなければ `ChecksumMismatchError` を投げます。
-3. 値が文字列でない場合、`required` が `true` であれば `ChecksumRequiredError` を投げます。`required` が `false` であればハッシュ計算を省略し、データをそのまま返します。
-4. 検証に成功した場合も、データをそのまま返します。
+1. `CHECKSUM_VAR_NAME` に対応する値を `vars` から取得します。
+2. 文字列ならハッシュを計算して 16 進文字列で比較し、不一致なら `ChecksumMismatchError` を投げます。
+3. 文字列でなければ、`required: true` なら `ChecksumRequiredError` を投げ、`false` なら計算を省略してそのまま返します。
+4. 検証に成功してもデータを変えずに返します。
 
 ストリーム検証の流れは次のとおりです。
 
-1. `vars` から期待値を取り出します。値が文字列でない場合、`required` が `true` であれば `ChecksumRequiredError` を投げます。`required` が `false` であれば、ハッシュ関数を使わない透過 `TransformStream` を返します。
-2. 値が文字列の場合は `this.hash.create()` で `IHasher` を作成します。
-3. 各チャンクが到達するたびに、`MAX_CHUNK_SIZE` である 4 GB 単位に分割しながら `hasher.update` を呼び、下流には分割後のチャンクをそのまま流します。
-4. ストリーム終了時の `flush` で `hasher.digest()` を 16 進文字列に変換し、期待値と比較します。一致しなければ `ChecksumMismatchError` を投げます。
+1. `vars` から期待値を取り出します。文字列でなければ、`required: true` なら `ChecksumRequiredError` を投げ、`false` なら透過 `TransformStream` を返します。
+2. 文字列なら `this.hash.create()` で `IHasher` を作ります。
+3. 各チャンクを 4 GB 単位に分割しながら `hasher.update` し、下流にはそのまま流します。
+4. 終了時の `flush` で `digest()` を 16 進文字列に変換して比較し、不一致なら `ChecksumMismatchError` を投げます。
 
 ```mermaid
 flowchart LR
@@ -148,14 +124,14 @@ flowchart LR
 
 | エラー | 意味 | 対処 |
 | --- | --- | --- |
-| `ChecksumMismatchError` | 計算したハッシュ値が期待値と一致しません。`meta` に `actual` と `expected` を含みます。 | 期待値の指定誤りか、データの破損を確認してください。 |
-| `ChecksumRequiredError` | `required` が `true` であるにもかかわらず、`vars` に文字列のチェックサムがありません。 | 対応する変数キーに 16 進文字列を設定するか、`required` を `false` にしてください。 |
-| `ChecksumInvalidVarNameError` | `CHECKSUM_VAR_NAME` が文字列ではありません。`meta` に `actual` を含みます。 | 基底クラスを独自に継承した場合に、静的プロパティーの定義を確認してください。通常のサブクラスでは発生しません。 |
+| `ChecksumMismatchError` | ハッシュが期待値と一致しません。`meta` に `actual`・`expected` を含みます。 | 期待値の指定誤りかデータの破損を確認してください。 |
+| `ChecksumRequiredError` | `required: true` なのに `vars` に文字列のチェックサムがありません。 | 変数キーに 16 進文字列を設定するか、`required` を `false` にしてください。 |
+| `ChecksumInvalidVarNameError` | `CHECKSUM_VAR_NAME` が文字列ではありません。通常のサブクラスでは発生しません。 | 基底クラスを独自継承した場合に静的プロパティーを確認してください。 |
 
-`ChecksumMismatchError` は一括検証では `encode` と `decode` の呼び出し時に投げられます。ストリーム検証では終了処理の `flush` 時に投げられます。
+一括検証では `encode`・`decode` の呼び出し時に、ストリーム検証では `flush` 時に `ChecksumMismatchError` を投げます。
 
 :::danger
-`ChecksumMismatchError` が投げられた場合は、そのまま処理を続けず、期待値の指定誤りかデータの破損を確認してください。`meta` の `actual` と `expected` を比べると原因の切り分けに役立ちます。
+不一致のときは処理を続けず、`meta` の `actual` と `expected` を比べて切り分けてください。
 :::
 
 ```ts
@@ -180,7 +156,7 @@ try {
 
 ## サブパスエクスポート [#exports]
 
-`package.json` の `exports` には次のサブパスが定義されています。用途に応じて個別に導入できます。
+`package.json` の `exports` のサブパスを使い分けられます。
 
 | サブパス | 内容 |
 | --- | --- |
@@ -234,7 +210,7 @@ import {
 
 </CodeGroup>
 
-既定の導入ではルートからの指定を使います。
+既定ではルートから指定します。
 
 ```ts
 import { ChecksumSha256 } from "@unikvs/checksum";
@@ -242,7 +218,7 @@ import { ChecksumSha256 } from "@unikvs/checksum";
 
 ## 使用例 [#examples]
 
-次の例は `ChecksumSha256` で一括検証を行う最小例です。文字列 `"test"` の SHA-256 ハッシュ値を使います。
+`ChecksumSha256` で一括検証する最小例です。文字列 `"test"` の SHA-256 ハッシュ値を使います。
 
 ```ts
 import { ChecksumSha256, ChecksumMismatchError } from "@unikvs/checksum";

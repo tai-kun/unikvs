@@ -22,11 +22,11 @@ description: "unikvs のインストールから基本操作までの最短手�
 
 ## 基本的な使い方 [#basic-usage]
 
-メモリーストレージを使った最小例です。手順は常に同じです。設定して作成し、開いて操作し、閉じます。
+メモリーストレージを使った最小例です。設定して作成し、開いて操作し、閉じます。
 
 <Steps>
-  <Step title="ビルダーを作成する">
-    `UniKvs.config()` でビルダーを作成します。型パラメーターにはキーと値のマッピングを指定します。
+  <Step title="ビルダーを作る">
+    `UniKvs.config()` でビルダーを作ります。型パラメーターにキーと値のマッピングを指定します。
 
     ```ts
     import { UniKvs, type Value } from "unikvs";
@@ -36,8 +36,8 @@ description: "unikvs のインストールから基本操作までの最短手�
     }>();
     ```
   </Step>
-  <Step title="保存先を追加して作成する">
-    `appendStorage()` で保存先を追加し、`create()` でクライアントを作成します。トランスフォーマーは不要な場合は省略できます。
+  <Step title="保存先を追加して作る">
+    `appendStorage()` で保存先を追加し、`create()` でクライアントを作ります。トランスフォーマーが不要なら省略できます。
 
     ```ts
     import { Memory } from "@unikvs/memory";
@@ -71,7 +71,7 @@ description: "unikvs のインストールから基本操作までの最短手�
 </Steps>
 
 :::tip
-`appendTransformer()` は `appendStorage()` の前後どちらにも追加できます。ストレージの登録後に追加したトランスフォーマーは、その後に登録するストレージにだけ適用されます。詳しくは基本概念のパイプラインの説明を参照してください。
+`appendTransformer()` は `appendStorage()` の前後どちらにも追加できます。ストレージ登録後に追加した分は、その後に登録するストレージにだけ適用します。詳しくは基本概念のパイプラインを参照してください。
 :::
 
 ## トランスフォーマーを足す [#add-transformer]
@@ -91,10 +91,10 @@ const kvs = UniKvs.config<{
   .create();
 ```
 
-利用側の `set` と `get` のコードは変えずに、保存時の圧縮と取得時の展開が自動で行われます。
+利用側の `set`・`get` は変えずに、保存時の圧縮と取得時の展開を自動で行います。
 
 :::warning
-`appendStorage()` を 1 つも呼ばずに `create()` すると `MissingStorageError` が投げられます。ストレージの登録は必須です。
+`appendStorage()` なしで `create()` すると `MissingStorageError` を投げます。ストレージ登録は必須です。
 :::
 
 ## 次の手順 [#next-steps]

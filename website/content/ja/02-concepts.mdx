@@ -5,7 +5,7 @@ description: "トランスフォーマーとストレージのパイプライン
 
 ## アーキテクチャー [#architecture]
 
-unikvs はビルダーパターンで構成されます。入力はトランスフォーマーの列を通過し、ストレージに到達します。
+unikvs はビルダーパターンで構成します。入力はトランスフォーマーの列を通り、ストレージに届きます。
 
 ```mermaid
 flowchart LR
@@ -17,10 +17,10 @@ flowchart LR
 
 役割は次の 2 つです。
 
-- トランスフォーマーは、データのエンコードとデコードを透過的に行います。
-- ストレージは、データの永続化先です。複数指定すると、すべてのストレージに並列で書き込まれます。
+- トランスフォーマーは、データのエンコード・デコードを透過的に行います。
+- ストレージは永続化先です。複数指定すると、すべてに並列で書き込みます。
 
-各ストレージは、登録時点までに追加されたトランスフォーマーを前段パイプラインとして使います。そのため、トランスフォーマーとストレージを交互に追加すると、ストレージごとに異なるパイプラインを構成できます。
+各ストレージは、登録時点までのトランスフォーマーを前段パイプラインとして使います。交互に追加すると、ストレージごとに異なるパイプラインになります。
 
 ```ts
 const kvs = UniKvs.config()
@@ -45,28 +45,28 @@ flowchart LR
   Transformer4 --> Storage3
 ```
 
-読み取り時は、キーが見つかったストレージの前段パイプラインを逆順に適用してデコードします。
+読み取り時は、見つかったストレージの前段パイプラインを逆順に適用してデコードします。
 
 :::note
-書き込みはすべてのストレージに並列で行われ、読み取りは登録順に探索して最初に見つかったキーでデコードして返します。高速な保存先を先に登録すると読み取りが速くなります。
+書き込みはすべてに並列で行い、読み取りは登録順に探して最初に見つけたキーで返します。高速な保存先を先に登録すると読み取りが速くなります。
 :::
 
 ## 設定ビルダー [#config-builder]
 
-`UniKvs.config()` でビルダーを作成し、次の順序で設定します。
+`UniKvs.config()` でビルダーを作り、次の順序で設定します。
 
 <Steps>
   <Step title="setVariables(vars)">
-    実行時変数を設定します。省略可能です。
+    実行時変数を設定します (任意)。
   </Step>
   <Step title="appendTransformer(transformer)">
-    トランスフォーマーを追加します。省略可能であり、ストレージの登録後にも追加できます。
+    トランスフォーマーを追加します (任意)。ストレージ登録後にも追加できます。
   </Step>
   <Step title="appendStorage(storage)">
-    ストレージを追加します。必須であり、複数追加できます。
+    ストレージを追加します (必須、複数可)。
   </Step>
   <Step title="create()">
-    KVS クライアントを作成します。
+    KVS クライアントを作ります。
   </Step>
 </Steps>
 
@@ -85,26 +85,19 @@ flowchart LR
 
 すべての操作は `AbortSignal` によるキャンセルと、実行時変数の受け渡しに対応します。
 
-```ts
-const ac = new AbortController();
-setTimeout(() => ac.abort(), 1000);
-
-await kvs.set("key", value, { signal: ac.signal });
-```
-
 ## 値の型 [#value-types]
 
-`Value`、`PlainValue`、`StreamValue` は実行時には存在しない型レベルの目印です。キーと値のマッピングを定義すると、キーごとに利用可能なメソッドが型によって制御されます。
+`Value`・`PlainValue`・`StreamValue` は実行時にはない型レベルの目印です。キーと値のマッピングを定義すると、キーごとに使えるメソッドが型で決まります。
 
 | 型 | 書き込み | 読み取り | ストリーム読み取り |
 | --- | --- | --- | --- |
-| `PlainValue<T>` | `set(key, T)` | `get(key): T` | 不可 |
-| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | 不可 | `stream(key): ValueStream<T>` |
+| `PlainValue<T>` | `set(key, T)` | `get(key): T` | 不可。 |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | 不可。 | `stream(key): ValueStream<T>` |
 | `Value<T>` | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
 
 <Tabs>
   <Tab title="PlainValue">
-    単一値の保存と取得に使います。`stream()` は型エラーになります。
+    単一値の保存と取得に使います。`stream()` は型エラーです。
 
     ```ts
     import { UniKvs, type PlainValue } from "unikvs";
@@ -120,7 +113,7 @@ await kvs.set("key", value, { signal: ac.signal });
     ```
   </Tab>
   <Tab title="StreamValue">
-    大規模データの逐次処理に使います。`get()` は型エラーになります。
+    大規模データの逐次処理に使います。`get()` は型エラーです。
 
     ```ts
     import { UniKvs, type StreamValue } from "unikvs";
@@ -136,7 +129,7 @@ await kvs.set("key", value, { signal: ac.signal });
     ```
   </Tab>
   <Tab title="Value">
-    両方に対応したい場合の糖衣構文であり、`PlainValue<T> | StreamValue<T>` と等価です。
+    両方に対応する糖衣構文で、`PlainValue<T> | StreamValue<T>` と等価です。
 
     ```ts
     import { UniKvs, type Value } from "unikvs";
@@ -156,7 +149,7 @@ await kvs.set("key", value, { signal: ac.signal });
 
 ## 実行時変数 [#variables]
 
-変数は操作の挙動を切り替えるための実行時コンテキストです。ビルダーの `setVariables()` で初期値を設定し、操作ごとの `vars` で上書きできます。
+変数は操作の挙動を切り替える実行時コンテキストです。ビルダーの `setVariables()` で初期値を設定し、操作ごとの `vars` で上書きできます。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
@@ -170,7 +163,7 @@ await kvs.set("foo", new Uint8Array([1]), {
 ```
 
 <Expandable title="自動的に付与される変数">
-操作の種類と対象キーは、`unikvs:action` と `unikvs:key` として自動的に付与されます。チェックサムのハッシュ指定など、一部のトランスフォーマーは変数を利用します。詳細は各パッケージリファレンスを参照してください。
+操作の種類と対象キーは、`unikvs:action` と `unikvs:key` として自動付与します。一部のトランスフォーマーは変数を使います。詳細は各パッケージリファレンスを参照してください。
 </Expandable>
 
 ## プラグインの種類 [#plugin-kinds]
@@ -186,5 +179,5 @@ await kvs.set("foo", new Uint8Array([1]), {
 | ストレージ | `@unikvs/opfs` | ブラウザーの OPFS に保存します。 |
 
 :::tip
-プラグインの自作方法は、自作プラグインのガイドを参照してください。ストレージは `IStorage`、トランスフォーマーは `ITransformer` の実装から始めます。
+自作方法は自作プラグインのガイドを参照してください。ストレージは `IStorage`、トランスフォーマーは `ITransformer` から始めます。
 :::

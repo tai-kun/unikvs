@@ -34,17 +34,15 @@ import {
 
 ## ファイル名の検証 [#filename]
 
-ファイル名が Windows・macOS・Linux の主要な OS で利用可能かどうかを検証します。
+Windows・macOS・Linux で使えるファイル名か検証します。
 
 ### isValidFilename [#is-valid-filename]
-
-シグネチャを示します。
 
 ```ts
 function isValidFilename(filename: string): boolean;
 ```
 
-有効なファイル名の場合は `true` を、そうでない場合は `false` を返します。例外は投げません。次のいずれかに当てはまる場合は `false` を返します。
+次のいずれかに当てはまると `false` を返します。例外は投げません。
 
 - 空文字列、`"."`、`".."` である場合
 - UTF-8 エンコード後のバイト数が 255 バイトを超える場合
@@ -53,8 +51,6 @@ function isValidFilename(filename: string): boolean;
 - 制御文字や予約文字を含む場合
 - Windows の予約名に一致する場合
 - `":"` を含む場合
-
-使用例を示します。
 
 ```ts
 import { isValidFilename } from "@unikvs/utils";
@@ -66,15 +62,11 @@ if (isValidFilename("report.txt")) {
 
 ### assertValidFilename [#assert-valid-filename]
 
-引数と戻り値は次のとおりです。
-
 ```ts
 function assertValidFilename(filename: string): void;
 ```
 
-有効なファイル名の場合は何もせずに戻ります。無効なファイル名の場合は `InvalidFilenameError` を投げます。戻り値は `void` です。
-
-次のように呼び出します。
+有効なら何もせずに戻り、無効なら `InvalidFilenameError` を投げます。
 
 ```ts
 import { assertValidFilename } from "@unikvs/utils";
@@ -83,49 +75,20 @@ assertValidFilename("report.txt");
 ```
 
 :::tip
-真偽値で事前チェックしたい場合には `isValidFilename` を、無効な場合に理由付きで中断したい場合には `assertValidFilename` を使います。
+真偽値で判定するなら `isValidFilename` を、無効時に理由付きで止めるなら `assertValidFilename` を使います。
 :::
-
-用途別の使い分けは次のとおりです。
-
-<Tabs>
-  <Tab title="判定だけしたい場合">
-    例外は投げず、真偽値で判定したい場合に使います。
-
-    ```ts
-    import { isValidFilename } from "@unikvs/utils";
-
-    if (isValidFilename("report.txt")) {
-      console.log("利用可能なファイル名です。");
-    }
-    ```
-  </Tab>
-  <Tab title="無効な場合に投げたい場合">
-    有効な場合は何もせずに戻り、無効な場合は `InvalidFilenameError` を投げたい場合に使います。
-
-    ```ts
-    import { assertValidFilename } from "@unikvs/utils";
-
-    assertValidFilename("report.txt");
-    ```
-  </Tab>
-</Tabs>
 
 ## ディレクトリ名の検証 [#dirname]
 
-ディレクトリ名が Windows・macOS・Linux の主要な OS で利用可能かどうかを検証します。実装はファイル名の検証に委譲されています。
+Windows・macOS・Linux で使えるディレクトリ名か検証します。内部でファイル名の検証に委譲するため、判定条件は同じです。
 
 ### isValidDirname [#is-valid-dirname]
-
-関数シグネチャは以下のとおりです。
 
 ```ts
 function isValidDirname(dirname: string): boolean;
 ```
 
-内部で `isValidFilename(dirname)` を呼び出すため、判定条件は `isValidFilename` と同じです。有効な場合は `true` を、無効な場合は `false` を返します。例外は投げません。
-
-使い方の例を示します。
+有効なら `true` を、無効なら `false` を返します。例外は投げません。
 
 ```ts
 import { isValidDirname } from "@unikvs/utils";
@@ -137,15 +100,11 @@ if (!isValidDirname("my-dir")) {
 
 ### assertValidDirname [#assert-valid-dirname]
 
-定義は次のとおりです。
-
 ```ts
 function assertValidDirname(dirname: string): void;
 ```
 
-有効なディレクトリ名の場合は何もせずに戻ります。無効なディレクトリ名の場合は `InvalidDirnameError` を投げます。戻り値は `void` です。
-
-呼び出し例は次のとおりです。
+有効なら何もせずに戻り、無効なら `InvalidDirnameError` を投げます。
 
 ```ts
 import { assertValidDirname } from "@unikvs/utils";
@@ -153,46 +112,17 @@ import { assertValidDirname } from "@unikvs/utils";
 assertValidDirname("my-dir");
 ```
 
-用途別の使い分けは次のとおりです。
-
-<Tabs>
-  <Tab title="判定だけしたい場合">
-    例外は投げず、真偽値で判定したい場合に使います。
-
-    ```ts
-    import { isValidDirname } from "@unikvs/utils";
-
-    if (!isValidDirname("my-dir")) {
-      console.log("利用できないディレクトリ名です。");
-    }
-    ```
-  </Tab>
-  <Tab title="無効な場合に投げたい場合">
-    有効な場合は何もせずに戻り、無効な場合は `InvalidDirnameError` を投げたい場合に使います。
-
-    ```ts
-    import { assertValidDirname } from "@unikvs/utils";
-
-    assertValidDirname("my-dir");
-    ```
-  </Tab>
-</Tabs>
-
 ## バイト列操作 [#bytes]
 
 バイナリーデータの変換と分割を行います。
 
 ### bytesToHex [#bytes-to-hex]
 
-シグネチャを示します。
-
 ```ts
 function bytesToHex(bytes: Uint8Array): string;
 ```
 
-`Uint8Array` の内容を小文字の 16 進数文字列に変換して返します。`Uint8Array.prototype.toHex` が利用できる環境ではそれを使い、利用できない環境では 0 から 255 までの事前計算テーブルで変換します。例外は投げません。
-
-使用例を示します。
+`Uint8Array` を小文字の 16 進数文字列に変換します。`Uint8Array.prototype.toHex` があれば使い、なければ事前計算テーブルで変換します。例外は投げません。
 
 ```ts
 import { bytesToHex } from "@unikvs/utils";
@@ -203,8 +133,6 @@ console.log(hex); // "00ff10"
 
 ### chunks [#chunks]
 
-引数と戻り値は次のとおりです。
-
 ```ts
 function chunks<TData extends DataView | ITypedArray>(
   data: TData,
@@ -214,9 +142,7 @@ function chunks<TData extends DataView | ITypedArray>(
 
 `DataView` または TypedArray を、1 チャンクあたり最大 `maxChunkByteSize` バイトになるように分割し、チャンクを順に生成するジェネレーターを返します。`maxChunkByteSize` は小数点以下を切り捨て、最低でも 1 として扱います。
 
-`DataView` の場合はバッファー範囲で切り出した新しい `DataView` を返し、TypedArray の場合は `subarray` によるビューを返します。`TypedArray` の分割位置は `maxChunkByteSize / BYTES_PER_ELEMENT` をもとに要素数で計算します。元のデータをコピーしません。
-
-次のように呼び出します。
+`DataView` の場合はバッファー範囲で切り出した新しい `DataView` を、TypedArray の場合は `subarray` によるビューを返します。元のデータはコピーしません。
 
 ```ts
 import { chunks } from "@unikvs/utils";
@@ -229,31 +155,8 @@ for (const chunk of chunks(data, 2)) {
 ```
 
 :::warning
-返されるチャンクは元のデータをコピーしないビューです。チャンクへの書き込みは元のデータに反映されるため、元のデータを保持したい場合は別途コピーしてください。
+返すチャンクは元のデータへのビューです。書き込むと元データに反映されるため、保持したい場合は別途コピーしてください。
 :::
-
-用途別の使い分けは次のとおりです。
-
-<CodeGroup>
-
-```ts 16進数に変換
-import { bytesToHex } from "@unikvs/utils";
-
-const hex = bytesToHex(new Uint8Array([0, 255, 16]));
-console.log(hex); // "00ff10"
-```
-
-```ts チャンクに分割
-import { chunks } from "@unikvs/utils";
-
-const data = new Uint8Array([1, 2, 3, 4, 5]);
-
-for (const chunk of chunks(data, 2)) {
-  console.log(chunk);
-}
-```
-
-</CodeGroup>
 
 ## ストリーム変換 [#streams]
 
@@ -261,17 +164,13 @@ for (const chunk of chunks(data, 2)) {
 
 ### toReadableStream [#to-readable-stream]
 
-関数シグネチャは以下のとおりです。
-
 ```ts
 function toReadableStream<T>(
   iterable: Iterable<T> | AsyncIterable<T>,
 ): ReadableStream<T>;
 ```
 
-同期または非同期の反復可能オブジェクトから `ReadableStream` を生成して返します。内部で `withReadableStreamFrom` を使い、`ReadableStream.from` が未実装の環境では一時的なポリフィルを適用します。
-
-使い方の例を示します。
+同期・非同期の反復可能オブジェクトから `ReadableStream` を作ります。`ReadableStream.from` がない環境では一時的なポリフィルを使います。
 
 ```ts
 import { toReadableStream } from "@unikvs/utils";
@@ -285,17 +184,13 @@ for await (const value of stream) {
 
 ### withReadableStreamFrom [#with-readable-stream-from]
 
-定義は次のとおりです。
-
 ```ts
 function withReadableStreamFrom<T>(
   cb: (ReadableStream: ReadableStreamWithFrom) => T,
 ): T;
 ```
 
-`ReadableStream.from` が存在する環境ではそのままコールバックを実行し、存在しない環境では一時的に `from` メソッドを定義してコールバックを実行したあと、必ず `from` メソッドを削除します。コールバックは同期関数である必要があります。非同期関数を渡すオーバーロードは非推奨であり、戻り値を使うべきではありません。
-
-呼び出し例は次のとおりです。
+`ReadableStream.from` がある環境ではそのまま実行し、ない環境では一時的に `from` を定義して実行後に削除します。コールバックは同期関数にしてください。非同期関数を渡す使い方は非推奨です。
 
 ```ts
 import { withReadableStreamFrom } from "@unikvs/utils";
@@ -306,45 +201,16 @@ const stream = withReadableStreamFrom((ReadableStream) =>
 ```
 
 :::warning
-コールバックは同期関数にしてください。非同期関数を渡すオーバーロードは非推奨であり、戻り値を使うべきではありません。また、`from` が未実装の環境では一時的に定義した `from` メソッドを実行後に必ず削除します。
+コールバックは同期関数にしてください。非同期関数は非推奨です。
 :::
-
-用途別の使い分けは次のとおりです。
-
-<Tabs>
-  <Tab title="反復可能オブジェクトを変換したい場合">
-    同期または非同期の反復可能オブジェクトから `ReadableStream` を生成したい場合に使います。
-
-    ```ts
-    import { toReadableStream } from "@unikvs/utils";
-
-    const stream = toReadableStream([1, 2, 3]);
-
-    for await (const value of stream) {
-      console.log(value);
-    }
-    ```
-  </Tab>
-  <Tab title="fromの有無を吸収したい場合">
-    `ReadableStream.from` が未実装の環境でも動作する形でコールバックを実行したい場合に使います。
-
-    ```ts
-    import { withReadableStreamFrom } from "@unikvs/utils";
-
-    const stream = withReadableStreamFrom((ReadableStream) =>
-      ReadableStream.from([1, 2, 3]),
-    );
-    ```
-  </Tab>
-</Tabs>
 
 ## エラー [#errors]
 
-ファイル名とディレクトリ名の検証で使われるエラーです。
+ファイル名・ディレクトリ名の検証エラーです。
 
 ### InvalidFilenameError [#invalid-filename-error]
 
-ファイル名として使用できない文字列が指定された場合に投げられるエラーです。`name` は `"UniKvsInvalidFilenameError"` です。メタデータとして無効だった `filename` を保持します。
+使えないファイル名を指定すると投げられます。`name` は `"UniKvsInvalidFilenameError"` で、無効だった `filename` をメタデータに保持します。
 
 ```ts
 import { InvalidFilenameError } from "@unikvs/utils";
@@ -354,13 +220,13 @@ throw new InvalidFilenameError({ filename: "../evil" });
 
 <Accordion>
   <AccordionItem title="コンストラクター引数とメッセージ">
-    コンストラクター引数の型は `InvalidFilenameErrorArgs` で、`ErrorOptions` と `InvalidFilenameErrorMeta` を合わせた型です。`cause` などの追加情報も渡せます。メッセージは英語では ``Invalid file name: ...``、日本語では ``無効なファイル名: ...`` になります。
+    引数は `ErrorOptions` とメタデータ型を合わせた `InvalidFilenameErrorArgs` です。メッセージは英語で ``Invalid file name: ...``、日本語で ``無効なファイル名: ...`` になります。
   </AccordionItem>
 </Accordion>
 
 ### InvalidDirnameError [#invalid-dirname-error]
 
-ディレクトリ名として使用できない文字列が指定された場合に投げられるエラーです。`name` は `"UniKvsInvalidDirnameError"` です。メタデータとして無効だった `dirname` を保持します。
+使えないディレクトリ名を指定すると投げられます。`name` は `"UniKvsInvalidDirnameError"` で、無効だった `dirname` をメタデータに保持します。
 
 ```ts
 import { InvalidDirnameError } from "@unikvs/utils";
@@ -370,13 +236,13 @@ throw new InvalidDirnameError({ dirname: ".." });
 
 <Accordion>
   <AccordionItem title="コンストラクター引数とメッセージ">
-    コンストラクター引数の型は `InvalidDirnameErrorArgs` で、`ErrorOptions` と `InvalidDirnameErrorMeta` を合わせた型です。`cause` などの追加情報も渡せます。メッセージは英語では ``Invalid directory name: ...``、日本語では ``無効なディレクトリー名: ...`` になります。
+    引数は `ErrorOptions` とメタデータ型を合わせた `InvalidDirnameErrorArgs` です。メッセージは英語で ``Invalid directory name: ...``、日本語で ``無効なディレクトリー名: ...`` になります。
   </AccordionItem>
 </Accordion>
 
 ## 使用例 [#examples]
 
-プラグイン実装で、ファイル名の検証・バイナリーの分割・ストリーム変換を組み合わせる例を示します。
+ファイル名の検証・バイナリーの分割・ストリーム変換を組み合わせる例です。
 
 ```ts
 import {

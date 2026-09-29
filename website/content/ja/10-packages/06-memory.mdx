@@ -1,22 +1,16 @@
 ---
-title: "@unikvs/memory — メモリストレージ"
-description: "インメモリで任意のデータを保存するストレージプラグインの使い方を解説します。"
+title: "@unikvs/memory — メモリーストレージ"
+description: "インメモリーで任意のデータを保存するストレージプラグインの使い方を解説します。"
 ---
 
 ## 概要 [#overview]
 
-`@unikvs/memory` は、データをメモリ上に保存するストレージプラグインです。パッケージの説明にあるとおり、任意のデータ（arbitrary data）をメモリに保存します。
+`@unikvs/memory` は、データをメモリーに保存するストレージプラグインです。任意のデータをそのまま保存できます。
 
-主な特徴は次のとおりです。
-
-- インメモリ保存のため、読み書きが同期で完了します。
-- 文字列やオブジェクトなどの任意の値を保存できます。
-- Node.js やブラウザなど、`Map`・`structuredClone`・Web Streams が利用できる環境で動作します。
-- テスト用のダブルや、一時的なキャッシュ用途に適しています。
-
-:::tip
-オープン処理が不要で読み書きが同期で完了するため、テスト用のダブルや一時的なキャッシュ用途に適しています。
-:::
+- 読み書きは同期で完了し、`open`・`close` は不要です。
+- 文字列やオブジェクトなど任意の値を保存できます。
+- `Map`・`structuredClone`・Web Streams が使える環境で動作します。
+- テスト用のダブルや一時的なキャッシュに適しています。
 
 インストールは次のコマンドで行います。
 
@@ -26,9 +20,7 @@ npm i @unikvs/memory
 
 ## 使い方 [#usage]
 
-`Memory` は `IStorage` を実装したストレージです。`UniKvs` の保存先としては `appendStorage()` に渡して使います。
-
-単体で直接操作することもできます。
+`Memory` は `IStorage` を実装しています。`UniKvs` には `appendStorage()` で渡し、単体で直接操作もできます。
 
 <Tabs>
   <Tab title="UniKvs 経由">
@@ -58,12 +50,12 @@ const value = storage.read({ key: "k1" });
   </Tab>
 </Tabs>
 
-コンストラクタの引数は次のとおりです。
+コンストラクターの引数は次のとおりです。
 
 | 引数 | 型 | 必須 | 説明 |
 | --- | --- | --- | --- |
-| `options` | `MemoryOptions` | いいえ | 初期化オプションです。省略時は空オブジェクトと同様に動作します。 |
-| `options.clone` | `<T>(value: T) => T` | いいえ | データの複製に使用する関数です。既定値は `structuredClone` です。 |
+| `options` | `MemoryOptions` | いいえ | 省略時は空オブジェクトと同様に動作します。 |
+| `options.clone` | `<T>(value: T) => T` | いいえ | 複製に使う関数です。既定値は `structuredClone` です。 |
 
 複製方法を変更する例は次のとおりです。
 
@@ -75,9 +67,7 @@ const storage = new Memory({
 });
 ```
 
-`open` メソッドと `close` メソッドは実装されていません。`isOpen` プロパティは常に `true` を返すため、事前のオープン処理や終了処理は不要です。
-
-基本操作の例は次のとおりです。
+`open`・`close` はありません。`isOpen` は常に `true` を返します。
 
 ```ts
 import { Memory } from "@unikvs/memory";
@@ -95,22 +85,18 @@ storage.delete({ key: "k1" });
 storage.clear();
 ```
 
-`write`・`read`・`exists`・`delete`・`clear` はいずれも同期メソッドです。`write` と `clear` は戻り値を返しません。`read` は保存した値を返します。`exists` は真偽値を返します。
+`write`・`read`・`exists`・`delete`・`clear` はいずれも同期です。
 
 ## 対応データ [#data]
 
-`write` と `read` はバイト列以外の任意の値に対応しています。文字列、オブジェクト、`null`、`undefined`、`Uint8Array` などをそのまま保存できます。
+`write`・`read` はバイト列以外の任意の値に対応しています。文字列、オブジェクト、`null`、`undefined`、`Uint8Array` などをそのまま保存できます。
 
-保存時と取得時には `clone` 関数による複製が行われます。既定の `structuredClone` では、書き込み後に元のオブジェクトを変更しても保存値には影響しません。また、取得した値を変更しても保存値には影響しません。
+保存時と取得時には `clone` 関数で複製します。既定の `structuredClone` では、書き込み後に元オブジェクトを変えても保存値に影響せず、取得した値を変えても保存値に影響しません。
 
-ストリーム操作は `Uint8Array<ArrayBuffer>` のみに対応しています。
+ストリーム操作は `Uint8Array<ArrayBuffer>` のみに対応しています。チャンク結合と単一チャンク送出による実装で、ネイティブの逐次処理ではありません。
 
-- `getWritable` は、書き込まれたチャンクをメモリ上の配列に保持し、ストリームのクローズ時に結合して 1 つの `Uint8Array` として保存します。
-- `getReadable` は、保存済みの値を単一チャンクとして送出します。保存値が `Uint8Array` ではない場合は読み取り時にエラーになります。
-
-:::note
-ストリームはネイティブ機能ではなく、チャンクの結合と単一チャンクの送出による実装です。`getWritable` は書き込まれたチャンクをメモリ上の配列に保持し、クローズ時に結合して保存します。`getReadable` は保存済みの値を単一チャンクとして送出します。
-:::
+- `getWritable` はチャンクをメモリー上の配列にため、クローズ時に結合して 1 つの `Uint8Array` として保存します。
+- `getReadable` は保存済みの値を単一チャンクとして送出します。保存値が `Uint8Array` でなければ読み取り時にエラーになります。
 
 ストリームの例は次のとおりです。
 
@@ -135,27 +121,17 @@ console.log(result.value);
 
 ## 制限と注意 [#limitations]
 
-- データは永続化されません。アプリケーションの実行中のみ保持され、プロセス終了時に破棄されます。
-- データは内部の `Map` に保持されます。大量のデータや大容量のバイナリを保存するとメモリ使用量が増加します。不要なデータは `delete` や `clear` で削除してください。
-- 既定の複製関数は `structuredClone` です。複製できない値を保存する場合は、`clone` オプションで独自の関数を指定してください。
-- ストリームはネイティブ機能ではなく、チャンクの結合と単一チャンクの送出による実装です。大規模データの逐次処理には適していません。
-
-:::warning
-データは永続化されません。アプリケーションの実行中のみ保持され、プロセス終了時に破棄されます。
-:::
-
-:::warning
-データは内部の `Map` に保持されます。大量のデータや大容量のバイナリを保存するとメモリ使用量が増加します。不要なデータは `delete` や `clear` で削除してください。
-:::
+- 永続化されません。プロセス終了時に破棄されます。
+- 内部の `Map` に保持します。大量・大容量のデータを保存するとメモリー使用量が増えます。不要なデータは `delete`・`clear` で削除してください。
+- 既定の複製関数は `structuredClone` です。複製できない値は `clone` オプションで独自関数を指定してください。
+- ストリームはチャンク結合による実装です。大規模データの逐次処理には適していません。
 
 ## エラー [#errors]
 
-このパッケージでは、次のエラーが定義されています。
-
 | エラー | エラー名 | 発生条件 |
 | --- | --- | --- |
-| `KeyNotFoundError` | `MemoryKeyNotFoundError` | `read`・`delete`・`getReadable` で指定したキーが存在しない場合に発生します。 |
-| `InvalidChunkTypeError` | `MemoryInvalidChunkTypeError` | `getWritable` が返すストリームに `Uint8Array<ArrayBuffer>` 以外の値が書き込まれた場合、または保存値が `Uint8Array` ではないキーに対して `getReadable` の読み取りを行った場合に発生します。 |
+| `KeyNotFoundError` | `MemoryKeyNotFoundError` | `read`・`delete`・`getReadable` でキーが存在しない場合に発生します。 |
+| `InvalidChunkTypeError` | `MemoryInvalidChunkTypeError` | `Uint8Array<ArrayBuffer>` 以外を書き込んだ場合、または保存値が `Uint8Array` でないキーから読み取った場合に発生します。 |
 
 各エラーのメタデータは次のとおりです。
 
@@ -167,7 +143,7 @@ console.log(result.value);
   </AccordionItem>
   <AccordionItem title="InvalidChunkTypeError">
 
-`key`・`chunk`・`chunkType` を保持します。`chunkType` はコンストラクタ内部で自動的に設定されます。日本語メッセージは次のとおりです。
+`key`・`chunk`・`chunkType` を保持します。`chunkType` は内部で自動設定します。日本語メッセージは次のとおりです。
 
 ```txt
 キー {key} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、{chunkType} を得ました
@@ -175,8 +151,6 @@ console.log(result.value);
 
   </AccordionItem>
 </Accordion>
-
-エラー処理の例は次のとおりです。
 
 ```ts
 import { KeyNotFoundError, Memory } from "@unikvs/memory";
@@ -194,11 +168,9 @@ try {
 }
 ```
 
-`KeyNotFoundError` と `InvalidChunkTypeError`、および関連するメタデータ型は `@unikvs/memory` からインポートできます。
-
 ## 使用例 [#examples]
 
-最小の完動例は次のとおりです。
+最小例です。
 
 ```ts
 import { Memory } from "@unikvs/memory";

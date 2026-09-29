@@ -5,7 +5,7 @@ description: "TypeScript 製のモジュラーな KVS クライアント unikvs 
 
 ## unikvsとは [#what-is-unikvs]
 
-unikvs は TypeScript で実装されたモジュラーでポータブルな KVS クライアントです。透過的なデータ変換を行うトランスフォーマーと、複数のバックエンドへの書き込みに対応したストレージを、ビルダーパターンで組み合わせます。
+unikvs は TypeScript 製のモジュラーでポータブルな KVS クライアントです。透過的にデータを変換するトランスフォーマーと、複数バックエンドに書き込むストレージを、ビルダーパターンで組み合わせます。
 
 主な特徴は次のとおりです。
 
@@ -43,10 +43,10 @@ const bytes = await kvs.get("foo");
 await kvs.close();
 ```
 
-上記の例では、キー `foo` に保存するバイト列を透過的に gzip 圧縮し、`.tmp/` 配下に保存します。
+上記の例では、キー `foo` のバイト列を透過的に gzip 圧縮し、`.tmp/` 配下に保存します。
 
 :::tip
-まずははじめにのページでメモリーストレージを使った最小例から試し、全体の仕組みは基本概念のページで確認するのがおすすめです。
+まずメモリーストレージの最小例から試し、仕組みは基本概念で確認するのがおすすめです。
 :::
 
 ## ドキュメントの読み進め方 [#how-to-read]
@@ -105,13 +105,13 @@ await kvs.close();
 
 | パッケージ | Node.js | ブラウザー |
 | --- | --- | --- |
-| `unikvs` | 対応します | 対応します |
-| `@unikvs/core` | 対応します | 対応します |
-| `@unikvs/utils` | 対応します | 対応します |
-| `@unikvs/compression` | 対応します | 対応します |
-| `@unikvs/checksum` | 対応します | 対応します |
-| `@unikvs/memory` | 対応します | 対応します |
-| `@unikvs/fs.node` | 対応します | 対応しません |
-| `@unikvs/s3.node` | 対応します | 対応しません |
-| `@unikvs/opfs` | 対応しません | 対応します |
-| `@unikvs/indexeddb` | 対応しません | 対応します |
+| `unikvs` | 対応します。 | 対応します。 |
+| `@unikvs/core` | 対応します。 | 対応します。 |
+| `@unikvs/utils` | 対応します。 | 対応します。 |
+| `@unikvs/compression` | 対応します。 | 対応します。 |
+| `@unikvs/checksum` | 対応します。 | 対応します。 |
+| `@unikvs/memory` | 対応します。 | 対応します。 |
+| `@unikvs/fs.node` | 対応します。 | 対応しません。 |
+| `@unikvs/s3.node` | 対応します。 | 対応しません。 |
+| `@unikvs/opfs` | 対応しません。 | 対応します。 |
+| `@unikvs/indexeddb` | 対応しません。 | 対応します。 |

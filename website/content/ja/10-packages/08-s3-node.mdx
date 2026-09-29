@@ -5,11 +5,7 @@ description: "Node.js で S3 互換オブジェクトストレージに保存す
 
 ## 概要 [#overview]
 
-`@unikvs/s3.node` は、S3 互換オブジェクトストレージにバイト配列を保存する Node.js 専用ストレージプラグインです。AWS SDK for JavaScript v3 に依存しており、`@aws-sdk/client-s3` でオブジェクト操作を行い、`@aws-sdk/lib-storage` の `Upload` でストリームアップロードを行います。
-
-<Badge variant="warning">Node.js 専用</Badge>
-
-対応するランタイムは Node.js のみです。ブラウザーでは使用できません。
+`@unikvs/s3.node` は、S3 互換オブジェクトストレージにバイト配列を保存する Node.js 専用プラグインです。<Badge variant="warning">Node.js 専用</Badge> AWS SDK for JavaScript v3 に依存し、`@aws-sdk/client-s3` でオブジェクト操作、`@aws-sdk/lib-storage` の `Upload` でストリームアップロードを行います。
 
 インストールは次のように行います。
 
@@ -17,17 +13,13 @@ description: "Node.js で S3 互換オブジェクトストレージに保存す
 npm install @unikvs/s3.node @aws-sdk/client-s3 @aws-sdk/lib-storage
 ```
 
-`package.json` では `@aws-sdk/client-s3` と `@aws-sdk/lib-storage` が依存関係に含まれています。使用するバージョンは `package.json` で指定された範囲に従います。
-
 ## 使い方 [#usage]
 
-ストレージクラス名は `S3` です。名前付きエクスポートで提供されます。
+ストレージクラスは `S3` です。
 
 ```ts
 import { S3 } from "@unikvs/s3.node";
 ```
-
-コンストラクターは次のシグネチャーです。
 
 ```ts
 new S3(bucket: string, config: S3ClientConfig = {})
@@ -35,16 +27,16 @@ new S3(bucket: string, config: S3ClientConfig = {})
 
 | 引数 | 型 | 説明 |
 | ---- | -- | ---- |
-| `bucket` | `string` | データを保存する対象のバケット名です。すべての操作でこのバケットが使用されます。 |
+| `bucket` | `string` | 保存先のバケット名です。すべての操作で使います。 |
 | `config` | `S3ClientConfig` | `S3Client` に渡す設定です。既定値は空オブジェクトです。リージョンや認証情報などを含めます。 |
 
-プレフィックスを指定する引数や、構築済みの `S3Client` を渡す引数はありません。キー変換やバケットの使い分けが必要な場合は、呼び出し側でキーに含めるか、バケットを分けてインスタンスを作成してください。
+構築済みの `S3Client` を渡す引数や、プレフィックス指定はありません。キー変換や使い分けが必要なら、キーに含めるかバケットごとにインスタンスを作ってください。
 
 :::note
-認証情報の解決は AWS SDK の標準的な仕組みに委ねます。本パッケージ独自の認証オプションはありません。`config` に `credentials` や `region`、`endpoint` を渡す方法でも、環境変数や共有設定ファイルなど AWS SDK が標準で対応する方法でも指定できます。
+認証情報の解決は AWS SDK の標準仕組みに委ねます。独自の認証オプションはありません。`config` に `credentials`・`region`・`endpoint` を渡す方法でも、環境変数や共有設定ファイルでも指定できます。
 :::
 
-ライフサイクルは次のとおりです。インスタンス化直後は `isOpen` が `false` です。`open()` を呼ぶと内部で `S3Client` が生成されて `isOpen` が `true` になります。`close()` を呼ぶと内部クライアントを破棄して `isOpen` が `false` に戻ります。実装上の `open()` と `close()` は引数を取りません。
+ライフサイクルは次のとおりです。生成直後は `isOpen` が `false` で、`open()` で内部に `S3Client` を作ると `true` になります。`close()` で破棄して `false` に戻ります。`open()`・`close()` は引数を取りません。
 
 ```ts
 import { UniKvs } from "unikvs";
@@ -60,12 +52,12 @@ const kvs = UniKvs.config()
 ```
 
 :::warning
-バケット自体の作成は本パッケージの責務ではありません。事前に AWS のコンソールや S3 互換ストレージの手段で作成しておきます。
+バケットの作成は本パッケージの責務ではありません。事前にコンソールなどで作っておきます。
 :::
 
 ## オブジェクト配置 [#layout]
 
-キーはオブジェクトキーにそのまま対応します。プレフィックスの付与やエスケープなどの変換は行いません。
+キーはオブジェクトキーにそのまま対応します。プレフィックス付与やエスケープは行いません。
 
 | unikvs のキー | S3 のオブジェクトキー |
 | ------------- | --------------------- |
@@ -74,25 +66,25 @@ const kvs = UniKvs.config()
 
 単発の書き込みは `PutObjectCommand`、読み取りは `GetObjectCommand`、存在確認は `HeadObjectCommand`、削除は `DeleteObjectCommand` を使用します。
 
-`clear` はバケット内のすべてのオブジェクトを削除します。プレフィックスによる絞り込みは行いません。内部では `ListObjectsV2Command` でページネーションしながら列挙し、`DeleteObjectsCommand` で削除します。unikvs 専用のバケットを使用してください。他のアプリケーションとバケットを共有している場合、それらのデータも削除されます。
+`clear` はバケット内のすべてのオブジェクトを削除します。プレフィックスで絞り込みません。`ListObjectsV2Command` で列挙し、`DeleteObjectsCommand` で削除します。unikvs 専用のバケットを使ってください。共有していると他のデータも消えます。
 
 ## ストリームとマルチパート [#multipart]
 
-単発の `write` は `PutObjectCommand` で保存し、単発の `read` は `GetObjectCommand` の結果を `transformToByteArray` でバイト配列に変換して返します。
+単発の `write` は `PutObjectCommand` で保存し、単発の `read` は `GetObjectCommand` の結果を `transformToByteArray` で変換して返します。
 
-書き込みストリームは `@aws-sdk/lib-storage` の `Upload` を使用するため、大容量データのマルチパートアップロードに対応します。取得方法は次のとおりです。
+書き込みストリームは `@aws-sdk/lib-storage` の `Upload` を使うため、大容量のマルチパートアップロードに対応します。
 
 ```ts
 const writable = storage.getWritable({ key, vars, signal });
 ```
 
-引数は `vars` と `key` と `signal` です。`vars` からパートサイズを読み取ります。パートサイズのキーは `@unikvs/s3.node:partSize` が優先され、未定義の場合に `@unikvs/s3:partSize` が参照されます。値はバイト単位の正の整数で指定します。未指定の場合は `Upload` の既定値に従います。
+引数は `vars`・`key`・`signal` です。パートサイズは `vars` から読み取ります。`@unikvs/s3.node:partSize` を優先し、なければ `@unikvs/s3:partSize` を参照します。バイト単位の正の整数で指定し、未指定なら `Upload` の既定値に従います。
 
 :::tip
-大容量データを書き込む場合は、単発の `write` ではなく書き込みストリームを使用してください。`Upload` によるマルチパートアップロードに対応し、パートサイズを未指定の場合は `Upload` の既定値に従います。
+大容量データは単発の `write` ではなく書き込みストリームを使ってください。マルチパートアップロードに対応します。
 :::
 
-`signal` がすでに中断済みの場合は、アップロードを開始せずに `StorageAbortedError` を投げます。書き込み中に `signal` が中断されると、中断理由が内部の `AbortController` に伝達され、アップロードが中断されます。ストリームの `close()` はアップロード完了を待ち合わせ、`abort()` はアップロードの中止を試みます。
+`signal` が中断済みなら開始せずに `StorageAbortedError` を投げます。書き込み中の中断は内部の `AbortController` に伝達してアップロードを中断します。`close()` は完了を待ち合わせ、`abort()` は中止を試みます。
 
 読み取りストリームは次のように取得します。
 
@@ -100,30 +92,30 @@ const writable = storage.getWritable({ key, vars, signal });
 const readable = await storage.getReadable({ key, signal });
 ```
 
-内部では `GetObjectCommand` を送信し、結果を `transformToWebStream` で `ReadableStream` に変換して返します。大きなオブジェクトも複数チャンクに分けて読み取れます。
+内部で `GetObjectCommand` を送り、結果を `transformToWebStream` で変換して返します。大きなオブジェクトも複数チャンクで読み取れます。
 
 ## エラー [#errors]
 
-`src/errors.ts` では次の 2 つのエラーを定義します。
+次の 2 種類を定義します。
 
-| クラス | `name` | メタデータ | 投げられる条件 |
+| クラス | `name` | メタデータ | 投げる条件 |
 | ------ | ------ | ---------- | -------------- |
-| `InvalidPartSizeError` | `S3InvalidPartSizeError` | `actual: unknown` | `vars` の `@unikvs/s3.node:partSize` または `@unikvs/s3:partSize` が数値型の正の整数ではない場合に、`getWritable` が投げます。 |
-| `StorageAbortedError` | `S3StorageAbortedError` | `key: string` | `getWritable` に渡された `signal` がすでに中断済みの場合に投げます。 |
+| `InvalidPartSizeError` | `S3InvalidPartSizeError` | `actual: unknown` | `vars` のパートサイズが正の整数でない場合に `getWritable` が投げます。 |
+| `StorageAbortedError` | `S3StorageAbortedError` | `key: string` | `getWritable` の `signal` が中断済みの場合に投げます。 |
 
-両クラスとも `@unikvs/core` の `ErrorBase` を継承し、コンストラクター引数はメタデータに `ErrorOptions` の `cause` などを加えた `InvalidPartSizeErrorArgs` と `StorageAbortedErrorArgs` です。日本語メッセージは `setErrorMessage` で登録されています。
+どちらも `ErrorBase` を継承し、日本語メッセージは `setErrorMessage` で登録しています。
 
 S3 固有の失敗は次のように扱います。
 
-- `exists` は、`HeadObjectCommand` が `NotFound` という名前のエラー、または HTTP ステータスコード 404 で失敗した場合に `false` を返します。それ以外のエラーはそのまま再送出します。
-- 存在しないキーの `read` は、AWS SDK のエラーで失敗します。存在確認が必要な場合は事前に `exists` を使用します。
-- 存在しないキーの `delete` はエラーになりません。S3 の `DeleteObjectCommand` の冪等性に従います。
-- `write` や `read`、`delete`、`clear` に渡した `signal` は、`client.send` の `abortSignal` オプションに渡されます。中断済みや中断途中のシグナルでは、対応する SDK リクエストが中断されます。
-- アップロード中の認証失敗などは、ストリームの `close()` 時にアップロードの失敗理由で拒否されます。
+- `exists` は、`HeadObjectCommand` が `NotFound`・404 で失敗したら `false` を返し、それ以外は再送出します。
+- 存在しないキーの `read` は AWS SDK のエラーで失敗します。必要なら事前に `exists` を使います。
+- 存在しないキーの `delete` はエラーになりません。S3 の冪等性に従います。
+- `write`・`read`・`delete`・`clear` の `signal` は `client.send` の `abortSignal` に渡します。
+- 認証失敗などは、ストリームの `close()` 時に失敗理由で拒否されます。
 
 ## 使用例 [#examples]
 
-S3 互換ストレージに対する最小構成の例です。エンドポイントや認証情報はダミー値で、一般的な S3 互換ストレージ (MinIO など) への接続を想定した書き方です。バケットは事前に作成しておきます。
+S3 互換ストレージへの最小構成例です。エンドポイントや認証情報はダミー値で、MinIO などへの接続を想定しています。バケットは事前に作っておきます。
 
 ```ts
 import { S3 } from "@unikvs/s3.node";
