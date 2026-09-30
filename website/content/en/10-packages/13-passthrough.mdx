@@ -1,0 +1,78 @@
+---
+title: "@unikvs/passthrough"
+description: "Explains how to use @unikvs/passthrough, which passes data through without transforming it."
+---
+
+## Overview [#overview]
+
+`@unikvs/passthrough` is a Transformer plugin that passes input through without transforming it. <Badge>Transformer</Badge>
+
+`encode` and `decode` return the data they receive, and `getEncodable` and `getDecodable` return streams that pass chunks through. They affect neither the contents of the data nor the chunk boundaries.
+
+This transformer is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"PassThrough"`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/passthrough
+```
+
+## Usage [#usage]
+
+Register it with `appendTransformer`. It adds a no-op pipeline to the storages registered after it.
+
+```ts
+import { PassThrough } from "@unikvs/passthrough";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .appendTransformer(new PassThrough())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## Streams [#streams]
+
+`getEncodable` and `getDecodable` return a TransformStream that emits its input unchanged. Neither the chunk boundaries nor the references change. An empty stream completes empty.
+
+## Use Cases [#use-cases]
+
+Use it to turn a transformer on or off with conditional branching. To turn it off, replace it with `PassThrough` instead of removing it from its position. You can switch a transformation on and off based on the environment or configuration without changing the pipeline structure.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { PassThrough } from "@unikvs/passthrough";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+// Assumed to come from configuration or an environment variable.
+const enableCompression = true;
+const transformer = enableCompression ? new Compression("gzip") : new PassThrough();
+
+const kvs = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(transformer)
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", Uint8Array.from([0, 1, 2]));
+const data = await kvs.get("data");
+
+await kvs.close();
+```
+
+`Compression` and `PassThrough` both implement `ITransformer`, so you can swap them at the same position.
+
+## Notes [#notes]
+
+- Because it does not transform data, using it alone does not change stored values.
+- To log reads and writes, use `@unikvs/debug` instead. `@unikvs/passthrough` neither logs data nor reads variables.

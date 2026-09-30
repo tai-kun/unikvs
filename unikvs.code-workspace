@@ -29,6 +29,10 @@
       "path": "packages/debug",
     },
     {
+      "name": "@unikvs/passthrough",
+      "path": "packages/passthrough",
+    },
+    {
       "name": "@unikvs/memory",
       "path": "packages/memory",
     },

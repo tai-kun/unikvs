@@ -1,0 +1,78 @@
+---
+title: "@unikvs/passthrough"
+description: "データを何も変換せずそのまま透過させる @unikvs/passthrough の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/passthrough` は、入力を何も変換せずそのまま透過させる Transformer プラグインです。<Badge>Transformer</Badge>
+
+`encode`・`decode` は受け取ったデータをそのまま返し、`getEncodable`・`getDecodable` はチャンクをそのまま流すストリームを返します。データの内容にもチャンクの分割にも影響しません。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"PassThrough"` を返します。
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/passthrough
+```
+
+## 使い方 [#usage]
+
+`appendTransformer` で登録します。登録位置より後ろのストレージに対して、変換をしないパイプラインを追加します。
+
+```ts
+import { PassThrough } from "@unikvs/passthrough";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .appendTransformer(new PassThrough())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## ストリーム [#streams]
+
+`getEncodable`・`getDecodable` は、入力をそのまま出力する TransformStream を返します。チャンクの境界も参照も変わりません。空のストリームは空のまま完了します。
+
+## 使いどころ [#use-cases]
+
+条件分岐でトランスフォーマーをオン・オフしたい場合に使います。オフにするときは登録位置から取り除くのではなく、`PassThrough` に差し替えます。パイプラインの構成を変えずに、環境や設定に応じて変換の有無を切り替えられます。
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { PassThrough } from "@unikvs/passthrough";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+// 設定や環境変数から取得する想定です。
+const enableCompression = true;
+const transformer = enableCompression ? new Compression("gzip") : new PassThrough();
+
+const kvs = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(transformer)
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", Uint8Array.from([0, 1, 2]));
+const data = await kvs.get("data");
+
+await kvs.close();
+```
+
+`Compression` と `PassThrough` はどちらも `ITransformer` を実装するため、同じ位置に差し替えられます。
+
+## 注意点 [#notes]
+
+- データを変換しないため、単体で使っても保存される値は変わりません。
+- ログを記録したい場合は、代わりに `@unikvs/debug` を使います。`@unikvs/passthrough` はログの出力も変数の参照も行いません。

@@ -8,6 +8,7 @@
     "packages/checksum",
     "packages/compression",
     "packages/debug",
+    "packages/passthrough",
     "packages/memory",
     "packages/writeonly",
     "packages/fs.node",
