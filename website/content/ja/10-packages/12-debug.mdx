@@ -1,0 +1,192 @@
+---
+title: "@unikvs/debug"
+description: "読み書きされる操作とデータを @logtape/logtape で記録する @unikvs/debug の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/debug` は、読み書きされるデータをそのまま透過させつつ、操作の種類・対象のキー・データのデバッグ情報を `@logtape/logtape` で記録する Transformer プラグインです。<Badge>Transformer</Badge>
+
+変数の `unikvs:action` と `unikvs:key` を参照するため、`UniKvs` 経由で使うと「どの操作で、どのキーに対するデータが読み書きされたか」がログに残ります。データの変換は行いません。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Debug"` を返します。
+
+インストールは次のとおりです。ログの出力には `@logtape/logtape` も必要です。
+
+```package-install
+npm install @unikvs/debug @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+LogTape を設定してから、`appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
+import { UniKvs, type PlainValue } from "unikvs";
+
+configureSync({
+  sinks: {
+    console: getConsoleSink(),
+  },
+  loggers: [
+    {
+      category: ["unikvs", "@unikvs/debug"],
+      sinks: ["console"],
+      lowestLevel: "debug",
+    },
+  ],
+});
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .appendTransformer(new Debug())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting"); // コンソールに読み書きのログを出力します
+
+await kvs.close();
+```
+
+`set` は書き込みとして、`get` は読み込みとして記録します。ストリーム値の `set` と `stream` はチャンクごとに記録します。
+
+## 記録内容 [#records]
+
+1 件のログには次のプロパティーを記録します。
+
+| プロパティー | 説明 |
+| --- | --- |
+| `action` | 変数の `unikvs:action` です。このトランスフォーマーでは `set`・`get`・`stream` のいずれかになります。 |
+| `key` | 変数の `unikvs:key` です。 |
+| `direction` | `"write"` または `"read"` です。`"write"` はストレージへ書き込むデータ、`"read"` は読み出したデータです。 |
+| `type` | データ型です。既定のコールバックが `type-name` の `typeName()` で判定します。 |
+| `length` | データが文字列のときの文字列長です。 |
+| `byteLength` | データが TypedArray または DataView のときの正確なバイト数です。 |
+
+`vars` に `unikvs:action` または `unikvs:key` がないデータは記録しません。フィルターの指定にかかわらず記録されません。
+
+ロガーカテゴリーは `["unikvs", "@unikvs/debug"]`、レベルは `debug` です。
+
+:::tip
+既定のコールバックはデータの中身を記録しません。型と大きさだけを記録するため、機密情報がログに残る心配はありません。中身が必要な場合は `getDebugInfo` で追加できます。
+:::
+
+## オプション [#options]
+
+コンストラクターの引数は次のとおりです。
+
+| 引数 | 型 | 必須 | 説明 |
+| --- | --- | --- | --- |
+| `options` | `DebugOptions` | いいえ | 省略時は空オブジェクトと同じように動作します。 |
+| `options.keyFilter` | `IDebugKeyFilter`（`(key: string) => boolean`） | いいえ | 記録対象のキーを絞り込みます。`true` を返したキーだけを記録します。 |
+| `options.actionFilter` | `IDebugActionFilter`（`(action: string) => boolean`） | いいえ | 記録対象の操作を絞り込みます。`true` を返した操作だけを記録します。 |
+| `options.getDebugInfo` | `IDebugInfoCallback`（`(args: DebugInfoArgs) => Record<string, unknown>`） | いいえ | 追加のデバッグ情報を返します。戻り値はログのプロパティーに展開します。 |
+
+### キーフィルター [#key-filter]
+
+`keyFilter` を指定すると、`true` を返したキーだけを記録します。`vars` に `unikvs:key` がないログは記録しません。
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  keyFilter: (key) => key.startsWith("user:"),
+});
+```
+
+### アクションフィルター [#action-filter]
+
+`actionFilter` を指定すると、`true` を返した操作だけを記録します。`vars` に `unikvs:action` がないログは記録しません。
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  actionFilter: (action) => action === "get" || action === "stream",
+});
+```
+
+### 追加のデバッグ情報 [#debug-info]
+
+`getDebugInfo` を指定すると、戻り値のオブジェクトをログのプロパティーに展開します。引数は `DebugInfoArgs` 型で、`vars`・`action`・`key`・`direction`・`data` を持ちます。`data` は読み書きされたデータで、ストリームの場合はチャンクです。
+
+既定のコールバックは静的メソッド `Debug.getDefaultDebugInfo` です。これを呼び出せば、既定の情報に独自の情報を追加できます。
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  getDebugInfo: (args) => ({
+    ...Debug.getDefaultDebugInfo(args),
+    preview: typeof args.data === "string" ? args.data.slice(0, 16) : null,
+  }),
+});
+```
+
+## ストリーム [#streams]
+
+`getEncodable`・`getDecodable` は入力をそのまま出力しつつ、チャンクごとにログを記録します。フィルターもチャンクごとに適用します。
+
+:::warning
+ストリームではチャンクごとに 1 件のログを出力します。巨大なストリームや小さなチャンクが多い場合はログの量が増えるため、`keyFilter` や `actionFilter` で絞り込むか、LogTape のフィルターを併用してください。
+:::
+
+## 注意点 [#notes]
+
+- ログを表示するには LogTape の設定が別途必要です。設定していない場合、ログはどこにも出力されません。
+- データは変換しません。ほかのトランスフォーマーと併用しても結果には影響しません。ただし登録位置によって観察できるデータが変わるため、前段の変換後のデータを確認できます。
+- 記録レベルは `debug` です。LogTape の設定で `lowestLevel` を `"debug"` または `"trace"` にしないと記録されません。
+- データの中身は既定では記録しません。`getDebugInfo` で中身を返す場合は、機密情報がログに残らないよう注意してください。
+
+## 使用例 [#examples]
+
+フィルターと追加のデバッグ情報を組み合わせた例です。`user:` で始まるキーの読み込みだけを記録し、データが文字列なら先頭 16 文字を `preview` として記録します。
+
+```ts
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
+import { UniKvs, type PlainValue } from "unikvs";
+
+configureSync({
+  sinks: {
+    console: getConsoleSink(),
+  },
+  loggers: [
+    {
+      category: ["unikvs", "@unikvs/debug"],
+      sinks: ["console"],
+      lowestLevel: "debug",
+    },
+  ],
+});
+
+const debug = new Debug({
+  actionFilter: (action) => action === "get" || action === "stream",
+  keyFilter: (key) => key.startsWith("user:"),
+  getDebugInfo: (args) => ({
+    ...Debug.getDefaultDebugInfo(args),
+    preview: typeof args.data === "string" ? args.data.slice(0, 16) : null,
+  }),
+});
+
+const kvs = UniKvs.config<{ "user:1": PlainValue<string>; settings: PlainValue<string> }>()
+  .appendTransformer(debug)
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("user:1", "Alice");
+await kvs.set("settings", "dark");
+
+await kvs.get("user:1"); // 記録されます
+await kvs.get("settings"); // キーが一致しないため記録しません
+
+await kvs.close();
+```

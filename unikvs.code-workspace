@@ -25,6 +25,10 @@
       "path": "packages/compression",
     },
     {
+      "name": "@unikvs/debug",
+      "path": "packages/debug",
+    },
+    {
       "name": "@unikvs/memory",
       "path": "packages/memory",
     },

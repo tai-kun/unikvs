@@ -1,0 +1,192 @@
+---
+title: "@unikvs/debug"
+description: "Explains how to use @unikvs/debug, which logs read and write operations and data with @logtape/logtape."
+---
+
+## Overview [#overview]
+
+`@unikvs/debug` is a Transformer plugin that passes data through unchanged while logging the operation kind, the target key, and debug information about the data with `@logtape/logtape`. <Badge>Transformer</Badge>
+
+It reads the `unikvs:action` and `unikvs:key` variables, so using it through `UniKvs` records which operation read or wrote data for which key. It does not transform data.
+
+This transformer is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"Debug"`.
+
+Install it as follows. `@logtape/logtape` is also required to output logs.
+
+```package-install
+npm install @unikvs/debug @logtape/logtape
+```
+
+## Usage [#usage]
+
+Configure LogTape first, then register it with `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
+import { UniKvs, type PlainValue } from "unikvs";
+
+configureSync({
+  sinks: {
+    console: getConsoleSink(),
+  },
+  loggers: [
+    {
+      category: ["unikvs", "@unikvs/debug"],
+      sinks: ["console"],
+      lowestLevel: "debug",
+    },
+  ],
+});
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .appendTransformer(new Debug())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting"); // logs reads and writes to the console
+
+await kvs.close();
+```
+
+`set` is recorded as a write and `get` as a read. For stream values, `set` and `stream` are recorded chunk by chunk.
+
+## What is Recorded [#records]
+
+Each log record has the following properties.
+
+| Property | Description |
+| --- | --- |
+| `action` | The `unikvs:action` variable. It is one of `set`, `get`, or `stream` for this transformer. |
+| `key` | The `unikvs:key` variable. |
+| `direction` | `"write"` or `"read"`. `"write"` is data written to storage, and `"read"` is data read from storage. |
+| `type` | The data type, determined by the default callback with `typeName()` from `type-name`. |
+| `length` | The string length when the data is a string. |
+| `byteLength` | The exact byte count when the data is a TypedArray or DataView. |
+
+Data without `unikvs:action` or `unikvs:key` in `vars` is not recorded, regardless of the filters.
+
+The logger category is `["unikvs", "@unikvs/debug"]` and the level is `debug`.
+
+:::tip
+The default callback does not record the data itself. It records only the type and size, so confidential information does not end up in logs. Add the content with `getDebugInfo` if you need it.
+:::
+
+## Options [#options]
+
+The constructor arguments are as follows.
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `options` | `DebugOptions` | No | Omitting it behaves the same as an empty object. |
+| `options.keyFilter` | `IDebugKeyFilter` (`(key: string) => boolean`) | No | Narrows the keys to record. Only keys for which it returns `true` are recorded. |
+| `options.actionFilter` | `IDebugActionFilter` (`(action: string) => boolean`) | No | Narrows the operations to record. Only operations for which it returns `true` are recorded. |
+| `options.getDebugInfo` | `IDebugInfoCallback` (`(args: DebugInfoArgs) => Record<string, unknown>`) | No | Returns additional debug information. The return value is spread into the log properties. |
+
+### Key Filter [#key-filter]
+
+When `keyFilter` is specified, only keys for which it returns `true` are recorded. Logs without `unikvs:key` in `vars` are not recorded.
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  keyFilter: (key) => key.startsWith("user:"),
+});
+```
+
+### Action Filter [#action-filter]
+
+When `actionFilter` is specified, only operations for which it returns `true` are recorded. Logs without `unikvs:action` in `vars` are not recorded.
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  actionFilter: (action) => action === "get" || action === "stream",
+});
+```
+
+### Additional Debug Information [#debug-info]
+
+When `getDebugInfo` is specified, the returned object is spread into the log properties. The argument is the `DebugInfoArgs` type and has `vars`, `action`, `key`, `direction`, and `data`. `data` is the data that was read or written; for streams, it is a chunk.
+
+The default callback is the static method `Debug.getDefaultDebugInfo`. Call it to add your own information on top of the default.
+
+```ts
+import { Debug } from "@unikvs/debug";
+
+const debug = new Debug({
+  getDebugInfo: (args) => ({
+    ...Debug.getDefaultDebugInfo(args),
+    preview: typeof args.data === "string" ? args.data.slice(0, 16) : null,
+  }),
+});
+```
+
+## Streams [#streams]
+
+`getEncodable` and `getDecodable` pass input through unchanged while recording a log entry for each chunk. Filters are applied per chunk as well.
+
+:::warning
+Streams emit one log entry per chunk. Large streams or many small chunks increase the log volume, so narrow it down with `keyFilter` or `actionFilter`, or use LogTape filters together.
+:::
+
+## Notes [#notes]
+
+- Displaying logs requires a LogTape configuration. Without one, logs are not output anywhere.
+- Data is not transformed. Using it with other Transformers does not affect the result. Its position in the chain changes what data you can observe, so you can inspect data after upstream transformations.
+- The record level is `debug`. Set `lowestLevel` to `"debug"` or `"trace"` in the LogTape configuration, or nothing is recorded.
+- The data itself is not recorded by default. If you return the content from `getDebugInfo`, be careful not to leave confidential information in logs.
+
+## Examples [#examples]
+
+An example combining filters with additional debug information. It records only reads of keys starting with `user:` and, when the data is a string, records its first 16 characters as `preview`.
+
+```ts
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
+import { UniKvs, type PlainValue } from "unikvs";
+
+configureSync({
+  sinks: {
+    console: getConsoleSink(),
+  },
+  loggers: [
+    {
+      category: ["unikvs", "@unikvs/debug"],
+      sinks: ["console"],
+      lowestLevel: "debug",
+    },
+  ],
+});
+
+const debug = new Debug({
+  actionFilter: (action) => action === "get" || action === "stream",
+  keyFilter: (key) => key.startsWith("user:"),
+  getDebugInfo: (args) => ({
+    ...Debug.getDefaultDebugInfo(args),
+    preview: typeof args.data === "string" ? args.data.slice(0, 16) : null,
+  }),
+});
+
+const kvs = UniKvs.config<{ "user:1": PlainValue<string>; settings: PlainValue<string> }>()
+  .appendTransformer(debug)
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("user:1", "Alice");
+await kvs.set("settings", "dark");
+
+await kvs.get("user:1"); // recorded
+await kvs.get("settings"); // not recorded because the key does not match
+
+await kvs.close();
+```

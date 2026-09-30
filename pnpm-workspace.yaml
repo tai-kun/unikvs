@@ -28,6 +28,7 @@ packages:
     "packages/utils",
     "packages/checksum",
     "packages/compression",
+    "packages/debug",
     "packages/memory",
     "packages/writeonly",
     "packages/fs.node",
