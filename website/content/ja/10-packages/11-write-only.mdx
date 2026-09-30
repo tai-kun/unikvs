@@ -1,0 +1,191 @@
+---
+title: "@unikvs/write-only"
+description: "既存のストレージを書き込み専用にする @unikvs/write-only の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/write-only` は、`IStorage` を実装するストレージを書き込み専用にラップするストレージプラグインです。書き込みは内部ストレージへそのまま委譲し、読み出しは常に失敗します。法令で長期間の保存が義務付けられているデータに向いています。改変・削除を防ぎたいバックアップの保管にも使います。
+
+- 内部ストレージは初期化時に `new WriteOnly(storage)` で渡します。
+- `read`・`getReadable` は常に `KeyNotFoundError` を投げ、`exists` は常に `false` を返します。
+- `delete`・`clear` は既定で何もせず、`allowDelete` オプションで許可できます。
+- 動作環境はラップするストレージに依存します。`@unikvs/memory` や `@unikvs/fs.node` など、任意の `IStorage` 実装をラップできます。
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/write-only
+```
+
+## 使い方 [#usage]
+
+クラス名は `WriteOnly`、`name` は `"WriteOnly"` です。`UniKvs` には `appendStorage()` で渡します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+import { WriteOnly } from "@unikvs/write-only";
+
+const kvs = UniKvs.config<{
+  foo: Value<string>;
+}>()
+  .appendStorage(new WriteOnly(new Memory()))
+  .create();
+
+await kvs.open();
+await kvs.set("foo", "important");
+await kvs.close();
+```
+
+コンストラクターの引数は次のとおりです。
+
+| 引数 | 型 | 必須 | 説明 |
+| --- | --- | --- | --- |
+| `storage` | `IStorage` | はい | 書き込みを委譲する内部ストレージです。 |
+| `options` | `WriteOnlyOptions` | いいえ | 省略時は空オブジェクトと同様に動作します。 |
+| `options.allowDelete` | `boolean` | いいえ | `delete`・`clear` を許可するかどうかです。既定値は `false` です。 |
+
+`isOpen` は内部ストレージの状態を返し、`open`・`close` は内部ストレージへ委譲します。内部ストレージが `open`・`close` を持たない場合は何もしません。
+
+単体で直接操作する場合も、読み出し系以外は内部ストレージと同じように使えます。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { WriteOnly } from "@unikvs/write-only";
+
+const storage = new WriteOnly(new Memory());
+
+await storage.write({ key: "k1", data: "v1" });
+```
+
+## 読み出しの制限 [#reads]
+
+`read` と `getReadable` は、書き込み済みのキーを指定しても `KeyNotFoundError` を投げます。`exists` は常に `false` です。このストレージからデータを読み出すことはできません。
+
+```ts
+import { KeyNotFoundError, WriteOnly } from "@unikvs/write-only";
+import { Memory } from "@unikvs/memory";
+
+const storage = new WriteOnly(new Memory());
+await storage.write({ key: "k1", data: "v1" });
+
+console.log(storage.exists({ key: "k1" })); // false
+
+try {
+  storage.read({ key: "k1" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key); // "k1"
+  } else {
+    throw error;
+  }
+}
+```
+
+`UniKvs` 経由の各操作は次のように振る舞います。
+
+| 操作 | 挙動 |
+| --- | --- |
+| `set` | ほかのストレージと同じく、内部ストレージへ書き込みます。 |
+| `get`・`stream` | `exists` が `false` のため、このストレージを飛ばして次を探します。ほかに見つからなければ `KeyNotFoundError` です。 |
+| `has` | `false` を返します。 |
+| `delete`・`clear` | 既定では何もせず、ほかのストレージにだけ適用されます。 |
+
+:::warning
+`has` は保存の有無にかかわらず `false` を返します。保存の成否を `has` で確認したい場合は、内部ストレージを直接参照してください。
+:::
+
+## 削除の制御 [#delete]
+
+`allowDelete` の既定値は `false` です。`delete` と `clear` は内部ストレージを変更せずに正常終了します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { WriteOnly } from "@unikvs/write-only";
+
+const inner = new Memory();
+const storage = new WriteOnly(inner);
+
+await storage.write({ key: "k1", data: "v1" });
+await storage.delete({ key: "k1" }); // 何もしない
+console.log(inner.exists({ key: "k1" })); // true
+```
+
+`allowDelete: true` を指定すると、削除を内部ストレージへ委譲します。
+
+```ts
+const storage = new WriteOnly(inner, { allowDelete: true });
+
+await storage.delete({ key: "k1" });
+await storage.clear();
+```
+
+## ストリーム [#streams]
+
+書き込み用ストリームは、内部ストレージが `getWritable` を持つ場合だけ公開します。持たない場合、`getWritable` は未定義です。
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+import { WriteOnly } from "@unikvs/write-only";
+
+const storage = new WriteOnly(new NodeFs(".archive"));
+
+if (typeof storage.getWritable === "function") {
+  const writable = await storage.getWritable({ key: "s1" });
+  const writer = writable.getWriter();
+  await writer.write(new Uint8Array([1, 2, 3]));
+  await writer.close();
+}
+```
+
+読み出し用ストリームは取得できません。`getReadable` も同じく `KeyNotFoundError` を投げます。
+
+## 注意点 [#notes]
+
+- 読み出し経路から内容は確認できません。復旧は内部ストレージを直接操作してください。
+- 書き込み専用ストレージだけを登録すると、`get`・`stream`・`has` は保存済みのデータを見つけられません。読み出しが必要な場合は、読み書き可能なストレージと組み合わせてください。
+- 書き込みは登録したすべてのストレージへ並列に行うため、書き込み専用ストレージの登録位置は書き込み結果に影響しません。読み出しは登録順に探すため、読み出し用のストレージを先に登録します。
+- `delete`・`clear` を無効にしても、ほかのストレージからは削除できます。改変を防ぐには、ほかのストレージにも同じ制限を掛けるか、削除操作を行わない運用にしてください。
+- ストリーム書き込みに対応しないストレージをラップした場合、`UniKvs` の `set` に `ReadableStream` を渡すとこのストレージだけ失敗します。プレーン値を使うか、ストリーム対応のストレージをラップしてください。
+
+## エラー [#errors]
+
+`KeyNotFoundError` は `@unikvs/write-only` からエクスポートしています。
+
+| エラー | エラー名 | 発生条件 |
+| --- | --- | --- |
+| `KeyNotFoundError` | `WriteOnlyKeyNotFoundError` | `read`・`getReadable` を呼び出した場合に常に発生します。 |
+
+メタデータに `key` を保持します。日本語メッセージは「キー \{key\} が見つかりません」です。
+
+## 使用例 [#examples]
+
+読み出し用のファイルストレージと、改変できないアーカイブを併用する例です。
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+import { UniKvs, type Value } from "unikvs";
+import { WriteOnly } from "@unikvs/write-only";
+
+const kvs = UniKvs.config<{
+  report: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .appendStorage(new NodeFs(".data"))
+  .appendStorage(new WriteOnly(new NodeFs(".archive")))
+  .create();
+
+await kvs.open();
+
+await kvs.set("report", new Uint8Array([1, 2, 3]));
+
+// NodeFs(.data) から読み出します。アーカイブは読み出しに使われません。
+const report = await kvs.get("report");
+
+// NodeFs(.data) のデータだけを削除します。アーカイブには削除を委譲しません。
+await kvs.delete("report");
+
+await kvs.close();
+```
+
+アーカイブには `@unikvs/s3.node` のような永続ストレージを指定します。遠隔地へのバックアップにも使えます。

@@ -259,6 +259,7 @@ await kvs.set("foo", new Uint8Array([1]), {
 | ストレージ | `@unikvs/s3.node` | S3 互換のオブジェクトストレージに保存します。Node.js 専用です。 |
 | ストレージ | `@unikvs/indexeddb` | ブラウザーの IndexedDB に保存します。 |
 | ストレージ | `@unikvs/opfs` | ブラウザーの OPFS に保存します。 |
+| ストレージ | `@unikvs/write-only` | 既存のストレージを書き込み専用にします。 |
 
 :::tip
 自作方法は自作プラグインのガイドを参照してください。ストレージは `IStorage`、トランスフォーマーは `ITransformer` から始めます。

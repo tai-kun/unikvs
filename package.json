@@ -8,6 +8,7 @@
     "packages/checksum",
     "packages/compression",
     "packages/memory",
+    "packages/write-only",
     "packages/fs.node",
     "packages/s3.node",
     "packages/opfs",
