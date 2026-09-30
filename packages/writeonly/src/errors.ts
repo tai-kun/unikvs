@@ -1,22 +1,22 @@
 import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/write-only#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
  */
 export type KeyNotFoundErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/write-only#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/write-only#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
  */
 export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/write-only#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
  */
 export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   static {
@@ -24,7 +24,7 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/write-only#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
    */
   public constructor(args: KeyNotFoundErrorArgs) {
     const { key, ...options } = args;

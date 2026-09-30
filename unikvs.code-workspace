@@ -29,8 +29,8 @@
       "path": "packages/memory",
     },
     {
-      "name": "@unikvs/write-only",
-      "path": "packages/write-only",
+      "name": "@unikvs/writeonly",
+      "path": "packages/writeonly",
     },
     {
       "name": "@unikvs/fs.node",

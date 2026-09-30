@@ -29,7 +29,7 @@ packages:
     "packages/checksum",
     "packages/compression",
     "packages/memory",
-    "packages/write-only",
+    "packages/writeonly",
     "packages/fs.node",
     "packages/s3.node",
     "packages/opfs",

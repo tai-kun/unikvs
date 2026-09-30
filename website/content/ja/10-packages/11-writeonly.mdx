@@ -1,11 +1,11 @@
 ---
-title: "@unikvs/write-only"
-description: "既存のストレージを書き込み専用にする @unikvs/write-only の使い方を説明します。"
+title: "@unikvs/writeonly"
+description: "既存のストレージを書き込み専用にする @unikvs/writeonly の使い方を説明します。"
 ---
 
 ## 概要 [#overview]
 
-`@unikvs/write-only` は、`IStorage` を実装するストレージを書き込み専用にラップするストレージプラグインです。書き込みは内部ストレージへそのまま委譲し、読み出しは常に失敗します。法令で長期間の保存が義務付けられているデータに向いています。改変・削除を防ぎたいバックアップの保管にも使います。
+`@unikvs/writeonly` は、`IStorage` を実装するストレージを書き込み専用にラップするストレージプラグインです。書き込みは内部ストレージへそのまま委譲し、読み出しは常に失敗します。法令で長期間の保存が義務付けられているデータに向いています。改変・削除を防ぎたいバックアップの保管にも使います。
 
 - 内部ストレージは初期化時に `new WriteOnly(storage)` で渡します。
 - `read`・`getReadable` は常に `KeyNotFoundError` を投げ、`exists` は常に `false` を返します。
@@ -15,7 +15,7 @@ description: "既存のストレージを書き込み専用にする @unikvs/wri
 インストールは次のとおりです。
 
 ```package-install
-npm install @unikvs/write-only
+npm install @unikvs/writeonly
 ```
 
 ## 使い方 [#usage]
@@ -25,7 +25,7 @@ npm install @unikvs/write-only
 ```ts
 import { Memory } from "@unikvs/memory";
 import { UniKvs, type Value } from "unikvs";
-import { WriteOnly } from "@unikvs/write-only";
+import { WriteOnly } from "@unikvs/writeonly";
 
 const kvs = UniKvs.config<{
   foo: Value<string>;
@@ -52,7 +52,7 @@ await kvs.close();
 
 ```ts
 import { Memory } from "@unikvs/memory";
-import { WriteOnly } from "@unikvs/write-only";
+import { WriteOnly } from "@unikvs/writeonly";
 
 const storage = new WriteOnly(new Memory());
 
@@ -64,7 +64,7 @@ await storage.write({ key: "k1", data: "v1" });
 `read` と `getReadable` は、書き込み済みのキーを指定しても `KeyNotFoundError` を投げます。`exists` は常に `false` です。このストレージからデータを読み出すことはできません。
 
 ```ts
-import { KeyNotFoundError, WriteOnly } from "@unikvs/write-only";
+import { KeyNotFoundError, WriteOnly } from "@unikvs/writeonly";
 import { Memory } from "@unikvs/memory";
 
 const storage = new WriteOnly(new Memory());
@@ -102,7 +102,7 @@ try {
 
 ```ts
 import { Memory } from "@unikvs/memory";
-import { WriteOnly } from "@unikvs/write-only";
+import { WriteOnly } from "@unikvs/writeonly";
 
 const inner = new Memory();
 const storage = new WriteOnly(inner);
@@ -127,7 +127,7 @@ await storage.clear();
 
 ```ts
 import { NodeFs } from "@unikvs/fs.node";
-import { WriteOnly } from "@unikvs/write-only";
+import { WriteOnly } from "@unikvs/writeonly";
 
 const storage = new WriteOnly(new NodeFs(".archive"));
 
@@ -151,7 +151,7 @@ if (typeof storage.getWritable === "function") {
 
 ## エラー [#errors]
 
-`KeyNotFoundError` は `@unikvs/write-only` からエクスポートしています。
+`KeyNotFoundError` は `@unikvs/writeonly` からエクスポートしています。
 
 | エラー | エラー名 | 発生条件 |
 | --- | --- | --- |
@@ -166,7 +166,7 @@ if (typeof storage.getWritable === "function") {
 ```ts
 import { NodeFs } from "@unikvs/fs.node";
 import { UniKvs, type Value } from "unikvs";
-import { WriteOnly } from "@unikvs/write-only";
+import { WriteOnly } from "@unikvs/writeonly";
 
 const kvs = UniKvs.config<{
   report: Value<Uint8Array<ArrayBuffer>>;

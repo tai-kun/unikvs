@@ -1,5 +1,5 @@
 {
-  "name": "@unikvs/write-only",
+  "name": "@unikvs/writeonly",
   "version": "0.0.0",
   "description": "Storage plugin that wraps another storage and makes it write-only.",
   "homepage": "https://github.com/tai-kun/unikvs",
