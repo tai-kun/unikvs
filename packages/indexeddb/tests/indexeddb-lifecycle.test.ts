@@ -1,0 +1,172 @@
+import { describe } from "vitest";
+
+import IndexeddbStorage from "../src/indexeddb.js";
+import { STORE_NAME, captureRejection, deleteDatabase, test } from "./_helpers.js";
+
+const DEFAULT_DB_NAME = "unikvs_db";
+
+const unopenedOperations: readonly {
+  readonly label: string;
+  readonly run: (storage: IndexeddbStorage) => Promise<unknown>;
+}[] = [
+  { label: "write", run: (storage) => storage.write({ key: "k", data: "v" }) },
+  { label: "read", run: (storage) => storage.read({ key: "k" }) },
+  { label: "exists", run: (storage) => storage.exists({ key: "k" }) },
+  { label: "delete", run: (storage) => storage.delete({ key: "k" }) },
+  { label: "clear", run: (storage) => storage.clear() },
+];
+
+describe("ライフサイクル", () => {
+  test("open した後に close して再度 open すると、再びオープン状態になる", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    await storage.open();
+    await storage.close();
+
+    // 実行
+    await storage.open();
+
+    // 検証
+    expect(storage.isOpen).toBe(true);
+  });
+
+  test("close して再度 open した後も、引き続きデータを操作できる", async ({ expect, storage }) => {
+    // 準備
+    await storage.open();
+    await storage.close();
+
+    // 実行
+    await storage.open();
+    await storage.write({ key: "k1", data: "v1" });
+
+    // 検証
+    expect(await storage.read({ key: "k1" })).toBe("v1");
+  });
+
+  test("open する前に close を呼ぶと TypeError で拒否される", async ({ expect, storage }) => {
+    // 実行
+    const error = await captureRejection(storage.close());
+
+    // 検証
+    expect(error).toBeInstanceOf(TypeError);
+    expect(storage.isOpen).toBe(false);
+  });
+
+  test("open を並行に複数回呼び出しても接続できる", async ({ expect, storage }) => {
+    // 実行
+    await Promise.all([storage.open(), storage.open()]);
+
+    // 検証
+    expect(storage.isOpen).toBe(true);
+  });
+
+  test("open を並行に呼び出した後もデータを操作できる", async ({ expect, storage }) => {
+    // 準備
+    await Promise.all([storage.open(), storage.open()]);
+
+    // 実行
+    await storage.write({ key: "k1", data: "v1" });
+
+    // 検証
+    expect(await storage.read({ key: "k1" })).toBe("v1");
+  });
+
+  test("既定の DB 名とストア名でデータを保存できる", async ({ expect }) => {
+    // 準備
+    const storage = new IndexeddbStorage();
+
+    try {
+      // 実行
+      await storage.open();
+      await storage.write({ key: "k1", data: "v1" });
+
+      // 検証
+      expect(await storage.read({ key: "k1" })).toBe("v1");
+    } finally {
+      if (storage.isOpen) {
+        await storage.close();
+      }
+      await deleteDatabase(DEFAULT_DB_NAME);
+    }
+  });
+
+  test("カスタムの DB 名とストア名でデータを保存できる", async ({ expect, dbName }) => {
+    // 準備
+    const storage = new IndexeddbStorage(dbName, STORE_NAME);
+
+    try {
+      // 実行
+      await storage.open();
+      await storage.write({ key: "k1", data: "v1" });
+
+      // 検証
+      expect(await storage.read({ key: "k1" })).toBe("v1");
+    } finally {
+      if (storage.isOpen) {
+        await storage.close();
+      }
+    }
+  });
+
+  test("同じ DB 名の複数インスタンスでデータを共有できる", async ({ expect, dbName, storage }) => {
+    // 準備
+    const second = new IndexeddbStorage(dbName, STORE_NAME);
+    await storage.open();
+    await second.open();
+
+    try {
+      // 実行
+      await storage.write({ key: "k1", data: "v1" });
+
+      // 検証
+      expect(await second.read({ key: "k1" })).toBe("v1");
+    } finally {
+      await second.close();
+    }
+  });
+
+  test("異なる DB 名のインスタンス間ではデータを共有しない", async ({
+    expect,
+    dbName,
+    storage,
+  }) => {
+    // 準備
+    const other = new IndexeddbStorage(`other-${dbName}`, STORE_NAME);
+    await storage.open();
+    await other.open();
+
+    try {
+      // 実行
+      await storage.write({ key: "k1", data: "v1" });
+
+      // 検証
+      expect(await other.exists({ key: "k1" })).toBe(false);
+    } finally {
+      await other.close();
+      await deleteDatabase(`other-${dbName}`);
+    }
+  });
+
+  test("close 後は isOpen が false のままである", async ({ expect, storage }) => {
+    // 準備
+    await storage.open();
+    await storage.close();
+
+    // 検証
+    expect(storage.isOpen).toBe(false);
+  });
+});
+
+describe("open していないとき", () => {
+  for (const { label, run } of unopenedOperations) {
+    test(`${label} は TypeError で拒否される`, async ({ expect, storage }) => {
+      // 実行
+      const error = await captureRejection(run(storage));
+
+      // 検証
+      expect(error).toBeInstanceOf(TypeError);
+    });
+  }
+});
