@@ -1,7 +1,7 @@
 import type { IStorage } from "@unikvs/core";
-import { describe, test } from "vitest";
+import { afterEach, describe, test, vi } from "vitest";
 
-import { PluginOperationAggregateError } from "../src/errors.js";
+import { PluginOperationAggregateError, UniKvsIsNotOpenError } from "../src/errors.js";
 import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStorage, FakeTransformer, Gate, collect } from "./_helpers.js";
@@ -321,6 +321,82 @@ describe("UniKvs - ストリーム読み取り中の abort", () => {
     // 後片付け
     await vs.dispose();
     await kvs.close();
+  });
+});
+
+/**
+ * `new AbortController()` で生成されたインスタンスを生成順に記録します。
+ * private な #acSet から中断済みの AbortController が解放されているかを、
+ * close() の一括 abort に巻き込まれないことで間接的に検証するために使用します。
+ */
+function captureAbortControllers(): AbortController[] {
+  const OriginalAbortController = AbortController;
+  const created: AbortController[] = [];
+  vi.stubGlobal(
+    "AbortController",
+    class extends OriginalAbortController {
+      public constructor() {
+        super();
+        created.push(this);
+      }
+    },
+  );
+  return created;
+}
+
+describe("UniKvs - open のロック待機中の abort", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("ロック待機中の abort は abort 理由で失敗し、中断された AbortController は #acSet に残らない", async ({
+    expect,
+  }) => {
+    // 準備
+    const reason = new Error("USER-CANCEL");
+    const storage = new FakeStorage();
+    const { entered, release } = gateMethod(storage, "open");
+    const kvs = UniKvs.config().appendStorage(storage).create();
+    const controller = new AbortController();
+    const created = captureAbortControllers();
+
+    // 実行: 1 つ目の open がロックを保持したままストレージの open で保留になる
+    const first = kvs.open();
+    await entered.wait();
+
+    // 実行: 2 つ目の open はロック待機に入り、待機中に abort される
+    const second = kvs.open({ signal: controller.signal });
+    controller.abort(reason);
+
+    // 検証: abort 理由がそのまま伝播する
+    await expect(second).rejects.toBe(reason);
+
+    // 後片付け: 1 つ目の open を完了させて通常どおり close する
+    release.open();
+    await expect(first).resolves.toBeUndefined();
+    await expect(kvs.close()).resolves.toBeUndefined();
+
+    // 検証: 2 つ目の AbortController が #acSet に残っていれば close() の一括 abort に巻き込まれる
+    expect(created).toHaveLength(2);
+    expect(created[1]!.signal.aborted).toBe(false);
+  });
+
+  test("実行前に abort 済みの signal で open すると AbortController は #acSet に追加されない", async ({
+    expect,
+  }) => {
+    // 準備
+    const reason = new Error("open aborted");
+    const kvs = UniKvs.config().appendStorage(new FakeStorage()).create();
+    const created = captureAbortControllers();
+
+    // 実行と検証: 事前 abort はストレージを開かず abort 理由で失敗する
+    await expect(kvs.open({ signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
+    expect(kvs.isOpen).toBe(false);
+
+    // 検証: Set に追加されていれば close() の一括 abort に巻き込まれる
+    await expect(kvs.close()).rejects.toThrow(UniKvsIsNotOpenError);
+    expect(created).toHaveLength(1);
+    expect(created[0]!.signal.aborted).toBe(false);
   });
 });
 

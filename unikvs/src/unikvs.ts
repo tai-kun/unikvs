@@ -566,9 +566,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     this.#acSet.add(ac);
 
     const dispose: (() => Promise<void>)[] = [];
+    let lock: AsyncmuxLock | undefined;
 
-    const lock = await asyncmux(this, signal);
     try {
+      lock = await asyncmux(this, signal);
+
       if (this.#con !== null) {
         throw new UniKvsIsOpenError();
       }
@@ -651,7 +653,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw ex;
     } finally {
       this.#acSet.delete(ac);
-      lock.release();
+      lock?.release();
     }
   }
 
