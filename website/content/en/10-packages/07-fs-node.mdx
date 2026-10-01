@@ -94,7 +94,7 @@ public getReadable(
 ): ReadableStream<Uint8Array<ArrayBuffer>>
 ```
 
-It converts `fs.createReadStream(file)` to a web stream with `stream.Readable.toWeb(readStream)`.
+It converts `fs.createReadStream(file, { signal })` to a web stream with `stream.Readable.toWeb(readStream)`. Aborting `signal` destroys the read stream with the abort reason, so in-flight reads fail as well.
 
 ## Notes [#notes]
 

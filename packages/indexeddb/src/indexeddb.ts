@@ -47,12 +47,16 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async open(): Promise<void> {
+  public async open(args: Pick<IStorage.OpenArgs, "signal">): Promise<void> {
+    const { signal } = args;
+
+    signal.throwIfAborted();
+
     if (this.db) {
       return;
     }
 
-    this.db = await openDB(this.dbName, 1, {
+    const db = await openDB(this.dbName, 1, {
       upgrade: (db) => {
         // オブジェクトストアが存在しない場合は作成します
         if (!db.objectStoreNames.contains(this.storeName)) {
@@ -60,12 +64,24 @@ export default class Indexeddb implements IStorage {
         }
       },
     });
+
+    // 中断時は接続を開いたままにせず、未オープン状態へ戻します。
+    if (signal.aborted) {
+      db.close();
+      signal.throwIfAborted();
+    }
+
+    this.db = db;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async close(): Promise<void> {
+  public async close(args: Pick<IStorage.CloseArgs, "signal">): Promise<void> {
+    const { signal } = args;
+
+    signal.throwIfAborted();
+
     this.db!.close();
     this.db = null;
   }
@@ -73,23 +89,32 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public async write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): Promise<void> {
-    const { key, data } = args;
+  public async write(
+    args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "signal">,
+  ): Promise<void> {
+    const { key, data, signal } = args;
+
+    signal.throwIfAborted();
+
     await this.db!.put(this.storeName, data, key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public async read(args: Pick<IStorage.ReadArgs, "key">): Promise<any> {
-    const { key } = args;
+  public async read(args: Pick<IStorage.ReadArgs, "key" | "signal">): Promise<any> {
+    const { key, signal } = args;
+
+    signal.throwIfAborted();
+
     // Opfs の挙動に合わせて、存在しない場合は DOMException (NotFoundError) を投げます
-    if (!(await this.exists({ key }))) {
+    if (!(await this.exists({ key, signal }))) {
       throw new DOMException(
         `A requested file or directory could not be found at the time an operation was processed.`,
         "NotFoundError",
       );
     }
+    signal.throwIfAborted();
 
     return await this.db!.get(this.storeName, key);
   }
@@ -97,8 +122,10 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
-    const { key } = args;
+  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
+    const { key, signal } = args;
+
+    signal.throwIfAborted();
 
     // count() はキーが存在すれば 1 を、存在しなければ 0 を返します
     const count = await this.db!.count(this.storeName, key);
@@ -108,8 +135,10 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
-    const { key } = args;
+  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
+    const { key, signal } = args;
+
+    signal.throwIfAborted();
 
     await this.db!.delete(this.storeName, key);
   }
@@ -117,22 +146,35 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async clear(): Promise<void> {
+  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
+    const { signal } = args;
+
+    signal.throwIfAborted();
+
     await this.db!.clear(this.storeName);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
-    const { key } = args;
+  public getWritable(
+    args: Pick<IStorage.GetWritableArgs, "key" | "signal">,
+  ): WritableStream<Uint8Array> {
+    const { key, signal } = args;
+
+    signal.throwIfAborted();
+
     const chunks: Uint8Array[] = [];
 
     return new WritableStream({
       write: (chunk) => {
+        signal.throwIfAborted();
         chunks.push(chunk);
       },
       close: async () => {
+        // 保存は close のときだけ行うため、中断時はここまでのチャンクを破棄できます。
+        signal.throwIfAborted();
+
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
         const result = new Uint8Array(totalLength);
         let offset = 0;
@@ -144,20 +186,33 @@ export default class Indexeddb implements IStorage {
 
         await this.db!.put(this.storeName, result, key);
       },
+      abort: () => {
+        chunks.length = 0;
+      },
     });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<Uint8Array> {
-    const { key } = args;
+  public getReadable(
+    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+  ): ReadableStream<Uint8Array> {
+    const { key, signal } = args;
+
+    signal.throwIfAborted();
 
     return new ReadableStream({
       pull: async (controller) => {
-        const data = await this.read({ key });
-        controller.enqueue(data);
-        controller.close();
+        try {
+          signal.throwIfAborted();
+          const data = await this.read({ key, signal });
+          signal.throwIfAborted();
+          controller.enqueue(data);
+          controller.close();
+        } catch (ex) {
+          controller.error(ex);
+        }
       },
     });
   }

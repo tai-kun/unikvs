@@ -61,6 +61,7 @@ describe("rename 失敗時の保全", () => {
   test("ストリーム書き込みの close で rename が失敗したとき、既存ディレクトリーと中身が保たれる", async ({
     expect,
     root,
+    signal,
     storage,
   }) => {
     // 準備
@@ -68,7 +69,7 @@ describe("rename 失敗時の保全", () => {
     const innerData = new Uint8Array([7, 7]);
     await mkdir(join(root, key));
     await writeFile(join(root, key, "inner.txt"), innerData);
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行と検証

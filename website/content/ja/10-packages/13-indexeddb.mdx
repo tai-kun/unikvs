@@ -66,8 +66,8 @@ await kvs.close();
 
 ストリームにも対応していますが、IndexedDB にネイティブ機能はないためメモリー上でエミュレートします。
 
-- `getWritable` はチャンクをメモリーにため、クローズ時に結合して 1 つの `Uint8Array` として保存します。
-- `getReadable` は全体をメモリーに読み込んでから、単一チャンクとして送出してクローズします。
+- `getWritable` はチャンクをメモリーにため、クローズ時に結合して 1 つの `Uint8Array` として保存します。`signal` を中断するとバッファーを破棄し、以降の操作は中断理由で失敗します。
+- `getReadable` は全体をメモリーに読み込んでから、単一チャンクとして送出してクローズします。`signal` を中断すると読み取りは中断理由で失敗します。
 
 :::warning
 `getWritable`・`getReadable` は全体をメモリーに保持します。大きなデータでは使用量に注意してください。
@@ -78,6 +78,7 @@ await kvs.close();
 ## 注意点 [#notes]
 
 - すべて非同期です。`open()` 完了前に `write`・`read`・`exists`・`delete`・`clear` を呼ばないでください。接続は完了まで `null` です。
+- すべてのメソッドは `signal` を受け取ります。IndexedDB にネイティブの中断機能はないため、各操作は待機の区切りで `signal` を確認し、中断されていればその中断理由で失敗します。`open` が中断された場合は未オープンのままです。
 - `read` はキーがないと `DOMException`（`NotFoundError`）を投げます。Opfs に合わせた挙動です。事前に `exists()` で確認できます。
 - データベースバージョンは `1` 固定で、ストアは不足時に自動作成します。既存構造の変更処理は含みません。
 - IndexedDB・`DOMException`・`WritableStream`・`ReadableStream` を使うブラウザー専用です。

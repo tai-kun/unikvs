@@ -111,7 +111,7 @@ describe("open 前の操作", () => {
     await expect(unopened.exists({ key })).rejects.toThrow(TypeError);
     await expect(unopened.delete({ key })).rejects.toThrow(TypeError);
     await expect(unopened.clear()).rejects.toThrow(TypeError);
-    await expect(unopened.getWritable({ key })).rejects.toThrow(TypeError);
+    await expect(unopened.getWritable({ key, signal })).rejects.toThrow(TypeError);
     expect(() => unopened.getReadable({ key, signal })).toThrow(TypeError);
   });
 });

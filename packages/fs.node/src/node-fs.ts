@@ -103,7 +103,7 @@ export default class NodeFs implements IStorage {
     const { key, data, signal } = args;
 
     assertValidFilename(key);
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const file = this.resolvePath(key);
     try {
@@ -178,13 +178,13 @@ export default class NodeFs implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
    */
   public async getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
+    args: Pick<IStorage.GetWritableArgs, "key" | "signal">,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
     const { fs } = this.con!;
     const { key, signal } = args;
 
     assertValidFilename(key);
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const file = this.resolvePath(key);
 
@@ -212,7 +212,7 @@ export default class NodeFs implements IStorage {
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async write(chunk) {
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         if (streamError) {
           throw streamError;
         }
@@ -233,14 +233,14 @@ export default class NodeFs implements IStorage {
             writeStream.once("error", onSettled);
             writeStream.once("close", onSettled);
           });
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           if (streamError) {
             throw streamError;
           }
         }
       },
       async close() {
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         if (streamError) {
           throw streamError;
         }
@@ -270,12 +270,14 @@ export default class NodeFs implements IStorage {
     args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
   ): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { fs, path, stream } = this.con!;
-    const { key } = args;
+    const { key, signal } = args;
 
     assertValidFilename(key);
+    signal.throwIfAborted();
 
     const file = path.join(this.root, key);
-    const readStream = fs.createReadStream(file);
+    // signal を渡すことで、中断時にはストリームが中断理由で破棄され、進行中の読み取りも失敗します。
+    const readStream = fs.createReadStream(file, { signal });
     const readableStream = stream.Readable.toWeb(readStream);
 
     // @ts-expect-error

@@ -94,7 +94,7 @@ public getReadable(
 ): ReadableStream<Uint8Array<ArrayBuffer>>
 ```
 
-`Bun.file(file).stream()` をそのまま返さず、`ReadableStream` で包んで返します。Bun のストリームはリーダーを取得した時点でファイルを開くため、存在しないファイルのエラーを `read()` まで遅延させ、他のストレージと同じ挙動に揃えています。
+`Bun.file(file).stream()` をそのまま返さず、`ReadableStream` で包んで返します。Bun のストリームはリーダーを取得した時点でファイルを開くため、存在しないファイルのエラーを `read()` まで遅延させ、他のストレージと同じ挙動に揃えています。`signal` を中断するとリーダーをキャンセルし、以降の読み取りは中断理由で失敗します。
 
 ## 注意点 [#notes]
 

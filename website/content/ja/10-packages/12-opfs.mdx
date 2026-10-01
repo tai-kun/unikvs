@@ -75,8 +75,8 @@ await storage.delete({ key: "data.bin" });
 
 書き込み・読み取りの両ストリームに対応しています。
 
-- `getWritable({ key })` は `WritableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルハンドルから `createWritable()` で取得したストリームをそのまま返します。
-- `getReadable({ key })` は `ReadableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルを取得し、`File.stream()` の結果を返します。
+- `getWritable({ key, signal })` は `WritableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルハンドルから `createWritable()` で取得したストリームをライター経由で包みます。`signal` を中断すると書き込み途中の変更を破棄します。
+- `getReadable({ key, signal })` は `ReadableStream<Uint8Array<ArrayBuffer>>` を返します。内部ではファイルを取得し、`File.stream()` をリーダー経由で包みます。`signal` を中断すると読み取りを中止し、以降の読み取りは中断理由で失敗します。
 
 ```ts
 import { Opfs } from "@unikvs/opfs";
@@ -96,6 +96,7 @@ await readable.cancel();
 ## 注意点 [#notes]
 
 - `open()` 前に `read`・`write` を行うと実行時エラーになります。必ず先にオープンしてください。
+- すべてのメソッドは `signal` を受け取ります。各操作は待機の区切りで `signal` を確認し、中断されていればその中断理由で失敗します。`open` が中断された場合は未オープンのままです。
 - `write` は失敗時に `abort` で変更を破棄するため、部分書き込みで既存データを壊しません。
 - `exists` は存在しないキーに `false` を返します。`NotFoundError` の `DOMException` を捕捉して判定し、それ以外は投げます。
 - キーとルート名にはファイル名の制約があります。無効な名前は検証エラーになります。

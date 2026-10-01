@@ -134,7 +134,7 @@ export default class Redis implements IStorage {
     const { client } = this.con!;
     const { key, data, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     // Bun のクライアントは ArrayBufferView をそのままバイナリーとして送信します。
     await client.set(this.toKey(key), data);
@@ -149,7 +149,7 @@ export default class Redis implements IStorage {
     const { client } = this.con!;
     const { key, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const data = await client.getBuffer(this.toKey(key));
     if (data === null) {
@@ -167,7 +167,7 @@ export default class Redis implements IStorage {
     const { client } = this.con!;
     const { key, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     // Bun のクライアントは EXISTS の整数を真偽値に変換して返します。
     return await client.exists(this.toKey(key));
@@ -180,7 +180,7 @@ export default class Redis implements IStorage {
     const { client } = this.con!;
     const { key, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     // 存在しないキーの削除は 0 を返すだけでエラーになりません。
     await client.del(this.toKey(key));
@@ -189,18 +189,18 @@ export default class Redis implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
    */
-  public async clear(args: { signal?: AbortSignal } = {}): Promise<void> {
+  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
     const { client } = this.con!;
     const { signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
     const pattern = `${this.keyPrefix}*`;
 
     let cursor = "0";
     do {
-      signal?.throwIfAborted();
+      signal.throwIfAborted();
 
       const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
       if (keys.length > 0) {
@@ -215,12 +215,12 @@ export default class Redis implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#streams)
    */
   public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
+    args: Pick<IStorage.GetWritableArgs, "key" | "signal">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.con!;
     const { key, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const dest = this.toKey(key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時キーが衝突しないようにします。
@@ -229,7 +229,7 @@ export default class Redis implements IStorage {
     // 中断と失敗のどちらからでも後始末が走るため、完了処理は一度だけ行います。
     let finished = false;
     const removeAbortListener = (): void => {
-      signal?.removeEventListener("abort", onAbort);
+      signal.removeEventListener("abort", onAbort);
     };
     const discardTemporary = async (): Promise<void> => {
       try {
@@ -248,12 +248,12 @@ export default class Redis implements IStorage {
       void finish();
     };
 
-    signal?.addEventListener("abort", onAbort, { once: true });
+    signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async start() {
         try {
-          signal?.throwIfAborted();
+          signal.throwIfAborted();
           // 0 バイトの書き込みでも close 時の RENAME が成功するよう、空の文字列で一時キーを作ります。
           await client.set(tmp, "");
         } catch (ex) {
@@ -262,7 +262,7 @@ export default class Redis implements IStorage {
         }
       },
       async write(chunk) {
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         try {
           await client.append(tmp, chunk);
         } catch (ex) {
@@ -271,7 +271,7 @@ export default class Redis implements IStorage {
         }
       },
       async close() {
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
         try {
           // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
           await client.rename(tmp, dest);
@@ -298,7 +298,7 @@ export default class Redis implements IStorage {
     const { client } = this.con!;
     const { key, signal } = args;
 
-    signal?.throwIfAborted();
+    signal.throwIfAborted();
 
     const dest = this.toKey(key);
     let sent = false;
@@ -312,7 +312,7 @@ export default class Redis implements IStorage {
         }
 
         sent = true;
-        signal?.throwIfAborted();
+        signal.throwIfAborted();
 
         const data = await client.getBuffer(dest);
         if (data === null) {

@@ -94,7 +94,7 @@ public getReadable(
 ): ReadableStream<Uint8Array<ArrayBuffer>>
 ```
 
-Instead of returning `Bun.file(file).stream()` directly, it wraps the stream in a new `ReadableStream`. Bun opens the file when a reader is acquired, so wrapping defers errors for missing files until `read()` and keeps behavior consistent with other storages.
+Instead of returning `Bun.file(file).stream()` directly, it wraps the stream in a new `ReadableStream`. Bun opens the file when a reader is acquired, so wrapping defers errors for missing files until `read()` and keeps behavior consistent with other storages. Aborting `signal` cancels the reader, and subsequent reads fail with the abort reason.
 
 ## Notes [#notes]
 

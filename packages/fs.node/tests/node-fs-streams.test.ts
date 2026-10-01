@@ -249,4 +249,36 @@ describe("getReadable の詳細", () => {
     expect(bytesEqual(streamed, direct)).toBe(true);
     expect(bytesEqual(streamed, data)).toBe(true);
   });
+
+  test("中断済みの signal を渡したとき、getReadable は同期エラーになる", ({ expect, storage }) => {
+    // 準備
+    const controller = new AbortController();
+    controller.abort();
+
+    // 実行と検証
+    expect(() =>
+      storage.getReadable({ key: "aborted-read.bin", signal: controller.signal }),
+    ).toThrow();
+  });
+
+  test("読み取り中に signal を中断したとき、読み取りが中断理由で失敗する", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "aborted-middle-read.bin";
+    const data = createPseudoRandomBytes(256 * 1024);
+    await storage.write({ key, data, signal });
+    const controller = new AbortController();
+    const reason = new Error("テスト用の中断");
+    const reader = storage.getReadable({ key, signal: controller.signal }).getReader();
+
+    // 実行
+    controller.abort(reason);
+
+    // 検証
+    // Node.js の読み取りストリームは中断理由を cause に持つ AbortError を返します。
+    await expect(reader.read()).rejects.toMatchObject({ name: "AbortError", cause: reason });
+  });
 });

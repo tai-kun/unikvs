@@ -94,7 +94,7 @@ public getReadable(
 ): ReadableStream<Uint8Array<ArrayBuffer>>
 ```
 
-`fs.createReadStream(file)` を `stream.Readable.toWeb(readStream)` で Web ストリームに変換して返します。
+`fs.createReadStream(file, { signal })` を `stream.Readable.toWeb(readStream)` で Web ストリームに変換して返します。`signal` を中断すると読み取りストリームが中断理由で破棄され、進行中の読み取りも失敗します。
 
 ## 注意点 [#notes]
 
