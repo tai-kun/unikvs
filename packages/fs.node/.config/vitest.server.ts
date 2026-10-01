@@ -12,6 +12,19 @@ export default defineConfig({
     __SERVER__: "true",
   },
   test: {
+    coverage: {
+      provider: "v8",
+      enabled: true,
+      include: ["src/**/*.ts"],
+      reporter: ["text", "json-summary", "lcov"],
+      reportsDirectory: "./coverage/server",
+      thresholds: {
+        lines: 96,
+        statements: 97,
+        functions: 96,
+        branches: 73,
+      },
+    },
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/**/*.client.test.ts"],
     setupFiles: [".config/_debugging.ts"],

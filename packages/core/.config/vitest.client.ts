@@ -13,6 +13,11 @@ export default defineConfig({
     __SERVER__: "false",
   },
   test: {
+    coverage: {
+      // core の src は istanbul で変換できず、v8 は Firefox で使えないため、client では計測しません。
+      // ランタイムコードは server 設定のカバレッジで検証します。
+      enabled: false,
+    },
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/**/*.server.test.ts"],
     browser: {

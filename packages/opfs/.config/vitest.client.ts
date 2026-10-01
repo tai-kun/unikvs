@@ -13,6 +13,19 @@ export default defineConfig({
     __SERVER__: "false",
   },
   test: {
+    coverage: {
+      provider: "istanbul",
+      enabled: true,
+      include: ["src/**/*.ts"],
+      reporter: ["text", "json-summary", "lcov"],
+      reportsDirectory: "./coverage/client",
+      thresholds: {
+        lines: 97,
+        statements: 96,
+        functions: 83,
+        branches: 96,
+      },
+    },
     include: ["tests/**/*.test.ts"],
     exclude: ["tests/**/*.server.test.ts"],
     browser: {

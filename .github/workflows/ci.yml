@@ -15,25 +15,39 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package-directory:
-          [
-            "packages/core",
-            "packages/utils",
-            "packages/checksum",
-            "packages/compression",
-            "packages/debug",
-            "packages/passthrough",
-            "packages/memory",
-            "packages/writeonly",
-            "packages/fs.node",
-            "packages/fs.bun",
-            "packages/redis.bun",
-            "packages/s3.node",
-            "packages/s3.bun",
-            "packages/opfs",
-            "packages/indexeddb",
-            "unikvs",
-          ]
+        package:
+          - name: "core"
+            directory: "packages/core"
+          - name: "utils"
+            directory: "packages/utils"
+          - name: "checksum"
+            directory: "packages/checksum"
+          - name: "compression"
+            directory: "packages/compression"
+          - name: "debug"
+            directory: "packages/debug"
+          - name: "passthrough"
+            directory: "packages/passthrough"
+          - name: "memory"
+            directory: "packages/memory"
+          - name: "writeonly"
+            directory: "packages/writeonly"
+          - name: "fs.node"
+            directory: "packages/fs.node"
+          - name: "fs.bun"
+            directory: "packages/fs.bun"
+          - name: "redis.bun"
+            directory: "packages/redis.bun"
+          - name: "s3.node"
+            directory: "packages/s3.node"
+          - name: "s3.bun"
+            directory: "packages/s3.bun"
+          - name: "opfs"
+            directory: "packages/opfs"
+          - name: "indexeddb"
+            directory: "packages/indexeddb"
+          - name: "unikvs"
+            directory: "unikvs"
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -62,7 +76,7 @@ jobs:
             fi
           ' | jq -s 'add')
 
-          cd "${{ matrix.package-directory }}"
+          cd "${{ matrix.package.directory }}"
 
           # 2. 現在のパッケージの全依存関係を取得
           all_deps_in_pkg=$(jq -r '
@@ -98,19 +112,28 @@ jobs:
           if grep -q "playwright" package.json; then
             npx playwright install --with-deps
           fi
-        working-directory: ${{ matrix.package-directory }}
+        working-directory: ${{ matrix.package.directory }}
 
       - name: "テスト準備"
         run: |
           if [ -f ./scripts/pretest.sh ]; then
             bash -euo pipefail ./scripts/pretest.sh
           fi
-        working-directory: ${{ matrix.package-directory }}
+        working-directory: ${{ matrix.package.directory }}
 
       - name: "ビルド"
         run: npm run build
-        working-directory: ${{ matrix.package-directory }}
+        working-directory: ${{ matrix.package.directory }}
 
       - name: "テスト"
         run: mise run test
-        working-directory: ${{ matrix.package-directory }}
+        working-directory: ${{ matrix.package.directory }}
+
+      - name: "カバレッジをアップロード"
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: coverage-${{ matrix.package.name }}
+          path: ${{ matrix.package.directory }}/coverage
+          if-no-files-found: ignore
+          retention-days: 7
