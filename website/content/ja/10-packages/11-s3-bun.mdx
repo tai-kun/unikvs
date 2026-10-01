@@ -1,0 +1,148 @@
+---
+title: "@unikvs/s3.bun"
+description: "Bun の S3 クライアントで S3 互換オブジェクトストレージに保存する @unikvs/s3.bun の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/s3.bun` は、Bun 組み込みの S3 クライアントで S3 互換オブジェクトストレージにバイト列を保存するストレージプラグインです。<Badge variant="warning">Bun 専用</Badge> AWS SDK には依存せず、`bun` モジュールの `S3Client` を動的インポートしてオブジェクトを操作します。扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付け、`read` は `Uint8Array<ArrayBuffer>` を返します。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/s3.bun
+```
+
+依存関係として `@unikvs/core` を使用します。AWS SDK は不要です。
+
+## 使い方 [#usage]
+
+ストレージクラスは `S3` です。
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+```
+
+```ts
+new S3(bucket: string, options: S3StorageOptions = {})
+```
+
+| 引数      | 型                 | 説明                                                                            |
+| --------- | ------------------ | ------------------------------------------------------------------------------- |
+| `bucket`  | `string`           | 保存先のバケット名です。すべての操作で使います。                                |
+| `options` | `S3StorageOptions` | Bun の `S3Options` から `bucket` を除いた設定です。既定値は空オブジェクトです。 |
+
+`S3StorageOptions` には `accessKeyId`・`secretAccessKey`・`sessionToken`・`region`・`endpoint`・`virtualHostedStyle`・`partSize`・`queueSize`・`retry` などを指定できます。省略した項目は Bun が環境変数 (`S3_ACCESS_KEY_ID`、`AWS_ACCESS_KEY_ID` など) から解決します。`options` に指定した値は環境変数より優先されます。
+
+:::note
+認証情報の解決は Bun の標準仕組みに委ねます。S3 互換サービスへ接続するときは `endpoint` と `region` を指定します。
+:::
+
+ライフサイクルは次のとおりです。生成直後は `isOpen` が `false` で、`open()` で内部に `S3Client` を作ると `true` になります。`open()` は動的インポートを行うため非同期です。`close()` は保持している参照を破棄して `false` に戻ります。Bun の `S3Client` には破棄用の API がないため、解放処理はありません。
+
+```ts
+import { UniKvs } from "unikvs";
+import { S3 } from "@unikvs/s3.bun";
+
+const storage = new S3("my-bucket", {
+  region: "ap-northeast-1",
+});
+
+await storage.open();
+
+const kvs = UniKvs.config().appendStorage(storage).create();
+```
+
+:::warning
+バケットの作成は本パッケージの責務ではありません。事前にコンソールなどで作っておきます。
+:::
+
+## オブジェクト配置 [#layout]
+
+キーはオブジェクトキーにそのまま対応します。プレフィックス付与やエスケープは行いません。
+
+| unikvs のキー            | S3 のオブジェクトキー    |
+| ------------------------ | ------------------------ |
+| `test.txt`               | `test.txt`               |
+| `folder/テスト #123.dat` | `folder/テスト #123.dat` |
+
+単発の書き込みは `S3Client.write`、読み取りは `S3File.arrayBuffer`、存在確認は `S3Client.exists`、削除は `S3Client.delete` を使用します。`clear` は `S3Client.list` でバケット内のすべてのオブジェクトを列挙し、`continuationToken` でページを進めながら 25 件ずつ並列に削除します。プレフィックスでは絞り込みません。
+
+:::warning
+`clear` はバケット内のすべてのオブジェクトを削除します。unikvs 専用のバケットを使ってください。共有していると他のデータも消えます。
+:::
+
+## ストリームとマルチパート [#multipart]
+
+単発の `write` は `S3Client.write` で保存し、単発の `read` は `S3File.arrayBuffer` の結果を `Uint8Array` に変換して返します。
+
+書き込みストリームは `S3File.writer` が返す `NetworkSink` を使うため、大容量のマルチパートアップロードに対応します。
+
+```ts
+const writable = storage.getWritable({ key, vars, signal });
+```
+
+引数は `vars`・`key`・`signal` です。パートサイズは `vars` から読み取ります。`@unikvs/s3.bun:partSize` を優先し、なければ `@unikvs/s3:partSize` を参照します。バイト単位の正の整数で指定し、未指定なら Bun の既定値 (5 MiB) に従います。
+
+:::tip
+大容量データは単発の `write` ではなく書き込みストリームを使ってください。マルチパートアップロードに対応します。
+:::
+
+`signal` が中断済みなら開始せずに `StorageAbortedError` を投げます。Bun の `NetworkSink` には中断用の API がないため、書き込み中の中断で送信済みのリクエストは取り消せません。中断後に `close()` を呼ぶと `signal` の理由で拒否され、オブジェクトは完成しません。未完了のマルチパートアップロードはオブジェクトとして公開されないため、途中の内容が読み取られることはありません。
+
+読み取りストリームは次のように取得します。
+
+```ts
+const readable = storage.getReadable({ key, signal });
+```
+
+内部で `S3File.stream` を呼び、チャンクごとに `signal` を確認しながら中継します。存在しないキーの失敗はストリームの読み取り時に `S3Error` として現れます。
+
+## エラー [#errors]
+
+次の 4 種類を定義します。
+
+| クラス                    | `name`                      | メタデータ        | 投げる条件                                                             |
+| ------------------------- | --------------------------- | ----------------- | ---------------------------------------------------------------------- |
+| `UnsupportedRuntimeError` | `S3UnsupportedRuntimeError` | なし              | `Bun` グローバルが無いランタイムで `open()` を呼んだ場合に発生します。 |
+| `StorageNotOpenError`     | `S3StorageNotOpenError`     | なし              | オープンされていない状態で `close()` を呼んだ場合に発生します。        |
+| `InvalidPartSizeError`    | `S3InvalidPartSizeError`    | `actual: unknown` | `vars` のパートサイズが正の整数でない場合に `getWritable` が投げます。 |
+| `StorageAbortedError`     | `S3StorageAbortedError`     | `key: string`     | `getWritable` の `signal` が中断済みの場合に投げます。                 |
+
+`InvalidPartSizeError` と `StorageAbortedError` は `ErrorBase` を、`UnsupportedRuntimeError` と `StorageNotOpenError` は `InvalidUsageErrorBase` を継承します。日本語メッセージは `setErrorMessage` で登録しています。
+
+S3 固有の失敗は次のように扱います。
+
+- `exists` は 404 を `false` として扱います。権限エラーなどは Bun の `S3Error` をそのまま伝播します。
+- 存在しないキーの `read` と `getReadable` は `S3Error` (code は `NoSuchKey`) で失敗します。必要なら事前に `exists` を使います。
+- 存在しないキーの `delete` はエラーになりません。S3 の冪等性に従います。
+- `write`・`read`・`exists`・`delete`・`clear` は中断済みの `AbortSignal` を渡すと即座に拒否されます。実行中のリクエストは中断できません。
+- パートサイズが 5 MiB 未満または 5 GiB を超える場合、Bun が `RangeError` を投げます。
+- 認証失敗などは、ストリームの `close()` 時に失敗理由で拒否されます。
+
+## 使用例 [#examples]
+
+S3 互換ストレージへの最小構成例です。エンドポイントや認証情報はダミー値で、MinIO などへの接続を想定しています。バケットは事前に作っておきます。
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+
+const storage = new S3("my-bucket", {
+  endpoint: "http://127.0.0.1:9000",
+  region: "ap-northeast-1",
+  accessKeyId: "minioadmin",
+  secretAccessKey: "minioadmin",
+});
+
+await storage.open();
+
+const signal = AbortSignal.timeout(30_000);
+const key = "hello.txt";
+const data = new TextEncoder().encode("Hello S3");
+
+await storage.write({ key, data, signal });
+const loaded = await storage.read({ key, signal });
+console.log(new TextDecoder().decode(loaded));
+
+storage.close();
+```

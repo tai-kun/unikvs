@@ -29,6 +29,7 @@ jobs:
             "packages/fs.bun",
             "packages/redis.bun",
             "packages/s3.node",
+            "packages/s3.bun",
             "packages/opfs",
             "packages/indexeddb",
             "unikvs",
