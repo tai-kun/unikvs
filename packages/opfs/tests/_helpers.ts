@@ -2,6 +2,8 @@ import { test as vitest } from "vitest";
 
 import Opfs from "../src/opfs.js";
 
+const { signal } = new AbortController();
+
 /**
  * テストごとに一意な OPFS ルート名を生成します。
  * テスト間で同じルートを共有して相互汚染するのを防ぐために使用します。
@@ -91,7 +93,7 @@ export const test = vitest.extend<{
   },
   async storage({ root }, use) {
     const storage = new Opfs(root);
-    await storage.open();
+    await storage.open({ signal });
     await use(storage);
   },
 });

@@ -3,24 +3,26 @@ import { describe } from "vitest";
 import IndexeddbStorage from "../src/indexeddb.js";
 import { STORE_NAME, captureRejection, createEmptyDatabase, test } from "./_helpers.js";
 
+const { signal } = new AbortController();
+
 const openedOperations: readonly {
   readonly label: string;
   readonly run: (storage: IndexeddbStorage) => Promise<unknown>;
 }[] = [
-  { label: "write", run: (storage) => storage.write({ key: "k", data: "v" }) },
-  { label: "read", run: (storage) => storage.read({ key: "k" }) },
-  { label: "exists", run: (storage) => storage.exists({ key: "k" }) },
-  { label: "delete", run: (storage) => storage.delete({ key: "k" }) },
-  { label: "clear", run: (storage) => storage.clear() },
+  { label: "write", run: (storage) => storage.write({ key: "k", data: "v", signal }) },
+  { label: "read", run: (storage) => storage.read({ key: "k", signal }) },
+  { label: "exists", run: (storage) => storage.exists({ key: "k", signal }) },
+  { label: "delete", run: (storage) => storage.delete({ key: "k", signal }) },
+  { label: "clear", run: (storage) => storage.clear({ signal }) },
 ];
 
 describe("存在しないキー", () => {
   test("read は NotFoundError の DOMException で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "missing" }));
+    const error = await captureRejection(storage.read({ key: "missing", signal }));
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -32,18 +34,18 @@ describe("存在しないキー", () => {
 
   test("delete を呼んでもエラーにならない", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
-    await expect(storage.delete({ key: "missing" })).resolves.toBeUndefined();
+    await expect(storage.delete({ key: "missing", signal })).resolves.toBeUndefined();
   });
 
   test("exists は false を返す", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行
-    const exists = await storage.exists({ key: "missing" });
+    const exists = await storage.exists({ key: "missing", signal });
 
     // 検証
     expect(exists).toBe(false);
@@ -54,8 +56,8 @@ describe("存在しないキー", () => {
     storage,
   }) => {
     // 準備
-    await storage.open();
-    const reader = storage.getReadable({ key: "missing" }).getReader();
+    await storage.open({ signal });
+    const reader = storage.getReadable({ key: "missing", signal }).getReader();
 
     // 実行
     const error = await captureRejection(reader.read());
@@ -69,12 +71,12 @@ describe("存在しないキー", () => {
 describe("削除・消去後", () => {
   test("delete したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
-    await storage.write({ key: "k1", data: "v1" });
-    await storage.delete({ key: "k1" });
+    await storage.open({ signal });
+    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.delete({ key: "k1", signal });
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "k1" }));
+    const error = await captureRejection(storage.read({ key: "k1", signal }));
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -83,12 +85,12 @@ describe("削除・消去後", () => {
 
   test("clear したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
-    await storage.write({ key: "k1", data: "v1" });
-    await storage.clear();
+    await storage.open({ signal });
+    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.clear({ signal });
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "k1" }));
+    const error = await captureRejection(storage.read({ key: "k1", signal }));
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -97,31 +99,31 @@ describe("削除・消去後", () => {
 
   test("空の状態で clear を呼んでもエラーにならない", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
-    await expect(storage.clear()).resolves.toBeUndefined();
+    await expect(storage.clear({ signal })).resolves.toBeUndefined();
   });
 
   test("削除したキーへ再度書き込みできる", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
-    await storage.write({ key: "k1", data: "v1" });
-    await storage.delete({ key: "k1" });
+    await storage.open({ signal });
+    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.delete({ key: "k1", signal });
 
     // 実行
-    await storage.write({ key: "k1", data: "v2" });
+    await storage.write({ key: "k1", data: "v2", signal });
 
     // 検証
-    expect(await storage.read({ key: "k1" })).toBe("v2");
+    expect(await storage.read({ key: "k1", signal })).toBe("v2");
   });
 });
 
 describe("close した後", () => {
   test("isOpen は false である", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
-    await storage.close();
+    await storage.open({ signal });
+    await storage.close({ signal });
 
     // 検証
     expect(storage.isOpen).toBe(false);
@@ -130,8 +132,8 @@ describe("close した後", () => {
   for (const { label, run } of openedOperations) {
     test(`close 後の ${label} は TypeError で拒否される`, async ({ expect, storage }) => {
       // 準備
-      await storage.open();
-      await storage.close();
+      await storage.open({ signal });
+      await storage.close({ signal });
 
       // 実行
       const error = await captureRejection(run(storage));
@@ -146,9 +148,9 @@ describe("close した後", () => {
     storage,
   }) => {
     // 準備
-    await storage.open();
-    await storage.close();
-    const writer = storage.getWritable({ key: "k1" }).getWriter();
+    await storage.open({ signal });
+    await storage.close({ signal });
+    const writer = storage.getWritable({ key: "k1", signal }).getWriter();
 
     // 実行
     const error = await captureRejection(writer.close());
@@ -163,17 +165,17 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open();
+    await storage.open({ signal });
 
     try {
       // 実行
-      const error = await captureRejection(storage.write({ key: "k1", data: "v1" }));
+      const error = await captureRejection(storage.write({ key: "k1", data: "v1", signal }));
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close();
+      await storage.close({ signal });
     }
   });
 
@@ -181,17 +183,17 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open();
+    await storage.open({ signal });
 
     try {
       // 実行
-      const error = await captureRejection(storage.exists({ key: "k1" }));
+      const error = await captureRejection(storage.exists({ key: "k1", signal }));
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close();
+      await storage.close({ signal });
     }
   });
 
@@ -199,17 +201,17 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open();
+    await storage.open({ signal });
 
     try {
       // 実行
-      const error = await captureRejection(storage.clear());
+      const error = await captureRejection(storage.clear({ signal }));
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close();
+      await storage.close({ signal });
     }
   });
 });
@@ -224,7 +226,7 @@ describe("open に失敗するとき", () => {
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
 
     // 実行
-    const error = await captureRejection(storage.open());
+    const error = await captureRejection(storage.open({ signal }));
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -238,8 +240,8 @@ describe("open に失敗するとき", () => {
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
 
     // 実行
-    await captureRejection(storage.open());
-    const error = await captureRejection(storage.open());
+    await captureRejection(storage.open({ signal }));
+    const error = await captureRejection(storage.open({ signal }));
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);

@@ -2,26 +2,28 @@ import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
 
+const { signal } = new AbortController();
+
 describe("AbortSignal による中断", () => {
   test("中断済みの signal はすべてのメソッドを中断理由で拒否する", async ({ expect, storage }) => {
     // 準備
     const key = "pre-aborted";
-    await storage.open();
-    await storage.write({ key, data: "value" });
+    await storage.open({ signal });
+    await storage.write({ key, data: "value", signal });
     const controller = new AbortController();
     const reason = new Error("独自の中断理由");
     controller.abort(reason);
-    const { signal } = controller;
+    const abortedSignal = controller.signal;
 
     // 実行と検証
-    await expect(storage.write({ key, data: "next", signal })).rejects.toBe(reason);
-    await expect(storage.read({ key, signal })).rejects.toBe(reason);
-    await expect(storage.exists({ key, signal })).rejects.toBe(reason);
-    await expect(storage.delete({ key, signal })).rejects.toBe(reason);
-    await expect(storage.clear({ signal })).rejects.toBe(reason);
-    await expect(storage.close({ signal })).rejects.toBe(reason);
-    expect(() => storage.getWritable({ key, signal })).toThrow(reason);
-    expect(() => storage.getReadable({ key, signal })).toThrow(reason);
+    await expect(storage.write({ key, data: "next", signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.read({ key, signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.exists({ key, signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.delete({ key, signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.clear({ signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.close({ signal: abortedSignal })).rejects.toBe(reason);
+    expect(() => storage.getWritable({ key, signal: abortedSignal })).toThrow(reason);
+    expect(() => storage.getReadable({ key, signal: abortedSignal })).toThrow(reason);
     expect(storage.isOpen).toBe(true);
   });
 
@@ -52,9 +54,9 @@ describe("AbortSignal による中断", () => {
 
   test("実行中に中断された read は中断理由で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
     const key = "aborted-read";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]) });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
 
@@ -68,7 +70,7 @@ describe("AbortSignal による中断", () => {
 
   test("書き込みストリームを signal で中断したとき、保存されない", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
     const key = "aborted-writable";
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
@@ -80,7 +82,7 @@ describe("AbortSignal による中断", () => {
 
     // 検証
     await expect(writer.close()).rejects.toBe(reason);
-    expect(await storage.exists({ key })).toBe(false);
+    expect(await storage.exists({ key, signal })).toBe(false);
   });
 
   test("読み取りストリームを signal で中断したとき、読み取りが中断理由で失敗する", async ({
@@ -88,9 +90,9 @@ describe("AbortSignal による中断", () => {
     storage,
   }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
     const key = "aborted-readable";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]) });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
     const reader = storage.getReadable({ key, signal: controller.signal }).getReader();

@@ -5,6 +5,8 @@ import { describe, expectTypeOf } from "vitest";
 import Opfs from "../src/opfs.js";
 import { removeRoot, test, uniqueRoot } from "./_helpers.js";
 
+const { signal } = new AbortController();
+
 const INVALID_DIRNAMES: readonly (readonly [string, string])[] = [
   ["Windows の予約名", "CON"],
   ["予約名を含むネストしたパス", "nested/COM1"],
@@ -25,12 +27,12 @@ const ROOT_DIRECT_CASES: readonly (readonly [string, string])[] = [
 ];
 
 const UNOPENED_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] = [
-  ["read", (storage) => storage.read({ key: "valid.bin" })],
-  ["write", (storage) => storage.write({ key: "valid.bin", data: new Uint8Array([1]) })],
-  ["exists", (storage) => storage.exists({ key: "valid.bin" })],
-  ["delete", (storage) => storage.delete({ key: "valid.bin" })],
-  ["getWritable", (storage) => storage.getWritable({ key: "valid.bin" })],
-  ["getReadable", (storage) => storage.getReadable({ key: "valid.bin" })],
+  ["read", (storage) => storage.read({ key: "valid.bin", signal })],
+  ["write", (storage) => storage.write({ key: "valid.bin", data: new Uint8Array([1]), signal })],
+  ["exists", (storage) => storage.exists({ key: "valid.bin", signal })],
+  ["delete", (storage) => storage.delete({ key: "valid.bin", signal })],
+  ["getWritable", (storage) => storage.getWritable({ key: "valid.bin", signal })],
+  ["getReadable", (storage) => storage.getReadable({ key: "valid.bin", signal })],
 ];
 
 describe("コンストラクターの振る舞い", () => {
@@ -48,34 +50,34 @@ describe("コンストラクターの振る舞い", () => {
     const key = `default-${crypto.randomUUID()}.bin`;
 
     // 実行
-    await storage.open();
-    await storage.write({ key, data: new Uint8Array([1, 2]) });
-    const loaded = await storage.read({ key });
+    await storage.open({ signal });
+    await storage.write({ key, data: new Uint8Array([1, 2]), signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(storage.isOpen).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array([1, 2]));
 
-    await storage.delete({ key });
+    await storage.delete({ key, signal });
   });
 
   for (const [label, root] of ROOT_DIRECT_CASES) {
     test(`${label} のルートを指定したとき、OPFS ルート直下が作業対象になる`, async ({ expect }) => {
       // 準備
       const writer = new Opfs("");
-      await writer.open();
+      await writer.open({ signal });
       const key = `direct-${crypto.randomUUID()}.bin`;
-      await writer.write({ key, data: new Uint8Array([7]) });
+      await writer.write({ key, data: new Uint8Array([7]), signal });
 
       // 実行
       const storage = new Opfs(root);
-      await storage.open();
-      const loaded = await storage.read({ key });
+      await storage.open({ signal });
+      const loaded = await storage.read({ key, signal });
 
       // 検証
       expect(loaded).toStrictEqual(new Uint8Array([7]));
 
-      await storage.delete({ key });
+      await storage.delete({ key, signal });
     });
   }
 
@@ -84,19 +86,19 @@ describe("コンストラクターの振る舞い", () => {
   }) => {
     // 準備
     const writer = new Opfs("//");
-    await writer.open();
+    await writer.open({ signal });
     const key = `slashes-${crypto.randomUUID()}.bin`;
-    await writer.write({ key, data: new Uint8Array([8]) });
+    await writer.write({ key, data: new Uint8Array([8]), signal });
 
     // 実行
     const storage = new Opfs("/");
-    await storage.open();
-    const loaded = await storage.read({ key });
+    await storage.open({ signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([8]));
 
-    await storage.delete({ key });
+    await storage.delete({ key, signal });
   });
 
   test("連続・先頭・末尾のスラッシュを含むルートを指定したとき、正規化されて同じ作業対象になる", async ({
@@ -105,14 +107,14 @@ describe("コンストラクターの振る舞い", () => {
     // 準備
     const root = uniqueRoot();
     const writer = new Opfs(`//${root}//`);
-    await writer.open();
+    await writer.open({ signal });
     const key = "normalized.bin";
-    await writer.write({ key, data: new Uint8Array([1, 2]) });
+    await writer.write({ key, data: new Uint8Array([1, 2]), signal });
 
     // 実行
     const storage = new Opfs(root);
-    await storage.open();
-    const loaded = await storage.read({ key });
+    await storage.open({ signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([1, 2]));
@@ -127,9 +129,9 @@ describe("コンストラクターの振る舞い", () => {
     const key = "データ.bin";
 
     // 実行
-    await storage.open();
-    await storage.write({ key, data: new Uint8Array([3]) });
-    const loaded = await storage.read({ key });
+    await storage.open({ signal });
+    await storage.write({ key, data: new Uint8Array([3]), signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([3]));
@@ -155,8 +157,8 @@ describe("コンストラクターの振る舞い", () => {
     const key = "handle.bin";
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([4]) });
-    const loaded = await storage.read({ key });
+    await storage.write({ key, data: new Uint8Array([4]), signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -174,13 +176,13 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await opfsRoot.getDirectoryHandle(dirname, { create: true });
     const storage = new Opfs(handle);
     const key = "handle.bin";
-    await storage.write({ key, data: new Uint8Array([4]) });
+    await storage.write({ key, data: new Uint8Array([4]), signal });
 
     // 実行
-    await storage.clear();
-    const existsAfterClear = await storage.exists({ key });
-    await storage.write({ key, data: new Uint8Array([5]) });
-    const reloaded = await storage.read({ key });
+    await storage.clear({ signal });
+    const existsAfterClear = await storage.exists({ key, signal });
+    await storage.write({ key, data: new Uint8Array([5]), signal });
+    const reloaded = await storage.read({ key, signal });
 
     // 検証
     expect(existsAfterClear).toBe(false);
@@ -199,14 +201,14 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await parent.getDirectoryHandle("inner", { create: true });
     const storage = new Opfs(handle);
     const key = "nested.bin";
-    await storage.write({ key, data: new Uint8Array([6]) });
+    await storage.write({ key, data: new Uint8Array([6]), signal });
 
     try {
       // 実行
-      await storage.clear();
+      await storage.clear({ signal });
 
       // 検証
-      expect(await storage.exists({ key })).toBe(false);
+      expect(await storage.exists({ key, signal })).toBe(false);
     } finally {
       await opfsRoot.removeEntry(parentName, { recursive: true });
     }
@@ -221,14 +223,14 @@ describe("コンストラクターの振る舞い", () => {
     const key = `root-handle-${crypto.randomUUID()}.bin`;
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]) });
-    const loaded = await storage.read({ key });
+    await storage.write({ key, data: new Uint8Array([9]), signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(storage.isOpen).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array([9]));
 
-    await storage.delete({ key });
+    await storage.delete({ key, signal });
   });
 });
 
@@ -236,15 +238,15 @@ describe("ライフサイクルの振る舞い", () => {
   test("open を二重に呼び出したとき、状態とデータが維持される", async ({ expect, storage }) => {
     // 準備
     const key = "twice.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]) });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
 
     // 実行
-    await storage.open();
-    await storage.open();
+    await storage.open({ signal });
+    await storage.open({ signal });
 
     // 検証
     expect(storage.isOpen).toBe(true);
-    expect(await storage.read({ key })).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
   for (const [label, operation] of UNOPENED_OPERATIONS) {
@@ -264,7 +266,7 @@ describe("ライフサイクルの振る舞い", () => {
     const storage = new Opfs(uniqueRoot());
 
     // 実行
-    const error = await storage.clear().catch((ex: unknown) => ex);
+    const error = await storage.clear({ signal }).catch((ex: unknown) => ex);
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -278,11 +280,11 @@ describe("ライフサイクルの振る舞い", () => {
   }) => {
     // 準備
     const opened = new Opfs(root);
-    await opened.open();
+    await opened.open({ signal });
     const unopened = new Opfs(root);
 
     // 実行と検証
-    await expect(unopened.clear()).rejects.toThrow();
+    await expect(unopened.clear({ signal })).rejects.toThrow();
   });
 
   test("同じルートを別のインスタンスで開いたとき、保存済みデータを読み取れる", async ({
@@ -291,13 +293,13 @@ describe("ライフサイクルの振る舞い", () => {
   }) => {
     // 準備
     const first = new Opfs(root);
-    await first.open();
-    await first.write({ key: "shared.bin", data: new Uint8Array([5, 6]) });
+    await first.open({ signal });
+    await first.write({ key: "shared.bin", data: new Uint8Array([5, 6]), signal });
 
     // 実行
     const second = new Opfs(root);
-    await second.open();
-    const loaded = await second.read({ key: "shared.bin" });
+    await second.open({ signal });
+    const loaded = await second.read({ key: "shared.bin", signal });
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([5, 6]));
@@ -311,16 +313,16 @@ describe("ライフサイクルの振る舞い", () => {
     // 準備
     const first = new Opfs(root);
     const second = new Opfs(root);
-    await first.open();
-    await second.open();
+    await first.open({ signal });
+    await second.open({ signal });
 
     // 実行
-    await first.write({ key: "a.bin", data: new Uint8Array([1]) });
-    await second.write({ key: "b.bin", data: new Uint8Array([2]) });
+    await first.write({ key: "a.bin", data: new Uint8Array([1]), signal });
+    await second.write({ key: "b.bin", data: new Uint8Array([2]), signal });
 
     // 検証
-    expect(await second.read({ key: "a.bin" })).toStrictEqual(new Uint8Array([1]));
-    expect(await first.read({ key: "b.bin" })).toStrictEqual(new Uint8Array([2]));
+    expect(await second.read({ key: "a.bin", signal })).toStrictEqual(new Uint8Array([1]));
+    expect(await first.read({ key: "b.bin", signal })).toStrictEqual(new Uint8Array([2]));
   });
 
   test("IStorage 実装として扱える", ({ expect }) => {

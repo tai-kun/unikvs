@@ -3,6 +3,8 @@ import { describe } from "vitest";
 import type Opfs from "../src/opfs.js";
 import { concatBytes, readAll, test } from "./_helpers.js";
 
+const { signal } = new AbortController();
+
 /**
  * チャンク列を書き込み用ストリーム経由で保存し、閉じるまでをまとめて行います。
  * ストリーム書き込みのテストを簡潔に保つために使用します。
@@ -12,7 +14,7 @@ async function writeChunks(
   key: string,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<void> {
-  const writable = await storage.getWritable({ key });
+  const writable = await storage.getWritable({ key, signal });
   const writer = writable.getWriter();
   for (const chunk of chunks) {
     await writer.write(chunk);
@@ -25,14 +27,14 @@ describe("書き込みストリームの振る舞い", () => {
   test("何も書き込まずに閉じたとき、空のデータが保存される", async ({ expect, storage }) => {
     // 準備
     const key = "empty-stream.bin";
-    const writable = await storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
 
     // 実行
     await writable.close();
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
-    expect(await storage.exists({ key })).toBe(true);
+    expect(await storage.exists({ key, signal })).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array());
   });
 
@@ -43,7 +45,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, [data]);
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -56,7 +58,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -69,7 +71,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -86,7 +88,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -106,8 +108,8 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const streamed = await readAll(await storage.getReadable({ key }));
-    const loaded = await storage.read({ key });
+    const streamed = await readAll(await storage.getReadable({ key, signal }));
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(streamed).toStrictEqual(data);
@@ -121,15 +123,15 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "visibility.bin";
     const original = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: original });
-    const writable = await storage.getWritable({ key });
+    await storage.write({ key, data: original, signal });
+    const writable = await storage.getWritable({ key, signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9]));
 
     // 実行
-    const beforeClose = await storage.read({ key });
+    const beforeClose = await storage.read({ key, signal });
     await writer.close();
-    const afterClose = await storage.read({ key });
+    const afterClose = await storage.read({ key, signal });
 
     // 検証
     expect(beforeClose).toStrictEqual(original);
@@ -142,15 +144,15 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "new-file-visibility.bin";
-    const writable = await storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行
-    const existsBeforeClose = await storage.exists({ key });
-    const beforeClose = await storage.read({ key });
+    const existsBeforeClose = await storage.exists({ key, signal });
+    const beforeClose = await storage.read({ key, signal });
     await writer.close();
-    const afterClose = await storage.read({ key });
+    const afterClose = await storage.read({ key, signal });
 
     // 検証
     expect(existsBeforeClose).toBe(true);
@@ -162,14 +164,14 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "aborted.bin";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original });
-    const writable = await storage.getWritable({ key });
+    await storage.write({ key, data: original, signal });
+    const writable = await storage.getWritable({ key, signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
     // 実行
     await writer.abort(new Error("テスト用の中断"));
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(original);
@@ -181,16 +183,16 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "aborted-new.bin";
-    const writable = await storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
     // 実行
     await writer.abort(new Error("テスト用の中断"));
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
-    expect(await storage.exists({ key })).toBe(true);
+    expect(await storage.exists({ key, signal })).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array());
   });
 });
@@ -203,8 +205,8 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "cancelled.bin";
     const data = new Uint8Array(200_000).fill(7);
-    await storage.write({ key, data });
-    const readable = await storage.getReadable({ key });
+    await storage.write({ key, data, signal });
+    const readable = await storage.getReadable({ key, signal });
     const reader = readable.getReader();
     await reader.read();
 
@@ -215,7 +217,7 @@ describe("読み取りストリームの振る舞い", () => {
     // 検証
     expect(afterCancel.done).toBe(true);
 
-    const again = await readAll(await storage.getReadable({ key }));
+    const again = await readAll(await storage.getReadable({ key, signal }));
     expect(again).toStrictEqual(data);
   });
 
@@ -224,7 +226,9 @@ describe("読み取りストリームの振る舞い", () => {
     storage,
   }) => {
     // 実行
-    const error = await storage.getReadable({ key: "missing.bin" }).catch((ex: unknown) => ex);
+    const error = await storage
+      .getReadable({ key: "missing.bin", signal })
+      .catch((ex: unknown) => ex);
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -241,7 +245,7 @@ describe("読み取りストリームの振る舞い", () => {
     await writeChunks(storage, key, [data]);
 
     // 実行
-    const loaded = await storage.read({ key });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -254,10 +258,10 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "write-then-stream.bin";
     const data = new Uint8Array([5, 6, 7, 8]);
-    await storage.write({ key, data });
+    await storage.write({ key, data, signal });
 
     // 実行
-    const loaded = await readAll(await storage.getReadable({ key }));
+    const loaded = await readAll(await storage.getReadable({ key, signal }));
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -269,10 +273,10 @@ describe("読み取りストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "empty-file.bin";
-    await storage.write({ key, data: new Uint8Array() });
+    await storage.write({ key, data: new Uint8Array(), signal });
 
     // 実行
-    const readable = await storage.getReadable({ key });
+    const readable = await storage.getReadable({ key, signal });
     const first = await readable.getReader().read();
 
     // 検証
@@ -286,12 +290,12 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "multi-reader.bin";
     const data = new Uint8Array(150_000).fill(3);
-    await storage.write({ key, data });
+    await storage.write({ key, data, signal });
 
     // 実行
     const [first, second] = await Promise.all([
-      storage.getReadable({ key }),
-      storage.getReadable({ key }),
+      storage.getReadable({ key, signal }),
+      storage.getReadable({ key, signal }),
     ]);
     const [firstData, secondData] = await Promise.all([readAll(first), readAll(second)]);
 

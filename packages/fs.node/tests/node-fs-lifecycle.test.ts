@@ -111,7 +111,7 @@ describe("open 前の操作", () => {
     await expect(storage.exists({ key })).rejects.toThrow(TypeError);
     await expect(storage.delete({ key })).rejects.toThrow(TypeError);
     await expect(storage.clear()).rejects.toThrow(TypeError);
-    await expect(storage.getWritable({ key })).rejects.toThrow(TypeError);
+    await expect(storage.getWritable({ key, signal })).rejects.toThrow(TypeError);
     expect(() => storage.getReadable({ key, signal })).toThrow(TypeError);
   });
 });

@@ -88,7 +88,7 @@ describe("キー検証", () => {
       await expect(storage.read({ key, signal })).rejects.toThrow(InvalidFilenameError);
       await expect(storage.exists({ key })).rejects.toThrow(InvalidFilenameError);
       await expect(storage.delete({ key })).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.getWritable({ key })).rejects.toThrow(InvalidFilenameError);
+      await expect(storage.getWritable({ key, signal })).rejects.toThrow(InvalidFilenameError);
       expect(() => storage.getReadable({ key, signal })).toThrow(InvalidFilenameError);
     }
   });

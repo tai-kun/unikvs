@@ -243,11 +243,11 @@ describe("ストリーム操作", () => {
     await expect(storage.exists({ key })).resolves.toBe(false);
   });
 
-  test("close 時の rename が失敗したとき、一時ファイルが残らない", async ({ expect }) => {
+  test("close 時の rename が失敗したとき、一時ファイルが残らない", async ({ expect, signal }) => {
     // 準備
     const key = "rename-conflict.txt";
     await mkdir(join(TEST_ROOT, key), { recursive: true });
-    const writable = await storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 

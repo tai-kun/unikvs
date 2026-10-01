@@ -2,6 +2,8 @@ import { test as vitest } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
 
+const { signal } = new AbortController();
+
 /**
  * テストで使用するオブジェクトストア名です。
  * 既定値とは異なるストア名を指定して動作を検証するために使用します。
@@ -92,7 +94,7 @@ export const test = vitest.extend<{ dbName: string; storage: IndexeddbStorage }>
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
     await use(storage);
     if (storage.isOpen) {
-      await storage.close();
+      await storage.close({ signal });
     }
   },
 });

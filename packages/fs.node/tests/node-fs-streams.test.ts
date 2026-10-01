@@ -28,7 +28,7 @@ describe("getWritable の詳細", () => {
       new Uint8Array(65536).fill(5),
     ];
     const expected = concatBytes(chunks);
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
 
     // 実行
     for (const chunk of chunks) {
@@ -48,7 +48,7 @@ describe("getWritable の詳細", () => {
   }) => {
     // 準備
     const key = "empty.bin";
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
 
     // 実行
     await writer.close();
@@ -62,11 +62,12 @@ describe("getWritable の詳細", () => {
   test("close するまで最終ファイルは見えず、close で rename される", async ({
     expect,
     root,
+    signal,
     storage,
   }) => {
     // 準備
     const key = "swap.bin";
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 検証 (close 前)
@@ -93,7 +94,7 @@ describe("getWritable の詳細", () => {
     const oldData = new Uint8Array([1, 1, 1]);
     const newData = new Uint8Array([2, 2, 2, 2]);
     await storage.write({ key, data: oldData, signal });
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
 
     // 実行
     await writer.write(newData);
@@ -117,7 +118,7 @@ describe("getWritable の詳細", () => {
     const key = "large.bin";
     const data = createPseudoRandomBytes(8 * 1024 * 1024);
     const chunkSize = 1024 * 1024;
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
 
     // 実行
     for (let offset = 0; offset < data.length; offset += chunkSize) {
@@ -139,7 +140,7 @@ describe("getWritable の詳細", () => {
     const key = "abort-existing.bin";
     const original = new Uint8Array([5, 5, 5]);
     await storage.write({ key, data: original, signal });
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x42));
 
     // 実行
@@ -155,11 +156,12 @@ describe("getWritable の詳細", () => {
   test("writer.abort した新規キーはファイルも一時ファイルも残さない", async ({
     expect,
     root,
+    signal,
     storage,
   }) => {
     // 準備
     const key = "abort-new.bin";
-    const writer = (await storage.getWritable({ key })).getWriter();
+    const writer = (await storage.getWritable({ key, signal })).getWriter();
     await writer.write(new Uint8Array(1024).fill(1));
 
     // 実行

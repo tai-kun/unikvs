@@ -164,12 +164,12 @@ describe("ライフサイクル管理", () => {
     await expect(storage.clear({ signal })).rejects.toThrow(TypeError);
   });
 
-  test("close 後の getWritable は同期エラーになる", ({ expect, storage }) => {
+  test("close 後の getWritable は同期エラーになる", ({ expect, signal, storage }) => {
     // 準備
     storage.close();
 
     // 実行と検証
-    expect(() => storage.getWritable({ key: "after-close.bin" })).toThrow(TypeError);
+    expect(() => storage.getWritable({ key: "after-close.bin", signal })).toThrow(TypeError);
   });
 
   test("close 後の getReadable は同期エラーになる", ({ expect, signal, storage }) => {

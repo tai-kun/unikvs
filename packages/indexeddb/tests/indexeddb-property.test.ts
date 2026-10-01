@@ -3,6 +3,8 @@ import { describe } from "vitest";
 import { concatChunks, test } from "./_helpers.js";
 import { forCasesAsync, type Random } from "./_random.js";
 
+const { signal } = new AbortController();
+
 const seed = 20260930;
 const caseCount = 30;
 
@@ -72,28 +74,28 @@ function randomOperation(random: Random): Operation {
 describe("Indexeddb のプロパティー", () => {
   test("任意のキーと structured clone 可能な値の write→read 往復", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
     await forCasesAsync(seed, caseCount, async (random) => {
       const key = randomKey(random);
       const value = randomValue(random);
 
-      await storage.write({ key, data: value });
-      expect(await storage.read({ key })).toStrictEqual(value);
+      await storage.write({ key, data: value, signal });
+      expect(await storage.read({ key, signal })).toStrictEqual(value);
     });
   });
 
   test("任意のバイト列を byte-for-byte で往復できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const bytes = random.bytes(random.uint(257));
 
-      await storage.write({ key: "bytes", data: bytes });
-      const result = await storage.read({ key: "bytes" });
+      await storage.write({ key: "bytes", data: bytes, signal });
+      const result = await storage.read({ key: "bytes", signal });
 
       expect(result).toStrictEqual(bytes);
       expect(result).not.toBe(bytes);
@@ -102,28 +104,28 @@ describe("Indexeddb のプロパティー", () => {
 
   test("ランダムな操作列に対して Map と同じ状態を保つ", async ({ expect, storage }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
     await forCasesAsync(seed + 2, caseCount, async (random) => {
       const operations = random.array(random.uint(21), () => randomOperation(random));
-      await storage.clear();
+      await storage.clear({ signal });
       const model = new Map<string, Value>();
 
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            await storage.write({ key: operation.key, data: operation.value });
+            await storage.write({ key: operation.key, data: operation.value, signal });
             model.set(operation.key, operation.value);
             break;
           }
           case "delete": {
-            await storage.delete({ key: operation.key });
+            await storage.delete({ key: operation.key, signal });
             model.delete(operation.key);
             break;
           }
           case "clear": {
-            await storage.clear();
+            await storage.clear({ signal });
             model.clear();
             break;
           }
@@ -137,9 +139,9 @@ describe("Indexeddb のプロパティー", () => {
         }
       }
       for (const key of touchedKeys) {
-        expect(await storage.exists({ key })).toBe(model.has(key));
+        expect(await storage.exists({ key, signal })).toBe(model.has(key));
         if (model.has(key)) {
-          expect(await storage.read({ key })).toStrictEqual(model.get(key));
+          expect(await storage.read({ key, signal })).toStrictEqual(model.get(key));
         }
       }
     });
@@ -150,18 +152,18 @@ describe("Indexeddb のプロパティー", () => {
     storage,
   }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
 
     // 実行と検証
     await forCasesAsync(seed + 3, caseCount, async (random) => {
       const chunks = random.array(random.uint(9), () => random.bytes(random.uint(65)));
-      const writer = storage.getWritable({ key: "stream" }).getWriter();
+      const writer = storage.getWritable({ key: "stream", signal }).getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
       await writer.close();
 
-      expect(await storage.read({ key: "stream" })).toStrictEqual(concatChunks(chunks));
+      expect(await storage.read({ key: "stream", signal })).toStrictEqual(concatChunks(chunks));
     });
   });
 });

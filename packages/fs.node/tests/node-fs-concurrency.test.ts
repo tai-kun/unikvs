@@ -37,7 +37,7 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map(async (data) => {
-        const writer = (await storage.getWritable({ key })).getWriter();
+        const writer = (await storage.getWritable({ key, signal })).getWriter();
         await writer.write(data);
         await writer.close();
       }),

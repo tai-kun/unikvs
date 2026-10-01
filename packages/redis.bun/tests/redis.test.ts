@@ -96,7 +96,7 @@ describe("基本操作 (CRUD)", () => {
     await expect(storage.exists({ key: "file2.txt", signal })).resolves.toBe(false);
   });
 
-  test("clear を引数なしで実行したときも、プレフィックス配下の全データが削除される", async ({
+  test("clear を実行したとき、プレフィックス配下の全データが削除される", async ({
     expect,
     signal,
     storage,
@@ -105,7 +105,7 @@ describe("基本操作 (CRUD)", () => {
     await storage.write({ key: "argless.txt", data: new Uint8Array([1]), signal });
 
     // 実行
-    await storage.clear();
+    await storage.clear({ signal });
 
     // 検証
     await expect(storage.exists({ key: "argless.txt", signal })).resolves.toBe(false);

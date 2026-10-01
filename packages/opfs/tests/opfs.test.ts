@@ -2,6 +2,8 @@ import { describe, test, beforeEach, afterEach } from "vitest";
 
 import Opfs from "../src/opfs.js";
 
+const { signal } = new AbortController();
+
 let storage: Opfs;
 const TEST_ROOT = ".unikvs/test";
 
@@ -10,14 +12,14 @@ beforeEach(async () => {
   storage = new Opfs(TEST_ROOT);
 
   // 前のテストの影響を除去するために、初期化してクリアする。
-  await storage.open();
-  await storage.clear();
+  await storage.open({ signal });
+  await storage.clear({ signal });
 });
 
 afterEach(async () => {
   // テスト終了後のクリーンアップ。
   if (storage.isOpen) {
-    await storage.clear();
+    await storage.clear({ signal });
   }
 });
 
@@ -26,7 +28,7 @@ describe("初期化の振る舞い", () => {
     expect,
   }) => {
     // 準備 & Act
-    await storage.open();
+    await storage.open({ signal });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -39,7 +41,7 @@ describe("初期化の振る舞い", () => {
     const rootStorage = new Opfs("");
 
     // 実行
-    await rootStorage.open();
+    await rootStorage.open({ signal });
 
     // 検証
     expect(rootStorage.isOpen).toBe(true);
@@ -51,13 +53,13 @@ describe("初期化の振る舞い", () => {
     const key = "test.bin";
 
     // 実行と検証
-    await expect(uninitializedStorage.read({ key })).rejects.toThrow();
+    await expect(uninitializedStorage.read({ key, signal })).rejects.toThrow();
   });
 });
 
 describe("基本操作 (CRUD) の振る舞い", () => {
   beforeEach(async () => {
-    await storage.open();
+    await storage.open({ signal });
   });
 
   test("データを書き込んだとき、エラーなく正常に終了する", async ({ expect }) => {
@@ -66,17 +68,17 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行と検証
-    await expect(storage.write({ key, data })).resolves.not.toThrow();
+    await expect(storage.write({ key, data, signal })).resolves.not.toThrow();
   });
 
   test("保存されたデータを読み取ったとき、書き込み時と同じ内容が取得できる", async ({ expect }) => {
     // 準備
     const key = "test.bin";
     const expectedData = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: expectedData });
+    await storage.write({ key, data: expectedData, signal });
 
     // 実行
-    const result = await storage.read({ key });
+    const result = await storage.read({ key, signal });
 
     // 検証
     expect(result).toStrictEqual(expectedData);
@@ -85,10 +87,10 @@ describe("基本操作 (CRUD) の振る舞い", () => {
   test("存在するキーに対して存在確認をしたとき、真を返す", async ({ expect }) => {
     // 準備
     const key = "exists.bin";
-    await storage.write({ key, data: new Uint8Array([0]) });
+    await storage.write({ key, data: new Uint8Array([0]), signal });
 
     // 実行
-    const exists = await storage.exists({ key });
+    const exists = await storage.exists({ key, signal });
 
     // 検証
     expect(exists).toBe(true);
@@ -99,7 +101,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     const key = "non_existent.bin";
 
     // 実行
-    const exists = await storage.exists({ key });
+    const exists = await storage.exists({ key, signal });
 
     // 検証
     expect(exists).toBe(false);
@@ -108,11 +110,11 @@ describe("基本操作 (CRUD) の振る舞い", () => {
   test("データを削除したとき、その後の存在確認で偽を返す", async ({ expect }) => {
     // 準備
     const key = "delete_me.bin";
-    await storage.write({ key, data: new Uint8Array([0]) });
+    await storage.write({ key, data: new Uint8Array([0]), signal });
 
     // 実行
-    await storage.delete({ key });
-    const exists = await storage.exists({ key });
+    await storage.delete({ key, signal });
+    const exists = await storage.exists({ key, signal });
 
     // 検証
     expect(exists).toBe(false);
@@ -122,8 +124,8 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     // 準備
     const key = "atomic.bin";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original });
-    expect(await storage.read({ key })).toStrictEqual(original);
+    await storage.write({ key, data: original, signal });
+    expect(await storage.read({ key, signal })).toStrictEqual(original);
 
     // createWritable を差し替え、write() が必ず失敗するが close() は成功する (＝ 部分的な書き込み内容がコミットされる) ストリームを返します。
     // 実際の OPFS ではクォータ超過・I/O エラーなどで書き込み途中に失敗し得ます。
@@ -157,7 +159,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
 
     try {
       // 実行と検証
-      await expect(storage.write({ key, data: new Uint8Array([9, 9, 9]) })).rejects.toThrow(
+      await expect(storage.write({ key, data: new Uint8Array([9, 9, 9]), signal })).rejects.toThrow(
         /quota exceeded/,
       );
     } finally {
@@ -165,13 +167,13 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     }
 
     // 検証: 失敗した書き込みによって既存データが破壊されていないこと
-    expect(await storage.read({ key })).toStrictEqual(original);
+    expect(await storage.read({ key, signal })).toStrictEqual(original);
   });
 });
 
 describe("ストリーム操作の振る舞い", () => {
   beforeEach(async () => {
-    await storage.open();
+    await storage.open({ signal });
   });
 
   test("書き込み用ストリームを取得したとき、WritableStream のインスタンスが返される", async ({
@@ -181,7 +183,7 @@ describe("ストリーム操作の振る舞い", () => {
     const key = "stream_write.bin";
 
     // 実行
-    const writable = await storage.getWritable({ key });
+    const writable = await storage.getWritable({ key, signal });
 
     // 検証
     expect(writable).toBeInstanceOf(WritableStream);
@@ -193,10 +195,10 @@ describe("ストリーム操作の振る舞い", () => {
   }) => {
     // 準備
     const key = "stream_read.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]) });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
 
     // 実行
-    const readable = await storage.getReadable({ key });
+    const readable = await storage.getReadable({ key, signal });
 
     // 検証
     expect(readable).toBeInstanceOf(ReadableStream);
@@ -209,31 +211,31 @@ describe("ストリーム操作の振る舞い", () => {
     const key = "missing_stream.bin";
 
     // 実行と検証
-    await expect(storage.getReadable({ key })).rejects.toThrow();
+    await expect(storage.getReadable({ key, signal })).rejects.toThrow();
   });
 });
 
 describe("一括削除 (Clear) の振る舞い", () => {
   test("クリアを実行したとき、保存されていたすべてのデータが削除される", async ({ expect }) => {
     // 準備
-    await storage.open();
+    await storage.open({ signal });
     const key1 = "file1.bin";
     const key2 = "file2.bin";
-    await storage.write({ key: key1, data: new Uint8Array([1]) });
-    await storage.write({ key: key2, data: new Uint8Array([2]) });
+    await storage.write({ key: key1, data: new Uint8Array([1]), signal });
+    await storage.write({ key: key2, data: new Uint8Array([2]), signal });
 
     // 実行
-    await storage.clear();
+    await storage.clear({ signal });
 
     // 検証
-    expect(await storage.exists({ key: key1 })).toBe(false);
-    expect(await storage.exists({ key: key2 })).toBe(false);
+    expect(await storage.exists({ key: key1, signal })).toBe(false);
+    expect(await storage.exists({ key: key2, signal })).toBe(false);
   });
 });
 
 describe("境界値・異常系の振る舞い", () => {
   beforeEach(async () => {
-    await storage.open();
+    await storage.open({ signal });
   });
 
   test("不正なファイル名で操作を試みたとき、検証エラーが発生する", async ({ expect }) => {
@@ -241,7 +243,9 @@ describe("境界値・異常系の振る舞い", () => {
     const invalidKey = "/invalid/path";
 
     // 実行と検証
-    await expect(storage.write({ key: invalidKey, data: new Uint8Array() })).rejects.toThrow();
+    await expect(
+      storage.write({ key: invalidKey, data: new Uint8Array(), signal }),
+    ).rejects.toThrow();
   });
 
   test("空のデータを書き込んだとき、サイズ 0 のファイルとして正常に保存される", async ({
@@ -252,8 +256,8 @@ describe("境界値・異常系の振る舞い", () => {
     const emptyData = new Uint8Array(0);
 
     // 実行
-    await storage.write({ key, data: emptyData });
-    const result = await storage.read({ key });
+    await storage.write({ key, data: emptyData, signal });
+    const result = await storage.read({ key, signal });
 
     // 検証
     expect(result.length).toBe(0);
@@ -265,6 +269,6 @@ describe("境界値・異常系の振る舞い", () => {
     const key = "never_created.bin";
 
     // 実行と検証
-    await expect(storage.read({ key })).rejects.toThrow();
+    await expect(storage.read({ key, signal })).rejects.toThrow();
   });
 });

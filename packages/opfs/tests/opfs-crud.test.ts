@@ -4,6 +4,8 @@ import { describe } from "vitest";
 import Opfs from "../src/opfs.js";
 import { removeRoot, test, uniqueRoot } from "./_helpers.js";
 
+const { signal } = new AbortController();
+
 const INTEGRITY_CASES: readonly (readonly [string, Uint8Array<ArrayBuffer>, string])[] = [
   ["0x00 を含むバイト列", new Uint8Array([0, 255, 0, 1, 0]), "nulls.bin"],
   ["すべて 0 のバイト列", new Uint8Array(256), "zeros.bin"],
@@ -34,23 +36,23 @@ const INVALID_KEY = "dir/file.bin";
 
 const INVALID_KEY_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] =
   [
-    ["read", (storage) => storage.read({ key: INVALID_KEY })],
-    ["write", (storage) => storage.write({ key: INVALID_KEY, data: new Uint8Array([1]) })],
-    ["exists", (storage) => storage.exists({ key: INVALID_KEY })],
-    ["delete", (storage) => storage.delete({ key: INVALID_KEY })],
-    ["getWritable", (storage) => storage.getWritable({ key: INVALID_KEY })],
-    ["getReadable", (storage) => storage.getReadable({ key: INVALID_KEY })],
+    ["read", (storage) => storage.read({ key: INVALID_KEY, signal })],
+    ["write", (storage) => storage.write({ key: INVALID_KEY, data: new Uint8Array([1]), signal })],
+    ["exists", (storage) => storage.exists({ key: INVALID_KEY, signal })],
+    ["delete", (storage) => storage.delete({ key: INVALID_KEY, signal })],
+    ["getWritable", (storage) => storage.getWritable({ key: INVALID_KEY, signal })],
+    ["getReadable", (storage) => storage.getReadable({ key: INVALID_KEY, signal })],
   ];
 
 describe("CRUD の振る舞い", () => {
   test("同じキーへ上書きしたとき、最新の内容だけが読み取れる", async ({ expect, storage }) => {
     // 準備
     const key = "overwrite.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]) });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]) });
-    const loaded = await storage.read({ key });
+    await storage.write({ key, data: new Uint8Array([9]), signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([9]));
@@ -69,26 +71,26 @@ describe("CRUD の振る舞い", () => {
 
     // 実行
     for (const [key, bytes] of entries) {
-      await storage.write({ key, data: new Uint8Array(bytes) });
+      await storage.write({ key, data: new Uint8Array(bytes), signal });
     }
 
     // 検証
     for (const [key, bytes] of entries) {
-      expect(await storage.read({ key })).toStrictEqual(new Uint8Array(bytes));
+      expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array(bytes));
     }
   });
 
   test("キーを削除したとき、他のキーは影響を受けない", async ({ expect, storage }) => {
     // 準備
-    await storage.write({ key: "keep.bin", data: new Uint8Array([1]) });
-    await storage.write({ key: "remove.bin", data: new Uint8Array([2]) });
+    await storage.write({ key: "keep.bin", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "remove.bin", data: new Uint8Array([2]), signal });
 
     // 実行
-    await storage.delete({ key: "remove.bin" });
+    await storage.delete({ key: "remove.bin", signal });
 
     // 検証
-    expect(await storage.exists({ key: "remove.bin" })).toBe(false);
-    expect(await storage.read({ key: "keep.bin" })).toStrictEqual(new Uint8Array([1]));
+    expect(await storage.exists({ key: "remove.bin", signal })).toBe(false);
+    expect(await storage.read({ key: "keep.bin", signal })).toStrictEqual(new Uint8Array([1]));
   });
 
   test("存在しないキーを削除しようとしたとき、NotFoundError を投げる", async ({
@@ -96,7 +98,7 @@ describe("CRUD の振る舞い", () => {
     storage,
   }) => {
     // 実行
-    const error = await storage.delete({ key: "missing.bin" }).catch((ex: unknown) => ex);
+    const error = await storage.delete({ key: "missing.bin", signal }).catch((ex: unknown) => ex);
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -109,12 +111,12 @@ describe("CRUD の振る舞い", () => {
     const data = new Uint8Array([10, 20, 30]);
 
     // 実行
-    await storage.write({ key, data });
-    const loaded = await storage.read({ key });
+    await storage.write({ key, data, signal });
+    const loaded = await storage.read({ key, signal });
 
     // 検証
     expect(loaded).toStrictEqual(data);
-    expect(await storage.exists({ key })).toBe(true);
+    expect(await storage.exists({ key, signal })).toBe(true);
   });
 });
 
@@ -125,20 +127,20 @@ describe("一括削除 (Clear) の振る舞い", () => {
     // 準備
     const root = crypto.randomUUID();
     const storage = new Opfs(root);
-    await storage.open();
-    await storage.write({ key: "a.bin", data: new Uint8Array([1]) });
-    await storage.write({ key: "b.bin", data: new Uint8Array([2]) });
+    await storage.open({ signal });
+    await storage.write({ key: "a.bin", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "b.bin", data: new Uint8Array([2]), signal });
 
     // 実行
-    await storage.clear();
+    await storage.clear({ signal });
 
     // 検証
-    expect(await storage.exists({ key: "a.bin" })).toBe(false);
-    expect(await storage.exists({ key: "b.bin" })).toBe(false);
+    expect(await storage.exists({ key: "a.bin", signal })).toBe(false);
+    expect(await storage.exists({ key: "b.bin", signal })).toBe(false);
     expect(storage.isOpen).toBe(true);
 
-    await storage.write({ key: "c.bin", data: new Uint8Array([3]) });
-    expect(await storage.read({ key: "c.bin" })).toStrictEqual(new Uint8Array([3]));
+    await storage.write({ key: "c.bin", data: new Uint8Array([3]), signal });
+    expect(await storage.read({ key: "c.bin", signal })).toStrictEqual(new Uint8Array([3]));
 
     await removeRoot(root);
   });
@@ -150,18 +152,18 @@ describe("一括削除 (Clear) の振る舞い", () => {
     const base = uniqueRoot();
     const target = new Opfs(`${base}/target`);
     const sibling = new Opfs(`${base}/sibling`);
-    await target.open();
-    await sibling.open();
-    await target.write({ key: "target.bin", data: new Uint8Array([1]) });
-    await sibling.write({ key: "sibling.bin", data: new Uint8Array([2]) });
+    await target.open({ signal });
+    await sibling.open({ signal });
+    await target.write({ key: "target.bin", data: new Uint8Array([1]), signal });
+    await sibling.write({ key: "sibling.bin", data: new Uint8Array([2]), signal });
 
     // 実行
-    await target.clear();
+    await target.clear({ signal });
 
     // 検証
-    expect(await target.exists({ key: "target.bin" })).toBe(false);
-    expect(await sibling.exists({ key: "sibling.bin" })).toBe(true);
-    expect(await sibling.read({ key: "sibling.bin" })).toStrictEqual(new Uint8Array([2]));
+    expect(await target.exists({ key: "target.bin", signal })).toBe(false);
+    expect(await sibling.exists({ key: "sibling.bin", signal })).toBe(true);
+    expect(await sibling.read({ key: "sibling.bin", signal })).toStrictEqual(new Uint8Array([2]));
 
     await removeRoot(base);
   });
@@ -171,28 +173,28 @@ describe("一括削除 (Clear) の振る舞い", () => {
   }) => {
     // 準備
     const storage = new Opfs("");
-    await storage.open();
+    await storage.open({ signal });
     const keys = Array.from(
       { length: 5 },
       (_, index) => `clear-${index}-${crypto.randomUUID()}.bin`,
     );
     for (const key of keys) {
-      await storage.write({ key, data: new Uint8Array([1]) });
+      await storage.write({ key, data: new Uint8Array([1]), signal });
     }
 
     // 実行
-    await storage.clear();
+    await storage.clear({ signal });
 
     // 検証
     for (const key of keys) {
-      expect(await storage.exists({ key })).toBe(false);
+      expect(await storage.exists({ key, signal })).toBe(false);
     }
 
     const key = `after-clear-${crypto.randomUUID()}.bin`;
-    await storage.write({ key, data: new Uint8Array([2]) });
-    expect(await storage.read({ key })).toStrictEqual(new Uint8Array([2]));
+    await storage.write({ key, data: new Uint8Array([2]), signal });
+    expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array([2]));
 
-    await storage.delete({ key });
+    await storage.delete({ key, signal });
   });
 });
 
@@ -203,8 +205,8 @@ describe("データ完全性の振る舞い", () => {
       storage,
     }) => {
       // 実行
-      await storage.write({ key, data });
-      const loaded = await storage.read({ key });
+      await storage.write({ key, data, signal });
+      const loaded = await storage.read({ key, signal });
 
       // 検証
       expect(loaded).toStrictEqual(data);
@@ -232,7 +234,7 @@ describe("キー検証の振る舞い", () => {
       storage,
     }) => {
       // 実行
-      const error = await storage.exists({ key }).catch((ex: unknown) => ex);
+      const error = await storage.exists({ key, signal }).catch((ex: unknown) => ex);
 
       // 検証
       expect(error).toBeInstanceOf(InvalidFilenameError);
@@ -245,7 +247,7 @@ describe("キー検証の振る舞い", () => {
 
     // 実行
     const error = await storage
-      .write({ key: INVALID_KEY, data: new Uint8Array() })
+      .write({ key: INVALID_KEY, data: new Uint8Array(), signal })
       .catch((ex: unknown) => ex);
 
     // 検証
