@@ -159,7 +159,7 @@ describe("UniKvs - 共有ロック", () => {
     }
   });
 
-  test("has の存在確認が保留中のとき set は排他ロックで待たされる", async ({ expect }) => {
+  test("has の存在確認が保留中でも別キーの set は完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
     const kvs = UniKvs.config().appendStorage(storage).create();
@@ -179,12 +179,111 @@ describe("UniKvs - 共有ロック", () => {
       await entered.promise;
       const setB = kvs.set("b", "value");
 
-      // 検証: 排他ロックにより set は has の完了待ちになる
-      await expect(withTimeout(setB, 200, "set-b")).rejects.toThrow("TIMEOUT(set-b)");
+      // 検証: グローバル読み取りロックは共存するため、別キーの set は待たされない
+      await expect(withTimeout(setB, 200, "set-b")).resolves.toBeUndefined();
       storage.ungate();
-      await expect(setB).resolves.toBeUndefined();
       await expect(pendingHasA).resolves.toBe(false);
       await expect(kvs.get("b")).resolves.toBe("value");
+    } finally {
+      storage.ungate();
+      await kvs.close();
+    }
+  });
+
+  test("has の存在確認が保留中のとき同一キーの set はキー書き込みロックの競合で待たされる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new GatedExistsStorage();
+    const kvs = UniKvs.config().appendStorage(storage).create();
+    await kvs.open();
+
+    const entered = Promise.withResolvers<void>();
+    storage.onExistsStart = (key) => {
+      if (key === "a") {
+        entered.resolve();
+      }
+    };
+    storage.gate("a");
+
+    try {
+      // 実行
+      const pendingHasA = kvs.has("a");
+      await entered.promise;
+      const setA = kvs.set("a", "value");
+
+      // 検証: 同一キーの読み取りロックと競合するため、set は has の完了待ちになる
+      await expect(withTimeout(setA, 200, "set-a")).rejects.toThrow("TIMEOUT(set-a)");
+      storage.ungate();
+      await expect(pendingHasA).resolves.toBe(false);
+      await expect(setA).resolves.toBeUndefined();
+      await expect(kvs.get("a")).resolves.toBe("value");
+    } finally {
+      storage.ungate();
+      await kvs.close();
+    }
+  });
+
+  test("ライブストリーム中の別キー操作は完了できるが同一キーの set は dispose まで待たされる", async ({
+    expect,
+  }) => {
+    // 準備: stream("a") がキー a の読み取りロックを保持し続ける
+    const storage = new GatedExistsStorage();
+    storage.map.set("a", [Uint8Array.from([1])]);
+    const kvs = UniKvs.config().appendStorage(storage).create();
+    await kvs.open();
+    const vs = await kvs.stream("a");
+
+    try {
+      // 検証: キー a の読み取りロックはキー b の操作と競合しない
+      await expect(withTimeout(kvs.has("b"), 200, "has-b")).resolves.toBe(false);
+      await expect(withTimeout(kvs.set("b", "value"), 200, "set-b")).resolves.toBeUndefined();
+
+      // 実行
+      const setA = kvs.set("a", "value");
+
+      // 検証: 同一キーへの書き込みはキー読み取りロックの解放待ちになる
+      await expect(withTimeout(setA, 200, "set-a")).rejects.toThrow("TIMEOUT(set-a)");
+
+      // 実行と検証: dispose でキー読み取りロックが解放されると完了する
+      await vs.dispose();
+      await expect(setA).resolves.toBeUndefined();
+      await expect(kvs.get("a")).resolves.toBe("value");
+    } finally {
+      await vs.dispose();
+      await kvs.close();
+    }
+  });
+
+  test("has の存在確認が保留中のとき clear は io グローバル書き込みロックの競合で待たされる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new GatedExistsStorage();
+    storage.map.set("a", "value");
+    const kvs = UniKvs.config().appendStorage(storage).create();
+    await kvs.open();
+
+    const entered = Promise.withResolvers<void>();
+    storage.onExistsStart = (key) => {
+      if (key === "a") {
+        entered.resolve();
+      }
+    };
+    storage.gate("a");
+
+    try {
+      // 実行
+      const pendingHasA = kvs.has("a");
+      await entered.promise;
+      const clearPending = kvs.clear();
+
+      // 検証: clear の io グローバル書き込みロックはキー読み取りロックの解放待ちになる
+      await expect(withTimeout(clearPending, 200, "clear")).rejects.toThrow("TIMEOUT(clear)");
+      storage.ungate();
+      await expect(pendingHasA).resolves.toBe(true);
+      await expect(clearPending).resolves.toBeUndefined();
+      expect(storage.map.size).toBe(0);
     } finally {
       storage.ungate();
       await kvs.close();

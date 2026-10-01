@@ -101,6 +101,8 @@ Install `valibot` separately when using Valibot schemas. Omitting `schema` falls
 
 All operations support cancellation via `AbortSignal` and passing of runtime variables.
 
+The data operations (`set` / `get` / `stream` / `has` / `delete` / `clear`) use a global read lock and per-key locks. Operations on different keys do not block each other. Reads and writes to the same key are serialized, which keeps results consistent per key. The `ValueStream` returned by `stream` holds the read lock for its key until it is disposed or fully consumed, so writes to the same key wait. `clear` and `open` / `close` use exclusive locks and wait for in-progress operations to finish.
+
 ## Value types [#value-types]
 
 `Value`, `PlainValue`, and `StreamValue` are both types and functions. Used as types, they decide the available methods per key at the type level; used as functions, they infer types from Valibot schemas and validate values at runtime.
