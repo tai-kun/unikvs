@@ -91,6 +91,9 @@ Start with the minimal memory example, then see concepts for how it works.
   <Card title="@unikvs/fs.node" href="./packages/fs-node" icon="hard-drive">
     Stores data in the Node.js local filesystem.
   </Card>
+  <Card title="@unikvs/fs.bun" href="./packages/fs-bun" icon="hard-drive">
+    Stores data in the Bun local filesystem.
+  </Card>
   <Card title="@unikvs/s3.node" href="./packages/s3-node" icon="cloud">
     Stores data in S3-compatible object storage.
   </Card>
@@ -110,17 +113,18 @@ Start with the minimal memory example, then see concepts for how it works.
 
 ## Environments [#environments]
 
-| Package | Node.js | Browser |
-| --- | --- | --- |
-| `unikvs` | Supported. | Supported. |
-| `@unikvs/core` | Supported. | Supported. |
-| `@unikvs/utils` | Supported. | Supported. |
-| `@unikvs/compression` | Supported. | Supported. |
-| `@unikvs/checksum` | Supported. | Supported. |
-| `@unikvs/memory` | Supported. | Supported. |
-| `@unikvs/fs.node` | Supported. | Not supported. |
-| `@unikvs/s3.node` | Supported. | Not supported. |
-| `@unikvs/opfs` | Not supported. | Supported. |
-| `@unikvs/indexeddb` | Not supported. | Supported. |
-| `@unikvs/debug` | Supported. | Supported. |
-| `@unikvs/passthrough` | Supported. | Supported. |
+| Package | Node.js | Bun | Browser |
+| --- | --- | --- | --- |
+| `unikvs` | Supported. | Supported. | Supported. |
+| `@unikvs/core` | Supported. | Supported. | Supported. |
+| `@unikvs/utils` | Supported. | Supported. | Supported. |
+| `@unikvs/compression` | Supported. | Supported. | Supported. |
+| `@unikvs/checksum` | Supported. | Supported. | Supported. |
+| `@unikvs/memory` | Supported. | Supported. | Supported. |
+| `@unikvs/fs.node` | Supported. | Not supported. | Not supported. |
+| `@unikvs/fs.bun` | Not supported. | Supported. | Not supported. |
+| `@unikvs/s3.node` | Supported. | Not supported. | Not supported. |
+| `@unikvs/opfs` | Not supported. | Not supported. | Supported. |
+| `@unikvs/indexeddb` | Not supported. | Not supported. | Supported. |
+| `@unikvs/debug` | Supported. | Supported. | Supported. |
+| `@unikvs/passthrough` | Supported. | Supported. | Supported. |

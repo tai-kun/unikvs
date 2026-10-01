@@ -1,0 +1,164 @@
+---
+title: "@unikvs/fs.bun"
+description: "Bun のローカルファイルシステムにバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/fs.bun` は、Bun のローカルファイルシステムに保存するストレージプラグインです。指定したルートディレクトリー配下にキーをファイル名として保存します。<Badge variant="warning">Bun 専用</Badge>
+
+扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付け、`read` は `Uint8Array<ArrayBuffer>` を返します。ファイルの読み書きには `Bun.file` の `bytes()`・`write()`・`writer()` を使い、ディレクトリー操作とリネームには `node:fs/promises`、パス操作には `node:path` を動的インポートして使います。一時ファイル名の生成には `Bun.randomUUIDv7()` を使います。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/fs.bun
+```
+
+依存関係として `@unikvs/core` と `@unikvs/utils` を使用します。
+
+## 使い方 [#usage]
+
+中心は `BunFs` クラスです。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+```
+
+```ts
+public constructor(root: string = ".unikvs")
+```
+
+`root` は保存先のルートディレクトリーです。相対パスは `open()` 実行時にカレントディレクトリー基準で解決します。既定値は `".unikvs"` です。
+
+主なメンバーは次のとおりです。
+
+- `name` は `"BunFs"` です。
+- `isOpen` はオープン済みかどうかを示します。
+- `open()` はルートディレクトリーを再帰的に作り、読み書き可能にします。
+- `write`・`read`・`exists`・`delete`・`clear` で読み書きします。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun");
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+```
+
+## ファイル配置 [#layout]
+
+キーからファイルパスへの対応は次のとおりです。ルート直下にキーがそのまま並び、サブディレクトリーは作りません。
+
+<FileTree>
+
+- .unikvs/
+  - hello.bin
+  - greeting.bin
+
+</FileTree>
+
+- 最終パスは `path.join(this.root, key)` です。
+- 書き込み時の一時ファイルは `` `${dest}.${Bun.randomUUIDv7()}.tmp` `` です。同じディレクトリーに作り、`rename` がアトミックになることを保証します。
+- `open()` では `path.resolve(this.root)` で絶対パス化し、`mkdir(root, { recursive: true })` で再帰的に作ります。
+- `clear()` ではルートを `rm(this.root, { recursive: true, force: true })` で削除後に作り直します。
+
+ファイル名の検証には `@unikvs/utils` の `assertValidFilename` を使います。`write`・`read`・`exists`・`delete`・`getWritable`・`getReadable` のいずれも最初に検証し、無効なら `InvalidFilenameError` を投げます。空文字、`.`、`..`、255 バイト超、NFC 不一致、予約文字・Windows 予約名を含むキーは使えません。
+
+## ストリーム [#streams]
+
+読み書きどちらのストリームにも対応しています。
+
+書き込み用は次のメソッドで取得します。
+
+```ts
+public async getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
+): Promise<WritableStream<Uint8Array<ArrayBuffer>>>
+```
+
+`Bun.file(tmp).writer()` が返す FileSink に書き出し、チャンクごとに `flush()` してディスクへ反映します。`close` 成功時のみ最終パスへ `rename` する swap-on-close 方式です。中断時は書き込み途中の一時ファイルを削除します。失敗・中断時に既存データを壊しません。
+
+読み取り用は次のメソッドで取得します。
+
+```ts
+public getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+): ReadableStream<Uint8Array<ArrayBuffer>>
+```
+
+`Bun.file(file).stream()` をそのまま返さず、`ReadableStream` で包んで返します。Bun のストリームはリーダーを取得した時点でファイルを開くため、存在しないファイルのエラーを `read()` まで遅延させ、他のストレージと同じ挙動に揃えています。
+
+## 注意点 [#notes]
+
+- Bun 専用です。`Bun` グローバルが無いランタイムでは `open()` が `UnsupportedRuntimeError` で失敗します。
+- `open()` 前に `write`・`read` を実行しないでください。内部の接続が `null` のため処理できません。`isOpen` で確認できます。
+- `open()` はオープン済みでも再初期化します。`root` は絶対パスで保持します。
+- `write` は一時ファイルへの書き込み後に `rename` します。失敗・中断時は一時ファイルを削除して既存データを保全します。
+- 同一キーへの並行書き込みは一時ファイルが衝突しません。最後に `rename` が完了した書き込みが残ります。
+- `exists` は `Bun.file(file).exists()` の結果を返します。ファイル以外では `false` になります。
+- `read` は `Bun.file(file).bytes()` で読み取り、`Uint8Array` として返します。存在しないファイルは `ENOENT` で失敗します。
+- `delete` は `Bun.file(file).delete()` で削除します。存在しないファイルだと `ENOENT` で失敗します。
+- 一時ファイルの削除には `Bun.file(tmp).delete()` を使います。
+- 権限や所有者は変更しません。OS と Bun の既定値に従います。
+- `close()` はありません。`IStorage` の `close` は任意のため、後始末が必要なら各自で管理してください。
+
+:::warning
+権限は OS と Bun の既定値に従います。同一キーへの並行書き込みは最後の `rename` が残るため、必要ならアプリケーション側で排他制御してください。
+:::
+
+## エラー [#errors]
+
+| エラー | エラー名 | 発生条件 |
+| --- | --- | --- |
+| `UnsupportedRuntimeError` | `BunFsUnsupportedRuntimeError` | `Bun` グローバルが無いランタイムで `open()` を呼んだ場合に発生します。 |
+
+`InvalidUsageErrorBase` を継承します。日本語メッセージは「BunFs は Bun ランタイムでのみ使用できます」です。
+
+```ts
+import { BunFs, UnsupportedRuntimeError } from "@unikvs/fs.bun";
+
+const storage = new BunFs();
+
+try {
+  await storage.open();
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    console.error("Bun ランタイムで実行してください");
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`.tmp/` 配下に保存する最小完動例です。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun-example");
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, BunFs"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key });
+await storage.clear();
+```

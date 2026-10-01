@@ -12,6 +12,7 @@
     "packages/memory",
     "packages/writeonly",
     "packages/fs.node",
+    "packages/fs.bun",
     "packages/s3.node",
     "packages/opfs",
     "packages/indexeddb",

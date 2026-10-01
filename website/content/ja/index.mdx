@@ -91,6 +91,9 @@ await kvs.close();
   <Card title="@unikvs/fs.node" href="./packages/fs-node" icon="hard-drive">
     Node.js のローカルファイルシステムに保存します。
   </Card>
+  <Card title="@unikvs/fs.bun" href="./packages/fs-bun" icon="hard-drive">
+    Bun のローカルファイルシステムに保存します。
+  </Card>
   <Card title="@unikvs/s3.node" href="./packages/s3-node" icon="cloud">
     S3 互換のオブジェクトストレージに保存します。
   </Card>
@@ -113,18 +116,19 @@ await kvs.close();
 
 ## 動作環境 [#environments]
 
-| パッケージ | Node.js | ブラウザー |
-| --- | --- | --- |
-| `unikvs` | 対応します。 | 対応します。 |
-| `@unikvs/core` | 対応します。 | 対応します。 |
-| `@unikvs/utils` | 対応します。 | 対応します。 |
-| `@unikvs/compression` | 対応します。 | 対応します。 |
-| `@unikvs/checksum` | 対応します。 | 対応します。 |
-| `@unikvs/memory` | 対応します。 | 対応します。 |
-| `@unikvs/fs.node` | 対応します。 | 対応しません。 |
-| `@unikvs/s3.node` | 対応します。 | 対応しません。 |
-| `@unikvs/opfs` | 対応しません。 | 対応します。 |
-| `@unikvs/indexeddb` | 対応しません。 | 対応します。 |
-| `@unikvs/writeonly` | 対応します。 | 対応します。 |
-| `@unikvs/debug` | 対応します。 | 対応します。 |
-| `@unikvs/passthrough` | 対応します。 | 対応します。 |
+| パッケージ | Node.js | Bun | ブラウザー |
+| --- | --- | --- | --- |
+| `unikvs` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/core` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/utils` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/compression` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/checksum` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/memory` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/fs.node` | 対応します。 | 対応しません。 | 対応しません。 |
+| `@unikvs/fs.bun` | 対応しません。 | 対応します。 | 対応しません。 |
+| `@unikvs/s3.node` | 対応します。 | 対応しません。 | 対応しません。 |
+| `@unikvs/opfs` | 対応しません。 | 対応しません。 | 対応します。 |
+| `@unikvs/indexeddb` | 対応しません。 | 対応しません。 | 対応します。 |
+| `@unikvs/writeonly` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/debug` | 対応します。 | 対応します。 | 対応します。 |
+| `@unikvs/passthrough` | 対応します。 | 対応します。 | 対応します。 |

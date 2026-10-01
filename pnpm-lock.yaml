@@ -199,6 +199,40 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@24.13.6)(@vitest/browser-playwright@4.1.11)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  packages/fs.bun:
+    dependencies:
+      '@logtape/logtape':
+        specifier: 2.0.0
+        version: 2.0.0
+      '@unikvs/core':
+        specifier: workspace:*
+        version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
+      '@tsconfig/node24':
+        specifier: 24.0.5
+        version: 24.0.5
+      '@tsconfig/strictest':
+        specifier: 2.0.8
+        version: 2.0.8
+      '@types/bun':
+        specifier: 1.4.2
+        version: 1.4.2
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      npm-check-updates:
+        specifier: 20.0.2
+        version: 20.0.2
+      vite:
+        specifier: 8.3.0
+        version: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(@vitest/browser-playwright@4.1.11)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   packages/fs.node:
     dependencies:
       '@logtape/logtape':
@@ -2239,6 +2273,9 @@ packages:
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
 
+  '@types/bun@1.4.2':
+    resolution: {integrity: sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -2899,6 +2936,9 @@ packages:
 
   buffer@5.6.0:
     resolution: {integrity: sha512-/gDYp/UtU0eA1ys8bOs9J6a+E/KWIY+DZ+Q2WESNUA0jFRsJOc0SNUO6xJ5SGA1xueg3NL65W6s+NY5l9cunuw==}
+
+  bun-types@1.4.2:
+    resolution: {integrity: sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w==}
 
   bytes@3.1.2:
     resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
@@ -6875,6 +6915,10 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.8
 
+  '@types/bun@1.4.2':
+    dependencies:
+      bun-types: 1.4.2
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -7708,6 +7752,10 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
+
+  bun-types@1.4.2:
+    dependencies:
+      '@types/node': 24.13.6
 
   bytes@3.1.2: {}
 

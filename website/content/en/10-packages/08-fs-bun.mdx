@@ -1,0 +1,164 @@
+---
+title: "@unikvs/fs.bun"
+description: "Learn how to use the storage plugin that saves byte sequences to the local file system in Bun."
+---
+
+## Overview [#overview]
+
+`@unikvs/fs.bun` is a storage plugin that saves data to the local file system in Bun. Keys are stored as file names under the specified root directory.<Badge variant="warning">Bun only</Badge>
+
+It handles byte sequences only. `write` accepts a `Uint8Array<ArrayBuffer>` and `read` returns a `Uint8Array<ArrayBuffer>`. File reads and writes use `bytes()`, `write()`, and `writer()` on `Bun.file`. Directory operations and renames dynamically import `node:fs/promises`, and paths use `node:path`. Temporary file names use `Bun.randomUUIDv7()`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/fs.bun
+```
+
+It depends on `@unikvs/core` and `@unikvs/utils`.
+
+## Usage [#usage]
+
+The central class is `BunFs`.
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+```
+
+```ts
+public constructor(root: string = ".unikvs")
+```
+
+`root` is the root directory for data. Relative paths are resolved against the current working directory when `open()` runs. The default is `".unikvs"`.
+
+The main members are as follows.
+
+- `name` is `"BunFs"`.
+- `isOpen` indicates whether the storage is open.
+- `open()` recursively creates the root directory and makes it ready for reads and writes.
+- `write`, `read`, `exists`, `delete`, and `clear` handle data.
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun");
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+```
+
+## File Layout [#layout]
+
+Keys map to file paths as follows. Keys sit directly under the root with no subdirectories.
+
+<FileTree>
+
+- .unikvs/
+  - hello.bin
+  - greeting.bin
+
+</FileTree>
+
+- The final path is `path.join(this.root, key)`.
+- The temporary write path is `` `${dest}.${Bun.randomUUIDv7()}.tmp` ``. It is created in the same directory so `rename` stays atomic.
+- `open()` absolutizes with `path.resolve(this.root)` and creates the root with `mkdir(root, { recursive: true })`.
+- `clear()` removes the root with `rm(this.root, { recursive: true, force: true })` and recreates it.
+
+File names are validated with `assertValidFilename` from `@unikvs/utils`. Each of `write`, `read`, `exists`, `delete`, `getWritable`, and `getReadable` validates first. Invalid names throw `InvalidFilenameError`. Empty strings, `.`, `..`, names over 255 bytes, non-NFC strings, and reserved/Windows-reserved names cannot be used.
+
+## Streams [#streams]
+
+Both readable and writable streams are supported.
+
+Obtain a writable stream with the following method.
+
+```ts
+public async getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key"> & { signal?: AbortSignal },
+): Promise<WritableStream<Uint8Array<ArrayBuffer>>>
+```
+
+It writes to the `FileSink` returned by `Bun.file(tmp).writer()` and calls `flush()` for every chunk to commit it to disk. It uses swap-on-close: data is renamed to the final path only on successful close. If the `AbortSignal` aborts, the partially written temp file is removed. It never destroys existing data on failure or abort.
+
+Obtain a readable stream with the following method.
+
+```ts
+public getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+): ReadableStream<Uint8Array<ArrayBuffer>>
+```
+
+Instead of returning `Bun.file(file).stream()` directly, it wraps the stream in a new `ReadableStream`. Bun opens the file when a reader is acquired, so wrapping defers errors for missing files until `read()` and keeps behavior consistent with other storages.
+
+## Notes [#notes]
+
+- Bun only. `open()` throws `UnsupportedRuntimeError` on runtimes without the `Bun` global.
+- Don't call `write` or `read` before `open()`. The internal connection is `null` until then. Check with `isOpen`.
+- `open()` re-initializes even when already open. `root` is kept as an absolute path.
+- `write` writes to a temp file then renames. On failure or abort, the temp file is removed, preserving existing data.
+- Concurrent writes to the same key don't collide thanks to unique suffixes. The last `rename` wins.
+- `exists` returns the result of `Bun.file(file).exists()`, which is `false` for non-files.
+- `read` reads with `Bun.file(file).bytes()` and returns a `Uint8Array`. Missing files fail with `ENOENT`.
+- `delete` removes files with `Bun.file(file).delete()`. Missing files fail with `ENOENT`.
+- Temp files are removed with `Bun.file(tmp).delete()`.
+- Permissions follow OS and Bun defaults.
+- `close()` is not implemented. Since `close` in `IStorage` is optional, manage cleanup yourself when needed.
+
+:::warning
+Permissions follow OS and Bun defaults. Concurrent writes to the same key resolve to the last `rename`, so add app-level locking when needed.
+:::
+
+## Errors [#errors]
+
+| Error | Error name | Condition |
+| --- | --- | --- |
+| `UnsupportedRuntimeError` | `BunFsUnsupportedRuntimeError` | Thrown by `open()` on runtimes without the `Bun` global. |
+
+It extends `InvalidUsageErrorBase`. The default message is "BunFs can only be used in the Bun runtime".
+
+```ts
+import { BunFs, UnsupportedRuntimeError } from "@unikvs/fs.bun";
+
+const storage = new BunFs();
+
+try {
+  await storage.open();
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    console.error("Run this on the Bun runtime");
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+A minimal example storing under `.tmp/`.
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun-example");
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, BunFs"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key });
+await storage.clear();
+```

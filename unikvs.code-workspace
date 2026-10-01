@@ -45,6 +45,10 @@
       "path": "packages/fs.node",
     },
     {
+      "name": "@unikvs/fs.bun",
+      "path": "packages/fs.bun",
+    },
+    {
       "name": "@unikvs/s3.node",
       "path": "packages/s3.node",
     },

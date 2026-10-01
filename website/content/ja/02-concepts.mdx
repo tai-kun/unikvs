@@ -258,6 +258,7 @@ await kvs.set("foo", new Uint8Array([1]), {
 | トランスフォーマー | `@unikvs/passthrough` | データを何も変換せずそのまま透過させます。 |
 | ストレージ | `@unikvs/memory` | メモリー上に保存します。すべての環境に対応します。 |
 | ストレージ | `@unikvs/fs.node` | ローカルファイルシステムに保存します。Node.js 専用です。 |
+| ストレージ | `@unikvs/fs.bun` | ローカルファイルシステムに保存します。Bun 専用です。 |
 | ストレージ | `@unikvs/s3.node` | S3 互換のオブジェクトストレージに保存します。Node.js 専用です。 |
 | ストレージ | `@unikvs/indexeddb` | ブラウザーの IndexedDB に保存します。 |
 | ストレージ | `@unikvs/opfs` | ブラウザーの OPFS に保存します。 |

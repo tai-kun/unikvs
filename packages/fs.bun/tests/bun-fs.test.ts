@@ -1,0 +1,358 @@
+import { access, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe } from "vitest";
+
+import BunFs from "../src/bun-fs.js";
+import { test } from "./_helpers.js";
+
+describe("初期化と接続管理", () => {
+  test("初期状態のとき、isOpen は false である", ({ expect, root }) => {
+    // 準備
+    const unopened = new BunFs(root);
+
+    // 実行と検証
+    expect(unopened.isOpen).toBe(false);
+  });
+
+  test("open を実行したとき、isOpen が true になりディレクトリが作成される", async ({
+    expect,
+    root,
+  }) => {
+    // 準備
+    const createdRoot = join(root, "created");
+    const unopened = new BunFs(createdRoot);
+
+    // 実行
+    await unopened.open();
+
+    // 検証
+    expect(unopened.isOpen).toBe(true);
+    await expect(access(createdRoot)).resolves.toBeNull();
+  });
+
+  test("相対ルートで open した後にカレントディレクトリーが変更されたとき、データは open 時点のカレントディレクトリー配下に書き込まれる", async ({
+    expect,
+    signal,
+  }) => {
+    const originalCwd = process.cwd();
+    let cwdA: string | undefined;
+    let cwdB: string | undefined;
+    try {
+      // 準備
+      cwdA = await mkdtemp(join(tmpdir(), "unikvs-cwd-a-"));
+      cwdB = await mkdtemp(join(tmpdir(), "unikvs-cwd-b-"));
+      process.chdir(cwdA);
+      const relative = new BunFs("rel-root");
+      await relative.open();
+
+      // 実行
+      process.chdir(cwdB);
+      const key = "test.txt";
+      const data = new TextEncoder().encode("Hello World");
+      await relative.write({ key, data, signal });
+
+      // 検証
+      const savedData = await readFile(join(cwdA, "rel-root", key));
+      expect(new Uint8Array(savedData)).toStrictEqual(data);
+    } finally {
+      process.chdir(originalCwd);
+      if (cwdA) {
+        await rm(cwdA, { recursive: true, force: true }).catch(() => {});
+      }
+      if (cwdB) {
+        await rm(cwdB, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+  });
+});
+
+describe("基本操作 (CRUD)", () => {
+  test("データを書き込んだとき、指定された パスにファイルが作成され、内容が一致する", async ({
+    expect,
+    root,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "test.txt";
+    const data = new TextEncoder().encode("Hello World");
+
+    // 実行
+    await storage.write({ key, data, signal });
+
+    // 検証
+    const filePath = join(root, key);
+    const savedData = await readFile(filePath);
+    expect(new Uint8Array(savedData)).toStrictEqual(data);
+  });
+
+  test("データを読み込んだとき、書き込まれたデータが Uint8Array として正しく返される", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "read-test.bin";
+    const data = new Uint8Array([1, 2, 3, 4, 5]);
+    await storage.write({ key, data, signal });
+
+    // 実行
+    const result = await storage.read({ key, signal });
+
+    // 検証
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(new Uint8Array(result)).toStrictEqual(data);
+  });
+
+  test("存在するファイルのキーで確認したとき、true が返される", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "exists.txt";
+    await storage.write({ key, data: new Uint8Array([0]), signal });
+
+    // 実行
+    const result = await storage.exists({ key });
+
+    // 検証
+    expect(result).toBe(true);
+  });
+
+  test("存在しないファイルのキーで確認したとき、false が返される", async ({ expect, storage }) => {
+    // 準備
+    const key = "non-existent.txt";
+
+    // 実行
+    const result = await storage.exists({ key });
+
+    // 検証
+    expect(result).toBe(false);
+  });
+
+  test("ファイルを削除したとき、ファイルが消滅し存在確認が false になる", async ({
+    expect,
+    root,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "delete-me.txt";
+    await storage.write({ key, data: new Uint8Array([0]), signal });
+
+    // 実行
+    await storage.delete({ key });
+
+    // 検証
+    await expect(storage.exists({ key })).resolves.toBe(false);
+    await expect(access(join(root, key))).rejects.toThrow();
+  });
+
+  test("clear を実行したとき、ルート内の全てのファイルが削除され、空のディレクトリが維持される", async ({
+    expect,
+    root,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal });
+
+    // 実行
+    await storage.clear();
+
+    // 検証
+    await expect(storage.exists({ key: "file1.txt" })).resolves.toBe(false);
+    await expect(storage.exists({ key: "file2.txt" })).resolves.toBe(false);
+    await expect(access(root)).resolves.toBeNull();
+  });
+});
+
+describe("ストリーム操作", () => {
+  test("getWritable で取得したストリームを使用したとき、データが正しく書き込める", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-write.txt";
+    const data = new TextEncoder().encode("Stream Data");
+    const writable = await storage.getWritable({ key, signal });
+
+    // 実行
+    const writer = writable.getWriter();
+    await writer.write(data);
+    await writer.close();
+
+    // 検証
+    const savedData = await storage.read({ key, signal });
+    expect(new Uint8Array(savedData)).toStrictEqual(data);
+  });
+
+  test("ストリームによる書き込みを中断したとき、既存のデータが保たれ一時ファイルも残らない", async ({
+    expect,
+    root,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "atomic-stream.txt";
+    const original = new Uint8Array([1, 2, 3, 4, 5]);
+    await storage.write({ key, data: original, signal });
+
+    const controller = new AbortController();
+    const writable = await storage.getWritable({ key, signal: controller.signal });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.close()).rejects.toThrow();
+
+    const savedData = await storage.read({ key, signal });
+    expect(new Uint8Array(savedData)).toStrictEqual(original);
+
+    const entries = await readdir(root);
+    expect(entries.filter((entry) => entry.endsWith(".tmp"))).toStrictEqual([]);
+  });
+
+  test("ストリームによる書き込みを中断したとき、新規キーのファイルは作成されない", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    const key = "atomic-stream-new.txt";
+    const controller = new AbortController();
+    const writable = await storage.getWritable({ key, signal: controller.signal });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.close()).rejects.toThrow();
+    await expect(storage.exists({ key })).resolves.toBe(false);
+  });
+
+  test("close 時の rename が失敗したとき、一時ファイルが残らない", async ({
+    expect,
+    root,
+    storage,
+  }) => {
+    // 準備
+    const key = "rename-conflict.txt";
+    await mkdir(join(root, key), { recursive: true });
+    const writable = await storage.getWritable({ key });
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array([1, 2, 3]));
+
+    // 実行と検証
+    await expect(writer.close()).rejects.toThrow();
+
+    const entries = await readdir(root);
+    expect(entries.filter((entry) => entry.endsWith(".tmp"))).toStrictEqual([]);
+  });
+
+  test("getReadable で取得したストリームを使用したとき、ファイルの内容を正しく読み取れる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-read.txt";
+    const data = new TextEncoder().encode("Readable Stream Content");
+    await storage.write({ key, data, signal });
+
+    // 実行
+    const readable = storage.getReadable({ key, signal });
+    const chunks: Uint8Array[] = [];
+    const reader = readable.getReader();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+
+    // 検証
+    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
+    expect(result).toStrictEqual(data);
+  });
+});
+
+describe("境界値・異常系テスト", () => {
+  test("ディレクトリトラバーサルを含む不正なファイル名を指定したとき、例外が投げられる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "../etc/passwd";
+
+    // 実行と検証
+    await expect(storage.read({ key, signal })).rejects.toThrow();
+  });
+
+  test("存在しないファイルを読み込もうとしたとき、ENOENT エラーが投げられる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "missing.txt";
+
+    // 実行と検証
+    await expect(storage.read({ key, signal })).rejects.toThrow(/ENOENT/);
+  });
+
+  test("AbortSignal が中断されているとき、書き込み処理が中断され例外が投げられる", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備
+    const key = "abort.txt";
+    const data = new Uint8Array([1, 2, 3]);
+    const controller = new AbortController();
+    controller.abort();
+
+    // 実行と検証
+    await expect(storage.write({ key, data, signal: controller.signal })).rejects.toThrow();
+  });
+
+  test("既にディレクトリが存在するパスで open を実行したとき、エラー にならず正常に終了する", async ({
+    expect,
+    storage,
+  }) => {
+    // 実行と検証
+    await expect(storage.open()).resolves.toBeUndefined();
+  });
+
+  test("サイズ 0 のデータを書き込んだとき、空のファイルが正常に作成される", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "empty.txt";
+    const data = new Uint8Array(0);
+
+    // 実行
+    await storage.write({ key, data, signal });
+
+    // 検証
+    const result = await storage.read({ key, signal });
+    expect(Array.from(result)).toStrictEqual(Array.from(data));
+  });
+});
