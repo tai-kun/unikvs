@@ -1,10 +1,46 @@
 import type { Variables, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
 
+import { isReadableStream, isWritableStream } from "./_streams.js";
+import * as v from "./_valibot.js";
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
   TransformerIsNotOpenError,
 } from "./errors.js";
+
+/**
+ * 値が `TransformStream` 互換、つまり `readable` と `writable` を持つかどうかを判定します。
+ *
+ * クロスレルムでも機能するよう、`instanceof` ではなく `isReadableStream` と `isWritableStream` による構造判定に委譲します。
+ *
+ * @param input 判定する値です。
+ * @returns `TransformStream` 互換の場合は `true` を返します。
+ */
+function isTransformStream(input: unknown): input is IEncodable & IDecodable {
+  if (typeof input !== "object" || input === null) {
+    return false;
+  }
+
+  const stream = input as Partial<IEncodable & IDecodable>;
+
+  return isReadableStream(stream.readable) && isWritableStream(stream.writable);
+}
+
+/**
+ * `getEncodable` の戻り値が `TransformStream` 互換かを検証するためのスキーマです。
+ */
+const EncodableSchema = v.custom<IEncodable>(
+  isTransformStream,
+  "Expected a transform stream compatible value",
+);
+
+/**
+ * `getDecodable` の戻り値が `TransformStream` 互換かを検証するためのスキーマです。
+ */
+const DecodableSchema = v.custom<IDecodable>(
+  isTransformStream,
+  "Expected a transform stream compatible value",
+);
 
 export default class UniKvsTransformer {
   private readonly tf: ITransformer;
@@ -67,7 +103,7 @@ export default class UniKvsTransformer {
     }
 
     const output = await this.tf.getEncodable({ vars, signal });
-    const parsed = output; // TODO(tai-kun): 要検証
+    const parsed = v.parseOutput(EncodableSchema, output);
 
     return parsed;
   }
@@ -82,7 +118,7 @@ export default class UniKvsTransformer {
     }
 
     const output = await this.tf.getDecodable({ vars, signal });
-    const parsed = output; // TODO(tai-kun): 要検証
+    const parsed = v.parseOutput(DecodableSchema, output);
 
     return parsed;
   }
