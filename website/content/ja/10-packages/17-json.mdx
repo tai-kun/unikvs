@@ -1,0 +1,177 @@
+---
+title: "@unikvs/json"
+description: "値を JSON や JSON Lines (JSONL) でシリアライズする Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/json` は、値を標準の `JSON.stringify` と `JSON.parse` でシリアライズする Transformer プラグインです。<Badge>Transformer</Badge> 一括変換では 1 つの値を 1 つの JSON 文字列として扱い、ストリームでは JSON Lines (JSONL / NDJSON) として 1 行につき 1 つの値を扱います。
+
+追加の依存はなく、実行環境の `TextEncoder`・`TextDecoder` と JSON API だけで動作します。型情報を持たない素の JSON のため、`Date` や `BigInt`、`Map`・`Set` のような値は種類を保ったまま往復できません。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Json"` を返します。
+
+## インストール [#install]
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/json
+```
+
+## 対応する値 [#values]
+
+JSON で表現できる値はそのまま往復できます。型ごとの扱いは次のとおりです。
+
+| 型 | 例 | 扱い |
+| --- | --- | --- |
+| `null` | `null` | 対応します。 |
+| 真偽値 | `true`・`false` | 対応します。 |
+| 数値 | `42`・`-0.5` | 対応します。`NaN`・`Infinity`・`-Infinity` は `null`、`-0` は `0` になります。 |
+| 文字列 | `"hello"`・`"😀"` | 対応します。UTF-8 でエンコードします。 |
+| 配列 | `[1, "a", null]` | 対応します。 |
+| オブジェクト | `{ "a": 1 }` | 対応します。 |
+| `undefined` | `undefined` | ルートでは `JsonUnsupportedValueError` を投げます。入れ子ではプロパティーごと省略されます。 |
+| 関数 | `() => {}` | ルートでは `JsonUnsupportedValueError` を投げます。入れ子ではプロパティーごと省略されます。 |
+| シンボル | `Symbol()` | ルートでは `JsonUnsupportedValueError` を投げます。入れ子ではプロパティーごと省略されます。 |
+| `BigInt` | `1n` | ネイティブの `TypeError` を投げます。 |
+| `Date` | `new Date()` | `toJSON` により ISO 8601 文字列になります。 |
+| `Map`・`Set` | `new Map()` | 空のオブジェクトになります。 |
+
+:::tip
+`Date` を日付のまま、`BigInt` や `Map`・`Set` を型を保ったまま往復したい場合は [`@unikvs/superjson`](/packages/superjson) を使います。バイナリー形式でより小さく保存したい場合は [`@unikvs/cbor`](/packages/cbor) を検討してください。
+:::
+
+## 使い方 [#usage]
+
+`Json` のコンストラクターは引数を取りません。
+
+```ts
+import { Json } from "@unikvs/json";
+
+const json = new Json();
+```
+
+主なメンバーは次のとおりです。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new Json()` | 引数なしで初期化します。 |
+| `name` | 常に `"Json"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | 値を JSON 文字列のバイト列へ変換します。 |
+| `decode({ data })` | JSON 文字列のバイト列を値へ変換します。 |
+| `getEncodable()` | 値を JSONL のバイト列へ変換する `TransformStream` を返します。 |
+| `getDecodable()` | JSONL のバイト列を値へ変換する `TransformStream` を返します。 |
+
+`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { Json } from "@unikvs/json";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Json())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("profile", { name: "tai-kun", tags: ["json"] });
+
+const profile = await kvs.get("profile");
+```
+
+`set` でシリアライズして保存し、`get` で自動的にデシリアライズします。
+
+## ストリーム [#streams]
+
+`getEncodable`・`getDecodable` は JSON Lines (JSONL / NDJSON) を扱います。JSONL は 1 行につき 1 つの JSON 値を並べた形式です。
+
+エンコードの動きは次のとおりです。
+
+- 入力チャンク 1 つを 1 つの値として `JSON.stringify` し、末尾に `\n` を付けて UTF-8 で出力します。
+- 文字列中の改行や `\r` は `JSON.stringify` がエスケープするため、行の区切りと衝突しません。
+
+デコードの動きは次のとおりです。
+
+- `\n` で区切って 1 行ずつ `JSON.parse` します。行の区切りが任意のバイト境界で分割されてもかまいません。マルチバイト文字が途中で分割されても正しく復元されます。
+- 行末の `\r` を 1 つだけ取り除くため、CRLF の改行も受理します。
+- 完全に空の行は読み飛ばします。
+- 最終行は末尾の改行がなくてもデコードします。空のストリームは値を 1 つも出力せず、エラーにもなりません。
+- JSON として不正な行があると、ネイティブの `SyntaxError` でストリームが失敗します。
+
+```ts
+import { Json } from "@unikvs/json";
+
+const json = new Json();
+
+const source = new ReadableStream({
+  start(controller) {
+    controller.enqueue({ id: 1 });
+    controller.enqueue({ id: 2 });
+    controller.close();
+  },
+});
+
+const decoded = source.pipeThrough(json.getEncodable()).pipeThrough(json.getDecodable());
+```
+
+一括変換の `encode`・`decode` は JSON 値 1 つだけを扱います。複数の値を連結して `decode` へ渡すと、JSON の後に続く内容として `SyntaxError` になります。複数の値をまとめて扱う場合はストリームを使ってください。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+| エラー | 意味 | 対処 |
+| --- | --- | --- |
+| `JsonUnsupportedValueError` | ルートの値が `undefined`・関数・シンボルで、JSON にシリアライズできません。`meta.type` に `typeof` の結果を保持します。 | `null` に置き換えるか、JSON で表現できる値へ変換してください。 |
+
+`BigInt` には `JSON.stringify` がネイティブの `TypeError` を投げます。`decode` の失敗もネイティブのエラーとして伝わります。
+
+- JSON として不正、空のバイト列、JSON 値の後に続く内容は `SyntaxError` です。
+- UTF-8 として不正なバイト列は `TypeError` です。
+- ストリームのエンコードで未対応の値を流すと `JsonUnsupportedValueError`、デコードで不正な行を流すと `SyntaxError` でストリームが失敗します。
+
+```ts
+import { JsonUnsupportedValueError } from "@unikvs/json";
+
+try {
+  json.encode({ data: undefined });
+} catch (error) {
+  if (error instanceof JsonUnsupportedValueError) {
+    console.log(error.meta.type);
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`Memory` と組み合わせた最小例です。書き込んだ値は JSON 文字列として保存し、読み取り時に自動でデシリアライズします。
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Profile = {
+  name: string;
+  tags: string[];
+};
+
+const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
+  .appendTransformer(new Json())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("profile", { name: "tai-kun", tags: ["json", "transformer"] });
+
+const profile = await kvs.get("profile");
+console.log(profile.name);
+
+await kvs.close();
+```

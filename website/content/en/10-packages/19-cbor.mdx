@@ -1,0 +1,193 @@
+---
+title: "@unikvs/cbor"
+description: "Explains how to use the Transformer plugin that transparently converts values to and from CBOR sequences."
+---
+
+## Overview [#overview]
+
+`@unikvs/cbor` is a Transformer plugin that converts JavaScript values to and from CBOR (RFC 8949) byte sequences. <Badge>Transformer</Badge> It wraps [cbor-x](https://github.com/kriszyp/cbor-x) to fit `ITransformer`.
+
+Writes convert with `encode` and reads convert with `decode`, so you can read and write without thinking about serialization details.
+
+The encoded output is valid CBOR, but rich types such as `Date` and `Map` use cbor-x extension tags (258, 259, 64, 27, and so on). Other CBOR decoders that do not understand these tags may expose them as raw tags.
+
+This transformer is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"Cbor"`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/cbor
+```
+
+## Supported Values [#values]
+
+The values you can convert to CBOR are as follows.
+
+| Value | Encoding | After decoding |
+| --- | --- | --- |
+| `null` | Supported | `null` |
+| Boolean | Supported | boolean |
+| `number` | Supported | number. `NaN`, `Infinity`, and `-Infinity` round-trip too. `-0` becomes `0`. |
+| `bigint` | Supported | bigint. It is restored as a bigint regardless of size. |
+| `string` | Supported | string, including Unicode. |
+| `undefined` | Supported | undefined. Preserved both at the root and nested. |
+| Array | Supported | array |
+| Plain object | Supported | plain object |
+| `Date` | Supported | `Date` |
+| `Map` | Supported | `Map`. Non-string keys are restored too. |
+| `Set` | Supported | `Set` |
+| Typed arrays | Supported | The same type, such as `Uint8Array` or `Float64Array` |
+| `RegExp` | Supported | `RegExp` |
+| `Error` | Supported | `Error`. The message is preserved. |
+
+The limitations are as follows.
+
+- A function or symbol at the root or nested cannot be encoded. Passing one throws `CborEncodeError`.
+- Properties keyed by a symbol are removed together with their values.
+- Indefinite-length byte strings and text strings cannot be decoded. Passing one throws `CborDecodeError`.
+- A standard CBOR map (major type 5) decodes to a plain object, and non-string keys are converted to strings. Tag 259 is required to restore a `Map`; this package's `encode` writes `Map` with tag 259.
+
+:::note
+If you need to interoperate with peers that do not understand the extension tags, consider [`@unikvs/superjson`](/packages/superjson), whose contents you can inspect as text, or [`@unikvs/json`](/packages/json) when plain JSON is enough.
+:::
+
+## Usage [#usage]
+
+The `Cbor` constructor takes no arguments.
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+```
+
+Its main members are as follows.
+
+| Member | Summary |
+| --- | --- |
+| `new Cbor()` | Initializes with no arguments. |
+| `name` | Always returns `"Cbor"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Converts any value to a CBOR `Uint8Array<ArrayBuffer>`. |
+| `decode({ data })` | Converts a CBOR data item back to a value. |
+| `getEncodable()` | Returns a `TransformStream` that converts values to a CBOR sequence. |
+| `getDecodable()` | Returns a `TransformStream` that converts a CBOR sequence to values. |
+
+Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Cbor())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", { message: "hello" });
+
+const output = await kvs.get("data");
+```
+
+`set` stores values converted to CBOR, and `get` converts them back to the original values automatically.
+
+## Streams [#streams]
+
+`@unikvs/cbor` supports both single values and streams.
+
+- Single values are converted with `encode` and `decode`. `decode` accepts exactly one data item. An empty byte sequence or bytes trailing a value are rejected.
+- Stream values are converted with the `TransformStream` from `getEncodable` and `getDecodable`.
+
+`getEncodable` encodes each input chunk as one independent value and emits its bytes in order. The output is a **CBOR sequence (RFC 8742)**: multiple data items concatenated, with no enclosing array or header.
+
+`getDecodable` decodes a CBOR sequence incrementally across arbitrary chunk boundaries.
+
+- As soon as one data item completes, its value is emitted immediately. If a chunk contains multiple items, the completed ones are emitted in order.
+- A data item cut off mid-way is buffered internally until it completes. It waits for the next chunk, so partial data is never emitted as a value by mistake.
+- An empty stream and zero-length chunks produce zero values and no error.
+- If an incomplete data item remains when the stream ends, it throws `CborDecodeError`. Completed values are emitted beforehand.
+- If the input is not valid CBOR, it throws `CborDecodeError` at that point.
+
+:::warning
+The output of `getEncodable` is a CBOR sequence, not a single CBOR data item. Combine it with `getDecodable` or another peer that understands the same CBOR sequence. Passing a whole sequence to a one-shot `decode` rejects the second and later items as trailing bytes.
+:::
+
+## Errors [#errors]
+
+| Error | Error name | Meaning |
+| --- | --- | --- |
+| `CborEncodeError` | `UniKvsCborEncodeError` | A value cannot be converted to CBOR. The original error is kept in `cause`. |
+| `CborDecodeError` | `UniKvsCborDecodeError` | A byte sequence cannot be interpreted as a CBOR data item. The original error is kept in `cause`. |
+
+Conversion failures in `encode` and `getEncodable` become `CborEncodeError`, and those in `decode` and `getDecodable` become `CborDecodeError`. Both keep the original error in `cause`.
+
+```ts
+import { Cbor, CborDecodeError, CborEncodeError } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+
+try {
+  cbor.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof CborEncodeError) {
+    console.log(error.cause);
+  }
+}
+
+try {
+  cbor.decode({ data: new Uint8Array(0) });
+} catch (error) {
+  if (error instanceof CborDecodeError) {
+    console.log(error.cause);
+  }
+}
+```
+
+## Examples [#examples]
+
+An example with `Memory` storage. `Date`, `Map`, `Set`, `bigint`, and `undefined` round-trip with their types intact.
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new Cbor())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```

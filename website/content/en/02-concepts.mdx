@@ -256,6 +256,9 @@ The operation kind and target key are automatically assigned as `unikvs:action` 
 | Transformer | `@unikvs/checksum` | Validates MD5, SHA-1, SHA-224, SHA-256, SHA-384, and SHA-512. |
 | Transformer | `@unikvs/debug` | Logs the operations, keys, and debug information of data read and written. |
 | Transformer | `@unikvs/passthrough` | Passes data through without transforming it. |
+| Transformer | `@unikvs/json` | Serializes values to JSON, or to JSON Lines in streams. |
+| Transformer | `@unikvs/superjson` | Serializes values with SuperJSON while preserving Date, Map, Set, BigInt, and undefined. |
+| Transformer | `@unikvs/cbor` | Serializes values to CBOR, or to a CBOR sequence in streams. |
 | Storage | `@unikvs/memory` | Stores in memory. Works in all environments. |
 | Storage | `@unikvs/fs.node` | Stores in the local filesystem. Node.js only. |
 | Storage | `@unikvs/fs.bun` | Stores in the local filesystem. Bun only. |

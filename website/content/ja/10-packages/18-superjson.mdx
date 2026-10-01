@@ -1,0 +1,225 @@
+---
+title: "@unikvs/superjson"
+description: "Date や Map、Set、BigInt、undefined、循環参照を保持したまま値を JSON へシリアライズする Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/superjson` は、任意の値を SuperJSON でシリアライズする Transformer プラグインです。<Badge>Transformer</Badge> [SuperJSON](https://github.com/blitz-js/superjson) をラップし、`ITransformer` に適合させています。
+
+素の JSON へ変換すると、Date は文字列に、Map や Set は空のオブジェクトになり、BigInt はシリアライズに失敗します。`@unikvs/superjson` は型情報をメタデータとして一緒に保存するため、これらの値を型を保ったまま往復できます。
+
+保存形式は JSON を基盤にしているため、内容をテキストとして確認できます。素の JSON で十分な場合は [`@unikvs/json`](/packages/json)、バイナリでより小さく保存したい場合は [`@unikvs/cbor`](/packages/cbor) も検討してください。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Superjson"` を返します。
+
+## インストール [#install]
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/superjson
+```
+
+## 対応する型 [#types]
+
+型情報を保持して往復できる値は次のとおりです。
+
+| 型 | 例 | 備考 |
+| --- | --- | --- |
+| Date | `new Date()` | 時刻を保持します。 |
+| Map | `new Map([["a", 1]])` | キーと値の両方を保持します。 |
+| Set | `new Set([1, 2])` | 要素の順序も保持します。 |
+| BigInt | `10n` | |
+| undefined | `undefined` | ルート値と入れ子の両方で保持します。 |
+| 循環参照 | `obj.self = obj` | 参照関係を保持します。 |
+| 特殊な数値 | `NaN`・`Infinity`・`-Infinity`・`-0` | JSON 単体では `null` になる値も保持します。 |
+| 型付き配列 | `Uint8Array`・`Float64Array` など | |
+| RegExp・URL・Error | | 主要なプロパティーのみ保持します。 |
+| 配列・オブジェクト | | プリミティブと文字列はそのまま保持します。 |
+
+次の値は保持されません。
+
+| 値 | 結果 |
+| --- | --- |
+| 関数・シンボル（入れ子） | プロパティーごと取り除かれます。 |
+| 関数・シンボル（ルート） | `SuperjsonUnsupportedValueError` を投げます。 |
+| クラスのインスタンス | プレーンオブジェクトになり、プロトタイプは失われます。 |
+
+:::warning
+ルートの関数やシンボルを SuperJSON へそのまま渡すと、エラーにはならず `"{}"` に変換されて元の値が失われます。`@unikvs/superjson` はこの消失を防ぐため、事前に `SuperjsonUnsupportedValueError` を投げます。
+:::
+
+## 使い方 [#usage]
+
+`Superjson` のコンストラクターは引数を取りません。
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+
+const superjson = new Superjson();
+```
+
+主なメンバーは次のとおりです。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new Superjson()` | 引数なしで初期化します。 |
+| `name` | 常に `"Superjson"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | 任意の値を SuperJSON ペイロードの UTF-8 バイト列へ変換します。 |
+| `decode({ data })` | SuperJSON ペイロードの UTF-8 バイト列を値へ復元します。 |
+| `getEncodable()` | 値を JSON Lines のバイト列へ変換する `TransformStream` を返します。 |
+| `getDecodable()` | JSON Lines のバイト列を値へ復元する `TransformStream` を返します。 |
+
+`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Profile = {
+  name: string;
+  joinedAt: Date;
+  tags: Set<string>;
+};
+
+const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
+  .appendTransformer(new Superjson())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("profile", {
+  name: "tai-kun",
+  joinedAt: new Date("2024-01-02T03:04:05.678Z"),
+  tags: new Set(["typescript", "kvs"]),
+});
+
+const profile = await kvs.get("profile");
+console.log(profile.joinedAt instanceof Date);
+console.log(profile.tags instanceof Set);
+```
+
+`set` でシリアライズして保存し、`get` で自動的に復元します。
+
+## ストリーム [#streams]
+
+`getEncodable` と `getDecodable` は、値とバイト列を相互に変換する `TransformStream` を返します。
+
+`getEncodable` は 1 チャンクを 1 つの SuperJSON ペイロードとして扱い、行末に改行 (`\n`) を付けて出力します。出力は JSON Lines (JSONL / NDJSON) です。値に改行文字が含まれていても、SuperJSON が文字列を JSON 文字列としてエスケープするため、行の境界と衝突しません。
+
+```text
+{"json":"2024-01-02T03:04:05.678Z","meta":{"values":["Date"],"v":1}}
+{"json":[["a",1]],"meta":{"values":["map"],"v":1}}
+```
+
+`getDecodable` は次の規則で JSON Lines を読み取ります。
+
+- 改行 (`\n`) ごとに 1 つの値を復元します。
+- CRLF (`\r\n`) の `\r` は取り除きます。
+- 空行は無視します。
+- 末尾の改行はあってもなくてもかまいません。改行がなければ、最後の行をそのまま処理します。
+- チャンク境界は任意でかまいません。1 バイトずつ流しても、UTF-8 のマルチバイト文字がチャンク境界で分断されても正しく処理します。
+- 空のストリームは値を 1 つも出力せずに完了します。
+
+```ts
+const source = new ReadableStream<unknown>({
+  start(controller) {
+    controller.enqueue(new Date());
+    controller.enqueue(new Map([["a", 1]]));
+    controller.close();
+  },
+});
+
+const decoded = source
+  .pipeThrough(superjson.getEncodable())
+  .pipeThrough(superjson.getDecodable());
+
+for await (const value of decoded) {
+  console.log(value);
+}
+```
+
+不正な行や不正な UTF-8 を含むストリームは拒否されます。エラーの種類は[エラー](#errors)を参照してください。
+
+## エラー [#errors]
+
+このパッケージは、シリアライズできないルート値に対して次のエラーを投げます。
+
+| エラー | 意味 | 対処 |
+| --- | --- | --- |
+| `SuperjsonUnsupportedValueError` | ルートの値が関数またはシンボルです。`meta.type` に `"function"` または `"symbol"` が入ります。 | 関数やシンボルを含まない値へ変換してから保存してください。 |
+
+```ts
+import { Superjson, SuperjsonUnsupportedValueError } from "@unikvs/superjson";
+
+const superjson = new Superjson();
+
+try {
+  superjson.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof SuperjsonUnsupportedValueError) {
+    console.log(error.name);
+    console.log(error.meta.type);
+  } else {
+    throw error;
+  }
+}
+```
+
+`decode` と `getDecodable` は、ペイロードの破損を表すネイティブのエラーも投げます。
+
+| 状況 | エラー |
+| --- | --- |
+| 空のバイト列、または JSON として解釈できない行 | `SyntaxError` |
+| UTF-8 として解釈できないバイト列 | `TypeError` |
+
+## 使用例 [#examples]
+
+`Memory` と組み合わせた最小例です。書き込んだ値は SuperJSON ペイロードとして保存し、読み取り時に自動で復元します。
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new Superjson())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```

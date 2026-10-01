@@ -1,0 +1,193 @@
+---
+title: "@unikvs/cbor"
+description: "値と CBOR シーケンスを透過的に変換する Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/cbor` は、JavaScript の値を CBOR (RFC 8949) のバイト列へ変換する Transformer プラグインです。<Badge>Transformer</Badge> [cbor-x](https://github.com/kriszyp/cbor-x) をラップし、`ITransformer` に適合させています。
+
+書き込み時は `encode` で CBOR に変換し、読み取り時は `decode` で元の値に戻すため、シリアライズの詳細を意識せずに読み書きできます。
+
+エンコード結果は標準の CBOR として読み書きできますが、`Date` や `Map` などのリッチな型には cbor-x の拡張タグ (258・259・64・27 など) を使用します。そのため、拡張タグを解釈しないほかの CBOR デコーダーでは、生のタグとして見える場合があります。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Cbor"` を返します。
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/cbor
+```
+
+## 対応する値 [#values]
+
+CBOR に変換できる値は次のとおりです。
+
+| 値 | エンコード | デコード後 |
+| --- | --- | --- |
+| `null` | 対応 | `null` |
+| 真偽値 | 対応 | boolean |
+| `number` | 対応 | number。`NaN`・`Infinity`・`-Infinity` も往復できます。`-0` は `0` になります。 |
+| `bigint` | 対応 | bigint。サイズを問わず bigint のまま復元されます。 |
+| `string` | 対応 | string。Unicode を含みます。 |
+| `undefined` | 対応 | undefined。ルート値と入れ子の両方で保持されます。 |
+| 配列 | 対応 | 配列 |
+| プレーンオブジェクト | 対応 | プレーンオブジェクト |
+| `Date` | 対応 | `Date` |
+| `Map` | 対応 | `Map`。文字列以外のキーも復元されます。 |
+| `Set` | 対応 | `Set` |
+| 型付き配列 | 対応 | `Uint8Array`・`Float64Array` など同じ型 |
+| `RegExp` | 対応 | `RegExp` |
+| `Error` | 対応 | `Error`。メッセージを保持します。 |
+
+制限は次のとおりです。
+
+- ルート値または入れ子に含まれる関数・シンボルはエンコードできません。渡すと `CborEncodeError` を投げます。
+- シンボルをキーに持つプロパティーは、値ごと取り除かれます。
+- 長さ不定のバイト文字列・テキスト文字列はデコードできません。渡すと `CborDecodeError` を投げます。
+- 標準の CBOR マップ (メジャータイプ 5) はプレーンオブジェクトへデコードされ、文字列以外のキーは文字列へ変換されます。`Map` として復元するにはタグ 259 が必要で、このパッケージの `encode` は `Map` をタグ 259 で出力します。
+
+:::note
+拡張タグを解釈できない相手とも相互運用したい場合は、テキストとして内容を確認できる [`@unikvs/superjson`](/packages/superjson) や、素の JSON で十分なときの [`@unikvs/json`](/packages/json) を検討してください。
+:::
+
+## 使い方 [#usage]
+
+`Cbor` のコンストラクターは引数を取りません。
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+```
+
+主なメンバーは次のとおりです。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new Cbor()` | 引数なしで初期化します。 |
+| `name` | 常に `"Cbor"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | 任意の値を CBOR の `Uint8Array<ArrayBuffer>` に変換します。 |
+| `decode({ data })` | CBOR のデータアイテムを値に戻します。 |
+| `getEncodable()` | 値を CBOR シーケンスへ変換する `TransformStream` を返します。 |
+| `getDecodable()` | CBOR シーケンスを値へ変換する `TransformStream` を返します。 |
+
+`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Cbor())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", { message: "hello" });
+
+const output = await kvs.get("data");
+```
+
+`set` で CBOR に変換して保存し、`get` で自動的に元の値へ戻します。
+
+## ストリーム [#streams]
+
+単体値とストリームの両方に対応しています。
+
+- 単体値は `encode`・`decode` で変換します。`decode` は 1 つのデータアイテムだけを受け付けます。空のバイト列や、1 つの値の後に続くバイト列は拒否されます。
+- ストリーム値は `getEncodable`・`getDecodable` の `TransformStream` で変換します。
+
+`getEncodable` は、入力チャンクを 1 つの値としてそれぞれ独立に CBOR へ変換し、そのバイト列を順に送出します。出力は **CBOR シーケンス (RFC 8742)** です。複数のデータアイテムを連結した形式で、全体を包む配列やヘッダーはありません。
+
+`getDecodable` は CBOR シーケンスを、チャンク境界をまたいで逐次デコードします。
+
+- 1 つのデータアイテムが完成した時点で、その値をすぐに送出します。同じチャンクに複数のアイテムが含まれていれば、完成した分から順に送出します。
+- 途中で切れたデータアイテムは、完成するまで内部でバッファーに保持します。次のチャンクの到着を待つため、途中のデータを誤って値として送出しません。
+- 空のストリームと長さ 0 のチャンクは値を 1 つも生成せず、エラーにもなりません。
+- ストリーム終了時に未完成のデータアイテムが残っている場合は `CborDecodeError` を投げます。完成済みの値は先に送出されます。
+- 入力が CBOR として不正な場合は、その時点で `CborDecodeError` を投げます。
+
+:::warning
+`getEncodable` の出力は CBOR シーケンスであり、単体の CBOR データアイテムではありません。`getDecodable` や、同じ CBOR シーケンスを解釈できる相手と組み合わせてください。シーケンス全体を単体の `decode` に渡すと、2 つ目以降が後続バイトとして拒否されます。
+:::
+
+## エラー [#errors]
+
+| エラー | エラー名 | 意味 |
+| --- | --- | --- |
+| `CborEncodeError` | `UniKvsCborEncodeError` | 値を CBOR に変換できません。`cause` に cbor-x のエラーを保持します。 |
+| `CborDecodeError` | `UniKvsCborDecodeError` | バイト列を CBOR のデータアイテムとして解釈できません。`cause` に cbor-x のエラーを保持します。 |
+
+`encode`・`getEncodable` の変換失敗は `CborEncodeError`、`decode`・`getDecodable` の変換失敗は `CborDecodeError` になります。どちらも元のエラーを `cause` に保持します。
+
+```ts
+import { Cbor, CborDecodeError, CborEncodeError } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+
+try {
+  cbor.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof CborEncodeError) {
+    console.log(error.cause);
+  }
+}
+
+try {
+  cbor.decode({ data: new Uint8Array(0) });
+} catch (error) {
+  if (error instanceof CborDecodeError) {
+    console.log(error.cause);
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`Memory` と組み合わせた例です。`Date`・`Map`・`Set`・`bigint`・`undefined` も型を保ったまま往復できます。
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new Cbor())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```

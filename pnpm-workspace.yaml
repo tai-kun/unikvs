@@ -18,6 +18,7 @@ trustPolicyExclude:
 strictDepBuilds: true
 onlyBuiltDependencies: []
 allowBuilds:
+  cbor-extract: false # インストールスクリプトは実行せず、プリビルドのネイティブバイナリーのみを使います。
   esbuild: true
 update:
   ignoreDeps:
@@ -30,6 +31,9 @@ packages:
     "packages/compression",
     "packages/debug",
     "packages/passthrough",
+    "packages/json",
+    "packages/superjson",
+    "packages/cbor",
     "packages/memory",
     "packages/writeonly",
     "packages/fs.node",

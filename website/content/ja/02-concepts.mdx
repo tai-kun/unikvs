@@ -256,6 +256,9 @@ await kvs.set("foo", new Uint8Array([1]), {
 | トランスフォーマー | `@unikvs/checksum` | MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の検証を行います。 |
 | トランスフォーマー | `@unikvs/debug` | 読み書きされる操作とキーとデータのデバッグ情報をログに記録します。 |
 | トランスフォーマー | `@unikvs/passthrough` | データを何も変換せずそのまま透過させます。 |
+| トランスフォーマー | `@unikvs/json` | 値を JSON に、ストリームでは JSON Lines に変換します。 |
+| トランスフォーマー | `@unikvs/superjson` | Date・Map・Set・BigInt・undefined を保持したまま SuperJSON で変換します。 |
+| トランスフォーマー | `@unikvs/cbor` | 値を CBOR に、ストリームでは CBOR シーケンスに変換します。 |
 | ストレージ | `@unikvs/memory` | メモリー上に保存します。すべての環境に対応します。 |
 | ストレージ | `@unikvs/fs.node` | ローカルファイルシステムに保存します。Node.js 専用です。 |
 | ストレージ | `@unikvs/fs.bun` | ローカルファイルシステムに保存します。Bun 専用です。 |

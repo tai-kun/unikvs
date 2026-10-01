@@ -1,0 +1,225 @@
+---
+title: "@unikvs/superjson"
+description: "Explains how to use the Transformer plugin that serializes values to JSON while preserving Date, Map, Set, BigInt, undefined, and circular references."
+---
+
+## Overview [#overview]
+
+`@unikvs/superjson` is a Transformer plugin that serializes arbitrary values with SuperJSON. <Badge>Transformer</Badge> It wraps [SuperJSON](https://github.com/blitz-js/superjson) to fit `ITransformer`.
+
+Converting to plain JSON turns Date into a string, Map and Set into empty objects, and fails to serialize BigInt. `@unikvs/superjson` stores type information alongside the data, so these values round-trip with their types intact.
+
+The storage format is based on JSON, so you can inspect the contents as text. If plain JSON is enough, consider [`@unikvs/json`](/packages/json); if you want a smaller binary format, consider [`@unikvs/cbor`](/packages/cbor).
+
+This transformer is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"Superjson"`.
+
+## Install [#install]
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/superjson
+```
+
+## Supported Types [#types]
+
+The following values round-trip with their type information preserved.
+
+| Type | Example | Notes |
+| --- | --- | --- |
+| Date | `new Date()` | The instant is preserved. |
+| Map | `new Map([["a", 1]])` | Both keys and values are preserved. |
+| Set | `new Set([1, 2])` | The element order is also preserved. |
+| BigInt | `10n` | |
+| undefined | `undefined` | Preserved both at the root and nested. |
+| Circular references | `obj.self = obj` | The reference relationships are preserved. |
+| Special numbers | `NaN`, `Infinity`, `-Infinity`, `-0` | Values that plain JSON turns into `null` are preserved. |
+| Typed arrays | `Uint8Array`, `Float64Array`, and others | |
+| RegExp, URL, Error | | Only the main properties are preserved. |
+| Arrays and objects | | Primitives and strings are preserved as is. |
+
+The following values are not preserved.
+
+| Value | Result |
+| --- | --- |
+| Functions and symbols (nested) | Removed together with their properties. |
+| Functions and symbols (root) | Throws `SuperjsonUnsupportedValueError`. |
+| Class instances | Become plain objects and lose their prototype. |
+
+:::warning
+Passing a root function or symbol to SuperJSON as is converts it to `"{}"` without an error, losing the original value. `@unikvs/superjson` throws `SuperjsonUnsupportedValueError` beforehand to prevent this loss.
+:::
+
+## Usage [#usage]
+
+The `Superjson` constructor takes no arguments.
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+
+const superjson = new Superjson();
+```
+
+Its main members are as follows.
+
+| Member | Summary |
+| --- | --- |
+| `new Superjson()` | Initializes with no arguments. |
+| `name` | Always returns `"Superjson"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Converts an arbitrary value into a UTF-8 byte sequence of a SuperJSON payload. |
+| `decode({ data })` | Restores a value from a UTF-8 byte sequence of a SuperJSON payload. |
+| `getEncodable()` | Returns a `TransformStream` that converts values into JSON Lines byte sequences. |
+| `getDecodable()` | Returns a `TransformStream` that restores values from JSON Lines byte sequences. |
+
+Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Profile = {
+  name: string;
+  joinedAt: Date;
+  tags: Set<string>;
+};
+
+const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
+  .appendTransformer(new Superjson())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("profile", {
+  name: "tai-kun",
+  joinedAt: new Date("2024-01-02T03:04:05.678Z"),
+  tags: new Set(["typescript", "kvs"]),
+});
+
+const profile = await kvs.get("profile");
+console.log(profile.joinedAt instanceof Date);
+console.log(profile.tags instanceof Set);
+```
+
+`set` serializes and stores the value, and `get` restores it automatically.
+
+## Streams [#streams]
+
+`getEncodable` and `getDecodable` return `TransformStream`s that convert between values and byte sequences.
+
+`getEncodable` treats each chunk as one SuperJSON payload and appends a newline (`\n`) at the end of the line. The output is JSON Lines (JSONL / NDJSON). Even when a value contains a newline character, SuperJSON escapes it as a JSON string, so it does not collide with the line boundaries.
+
+```text
+{"json":"2024-01-02T03:04:05.678Z","meta":{"values":["Date"],"v":1}}
+{"json":[["a",1]],"meta":{"values":["map"],"v":1}}
+```
+
+`getDecodable` reads JSON Lines with the following rules.
+
+- It restores one value per newline (`\n`).
+- It strips the `\r` of CRLF (`\r\n`).
+- It ignores empty lines.
+- A trailing newline is optional. Without one, it processes the last line as is.
+- Chunk boundaries can be arbitrary. It handles one byte at a time and multi-byte UTF-8 characters split across chunks correctly.
+- An empty stream completes without emitting any values.
+
+```ts
+const source = new ReadableStream<unknown>({
+  start(controller) {
+    controller.enqueue(new Date());
+    controller.enqueue(new Map([["a", 1]]));
+    controller.close();
+  },
+});
+
+const decoded = source
+  .pipeThrough(superjson.getEncodable())
+  .pipeThrough(superjson.getDecodable());
+
+for await (const value of decoded) {
+  console.log(value);
+}
+```
+
+A stream containing an invalid line or invalid UTF-8 is rejected. See [Errors](#errors) for the error types.
+
+## Errors [#errors]
+
+This package throws the following error for a root value it cannot serialize.
+
+| Error | Meaning | Resolution |
+| --- | --- | --- |
+| `SuperjsonUnsupportedValueError` | The root value is a function or a symbol. `meta.type` is `"function"` or `"symbol"`. | Convert the value so that it contains no functions or symbols, then store it. |
+
+```ts
+import { Superjson, SuperjsonUnsupportedValueError } from "@unikvs/superjson";
+
+const superjson = new Superjson();
+
+try {
+  superjson.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof SuperjsonUnsupportedValueError) {
+    console.log(error.name);
+    console.log(error.meta.type);
+  } else {
+    throw error;
+  }
+}
+```
+
+`decode` and `getDecodable` also throw native errors for corrupted payloads.
+
+| Situation | Error |
+| --- | --- |
+| Empty bytes or a line that cannot be parsed as JSON | `SyntaxError` |
+| Bytes that cannot be decoded as UTF-8 | `TypeError` |
+
+## Examples [#examples]
+
+A minimal example with `Memory` storage. Written values are stored as SuperJSON payloads and automatically restored on reads.
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new Superjson())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```

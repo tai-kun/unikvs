@@ -33,6 +33,18 @@
       "path": "packages/passthrough",
     },
     {
+      "name": "@unikvs/json",
+      "path": "packages/json",
+    },
+    {
+      "name": "@unikvs/superjson",
+      "path": "packages/superjson",
+    },
+    {
+      "name": "@unikvs/cbor",
+      "path": "packages/cbor",
+    },
+    {
       "name": "@unikvs/memory",
       "path": "packages/memory",
     },
