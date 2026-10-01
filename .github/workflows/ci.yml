@@ -137,3 +137,35 @@ jobs:
           path: ${{ matrix.package.directory }}/coverage
           if-no-files-found: ignore
           retention-days: 7
+
+  package:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: "チェックアウト"
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: "mise をセットアップ"
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+
+      - name: "依存関係をインストール"
+        run: pnpm i
+
+      - name: "ビルド"
+        run: npm run build --workspaces
+
+      - name: "パッケージ検証"
+        run: |
+          for pkg in $(jq -r '.workspaces[]' package.json); do
+            if [ ! -f "$pkg/package.json" ]; then
+              continue
+            fi
+
+            if [ "$(jq -r .private "$pkg/package.json")" = "true" ]; then
+              continue
+            fi
+
+            file=$(npm pack "./$pkg" --pack-destination "$RUNNER_TEMP" 2>/dev/null | tail -n 1)
+            npx publint "$RUNNER_TEMP/$file"
+            npx attw --profile esm-only "$RUNNER_TEMP/$file"
+          done
