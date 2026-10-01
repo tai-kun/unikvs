@@ -67,6 +67,7 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 - Combine a fast cache with a persistent primary destination.
 - Use memory only during development, and add files or S3 in production.
 - Add another destination for auditing to keep a recovery path.
+- Wrap a destination with `@unikvs/writeonly` to keep an archive that cannot be modified.
 
 ## Design notes [#notes]
 
@@ -77,3 +78,4 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 - Read priority follows registration order. Register fast destinations first.
 - When combining compression and checksum, decide the order based on whether the checksum should cover data before or after compression.
 - Partial write failures are reported as an aggregate error. See the errors and diagnostics page for details.
+- Storages wrapped with `@unikvs/writeonly` ignore delete operations by default. Use them for destinations you want to exclude from deletion.

@@ -13,7 +13,7 @@ description: "Explains the storage comparison table and selection guide for choo
 | Streams | Limited. | Supported. | Supported. | Supported. | Supported. | Supported. | Supported. | Check limitations. |
 | Primary use | Test / temporary. | Single server. | Single server. | Shared / cache. | Shared / large-scale. | Shared / large-scale. | Large-scale browser. | Structured browser. |
 
-See each package reference for details.
+See each package reference for details. `@unikvs/writeonly` is not a destination but a wrapper that makes an existing storage unreadable, so it is not included in the comparison table.
 
 ## Selection guide [#guide]
 
@@ -43,6 +43,9 @@ See each package reference for details.
   </Card>
   <Card title="IndexedDB + OPFS" icon="globe">
     Separates structured data and binary data backends in the browser.
+  </Card>
+  <Card title="Primary + write-only archive" icon="lock">
+    Combines a readable storage with a backup that cannot be read back.
   </Card>
 </CardGroup>
 
