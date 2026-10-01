@@ -38,5 +38,7 @@ export default defineConfig({
       instances: [{ browser: "chromium" }, { browser: "firefox" }],
     },
     setupFiles: [".config/_debugging.ts"],
+    hookTimeout: 30e3,
+    testTimeout: 30e3,
   },
 });
