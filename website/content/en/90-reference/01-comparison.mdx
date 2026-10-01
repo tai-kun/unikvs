@@ -5,13 +5,13 @@ description: "Explains the storage comparison table and selection guide for choo
 
 ## Comparison table [#comparison]
 
-| Feature | `@unikvs/memory` | `@unikvs/fs.node` | `@unikvs/fs.bun` | `@unikvs/s3.node` | `@unikvs/opfs` | `@unikvs/indexeddb` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Environment | <Badge>All</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="warning">Browser</Badge> | <Badge variant="warning">Browser</Badge> |
-| Persistence | None. | Yes. | Yes. | Yes. | Yes. | Yes. |
-| Supported data | Any value. | Bytes. | Bytes. | Bytes. | Bytes. | Any value. |
-| Streams | Limited. | Supported. | Supported. | Supported. | Supported. | Check limitations. |
-| Primary use | Test / temporary. | Single server. | Single server. | Shared / large-scale. | Large-scale browser. | Structured browser. |
+| Feature | `@unikvs/memory` | `@unikvs/fs.node` | `@unikvs/fs.bun` | `@unikvs/redis.bun` | `@unikvs/s3.node` | `@unikvs/opfs` | `@unikvs/indexeddb` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Environment | <Badge>All</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="warning">Browser</Badge> | <Badge variant="warning">Browser</Badge> |
+| Persistence | None. | Yes. | Yes. | Yes. | Yes. | Yes. | Yes. |
+| Supported data | Any value. | Bytes. | Bytes. | Bytes. | Bytes. | Bytes. | Any value. |
+| Streams | Limited. | Supported. | Supported. | Supported. | Supported. | Supported. | Check limitations. |
+| Primary use | Test / temporary. | Single server. | Single server. | Shared / cache. | Shared / large-scale. | Large-scale browser. | Structured browser. |
 
 See each package reference for details.
 
