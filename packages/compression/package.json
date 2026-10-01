@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/compression",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Transformer plugin that transparently compresses and decompresses byte arrays in the specified format.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

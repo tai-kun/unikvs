@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/passthrough",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Transformer plugin that passes all data through without transforming it.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

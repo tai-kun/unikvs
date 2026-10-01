@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/utils",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Shared utilities that may be used by some plugins.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

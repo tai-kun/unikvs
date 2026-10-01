@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/checksum",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Transformer plugin that transparently computes hashes of byte arrays and verifies them against expected values.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

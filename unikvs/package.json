@@ -1,6 +1,6 @@
 {
   "name": "unikvs",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "A modular and portable KVS client implemented in TypeScript.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

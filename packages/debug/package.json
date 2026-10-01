@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/debug",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Transformer plugin that logs data read and write operations for debugging.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/redis.bun",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Storage plugin that stores byte arrays in Redis on Bun.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",

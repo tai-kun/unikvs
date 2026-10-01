@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/s3.bun",
-  "version": "0.0.0",
+  "version": "0.0.13",
   "description": "Storage plugin that stores byte arrays in S3-compatible object storage on Bun.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
