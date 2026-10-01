@@ -843,7 +843,19 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
         let cur: ReadableStream = value;
         const branches: ReadableStream[] = [];
-        const built: ReadableStream[] = [];
+        // 構築中やキーロックの待機中に失敗した場合、パイプが保持するソースストリームのリソースを解放するために構築済みのストリームをキャンセルします。
+        // キャンセルしないとソースストリームはロックされたままリークします。利用者が渡した元ストリームが対象になる場合もありますが、操作が失敗した以上ロックを残さないことを優先します。
+        const cancelBranches = async (reason: unknown): Promise<void> => {
+          await Promise.all(
+            [...new Set([cur, ...branches])].map(async (branch) => {
+              try {
+                await branch.cancel(reason);
+              } catch {
+                // キャンセルに失敗しても元の例外の伝播を優先します。
+              }
+            }),
+          );
+        };
         try {
           let applied = 0;
           for (let i = 0; i < this.#destinations.length; i++) {
@@ -858,32 +870,25 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             } else {
               const [branch, rest] = cur.tee();
               branches[i] = branch;
-              built.push(branch);
               cur = rest;
             }
           }
         } catch (ex) {
-          // チェーンの構築中に失敗した場合、パイプが保持するソースストリームのリソースを解放するためにキャンセルします。
-          // キャンセルしないとソースストリームはロックされたままリークします。
-          try {
-            await cur.cancel(ex);
-          } catch {
-            // キャンセルに失敗しても元の例外の伝播を優先します。
-          }
-          await Promise.all(
-            built.map(async (branch) => {
-              try {
-                await branch.cancel(ex);
-              } catch {
-                // キャンセルに失敗しても元の例外の伝播を優先します。
-              }
-            }),
-          );
+          await cancelBranches(ex);
 
           throw ex;
         }
 
-        const lock = await io.lock({ key, signal });
+        let lock: AsyncmuxLock;
+        try {
+          lock = await io.lock({ key, signal });
+        } catch (ex) {
+          // キーロックの待機中に中断された場合も、構築済みのストリームがソースストリームをロックしたままにしないようにキャンセルします。
+          await cancelBranches(ex);
+
+          throw ex;
+        }
+
         try {
           await Promise.all(
             this.#destinations.map(async (dest, i) => {

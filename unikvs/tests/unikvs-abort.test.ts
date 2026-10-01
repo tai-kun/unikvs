@@ -4,7 +4,16 @@ import { afterEach, describe, test, vi } from "vitest";
 import { PluginOperationAggregateError, UniKvsIsNotOpenError } from "../src/errors.js";
 import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
-import { FakeStorage, FakeTransformer, Gate, collect } from "./_helpers.js";
+import {
+  FakeStorage,
+  FakeStreamStorage,
+  FakeStreamTransformer,
+  FakeTransformer,
+  Gate,
+  collect,
+  isPending,
+  streamOf,
+} from "./_helpers.js";
 
 /**
  * exists がゲートで保留され、解放時に中断を確認するフックを設定します。
@@ -258,6 +267,112 @@ describe("UniKvs - 実行中 abort", () => {
     expect(storage.map.has("foo")).toBe(false);
 
     // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - set のキーロック待機中の abort", () => {
+  test("キーロック待機中の abort は構築済みのストリームをキャンセルして abort 理由で失敗する", async ({
+    expect,
+  }) => {
+    // 準備: 同じキーの読み取りロックを ValueStream で保持し、set をキーロック待機させる
+    const reason = new Error("USER-CANCEL");
+    const storage = new FakeStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    await kvs.open();
+    const holder = await kvs.stream("logs");
+    const { promise: cancelled, resolve: onCancelled } = Promise.withResolvers<void>();
+    const source = new ReadableStream<Uint8Array>({
+      cancel() {
+        onCancelled();
+      },
+    });
+    const controller = new AbortController();
+
+    // 実行
+    const pending = kvs.set("logs", source, { signal: controller.signal });
+    await expect(isPending(pending)).resolves.toBe(true);
+    controller.abort(reason);
+
+    // 検証: abort 理由が伝播し、構築済みのソースストリームがキャンセルされる
+    await expect(pending).rejects.toBe(reason);
+    await expect(cancelled).resolves.toBeUndefined();
+
+    // 後片付け: 読み取りロックを解放すると同じキーへの操作が再開できる
+    await holder.dispose();
+    await kvs.set("logs", streamOf([new Uint8Array([2])]));
+    const vs = await kvs.stream("logs");
+    await expect(collect(vs)).resolves.toStrictEqual([new Uint8Array([2])]);
+    await vs.dispose();
+    await kvs.close();
+  });
+
+  test("トランスフォーマー経由で構築されたストリームもキーロック待機中の abort でキャンセルされる", async ({
+    expect,
+  }) => {
+    // 準備
+    const reason = new Error("USER-CANCEL");
+    const storage = new FakeStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .appendTransformer(new FakeStreamTransformer())
+      .appendStorage(storage)
+      .create();
+    await kvs.open();
+    const holder = await kvs.stream("logs");
+    const { promise: cancelled, resolve: onCancelled } = Promise.withResolvers<void>();
+    const source = new ReadableStream<Uint8Array>({
+      cancel() {
+        onCancelled();
+      },
+    });
+    const controller = new AbortController();
+
+    // 実行
+    const pending = kvs.set("logs", source, { signal: controller.signal });
+    await expect(isPending(pending)).resolves.toBe(true);
+    controller.abort(reason);
+
+    // 検証
+    await expect(pending).rejects.toBe(reason);
+    await expect(cancelled).resolves.toBeUndefined();
+
+    // 後片付け
+    await holder.dispose();
+    await kvs.close();
+  });
+
+  test("キーロック待機中の abort でキャンセルが失敗しても abort 理由が伝播する", async ({
+    expect,
+  }) => {
+    // 準備
+    const reason = new Error("USER-CANCEL");
+    const storage = new FakeStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+    const kvs = UniKvs.config().appendStorage(storage).create();
+    await kvs.open();
+    const holder = await kvs.stream("logs");
+    let cancelCalled = false;
+    const source = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelCalled = true;
+        throw new Error("CANCEL-FAILED");
+      },
+    });
+    const controller = new AbortController();
+
+    // 実行
+    const pending = kvs.set("logs", source, { signal: controller.signal });
+    await expect(isPending(pending)).resolves.toBe(true);
+    controller.abort(reason);
+
+    // 検証
+    await expect(pending).rejects.toBe(reason);
+    expect(cancelCalled).toBe(true);
+
+    // 後片付け
+    await holder.dispose();
     await kvs.close();
   });
 });
