@@ -76,6 +76,8 @@ Checksum mismatches are mainly caused by corrupted stored data, wrong `vars` spe
 
 Partial failures such as writes to multiple Storages are grouped into an aggregate error. Inspect each wrapped error to identify the failed destination.
 
+Each element of `meta.errors` includes the `name` of the failed plugin and the `index` that represents its registration order. This lets you identify which Storage failed even in a multi-Storage setup.
+
 ## Internationalization [#i18n]
 
 Error messages support i18n. The `ErrorBase` and `setErrorMessage` mechanism lets you define locale-specific messages. Use the same mechanism for custom plugins. See the `@unikvs/core` reference for details.

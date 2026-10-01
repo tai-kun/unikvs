@@ -869,8 +869,8 @@ describe("UniKvs - 複数ストレージ", () => {
     expect(
       ((error as KeyNotFoundError).cause as PluginOperationAggregateError).meta.errors,
     ).toStrictEqual([
-      { plugin: "storage", reason: new Error("read failed") },
-      { plugin: "storage", reason: new Error("read failed") },
+      { plugin: "storage", name: "storage1", index: 0, reason: new Error("read failed") },
+      { plugin: "storage", name: "storage2", index: 1, reason: new Error("read failed") },
     ]);
   });
 

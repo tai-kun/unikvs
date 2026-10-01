@@ -52,6 +52,13 @@ export default class UniKvsTransformer {
     this.managed = false;
   }
 
+  /**
+   * トランスフォーマーの名前です。
+   */
+  public get name(): string {
+    return this.tf.name;
+  }
+
   public async open(vars: Variables, signal: AbortSignal): Promise<void> {
     if (typeof this.tf.open !== "function") {
       return;

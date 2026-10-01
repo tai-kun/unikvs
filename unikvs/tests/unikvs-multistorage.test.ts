@@ -134,10 +134,41 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     const aggregate = error as PluginOperationAggregateError;
     expect(aggregate.meta.action).toBe("write");
-    expect(aggregate.meta.errors).toStrictEqual([{ plugin: "storage", reason: failure }]);
+    expect(aggregate.meta.errors).toStrictEqual([
+      { plugin: "storage", name: "storage1", index: 0, reason: failure },
+    ]);
     expect(storage2.otherWriteErrors).toStrictEqual([aggregate]);
     expect(storage1.otherWriteErrors).toHaveLength(0);
     expect(storage2.map.get("foo")).toBe("value");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("2 番目のストレージだけが失敗すると name と index で特定できる", async ({ expect }) => {
+    // 準備
+    const failure = new Error("write failed");
+    const storage1 = new FakeStorage("storage1");
+    const storage2 = new FakeStorage("storage2");
+    storage2.errors["write"] = failure;
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .appendStorage(storage1)
+      .appendStorage(storage2)
+      .create();
+    await kvs.open();
+
+    // 実行
+    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+
+    // 検証
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    const aggregate = error as PluginOperationAggregateError;
+    expect(aggregate.meta.errors).toStrictEqual([
+      { plugin: "storage", name: "storage2", index: 1, reason: failure },
+    ]);
+    expect(storage1.otherWriteErrors).toStrictEqual([aggregate]);
+    expect(storage2.otherWriteErrors).toHaveLength(0);
+    expect(storage1.map.get("foo")).toBe("value");
 
     // 後片付け
     await kvs.close();
@@ -387,7 +418,9 @@ describe("UniKvs - 複数ストレージの中断", () => {
     const error = await pending.catch((ex: unknown) => ex);
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.errors).toStrictEqual([{ plugin: "storage", reason }]);
+    expect(aggregate.meta.errors).toStrictEqual([
+      { plugin: "storage", name: "storage1", index: 0, reason },
+    ]);
     expect(storage2.map.get("foo")).toBe("value");
     expect(storage1.map.has("foo")).toBe(false);
 

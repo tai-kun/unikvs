@@ -575,10 +575,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsOpenError();
       }
 
-      const openFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
+      const openFns: [
+        () => Promise<void>,
+        plugin: "storage" | "transformer",
+        name: string,
+        index: number,
+      ][] = [];
 
       // 各ストレージのオープン処理をリストに追加します。
-      for (const { storage } of this.#destinations) {
+      for (const [index, { storage }] of this.#destinations.entries()) {
         openFns.push([
           async () => {
             await storage.open(vars, signal);
@@ -592,11 +597,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             });
           },
           "storage",
+          storage.name,
+          index,
         ]);
       }
 
       // 各トランスフォーマーのオープン処理をリストに追加します。
-      for (const transformer of this.#transformers) {
+      for (const [index, transformer] of this.#transformers.entries()) {
         openFns.push([
           async () => {
             await transformer.open(vars, signal);
@@ -610,17 +617,24 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             });
           },
           "transformer",
+          transformer.name,
+          index,
         ]);
       }
 
       // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-      const errors: { plugin: "storage" | "transformer"; reason: unknown }[] = [];
+      const errors: {
+        plugin: "storage" | "transformer";
+        name: string;
+        index: number;
+        reason: unknown;
+      }[] = [];
       await Promise.all(
-        openFns.map(async ([f, plugin]) => {
+        openFns.map(async ([f, plugin, name, index]) => {
           try {
             await f();
           } catch (reason) {
-            errors.push({ plugin, reason });
+            errors.push({ plugin, name, index, reason });
           }
         }),
       );
@@ -668,36 +682,50 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const { io } = this.#con;
       const lock = await io.lock({ signal });
       try {
-        const closeFns: [() => Promise<void>, plugin: "storage" | "transformer"][] = [];
+        const closeFns: [
+          () => Promise<void>,
+          plugin: "storage" | "transformer",
+          name: string,
+          index: number,
+        ][] = [];
 
         // ストレージのクローズ処理を登録します。
-        for (const { storage } of this.#destinations) {
+        for (const [index, { storage }] of this.#destinations.entries()) {
           closeFns.push([
             async () => {
               await storage.close(vars, signal);
             },
             "storage",
+            storage.name,
+            index,
           ]);
         }
 
         // トランスフォーマーのクローズ処理を登録します。
-        for (const plugin of this.#transformers) {
+        for (const [index, plugin] of this.#transformers.entries()) {
           closeFns.push([
             async () => {
               await plugin.close(vars, signal);
             },
             "transformer",
+            plugin.name,
+            index,
           ]);
         }
 
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { plugin: "storage" | "transformer"; reason: unknown }[] = [];
+        const errors: {
+          plugin: "storage" | "transformer";
+          name: string;
+          index: number;
+          reason: unknown;
+        }[] = [];
         await Promise.all(
-          closeFns.map(async ([f, plugin]) => {
+          closeFns.map(async ([f, plugin, name, index]) => {
             try {
               await f();
             } catch (reason) {
-              errors.push({ plugin, reason });
+              errors.push({ plugin, name, index, reason });
             }
           }),
         );
@@ -830,7 +858,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const errors: { reason: unknown }[] = [];
+      const errors: { name: string; index: number; reason: unknown }[] = [];
       const errorStorageSet = new Set<UniKvsDestination>();
       if (isReadableStream(value)) {
         // 各ストレージ専用の前段パイプラインを通すため、tee で分岐しながらエンコードストリームを構築します。
@@ -904,7 +932,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   // キャンセルに失敗してもエラー集約を優先します。
                 }
 
-                errors.push({ reason });
+                errors.push({ name: dest.storage.name, index: i, reason });
                 errorStorageSet.add(dest);
               }
             }),
@@ -933,7 +961,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               try {
                 await dest.storage.write(vars, signal, key, encoded[i]);
               } catch (reason) {
-                errors.push({ reason });
+                errors.push({ name: dest.storage.name, index: i, reason });
                 errorStorageSet.add(dest);
               }
             }),
@@ -1019,13 +1047,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const NONE = {};
       let data: any = NONE;
       let transformers: readonly UniKvsTransformer[] = [];
-      const errors: { reason: unknown }[] = [];
+      const errors: { name: string; index: number; reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const dest of this.#destinations) {
+        for (const [index, dest] of this.#destinations.entries()) {
           try {
             if (!(await dest.storage.exists(vars, signal, key))) {
               continue;
@@ -1037,7 +1065,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             if (signal.aborted) {
               throw ex;
             }
-            errors.push({ reason: ex });
+            errors.push({ name: dest.storage.name, index, reason: ex });
             logger.error`Failed to read from a storage: ${ex}`;
           }
         }
@@ -1122,13 +1150,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const NONE: any = {};
       let r: IReadableStream = NONE;
       let transformers: readonly UniKvsTransformer[] = [];
-      const errors: { reason: unknown }[] = [];
+      const errors: { name: string; index: number; reason: unknown }[] = [];
 
       const lock = await io.rLock({ key, signal });
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const dest of this.#destinations) {
+        for (const [index, dest] of this.#destinations.entries()) {
           try {
             if (!(await dest.storage.exists(vars, signal, key))) {
               continue;
@@ -1142,7 +1170,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               throw ex;
             }
 
-            errors.push({ reason: ex });
+            errors.push({ name: dest.storage.name, index, reason: ex });
             logger.error`Failed to read from a storage: ${ex}`;
           }
         }
@@ -1270,8 +1298,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         // いずれかのストレージに存在すれば true を返します。
         // あるストレージの存在確認に失敗しても、他のストレージで存在を確認できるようにフォールバックします。
-        const errors: { reason: unknown }[] = [];
-        for (const { storage } of this.#destinations) {
+        const errors: { name: string; index: number; reason: unknown }[] = [];
+        for (const [index, { storage }] of this.#destinations.entries()) {
           try {
             if (await storage.exists(vars, signal, key)) {
               return true;
@@ -1280,7 +1308,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             if (signal.aborted) {
               throw ex;
             }
-            errors.push({ reason: ex });
+            errors.push({ name: storage.name, index, reason: ex });
             logger.error`Failed to check existence in a storage: ${ex}`;
           }
         }
@@ -1354,15 +1382,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         // すべてのストレージから対象データを削除します。
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { reason: unknown }[] = [];
+        const errors: { name: string; index: number; reason: unknown }[] = [];
         await Promise.all(
-          this.#destinations.map(async ({ storage }) => {
+          this.#destinations.map(async ({ storage }, index) => {
             try {
               if (await storage.exists(vars, signal, key)) {
                 await storage.delete(vars, signal, key);
               }
             } catch (reason) {
-              errors.push({ reason });
+              errors.push({ name: storage.name, index, reason });
             }
           }),
         );
@@ -1407,13 +1435,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         // すべてのストレージで一括削除を実行します。
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { reason: unknown }[] = [];
+        const errors: { name: string; index: number; reason: unknown }[] = [];
         await Promise.all(
-          this.#destinations.map(async ({ storage }) => {
+          this.#destinations.map(async ({ storage }, index) => {
             try {
               await storage.clear(vars, signal);
             } catch (reason) {
-              errors.push({ reason });
+              errors.push({ name: storage.name, index, reason });
             }
           }),
         );

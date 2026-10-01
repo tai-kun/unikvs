@@ -41,6 +41,13 @@ export default class UniKvsStorage {
     this.managed = false;
   }
 
+  /**
+   * ストレージの名前です。
+   */
+  public get name(): string {
+    return this.io.name;
+  }
+
   public async open(vars: Variables, signal: AbortSignal): Promise<void> {
     if (typeof this.io.open !== "function") {
       return;

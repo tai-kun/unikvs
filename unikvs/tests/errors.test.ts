@@ -185,6 +185,34 @@ describe("PluginOperationAggregateError", () => {
     // 検証
     expect(error.meta.plugin).toBe("storage");
   });
+
+  test("name と index を保持する", ({ expect }) => {
+    // 準備
+    const reason = new Error("fail");
+    const errors = [{ plugin: "storage" as const, name: "storage2", index: 1, reason }];
+
+    // 実行
+    const error = new PluginOperationAggregateError({ action: "write", errors });
+
+    // 検証
+    expect(error.meta.errors).toStrictEqual([
+      { plugin: "storage", name: "storage2", index: 1, reason },
+    ]);
+  });
+
+  test("name と index を省略した場合はプロパティを追加しない", ({ expect }) => {
+    // 準備
+    const reason = new Error("fail");
+    const errors = [{ plugin: "storage" as const, reason }];
+
+    // 実行
+    const error = new PluginOperationAggregateError({ action: "write", errors });
+
+    // 検証
+    expect(error.meta.errors).toStrictEqual([{ plugin: "storage", reason }]);
+    expect(error.meta.errors[0]).not.toHaveProperty("name");
+    expect(error.meta.errors[0]).not.toHaveProperty("index");
+  });
 });
 
 describe("MissingStorageError", () => {

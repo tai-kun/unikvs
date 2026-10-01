@@ -526,6 +526,16 @@ export type PluginOperationAggregateErrorMeta = {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
+    readonly name?: string;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+     */
+    readonly index?: number;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+     */
     readonly reason: unknown;
   }[];
 };
@@ -556,6 +566,16 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
+    readonly name?: string;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+     */
+    readonly index?: number;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+     */
     readonly reason: unknown;
   }[];
 };
@@ -573,6 +593,8 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
     // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
     const normalizedErrors = errors.map((error) => ({
       plugin: error.plugin ?? plugin ?? ("" as never),
+      ...(error.name !== undefined ? { name: error.name } : {}),
+      ...(error.index !== undefined ? { index: error.index } : {}),
       reason: error.reason,
     }));
     const plugins = [...new Set(normalizedErrors.map((error) => error.plugin))];

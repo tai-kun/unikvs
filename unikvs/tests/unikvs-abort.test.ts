@@ -111,7 +111,7 @@ describe("UniKvs - 実行中 abort", () => {
     const error = await pending.catch((ex: unknown) => ex);
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     expect((error as PluginOperationAggregateError).meta.errors).toStrictEqual([
-      { plugin: "storage", reason },
+      { plugin: "storage", name: "FakeStorage", index: 0, reason },
     ]);
     expect(storage.map.has("foo")).toBe(false);
 
