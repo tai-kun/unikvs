@@ -220,5 +220,6 @@ $RECYCLE.BIN/
 .agents/
 .claude/
 .history/
+.temp/
 .vitest-attachments/
 __screenshots__/
