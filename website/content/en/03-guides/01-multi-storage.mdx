@@ -69,6 +69,33 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 - Add another destination for auditing to keep a recovery path.
 - Wrap a destination with `@unikvs/writeonly` to keep an archive that cannot be modified.
 
+## Write-back on read [#read-repair]
+
+Pass `repair: true` to `get` and `stream` to write data found in a later storage back to earlier storages while decoding. Each storage's format is determined by the number of transformers at registration time, so the intermediate decoded value is already in the right format for its target. No re-encoding is needed.
+
+```ts
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .appendStorage(new Memory()) // before compression
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new NodeFs(".tmp")) // after compression
+  .create();
+
+// A value that only exists in NodeFs is restored and also written back to Memory.
+const bytes = await kvs.get("foo", { repair: true });
+```
+
+```mermaid
+flowchart LR
+  NodeFs --> Compression
+  Compression --> Memory
+```
+
+- Only storages confirmed to be missing the key are written back to. Storages whose existence check itself failed are skipped.
+- Write-back is best-effort. A failed write does not fail the read; it is only logged.
+- Repair writes carry `unikvs:repair: true` in their runtime variables, so you can tell them apart from normal writes.
+- Reading through write-back is serialized with writes to the same key. For `stream`, the write lock is held until the stream is fully read or disposed.
+- It is disabled by default. Leave it off to avoid write amplification.
+
 ## Design notes [#notes]
 
 :::warning

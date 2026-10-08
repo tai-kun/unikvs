@@ -10,11 +10,13 @@ import type { ValueStream } from "./value-stream.types.js";
  * @template T ストリームが保持する値の型です。
  * @param readableStream 変換対象となる `IReadableStream` インスタンスです。
  * @param onAsyncDispose ストリーム破棄時の処理です。
+ * @param onBeforeDispose ソースストリームをキャンセルする前に呼ばれる処理です。
  * @returns 非同期イテレーターが付与された `ValueStream` インスタンスを返します。
  */
 export default function toValueStream<T>(
   readableStream: IReadableStream<T>,
   onAsyncDispose: () => Promise<void>,
+  onBeforeDispose?: () => void,
 ): ValueStream<T> {
   const cacheMap = new Map();
   const reader = readableStream.getReader();
@@ -22,6 +24,8 @@ export default function toValueStream<T>(
   async function disposeValueStream(): Promise<void> {
     await callAsyncableFnOnce(cacheMap, "dispose", async () => {
       try {
+        // ソースストリームのキャンセルが他の分岐の解放を待つ場合、先に分岐を中断しないと破棄が停止します。
+        onBeforeDispose?.();
         await reader.cancel();
       } catch (ex) {
         logger.error`Failed to cancel the source stream: ${ex}`;

@@ -11,20 +11,21 @@ import {
 export type { GenericSchema, InferInput, InferOutput } from "valibot";
 export {
   any,
-  check,
-  custom,
   omit,
   pipe,
+  check,
   union,
+  custom,
   number,
   string,
   symbol,
+  boolean,
   unknown,
   instance,
   minValue,
   optional,
-  safeInteger,
   safeParse,
+  safeInteger,
 } from "valibot";
 
 export { array, tuple, object, record, transform } from "@tai-kun/valibot-extra-lab";

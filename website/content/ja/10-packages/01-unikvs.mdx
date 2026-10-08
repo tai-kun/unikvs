@@ -326,6 +326,14 @@ setTimeout(() => ac.abort(), 1000);
 await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 ```
 
+## 読み取り時の書き戻し [#read-repair]
+
+`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を、デコードしながら前段のストレージへ書き戻します (既定は `false`)。各ストレージの保存形式に合うようデコード途中の値を使うため、エンコードし直す必要はありません。書き戻しに失敗しても読み取りは成功します。詳細は複数ストレージのガイドを参照してください。
+
+```ts
+const bytes = await kvs.get("foo", { repair: true });
+```
+
 ## エラー [#errors]
 
 | エラークラス | 説明 |

@@ -326,6 +326,14 @@ setTimeout(() => ac.abort(), 1000);
 await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 ```
 
+## Write-back on read [#read-repair]
+
+`get` and `stream` accept `repair: true` to write a value found in a later storage back to earlier storages while decoding (disabled by default). Because the intermediate decoded value already matches each storage's format, no re-encoding is needed. A failed write-back does not fail the read. See the multi-storage guide for details.
+
+```ts
+const bytes = await kvs.get("foo", { repair: true });
+```
+
 ## Errors [#errors]
 
 | Error class | Description |

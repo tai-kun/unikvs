@@ -69,6 +69,33 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 - 監査用にもう 1 つ追加し、復旧経路を確保します。
 - `@unikvs/writeonly` でラップし、改変できないアーカイブを残します。
 
+## 読み取り時の書き戻し [#read-repair]
+
+`get` と `stream` は `repair: true` を渡すと、後段のストレージで見つかったデータを、デコードしながら前段へ書き戻して返します。各ストレージの保存形式は登録時点のトランスフォーマー数で決まるため、デコード途中の値がそのまま書き戻し先の形式になります。エンコードし直す必要はありません。
+
+```ts
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .appendStorage(new Memory()) // 圧縮前
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new NodeFs(".tmp")) // 圧縮後
+  .create();
+
+// NodeFs にしかない値は、復元しながら Memory にも書き戻されます。
+const bytes = await kvs.get("foo", { repair: true });
+```
+
+```mermaid
+flowchart LR
+  NodeFs --> Compression
+  Compression --> Memory
+```
+
+- 書き戻すのは、存在確認で見つからなかったストレージだけです。存在確認自体に失敗したストレージには書き戻しません。
+- 書き戻しはベストエフォートです。失敗しても読み取りは成功し、ログに残るだけです。
+- 書き戻しの書き込みには、実行時変数に `unikvs:repair: true` が付与されます。通常の書き込みと区別したい場合に使えます。
+- 読み取りから書き戻しまでは、同じキーへの書き込みと直列化されます。`stream` の場合は、読み切るか破棄するまで書き込みロックを保持します。
+- 既定は無効です。書き込み増幅を避けたい場合は指定しないでください。
+
 ## 設計の注意 [#notes]
 
 :::warning

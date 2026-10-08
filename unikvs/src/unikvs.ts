@@ -190,6 +190,7 @@ const SetArgsSchema = v.union([
 
 const GetOptionsSchema = v.object({
   key: v.string(),
+  repair: v.optional(v.boolean()),
   signal: v.optional(v.instance(AbortSignal)),
   vars: v.optional(VariablesSourceSchema),
 });
@@ -204,6 +205,7 @@ const GetArgsSchema = v.union([
 
 const StreamOptionsSchema = v.object({
   key: v.string(),
+  repair: v.optional(v.boolean()),
   signal: v.optional(v.instance(AbortSignal)),
   vars: v.optional(VariablesSourceSchema),
 });
@@ -312,6 +314,11 @@ export type GetOptions<TKey = IStorage.Key> = {
   readonly key: TKey;
 
   /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   */
+  readonly repair?: boolean | undefined;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
   readonly signal?: AbortSignal | undefined;
@@ -330,6 +337,11 @@ export type StreamOptions<TKey = IStorage.Key> = {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
   readonly key: TKey;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
+   */
+  readonly repair?: boolean | undefined;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
@@ -453,6 +465,31 @@ export type UniKvsDestination = {
    */
   readonly transformers: readonly UniKvsTransformer[];
 };
+
+/**
+ * 書き戻し先のストレージを、保持するデータの段階ごとにまとめます。
+ *
+ * ストレージの保存形式は登録時点のトランスフォーマー数で決まるため、同じ数を持つストレージは同じデータを受け取れます。
+ *
+ * @param destinations 書き戻し先のストレージです。
+ * @returns トランスフォーマー数をキーとしたストレージの一覧を返します。
+ */
+function groupDestinationsByTransformerCount(
+  destinations: readonly UniKvsDestination[],
+): Map<number, UniKvsDestination[]> {
+  const groups = new Map<number, UniKvsDestination[]>();
+  for (const dest of destinations) {
+    const count = dest.transformers.length;
+    const group = groups.get(count);
+    if (group) {
+      group.push(dest);
+    } else {
+      groups.set(count, [dest]);
+    }
+  }
+
+  return groups;
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
@@ -1006,6 +1043,59 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 後段ストレージから読み取ったデータをデコードしながら、デコード途中の段階に対応する前段ストレージへ書き戻します。
+   *
+   * 書き戻しはベストエフォートです。前段の失敗で読み取り自体を失敗させないように、失敗はログに残して続行します。
+   *
+   * @param data 読み取ったデータです。
+   * @param transformers 読み取り元ストレージの前段パイプラインです。
+   * @param targets 書き戻し先のストレージです。
+   * @param vars 実行時の変数です。
+   * @param key 対象のキーです。
+   * @param signal 処理の中断を通知するためのシグナルです。
+   * @returns デコード済みのデータを返します。
+   */
+  async #decodeWithRepair(
+    data: unknown,
+    transformers: readonly UniKvsTransformer[],
+    targets: readonly UniKvsDestination[],
+    vars: Variables,
+    key: IStorage.Key,
+    signal: AbortSignal,
+  ): Promise<unknown> {
+    const groups = groupDestinationsByTransformerCount(targets);
+
+    // 書き戻しによる書き込みであることが分かるように、書き込み専用の変数を用意します。
+    const repairVars: Variables = { ...vars, "unikvs:repair": true };
+
+    let level = transformers.length;
+    while (true) {
+      const destinations = groups.get(level);
+      if (destinations) {
+        // 同じ段階のストレージは、同じ形式のデータを受け取れます。
+        await Promise.all(
+          destinations.map(async (dest) => {
+            try {
+              await dest.storage.write(repairVars, signal, key, data);
+            } catch (reason) {
+              logger.error`Failed to repair a storage: ${reason}`;
+            }
+          }),
+        );
+        signal.throwIfAborted();
+      }
+
+      if (level === 0) {
+        return data;
+      }
+
+      data = await transformers[level - 1]!.decode(vars, signal, data);
+      level--;
+      signal.throwIfAborted();
+    }
+  }
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
@@ -1026,7 +1116,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(GetArgsSchema, args);
-    const { key, signal: signalOption, vars: varsOption } = options;
+    const { key, repair = false, signal: signalOption, vars: varsOption } = options;
 
     const valueSchema = this.#resolveValueSchema(key);
 
@@ -1047,15 +1137,18 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const NONE = {};
       let data: any = NONE;
       let transformers: readonly UniKvsTransformer[] = [];
+      const missing: UniKvsDestination[] = [];
       const errors: { name: string; index: number; reason: unknown }[] = [];
 
-      const lock = await io.rLock({ key, signal });
+      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するために書き込みロックを取得します。
+      const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const [index, dest] of this.#destinations.entries()) {
           try {
             if (!(await dest.storage.exists(vars, signal, key))) {
+              missing.push(dest);
               continue;
             }
             data = await dest.storage.read(vars, signal, key);
@@ -1069,32 +1162,39 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             logger.error`Failed to read from a storage: ${ex}`;
           }
         }
+
+        if (data === NONE) {
+          const args: KeyNotFoundErrorArgs = { key };
+          switch (errors.length) {
+            case 0:
+              break;
+            case 1:
+              args.cause = errors[0]!.reason;
+              break;
+            default:
+              args.cause = new PluginOperationAggregateError({
+                plugin: "storage",
+                action: "read",
+                errors,
+              });
+          }
+
+          throw new KeyNotFoundError(args);
+        }
+
+        if (repair) {
+          // 後段ヒットしたデータをデコードしながら、デコード途中の段階に対応する前段ストレージへ書き戻します。
+          data = await this.#decodeWithRepair(data, transformers, missing, vars, key, signal);
+        }
       } finally {
         lock.release();
       }
 
-      if (data === NONE) {
-        const args: KeyNotFoundErrorArgs = { key };
-        switch (errors.length) {
-          case 0:
-            break;
-          case 1:
-            args.cause = errors[0]!.reason;
-            break;
-          default:
-            args.cause = new PluginOperationAggregateError({
-              plugin: "storage",
-              action: "read",
-              errors,
-            });
+      if (!repair) {
+        // 見つかったストレージ専用の前段パイプラインを逆順に適用してデータをデコードします。
+        for (const transformer of transformers.toReversed()) {
+          data = await transformer.decode(vars, signal, data);
         }
-
-        throw new KeyNotFoundError(args);
-      }
-
-      // 見つかったストレージ専用の前段パイプラインを逆順に適用してデータをデコードします。
-      for (const transformer of transformers.toReversed()) {
-        data = await transformer.decode(vars, signal, data);
       }
 
       // デコード後のデータを検証します。
@@ -1129,7 +1229,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
 
     const [options] = v.parseInput(StreamArgsSchema, args);
-    const { key, signal: signalOption, vars: varsOption } = options;
+    const { key, repair = false, signal: signalOption, vars: varsOption } = options;
 
     const valueSchema = this.#resolveValueSchema(key);
 
@@ -1150,15 +1250,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const NONE: any = {};
       let r: IReadableStream = NONE;
       let transformers: readonly UniKvsTransformer[] = [];
+      const missing: UniKvsDestination[] = [];
       const errors: { name: string; index: number; reason: unknown }[] = [];
+      const fillBranches: IReadableStream[] = [];
+      const fillTasks: Promise<void>[] = [];
+      let repairAc: AbortController | null = null;
+      let cancelFills: ((reason: unknown) => Promise<void>) | null = null;
 
-      const lock = await io.rLock({ key, signal });
+      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するために書き込みロックを取得します。
+      const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
         // 各ストレージを巡回し、最初に見つかったデータを取得します。
         // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
         for (const [index, dest] of this.#destinations.entries()) {
           try {
             if (!(await dest.storage.exists(vars, signal, key))) {
+              missing.push(dest);
               continue;
             }
 
@@ -1194,10 +1301,70 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           throw new KeyNotFoundError(args);
         }
 
+        // 書き戻しが有効な場合のみ、ストリームが途中で破棄されたときに進行中の書き戻しも中断できるようにします。
+        repairAc = repair ? new AbortController() : null;
+        const repairSignal = repairAc ? combineSignals([signal, repairAc.signal]) : signal;
+
+        // 書き戻しによる書き込みであることが分かるように、書き込み専用の変数を用意します。
+        const repairVars: Variables = repair ? { ...vars, "unikvs:repair": true } : vars;
+
+        // 書き戻し先へ分岐をパイプします。書き戻しはベストエフォートであり、失敗はログに残して続行します。
+        const fill = (dest: UniKvsDestination, branch: IReadableStream): void => {
+          fillBranches.push(branch);
+          fillTasks.push(
+            (async () => {
+              try {
+                const w = await dest.storage.getWritable(repairVars, repairSignal, key);
+                await branch.pipeTo(w, { signal: repairSignal });
+              } catch (reason) {
+                // パイプが中断された場合は分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
+                try {
+                  await branch.cancel(reason);
+                } catch {}
+
+                // 意図的な中断時はエラーではありません。
+                if (!repairSignal.aborted) {
+                  logger.error`Failed to repair a storage: ${reason}`;
+                }
+              }
+            })(),
+          );
+        };
+
+        // セットアップの失敗時に、構築済みの分岐と進行中の書き戻しを中断します。
+        cancelFills = async (reason) => {
+          repairAc?.abort(reason);
+          await Promise.all(
+            fillBranches.map(async (branch) => {
+              try {
+                await branch.cancel(reason);
+              } catch {}
+            }),
+          );
+          await Promise.all(fillTasks);
+        };
+
         // 見つかったストレージ専用の前段パイプラインを逆順に適用し、デコード用トランスフォームを連結します。
-        for (const transformer of transformers.toReversed()) {
-          const d = await transformer.getDecodable(vars, signal);
+        // デコード途中で書き戻し先の段階に到達するたびに tee で分岐し、その時点のデータを書き戻し用にパイプします。
+        const groups = repair ? groupDestinationsByTransformerCount(missing) : null;
+        let level = transformers.length;
+        while (true) {
+          const destinations = groups?.get(level);
+          if (destinations) {
+            for (const dest of destinations) {
+              const [branch, rest] = r.tee();
+              fill(dest, branch);
+              r = rest;
+            }
+          }
+
+          if (level === 0) {
+            break;
+          }
+
+          const d = await transformers[level - 1]!.getDecodable(vars, signal);
           r = r.pipeThrough(d);
+          level--;
         }
 
         // デコード後のチャンクを検証します。
@@ -1211,23 +1378,55 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           );
         }
 
-        if (!ioLockRegistry) {
-          return toValueStream(r, async () => {
+        // ストリームを読み切ったかどうかを監視します。読み切った場合は書き戻しの完了を待ち、途中で破棄された場合は書き戻しを中断します。
+        let completed = false;
+        if (repairAc) {
+          r = r.pipeThrough(
+            new TransformStream({
+              transform(chunk, controller) {
+                controller.enqueue(chunk);
+              },
+              flush() {
+                completed = true;
+              },
+            }),
+          );
+        }
+
+        // 破棄時は、ソースストリームをキャンセルする前に進行中の書き戻しを中断します。
+        // tee で分岐したストリームは、分岐のキャンセルが揃うまで元ストリームのキャンセルが完了しないためです。
+        const beforeDispose = (): void => {
+          if (!completed) {
+            repairAc?.abort(signal.reason);
+          }
+        };
+
+        // 書き戻しの完了または中断を待ってからキーの書き込みロックを解放します。
+        const dispose = async (): Promise<void> => {
+          try {
+            await Promise.all(fillTasks);
+          } finally {
             try {
               lock.release();
             } catch {}
-          });
+          }
+        };
+
+        if (!ioLockRegistry) {
+          return toValueStream(r, dispose, beforeDispose);
         }
 
         const unregisterToken = {};
-        const valueStream = toValueStream(r, async () => {
-          try {
-            ioLockRegistry.unregister(unregisterToken);
-          } catch {}
-          try {
-            lock.release();
-          } catch {}
-        });
+        const valueStream = toValueStream(
+          r,
+          async () => {
+            try {
+              ioLockRegistry.unregister(unregisterToken);
+            } catch {}
+            await dispose();
+          },
+          beforeDispose,
+        );
 
         // valueStream が GC されるタイミングでストリームが終了していなければロックを自動解放するとともに、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放できるように dispose を記録します。
         ioLockRegistry.register(
@@ -1241,6 +1440,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         return valueStream;
       } catch (ex) {
+        await cancelFills?.(ex);
+
         if (r !== NONE) {
           // getReadable 成功後のセットアップ中に失敗した場合、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するためにキャンセルします。
           try {
