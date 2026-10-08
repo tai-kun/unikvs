@@ -17,7 +17,7 @@ describe("並行実行", () => {
     ];
 
     // 実行
-    await Promise.all(candidates.map((data) => storage.write({ key, data, signal })));
+    await Promise.all(candidates.map((data) => storage.write({ key, data, signal, vars: {} })));
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -34,7 +34,9 @@ describe("並行実行", () => {
     const data = createAllByteValues(64 * 1024);
 
     // 実行
-    await Promise.all(Array.from({ length: 30 }, () => storage.write({ key, data, signal })));
+    await Promise.all(
+      Array.from({ length: 30 }, () => storage.write({ key, data, signal, vars: {} })),
+    );
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -49,7 +51,9 @@ describe("並行実行", () => {
     }));
 
     // 実行
-    await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+    await Promise.all(
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+    );
     const results = await Promise.all(entries.map(({ key }) => storage.read({ key, signal })));
 
     // 検証
@@ -67,7 +71,7 @@ describe("並行実行", () => {
     // 準備
     const key = "parallel-read.bin";
     const data = createPseudoRandomBytes(64 * 1024, 999);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     const results = await Promise.all(
@@ -83,7 +87,7 @@ describe("並行実行", () => {
   test("同じキーへの並列 delete が全て成功する", async ({ expect, signal, storage }) => {
     // 準備
     const key = "parallel-delete.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
 
     // 実行
     await Promise.all(Array.from({ length: 5 }, () => storage.delete({ key, signal })));
@@ -102,7 +106,9 @@ describe("並行実行", () => {
       key: `bulk-delete/${index}.bin`,
       data: new Uint8Array([index]),
     }));
-    await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+    await Promise.all(
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+    );
 
     // 実行
     const removed = entries.filter((_, index) => index % 2 === 0);

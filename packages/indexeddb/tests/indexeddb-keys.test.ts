@@ -29,7 +29,7 @@ describe("キーの境界値", () => {
       await storage.open({ signal });
 
       // 実行
-      await storage.write({ key, data: "value", signal });
+      await storage.write({ key, data: "value", signal, vars: {} });
 
       // 検証
       expect(await storage.read({ key, signal })).toBe("value");
@@ -48,8 +48,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "Key", data: "upper", signal });
-    await storage.write({ key: "key", data: "lower", signal });
+    await storage.write({ key: "Key", data: "upper", signal, vars: {} });
+    await storage.write({ key: "key", data: "lower", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "Key", signal })).toBe("upper");
@@ -62,8 +62,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "k", data: "plain", signal });
-    await storage.write({ key: " k ", data: "padded", signal });
+    await storage.write({ key: "k", data: "plain", signal, vars: {} });
+    await storage.write({ key: " k ", data: "padded", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k", signal })).toBe("plain");
@@ -75,8 +75,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "k1", data: "first", signal });
-    await storage.write({ key: `k${1}`, data: "second", signal });
+    await storage.write({ key: "k1", data: "first", signal, vars: {} });
+    await storage.write({ key: `k${1}`, data: "second", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toBe("second");
@@ -89,7 +89,7 @@ describe("プロトタイプ汚染キー", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "__proto__", data: { polluted: true }, signal });
+    await storage.write({ key: "__proto__", data: { polluted: true }, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "__proto__", signal })).toStrictEqual({ polluted: true });
@@ -100,10 +100,10 @@ describe("プロトタイプ汚染キー", () => {
   test("constructor へ書き込んでも既存のキーは影響を受けない", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
     // 実行
-    await storage.write({ key: "constructor", data: "shadowed", signal });
+    await storage.write({ key: "constructor", data: "shadowed", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "constructor", signal })).toBe("shadowed");

@@ -17,7 +17,9 @@ describe("並行実行の振る舞い", () => {
     }));
 
     // 実行
-    await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+    await Promise.all(
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+    );
 
     // 検証
     for (const { key, data } of entries) {
@@ -40,7 +42,7 @@ describe("並行実行の振る舞い", () => {
     ];
 
     // 実行
-    await Promise.all(payloads.map((data) => storage.write({ key, data, signal })));
+    await Promise.all(payloads.map((data) => storage.write({ key, data, signal, vars: {} })));
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -57,7 +59,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index]),
     }));
     for (const { key, data } of existing) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
     }
 
     const fresh = Array.from({ length: 16 }, (_, index) => ({
@@ -68,7 +70,7 @@ describe("並行実行の振る舞い", () => {
     // 実行
     const [readResults] = await Promise.all([
       Promise.all(existing.map(({ key }) => storage.read({ key, signal }))),
-      Promise.all(fresh.map(({ key, data }) => storage.write({ key, data, signal }))),
+      Promise.all(fresh.map(({ key, data }) => storage.write({ key, data, signal, vars: {} }))),
     ]);
 
     // 検証
@@ -101,8 +103,8 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     await Promise.all([
-      ...firstEntries.map(({ key, data }) => first.write({ key, data, signal })),
-      ...secondEntries.map(({ key, data }) => second.write({ key, data, signal })),
+      ...firstEntries.map(({ key, data }) => first.write({ key, data, signal, vars: {} })),
+      ...secondEntries.map(({ key, data }) => second.write({ key, data, signal, vars: {} })),
     ]);
 
     // 検証
@@ -125,7 +127,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index, index + 1]),
     }));
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
     }
 
     // 実行

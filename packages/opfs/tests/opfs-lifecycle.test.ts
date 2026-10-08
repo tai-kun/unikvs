@@ -2,7 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { InvalidDirnameError } from "@unikvs/utils";
 import { describe, expectTypeOf } from "vitest";
 
-import Opfs from "../src/opfs.js";
+import Opfs, { type OpfsOptions } from "../src/opfs.js";
 import { removeRoot, test, uniqueRoot } from "./_helpers.js";
 
 const { signal } = new AbortController();
@@ -28,10 +28,13 @@ const ROOT_DIRECT_CASES: readonly (readonly [string, string])[] = [
 
 const UNOPENED_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] = [
   ["read", (storage) => storage.read({ key: "valid.bin", signal })],
-  ["write", (storage) => storage.write({ key: "valid.bin", data: new Uint8Array([1]), signal })],
+  [
+    "write",
+    (storage) => storage.write({ key: "valid.bin", data: new Uint8Array([1]), signal, vars: {} }),
+  ],
   ["exists", (storage) => storage.exists({ key: "valid.bin", signal })],
   ["delete", (storage) => storage.delete({ key: "valid.bin", signal })],
-  ["getWritable", (storage) => storage.getWritable({ key: "valid.bin", signal })],
+  ["getWritable", (storage) => storage.getWritable({ key: "valid.bin", signal, vars: {} })],
   ["getReadable", (storage) => storage.getReadable({ key: "valid.bin", signal })],
 ];
 
@@ -51,7 +54,7 @@ describe("コンストラクターの振る舞い", () => {
 
     // 実行
     await storage.open({ signal });
-    await storage.write({ key, data: new Uint8Array([1, 2]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 2]), signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -67,7 +70,7 @@ describe("コンストラクターの振る舞い", () => {
       const writer = new Opfs("");
       await writer.open({ signal });
       const key = `direct-${crypto.randomUUID()}.bin`;
-      await writer.write({ key, data: new Uint8Array([7]), signal });
+      await writer.write({ key, data: new Uint8Array([7]), signal, vars: {} });
 
       // 実行
       const storage = new Opfs(root);
@@ -88,7 +91,7 @@ describe("コンストラクターの振る舞い", () => {
     const writer = new Opfs("//");
     await writer.open({ signal });
     const key = `slashes-${crypto.randomUUID()}.bin`;
-    await writer.write({ key, data: new Uint8Array([8]), signal });
+    await writer.write({ key, data: new Uint8Array([8]), signal, vars: {} });
 
     // 実行
     const storage = new Opfs("/");
@@ -109,7 +112,7 @@ describe("コンストラクターの振る舞い", () => {
     const writer = new Opfs(`//${root}//`);
     await writer.open({ signal });
     const key = "normalized.bin";
-    await writer.write({ key, data: new Uint8Array([1, 2]), signal });
+    await writer.write({ key, data: new Uint8Array([1, 2]), signal, vars: {} });
 
     // 実行
     const storage = new Opfs(root);
@@ -130,7 +133,7 @@ describe("コンストラクターの振る舞い", () => {
 
     // 実行
     await storage.open({ signal });
-    await storage.write({ key, data: new Uint8Array([3]), signal });
+    await storage.write({ key, data: new Uint8Array([3]), signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -157,7 +160,7 @@ describe("コンストラクターの振る舞い", () => {
     const key = "handle.bin";
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([4]), signal });
+    await storage.write({ key, data: new Uint8Array([4]), signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -176,12 +179,12 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await opfsRoot.getDirectoryHandle(dirname, { create: true });
     const storage = new Opfs(handle);
     const key = "handle.bin";
-    await storage.write({ key, data: new Uint8Array([4]), signal });
+    await storage.write({ key, data: new Uint8Array([4]), signal, vars: {} });
 
     // 実行
     await storage.clear({ signal });
     const existsAfterClear = await storage.exists({ key, signal });
-    await storage.write({ key, data: new Uint8Array([5]), signal });
+    await storage.write({ key, data: new Uint8Array([5]), signal, vars: {} });
     const reloaded = await storage.read({ key, signal });
 
     // 検証
@@ -201,7 +204,7 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await parent.getDirectoryHandle("inner", { create: true });
     const storage = new Opfs(handle);
     const key = "nested.bin";
-    await storage.write({ key, data: new Uint8Array([6]), signal });
+    await storage.write({ key, data: new Uint8Array([6]), signal, vars: {} });
 
     try {
       // 実行
@@ -223,7 +226,7 @@ describe("コンストラクターの振る舞い", () => {
     const key = `root-handle-${crypto.randomUUID()}.bin`;
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]), signal });
+    await storage.write({ key, data: new Uint8Array([9]), signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -238,7 +241,7 @@ describe("ライフサイクルの振る舞い", () => {
   test("open を二重に呼び出したとき、状態とデータが維持される", async ({ expect, storage }) => {
     // 準備
     const key = "twice.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
 
     // 実行
     await storage.open({ signal });
@@ -294,7 +297,7 @@ describe("ライフサイクルの振る舞い", () => {
     // 準備
     const first = new Opfs(root);
     await first.open({ signal });
-    await first.write({ key: "shared.bin", data: new Uint8Array([5, 6]), signal });
+    await first.write({ key: "shared.bin", data: new Uint8Array([5, 6]), signal, vars: {} });
 
     // 実行
     const second = new Opfs(root);
@@ -317,8 +320,8 @@ describe("ライフサイクルの振る舞い", () => {
     await second.open({ signal });
 
     // 実行
-    await first.write({ key: "a.bin", data: new Uint8Array([1]), signal });
-    await second.write({ key: "b.bin", data: new Uint8Array([2]), signal });
+    await first.write({ key: "a.bin", data: new Uint8Array([1]), signal, vars: {} });
+    await second.write({ key: "b.bin", data: new Uint8Array([2]), signal, vars: {} });
 
     // 検証
     expect(await second.read({ key: "a.bin", signal })).toStrictEqual(new Uint8Array([1]));
@@ -342,7 +345,7 @@ describe("ライフサイクルの振る舞い", () => {
 
     // 実行と検証
     expectTypeOf(Opfs).constructorParameters.toEqualTypeOf<
-      [root?: string | FileSystemDirectoryHandle | undefined]
+      [root?: string | FileSystemDirectoryHandle | undefined, options?: OpfsOptions | undefined]
     >();
     expect(withString).toStrictEqual(["valid-root"]);
     expect(new Opfs("valid-root")).toBeInstanceOf(Opfs);

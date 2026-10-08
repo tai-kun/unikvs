@@ -31,9 +31,10 @@ public constructor(url?: string, options?: RedisStorageOptions)
 
 `url` is the connection target. When omitted, Bun resolves it from `REDIS_URL`, `VALKEY_URL`, and then `redis://localhost:6379`, in that order.
 
-`options` is `RedisOptions` plus `keyPrefix`.
+`options` is `RedisOptions` plus `keyPrefix` and `allowRepair`.
 
 - `keyPrefix` is a string prepended to every key. The default is `"unikvs:"`, which limits what `clear()` deletes to keys under this prefix. An empty string uses keys as-is.
+- `allowRepair` controls whether repair writes are allowed. The default is `false`. When set to `false`, repair `write` and `getWritable` calls fail with `RepairNotAllowedError`.
 - All other properties are passed to Bun's `RedisClient`, such as `connectionTimeout`, `autoReconnect`, `maxRetries`, and `tls`.
 
 The main members are as follows.

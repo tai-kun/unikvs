@@ -31,6 +31,8 @@ import Indexeddb from "@unikvs/indexeddb";
 | ---- | -- | ------ | ---- |
 | `dbName` | `string` | `"unikvs_db"` | データベース名です。 |
 | `storeName` | `string` | `"kvs_store"` | オブジェクトストア名です。 |
+| `options` | `IndexeddbOptions` | `{}` | 追加の動作を指定します。 |
+| `options.allowRepair` | `boolean` | `false` | 書き戻しによる書き込みを許可するかどうかです。`false` の場合、書き戻しの `write`・`getWritable` はエラーを投げます。 |
 
 ```ts
 import Indexeddb from "@unikvs/indexeddb";

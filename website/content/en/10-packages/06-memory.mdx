@@ -56,6 +56,7 @@ The constructor arguments are as follows.
 | --- | --- | --- | --- |
 | `options` | `MemoryOptions` | No | When omitted, behaves as an empty object. |
 | `options.clone` | `<T>(value: T) => T` | No | Function used to clone data. Defaults to `structuredClone`. |
+| `options.allowRepair` | `boolean` | No | Whether to allow repair writes. Defaults to `false`. |
 
 The following example changes how values are cloned.
 

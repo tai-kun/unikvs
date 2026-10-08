@@ -17,7 +17,7 @@ describe("権限エラー", () => {
       try {
         // 実行と検証
         await expect(
-          storage.write({ key: "denied.bin", data: new Uint8Array([1]), signal }),
+          storage.write({ key: "denied.bin", data: new Uint8Array([1]), signal, vars: {} }),
         ).rejects.toThrow(/EACCES/);
         expect(await listTemporaryFiles(root)).toStrictEqual([]);
       } finally {
@@ -31,7 +31,7 @@ describe("権限エラー", () => {
     async ({ expect, root, signal, storage }) => {
       // 準備
       const key = "no-read.bin";
-      await storage.write({ key, data: new Uint8Array([1]), signal });
+      await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
       await chmod(join(root, key), 0o000);
 
       try {
@@ -48,7 +48,7 @@ describe("abort された signal", () => {
   test("read は失敗する", async ({ expect, signal, storage }) => {
     // 準備
     const key = "aborted-read.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     const controller = new AbortController();
     controller.abort();
 
@@ -69,7 +69,7 @@ describe("rename 失敗時の保全", () => {
     const innerData = new Uint8Array([7, 7]);
     await mkdir(join(root, key));
     await writeFile(join(root, key, "inner.txt"), innerData);
-    const writer = (await storage.getWritable({ key, signal })).getWriter();
+    const writer = (await storage.getWritable({ key, signal, vars: {} })).getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行と検証
@@ -92,7 +92,9 @@ describe("rename 失敗時の保全", () => {
     await writeFile(join(root, key, "inner.txt"), innerData);
 
     // 実行と検証
-    await expect(storage.write({ key, data: new Uint8Array([1]), signal })).rejects.toThrow();
+    await expect(
+      storage.write({ key, data: new Uint8Array([1]), signal, vars: {} }),
+    ).rejects.toThrow();
     expect(await readdir(join(root, key))).toStrictEqual(["inner.txt"]);
     expect(new Uint8Array(await readFile(join(root, key, "inner.txt")))).toStrictEqual(innerData);
     expect(await listTemporaryFiles(root)).toStrictEqual([]);

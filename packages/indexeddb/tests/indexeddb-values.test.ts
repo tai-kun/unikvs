@@ -21,7 +21,7 @@ describe("プリミティブ値", () => {
       await storage.open({ signal });
 
       // 実行
-      await storage.write({ key: "k1", data: value, signal });
+      await storage.write({ key: "k1", data: value, signal, vars: {} });
 
       // 検証
       expect(await storage.read({ key: "k1", signal })).toBe(value);
@@ -33,7 +33,7 @@ describe("プリミティブ値", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "k1", data: Number.NaN, signal });
+    await storage.write({ key: "k1", data: Number.NaN, signal, vars: {} });
 
     // 検証
     expect(await storage.exists({ key: "k1", signal })).toBe(true);
@@ -44,8 +44,8 @@ describe("プリミティブ値", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "positive", data: Number.POSITIVE_INFINITY, signal });
-    await storage.write({ key: "negative", data: Number.NEGATIVE_INFINITY, signal });
+    await storage.write({ key: "positive", data: Number.POSITIVE_INFINITY, signal, vars: {} });
+    await storage.write({ key: "negative", data: Number.NEGATIVE_INFINITY, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "positive", signal })).toBe(Number.POSITIVE_INFINITY);
@@ -57,8 +57,8 @@ describe("プリミティブ値", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "zero", data: 0, signal });
-    await storage.write({ key: "negative-zero", data: -0, signal });
+    await storage.write({ key: "zero", data: 0, signal, vars: {} });
+    await storage.write({ key: "negative-zero", data: -0, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "zero", signal })).toBe(0);
@@ -73,7 +73,7 @@ describe("複合値", () => {
     const value = { list: [1, "two", { three: true }], nested: { deep: null } };
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toStrictEqual(value);
@@ -85,7 +85,7 @@ describe("複合値", () => {
     const value = new Date("2024-01-02T03:04:05.678Z");
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -102,7 +102,7 @@ describe("複合値", () => {
     ]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -117,7 +117,7 @@ describe("複合値", () => {
     const value = new Set([1, 2, 3]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -132,7 +132,7 @@ describe("複合値", () => {
     const value = /abc/giu;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -148,7 +148,7 @@ describe("複合値", () => {
     const value = new Blob(["hello", "world"], { type: "text/plain" });
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -166,7 +166,7 @@ describe("複合値", () => {
     value.self = value;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -183,7 +183,7 @@ describe("バイナリーデータ", () => {
     const value = new Uint8Array([1, 2, 3, 255]).buffer;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -198,7 +198,7 @@ describe("バイナリーデータ", () => {
     const value = new Uint8Array([0, 1, 2, 255]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -216,7 +216,7 @@ describe("バイナリーデータ", () => {
     const view = new Uint8Array(buffer, 1, 2);
 
     // 実行
-    await storage.write({ key: "k1", data: view, signal });
+    await storage.write({ key: "k1", data: view, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toStrictEqual(new Uint8Array([1, 2]));
@@ -228,7 +228,7 @@ describe("バイナリーデータ", () => {
     const value = "a".repeat(3 * 1024 * 1024);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -245,7 +245,7 @@ describe("バイナリーデータ", () => {
     value[size - 1] = 2;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal });
+    await storage.write({ key: "k1", data: value, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -262,7 +262,9 @@ describe("複製できない値", () => {
     await storage.open({ signal });
 
     // 実行
-    const error = await captureRejection(storage.write({ key: "fn", data: () => {}, signal }));
+    const error = await captureRejection(
+      storage.write({ key: "fn", data: () => {}, signal, vars: {} }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -279,7 +281,9 @@ describe("複製できない値", () => {
     const symbol = Symbol("value");
 
     // 実行
-    const error = await captureRejection(storage.write({ key: "sym", data: symbol, signal }));
+    const error = await captureRejection(
+      storage.write({ key: "sym", data: symbol, signal, vars: {} }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -296,7 +300,7 @@ describe("複製できない値", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.write({ key: "nested", data: { callback: () => {} }, signal }),
+      storage.write({ key: "nested", data: { callback: () => {} }, signal, vars: {} }),
     );
 
     // 検証
@@ -308,10 +312,12 @@ describe("複製できない値", () => {
   test("複製に失敗しても既存の値は上書きされない", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "old", signal });
+    await storage.write({ key: "k1", data: "old", signal, vars: {} });
 
     // 実行
-    const error = await captureRejection(storage.write({ key: "k1", data: () => {}, signal }));
+    const error = await captureRejection(
+      storage.write({ key: "k1", data: () => {}, signal, vars: {} }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);

@@ -15,7 +15,9 @@ describe("並行操作", () => {
     }));
 
     // 実行
-    await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+    await Promise.all(
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+    );
 
     // 検証
     for (const { key, data } of entries) {
@@ -36,7 +38,7 @@ describe("並行操作", () => {
     );
 
     // 実行
-    await Promise.all(payloads.map((data) => storage.write({ key, data, signal })));
+    await Promise.all(payloads.map((data) => storage.write({ key, data, signal, vars: {} })));
 
     // 検証
     const result = await storage.read({ key, signal });
@@ -54,9 +56,9 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all([
-      storage.write({ key, data, signal }),
+      storage.write({ key, data, signal, vars: {} }),
       storage.delete({ key, signal }),
-      storage.write({ key, data, signal }),
+      storage.write({ key, data, signal, vars: {} }),
       storage.delete({ key, signal }),
     ]);
 
@@ -72,7 +74,7 @@ describe("並行操作", () => {
     // 準備
     const key = "parallel-read.bin";
     const data = createPseudoRandomBytes(64 * 1024, 999);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     const results = await Promise.all(

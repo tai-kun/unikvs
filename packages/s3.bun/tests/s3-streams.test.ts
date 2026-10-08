@@ -203,7 +203,12 @@ describe("ストリーム操作", () => {
 
     // 検証
     await expect(storage.exists({ key, signal })).resolves.toBe(false);
-    await storage.write({ key: "after-writer-abort.bin", data: new Uint8Array([1]), signal });
+    await storage.write({
+      key: "after-writer-abort.bin",
+      data: new Uint8Array([1]),
+      signal,
+      vars: {},
+    });
     await expect(storage.exists({ key: "after-writer-abort.bin", signal })).resolves.toBe(true);
   });
 
@@ -233,7 +238,7 @@ describe("ストリーム操作", () => {
   }) => {
     // 準備
     const key = "empty-read.bin";
-    await storage.write({ key, data: new Uint8Array(0), signal });
+    await storage.write({ key, data: new Uint8Array(0), signal, vars: {} });
 
     // 実行
     const streamed = await collectBytes(storage.getReadable({ key, signal }));
@@ -249,7 +254,7 @@ describe("ストリーム操作", () => {
   }) => {
     // 準備
     const key = "cancelled-reader.bin";
-    await storage.write({ key, data: createAllByteValues(1024 * 1024), signal });
+    await storage.write({ key, data: createAllByteValues(1024 * 1024), signal, vars: {} });
     const reader = storage.getReadable({ key, signal }).getReader();
     const first = await reader.read();
 
@@ -258,7 +263,7 @@ describe("ストリーム操作", () => {
 
     // 検証
     expect(first.done).toBe(false);
-    await storage.write({ key: "after-cancel.bin", data: new Uint8Array([2]), signal });
+    await storage.write({ key: "after-cancel.bin", data: new Uint8Array([2]), signal, vars: {} });
     await expect(storage.exists({ key: "after-cancel.bin", signal })).resolves.toBe(true);
   });
 

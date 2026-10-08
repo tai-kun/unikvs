@@ -22,13 +22,15 @@ import { S3 } from "@unikvs/s3.node";
 ```
 
 ```ts
-new S3(bucket: string, config: S3ClientConfig = {})
+new S3(bucket: string, config: S3ClientConfig = {}, options: S3StorageOptions = {})
 ```
 
 | 引数 | 型 | 説明 |
 | ---- | -- | ---- |
 | `bucket` | `string` | 保存先のバケット名です。すべての操作で使います。 |
 | `config` | `S3ClientConfig` | `S3Client` に渡す設定です。既定値は空オブジェクトです。リージョンや認証情報などを含めます。 |
+| `options` | `S3StorageOptions` | ストレージの動作設定です。既定値は空オブジェクトです。 |
+| `options.allowRepair` | `boolean` | 書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` にすると書き戻し（`vars["unikvs:repair"]` が `true`）の `write`・`getWritable` で `RepairNotAllowedError` を投げます。 |
 
 構築済みの `S3Client` を渡す引数や、プレフィックス指定はありません。キー変換や使い分けが必要なら、キーに含めるかバケットごとにインスタンスを作ってください。
 

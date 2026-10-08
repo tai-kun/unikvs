@@ -30,7 +30,8 @@ new S3(bucket: string, options: S3StorageOptions = {})
 | Argument  | Type               | Description                                                      |
 | --------- | ------------------ | ---------------------------------------------------------------- |
 | `bucket`  | `string`           | The destination bucket name. All operations use it.              |
-| `options` | `S3StorageOptions` | Bun's `S3Options` without `bucket`. Defaults to an empty object. |
+| `options` | `S3StorageOptions` | Bun's `S3Options` without `bucket`, plus `allowRepair`. Defaults to an empty object. |
+| `options.allowRepair` | `boolean` | Whether to allow repair writes. Defaults to `false`. When `false`, `write` and `getWritable` for repairs (where `vars["unikvs:repair"]` is `true`) throw `RepairNotAllowedError`. |
 
 `S3StorageOptions` accepts `accessKeyId`, `secretAccessKey`, `sessionToken`, `region`, `endpoint`, `virtualHostedStyle`, `partSize`, `queueSize`, `retry`, and more. Omitted fields are resolved by Bun from environment variables such as `S3_ACCESS_KEY_ID` and `AWS_ACCESS_KEY_ID`. Values in `options` take precedence over environment variables.
 

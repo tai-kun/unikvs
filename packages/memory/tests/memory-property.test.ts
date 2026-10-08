@@ -87,7 +87,7 @@ describe("Memory のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            storage.write({ key: operation.key, data: operation.value });
+            storage.write({ vars: {}, key: operation.key, data: operation.value });
             model.set(operation.key, operation.value);
             break;
           }
@@ -134,7 +134,7 @@ describe("Memory のプロパティー", () => {
       const bytes = random.bytes(random.int(0, 512));
 
       // 実行
-      storage.write({ key: "k1", data: bytes });
+      storage.write({ vars: {}, key: "k1", data: bytes });
       const result = storage.read({ key: "k1" }) as Uint8Array;
 
       // 検証
@@ -150,7 +150,7 @@ describe("Memory のプロパティー", () => {
       // 準備
       const storage = new Memory();
       const chunks = random.array(random.int(0, 8), () => random.bytes(random.int(0, 64)));
-      const writer = storage.getWritable({ key: "k1" }).getWriter();
+      const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
 
       // 実行
       for (const chunk of chunks) {

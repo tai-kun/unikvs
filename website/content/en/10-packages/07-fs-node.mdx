@@ -26,14 +26,17 @@ import { NodeFs } from "@unikvs/fs.node";
 ```
 
 ```ts
-public constructor(root: string = ".unikvs")
+public constructor(root: string = ".unikvs", options: NodeFsOptions = {})
 ```
 
 `root` is the root directory for data. Relative paths are resolved against the current working directory when `open()` runs. The default is `".unikvs"`.
 
+`options.allowRepair` controls whether repair writes are allowed. The default is `false`. When `false`, `write` and `getWritable` with a repair marker (`vars["unikvs:repair"]` is `true`) fail with `RepairNotAllowedError`.
+
 The main members are as follows.
 
 - `name` is `"NodeFs"`.
+- `allowRepair` indicates whether repair writes are allowed.
 - `isOpen` indicates whether the storage is open.
 - `open()` recursively creates the root directory and makes it ready for reads and writes.
 - `write`, `read`, `exists`, `delete`, and `clear` handle data.

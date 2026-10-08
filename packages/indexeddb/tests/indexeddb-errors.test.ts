@@ -9,7 +9,7 @@ const openedOperations: readonly {
   readonly label: string;
   readonly run: (storage: IndexeddbStorage) => Promise<unknown>;
 }[] = [
-  { label: "write", run: (storage) => storage.write({ key: "k", data: "v", signal }) },
+  { label: "write", run: (storage) => storage.write({ key: "k", data: "v", signal, vars: {} }) },
   { label: "read", run: (storage) => storage.read({ key: "k", signal }) },
   { label: "exists", run: (storage) => storage.exists({ key: "k", signal }) },
   { label: "delete", run: (storage) => storage.delete({ key: "k", signal }) },
@@ -72,7 +72,7 @@ describe("削除・消去後", () => {
   test("delete したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
     await storage.delete({ key: "k1", signal });
 
     // 実行
@@ -86,7 +86,7 @@ describe("削除・消去後", () => {
   test("clear したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
     await storage.clear({ signal });
 
     // 実行
@@ -108,11 +108,11 @@ describe("削除・消去後", () => {
   test("削除したキーへ再度書き込みできる", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
     await storage.delete({ key: "k1", signal });
 
     // 実行
-    await storage.write({ key: "k1", data: "v2", signal });
+    await storage.write({ key: "k1", data: "v2", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toBe("v2");
@@ -150,7 +150,7 @@ describe("close した後", () => {
     // 準備
     await storage.open({ signal });
     await storage.close({ signal });
-    const writer = storage.getWritable({ key: "k1", signal }).getWriter();
+    const writer = storage.getWritable({ key: "k1", signal, vars: {} }).getWriter();
 
     // 実行
     const error = await captureRejection(writer.close());
@@ -169,7 +169,9 @@ describe("ストアが存在しないとき", () => {
 
     try {
       // 実行
-      const error = await captureRejection(storage.write({ key: "k1", data: "v1", signal }));
+      const error = await captureRejection(
+        storage.write({ key: "k1", data: "v1", signal, vars: {} }),
+      );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);

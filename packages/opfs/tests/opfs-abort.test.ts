@@ -9,7 +9,7 @@ describe("AbortSignal による中断", () => {
   test("中断済みの signal はすべてのメソッドを中断理由で拒否する", async ({ expect, storage }) => {
     // 準備
     const key = "pre-aborted.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     const controller = new AbortController();
     const reason = new Error("独自の中断理由");
     controller.abort(reason);
@@ -18,13 +18,15 @@ describe("AbortSignal による中断", () => {
     // 実行と検証
     await expect(storage.open({ signal: abortedSignal })).rejects.toBe(reason);
     await expect(
-      storage.write({ key, data: new Uint8Array([2]), signal: abortedSignal }),
+      storage.write({ key, data: new Uint8Array([2]), signal: abortedSignal, vars: {} }),
     ).rejects.toBe(reason);
     await expect(storage.read({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.exists({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.delete({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.clear({ signal: abortedSignal })).rejects.toBe(reason);
-    await expect(storage.getWritable({ key, signal: abortedSignal })).rejects.toBe(reason);
+    await expect(storage.getWritable({ key, signal: abortedSignal, vars: {} })).rejects.toBe(
+      reason,
+    );
     await expect(storage.getReadable({ key, signal: abortedSignal })).rejects.toBe(reason);
   });
 
@@ -46,7 +48,7 @@ describe("AbortSignal による中断", () => {
   test("実行中に中断された read は中断理由で拒否される", async ({ expect, storage }) => {
     // 準備
     const key = "aborted-read.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
 
@@ -65,10 +67,12 @@ describe("AbortSignal による中断", () => {
     // 準備
     const key = "aborted-writable.bin";
     const original = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: original, signal });
+    await storage.write({ key, data: original, signal, vars: {} });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
-    const writer = (await storage.getWritable({ key, signal: controller.signal })).getWriter();
+    const writer = (
+      await storage.getWritable({ key, signal: controller.signal, vars: {} })
+    ).getWriter();
     await writer.write(new Uint8Array([9, 9]));
 
     // 実行
@@ -85,7 +89,7 @@ describe("AbortSignal による中断", () => {
   }) => {
     // 準備
     const key = "aborted-readable.bin";
-    await storage.write({ key, data: new Uint8Array(256 * 1024).fill(7), signal });
+    await storage.write({ key, data: new Uint8Array(256 * 1024).fill(7), signal, vars: {} });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
     const reader = (await storage.getReadable({ key, signal: controller.signal })).getReader();

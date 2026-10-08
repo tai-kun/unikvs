@@ -1,4 +1,4 @@
-import type { IStorage, Variables } from "@unikvs/core";
+import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
 import type { S3Client, S3Options } from "bun";
 
 import {
@@ -11,7 +11,12 @@ import {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
  */
-export type S3StorageOptions = Omit<S3Options, "bucket">;
+export type S3StorageOptions = Omit<S3Options, "bucket"> & {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
+   */
+  readonly allowRepair?: boolean | undefined;
+};
 
 /**
  * `clear()` で同時に削除するオブジェクト数の上限です。
@@ -71,11 +76,29 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
+  public readonly allowRepair: boolean;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
+   */
   public constructor(bucket: string, options: S3StorageOptions = {}) {
+    const { allowRepair = false, ...s3Options } = options;
     this.name = "S3";
     this.client = null;
     this.bucket = bucket;
-    this.options = options;
+    this.options = s3Options;
+    this.allowRepair = allowRepair;
+  }
+
+  /**
+   * 書き戻しによる書き込みが許可されているかを検証します。
+   *
+   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
+   */
+  private assertRepairAllowed(args: { vars: Variables }): void {
+    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
+      throw new RepairNotAllowedError({ name: this.name });
+    }
   }
 
   /**
@@ -119,8 +142,9 @@ export default class S3 implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
   public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
+    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
+    this.assertRepairAllowed(args);
     const { key, data, signal } = args;
 
     signal.throwIfAborted();
@@ -202,6 +226,7 @@ export default class S3 implements IStorage {
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
+    this.assertRepairAllowed(args);
     const { key, vars, signal } = args;
 
     if (signal.aborted) {

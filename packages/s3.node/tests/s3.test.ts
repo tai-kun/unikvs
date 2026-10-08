@@ -43,7 +43,7 @@ describe("ライフサイクル管理", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
@@ -62,7 +62,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -77,7 +77,7 @@ describe("基本データ操作 (CRUD)", () => {
     const key = "read-test.txt";
     const expectedData = new TextEncoder().encode("Read Content");
     storage.open();
-    await storage.write({ key, data: expectedData, signal });
+    await storage.write({ key, data: expectedData, signal, vars: {} });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -96,10 +96,10 @@ describe("基本データ操作 (CRUD)", () => {
     const firstData = new TextEncoder().encode("first version");
     const secondData = new TextEncoder().encode("second version");
     storage.open();
-    await storage.write({ key, data: firstData, signal });
+    await storage.write({ key, data: firstData, signal, vars: {} });
 
     // 実行
-    await storage.write({ key, data: secondData, signal });
+    await storage.write({ key, data: secondData, signal, vars: {} });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(secondData);
@@ -138,7 +138,7 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "delete-test.txt";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
 
     // 実行
     await storage.delete({ key, signal });
@@ -308,7 +308,7 @@ describe("ストリーム操作", () => {
     }
     const key = "stream-read.dat";
     storage.open();
-    await storage.write({ key, data: expectedData, signal });
+    await storage.write({ key, data: expectedData, signal, vars: {} });
 
     // 実行
     const readable = await storage.getReadable({ key, signal });
@@ -342,8 +342,8 @@ describe("バケット一括削除 (clear)", () => {
   }) => {
     // 準備
     storage.open();
-    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal });
-    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal });
+    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal, vars: {} });
 
     // 実行
     await storage.clear({ signal });
@@ -374,7 +374,7 @@ describe("境界値・異常系テスト", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data: emptyData, signal });
+    await storage.write({ key, data: emptyData, signal, vars: {} });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(emptyData);
@@ -391,7 +391,7 @@ describe("境界値・異常系テスト", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -414,6 +414,7 @@ describe("境界値・異常系テスト", () => {
         key,
         data: new Uint8Array([1]),
         signal: controller.signal,
+        vars: {},
       });
     }).rejects.toThrow();
   });

@@ -31,9 +31,10 @@ public constructor(url?: string, options?: RedisStorageOptions)
 
 `url` は接続先です。省略すると Bun が `REDIS_URL`、`VALKEY_URL`、`redis://localhost:6379` の順に解決します。
 
-`options` は `RedisOptions` に `keyPrefix` を加えた型です。
+`options` は `RedisOptions` に `keyPrefix` と `allowRepair` を加えた型です。
 
 - `keyPrefix` はすべてのキーの先頭に付与する文字列です。既定値は `"unikvs:"` で、`clear()` が削除する範囲をこのプレフィックス配下に限定します。空文字を指定するとキーをそのまま使います。
+- `allowRepair` は書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` を指定すると書き戻しの `write`・`getWritable` が `RepairNotAllowedError` で失敗します。
 - それ以外のプロパティーは Bun の `RedisClient` に渡します。`connectionTimeout`・`autoReconnect`・`maxRetries`・`tls` などが指定できます。
 
 主なメンバーは次のとおりです。

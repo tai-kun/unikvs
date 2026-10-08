@@ -78,7 +78,7 @@ describe("基本データ操作 (CRUD)", () => {
     const data = { message: "hello" };
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     const exists = await storage.exists({ key, signal });
@@ -89,7 +89,7 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "k1";
     const data = "v1";
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -101,7 +101,7 @@ describe("基本データ操作 (CRUD)", () => {
   test("データを削除したとき、そのデータが存在しなくなる", async ({ expect }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", signal });
+    await storage.write({ key, data: "v1", signal, vars: {} });
 
     // 実行
     await storage.delete({ key, signal });
@@ -113,8 +113,8 @@ describe("基本データ操作 (CRUD)", () => {
 
   test("clear を実行したとき、すべてのデータが削除される", async ({ expect }) => {
     // 準備
-    await storage.write({ key: "k1", data: "v1", signal });
-    await storage.write({ key: "k2", data: "v2", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k2", data: "v2", signal, vars: {} });
 
     // 実行
     await storage.clear({ signal });
@@ -139,7 +139,7 @@ describe("ストリーム操作", () => {
     const key = "stream-key";
     const chunk1 = new Uint8Array([1, 2]);
     const chunk2 = new Uint8Array([3, 4]);
-    const writable = storage.getWritable({ key, signal });
+    const writable = storage.getWritable({ key, signal, vars: {} });
     const writer = writable.getWriter();
 
     // 実行
@@ -158,7 +158,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "read-stream-key";
     const data = new Uint8Array([10, 20, 30]);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     const readable = storage.getReadable({ key, signal });
@@ -180,7 +180,7 @@ describe("ストリーム操作", () => {
   }) => {
     // 準備
     const key = "empty-stream";
-    const writable = storage.getWritable({ key, signal });
+    const writable = storage.getWritable({ key, signal, vars: {} });
     const writer = writable.getWriter();
 
     // 実行
@@ -219,7 +219,7 @@ describe("境界値・異常系", () => {
     const data = "special-key-value";
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -233,7 +233,7 @@ describe("境界値・異常系", () => {
     const data = "empty-key-data";
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -248,7 +248,7 @@ describe("境界値・異常系", () => {
     const data = new Uint8Array(size).fill(1);
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     const result = await storage.read({ key, signal });
 
     // 検証

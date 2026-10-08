@@ -26,14 +26,17 @@ import { BunFs } from "@unikvs/fs.bun";
 ```
 
 ```ts
-public constructor(root: string = ".unikvs")
+public constructor(root: string = ".unikvs", options: BunFsOptions = {})
 ```
 
 `root` は保存先のルートディレクトリーです。相対パスは `open()` 実行時にカレントディレクトリー基準で解決します。既定値は `".unikvs"` です。
 
+`options.allowRepair` は書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` を指定すると、書き戻し（`vars["unikvs:repair"]` が `true`）の `write`・`getWritable` は `RepairNotAllowedError` で失敗します。
+
 主なメンバーは次のとおりです。
 
 - `name` は `"BunFs"` です。
+- `allowRepair` は書き戻しによる書き込みを許可するかどうかを示します。
 - `isOpen` はオープン済みかどうかを示します。
 - `open()` はルートディレクトリーを再帰的に作り、読み書き可能にします。
 - `write`・`read`・`exists`・`delete`・`clear` で読み書きします。

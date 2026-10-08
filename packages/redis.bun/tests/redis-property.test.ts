@@ -11,7 +11,7 @@ describe("プロパティーベースの検証", () => {
       const data = random.bytes(random.uint(4096));
 
       // 実行
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
 
       // 検証
       await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -19,7 +19,7 @@ describe("プロパティーベースの検証", () => {
 
       // 実行
       const next = random.bytes(random.uint(4096));
-      await storage.write({ key, data: next, signal });
+      await storage.write({ key, data: next, signal, vars: {} });
 
       // 検証
       expect(bytesEqual(await storage.read({ key, signal }), next)).toBe(true);
@@ -41,7 +41,7 @@ describe("プロパティーベースの検証", () => {
       // 準備
       const key = `prop-stream/${random.uint(1_000_000_000)}/${random.string(6)}`;
       const chunks = random.array(random.int(1, 4), () => random.bytes(random.uint(8192)));
-      const writer = storage.getWritable({ key, signal }).getWriter();
+      const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
 
       // 実行
       for (const chunk of chunks) {
@@ -68,7 +68,9 @@ describe("プロパティーベースの検証", () => {
         key: `prop-clear/${random.uint(1_000_000_000)}/${random.string(4)}`,
         data: random.bytes(random.uint(128)),
       }));
-      await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+      await Promise.all(
+        entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      );
 
       // 実行
       await storage.clear({ signal });

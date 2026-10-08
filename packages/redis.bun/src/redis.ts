@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
 import type { RedisClient, RedisOptions } from "bun";
 
 import { KeyNotFoundError, UnsupportedRuntimeError } from "./errors.js";
@@ -13,6 +13,11 @@ export type RedisStorageOptions = RedisOptions & {
    * キーを名前空間で分離し、`clear()` が削除する範囲を限定します。空文字を指定するとキーをそのまま使います。
    */
   readonly keyPrefix?: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
+   */
+  readonly allowRepair?: boolean | undefined;
 };
 
 /**
@@ -62,18 +67,35 @@ export default class Redis implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
    */
+  public readonly allowRepair: boolean;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
+   */
   public readonly name: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
    */
   public constructor(url?: string, options: RedisStorageOptions = {}) {
-    const { keyPrefix = "unikvs:", ...redisOptions } = options;
+    const { keyPrefix = "unikvs:", allowRepair = false, ...redisOptions } = options;
     this.name = "Redis";
     this.con = null;
     this.url = url;
     this.options = redisOptions;
     this.keyPrefix = keyPrefix;
+    this.allowRepair = allowRepair;
+  }
+
+  /**
+   * 書き戻しによる書き込みが許可されているかを検証します。
+   *
+   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
+   */
+  private assertRepairAllowed(args: { vars: Variables }): void {
+    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
+      throw new RepairNotAllowedError({ name: this.name });
+    }
   }
 
   /**
@@ -129,8 +151,9 @@ export default class Redis implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
    */
   public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal">,
+    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
+    this.assertRepairAllowed(args);
     const { client } = this.con!;
     const { key, data, signal } = args;
 
@@ -215,8 +238,9 @@ export default class Redis implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#streams)
    */
   public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal">,
+    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
+    this.assertRepairAllowed(args);
     const { client } = this.con!;
     const { key, signal } = args;
 

@@ -29,7 +29,7 @@ import { Opfs } from "@unikvs/opfs";
 const storage = new Opfs(".unikvs");
 ```
 
-The constructor argument `root` is typed `string | FileSystemDirectoryHandle` and defaults to `".unikvs"`. A string is the root name inside OPFS; a handle itself becomes the working directory. Passing a handle counts as already open.
+The constructor argument `root` is typed `string | FileSystemDirectoryHandle` and defaults to `".unikvs"`. A string is the root name inside OPFS; a handle itself becomes the working directory. Passing a handle counts as already open. The second argument `options` is optional, and `options.allowRepair` (`boolean`, defaults to `false`) controls whether repair writes are allowed. When `false`, `write` and `getWritable` with a repair marker (`vars["unikvs:repair"]` set to `true`) throw an error.
 
 Call `open()` before use. With `UniKvs`, register with `appendStorage` then call `kvs.open()`. It internally calls `Opfs.open()`.
 

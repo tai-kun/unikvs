@@ -135,7 +135,7 @@ describe("InvalidChunkTypeError", () => {
 
   test("書き込み時に投げられたエラーはキーとチャンクを保持する", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key: "s1" }).getWriter();
 
     // 実行
     const error = await captureRejection(
@@ -153,7 +153,7 @@ describe("InvalidChunkTypeError", () => {
 
   test("読み取り時に投げられたエラーは保存値の型名を保持する", async ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: { a: 1 } });
+    storage.write({ vars: {}, key: "k1", data: { a: 1 } });
     const reader = storage.getReadable({ key: "k1" }).getReader();
 
     // 実行
@@ -170,7 +170,7 @@ describe("InvalidChunkTypeError", () => {
 describe("エラーの伝播", () => {
   test("ストリームの書き込みエラーは writer.closed へも伝播する", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key: "s1" }).getWriter();
     await captureRejection(writer.write("invalid" as unknown as Uint8Array<ArrayBuffer>));
 
     // 実行と検証

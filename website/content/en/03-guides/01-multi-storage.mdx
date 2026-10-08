@@ -93,6 +93,7 @@ flowchart LR
 - Only storages confirmed to be missing the key are written back to. Storages whose existence check itself failed are skipped.
 - Write-back is best-effort. A failed write does not fail the read; it is only logged.
 - Repair writes carry `unikvs:repair: true` in their runtime variables, so you can tell them apart from normal writes.
+- To accept write-back on a storage, pass `allowRepair: true` to its constructor (disabled by default). Refused write-backs do not fail the read; they are only logged.
 - Reading through write-back is serialized with writes to the same key. For `stream`, the write lock is held until the stream is fully read or disposed.
 - It is disabled by default. Leave it off to avoid write amplification.
 

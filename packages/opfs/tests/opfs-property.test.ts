@@ -55,7 +55,7 @@ describe("決定的ファズテストの振る舞い", () => {
       const data = random.bytes(random.int(0, 4096));
 
       // 実行
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       const loaded = await storage.read({ key, signal });
 
       // 検証
@@ -72,7 +72,7 @@ describe("決定的ファズテストの振る舞い", () => {
       const key = randomKey(random);
       const data = random.bytes(random.int(0, 4096));
       const chunkSizes = random.array(random.int(1, 10), () => random.int(1, 1000));
-      const writable = await storage.getWritable({ key, signal });
+      const writable = await storage.getWritable({ key, signal, vars: {} });
       const writer = writable.getWriter();
 
       // 実行
@@ -107,7 +107,7 @@ describe("決定的ファズテストの振る舞い", () => {
       for (const command of commands) {
         switch (command.type) {
           case "write": {
-            await storage.write({ key: command.key, data: command.data, signal });
+            await storage.write({ key: command.key, data: command.data, signal, vars: {} });
             model.set(command.key, command.data);
             break;
           }

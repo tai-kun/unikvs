@@ -30,7 +30,7 @@ describe("キー検証", () => {
       const data = new Uint8Array([index, index + 1]);
 
       // 実行
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
 
       // 検証
       expect(await storage.exists({ key })).toBe(true);
@@ -82,13 +82,15 @@ describe("キー検証", () => {
     ];
 
     for (const key of invalidKeys) {
-      await expect(storage.write({ key, data: new Uint8Array([1]), signal })).rejects.toThrow(
-        InvalidFilenameError,
-      );
+      await expect(
+        storage.write({ key, data: new Uint8Array([1]), signal, vars: {} }),
+      ).rejects.toThrow(InvalidFilenameError);
       await expect(storage.read({ key, signal })).rejects.toThrow(InvalidFilenameError);
       await expect(storage.exists({ key })).rejects.toThrow(InvalidFilenameError);
       await expect(storage.delete({ key })).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.getWritable({ key, signal })).rejects.toThrow(InvalidFilenameError);
+      await expect(storage.getWritable({ key, signal, vars: {} })).rejects.toThrow(
+        InvalidFilenameError,
+      );
       expect(() => storage.getReadable({ key, signal })).toThrow(InvalidFilenameError);
     }
   });
@@ -121,7 +123,7 @@ describe("キー検証", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data: new Uint8Array([1]), signal }),
+      storage.write({ key, data: new Uint8Array([1]), signal, vars: {} }),
     ).resolves.toBeUndefined();
   });
 });

@@ -11,7 +11,7 @@ const unopenedOperations: readonly {
   readonly label: string;
   readonly run: (storage: IndexeddbStorage) => Promise<unknown>;
 }[] = [
-  { label: "write", run: (storage) => storage.write({ key: "k", data: "v", signal }) },
+  { label: "write", run: (storage) => storage.write({ key: "k", data: "v", signal, vars: {} }) },
   { label: "read", run: (storage) => storage.read({ key: "k", signal }) },
   { label: "exists", run: (storage) => storage.exists({ key: "k", signal }) },
   { label: "delete", run: (storage) => storage.delete({ key: "k", signal }) },
@@ -41,7 +41,7 @@ describe("ライフサイクル", () => {
 
     // 実行
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toBe("v1");
@@ -69,7 +69,7 @@ describe("ライフサイクル", () => {
     await Promise.all([storage.open({ signal }), storage.open({ signal })]);
 
     // 実行
-    await storage.write({ key: "k1", data: "v1", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toBe("v1");
@@ -82,7 +82,7 @@ describe("ライフサイクル", () => {
     try {
       // 実行
       await storage.open({ signal });
-      await storage.write({ key: "k1", data: "v1", signal });
+      await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
       // 検証
       expect(await storage.read({ key: "k1", signal })).toBe("v1");
@@ -101,7 +101,7 @@ describe("ライフサイクル", () => {
     try {
       // 実行
       await storage.open({ signal });
-      await storage.write({ key: "k1", data: "v1", signal });
+      await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
       // 検証
       expect(await storage.read({ key: "k1", signal })).toBe("v1");
@@ -120,7 +120,7 @@ describe("ライフサイクル", () => {
 
     try {
       // 実行
-      await storage.write({ key: "k1", data: "v1", signal });
+      await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
       // 検証
       expect(await second.read({ key: "k1", signal })).toBe("v1");
@@ -141,7 +141,7 @@ describe("ライフサイクル", () => {
 
     try {
       // 実行
-      await storage.write({ key: "k1", data: "v1", signal });
+      await storage.write({ key: "k1", data: "v1", signal, vars: {} });
 
       // 検証
       expect(await other.exists({ key: "k1", signal })).toBe(false);

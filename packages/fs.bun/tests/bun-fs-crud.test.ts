@@ -14,11 +14,11 @@ describe("CRUD の詳細", () => {
   }) => {
     // 準備
     const key = "overwrite.bin";
-    await storage.write({ key, data: new Uint8Array([1, 1, 1, 1, 1, 1]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 1, 1, 1, 1, 1]), signal, vars: {} });
 
     // 実行
     const next = new Uint8Array([2, 2]);
-    await storage.write({ key, data: next, signal });
+    await storage.write({ key, data: next, signal, vars: {} });
 
     // 検証
     const info = await stat(join(root, key));
@@ -34,7 +34,7 @@ describe("CRUD の詳細", () => {
     // 準備
     const key = "immutable.bin";
     const original = new Uint8Array([7, 8, 9]);
-    await storage.write({ key, data: original, signal });
+    await storage.write({ key, data: original, signal, vars: {} });
 
     // 実行
     const first = await storage.read({ key, signal });
@@ -46,7 +46,7 @@ describe("CRUD の詳細", () => {
 
   test("write が成功した後、一時ファイルは残らない", async ({ expect, root, signal, storage }) => {
     // 準備と実行
-    await storage.write({ key: "no-tmp.bin", data: new Uint8Array([1, 2]), signal });
+    await storage.write({ key: "no-tmp.bin", data: new Uint8Array([1, 2]), signal, vars: {} });
 
     // 検証
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
@@ -60,12 +60,12 @@ describe("CRUD の詳細", () => {
   test("削除したキーへ再度書き込める", async ({ expect, signal, storage }) => {
     // 準備
     const key = "rewrite.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     await storage.delete({ key });
 
     // 実行
     const data = new Uint8Array([2, 3]);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     expect(await storage.exists({ key })).toBe(true);
@@ -79,7 +79,7 @@ describe("CRUD の詳細", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "top.bin", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "top.bin", data: new Uint8Array([1]), signal, vars: {} });
     await mkdir(join(root, "nested"));
     await writeFile(join(root, "nested", "inner.bin"), new Uint8Array([2]));
 
@@ -107,7 +107,7 @@ describe("CRUD の詳細", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "gone.bin", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "gone.bin", data: new Uint8Array([1]), signal, vars: {} });
     await rm(root, { recursive: true, force: true });
 
     // 実行
@@ -121,12 +121,12 @@ describe("CRUD の詳細", () => {
   test("clear の後も同じキーへ書き込める", async ({ expect, signal, storage }) => {
     // 準備
     const key = "after-clear.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     await storage.clear();
 
     // 実行
     const data = new Uint8Array([9, 8]);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     expect(new Uint8Array(await storage.read({ key, signal }))).toStrictEqual(data);
@@ -139,7 +139,7 @@ describe("CRUD の詳細", () => {
     storage,
   }) => {
     // 準備と実行
-    await storage.write({ key: "flat.txt", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "flat.txt", data: new Uint8Array([1]), signal, vars: {} });
 
     // 検証
     expect(await readdir(root)).toStrictEqual(["flat.txt"]);

@@ -17,7 +17,7 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        missing.write({ key: "x.bin", data: new Uint8Array([1]), signal }),
+        missing.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
       ).rejects.toMatchObject({ name: "NoSuchBucket" });
       await expect(missing.delete({ key: "x.bin", signal })).rejects.toMatchObject({
         name: "NoSuchBucket",
@@ -61,7 +61,7 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        unreachable.write({ key: "x.bin", data: new Uint8Array([1]), signal }),
+        unreachable.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
       ).rejects.toThrow(/ECONNREFUSED|fetch failed/);
       await expect(unreachable.exists({ key: "x.bin", signal })).rejects.toThrow(
         /ECONNREFUSED|fetch failed/,
@@ -81,7 +81,7 @@ describe("異常系とエラー伝播", () => {
 
     // 実行と検証
     await expect(
-      unauthorizedStorage.write({ key: "x.bin", data: new Uint8Array([1]), signal }),
+      unauthorizedStorage.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
     ).rejects.toThrow();
     await expect(unauthorizedStorage.read({ key: "x.bin", signal })).rejects.toThrow();
     await expect(unauthorizedStorage.delete({ key: "x.bin", signal })).rejects.toThrow();

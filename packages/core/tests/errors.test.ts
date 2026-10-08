@@ -5,6 +5,7 @@ import {
   ErrorBase,
   type ErrorOptions,
   InvalidUsageErrorBase,
+  RepairNotAllowedError,
   setErrorMessage,
 } from "../src/errors.js";
 
@@ -166,5 +167,42 @@ describe("InvalidUsageErrorBase", () => {
     expect(error).toBeInstanceOf(ErrorBase);
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
     expect(error.message).toBe("Invalid usage: null");
+  });
+});
+
+describe("RepairNotAllowedError", () => {
+  test("ErrorBase と globalThis.Error を継承する", ({ expect }) => {
+    // 実行
+    const error = new RepairNotAllowedError({ name: "Memory" });
+
+    // 検証
+    expect(error).toBeInstanceOf(globalThis.Error);
+    expect(error).toBeInstanceOf(ErrorBase);
+    expect(error).toBeInstanceOf(RepairNotAllowedError);
+  });
+
+  test("meta にストレージ名を保持する", ({ expect }) => {
+    // 実行
+    const error = new RepairNotAllowedError({ name: "Memory" });
+
+    // 検証
+    expect(error.meta).toStrictEqual({ name: "Memory" });
+  });
+
+  test("既定のメッセージはストレージ名を含む", ({ expect }) => {
+    // 実行と検証
+    expect(new RepairNotAllowedError({ name: "Memory" }).message).toBe(
+      'Storage "Memory" does not allow repair writes',
+    );
+  });
+
+  test("日本語では書き戻し拒否のメッセージを返す", ({ expect, setLang }) => {
+    // 準備
+    setLang("ja");
+
+    // 実行と検証
+    expect(new RepairNotAllowedError({ name: "Memory" }).message).toBe(
+      'ストレージ "Memory" は書き戻しを許可していません',
+    );
   });
 });

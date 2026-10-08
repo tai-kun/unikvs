@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
 
 import { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
 
@@ -10,6 +10,11 @@ export type MemoryOptions = {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
   readonly clone?: (<T>(value: T) => T) | undefined;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
+   */
+  readonly allowRepair?: boolean | undefined;
 };
 
 /**
@@ -34,10 +39,28 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
+  public readonly allowRepair: boolean;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
+   */
   public constructor(options: MemoryOptions = {}) {
+    const { clone = (value) => structuredClone(value), allowRepair = false } = options;
     this.name = "Memory";
     this.map = new Map();
-    this.clone = options.clone ?? ((v) => structuredClone(v));
+    this.clone = clone;
+    this.allowRepair = allowRepair;
+  }
+
+  /**
+   * 書き戻しによる書き込みが許可されているかを検証します。
+   *
+   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
+   */
+  private assertRepairAllowed(args: { vars: Variables }): void {
+    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
+      throw new RepairNotAllowedError({ name: this.name });
+    }
   }
 
   /**
@@ -50,7 +73,8 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
-  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data">): void {
+  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "vars">): void {
+    this.assertRepairAllowed(args);
     const { key, data } = args;
     this.map.set(key, this.clone(data));
   }
@@ -102,8 +126,9 @@ export default class Memory implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#data)
    */
   public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key">,
+    args: Pick<IStorage.GetWritableArgs, "key" | "vars">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
+    this.assertRepairAllowed(args);
     const { key } = args;
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];

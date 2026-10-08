@@ -62,7 +62,7 @@ describe("プロパティベース検証", () => {
       const data = random.bytes(random.int(0, 4096));
 
       // 実行
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       const result = await storage.read({ key, signal });
 
       // 検証
@@ -99,7 +99,7 @@ describe("プロパティベース検証", () => {
       }
 
       // 実行
-      const writer = (await storage.getWritable({ key, signal })).getWriter();
+      const writer = (await storage.getWritable({ key, signal, vars: {} })).getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
@@ -128,7 +128,7 @@ describe("プロパティベース検証", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            await storage.write({ key: operation.key, data: operation.data, signal });
+            await storage.write({ key: operation.key, data: operation.data, signal, vars: {} });
             model.set(operation.key, operation.data);
             break;
           }

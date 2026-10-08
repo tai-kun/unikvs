@@ -1,5 +1,15 @@
-export type { ErrorMeta, ErrorOptions } from "./errors.js";
-export { ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "./errors.js";
+export type {
+  ErrorMeta,
+  ErrorOptions,
+  RepairNotAllowedErrorArgs,
+  RepairNotAllowedErrorMeta,
+} from "./errors.js";
+export {
+  ErrorBase,
+  setErrorMessage,
+  InvalidUsageErrorBase,
+  RepairNotAllowedError,
+} from "./errors.js";
 
 export type * from "./storage.types.js";
 

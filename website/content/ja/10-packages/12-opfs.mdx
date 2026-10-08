@@ -29,7 +29,7 @@ import { Opfs } from "@unikvs/opfs";
 const storage = new Opfs(".unikvs");
 ```
 
-コンストラクター引数 `root` の型は `string | FileSystemDirectoryHandle` で、既定値は `".unikvs"` です。文字列は OPFS 内のルート名、ハンドルは作業対象そのものとして扱います。ハンドルを渡すとオープン済み扱いです。
+コンストラクター引数 `root` の型は `string | FileSystemDirectoryHandle` で、既定値は `".unikvs"` です。文字列は OPFS 内のルート名、ハンドルは作業対象そのものとして扱います。ハンドルを渡すとオープン済み扱いです。第 2 引数 `options` は省略可能で、`options.allowRepair`（`boolean`、既定値 `false`）で書き戻しによる書き込みの許可を指定します。`false` の場合、書き戻し（`vars["unikvs:repair"]` が `true`）の `write`・`getWritable` はエラーを投げます。
 
 使う前に `open()` を呼び出します。`UniKvs` と組み合わせる場合は、`appendStorage` で登録してから `kvs.open()` を呼びます。内部で `Opfs.open()` が呼ばれます。
 

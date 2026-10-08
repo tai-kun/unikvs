@@ -56,6 +56,7 @@ const value = storage.read({ key: "k1" });
 | --- | --- | --- | --- |
 | `options` | `MemoryOptions` | いいえ | 省略時は空オブジェクトと同様に動作します。 |
 | `options.clone` | `<T>(value: T) => T` | いいえ | 複製に使う関数です。既定値は `structuredClone` です。 |
+| `options.allowRepair` | `boolean` | いいえ | 書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。 |
 
 複製方法を変更する例は次のとおりです。
 

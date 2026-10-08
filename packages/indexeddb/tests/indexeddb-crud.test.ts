@@ -10,7 +10,9 @@ describe("CRUD の不変条件", () => {
     await storage.open({ signal });
 
     // 実行と検証
-    await expect(storage.write({ key: "k1", data: "v1", signal })).resolves.toBeUndefined();
+    await expect(
+      storage.write({ key: "k1", data: "v1", signal, vars: {} }),
+    ).resolves.toBeUndefined();
   });
 
   test("write したオブジェクトの read は内容が等しく参照は異なる", async ({ expect, storage }) => {
@@ -19,7 +21,7 @@ describe("CRUD の不変条件", () => {
     const data = { message: "hello", nested: { list: [1, 2, 3] } };
 
     // 実行
-    await storage.write({ key: "k1", data, signal });
+    await storage.write({ key: "k1", data, signal, vars: {} });
     const result = await storage.read({ key: "k1", signal });
 
     // 検証
@@ -31,10 +33,10 @@ describe("CRUD の不変条件", () => {
   test("同じキーへ書き込むと上書きされる", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "first", signal });
+    await storage.write({ key: "k1", data: "first", signal, vars: {} });
 
     // 実行
-    await storage.write({ key: "k1", data: "second", signal });
+    await storage.write({ key: "k1", data: "second", signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "k1", signal })).toBe("second");
@@ -43,10 +45,10 @@ describe("CRUD の不変条件", () => {
   test("上書き後の exists は true のままである", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "first", signal });
+    await storage.write({ key: "k1", data: "first", signal, vars: {} });
 
     // 実行
-    await storage.write({ key: "k1", data: "second", signal });
+    await storage.write({ key: "k1", data: "second", signal, vars: {} });
 
     // 検証
     expect(await storage.exists({ key: "k1", signal })).toBe(true);
@@ -55,9 +57,9 @@ describe("CRUD の不変条件", () => {
   test("複数のキーへ書き込んだとき、互いに干渉しない", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
-    await storage.write({ key: "k2", data: "v2", signal });
-    await storage.write({ key: "k3", data: "v3", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k2", data: "v2", signal, vars: {} });
+    await storage.write({ key: "k3", data: "v3", signal, vars: {} });
 
     // 実行
     await storage.delete({ key: "k2", signal });
@@ -85,7 +87,7 @@ describe("CRUD の不変条件", () => {
     const data = { count: 1 };
 
     // 実行
-    await storage.write({ key: "k1", data, signal });
+    await storage.write({ key: "k1", data, signal, vars: {} });
     data.count = 99;
 
     // 検証
@@ -95,7 +97,7 @@ describe("CRUD の不変条件", () => {
   test("read で得た値を変更しても保存値は変わらない", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: { count: 1 }, signal });
+    await storage.write({ key: "k1", data: { count: 1 }, signal, vars: {} });
 
     // 実行
     const first = await storage.read({ key: "k1", signal });
@@ -110,7 +112,7 @@ describe("CRUD の不変条件", () => {
     // 準備
     await storage.open({ signal });
     const data = { list: [1, 2] };
-    await storage.write({ key: "k1", data, signal });
+    await storage.write({ key: "k1", data, signal, vars: {} });
 
     // 実行
     const first = await storage.read({ key: "k1", signal });
@@ -124,13 +126,13 @@ describe("CRUD の不変条件", () => {
   test("clear はすべてのキーを消去し、再度書き込める", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal });
-    await storage.write({ key: "k2", data: "v2", signal });
+    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k2", data: "v2", signal, vars: {} });
 
     // 実行
     await storage.clear({ signal });
     const existsAfterClear = await storage.exists({ key: "k1", signal });
-    await storage.write({ key: "k1", data: "v3", signal });
+    await storage.write({ key: "k1", data: "v3", signal, vars: {} });
 
     // 検証
     expect(existsAfterClear).toBe(false);
@@ -143,7 +145,7 @@ describe("CRUD の不変条件", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "k1", data: undefined, signal });
+    await storage.write({ key: "k1", data: undefined, signal, vars: {} });
 
     // 検証
     expect(await storage.exists({ key: "k1", signal })).toBe(true);
@@ -155,9 +157,9 @@ describe("CRUD の不変条件", () => {
     await storage.open({ signal });
 
     // 実行
-    await storage.write({ key: "string", data: "v1", signal });
-    await storage.write({ key: "number", data: 42, signal });
-    await storage.write({ key: "boolean", data: false, signal });
+    await storage.write({ key: "string", data: "v1", signal, vars: {} });
+    await storage.write({ key: "number", data: 42, signal, vars: {} });
+    await storage.write({ key: "boolean", data: false, signal, vars: {} });
 
     // 検証
     expect(await storage.read({ key: "string", signal })).toBe("v1");

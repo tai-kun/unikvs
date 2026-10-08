@@ -22,13 +22,15 @@ import { S3 } from "@unikvs/s3.node";
 ```
 
 ```ts
-new S3(bucket: string, config: S3ClientConfig = {})
+new S3(bucket: string, config: S3ClientConfig = {}, options: S3StorageOptions = {})
 ```
 
 | Argument | Type | Description |
 | ---- | -- | ---- |
 | `bucket` | `string` | The destination bucket name. All operations use it. |
 | `config` | `S3ClientConfig` | Settings passed to `S3Client`. Defaults to an empty object. Includes region and credentials. |
+| `options` | `S3StorageOptions` | Behavioral settings for the storage. Defaults to an empty object. |
+| `options.allowRepair` | `boolean` | Whether to allow repair writes. Defaults to `false`. When `false`, `write` and `getWritable` for repairs (where `vars["unikvs:repair"]` is `true`) throw `RepairNotAllowedError`. |
 
 There is no argument for a pre-built `S3Client` or a prefix. For key mapping or bucket separation, include it in the key or create instances per bucket.
 

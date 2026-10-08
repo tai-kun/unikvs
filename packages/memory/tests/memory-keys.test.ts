@@ -28,7 +28,7 @@ describe("キーの境界値", () => {
       const storage = new Memory();
 
       // 実行
-      storage.write({ key, data: "value" });
+      storage.write({ vars: {}, key, data: "value" });
 
       // 検証
       expect(storage.read({ key })).toBe("value");
@@ -47,8 +47,8 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ key: "Key", data: "upper" });
-    storage.write({ key: "key", data: "lower" });
+    storage.write({ vars: {}, key: "Key", data: "upper" });
+    storage.write({ vars: {}, key: "key", data: "lower" });
 
     // 検証
     expect(storage.read({ key: "Key" })).toBe("upper");
@@ -61,8 +61,8 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ key: "k", data: "plain" });
-    storage.write({ key: " k ", data: "padded" });
+    storage.write({ vars: {}, key: "k", data: "plain" });
+    storage.write({ vars: {}, key: " k ", data: "padded" });
 
     // 検証
     expect(storage.read({ key: "k" })).toBe("plain");
@@ -74,8 +74,8 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ key: "k1", data: "first" });
-    storage.write({ key: `k${1}`, data: "second" });
+    storage.write({ vars: {}, key: "k1", data: "first" });
+    storage.write({ vars: {}, key: `k${1}`, data: "second" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("second");
@@ -88,7 +88,7 @@ describe("プロトタイプ汚染キー", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ key: "__proto__", data: { polluted: true } });
+    storage.write({ vars: {}, key: "__proto__", data: { polluted: true } });
 
     // 検証
     expect(storage.read({ key: "__proto__" })).toStrictEqual({ polluted: true });
@@ -99,10 +99,10 @@ describe("プロトタイプ汚染キー", () => {
   test("constructor へ書き込んでも既存のキーは影響を受けない", ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
 
     // 実行
-    storage.write({ key: "constructor", data: "shadowed" });
+    storage.write({ vars: {}, key: "constructor", data: "shadowed" });
 
     // 検証
     expect(storage.read({ key: "constructor" })).toBe("shadowed");

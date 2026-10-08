@@ -17,7 +17,7 @@ const test = vitest.extend<{ storage: Memory }>({
 describe("CRUD の不変条件", () => {
   test("削除したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
 
     // 実行
     storage.delete({ key: "k1" });
@@ -28,7 +28,7 @@ describe("CRUD の不変条件", () => {
 
   test("clear したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
 
     // 実行
     storage.clear();
@@ -45,7 +45,7 @@ describe("CRUD の不変条件", () => {
 
   test("undefined を保存したキーの exists は true を返す", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: undefined });
+    storage.write({ vars: {}, key: "k1", data: undefined });
 
     // 実行
     const exists = storage.exists({ key: "k1" });
@@ -56,11 +56,11 @@ describe("CRUD の不変条件", () => {
 
   test("削除したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
     storage.delete({ key: "k1" });
 
     // 実行
-    storage.write({ key: "k1", data: "v2" });
+    storage.write({ vars: {}, key: "k1", data: "v2" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("v2");
@@ -68,11 +68,11 @@ describe("CRUD の不変条件", () => {
 
   test("clear したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
     storage.clear();
 
     // 実行
-    storage.write({ key: "k1", data: "v2" });
+    storage.write({ vars: {}, key: "k1", data: "v2" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("v2");

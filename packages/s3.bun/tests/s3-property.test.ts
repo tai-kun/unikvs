@@ -17,7 +17,7 @@ describe("決定的ファズ検証", () => {
       const key = `prop/${random.string(random.int(1, 32), KEY_CHARS)}`;
       const data = random.bytes(random.uint(64 * 1024 + 1));
 
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       const result = await storage.read({ key, signal });
 
       expect(bytesEqual(result, data)).toBe(true);

@@ -48,7 +48,7 @@ describe("AbortSignal による中断", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "pre-aborted.bin", data: new Uint8Array([1]), signal }),
+      storage.write({ key: "pre-aborted.bin", data: new Uint8Array([1]), signal, vars: {} }),
     ).rejects.toMatchObject({ name: "AbortError" });
     await expect(storage.read({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
       name: "AbortError",
@@ -98,7 +98,7 @@ describe("AbortSignal による中断", () => {
     // 準備
     const targetKey = "in-flight-target.bin";
     storage.open();
-    await storage.write({ key: targetKey, data: new Uint8Array([1]), signal });
+    await storage.write({ key: targetKey, data: new Uint8Array([1]), signal, vars: {} });
 
     await withDelayedProxy(endpoint, async (proxyEndpoint) => {
       const proxyStorage = new S3(bucket, createClientConfig(proxyEndpoint));
@@ -112,6 +112,7 @@ describe("AbortSignal による中断", () => {
               key: "in-flight-write.bin",
               data: new Uint8Array([2]),
               signal: abortSignal,
+              vars: {},
             }),
           (abortSignal) => proxyStorage.read({ key: targetKey, signal: abortSignal }),
           (abortSignal) => proxyStorage.exists({ key: targetKey, signal: abortSignal }),
@@ -152,6 +153,7 @@ describe("AbortSignal による中断", () => {
             key: "first-attempt.bin",
             data: new Uint8Array([1]),
             signal: controller.signal,
+            vars: {},
           }),
         ).rejects.toMatchObject({ name: "AbortError" });
 
@@ -160,6 +162,7 @@ describe("AbortSignal による中断", () => {
           key: "second-attempt.bin",
           data: new Uint8Array([2]),
           signal,
+          vars: {},
         });
         const result = await proxyStorage.read({ key: "second-attempt.bin", signal });
 
@@ -183,7 +186,7 @@ describe("AbortSignal による中断", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal: controller.signal });
+    await storage.write({ key, data, signal: controller.signal, vars: {} });
     controller.abort();
 
     // 検証

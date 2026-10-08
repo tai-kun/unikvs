@@ -67,14 +67,19 @@ describe("中断された signal", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "aborted.bin", data: new Uint8Array([1]), signal: controller.signal }),
+      storage.write({
+        key: "aborted.bin",
+        data: new Uint8Array([1]),
+        signal: controller.signal,
+        vars: {},
+      }),
     ).rejects.toThrow();
   });
 
   test("read は拒否される", async ({ expect, signal, storage }) => {
     // 準備
     const key = "aborted-read.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     const controller = new AbortController();
     controller.abort();
 

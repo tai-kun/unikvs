@@ -14,7 +14,7 @@ describe("並行操作", () => {
     const values = Array.from({ length: 10 }, (_, index) => new Uint8Array(4096).fill(index + 1));
 
     // 実行
-    await Promise.all(values.map((data) => storage.write({ key, data, signal })));
+    await Promise.all(values.map((data) => storage.write({ key, data, signal, vars: {} })));
 
     // 検証
     const result = new Uint8Array(await storage.read({ key, signal }));
@@ -37,7 +37,7 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map(async (data) => {
-        const writer = (await storage.getWritable({ key, signal })).getWriter();
+        const writer = (await storage.getWritable({ key, signal, vars: {} })).getWriter();
         await writer.write(data);
         await writer.close();
       }),
@@ -62,7 +62,9 @@ describe("並行操作", () => {
     }));
 
     // 実行
-    await Promise.all(entries.map(({ key, data }) => storage.write({ key, data, signal })));
+    await Promise.all(
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+    );
 
     // 検証
     for (const { key, data } of entries) {
@@ -79,10 +81,10 @@ describe("並行操作", () => {
     const key = "during-write.bin";
     const oldData = new Uint8Array([1, 1, 1]);
     const newData = createPseudoRandomBytes(4 * 1024 * 1024);
-    await storage.write({ key, data: oldData, signal });
+    await storage.write({ key, data: oldData, signal, vars: {} });
 
     // 実行
-    const writing = storage.write({ key, data: newData, signal });
+    const writing = storage.write({ key, data: newData, signal, vars: {} });
     const during = new Uint8Array(await storage.read({ key, signal }));
     await writing;
 
@@ -103,7 +105,7 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all([storage.open(), storage.open(), storage.open()]);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -114,7 +116,9 @@ describe("並行操作", () => {
     // 準備
     const keys = Array.from({ length: 30 }, (_, index) => `mixed-${index}.bin`);
     const data = keys.map((_, index) => new Uint8Array([index % 256, (index * 7) % 256]));
-    await Promise.all(keys.map((key, index) => storage.write({ key, data: data[index]!, signal })));
+    await Promise.all(
+      keys.map((key, index) => storage.write({ key, data: data[index]!, signal, vars: {} })),
+    );
 
     // 実行
     const readKeys = keys.slice(0, 15);

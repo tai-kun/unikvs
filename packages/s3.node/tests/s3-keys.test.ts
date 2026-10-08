@@ -14,7 +14,7 @@ describe("キーの扱い", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
     }
     await storage.delete({ key: "dir/sub.txt", signal });
 
@@ -38,7 +38,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
     }
   });
@@ -55,7 +55,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
     }
   });
@@ -63,7 +63,7 @@ describe("キーの扱い", () => {
   test("大文字と小文字を区別する", async ({ expect, signal, storage }) => {
     // 準備
     storage.open();
-    await storage.write({ key: "Case.txt", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "Case.txt", data: new Uint8Array([1]), signal, vars: {} });
 
     // 実行
     const lowerExists = await storage.exists({ key: "case.txt", signal });
@@ -81,7 +81,7 @@ describe("キーの扱い", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     expect(key).toHaveLength(255);
@@ -94,7 +94,9 @@ describe("キーの扱い", () => {
     storage.open();
 
     // 実行と検証
-    await expect(storage.write({ key, data: new Uint8Array([1]), signal })).rejects.toMatchObject({
+    await expect(
+      storage.write({ key, data: new Uint8Array([1]), signal, vars: {} }),
+    ).rejects.toMatchObject({
       name: "KeyTooLongError",
     });
   });
@@ -104,7 +106,9 @@ describe("キーの扱い", () => {
     storage.open();
 
     // 実行と検証
-    await expect(storage.write({ key: "", data: new Uint8Array([1]), signal })).rejects.toThrow();
+    await expect(
+      storage.write({ key: "", data: new Uint8Array([1]), signal, vars: {} }),
+    ).rejects.toThrow();
     await expect(storage.read({ key: "", signal })).rejects.toThrow();
   });
 
@@ -118,7 +122,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "dir/../escape.txt", data: new Uint8Array([1]), signal }),
+      storage.write({ key: "dir/../escape.txt", data: new Uint8Array([1]), signal, vars: {} }),
     ).rejects.toThrow();
     await expect(storage.exists({ key: "escape.txt", signal })).resolves.toBe(false);
   });
@@ -129,7 +133,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "dir//file.txt", data: new Uint8Array([1]), signal }),
+      storage.write({ key: "dir//file.txt", data: new Uint8Array([1]), signal, vars: {} }),
     ).rejects.toThrow();
   });
 
@@ -140,7 +144,7 @@ describe("キーの扱い", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);

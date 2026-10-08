@@ -13,7 +13,7 @@ describe("永続化", () => {
     // 準備
     const key = "persist.bin";
     const data = new Uint8Array([10, 20, 30]);
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     const restarted = new NodeFs(root);
@@ -31,12 +31,12 @@ describe("永続化", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "first.bin", data: new Uint8Array([1]), signal });
+    await storage.write({ key: "first.bin", data: new Uint8Array([1]), signal, vars: {} });
 
     // 実行
     const restarted = new NodeFs(root);
     await restarted.open();
-    await restarted.write({ key: "second.bin", data: new Uint8Array([2]), signal });
+    await restarted.write({ key: "second.bin", data: new Uint8Array([2]), signal, vars: {} });
 
     // 検証
     expect(new Uint8Array(await restarted.read({ key: "first.bin", signal }))).toStrictEqual(
@@ -68,7 +68,7 @@ describe("永続化", () => {
   }) => {
     // 準備
     const key = "cleared.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     const restarted = new NodeFs(root);
     await restarted.open();
 

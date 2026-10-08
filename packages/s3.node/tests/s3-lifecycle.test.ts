@@ -24,7 +24,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行
     storage.open();
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -46,7 +46,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       storage.close();
       storage.open();
     }
@@ -80,7 +80,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "after-close.bin", data: new Uint8Array([1]), signal }),
+      storage.write({ key: "after-close.bin", data: new Uint8Array([1]), signal, vars: {} }),
     ).rejects.toThrow(TypeError);
   });
 
@@ -149,7 +149,7 @@ describe("ライフサイクル管理", () => {
     const key = "reopen-same-instance.bin";
     const data = new Uint8Array([9, 8, 7, 6]);
     storage.open();
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
 
     // 実行
     storage.close();
@@ -170,7 +170,7 @@ describe("ライフサイクル管理", () => {
     const key = "shared-bucket.bin";
     const data = new Uint8Array([1, 3, 5, 7]);
     storage.open();
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     storage.close();
 
     const other = new S3(bucket, createClientConfig(endpoint));
@@ -192,7 +192,7 @@ describe("ライフサイクル管理", () => {
     // 準備
     const key = "cleared.bin";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     await storage.clear({ signal });
 
     // 実行

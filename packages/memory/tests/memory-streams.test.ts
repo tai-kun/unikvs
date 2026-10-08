@@ -32,7 +32,7 @@ describe("getWritable", () => {
   test("長さの異なる複数のチャンクを順番どおり結合して保存する", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2, 3]));
@@ -48,7 +48,7 @@ describe("getWritable", () => {
     // 準備
     const key = "s1";
     const chunk = new Uint8Array([1, 2, 3]);
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(chunk);
@@ -62,7 +62,7 @@ describe("getWritable", () => {
   test("close するまで値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
@@ -77,7 +77,7 @@ describe("getWritable", () => {
   test("空のストリームを close したとき、長さ 0 の値が保存される", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.close();
@@ -90,7 +90,7 @@ describe("getWritable", () => {
   test("abort したとき値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -107,7 +107,7 @@ describe("getWritable", () => {
   }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     const error = await captureRejection(
@@ -122,8 +122,8 @@ describe("getWritable", () => {
   test("既存の値を上書きする", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    storage.write({ key, data: new Uint8Array([9]) });
-    const writer = storage.getWritable({ key }).getWriter();
+    storage.write({ vars: {}, key, data: new Uint8Array([9]) });
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -136,9 +136,9 @@ describe("getWritable", () => {
   test("削除したキーへ再度ストリームで書き込める", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    storage.write({ key, data: new Uint8Array([9]) });
+    storage.write({ vars: {}, key, data: new Uint8Array([9]) });
     storage.delete({ key });
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
@@ -165,7 +165,7 @@ describe("getWritable", () => {
     expected.fill(3, 200_000);
 
     // 実行
-    const writer = storage.getWritable({ key }).getWriter();
+    const writer = storage.getWritable({ vars: {}, key }).getWriter();
     for (const chunk of chunks) {
       await writer.write(chunk);
     }
@@ -186,7 +186,7 @@ describe("getReadable", () => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
 
     // 実行
     const reader = storage.getReadable({ key }).getReader();
@@ -203,7 +203,7 @@ describe("getReadable", () => {
   test("同じキーから複数回読み取っても同じ値を得られる", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    storage.write({ key, data: new Uint8Array([1, 2]) });
+    storage.write({ vars: {}, key, data: new Uint8Array([1, 2]) });
     const firstReader = storage.getReadable({ key }).getReader();
     const secondReader = storage.getReadable({ key }).getReader();
 
@@ -220,7 +220,7 @@ describe("getReadable", () => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
     const reader = storage.getReadable({ key }).getReader();
 
     // 実行
@@ -236,11 +236,11 @@ describe("getReadable", () => {
   }) => {
     // 準備
     const key = "s1";
-    storage.write({ key, data: new Uint8Array([1, 2]) });
+    storage.write({ vars: {}, key, data: new Uint8Array([1, 2]) });
     const reader = storage.getReadable({ key }).getReader();
 
     // 実行
-    storage.write({ key, data: new Uint8Array([3, 4]) });
+    storage.write({ vars: {}, key, data: new Uint8Array([3, 4]) });
     const { value } = await reader.read();
 
     // 検証
@@ -253,7 +253,7 @@ describe("getReadable", () => {
   }) => {
     // 準備
     const key = "s1";
-    storage.write({ key, data: new Uint8Array([0, 1, 2, 255]) });
+    storage.write({ vars: {}, key, data: new Uint8Array([0, 1, 2, 255]) });
     const reader = storage.getReadable({ key }).getReader();
 
     // 実行

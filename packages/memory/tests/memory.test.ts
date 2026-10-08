@@ -29,7 +29,7 @@ describe("基本操作（CRUD）", () => {
     const data = "v1";
 
     // 実行
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
     const result = storage.read({ key });
 
     // 検証
@@ -39,7 +39,7 @@ describe("基本操作（CRUD）", () => {
   test("データが存在するとき、exists が true を返す", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1" });
+    storage.write({ vars: {}, key, data: "v1" });
 
     // 実行
     const result = storage.exists({ key });
@@ -59,7 +59,7 @@ describe("基本操作（CRUD）", () => {
   test("データを削除したとき、そのデータが存在しなくなる", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1" });
+    storage.write({ vars: {}, key, data: "v1" });
 
     // 実行
     storage.delete({ key });
@@ -70,8 +70,8 @@ describe("基本操作（CRUD）", () => {
 
   test("全データを消去したとき、すべてのキーが存在しなくなる", ({ expect }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1" });
-    storage.write({ key: "k2", data: "v2" });
+    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: {}, key: "k2", data: "v2" });
 
     // 実行
     storage.clear();
@@ -84,10 +84,10 @@ describe("基本操作（CRUD）", () => {
   test("既存のキーに対してデータを書き込んだとき、値が更新される", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1" });
+    storage.write({ vars: {}, key, data: "v1" });
 
     // 実行
-    storage.write({ key, data: "v2" });
+    storage.write({ vars: {}, key, data: "v2" });
     const result = storage.read({ key });
 
     // 検証
@@ -108,7 +108,7 @@ describe("ストリーム操作", () => {
     // 準備
 
     const key = "s1";
-    const writable = storage.getWritable({ key });
+    const writable = storage.getWritable({ vars: {}, key });
     const writer = writable.getWriter();
 
     // 実行
@@ -128,7 +128,7 @@ describe("ストリーム操作", () => {
 
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
 
     // 実行
     const readable = storage.getReadable({ key });
@@ -151,7 +151,7 @@ describe("ストリーム操作", () => {
     // 準備
 
     const key = "s2";
-    const writable = storage.getWritable({ key });
+    const writable = storage.getWritable({ vars: {}, key });
 
     // 実行
     await writable.getWriter().close();
@@ -184,7 +184,7 @@ describe("異常系・エラーハンドリング", () => {
     expect,
   }) => {
     // 準備
-    const writable = storage.getWritable({ key: "s1" });
+    const writable = storage.getWritable({ vars: {}, key: "s1" });
     const writer = writable.getWriter();
 
     // 実行と検証
@@ -197,7 +197,7 @@ describe("異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: { a: 1 } }); // オブジェクトを保存
+    storage.write({ vars: {}, key, data: { a: 1 } }); // オブジェクトを保存
 
     // 実行
     const readable = storage.getReadable({ key });
@@ -221,7 +221,7 @@ describe("境界値・特殊ケース", () => {
     const data = "empty key data";
 
     // 実行
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
 
     // 検証
     expect(storage.read({ key })).toBe(data);
@@ -234,7 +234,7 @@ describe("境界値・特殊ケース", () => {
     const data = "special key data";
 
     // 実行
-    storage.write({ key, data });
+    storage.write({ vars: {}, key, data });
 
     // 検証
     expect(storage.read({ key })).toBe(data);
@@ -242,8 +242,8 @@ describe("境界値・特殊ケース", () => {
 
   test("null または undefined を保存したとき、そのままの値が取得できる", ({ expect }) => {
     // 実行
-    storage.write({ key: "null-key", data: null });
-    storage.write({ key: "undefined-key", data: undefined });
+    storage.write({ vars: {}, key: "null-key", data: null });
+    storage.write({ vars: {}, key: "undefined-key", data: undefined });
 
     // 検証
     expect(storage.read({ key: "null-key" })).toBe(null);
@@ -257,7 +257,7 @@ describe("境界値・特殊ケース", () => {
     const key = "large-data";
 
     // 実行
-    storage.write({ key, data: bigData });
+    storage.write({ vars: {}, key, data: bigData });
     const result = storage.read({ key });
 
     // 検証
@@ -273,7 +273,7 @@ describe("データの隔離", () => {
     // 準備
     const storage = new Memory();
     const source = new Uint8Array([1, 2, 3]);
-    storage.write({ key: "k1", data: source });
+    storage.write({ vars: {}, key: "k1", data: source });
 
     // 実行
     source[0] = 99;
@@ -285,7 +285,7 @@ describe("データの隔離", () => {
   test("読み取った値を変更したとき、保存値は変わらない", ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ key: "k1", data: new Uint8Array([1, 2, 3]) });
+    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1, 2, 3]) });
 
     // 実行
     storage.read({ key: "k1" })[0] = 99;
@@ -297,7 +297,7 @@ describe("データの隔離", () => {
   test("ストリームで読み取ったチャンクを変更したとき、保存値は変わらない", async ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ key: "s1", data: new Uint8Array([1, 2, 3]) });
+    storage.write({ vars: {}, key: "s1", data: new Uint8Array([1, 2, 3]) });
     const reader = storage.getReadable({ key: "s1" }).getReader();
 
     // 実行
@@ -313,7 +313,7 @@ describe("データの隔離", () => {
     // 準備
     const storage = new Memory();
     const source = { nested: { list: [1, 2, 3] } };
-    storage.write({ key: "k1", data: source });
+    storage.write({ vars: {}, key: "k1", data: source });
 
     // 実行
     source.nested.list[0] = 99;
@@ -328,7 +328,7 @@ describe("データの隔離", () => {
     const source = new Uint8Array([1, 2, 3]);
 
     // 実行
-    storage.write({ key: "k1", data: source });
+    storage.write({ vars: {}, key: "k1", data: source });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe(source);

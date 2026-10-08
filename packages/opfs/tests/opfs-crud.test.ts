@@ -37,10 +37,13 @@ const INVALID_KEY = "dir/file.bin";
 const INVALID_KEY_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] =
   [
     ["read", (storage) => storage.read({ key: INVALID_KEY, signal })],
-    ["write", (storage) => storage.write({ key: INVALID_KEY, data: new Uint8Array([1]), signal })],
+    [
+      "write",
+      (storage) => storage.write({ key: INVALID_KEY, data: new Uint8Array([1]), signal, vars: {} }),
+    ],
     ["exists", (storage) => storage.exists({ key: INVALID_KEY, signal })],
     ["delete", (storage) => storage.delete({ key: INVALID_KEY, signal })],
-    ["getWritable", (storage) => storage.getWritable({ key: INVALID_KEY, signal })],
+    ["getWritable", (storage) => storage.getWritable({ key: INVALID_KEY, signal, vars: {} })],
     ["getReadable", (storage) => storage.getReadable({ key: INVALID_KEY, signal })],
   ];
 
@@ -48,10 +51,10 @@ describe("CRUD の振る舞い", () => {
   test("同じキーへ上書きしたとき、最新の内容だけが読み取れる", async ({ expect, storage }) => {
     // 準備
     const key = "overwrite.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]), signal });
+    await storage.write({ key, data: new Uint8Array([9]), signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -71,7 +74,7 @@ describe("CRUD の振る舞い", () => {
 
     // 実行
     for (const [key, bytes] of entries) {
-      await storage.write({ key, data: new Uint8Array(bytes), signal });
+      await storage.write({ key, data: new Uint8Array(bytes), signal, vars: {} });
     }
 
     // 検証
@@ -82,8 +85,8 @@ describe("CRUD の振る舞い", () => {
 
   test("キーを削除したとき、他のキーは影響を受けない", async ({ expect, storage }) => {
     // 準備
-    await storage.write({ key: "keep.bin", data: new Uint8Array([1]), signal });
-    await storage.write({ key: "remove.bin", data: new Uint8Array([2]), signal });
+    await storage.write({ key: "keep.bin", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key: "remove.bin", data: new Uint8Array([2]), signal, vars: {} });
 
     // 実行
     await storage.delete({ key: "remove.bin", signal });
@@ -111,7 +114,7 @@ describe("CRUD の振る舞い", () => {
     const data = new Uint8Array([10, 20, 30]);
 
     // 実行
-    await storage.write({ key, data, signal });
+    await storage.write({ key, data, signal, vars: {} });
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -128,8 +131,8 @@ describe("一括削除 (Clear) の振る舞い", () => {
     const root = crypto.randomUUID();
     const storage = new Opfs(root);
     await storage.open({ signal });
-    await storage.write({ key: "a.bin", data: new Uint8Array([1]), signal });
-    await storage.write({ key: "b.bin", data: new Uint8Array([2]), signal });
+    await storage.write({ key: "a.bin", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key: "b.bin", data: new Uint8Array([2]), signal, vars: {} });
 
     // 実行
     await storage.clear({ signal });
@@ -139,7 +142,7 @@ describe("一括削除 (Clear) の振る舞い", () => {
     expect(await storage.exists({ key: "b.bin", signal })).toBe(false);
     expect(storage.isOpen).toBe(true);
 
-    await storage.write({ key: "c.bin", data: new Uint8Array([3]), signal });
+    await storage.write({ key: "c.bin", data: new Uint8Array([3]), signal, vars: {} });
     expect(await storage.read({ key: "c.bin", signal })).toStrictEqual(new Uint8Array([3]));
 
     await removeRoot(root);
@@ -154,8 +157,8 @@ describe("一括削除 (Clear) の振る舞い", () => {
     const sibling = new Opfs(`${base}/sibling`);
     await target.open({ signal });
     await sibling.open({ signal });
-    await target.write({ key: "target.bin", data: new Uint8Array([1]), signal });
-    await sibling.write({ key: "sibling.bin", data: new Uint8Array([2]), signal });
+    await target.write({ key: "target.bin", data: new Uint8Array([1]), signal, vars: {} });
+    await sibling.write({ key: "sibling.bin", data: new Uint8Array([2]), signal, vars: {} });
 
     // 実行
     await target.clear({ signal });
@@ -179,7 +182,7 @@ describe("一括削除 (Clear) の振る舞い", () => {
       (_, index) => `clear-${index}-${crypto.randomUUID()}.bin`,
     );
     for (const key of keys) {
-      await storage.write({ key, data: new Uint8Array([1]), signal });
+      await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
     }
 
     // 実行
@@ -191,7 +194,7 @@ describe("一括削除 (Clear) の振る舞い", () => {
     }
 
     const key = `after-clear-${crypto.randomUUID()}.bin`;
-    await storage.write({ key, data: new Uint8Array([2]), signal });
+    await storage.write({ key, data: new Uint8Array([2]), signal, vars: {} });
     expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array([2]));
 
     await storage.delete({ key, signal });
@@ -205,7 +208,7 @@ describe("データ完全性の振る舞い", () => {
       storage,
     }) => {
       // 実行
-      await storage.write({ key, data, signal });
+      await storage.write({ key, data, signal, vars: {} });
       const loaded = await storage.read({ key, signal });
 
       // 検証
@@ -247,7 +250,7 @@ describe("キー検証の振る舞い", () => {
 
     // 実行
     const error = await storage
-      .write({ key: INVALID_KEY, data: new Uint8Array(), signal })
+      .write({ key: INVALID_KEY, data: new Uint8Array(), signal, vars: {} })
       .catch((ex: unknown) => ex);
 
     // 検証

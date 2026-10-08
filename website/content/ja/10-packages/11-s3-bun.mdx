@@ -30,7 +30,8 @@ new S3(bucket: string, options: S3StorageOptions = {})
 | 引数      | 型                 | 説明                                                                            |
 | --------- | ------------------ | ------------------------------------------------------------------------------- |
 | `bucket`  | `string`           | 保存先のバケット名です。すべての操作で使います。                                |
-| `options` | `S3StorageOptions` | Bun の `S3Options` から `bucket` を除いた設定です。既定値は空オブジェクトです。 |
+| `options` | `S3StorageOptions` | Bun の `S3Options` から `bucket` を除き、`allowRepair` を加えた設定です。既定値は空オブジェクトです。 |
+| `options.allowRepair` | `boolean` | 書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` にすると書き戻し（`vars["unikvs:repair"]` が `true`）の `write`・`getWritable` で `RepairNotAllowedError` を投げます。 |
 
 `S3StorageOptions` には `accessKeyId`・`secretAccessKey`・`sessionToken`・`region`・`endpoint`・`virtualHostedStyle`・`partSize`・`queueSize`・`retry` などを指定できます。省略した項目は Bun が環境変数 (`S3_ACCESS_KEY_ID`、`AWS_ACCESS_KEY_ID` など) から解決します。`options` に指定した値は環境変数より優先されます。
 
