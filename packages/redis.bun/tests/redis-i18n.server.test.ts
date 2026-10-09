@@ -23,11 +23,11 @@ const test = vitest.extend<{
 describe("エラーの国際化 (server)", () => {
   test("UnsupportedRuntimeError は既定では英語メッセージと name を持つ", ({ expect }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 実行と検証
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
-    expect(error.name).toBe("RedisUnsupportedRuntimeError");
+    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("Redis can only be used in the Bun runtime");
   });
 
@@ -36,7 +36,7 @@ describe("エラーの国際化 (server)", () => {
     setLang,
   }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 実行
     setLang("ja");
@@ -47,7 +47,7 @@ describe("エラーの国際化 (server)", () => {
 
   test("UnsupportedRuntimeError は en に戻すと英語メッセージに戻る", ({ expect, setLang }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 実行と検証
     setLang("ja");

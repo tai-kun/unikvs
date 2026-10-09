@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
+import {
+  KeyNotFoundError,
+  RepairNotAllowedError,
+  type IStorage,
+  type Variables,
+} from "@unikvs/core";
 import {
   Redis as Ioredis,
   type ClusterNode,
@@ -13,7 +18,6 @@ import {
   ClusterNotSupportedError,
   ConnectTimeoutError,
   InvalidCloseTimeoutError,
-  KeyNotFoundError,
 } from "./errors.js";
 
 /**

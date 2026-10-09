@@ -43,9 +43,9 @@ async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
 }
 
 describe("KeyNotFoundError", () => {
-  test("name は MemoryKeyNotFoundError である", ({ expect }) => {
+  test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
     // 実行と検証
-    expect(new KeyNotFoundError({ key: "k1" }).name).toBe("MemoryKeyNotFoundError");
+    expect(new KeyNotFoundError({ key: "k1" }).name).toBe("UniKvsKeyNotFoundError");
   });
 
   test("Error と KeyNotFoundError を継承している", ({ expect }) => {

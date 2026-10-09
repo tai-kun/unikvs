@@ -13,11 +13,11 @@ import { acquireFreePort, collectBytes, createClientConfig, test } from "./_help
 describe("エラークラス", () => {
   test("UnsupportedRuntimeError は name と基本メッセージを持つ", ({ expect }) => {
     // 準備と実行
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "S3", runtime: "Bun" });
 
     // 検証
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
-    expect(error.name).toBe("S3UnsupportedRuntimeError");
+    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("S3 can only be used in the Bun runtime");
   });
 
@@ -36,7 +36,7 @@ describe("エラークラス", () => {
     const error = new InvalidPartSizeError({ actual: "不正な値" });
 
     // 検証
-    expect(error.name).toBe("S3InvalidPartSizeError");
+    expect(error.name).toBe("UniKvsInvalidPartSizeError");
     expect(error.meta).toStrictEqual({ actual: "不正な値" });
     expect(error.message).toContain("Invalid part size 不正な値");
   });
@@ -46,7 +46,7 @@ describe("エラークラス", () => {
     const error = new StorageAbortedError({ key: "k1" });
 
     // 検証
-    expect(error.name).toBe("S3StorageAbortedError");
+    expect(error.name).toBe("UniKvsStorageAbortedError");
     expect(error.meta).toStrictEqual({ key: "k1" });
     expect(error.message).toContain('The upload for key "k1" was aborted');
   });

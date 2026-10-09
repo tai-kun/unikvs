@@ -1,6 +1,4 @@
-import type { IStorage } from "@unikvs/core";
-
-import { KeyNotFoundError } from "./errors.js";
+import { KeyNotFoundError, type IStorage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)

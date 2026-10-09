@@ -31,7 +31,7 @@ describe("エラーの国際化 (server)", () => {
     const error = new KeyNotFoundError({ key: "k1" });
 
     // 検証
-    expect(error.name).toBe("RedisKeyNotFoundError");
+    expect(error.name).toBe("UniKvsKeyNotFoundError");
     expect(error.message).toBe("Key not found: k1");
   });
 

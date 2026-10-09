@@ -9,8 +9,12 @@ test("エントリーポイントは実行時の公開値をすべて再エク�
   // 実行と検証
   expect(Object.keys(core).sort()).toStrictEqual([
     "ErrorBase",
+    "InvalidPartSizeError",
     "InvalidUsageErrorBase",
+    "KeyNotFoundError",
     "RepairNotAllowedError",
+    "StorageAbortedError",
+    "UnsupportedRuntimeError",
     "setErrorMessage",
   ]);
 });
@@ -19,6 +23,10 @@ test("エントリーポイントの実行時の値は errors モジュールと
   // 実行と検証
   expect(core.ErrorBase).toBe(errors.ErrorBase);
   expect(core.InvalidUsageErrorBase).toBe(errors.InvalidUsageErrorBase);
+  expect(core.KeyNotFoundError).toBe(errors.KeyNotFoundError);
+  expect(core.UnsupportedRuntimeError).toBe(errors.UnsupportedRuntimeError);
+  expect(core.InvalidPartSizeError).toBe(errors.InvalidPartSizeError);
+  expect(core.StorageAbortedError).toBe(errors.StorageAbortedError);
   expect(core.RepairNotAllowedError).toBe(errors.RepairNotAllowedError);
   expect(core.setErrorMessage).toBe(errors.setErrorMessage);
 });

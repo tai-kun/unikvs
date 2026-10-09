@@ -1,6 +1,11 @@
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
+import {
+  KeyNotFoundError,
+  RepairNotAllowedError,
+  type IStorage,
+  type Variables,
+} from "@unikvs/core";
 
-import { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
+import { InvalidChunkTypeError } from "./errors.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)

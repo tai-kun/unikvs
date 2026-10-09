@@ -1,24 +1,14 @@
 import {
+  InvalidUsageErrorBase,
+  KeyNotFoundError,
   setErrorMessage,
   ErrorBase,
   type ErrorOptions,
-  type ErrorMeta,
-  type IStorage,
 } from "@unikvs/core";
 import type { BaseIssue } from "valibot";
 
-// -------------------------------------------------------------------------------------------------
-//
-// 境界エラー
-//
-// -------------------------------------------------------------------------------------------------
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
- */
-export class InvalidUsageErrorBase<
-  TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
-> extends ErrorBase<TMeta> {}
+export { InvalidUsageErrorBase, KeyNotFoundError };
+export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 
 // -------------------------------------------------------------------------------------------------
 
@@ -154,42 +144,6 @@ export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
 }
 
 setErrorMessage(UniKvsIsNotOpenError, "UniKvs は開いていません", "ja");
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
- */
-export type KeyNotFoundErrorMeta = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
-   */
-  readonly key: IStorage.Key;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
- */
-export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
- */
-export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
-  static {
-    this.prototype.name = "UniKvsKeyNotFoundError";
-  }
-
-  public constructor(args: KeyNotFoundErrorArgs) {
-    const { key, ...options } = args;
-    const meta: KeyNotFoundErrorMeta = { key };
-    super(meta, ({ key }) => `IStorage.Key ${JSON.stringify(key)} not found`, options);
-  }
-}
-
-setErrorMessage(
-  KeyNotFoundError,
-  ({ key }) => `キー ${JSON.stringify(key)} が見つかりません`,
-  "ja",
-);
 
 // -------------------------------------------------------------------------------------------------
 //

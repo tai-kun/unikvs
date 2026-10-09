@@ -1,39 +1,7 @@
 import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
- */
-export type KeyNotFoundErrorMeta = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
-   */
-  readonly key: string;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
- */
-export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
- */
-export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
-  static {
-    this.prototype.name = "RedisKeyNotFoundError";
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
-   */
-  public constructor(args: KeyNotFoundErrorArgs) {
-    const { key, ...options } = args;
-    const meta: KeyNotFoundErrorMeta = { key };
-    super(meta, ({ key }) => `Key not found: ${key}`, options);
-  }
-}
-
-setErrorMessage(KeyNotFoundError, ({ key }) => `キー ${key} が見つかりません`, "ja");
+export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
+export { KeyNotFoundError } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)

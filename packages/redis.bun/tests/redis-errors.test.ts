@@ -5,12 +5,12 @@ import { KeyNotFoundError, UnsupportedRuntimeError } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 describe("KeyNotFoundError", () => {
-  test("name は RedisKeyNotFoundError である", ({ expect }) => {
+  test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
     // 準備と実行
     const error = new KeyNotFoundError({ key: "k1" });
 
     // 検証
-    expect(error.name).toBe("RedisKeyNotFoundError");
+    expect(error.name).toBe("UniKvsKeyNotFoundError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
@@ -24,17 +24,17 @@ describe("KeyNotFoundError", () => {
 });
 
 describe("UnsupportedRuntimeError", () => {
-  test("name は RedisUnsupportedRuntimeError である", ({ expect }) => {
+  test("name は UniKvsUnsupportedRuntimeError である", ({ expect }) => {
     // 準備と実行
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 検証
-    expect(error.name).toBe("RedisUnsupportedRuntimeError");
+    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
   });
 
   test("InvalidUsageErrorBase を継承している", ({ expect }) => {
     // 準備と実行
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 検証
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
@@ -42,7 +42,7 @@ describe("UnsupportedRuntimeError", () => {
 
   test("既定のメッセージを持つ", ({ expect }) => {
     // 準備と実行
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
     // 検証
     expect(error.message).toBe("Redis can only be used in the Bun runtime");

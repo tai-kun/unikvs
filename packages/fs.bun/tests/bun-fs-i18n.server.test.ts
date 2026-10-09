@@ -23,17 +23,17 @@ const test = vitest.extend<{
 describe("UnsupportedRuntimeError の国際化 (server)", () => {
   test("既定では英語メッセージと name を持つ", ({ expect }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
 
     // 実行と検証
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
-    expect(error.name).toBe("BunFsUnsupportedRuntimeError");
+    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("BunFs can only be used in the Bun runtime");
   });
 
   test("ja を設定すると日本語メッセージになる", ({ expect, setLang }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
 
     // 実行
     setLang("ja");
@@ -44,7 +44,7 @@ describe("UnsupportedRuntimeError の国際化 (server)", () => {
 
   test("en に戻すと英語メッセージに戻る", ({ expect, setLang }) => {
     // 準備
-    const error = new UnsupportedRuntimeError();
+    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
 
     // 実行と検証
     setLang("ja");

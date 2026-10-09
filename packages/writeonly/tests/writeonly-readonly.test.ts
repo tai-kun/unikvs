@@ -41,7 +41,7 @@ describe("読み出しの拒否", () => {
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
     expect(error).toMatchObject({
-      name: "WriteOnlyKeyNotFoundError",
+      name: "UniKvsKeyNotFoundError",
       message: `Key not found: ${key}`,
       meta: { key },
     });
@@ -67,7 +67,7 @@ describe("読み出しの拒否", () => {
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
     expect(error).toMatchObject({
-      name: "WriteOnlyKeyNotFoundError",
+      name: "UniKvsKeyNotFoundError",
       message: `Key not found: ${key}`,
       meta: { key },
     });

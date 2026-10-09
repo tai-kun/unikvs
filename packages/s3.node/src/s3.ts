@@ -10,9 +10,13 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
-
-import { InvalidPartSizeError, StorageAbortedError } from "./errors.js";
+import {
+  InvalidPartSizeError,
+  RepairNotAllowedError,
+  StorageAbortedError,
+  type IStorage,
+  type Variables,
+} from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)

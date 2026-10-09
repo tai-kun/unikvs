@@ -1,12 +1,14 @@
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
-import type { S3Client, S3Options } from "bun";
-
 import {
   InvalidPartSizeError,
+  RepairNotAllowedError,
   StorageAbortedError,
-  StorageNotOpenError,
   UnsupportedRuntimeError,
-} from "./errors.js";
+  type IStorage,
+  type Variables,
+} from "@unikvs/core";
+import type { S3Client, S3Options } from "bun";
+
+import { StorageNotOpenError } from "./errors.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
@@ -114,7 +116,7 @@ export default class S3 implements IStorage {
   public async open(): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
-      throw new UnsupportedRuntimeError();
+      throw new UnsupportedRuntimeError({ name: this.name, runtime: "Bun" });
     }
 
     // オープン済みの場合は既存のクライアントを破棄し、開き直しでリークしないようにします。

@@ -10,12 +10,12 @@ import {
 import { test } from "./_helpers.js";
 
 describe("KeyNotFoundError", () => {
-  test("name は RedisKeyNotFoundError である", ({ expect }) => {
+  test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
     // 準備と実行
     const error = new KeyNotFoundError({ key: "k1" });
 
     // 検証
-    expect(error.name).toBe("RedisKeyNotFoundError");
+    expect(error.name).toBe("UniKvsKeyNotFoundError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {

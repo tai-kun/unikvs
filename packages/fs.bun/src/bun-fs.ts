@@ -1,7 +1,10 @@
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
+import {
+  RepairNotAllowedError,
+  UnsupportedRuntimeError,
+  type IStorage,
+  type Variables,
+} from "@unikvs/core";
 import { assertValidFilename } from "@unikvs/utils";
-
-import { UnsupportedRuntimeError } from "./errors.js";
 
 /**
  * ストレージの動作に必要な Node.js 互換モジュールをまとめて保持する型定義です。
@@ -80,7 +83,7 @@ export default class BunFs implements IStorage {
   public async open(): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
-      throw new UnsupportedRuntimeError();
+      throw new UnsupportedRuntimeError({ name: this.name, runtime: "Bun" });
     }
 
     const [fs, path] = await Promise.all([import("node:fs/promises"), import("node:path")]);
