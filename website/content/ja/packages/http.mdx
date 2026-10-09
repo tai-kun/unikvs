@@ -1,0 +1,465 @@
+---
+title: "@unikvs/http"
+description: "UniKVS の HTTP 汎用ストレージ。fetch だけで読み書きする方法を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/http` は、任意の HTTP エンドポイントを KV として使うストレージプラグインです。`fetch` だけで読み書きします。
+
+- Edge や Workers、Lambda などの最小ランタイムで動きます。ランタイム固有の API は使いません。
+- 扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付けます。`read` は `Uint8Array<ArrayBuffer>` を返します。
+- `baseUrl` 配下にキーを対応付けます。認証ヘッダーやトークンを付与できます。
+- マイクロサービス間の共有や、ゲートウェイ経由の保存に適しています。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/http
+```
+
+主な依存は `@unikvs/core` です。
+
+## 使い方 [#usage]
+
+中心は `Http` クラスです。
+
+```ts
+import { Http } from "@unikvs/http";
+```
+
+```ts
+public constructor(baseUrl: string, options?: HttpOptions)
+```
+
+`fetch` の差し替え型は次のインターフェースです。
+
+```ts
+export interface IFetch {
+  (request: Request): Promise<Response>;
+}
+```
+
+`baseUrl` は保存先の起点です。正規化規則は次のとおりです。
+
+- 絶対 URL のみを受け付けます。相対 URL は拒否します。
+- クエリーやフラグメント付きは拒否します。
+- 末尾の `/` は除去します。
+- `/` のみなど除去後に空になる入力は拒否します。
+- 空文字や前後空白付きは拒否します。
+
+`options` は省略可能です。項目は次のとおりです。
+
+| 項目 | 型 | 既定値 | 説明 |
+| --- | --- | --- | --- |
+| `keyPrefix` | `string` | `"unikvs:"` | すべてのキーに付ける接頭辞です。`clear()` の削除範囲を限定します。 |
+| `allowRepair` | `boolean` | `false` | 書き戻しによる書き込みを許可するかどうかです。`false` では書き戻しの `write`・`getWritable` が `RepairNotAllowedError` で失敗します。 |
+| `allowClearWithoutPrefix` | `boolean` | `false` | 空の `keyPrefix` での `clear()` を許可するかどうかです。 |
+| `fetch` | `IFetch` | `globalThis.fetch` | 送信用の `fetch` 実装です。`Request` を包んで呼びます。未指定時は `globalThis.fetch` を使います。 |
+| `headers` | `Record<string, string>` | `{}` | 既定の送信ヘッダーです。値は文字列のみです。 |
+| `token` | `string` | `undefined` | 既定のベアラートークンです。空でない文字列のみです。 |
+
+送信ヘッダーは三層の優先度で決まります。
+
+1. `vars["@unikvs/http:headers"]` と `vars["@unikvs/http:token"]`
+2. `vars["@unikvs/fetch:headers"]` と `vars["@unikvs/fetch:token"]`
+3. コンストラクターの `headers` と `token`
+
+トークンがある場合、`Authorization` がなければ `Bearer ${token}` を自動付与します。明示の `Authorization` が優先します。`baseUrl`・`keyPrefix`・`fetch` は `vars` で上書きできません。
+
+主なメンバーは次のとおりです。
+
+- `name` は `"Http"` です。
+- `isOpen` は常に `true` です。
+- `open()`・`close()` は中断の検証のみ行います。接続は作りません。
+- `write` は `PUT` で保存します。
+- `read` は `GET` で取得します。
+- `exists` は `HEAD` で確認します。
+- `delete` は `DELETE` で削除します。
+
+```ts
+import { Http } from "@unikvs/http";
+
+const storage = new Http("https://kv.example.com/store");
+const signal = AbortSignal.timeout(5_000);
+const vars = {};
+
+await storage.open({ signal });
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+  signal,
+  vars,
+});
+
+const exists = await storage.exists({ key: "hello.bin", signal, vars });
+
+if (exists) {
+  const data = await storage.read({ key: "hello.bin", signal, vars });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key: "hello.bin", signal, vars });
+await storage.close({ signal });
+```
+
+## キーの配置 [#keys]
+
+キーは `baseUrl` 直下の単一セグメントに対応します。
+
+```text
+https://kv.example.com/store/unikvs%3Ahello%2Ebin
+```
+
+- 対応は `` `${baseUrl}/${encoded}` `` です。`encoded` は `` `${keyPrefix}${key}` `` を符号化した値です。
+- `.` は `%2E` に変換します。ドット付きキーも単一セグメントに収まります。
+- `clear()` は `DELETE ?prefix=` のみ使います。次の一例です。
+
+```text
+DELETE https://kv.example.com/store/?prefix=unikvs%3A
+```
+
+:::warning
+`clear()` はサーバー側の実装が必要な契約です。`?prefix=` 削除に対応しないサーバーでは使えません。
+:::
+
+## サーバー実装 [#server]
+
+サーバー側が用意する契約です。クライアントは `baseUrl` 直下に次の要求を送ります。
+
+```text
+PUT https://kv.example.com/store/unikvs%3Ahello%2Ebin
+GET https://kv.example.com/store/unikvs%3Ahello%2Ebin
+HEAD https://kv.example.com/store/unikvs%3Ahello%2Ebin
+DELETE https://kv.example.com/store/unikvs%3Ahello%2Ebin
+DELETE https://kv.example.com/store/?prefix=unikvs%3A
+```
+
+- パスはすべて `baseUrl` 直下です。キー部は単一セグメントに符号化します。`.` は `%2E` に変換されます。
+- 送信ヘッダーはそのまま届く前提で実装します。`Authorization: Bearer ...` がある場合は検証してください。
+- 状態コードの対応は次のとおりです。
+
+| 要求 | 成功 | 未存在 | 未対応・失敗 |
+| --- | --- | --- | --- |
+| `PUT /{encoded}` | `2xx` | — | `2xx` 以外は保存失敗として扱います。 |
+| `GET /{encoded}` | `2xx` でバイト列を返します。 | `404`・`410` | `2xx`・`404`・`410` 以外は取得失敗として扱います。 |
+| `HEAD /{encoded}` | `2xx` | `404`・`410` | `405`・`501` の場合のみ `GET` で確認し直します。 |
+| `DELETE /{encoded}` | `2xx` | `404`・`410` も成功として扱います。 | `2xx`・`404`・`410` 以外は削除失敗として扱います。 |
+| `DELETE /?prefix={encodedPrefix}` | `2xx` | — | `404`・`405`・`501` は未対応として扱います。`2xx`・`404`・`405`・`501` 以外は削除失敗として扱い、`HttpResponseError` になります。 |
+
+- `PUT /{encoded}` は保存です。`write` と書き込みストリームの確定時に一括で送ります。`Content-Type: application/octet-stream` でバイト列が届きます。成功は `2xx` を返します。
+- `GET /{encoded}` は取得です。成功は `2xx` で `application/octet-stream` のバイト列を返します。存在しないキーは `404` または `410` を返します。
+- `HEAD /{encoded}` は存在確認です。存在しないキーは `404` または `410` を返します。未対応でもかまいませんが、その場合は `405` または `501` を返します。クライアントはその場合のみ `Range: bytes=0-0` 付きの `GET` で確認し直すため、その `GET` に応答できることが望ましいです。
+- `DELETE /{encoded}` は削除です。冪等に実装します。存在しないキーの `404`・`410` も成功として扱うため、削除済みにはそのまま返します。
+- `DELETE /?prefix={encodedPrefix}` は一括削除専用です。接頭辞に一致するデータだけを削除します。対応しない場合は `404`・`405`・`501` のいずれかを返します。
+
+<Accordion>
+  <AccordionItem title="OpenAPI 定義 (YAML)">
+
+```yaml
+openapi: 3.0.3
+info:
+  title: UniKVS HTTP Storage API
+  version: 1.0.0
+  description: '@unikvs/http が baseUrl 直下に送る要求の契約。送信ヘッダーは透過し、Authorization: Bearer がある場合は検証する。'
+servers:
+  - url: '{baseUrl}'
+    variables:
+      baseUrl:
+        default: https://kv.example.com/store
+        description: 保存先の起点。末尾の / を除いた絶対 URL。
+paths:
+  /{encoded}:
+    parameters:
+      - $ref: '#/components/parameters/Encoded'
+    put:
+      summary: 値を保存する
+      operationId: putValue
+      security:
+        - bearer: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: 保存するバイト列。
+      responses:
+        '2XX':
+          description: 保存成功。
+        '5XX':
+          description: 保存失敗。クライアントは HttpResponseError として扱う。
+        default:
+          description: 2xx 以外は保存失敗。クライアントは HttpResponseError として扱う。
+    get:
+      summary: 値を読む
+      operationId: getValue
+      security:
+        - bearer: []
+        - {}
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          schema:
+            type: string
+          description: 存在確認の代替時に bytes=0-0 で送る。任意。
+      responses:
+        '2XX':
+          description: 取得成功。
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: 保存されたバイト列。
+        '404':
+          description: 未存在。クライアントは未存在として扱う。
+        '410':
+          description: 未存在。クライアントは未存在として扱う。
+        '5XX':
+          description: 取得失敗。クライアントは HttpResponseError として扱う。
+        default:
+          description: 2xx・404・410 以外は取得失敗。クライアントは HttpResponseError として扱う。
+    head:
+      summary: 存在を確認する
+      operationId: hasValue
+      security:
+        - bearer: []
+        - {}
+      responses:
+        '2XX':
+          description: 存在する。
+        '404':
+          description: 存在しない。
+        '410':
+          description: 存在しない。
+        '405':
+          description: 未対応。クライアントは Range 付き GET で確認し直す。
+        '501':
+          description: 未対応。クライアントは Range 付き GET で確認し直す。
+        '5XX':
+          description: 確認失敗。クライアントは HttpResponseError として扱う。
+        default:
+          description: 405・501 以外の非 2xx・非 404・非 410 は確認失敗。クライアントは HttpResponseError として扱う。
+    delete:
+      summary: 値を消す
+      operationId: deleteValue
+      security:
+        - bearer: []
+        - {}
+      responses:
+        '2XX':
+          description: 削除成功。冪等。
+        '404':
+          description: 削除済みとして成功。冪等。
+        '410':
+          description: 削除済みとして成功。冪等。
+        '5XX':
+          description: 削除失敗。クライアントは HttpResponseError として扱う。
+        default:
+          description: 2xx・404・410 以外は削除失敗。クライアントは HttpResponseError として扱う。
+  /:
+    delete:
+      summary: 接頭辞に一致する値をまとめて消す
+      operationId: clearByPrefix
+      security:
+        - bearer: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/Prefix'
+      responses:
+        '2XX':
+          description: 一括削除成功。
+        '404':
+          description: 未対応。クライアントは ClearNotSupported として扱う。
+        '405':
+          description: 未対応。クライアントは ClearNotSupported として扱う。
+        '501':
+          description: 未対応。クライアントは ClearNotSupported として扱う。
+        '5XX':
+          description: 一括削除失敗。クライアントは HttpResponseError として扱う。
+        default:
+          description: 2xx・404・405・501 以外は一括削除失敗。クライアントは HttpResponseError として扱う。
+components:
+  parameters:
+    Encoded:
+      name: encoded
+      in: path
+      required: true
+      schema:
+        type: string
+      description: keyPrefix とキーを連結して符号化した単一セグメント。. は %2E に変換される。
+    Prefix:
+      name: prefix
+      in: query
+      required: true
+      schema:
+        type: string
+      description: keyPrefix を符号化した値。一致する接頭辞だけを削除する。
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: 'Authorization: Bearer で送る。任意。明示の Authorization が優先される。'
+```
+
+  </AccordionItem>
+</Accordion>
+
+## ストリーム [#streams]
+
+読み書きどちらのストリームにも対応しています。
+
+書き込み用は次のメソッドで取得します。
+
+```ts
+public getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+): WritableStream<Uint8Array<ArrayBuffer>>
+```
+
+チャンクを蓄積し、`close` 時に一括で `PUT` します。`abort` では蓄積分を破棄します。サーバー側にストリーミング送信を求めません。
+
+読み取り用は次のメソッドで取得します。
+
+```ts
+public async getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal" | "vars">,
+): Promise<ReadableStream<Uint8Array<ArrayBuffer>>>
+```
+
+応答のボディをそのまま委譲します。ボディなし応答では空ストリームを返します。
+
+:::warning
+`getWritable` は全チャンクをメモリーに蓄積します。大容量データでは使用量が増えます。不要なデータは削除してください。中断は透過のみで、蓄積分の破棄以上の掃除はしません。
+:::
+
+## 注意点 [#notes]
+
+- ランタイム非依存です。`fetch`・`Request`・`Response` があれば動きます。
+- タイムアウトは備えていません。`AbortSignal` に一任します。
+- `exists()` は `HEAD` 未対応時に `GET` で代替します。`405`・`501` の場合のみ代替します。
+- `read` は存在しないキーで失敗します。`404`・`410` を未存在とみなします。
+- `delete` は冪等です。存在しないキーでも成功扱いにします。
+- `clear()` は空 `keyPrefix` のままでは送信前に拒否します。許可には `allowClearWithoutPrefix: true` が必要です。
+- `clear()` 未対応時は `ClearNotSupportedError` になります。`404` の場合は `baseUrl` の誤りの可能性もあります。
+- 中断はそのまま伝えます。`HttpNetworkError` には包みません。再試行の要否は型ではなく、中断が原因かどうかで判定してください。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear()` は起点配下の全データを消す契約になります。共有エンドポイントでは必ず一意なプレフィックスを指定してください。
+:::
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `KeyNotFoundError` | 存在しないキーを `read` または `getReadable` で読もうとした場合に発生します。`@unikvs/core` の共通エラーです。 |
+| `InvalidBaseUrlError` | `baseUrl` が絶対 URL でない場合や、クエリー・フラグメント付き、空文字・前後空白などの場合に発生します。 |
+| `InvalidHeadersError` | ヘッダーに文字列以外を含む場合に発生します。 |
+| `InvalidTokenError` | トークンが空文字や文字列以外の場合に発生します。 |
+| `InvalidKeyError` | キーを URL パスセグメントに符号化できない場合に発生します。 |
+| `ClearWithoutPrefixNotAllowedError` | 空の `keyPrefix` のまま許可なく `clear()` を呼んだ場合に発生します。 |
+| `ClearNotSupportedError` | サーバーが `DELETE ?prefix=` に対応しない場合に発生します。 |
+| `HttpNetworkError` | 送信自体に失敗した場合に発生します。 |
+| `HttpResponseError` | 応答が異常ステータスの場合に発生します。 |
+| `InvalidChunkTypeError` | `getWritable` に `Uint8Array` 以外を書いた場合に発生します。 |
+
+```ts
+import { Http, KeyNotFoundError } from "@unikvs/http";
+
+const storage = new Http("https://kv.example.com/store");
+const signal = AbortSignal.timeout(5_000);
+const vars = {};
+
+try {
+  await storage.open({ signal });
+  await storage.read({ key: "missing.bin", signal, vars });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.error(`キー ${error.meta.key} が見つかりません`);
+  } else {
+    throw error;
+  }
+} finally {
+  await storage.close({ signal });
+}
+```
+
+## 使用例 [#examples]
+
+<Tabs>
+  <Tab title="既定の fetch">
+
+既定の `globalThis.fetch` を使う最小完動例です。
+
+```ts
+import { Http } from "@unikvs/http";
+
+const storage = new Http("https://kv.example.com/store");
+const signal = AbortSignal.timeout(5_000);
+const vars = {};
+await storage.open({ signal });
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, Http"),
+  signal,
+  vars,
+});
+
+if (await storage.exists({ key, signal, vars })) {
+  const data = await storage.read({ key, signal, vars });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key, signal, vars });
+await storage.clear({ signal, vars });
+await storage.close({ signal });
+```
+
+  </Tab>
+  <Tab title="fetch 注入">
+
+独自の `fetch` 実装を注入する最小完動例です。`Request` を受けて `Response` を返します。
+
+```ts
+import { Http, type IFetch } from "@unikvs/http";
+
+const fetchImpl: IFetch = async (request: Request) => {
+  return globalThis.fetch(request);
+};
+
+const storage = new Http("https://kv.example.com/store", {
+  fetch: fetchImpl,
+  headers: { "X-App": "myapp" },
+  token: "secret",
+});
+const signal = AbortSignal.timeout(5_000);
+const vars = {};
+await storage.open({ signal });
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, Http"),
+  signal,
+  vars,
+});
+
+if (await storage.exists({ key, signal, vars })) {
+  const data = await storage.read({ key, signal, vars });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key, signal, vars });
+await storage.clear({ signal, vars });
+await storage.close({ signal });
+```
+
+  </Tab>
+</Tabs>

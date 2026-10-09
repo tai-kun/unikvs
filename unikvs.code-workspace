@@ -85,6 +85,10 @@
       "path": "packages/indexeddb",
     },
     {
+      "name": "@unikvs/http",
+      "path": "packages/http",
+    },
+    {
       "name": "website",
       "path": "website",
     },

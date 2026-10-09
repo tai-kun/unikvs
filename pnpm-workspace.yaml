@@ -44,6 +44,7 @@ packages:
     "packages/s3.bun",
     "packages/opfs",
     "packages/indexeddb",
+    "packages/http",
     "unikvs",
     "website",
   ]

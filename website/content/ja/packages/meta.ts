@@ -24,5 +24,6 @@ export default defineMeta({
     "superjson",
     "cbor",
     "redis-node",
+    "http",
   ],
 });

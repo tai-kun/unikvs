@@ -54,6 +54,8 @@ jobs:
             directory: "packages/opfs"
           - name: "indexeddb"
             directory: "packages/indexeddb"
+          - name: "http"
+            directory: "packages/http"
           - name: "unikvs"
             directory: "unikvs"
     timeout-minutes: 15
