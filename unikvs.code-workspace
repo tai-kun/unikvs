@@ -97,6 +97,10 @@
       "path": "packages/hex",
     },
     {
+      "name": "@unikvs/base64",
+      "path": "packages/base64",
+    },
+    {
       "name": "@unikvs/base64url",
       "path": "packages/base64url",
     },

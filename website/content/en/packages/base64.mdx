@@ -1,0 +1,219 @@
+---
+title: "@unikvs/base64"
+description: "Explains how to use the Transformer plugin that transparently converts byte sequences to bytes representing a standard base64 string."
+---
+
+## Overview [#overview]
+
+`@unikvs/base64` is a Transformer plugin that converts byte sequences to bytes representing standard base64. <Badge>Transformer</Badge>
+
+It encodes on writes with `encode` and restores the original bytes on reads with `decode`, so you can read and write without thinking about conversion details. Use it for storing data in destinations that only accept text, and for passing binary data as ASCII strings.
+
+The 64 characters used are RFC 4648 §4 `A-Z`, `a-z`, `0-9`, `+`, and `/`. It neither includes nor accepts `-` and `_` used by base64url.
+
+Both input and output are `Uint8Array<ArrayBuffer>`. The converted size is about 1.37 times the original size.
+
+It is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"Base64"`.
+
+It works on Node.js, Bun, and browsers. There are no runtime differences in behavior.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/base64
+```
+
+:::tip
+To store data in a smaller size, consider [`@unikvs/compression`](/packages/compression). To detect corruption or tampering, consider [`@unikvs/checksum`](/packages/checksum). This package provides neither compression nor verification.
+:::
+
+## Usage [#usage]
+
+Normally create it with no arguments. Pass `Base64Options` only when you want to omit trailing `=` padding or to replace the instances used for UTF-8 conversion.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+
+const base64 = new Base64();
+```
+
+```ts
+import { Base64, type Base64Options } from "@unikvs/base64";
+import { FastUtf8 } from "fast-utf8";
+
+const options: Base64Options = {
+  encoder: new FastUtf8(),
+  decoder: new FastUtf8({ strict: true }),
+  padding: true,
+};
+
+const base64 = new Base64(options);
+```
+
+`Base64Options` is as follows. Normally omit it and use the defaults. When `padding` is omitted, it is treated as `true` and outputs with `=`. `decode` accepts input with or without `=`. When a `decoder` instance with `strict: false` is injected, invalid UTF-8 is thrown as `Base64DecodeError`. See [Errors](#errors) for details.
+
+```ts
+type Base64Options = {
+  readonly encoder?: FastUtf8 | undefined;
+  readonly decoder?: FastUtf8 | undefined;
+  readonly padding?: boolean | undefined;
+};
+```
+
+Its main members are as follows.
+
+| Member | Summary |
+| --- | --- |
+| `new Base64(options?)` | Initializes with no options. Pass `Base64Options` only when a replacement is needed. |
+| `name` | Always returns `"Base64"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Converts a `Uint8Array<ArrayBuffer>` to a base64 `Uint8Array<ArrayBuffer>`. |
+| `decode({ data })` | Converts a base64 `Uint8Array<ArrayBuffer>` back to the original bytes. |
+| `getEncodable()` | Returns a `TransformStream` for base64 encoding. |
+| `getDecodable()` | Returns a `TransformStream` for base64 decoding. |
+
+Here is a one-shot conversion example. Interpreting the `encode` result as a UTF-8 string yields base64.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+
+const base64 = new Base64();
+
+const encoded = base64.encode({ data: new TextEncoder().encode("foobar") });
+console.log(new TextDecoder().decode(encoded)); // "Zm9vYmFy"
+
+const decoded = base64.decode({ data: new TextEncoder().encode("Zm9vYmFy") });
+console.log(new TextDecoder().decode(decoded)); // "foobar"
+```
+
+Specifying `padding: false` returns output without trailing `=`, for both one-shot and stream conversion. By default (`true`), it returns output padded with `=` to a 4-character boundary, following the canonical RFC 4648 §4 form.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+
+const padded = new Base64();
+console.log(new TextDecoder().decode(padded.encode({ data: new TextEncoder().encode("f") }))); // "Zg=="
+
+const omitted = new Base64({ padding: false });
+console.log(new TextDecoder().decode(omitted.encode({ data: new TextEncoder().encode("f") }))); // "Zg"
+```
+
+Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Base64())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+```
+
+`set` stores values base64-encoded, and `get` restores them to the original bytes automatically.
+
+## Streams [#streams]
+
+Supports both single values and streams.
+
+- Single values are converted with `encode` and `decode`.
+- Stream values are converted with the `TransformStream` from `getEncodable` and `getDecodable`.
+
+`getEncodable` correctly base64-encodes across input chunk boundaries. The `padding` setting also applies to streams, and the presence of `=` is finalized when the stream ends.
+
+`getDecodable` correctly restores base64 split across chunk boundaries.
+
+- An empty stream and zero-length chunks produce zero values and no error.
+- If the character count leaves a remainder of 1 when divided by 4 at stream end, or if `=` is misplaced, it throws `Base64DecodeError`.
+- If the input contains a character that is not valid base64, it throws `Base64DecodeError` at that point.
+- By default, invalid UTF-8 or a truncated multi-byte character throws a native `TypeError`. See [Errors](#errors) for details.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+
+const base64 = new Base64();
+
+const source = new ReadableStream({
+  start(controller) {
+    controller.enqueue(new TextEncoder().encode("fo"));
+    controller.enqueue(new TextEncoder().encode("obar"));
+    controller.close();
+  },
+});
+
+const decoded = source.pipeThrough(base64.getEncodable()).pipeThrough(base64.getDecodable());
+```
+
+## Notes [#notes]
+
+The format handling is as follows.
+
+- `-` and `_` are not accepted. Use a different package when you need base64url. No replacement is performed automatically. Convert on the caller side when needed.
+- Separators such as whitespace and newlines are not skipped. They are rejected as invalid characters.
+- `=` may only appear as one or two trailing characters, and only when the whole input aligns to a 4-character boundary. A padded input of length 3 such as `"Zg="` is rejected. `=` in the middle or at the start is rejected.
+- Empty input produces empty output. Passing `new Uint8Array(0)` is not an error.
+
+`+`, `/`, and `=` may be interpreted as delimiters when used directly in URLs or file names, so they are not suitable for values embedded in URLs. For that use case, use base64url.
+
+The size in bytes becomes about 1.37 times the original size (including `=` with the default `padding: true`). Do not use it for compression, encryption, or tamper detection.
+
+:::warning
+When combining multiple Transformers, the result changes with the registration order. When using it with others such as Checksum, decide the order of base64 encoding versus verification, and verify a round-trip with small data before applying it to production data.
+:::
+
+## Errors [#errors]
+
+The errors this package throws are as follows.
+
+| Error | Meaning | Action |
+| --- | --- | --- |
+| `Base64DecodeError` | The input cannot be interpreted as base64. Caused by invalid characters (e.g. `-`, `_`, whitespace), misplaced `=`, or a length with a remainder of 1 when divided by 4 (e.g. `"a"`, `"abcde"`). | Check that the input is a sequence of base64 (`A-Z`, `a-z`, `0-9`, `+`, `/` with trailing `=`). |
+
+By default (for both one-shot and stream conversion), byte sequences that are invalid as UTF-8 propagate as a native `TypeError`, not as `Base64DecodeError`. When a `decoder` with `strict: false` is injected via `Base64Options`, they are thrown as `Base64DecodeError`.
+
+```ts
+import { Base64, Base64DecodeError } from "@unikvs/base64";
+
+const base64 = new Base64();
+
+try {
+  base64.decode({ data: new TextEncoder().encode("ab-c") });
+} catch (error) {
+  if (error instanceof Base64DecodeError) {
+    console.log("Cannot be interpreted as base64.");
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+A minimal example with `Memory` storage. Written values are stored base64-encoded and automatically restored to the original bytes on reads.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(new Base64())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = new TextEncoder().encode("foobar");
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+console.log(output.length === input.length);
+
+await kvs.close();
+```

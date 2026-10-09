@@ -60,6 +60,8 @@ jobs:
             directory: "packages/localstorage"
           - name: "hex"
             directory: "packages/hex"
+          - name: "base64"
+            directory: "packages/base64"
           - name: "base64url"
             directory: "packages/base64url"
           - name: "unikvs"

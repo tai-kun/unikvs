@@ -47,6 +47,7 @@ packages:
     "packages/http",
     "packages/localstorage",
     "packages/hex",
+    "packages/base64",
     "packages/base64url",
     "unikvs",
     "website",
