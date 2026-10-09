@@ -1,0 +1,93 @@
+---
+title: "@unikvs/core"
+description: "Overview of @unikvs/core, which provides the types and shared errors for UniKVS."
+---
+
+## Overview [#overview]
+
+`@unikvs/core` is the package that provides the shared types and errors for UniKVS. It covers storage and transformer interfaces, runtime variables, and error base classes.
+
+You normally do not need to touch this package directly, except when creating your own plugins.
+
+Install it with the following command.
+
+```package-install
+pnpm add @unikvs/core
+```
+
+## Storage [#storage]
+
+A storage is a data destination. It offers one-shot reads and writes (`write`, `read`, `exists`, `delete`, `clear`) and stream reads and writes for large data (`getWritable`, `getReadable`). Stream support is optional.
+
+Every operation accepts a cancellation `signal` and runtime settings via `vars`.
+
+To build your own, implement `IStorage`. See the API reference for detailed signatures.
+
+## Transformer [#transformer]
+
+A transformer converts data transparently. One-shot conversion (`encode`, `decode`) is required, while stream conversion (`getEncodable`, `getDecodable`) is optional.
+
+Every operation supports cancellation via `signal` and settings via `vars`.
+
+To build your own, implement `ITransformer`. See the API reference for detailed signatures.
+
+## Variables [#variables]
+
+You can pass runtime settings that change operation behavior. Set initial values with `setVariables()` on the builder and override them per operation with `vars`.
+
+```ts
+import type { Variables } from "@unikvs/core";
+
+const vars: Variables = {
+  locale: "en",
+  retryCount: 3,
+};
+```
+
+## Errors [#errors]
+
+All UniKVS errors extend `ErrorBase` and support Japanese and English messages. Use `instanceof` to tell them apart.
+
+### Shared errors [#errors-common]
+
+| Error class | Description |
+| --- | --- |
+| `KeyNotFoundError` | The key was not found, for example when reading a missing key. Re-exported from each storage package. |
+| `UnsupportedRuntimeError` | Used on an unsupported runtime, for example when opening a Bun-only storage on Node.js. |
+| `InvalidPartSizeError` | The part size for multipart upload is invalid. |
+| `StorageAbortedError` | A writable stream was requested with an already aborted signal. |
+| `RepairNotAllowedError` | A repair write to a storage that does not allow it. |
+| `InvalidUsageErrorBase` | Base class for errors caused by incorrect usage. |
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### Defining errors in custom plugins [#errors-custom]
+
+1. Extend `ErrorBase` or `InvalidUsageErrorBase`. Use the latter for incorrect usage.
+2. Specify a meta type when needed.
+3. Register per-language messages with `setErrorMessage`.
+
+```ts
+import { ErrorBase, setErrorMessage } from "@unikvs/core";
+
+type MyMeta = {
+  readonly key: string;
+};
+
+export class MyStorageError extends ErrorBase<MyMeta> {}
+
+setErrorMessage(MyStorageError, (meta) => `Failed to write key ${meta.key}.`, "en");
+setErrorMessage(MyStorageError, (meta) => `キー ${meta.key} の書き込みに失敗しました。`, "ja");
+```

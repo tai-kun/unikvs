@@ -1,0 +1,128 @@
+---
+title: "@unikvs/fs.bun"
+description: "Bun のローカルファイルシステムにバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/fs.bun` は、Bun のローカルファイルシステムに保存するストレージプラグインです。指定したルートディレクトリー配下にキーをファイル名として保存します。<Badge variant="warning">Bun 専用</Badge>
+
+扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付け、`read` は `Uint8Array<ArrayBuffer>` を返します。ファイルの読み書きには `Bun.file` の `bytes()`・`write()`・`writer()` を使い、ディレクトリー操作とリネームには `node:fs/promises`、パス操作には `node:path` を動的インポートして使います。一時ファイル名の生成には `Bun.randomUUIDv7()` を使います。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/fs.bun
+```
+
+依存関係として `@unikvs/core` と `@unikvs/utils` を使用します。
+
+## 使い方 [#usage]
+
+中心は `BunFs` クラスです。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+```
+
+```ts
+public constructor(root: string = ".unikvs", options: BunFsOptions = {})
+```
+
+`root` は保存先のルートディレクトリーです。相対パスは `open()` 実行時にカレントディレクトリー基準で解決します。既定値は `".unikvs"` です。
+
+`options.allowRepair` は書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` を指定すると、書き戻し（`vars["unikvs:repair"]` が `true`）の `write`・`getWritable` は `RepairNotAllowedError` で失敗します。
+
+主なメンバーは次のとおりです。
+
+- `name` は `"BunFs"` です。
+- `allowRepair` は書き戻しによる書き込みを許可するかどうかを示します。
+- `isOpen` はオープン済みかどうかを示します。
+- `open()` はルートディレクトリーを再帰的に作り、読み書き可能にします。
+- `write`・`read`・`exists`・`delete`・`clear` で読み書きします。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun");
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+```
+
+## ファイル配置 [#layout]
+
+キーからファイルパスへの対応は次のとおりです。ルート直下にキーがそのまま並び、サブディレクトリーは作りません。
+
+<FileTree>
+
+- .unikvs/
+  - hello.bin
+  - greeting.bin
+
+</FileTree>
+
+ファイル名の検証には `@unikvs/utils` の `assertValidFilename` を使います。無効なキーでは `InvalidFilenameError` を投げます。
+
+## ストリーム [#streams]
+
+読み書きどちらのストリームにも対応しています。
+
+## 注意点 [#notes]
+
+- Bun 専用です。`Bun` グローバルが無いランタイムでは `open()` が `UnsupportedRuntimeError` で失敗します。
+- `open()` 前に操作しないでください。`isOpen` で確認できます。
+- 存在しないファイルの読み取りや削除はエラーになります。
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `UnsupportedRuntimeError` | `Bun` グローバルが無いランタイムで `open()` を呼んだ場合に発生します。`@unikvs/core` の共通エラーです。 |
+
+```ts
+import { BunFs, UnsupportedRuntimeError } from "@unikvs/fs.bun";
+
+const storage = new BunFs();
+
+try {
+  await storage.open();
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    console.error("Bun ランタイムで実行してください");
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`.tmp/` 配下に保存する最小完動例です。
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+
+const storage = new BunFs("./.tmp/unikvs-fs-bun-example");
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, BunFs"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+await storage.delete({ key });
+await storage.clear();
+```

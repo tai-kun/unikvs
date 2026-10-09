@@ -1,0 +1,150 @@
+---
+title: "@unikvs/redis.bun"
+description: "Bun の Redis クライアントで Redis にバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/redis.bun` は、Bun 組み込みの Redis クライアントで Redis に保存するストレージプラグインです。キーにプレフィックスを付けて名前空間を分けます。<Badge variant="warning">Bun 専用</Badge>
+
+扱うデータはバイト列専用です。Redis サーバーは 7.2 以上が必要です。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/redis.bun
+```
+
+依存関係として `@unikvs/core` を使用します。
+
+## 使い方 [#usage]
+
+中心は `Redis` クラスです。
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+```
+
+```ts
+public constructor(url?: string, options?: RedisStorageOptions)
+```
+
+`url` は接続先です。省略すると Bun が `REDIS_URL`、`VALKEY_URL`、`redis://localhost:6379` の順に解決します。
+
+`options` は `RedisOptions` に `keyPrefix` と `allowRepair` を加えた型です。
+
+- `keyPrefix` はすべてのキーの先頭に付与する文字列です。既定値は `"unikvs:"` で、`clear()` が削除する範囲をこのプレフィックス配下に限定します。空文字を指定するとキーをそのまま使います。
+- `allowRepair` は書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` を指定すると書き戻しの `write`・`getWritable` が `RepairNotAllowedError` で失敗します。
+- それ以外のプロパティーは Bun の `RedisClient` に渡します。`connectionTimeout`・`autoReconnect`・`maxRetries`・`tls` などが指定できます。
+
+主なメンバーは次のとおりです。
+
+- `name` は `"Redis"` です。
+- `isOpen` はオープン済みかどうかを示します。
+- `open()` はクライアントを作り、接続を確立します。
+- `close()` は接続を閉じます。
+- `write`・`read`・`exists`・`delete`・`clear` で読み書きします。
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "myapp:" });
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+
+storage.close();
+```
+
+## キーの配置 [#keys]
+
+`hello.bin` というキーは、既定のプレフィックスでは `unikvs:hello.bin` という Redis キーになります。
+
+- `:` などを含むキーもそのまま使えます。
+- `clear()` はプレフィックス配下のキーを削除します。
+
+:::warning
+`keyPrefix` に `*` や `?` などのグロブ文字を含めないでください。`clear()` が意図しないキーに一致します。
+:::
+
+## ストリーム [#streams]
+
+読み書きどちらのストリームにも対応しています。
+
+## 注意点 [#notes]
+
+- Bun 専用です。`Bun` グローバルが無いランタイムでは `open()` が `UnsupportedRuntimeError` で失敗します。
+- Redis サーバー 7.2 以上が必要です。
+- `open()` 前に操作しないでください。`isOpen` で確認できます。
+- `read` は存在しないキーで `KeyNotFoundError` を投げます。
+- `delete` は存在しないキーでもエラーになりません。
+- 永続性は Redis サーバーの設定に従います。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear()` は選択中のデータベースの全キーを削除します。共有データベースでは必ず一意なプレフィックスを指定してください。
+:::
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `UnsupportedRuntimeError` | `Bun` グローバルが無いランタイムで `open()` を呼んだ場合に発生します。`@unikvs/core` の共通エラーです。 |
+| `KeyNotFoundError` | 存在しないキーを `read` または `getReadable` で読もうとした場合に発生します。`@unikvs/core` の共通エラーです。 |
+
+```ts
+import { KeyNotFoundError, Redis, UnsupportedRuntimeError } from "@unikvs/redis.bun";
+
+const storage = new Redis();
+
+try {
+  await storage.open();
+  await storage.read({ key: "missing.bin" });
+} catch (error) {
+  if (error instanceof UnsupportedRuntimeError) {
+    console.error("Bun ランタイムで実行してください");
+  } else if (error instanceof KeyNotFoundError) {
+    console.error(`キー ${error.meta.key} が見つかりません`);
+  } else {
+    throw error;
+  }
+}
+```
+
+接続や認証、サーバー側の拒否はクライアントのエラーをそのまま伝播します。
+
+## 使用例 [#examples]
+
+`redis://localhost:6379` に保存する最小完動例です。
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "unikvs-example:" });
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, Redis"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+const writer = storage.getWritable({ key: "stream.bin" }).getWriter();
+await writer.write(new Uint8Array([1, 2, 3]));
+await writer.write(new Uint8Array([4, 5, 6]));
+await writer.close();
+
+await storage.delete({ key });
+await storage.clear();
+storage.close();
+```

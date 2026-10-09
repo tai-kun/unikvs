@@ -1,0 +1,148 @@
+---
+title: "@unikvs/memory"
+description: "How to use @unikvs/memory, the in-memory storage for UniKVS."
+---
+
+## Overview [#overview]
+
+`@unikvs/memory` is a storage plugin that keeps data in memory. It can store arbitrary values as-is.
+
+- Reads and writes finish synchronously, with no `open` or `close` needed.
+- Strings, objects, and other arbitrary values can be stored.
+- Suitable for test doubles and temporary caches.
+
+Install it with the following command.
+
+```package-install
+npm i @unikvs/memory
+```
+
+## Usage [#usage]
+
+`Memory` implements `IStorage`. Pass it to `UniKvs` with `appendStorage()`, or operate it directly.
+
+<Tabs>
+  <Tab title="Via UniKvs">
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<string>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+```
+
+  </Tab>
+  <Tab title="Direct">
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+storage.write({ key: "k1", data: "v1" });
+const value = storage.read({ key: "k1" });
+```
+
+  </Tab>
+</Tabs>
+
+Constructor arguments are as follows.
+
+| Argument | Type | Required | Description |
+| --- | --- | --- | --- |
+| `options` | `MemoryOptions` | No | Behaves like an empty object when omitted. |
+| `options.clone` | `<T>(value: T) => T` | No | Function used for cloning. Defaults to `structuredClone`. |
+| `options.allowRepair` | `boolean` | No | Whether to allow repair writes. Defaults to `false`. |
+
+There is no `open` or `close`. `isOpen` always returns `true`.
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+storage.write({ key: "k1", data: { message: "hello" } });
+
+if (storage.exists({ key: "k1" })) {
+  const value = storage.read({ key: "k1" });
+  console.log(value);
+}
+
+storage.delete({ key: "k1" });
+storage.clear();
+```
+
+`write`, `read`, `exists`, `delete`, and `clear` are all synchronous.
+
+## Supported data [#data]
+
+`write` and `read` accept arbitrary values other than byte streams, such as strings, objects, `null`, `undefined`, and `Uint8Array`.
+
+Stream operations only support `Uint8Array<ArrayBuffer>`.
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+// Write example
+const writable = storage.getWritable({ key: "s1" });
+const writer = writable.getWriter();
+await writer.write(new Uint8Array([1, 2]));
+await writer.write(new Uint8Array([3]));
+await writer.close();
+
+// Read example
+const readable = storage.getReadable({ key: "s1" });
+const reader = readable.getReader();
+const result = await reader.read();
+console.log(result.value);
+```
+
+## Limitations [#limitations]
+
+- Not persisted. Data is discarded when the process ends.
+- Storing large or many values increases memory usage. Remove unneeded data with `delete` or `clear`.
+- Not suitable for sequential processing of very large data.
+
+## Errors [#errors]
+
+| Error | Condition |
+| --- | --- |
+| `KeyNotFoundError` | Thrown when the key for `read`, `delete`, or `getReadable` does not exist. A shared error from `@unikvs/core`. |
+| `InvalidChunkTypeError` | Thrown when a non-`Uint8Array<ArrayBuffer>` chunk is written, or when reading a key whose value is not a `Uint8Array`. |
+
+```ts
+import { KeyNotFoundError, Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+try {
+  storage.read({ key: "unknown" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+A minimal example.
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+storage.write({ key: "greeting", data: "hello" });
+console.log(storage.exists({ key: "greeting" }));
+console.log(storage.read({ key: "greeting" }));
+storage.delete({ key: "greeting" });
+console.log(storage.exists({ key: "greeting" }));
+```

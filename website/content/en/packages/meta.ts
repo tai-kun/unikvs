@@ -1,0 +1,28 @@
+import { defineMeta } from "blume";
+
+export default defineMeta({
+  title: "Package Reference",
+  order: 10,
+  pages: [
+    "unikvs",
+    "core",
+    "utils",
+    "compression",
+    "checksum",
+    "memory",
+    "fs-node",
+    "fs-bun",
+    "redis-bun",
+    "s3-node",
+    "s3-bun",
+    "opfs",
+    "indexeddb",
+    "writeonly",
+    "debug",
+    "passthrough",
+    "json",
+    "superjson",
+    "cbor",
+    "redis-node",
+  ],
+});

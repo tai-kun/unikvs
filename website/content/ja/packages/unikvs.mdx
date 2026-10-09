@@ -1,0 +1,399 @@
+---
+title: "UniKVS"
+description: "設定ビルダーと KVS クライアントを提供するメインパッケージ UniKVS の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`unikvs` はメインクライアントのパッケージです。<Badge>メインクライアント</Badge> 設定ビルダー (`UniKvs.config()` / `UniKvsConfig`) でトランスフォーマーとストレージを組み立て、生成したクライアント (`UniKvs`) で読み書きします。
+
+```package-install
+npm i unikvs
+```
+
+## 設定ビルダー [#config-builder]
+
+`UniKvs.config()` でビルダーを作ります。型パラメーターでマッピングを直接指定する方法と、`schema` オプションで Valibot スキーマから推論させる方法があります。後者では入出力値の実行時検証も有効になります。
+
+<Tabs>
+  <Tab title="schemaあり">
+    `PlainValue()`・`StreamValue()`・`Value()` に Valibot スキーマを渡します。マッピング型は自動推論します。Valibot スキーマを使う場合は `valibot` を別途インストールします。
+
+    ```ts
+    import { PlainValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: {
+        foo: PlainValue(v.instance(Uint8Array)),
+      },
+    })
+      .appendStorage(storage)
+      .create();
+    ```
+
+    動的キーには配列形式を使います。キースキーマと値スキーマの組を並べ、最初に一致した定義を採用します。
+
+    ```ts
+    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: [
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
+      ],
+    })
+      .appendStorage(storage)
+      .create();
+    ```
+  </Tab>
+  <Tab title="schemaなし">
+    `T` はキーから値へのマッピング (`{ [key]: PlainValue | StreamValue | Value }`) で、キーごとに使える操作が型レベルで決まります。実行時の検証は行いません。
+
+    ```ts
+    import { UniKvs, type Value } from "unikvs";
+
+    const kvs = UniKvs.config<{
+      foo: Value<Uint8Array>;
+    }>()
+      .appendStorage(storage)
+      .create();
+    ```
+  </Tab>
+</Tabs>
+
+:::warning[スキーマ定義が不正な場合]
+`schema` の形式が不正な場合は `config()` の時点で `InvalidInputError` を投げます。
+:::
+
+設定は以下の順序で行います。
+
+<Steps>
+  <Step title="`setVariables(vars)`">
+    実行時変数の初期値を設定します (任意)。呼ぶたびに置換します。
+  </Step>
+  <Step title="`appendTransformer(transformer)`">
+    トランスフォーマーを追加します (任意)。ストレージ登録後にも追加できます。
+  </Step>
+  <Step title="`appendStorage(storage)`">
+    ストレージを追加します (必須、複数可)。
+  </Step>
+  <Step title="`create()`">
+    `UniKvs` クライアントを作ります。ストレージがなければ `MissingStorageError` を投げます。
+  </Step>
+</Steps>
+
+:::warning[ストレージ未登録に注意]
+`create()` の前に `appendStorage()` を少なくとも 1 回呼んでください。
+:::
+
+各ストレージは、登録時点までのトランスフォーマーを前段として使います。
+
+書き込みはすべてのストレージに並列で行い、読み取りは見つかったストレージの前段を逆順に適用してデコードします。
+
+## クライアント操作 [#client-operations]
+
+作成したクライアントは次の操作を提供します。`open()` で初期化し、使い終わったら `close()` で閉じます (`await using` でも自動クローズできます)。
+
+| メソッド          | 説明                                                     |
+| ----------------- | -------------------------------------------------------- |
+| `open()`          | ストレージとトランスフォーマーを初期化します。           |
+| `close()`         | すべてのストレージとトランスフォーマーをクローズします。 |
+| `set(key, value)` | キーに値を保存します。                                   |
+| `get(key)`        | キーから値を取得します。                                 |
+| `stream(key)`     | キーからストリームを取得します。                         |
+| `has(key)`        | キーが存在するかを確認します。                           |
+| `delete(key)`     | キーを削除します。                                       |
+| `clear()`         | すべてのデータを削除します。                             |
+
+すべての操作は `AbortSignal` によるキャンセルと、実行時変数 (`vars`) の受け渡しに対応します。引数はオプションオブジェクト形式と位置引数形式のどちらでも指定できます。
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("foo", new Uint8Array([0, 1, 2]), {
+  signal: ac.signal,
+  vars: { traceId: "abc-123" },
+});
+
+const bytes = await kvs.get("foo", { signal: ac.signal });
+```
+
+## 値の型 [#value-types]
+
+`PlainValue`・`StreamValue`・`Value` は型と関数の両方です。型として使うとキーごとに使えるメソッドを制限し、関数として使うと Valibot スキーマから型を推論します。
+
+| 型              | 書き込み                           | 読み取り      | ストリーム読み取り            |
+| --------------- | ---------------------------------- | ------------- | ----------------------------- |
+| `PlainValue<T>` | `set(key, T)`                      | `get(key): T` | 不可。                          |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | 不可。          | `stream(key): ValueStream<T>` |
+| `Value<T>`      | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
+
+`Value<T>` は両方に対応する糖衣構文で、`PlainValue<T> | StreamValue<T>` と等価です。
+
+<Tabs>
+  <Tab title="型で指定">
+    ```ts
+    import { UniKvs, type PlainValue, type StreamValue } from "unikvs";
+
+    const kvs = UniKvs.config<{
+      message: PlainValue<string>;
+      logs: StreamValue<Uint8Array>;
+    }>()
+      .appendStorage(storage)
+      .create();
+
+    await kvs.open();
+
+    await kvs.set("message", "hello");
+    const msg = await kvs.get("message");
+    // msg は string 型になります
+
+    await kvs.set("logs", new Uint8Array([0x01]));
+    const valueStream = await kvs.stream("logs");
+    ```
+  </Tab>
+  <Tab title="スキーマで指定">
+    ```ts
+    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: {
+        message: PlainValue(v.string()),
+        logs: StreamValue(v.instance(Uint8Array)),
+      },
+    })
+      .appendStorage(storage)
+      .create();
+
+    await kvs.open();
+
+    await kvs.set("message", "hello");
+    const msg = await kvs.get("message");
+    // msg は string 型になります
+    ```
+  </Tab>
+</Tabs>
+
+許可されていない組み合わせは型エラーです。`schema` ありの場合は、実行時にも `InvalidInputError` を投げます。
+
+```ts
+// 型エラー: PlainValue のキーに stream() は使えません
+kvs.stream("message");
+
+// 型エラー: StreamValue のキーに get() は使えません
+kvs.get("logs");
+```
+
+## スキーマによる検証 [#schema-validation]
+
+`schema` を指定すると、入出力値を Valibot スキーマで検証します。
+
+| 操作 | 検証内容 | 失敗時のエラー |
+| ---- | -------- | -------------- |
+| `set` | 入力値を検証します。 | `InvalidInputError` |
+| `get` | 出力値を検証します。 | `InvalidOutputError` |
+| `stream` | チャンクを 1 つずつ検証します。 | `InvalidOutputError` |
+| `has`・`delete` | 配列形式の場合のみ、キーを検証します。 | `InvalidInputError` |
+
+```ts
+import { PlainValue, UniKvs } from "unikvs";
+import * as v from "valibot";
+
+const kvs = UniKvs.config({
+  schema: {
+    message: PlainValue(v.pipe(v.string(), v.minLength(1))),
+  },
+})
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("message", "hello");
+await kvs.get("message"); // "hello"
+
+// 入力検証に失敗し、InvalidInputError を投げます
+await kvs.set("message", "");
+```
+
+:::note[プレーンとストリームの取り違え]
+プレーン専用のキーに `ReadableStream` を渡した場合や、ストリーム専用のキーにプレーン値を渡した場合は `InvalidInputError` を投げます。配列形式でどのキースキーマにも一致しないキーも `InvalidInputError` です。
+:::
+
+## ValueStream [#value-stream]
+
+`stream()` の戻り値は `ValueStream<T>` で、`ReadableStream` のラッパーです。`for await...of` と `await using` による自動破棄に対応します。
+
+<Tabs>
+  <Tab title="getReader">
+
+```ts
+const reader = (await kvs.stream("logs")).getReader();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) {
+    break;
+  }
+  console.log(value); // Uint8Array
+}
+```
+
+  </Tab>
+  <Tab title="for-await">
+
+```ts
+for await (const chunk of await kvs.stream("logs")) {
+  console.log(chunk); // Uint8Array
+}
+```
+
+  </Tab>
+  <Tab title="await using">
+
+```ts
+await using (const valueStream = await kvs.stream("logs")) {
+  const reader = valueStream.getReader();
+  const { value } = await reader.read();
+  console.log(value);
+}
+```
+
+  </Tab>
+</Tabs>
+
+:::warning[使い終わったストリームは破棄してください]
+`await using` による自動破棄か `dispose()` を忘れないでください。
+:::
+
+## 変数とキャンセル [#variables-and-cancellation]
+
+`vars` で操作ごとの設定を渡せます。ビルダーの `setVariables()` を上書きする形で結合します。
+
+```ts
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .setVariables({ region: "ap-northeast-1" })
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+// 操作ごとの vars が同じキーを上書きします
+await kvs.set("foo", new Uint8Array([1]), {
+  vars: { region: "us-east-1" },
+});
+
+// 配列形式でも指定できます
+await kvs.get("foo", {
+  vars: [["region", "us-east-1"]],
+});
+```
+
+キャンセルは `AbortSignal` で行い、中断した操作は理由とともに失敗します。
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
+```
+
+## 読み取り時の書き戻し [#read-repair]
+
+`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しに失敗しても読み取りは成功します。詳細は複数ストレージのガイドを参照してください。
+
+```ts
+const bytes = await kvs.get("foo", { repair: true });
+```
+
+## エラー [#errors]
+
+| エラークラス | 説明 |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `KeyNotFoundError` | キーがどのストレージにもありません。 |
+| `UniKvsIsNotOpenError` | 未オープンで操作しました。 |
+| `UniKvsIsOpenError` | オープン済みで再度 `open()` しました。 |
+| `MissingStorageError` | ストレージ未登録で `create()` しました。 |
+| `StorageIsNotOpenError` | ストレージが未オープンです。 |
+| `TransformerIsNotOpenError` | トランスフォーマーが未オープンです。 |
+| `PluginOperationAggregateError` | 複数プラグイン操作の集約エラーです。 |
+| `InvalidInputError` | 入力形式が不正です。 |
+| `InvalidOutputError` | 出力形式が不正です。 |
+| `ReadableStreamNotSupportedError` | 読み取りストリーム未対応です。 |
+| `WritableStreamNotSupportedError` | 書き込みストリーム未対応です。 |
+| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。 |
+| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。 |
+
+```ts
+import { KeyNotFoundError } from "unikvs";
+
+try {
+  const bytes = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+エラーの分類や対処は横断ドキュメントに譲ります。
+
+## 使用例 [#examples]
+
+`@unikvs/memory` を使った最小例です。
+
+<Tabs>
+  <Tab title="最小例">
+    ```ts
+    import { Memory } from "@unikvs/memory";
+    import { UniKvs, type Value } from "unikvs";
+
+    const kvs = UniKvs.config<{
+      foo: Value<Uint8Array>;
+    }>()
+      .appendStorage(new Memory())
+      .create();
+
+    await kvs.open();
+
+    await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+    console.log(await kvs.has("foo")); // true
+
+    await kvs.delete("foo");
+    await kvs.close();
+    ```
+  </Tab>
+  <Tab title="検証あり">
+    ```ts
+    import { Memory } from "@unikvs/memory";
+    import { PlainValue, UniKvs } from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = UniKvs.config({
+      schema: {
+        foo: PlainValue(v.instance(Uint8Array)),
+      },
+    })
+      .appendStorage(new Memory())
+      .create();
+
+    await kvs.open();
+
+    await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+    await kvs.close();
+    ```
+  </Tab>
+</Tabs>

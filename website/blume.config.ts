@@ -1,7 +1,7 @@
 import { defineConfig } from "blume";
 import { filesystem, githubReleases } from "blume/sources";
 
-const PROJET_NAME = "UniKvs";
+const PROJET_NAME = "UniKVS";
 const GITHUB_REPO = "unikvs";
 const GITHUB_OWNER = "tai-kun";
 

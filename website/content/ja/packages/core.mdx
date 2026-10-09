@@ -1,0 +1,93 @@
+---
+title: "@unikvs/core"
+description: "全パッケージで共有する型と共通エラーを提供する @unikvs/core の概要です。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/core` は、UniKVS の全パッケージで共有する型と共通エラーのパッケージです。ストレージとトランスフォーマーのインターフェース、実行時変数、エラーの基底クラスをまとめています。
+
+自作プラグインを作る場合を除き、直接触る必要はありません。
+
+インストールは次のコマンドで行います。
+
+```package-install
+pnpm add @unikvs/core
+```
+
+## ストレージ [#storage]
+
+ストレージはデータを保存する先です。単発の読み書き（`write`・`read`・`exists`・`delete`・`clear`）と、大容量データ向けのストリーム読み書き（`getWritable`・`getReadable`）を提供します。ストリーム対応は任意で、対応していないストレージではそのメソッドを省略できます。
+
+すべての操作はキャンセル用の `signal` と実行時設定用の `vars` を受け付けます。
+
+自作する場合は `IStorage` を実装します。詳細なシグネチャーは API リファレンスを参照してください。
+
+## トランスフォーマー [#transformer]
+
+トランスフォーマーはデータを透過的に変換します。単発の変換（`encode`・`decode`）は必須で、ストリーム変換（`getEncodable`・`getDecodable`）は任意です。
+
+すべての操作は `signal` によるキャンセルと `vars` の受け渡しに対応します。
+
+自作する場合は `ITransformer` を実装します。詳細なシグネチャーは API リファレンスを参照してください。
+
+## 変数 [#variables]
+
+操作の挙動を切り替える実行時コンテキストを変数として渡せます。ビルダーの `setVariables()` で初期値を設定し、操作ごとの `vars` で上書きできます。
+
+```ts
+import type { Variables } from "@unikvs/core";
+
+const vars: Variables = {
+  locale: "ja",
+  retryCount: 3,
+};
+```
+
+## エラー [#errors]
+
+UniKVS のエラーはすべて `ErrorBase` を継承し、日本語と英語のメッセージに対応しています。`instanceof` で種類を判別できます。
+
+### 共通エラー [#errors-common]
+
+| エラークラス | 説明 |
+| --- | --- |
+| `KeyNotFoundError` | キーが見つかりません。存在しないキーの読み取りなどで発生します。各ストレージパッケージから再エクスポートされています。 |
+| `UnsupportedRuntimeError` | 対応ランタイム以外で使われました。Bun 専用ストレージを Node.js で開く場合などに発生します。 |
+| `InvalidPartSizeError` | マルチパートアップロードのパートサイズ指定が不正です。 |
+| `StorageAbortedError` | 中断済みのシグナルで書き込みストリームを要求しました。 |
+| `RepairNotAllowedError` | 書き戻しが許可されていないストレージへの書き戻しです。 |
+| `InvalidUsageErrorBase` | 使い方の誤りを示すエラーの基底クラスです。 |
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### 自作プラグインでのエラー定義 [#errors-custom]
+
+1. `ErrorBase` か `InvalidUsageErrorBase` を継承します。使い方の誤りには `InvalidUsageErrorBase` を使います。
+2. 必要ならメタ情報の型を指定します。
+3. `setErrorMessage` で言語ごとのメッセージを登録します。
+
+```ts
+import { ErrorBase, setErrorMessage } from "@unikvs/core";
+
+type MyMeta = {
+  readonly key: string;
+};
+
+export class MyStorageError extends ErrorBase<MyMeta> {}
+
+setErrorMessage(MyStorageError, (meta) => `キー ${meta.key} の書き込みに失敗しました。`, "ja");
+setErrorMessage(MyStorageError, (meta) => `Failed to write key ${meta.key}.`, "en");
+```

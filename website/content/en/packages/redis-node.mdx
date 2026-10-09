@@ -1,0 +1,195 @@
+---
+title: "@unikvs/redis.node"
+description: "Learn how to use the storage plugin that saves byte sequences to Redis with ioredis on Node.js."
+---
+
+## Overview [#overview]
+
+`@unikvs/redis.node` is a storage plugin that saves data to Redis using `ioredis@^6.0.0`. Keys are namespaced with a prefix.<Badge variant="warning">Node.js only</Badge>
+
+It handles byte sequences only. `write` accepts a `Uint8Array<ArrayBuffer>` and `read` returns a `Uint8Array<ArrayBuffer>`. Bytes are stored as-is in Redis string values and fetched with `getBuffer`. The driver is `ioredis`, and it is Node.js only.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/redis.node
+```
+
+`ioredis` is listed in `dependencies`, so it is installed automatically. It depends on `@unikvs/core`.
+
+## Usage [#usage]
+
+The central class is `Redis`.
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+```
+
+```ts
+public constructor(url?: string, options?: RedisStorageOptions)
+```
+
+The second argument is optional.
+
+`url` is the connection target. The resolution order is the `url` argument, `REDIS_URL`, `VALKEY_URL`, and the default `127.0.0.1:6379` when unspecified. An empty string is treated as unspecified. The format requires `redis://` / `rediss://`; bare forms such as a bare hostname are not supported.
+
+`options` is `Omit<RedisOptions, "keyPrefix" | "lazyConnect">` plus package-specific fields.
+
+- `keyPrefix` is a unikvs-side namespace prepended to every key. The default is `"unikvs:"`, which limits what `clear()` deletes to keys under this prefix. An empty string uses keys as-is. It is not used as the built-in `keyPrefix` feature of `ioredis` and is not passed through to `new Ioredis`.
+- `cluster` is reserved for future cluster support. v1 supports standalone only, and specifying it makes the constructor throw `ClusterNotSupportedError` before `closeTimeout` validation.
+- `allowRepair` controls whether repair writes are allowed. The default is `false`. When set to `false`, repair `write` and `getWritable` calls fail with `RepairNotAllowedError`.
+- `closeTimeout` is a package-specific extension: the cutoff limit in milliseconds for `quit()` in `close()`. The default is `5000`. It is not passed to `new Ioredis`. Only finite positive numbers are accepted; `0`, negative numbers, `NaN`, and `Infinity` cause the constructor to throw `InvalidCloseTimeoutError`.
+- `lazyConnect` is not accepted at the type level. It is always treated as `true`, connecting on `open()`.
+- `connectTimeout` is the cutoff limit in milliseconds for the initial connection. The default is `5000`.
+- All other properties are passed through to `ioredis`, such as `tls`, reconnection options, `db`, `password`, and `username`.
+
+The main members are as follows.
+
+- `name` is `"Redis"`.
+- `isOpen` indicates whether the storage is open.
+- `open()` creates the client and establishes the connection. When already open, it closes and reopens. The initial connection is cut off by `connectTimeout`, and on failure it cleans up with `disconnect()` and rethrows.
+- `close()` is async, returns `Promise<void>`, and must always be awaited. `quit()` is cut off by `closeTimeout`, and on failure or timeout it calls `disconnect()` and recovers normally. Calling it when not open, or calling it twice, is rejected with a `TypeError`.
+- `write`, `read`, `exists`, `delete`, and `clear` handle data.
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "myapp:" });
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+
+await storage.close();
+```
+
+## Key Layout [#keys]
+
+With the default prefix, the key `hello.bin` becomes the Redis key `unikvs:hello.bin`. No conversion or escaping beyond the prefix is applied.
+
+```text
+unikvs:hello.bin
+unikvs:greeting.bin
+```
+
+- Keys are built with `` `${this.keyPrefix}${key}` ``.
+- Redis keys are binary-safe, so unlike `@unikvs/fs.node`, keys containing slashes, spaces, or `:` work as-is.
+- `clear()` uses `SCAN` to enumerate keys matching `` `${this.keyPrefix}*` `` and deletes them with `DEL` in batches of `COUNT 1000`. When the prefix is empty, the pattern is `"*"`.
+- The temporary key for `getWritable` is `` `${dest}.${randomUUID()}.tmp` ``. It is generated with `randomUUID` from `node:crypto` and lives under the same prefix, so `clear()` also removes temporary keys left behind by aborts.
+
+:::warning
+Do not include glob characters such as `*` or `?` in `keyPrefix`. The `SCAN` pattern used by `clear()` would match unintended keys.
+:::
+
+## Streams [#streams]
+
+Both readable and writable streams are supported.
+
+Obtain a writable stream with the following method.
+
+```ts
+public getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+): WritableStream<Uint8Array<ArrayBuffer>>
+```
+
+It creates a temporary key with an empty string value on start and appends each chunk with `APPEND` via `Buffer.from(chunk)`. It uses swap-on-close: data is replaced with the final key via `RENAME` on close. On failure or abort, it cleans up with `del(tmp)`, preserving existing data. `RENAME` is atomic, so readers never observe partially written contents. Concurrent writes to the same key don't collide thanks to unique temporary keys, and the last completed `RENAME` wins.
+
+Obtain a readable stream with the following method.
+
+```ts
+public getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+): ReadableStream<Uint8Array<ArrayBuffer>>
+```
+
+Redis `GET` returns the whole value at once, so the bytes from `getBuffer` are emitted as a single chunk.
+
+## Notes [#notes]
+
+- Node.js only. The driver is `ioredis`.
+- Don't call `write` or `read` before `open()`. The internal connection is `null` until then. Check with `isOpen`.
+- `open()` waits until the connection is established before setting `isOpen` to true. If connecting fails, it cleans up with `disconnect()`, `isOpen` stays false, and the error propagates.
+- Calling `open()` while already open closes the old connection and opens a new one.
+- Concurrent `open` calls, and `close` calls while `open` is waiting to connect, are forbidden. Serialize them on the caller side.
+- `close()` is async and must always be awaited. Leaving the returned promise floating causes an incomplete `QUIT` or leftover handles. A second call or a call when not open is rejected with a `TypeError`.
+- `write`, `read`, `exists`, `delete`, and `clear` reject when given an already aborted `AbortSignal` via `signal.throwIfAborted()`. Redis commands cannot be cancelled after they are sent, so in-flight commands are not interrupted.
+- `write` saves with `SET` via `Buffer.from(data)`. Overwrites replace the whole value.
+- `read` throws `KeyNotFoundError` for missing keys. `getReadable` surfaces the same error when the stream is read.
+- `delete` is idempotent and does not error for missing keys.
+- `exists` returns the boolean determined from the number returned by `ioredis` with `> 0`. Zero-byte values also return `true`.
+- `read` and `getReadable` normalize the `Buffer` returned by `ioredis` into `new Uint8Array(data)`.
+- Persistence follows the Redis server configuration. Servers with RDB and AOF disabled lose data on restart.
+
+:::warning
+With an empty `keyPrefix`, `clear()` deletes every key in the selected database. Always use a unique prefix on shared databases.
+:::
+
+## Errors [#errors]
+
+| Error | Condition |
+| --- | --- |
+| `KeyNotFoundError` | Thrown when reading a missing key with `read` or `getReadable`. A shared error from `@unikvs/core`. |
+| `ClusterNotSupportedError` | Thrown when constructed with `cluster`. v1 supports standalone only. |
+| `InvalidCloseTimeoutError` | Thrown when `closeTimeout` is not a finite positive number. |
+| `ConnectTimeoutError` | Thrown when the initial connection in `open()` exceeds `connectTimeout`. |
+| `CloseTimeoutError` | Thrown when closing exceeds `closeTimeout`. |
+
+```ts
+import { KeyNotFoundError, Redis } from "@unikvs/redis.node";
+
+const storage = new Redis();
+
+try {
+  await storage.open();
+  await storage.read({ key: "missing.bin" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.error(`Key ${error.meta.key} was not found`);
+  } else {
+    throw error;
+  }
+} finally {
+  if (storage.isOpen) {
+    await storage.close();
+  }
+}
+```
+
+Connection, authentication, and server-side rejections propagate the raw errors from `ioredis` as-is.
+
+## Examples [#examples]
+
+A minimal working example storing to `redis://localhost:6379`.
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "unikvs-example:" });
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, Redis"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+const writer = storage.getWritable({ key: "stream.bin" }).getWriter();
+await writer.write(new Uint8Array([1, 2, 3]));
+await writer.write(new Uint8Array([4, 5, 6]));
+await writer.close();
+
+await storage.delete({ key });
+await storage.clear();
+await storage.close();
+```

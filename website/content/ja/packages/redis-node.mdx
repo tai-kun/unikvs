@@ -1,0 +1,195 @@
+---
+title: "@unikvs/redis.node"
+description: "Node.js の ioredis で Redis にバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/redis.node` は、`ioredis@^6.0.0` で Redis に保存するストレージプラグインです。キーにプレフィックスを付けて名前空間を分けます。<Badge variant="warning">Node.js 専用</Badge>
+
+扱うデータはバイト列専用です。`write` は `Uint8Array<ArrayBuffer>` を受け付け、`read` は `Uint8Array<ArrayBuffer>` を返します。バイト列は Redis の文字列値としてそのまま保存し、取得には `getBuffer` を使います。ドライバは `ioredis` で、Node.js 専用です。
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/redis.node
+```
+
+`ioredis` は `dependencies` のため自動で導入されます。依存関係として `@unikvs/core` を使用します。
+
+## 使い方 [#usage]
+
+中心は `Redis` クラスです。
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+```
+
+```ts
+public constructor(url?: string, options?: RedisStorageOptions)
+```
+
+第2引数は省略可能です。
+
+`url` は接続先です。解決順は引数 `url`、`REDIS_URL`、`VALKEY_URL`、未指定時の既定 `127.0.0.1:6379` です。空文字は未指定扱いです。形式は `redis://` / `rediss://` を要求し、ホスト名のみなどの bare 形式は非サポートです。
+
+`options` は `Omit<RedisOptions, "keyPrefix" | "lazyConnect">` に独自項目を加えた型です。
+
+- `keyPrefix` はすべてのキーの先頭に付与する UniKVS 側の名前空間です。既定値は `"unikvs:"` で、`clear()` が削除する範囲をこのプレフィックス配下に限定します。空文字を指定するとキーをそのまま使います。`ioredis` 備え付けの `keyPrefix` 機能としては使えず、`new Ioredis` には透過されません。
+- `cluster` は将来のクラスタ対応に備えた指定です。v1 は standalone のみで、指定時は `closeTimeout` の検証より先にコンストラクタが `ClusterNotSupportedError` で拒否します。
+- `allowRepair` は書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。`false` を指定すると書き戻しの `write`・`getWritable` が `RepairNotAllowedError` で失敗します。
+- `closeTimeout` は本パッケージ固有の拡張で、`close()` の `quit()` 打ち切り上限ミリ秒です。既定値は `5000` です。`new Ioredis` には渡りません。有限の正数のみを受け付け、`0`・負数・`NaN`・`Infinity` はコンストラクタが `InvalidCloseTimeoutError` で拒否します。
+- `lazyConnect` は型レベルで受け付けません。常に `true` 相当として `open()` 時に接続します。
+- `connectTimeout` は初回接続の打ち切り上限ミリ秒です。既定値は `5000` です。
+- それ以外のプロパティーは `ioredis` に透過されます。`tls`・再接続系・`db`・`password`・`username` などが指定できます。
+
+主なメンバーは次のとおりです。
+
+- `name` は `"Redis"` です。
+- `isOpen` はオープン済みかどうかを示します。
+- `open()` はクライアントを作り、接続を確立します。オープン済みなら閉じて開き直します。初回接続を `connectTimeout` で打ち切り、失敗時は `disconnect()` で掃除して再送出します。
+- `close()` は非同期 `Promise<void>` で、必ず `await` する必要があります。`quit()` を `closeTimeout` で打ち切り、失敗・タイムアウト時は `disconnect()` して正常復帰します。未 open・二重 close は `TypeError` で reject されます。
+- `write`・`read`・`exists`・`delete`・`clear` で読み書きします。
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "myapp:" });
+await storage.open();
+
+await storage.write({
+  key: "hello.bin",
+  data: new TextEncoder().encode("hello"),
+});
+
+const data = await storage.read({ key: "hello.bin" });
+console.log(new TextDecoder().decode(data));
+
+await storage.close();
+```
+
+## キーの配置 [#keys]
+
+`hello.bin` というキーは、既定のプレフィックスでは `unikvs:hello.bin` という Redis キーになります。プレフィックス以外の変換やエスケープは行いません。
+
+```text
+unikvs:hello.bin
+unikvs:greeting.bin
+```
+
+- キーは `` `${this.keyPrefix}${key}` `` で組み立てます。
+- Redis のキーはバイナリーセーフなため、`@unikvs/fs.node` と違いスラッシュや空白、`:` などを含むキーもそのまま使えます。
+- `clear()` は `SCAN` で `` `${this.keyPrefix}*` `` に一致するキーを列挙し、`COUNT 1000` ずつ `DEL` します。プレフィックスが空の場合のパターンは `"*"` です。
+- `getWritable` の一時キーは `` `${dest}.${randomUUID()}.tmp` `` です。`node:crypto` の `randomUUID` で生成し、同じプレフィックス配下に作るため、中断で残った一時キーも `clear()` が削除します。
+
+:::warning
+`keyPrefix` に `*` や `?` などのグロブ文字を含めないでください。`clear()` の `SCAN` パターンが意図しないキーに一致します。
+:::
+
+## ストリーム [#streams]
+
+読み書きどちらのストリームにも対応しています。
+
+書き込み用は次のメソッドで取得します。
+
+```ts
+public getWritable(
+  args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+): WritableStream<Uint8Array<ArrayBuffer>>
+```
+
+開始時に空文字で一時キーを作り、チャンクごとに `Buffer.from(chunk)` で `APPEND` 追記します。`close` 時に `RENAME` で最終キーへ置き換える swap-on-close 方式です。失敗・中断時は `del(tmp)` で後始末し、既存データを保全します。`RENAME` はアトミックなため、読み取り側が書き込み途中の内容を見ることはありません。同一キーへの並行書き込みは一時キーが衝突せず、最後に `RENAME` が完了した書き込みが残ります。
+
+読み取り用は次のメソッドで取得します。
+
+```ts
+public getReadable(
+  args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+): ReadableStream<Uint8Array<ArrayBuffer>>
+```
+
+Redis の `GET` は値を一括で返すため、`getBuffer` で取得したバイト列を単一のチャンクとして送出します。
+
+## 注意点 [#notes]
+
+- Node.js 専用で、ドライバに `ioredis` を使います。
+- `open()` 前に `write`・`read` を実行しないでください。内部の接続が `null` のため処理できません。`isOpen` で確認できます。
+- `open()` は接続の確立まで待ってから `isOpen` を true にします。接続に失敗した場合、`disconnect()` で掃除し、`isOpen` は false のままでエラーが伝播します。
+- `open()` をオープン済みで呼び出すと、古い接続を閉じて開き直します。
+- 並行 `open` 同士、および `open` 接続待ち中の `close` の同時呼び出しは禁止です。呼び出し側で直列化してください。
+- `close()` は非同期で、必ず `await` してください。結果を浮かせると `QUIT` 未完了やハンドル残存の原因になります。2 回目の呼び出しや未 open での呼び出しは `TypeError` で reject されます。
+- `write`・`read`・`exists`・`delete`・`clear` は入口で中断済みの `AbortSignal` を `signal.throwIfAborted()` で拒否します。Redis のコマンドは送信後に中断できないため、実行中のコマンドは中断されません。
+- `write` は `Buffer.from(data)` で `SET` 保存します。上書きは全体置換です。
+- `read` は存在しないキーで `KeyNotFoundError` を投げます。`getReadable` はストリームの読み取り時に同じエラーにします。
+- `delete` は存在しないキーでもエラーにならない冪等です。
+- `exists` は `ioredis` が返す数値を `> 0` で判定した真偽値を返します。0 バイト値も `true` になります。
+- `read` と `getReadable` は `ioredis` が返す `Buffer` を `new Uint8Array(data)` に正規化して返します。
+- 永続性は Redis サーバーの設定に従います。RDB や AOF を無効にしたサーバーでは再起動でデータが失われます。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear()` は選択中のデータベースの全キーを削除します。共有データベースでは必ず一意なプレフィックスを指定してください。
+:::
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `KeyNotFoundError` | 存在しないキーを `read` または `getReadable` で読もうとした場合に発生します。`@unikvs/core` の共通エラーです。 |
+| `ClusterNotSupportedError` | `cluster` を指定して構築した場合に発生します。v1 は standalone のみです。 |
+| `InvalidCloseTimeoutError` | `closeTimeout` に有限の正数以外を指定した場合に発生します。 |
+| `ConnectTimeoutError` | `open()` の初回接続が `connectTimeout` を超えた場合に発生します。 |
+| `CloseTimeoutError` | `close()` が `closeTimeout` を超えた場合に発生します。 |
+
+```ts
+import { KeyNotFoundError, Redis } from "@unikvs/redis.node";
+
+const storage = new Redis();
+
+try {
+  await storage.open();
+  await storage.read({ key: "missing.bin" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.error(`キー ${error.meta.key} が見つかりません`);
+  } else {
+    throw error;
+  }
+} finally {
+  if (storage.isOpen) {
+    await storage.close();
+  }
+}
+```
+
+接続や認証、サーバー側の拒否は `ioredis` の生エラーをそのまま伝播します。
+
+## 使用例 [#examples]
+
+`redis://localhost:6379` に保存する最小完動例です。
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+
+const storage = new Redis("redis://localhost:6379", { keyPrefix: "unikvs-example:" });
+await storage.open();
+
+const key = "greeting.bin";
+await storage.write({
+  key,
+  data: new TextEncoder().encode("hello, Redis"),
+});
+
+if (await storage.exists({ key })) {
+  const data = await storage.read({ key });
+  console.log(new TextDecoder().decode(data));
+}
+
+const writer = storage.getWritable({ key: "stream.bin" }).getWriter();
+await writer.write(new Uint8Array([1, 2, 3]));
+await writer.write(new Uint8Array([4, 5, 6]));
+await writer.close();
+
+await storage.delete({ key });
+await storage.clear();
+await storage.close();
+```

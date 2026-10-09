@@ -1,0 +1,129 @@
+---
+title: "Getting started"
+description: "The shortest path from installing UniKVS to basic operations."
+---
+
+## Installation [#install]
+
+Install the `unikvs` package plus the Storage and Transformer packages you plan to use.
+
+<Tabs>
+  <Tab title="Try with memory">
+    ```package-install
+    npm i unikvs @unikvs/memory
+    ```
+  </Tab>
+  <Tab title="Save to files">
+    ```package-install
+    npm i unikvs @unikvs/fs.node @unikvs/compression
+    ```
+  </Tab>
+</Tabs>
+
+## Basic usage [#basic-usage]
+
+A minimal example using memory Storage. Configure and create, then open, operate, and close.
+
+<Steps>
+  <Step title="Create a builder">
+    Create a builder with `UniKvs.config()`. Specify a key-to-value mapping in the type parameter.
+
+    ```ts
+    import { UniKvs, type Value } from "unikvs";
+
+    const builder = UniKvs.config<{
+      foo: Value<Uint8Array>;
+    }>();
+    ```
+  </Step>
+  <Step title="Add a storage and create">
+    Add a storage with `appendStorage()`, then create the client with `create()`. Omit Transformers if you don't need them.
+
+    ```ts
+    import { Memory } from "@unikvs/memory";
+
+    const kvs = builder.appendStorage(new Memory()).create();
+    ```
+  </Step>
+  <Step title="Open and operate">
+    Initialize with `open()`, then use operations such as `set`, `get`, `has`, and `delete`.
+
+    ```ts
+    await kvs.open();
+
+    await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes);
+
+    console.log(await kvs.has("foo"));
+
+    await kvs.delete("foo");
+    ```
+  </Step>
+  <Step title="Close">
+    Call `close()` when you are done.
+
+    ```ts
+    await kvs.close();
+    ```
+  </Step>
+</Steps>
+
+:::tip
+`appendTransformer()` can be added either before or after `appendStorage()`. Transformers added after a Storage apply only to Storages registered later. See the pipeline in concepts for details.
+:::
+
+## Add a Transformer [#add-transformer]
+
+An example of transparent compression.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .appendTransformer(new Compression("gzip"))
+  .appendStorage(new Memory())
+  .create();
+```
+
+Keep `set` and `get` unchanged; compression on write and decompression on read happen automatically.
+
+:::warning
+Calling `create()` without `appendStorage()` throws `MissingStorageError`. At least one Storage is required.
+:::
+
+## Validate values [#validate-values]
+
+Pass Valibot schemas via `UniKvs.config({ schema })` to enable type inference and runtime validation. Install `valibot` separately when using Valibot schemas.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { PlainValue, UniKvs } from "unikvs";
+import * as v from "valibot";
+
+const kvs = UniKvs.config({
+  schema: {
+    foo: PlainValue(v.instance(Uint8Array)),
+  },
+})
+  .appendStorage(new Memory())
+  .create();
+```
+
+Failing input validation on `set` throws `InvalidInputError`, and failing output validation on `get` throws `InvalidOutputError`. The array form is also available for dynamic keys. See schema definition and validation timing in concepts for details.
+
+## Next steps [#next-steps]
+
+<CardGroup cols={2}>
+  <Card title="Concepts" href="./concepts" icon="book-open">
+    Understand the architecture and how Value types work.
+  </Card>
+  <Card title="Storage comparison" href="./reference/comparison" icon="database">
+    See how to choose a storage backend.
+  </Card>
+</CardGroup>

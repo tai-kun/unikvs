@@ -1,0 +1,148 @@
+---
+title: "@unikvs/memory"
+description: "UniKVS のインメモリーストレージ @unikvs/memory の使い方です。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/memory` は、データをメモリーに保存するストレージプラグインです。任意のデータをそのまま保存できます。
+
+- 読み書きは同期で完了し、`open`・`close` は不要です。
+- 文字列やオブジェクトなど任意の値を保存できます。
+- テスト用のダブルや一時的なキャッシュに適しています。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm i @unikvs/memory
+```
+
+## 使い方 [#usage]
+
+`Memory` は `IStorage` を実装しています。`UniKvs` には `appendStorage()` で渡し、単体で直接操作もできます。
+
+<Tabs>
+  <Tab title="UniKvs 経由">
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<string>;
+}>()
+  .appendStorage(new Memory())
+  .create();
+```
+
+  </Tab>
+  <Tab title="単体操作">
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+storage.write({ key: "k1", data: "v1" });
+const value = storage.read({ key: "k1" });
+```
+
+  </Tab>
+</Tabs>
+
+コンストラクターの引数は次のとおりです。
+
+| 引数 | 型 | 必須 | 説明 |
+| --- | --- | --- | --- |
+| `options` | `MemoryOptions` | いいえ | 省略時は空オブジェクトと同様に動作します。 |
+| `options.clone` | `<T>(value: T) => T` | いいえ | 複製に使う関数です。既定値は `structuredClone` です。 |
+| `options.allowRepair` | `boolean` | いいえ | 書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。 |
+
+`open`・`close` はありません。`isOpen` は常に `true` を返します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+storage.write({ key: "k1", data: { message: "hello" } });
+
+if (storage.exists({ key: "k1" })) {
+  const value = storage.read({ key: "k1" });
+  console.log(value);
+}
+
+storage.delete({ key: "k1" });
+storage.clear();
+```
+
+`write`・`read`・`exists`・`delete`・`clear` はいずれも同期です。
+
+## 対応データ [#data]
+
+`write`・`read` はバイト列以外の任意の値に対応しています。文字列、オブジェクト、`null`、`undefined`、`Uint8Array` などをそのまま保存できます。
+
+ストリーム操作は `Uint8Array<ArrayBuffer>` のみに対応しています。
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+// 書き込み例
+const writable = storage.getWritable({ key: "s1" });
+const writer = writable.getWriter();
+await writer.write(new Uint8Array([1, 2]));
+await writer.write(new Uint8Array([3]));
+await writer.close();
+
+// 読み取り例
+const readable = storage.getReadable({ key: "s1" });
+const reader = readable.getReader();
+const result = await reader.read();
+console.log(result.value);
+```
+
+## 制限と注意 [#limitations]
+
+- 永続化されません。プロセス終了時に破棄されます。
+- 大量・大容量のデータを保存するとメモリー使用量が増えます。不要なデータは `delete`・`clear` で削除してください。
+- 大規模データの逐次処理には適していません。
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `KeyNotFoundError` | `read`・`delete`・`getReadable` でキーが存在しない場合に発生します。`@unikvs/core` の共通エラーです。 |
+| `InvalidChunkTypeError` | `Uint8Array<ArrayBuffer>` 以外を書き込んだ場合、または保存値が `Uint8Array` でないキーから読み取った場合に発生します。 |
+
+```ts
+import { KeyNotFoundError, Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+try {
+  storage.read({ key: "unknown" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+最小例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+storage.write({ key: "greeting", data: "hello" });
+console.log(storage.exists({ key: "greeting" }));
+console.log(storage.read({ key: "greeting" }));
+storage.delete({ key: "greeting" });
+console.log(storage.exists({ key: "greeting" }));
+```

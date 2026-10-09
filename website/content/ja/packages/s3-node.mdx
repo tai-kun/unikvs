@@ -1,0 +1,128 @@
+---
+title: "@unikvs/s3.node"
+description: "Node.js で S3 互換オブジェクトストレージに保存する @unikvs/s3.node の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/s3.node` は、S3 互換オブジェクトストレージにバイト配列を保存する Node.js 専用プラグインです。<Badge variant="warning">Node.js 専用</Badge>
+
+インストールは次のように行います。
+
+```package-install
+npm install @unikvs/s3.node @aws-sdk/client-s3 @aws-sdk/lib-storage
+```
+
+## 使い方 [#usage]
+
+ストレージクラスは `S3` です。
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+```
+
+```ts
+new S3(bucket: string, config: S3ClientConfig = {}, options: S3StorageOptions = {})
+```
+
+| 引数 | 型 | 説明 |
+| ---- | -- | ---- |
+| `bucket` | `string` | 保存先のバケット名です。すべての操作で使います。 |
+| `config` | `S3ClientConfig` | `S3Client` に渡す設定です。既定値は空オブジェクトです。リージョンや認証情報などを含めます。 |
+| `options` | `S3StorageOptions` | ストレージの動作設定です。既定値は空オブジェクトです。 |
+| `options.allowRepair` | `boolean` | 書き戻しによる書き込みを許可するかどうかです。既定値は `false` です。 |
+
+構築済みの `S3Client` を渡す引数や、プレフィックス指定はありません。キー変換や使い分けが必要なら、キーに含めるかバケットごとにインスタンスを作ってください。
+
+:::note
+認証情報の解決は AWS SDK の標準仕組みに委ねます。独自の認証オプションはありません。`config` に `credentials`・`region`・`endpoint` を渡す方法でも、環境変数や共有設定ファイルでも指定できます。
+:::
+
+ライフサイクルは次のとおりです。生成直後は `isOpen` が `false` で、`open()` すると `true` になります。`close()` で破棄して `false` に戻ります。
+
+```ts
+import { UniKvs } from "unikvs";
+import { S3 } from "@unikvs/s3.node";
+
+const storage = new S3("my-bucket", {
+  region: "ap-northeast-1",
+});
+
+const kvs = UniKvs.config()
+  .appendStorage(storage)
+  .create();
+```
+
+:::warning
+バケットの作成は本パッケージの責務ではありません。事前にコンソールなどで作っておきます。
+:::
+
+## オブジェクト配置 [#layout]
+
+キーはオブジェクトキーにそのまま対応します。
+
+`clear` はバケット内のすべてのオブジェクトを削除します。プレフィックスで絞り込みません。UniKVS 専用のバケットを使ってください。共有していると他のデータも消えます。
+
+## ストリームとマルチパート [#multipart]
+
+大容量データは単発の `write` ではなく書き込みストリームを使ってください。マルチパートアップロードに対応します。
+
+```ts
+const writable = storage.getWritable({ key, vars, signal });
+```
+
+パートサイズは `vars` で指定します。バイト単位の正の整数で指定し、未指定なら既定値に従います。
+
+:::tip
+大容量データは単発の `write` ではなく書き込みストリームを使ってください。マルチパートアップロードに対応します。
+:::
+
+`signal` が中断済みなら開始せずに `StorageAbortedError` を投げます。
+
+読み取りストリームは次のように取得します。
+
+```ts
+const readable = await storage.getReadable({ key, signal });
+```
+
+大きなオブジェクトも複数チャンクで読み取れます。
+
+## エラー [#errors]
+
+| クラス | 投げる条件 |
+| ------ | -------------- |
+| `InvalidPartSizeError` | `vars` のパートサイズが正の整数でない場合に `getWritable` が投げます。`@unikvs/core` の共通エラーです。 |
+| `StorageAbortedError` | `getWritable` の `signal` が中断済みの場合に投げます。`@unikvs/core` の共通エラーです。 |
+
+- 存在しないキーの `read` はエラーで失敗します。必要なら事前に `exists` を使います。
+- 存在しないキーの `delete` はエラーになりません。
+
+## 使用例 [#examples]
+
+S3 互換ストレージへの最小構成例です。エンドポイントや認証情報はダミー値で、MinIO などへの接続を想定しています。バケットは事前に作っておきます。
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+
+const storage = new S3("my-bucket", {
+  endpoint: "http://127.0.0.1:9000",
+  region: "ap-northeast-1",
+  credentials: {
+    accessKeyId: "minioadmin",
+    secretAccessKey: "minioadmin",
+  },
+  forcePathStyle: true,
+});
+
+storage.open();
+
+const signal = AbortSignal.timeout(30_000);
+const key = "hello.txt";
+const data = new TextEncoder().encode("Hello S3");
+
+await storage.write({ key, data, signal });
+const loaded = await storage.read({ key, signal });
+console.log(new TextDecoder().decode(loaded));
+
+storage.close();
+```
