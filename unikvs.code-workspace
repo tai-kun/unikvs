@@ -105,6 +105,10 @@
       "path": "packages/base64url",
     },
     {
+      "name": "@unikvs/v8-serde",
+      "path": "packages/v8-serde",
+    },
+    {
       "name": "website",
       "path": "website",
     },

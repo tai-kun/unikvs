@@ -1,0 +1,236 @@
+---
+title: "@unikvs/v8-serde"
+description: "Node.js の v8.serialize で値を高速にシリアライズする Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/v8-serde` は、JavaScript の値を Node.js の `v8.serialize` でバイト列へ変換する Transformer プラグインです。<Badge>Transformer</Badge> <Badge variant="warning">Node.js 専用</Badge>
+
+Structured Clone で扱えるような値を、ネイティブ実装で高速に変換します。書き込み時は `encode` でバイト列に変換し、読み取り時は `decode` で元の値に戻すため、シリアライズの詳細を意識せずに読み書きできます。
+
+保存形式は V8 固有のため、他のランタイムや他の言語とは互換性がありません。Node.js 同士でのスナップショットやキャッシュに向いています。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"V8Serde"` を返します。
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/v8-serde
+```
+
+:::note
+標準のバイナリー形式で相互運用したい場合は [`@unikvs/cbor`](/packages/cbor) を、内容をテキストとして確認したい場合は [`@unikvs/json`](/packages/json) や [`@unikvs/superjson`](/packages/superjson) を検討してください。
+:::
+
+## 対応する値 [#values]
+
+変換できる値は次のとおりです。
+
+| 値 | エンコード | デコード後 |
+| --- | --- | --- |
+| `null` | 対応 | `null` |
+| 真偽値 | 対応 | boolean |
+| `number` | 対応 | number。`NaN`・`Infinity`・`-Infinity`・`-0` もそのまま往復できます。 |
+| `bigint` | 対応 | bigint。サイズを問わず bigint のまま復元されます。 |
+| `string` | 対応 | string。Unicode を含みます。 |
+| `undefined` | 対応 | undefined。ルート値と入れ子の両方で保持されます。 |
+| 配列 | 対応 | 配列。疎配列の空きも保持されます。 |
+| プレーンオブジェクト | 対応 | プレーンオブジェクト |
+| `Date` | 対応 | `Date`。Invalid Date も `Date` のまま復元されます。 |
+| `Map` | 対応 | `Map`。文字列以外のキーも復元されます。 |
+| `Set` | 対応 | `Set` |
+| 型付き配列 | 対応 | `Uint8Array`・`Float64Array` など同じ型 |
+| `ArrayBuffer` | 対応 | `ArrayBuffer` |
+| `DataView` | 対応 | `DataView` |
+| `Buffer` | 対応 | `Buffer` |
+| `RegExp` | 対応 | `RegExp` |
+| `Error` | 対応 | `Error` とサブクラス。種類とメッセージを保持します。 |
+| 循環参照 | 対応 | 参照関係を保ったまま復元されます。 |
+
+制限は次のとおりです。
+
+- 関数・シンボル・`WeakMap`・`WeakSet`・`Promise`・`SharedArrayBuffer` はエンコードできません。ルート値または入れ子に含まれる場合も `V8SerdeEncodeError` を投げます。
+- シンボルをキーに持つプロパティーは、値ごと取り除かれます。
+- クラスのインスタンスはプレーンオブジェクトになり、プロトタイプは失われます。
+
+:::note
+`-0` をそのまま保持します。`@unikvs/cbor` では `-0` は `0` になります。
+:::
+
+## 使い方 [#usage]
+
+`V8Serde` のコンストラクターは引数を取りません。
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+```
+
+主なメンバーは次のとおりです。`encode`・`decode`・`getEncodable`・`getDecodable` の 4 つはいずれも非同期のため、`await` を付けて呼び出します。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new V8Serde()` | 引数なしで初期化します。 |
+| `name` | 常に `"V8Serde"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | 任意の値をバイト列の `Uint8Array<ArrayBuffer>` に変換します。 |
+| `decode({ data })` | バイト列を値に戻します。複数の値を連結したバイト列を渡した場合は、先頭の値のみを返します。 |
+| `getEncodable()` | 値をバイト列へ変換する `TransformStream` を返します。 |
+| `getDecodable()` | バイト列を値へ変換する `TransformStream` を返します。 |
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+const bytes = await v8serde.encode({ data: { message: "hello" } });
+const value = await v8serde.decode({ data: bytes });
+```
+
+`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new V8Serde())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", { message: "hello" });
+
+const output = await kvs.get("data");
+```
+
+`set` でバイト列に変換して保存し、`get` で自動的に元の値へ戻します。
+
+## ストリーム [#streams]
+
+単体値とストリームの両方に対応しています。
+
+- 単体値は `encode`・`decode` で変換します。
+- ストリーム値は `getEncodable`・`getDecodable` の `TransformStream` で変換します。取得も非同期のため、`await` を付けて呼び出します。
+
+`getEncodable` は、入力チャンクを 1 つの値としてそれぞれ独立に変換し、そのバイト列を順に送出します。出力はストリーム専用の形式です。
+
+`getDecodable` はバイト列を、チャンク境界をまたいで逐次デコードします。
+
+- 1 つの値が完成した時点で、その値をすぐに送出します。同じチャンクに複数の値が含まれていれば、完成した分から順に送出します。
+- 途中で切れた値は、完成するまで内部で保持します。次のチャンクの到着を待つため、途中のデータを誤って値として送出しません。
+- 空のストリームと長さ 0 のチャンクは値を 1 つも生成せず、エラーにもなりません。
+- ストリーム終了時に未完成のデータが残っている場合は `V8SerdeDecodeError` を投げます。完成済みの値は先に送出されます。
+- 入力がこのパッケージの形式として不正な場合は、その時点で `V8SerdeDecodeError` を投げます。
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+const source = new ReadableStream<unknown>({
+  start(controller) {
+    controller.enqueue(new Date());
+    controller.enqueue(new Map([["a", 1]]));
+    controller.close();
+  },
+});
+
+const decoded = source
+  .pipeThrough(await v8serde.getEncodable())
+  .pipeThrough(await v8serde.getDecodable());
+
+for await (const value of decoded) {
+  console.log(value);
+}
+```
+
+:::warning
+`getEncodable` の出力はストリーム専用の形式であり、単体の `encode` の出力とは異なります。`getDecodable` と組み合わせてください。ストリームの出力全体を単体の `decode` に渡すと、正しく復元できません。
+:::
+
+## エラー [#errors]
+
+| エラー | エラー名 | 意味 |
+| --- | --- | --- |
+| `V8SerdeEncodeError` | `UniKvsV8SerdeEncodeError` | 値をバイト列に変換できません。`cause` に元のエラーを保持します。 |
+| `V8SerdeDecodeError` | `UniKvsV8SerdeDecodeError` | バイト列を値として解釈できません。`cause` に元のエラーを保持します。 |
+| `UnsupportedRuntimeError` | `UniKvsUnsupportedRuntimeError` | Node.js 以外のランタイムで使われました。`@unikvs/core` の共通エラーです。 |
+
+`encode`・`getEncodable` の変換失敗は `V8SerdeEncodeError`、`decode`・`getDecodable` の変換失敗は `V8SerdeDecodeError` になります。どちらも元のエラーを `cause` に保持します。メッセージは日本語表示に対応しています。Node.js 以外のランタイムでは、4 つのメソッドのいずれも `UnsupportedRuntimeError` を投げます。
+
+```ts
+import { V8Serde, V8SerdeDecodeError, V8SerdeEncodeError } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+try {
+  await v8serde.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof V8SerdeEncodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+
+try {
+  await v8serde.decode({ data: new Uint8Array(0) });
+} catch (error) {
+  if (error instanceof V8SerdeDecodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`Memory` と組み合わせた例です。`Date`・`Map`・`Set`・`bigint`・`undefined` も型を保ったまま往復できます。
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new V8Serde())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```

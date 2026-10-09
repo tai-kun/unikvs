@@ -27,6 +27,7 @@ export default defineMeta({
     "json",
     "superjson",
     "cbor",
+    "v8-serde",
     "redis-node",
     "http",
   ],

@@ -64,6 +64,8 @@ jobs:
             directory: "packages/base64"
           - name: "base64url"
             directory: "packages/base64url"
+          - name: "v8-serde"
+            directory: "packages/v8-serde"
           - name: "unikvs"
             directory: "unikvs"
     timeout-minutes: 15

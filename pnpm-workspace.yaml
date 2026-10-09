@@ -49,6 +49,7 @@ packages:
     "packages/hex",
     "packages/base64",
     "packages/base64url",
+    "packages/v8-serde",
     "unikvs",
     "website",
   ]

@@ -1,0 +1,236 @@
+---
+title: "@unikvs/v8-serde"
+description: "Explains how to use the Transformer plugin that serializes values fast with Node.js v8.serialize."
+---
+
+## Overview [#overview]
+
+`@unikvs/v8-serde` is a Transformer plugin that converts JavaScript values to byte sequences with Node.js `v8.serialize`. <Badge>Transformer</Badge> <Badge variant="warning">Node.js only</Badge>
+
+It converts values that structured clone can handle, fast with the native implementation. Writes convert to bytes with `encode` and reads restore the original value with `decode`, so you can read and write without thinking about serialization details.
+
+The storage format is V8-specific and is not compatible with other runtimes or other languages. It fits snapshots and caches shared between Node.js peers.
+
+This transformer is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"V8Serde"`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/v8-serde
+```
+
+:::note
+If you want to interoperate in a standard binary format, consider [`@unikvs/cbor`](/packages/cbor). If you want to inspect the contents as text, consider [`@unikvs/json`](/packages/json) or [`@unikvs/superjson`](/packages/superjson).
+:::
+
+## Supported Values [#values]
+
+The values you can convert are as follows.
+
+| Value | Encoding | After decoding |
+| --- | --- | --- |
+| `null` | Supported | `null` |
+| Boolean | Supported | boolean |
+| `number` | Supported | number. `NaN`, `Infinity`, `-Infinity`, and `-0` round-trip as is. |
+| `bigint` | Supported | bigint. It is restored as a bigint regardless of size. |
+| `string` | Supported | string, including Unicode. |
+| `undefined` | Supported | undefined. Preserved both at the root and nested. |
+| Array | Supported | array. Holes in sparse arrays are preserved too. |
+| Plain object | Supported | plain object |
+| `Date` | Supported | `Date`. An Invalid Date is restored as a `Date` too. |
+| `Map` | Supported | `Map`. Non-string keys are restored too. |
+| `Set` | Supported | `Set` |
+| Typed arrays | Supported | The same type, such as `Uint8Array` or `Float64Array` |
+| `ArrayBuffer` | Supported | `ArrayBuffer` |
+| `DataView` | Supported | `DataView` |
+| `Buffer` | Supported | `Buffer` |
+| `RegExp` | Supported | `RegExp` |
+| `Error` | Supported | `Error` and subclasses. The kind and message are preserved. |
+| Circular references | Supported | Restored with the reference relationships intact. |
+
+The limitations are as follows.
+
+- Functions, symbols, `WeakMap`, `WeakSet`, `Promise`, and `SharedArrayBuffer` cannot be encoded. Passing one at the root or nested throws `V8SerdeEncodeError`.
+- Properties keyed by a symbol are removed together with their values.
+- Class instances become plain objects and lose their prototype.
+
+:::note
+`-0` is preserved as is. In `@unikvs/cbor`, `-0` becomes `0`.
+:::
+
+## Usage [#usage]
+
+The `V8Serde` constructor takes no arguments.
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+```
+
+Its main members are as follows. `encode`, `decode`, `getEncodable`, and `getDecodable` are all async, so call them with `await`.
+
+| Member | Summary |
+| --- | --- |
+| `new V8Serde()` | Initializes with no arguments. |
+| `name` | Always returns `"V8Serde"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Converts any value to a byte `Uint8Array<ArrayBuffer>`. |
+| `decode({ data })` | Converts bytes back to a value. If passed bytes holding multiple concatenated values, it returns only the first value. |
+| `getEncodable()` | Returns a `TransformStream` that converts values to bytes. |
+| `getDecodable()` | Returns a `TransformStream` that converts bytes to values. |
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+const bytes = await v8serde.encode({ data: { message: "hello" } });
+const value = await v8serde.decode({ data: bytes });
+```
+
+Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new V8Serde())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", { message: "hello" });
+
+const output = await kvs.get("data");
+```
+
+`set` converts to bytes for storage, and `get` converts them back to the original value automatically.
+
+## Streams [#streams]
+
+It supports both single values and streams.
+
+- Single values are converted with `encode` and `decode`.
+- Stream values are converted with the `TransformStream` from `getEncodable` and `getDecodable`. Obtaining them is async, so call them with `await`.
+
+`getEncodable` encodes each input chunk as one independent value and emits its bytes in order. The output is a stream-only format.
+
+`getDecodable` decodes bytes incrementally across arbitrary chunk boundaries.
+
+- As soon as one value completes, its value is emitted immediately. If a chunk contains multiple values, the completed ones are emitted in order.
+- A value cut off mid-way is buffered internally until it completes. It waits for the next chunk, so partial data is never emitted as a value by mistake.
+- An empty stream and zero-length chunks produce zero values and no error.
+- If incomplete data remains when the stream ends, it throws `V8SerdeDecodeError`. Completed values are emitted beforehand.
+- If the input is not valid for this package's format, it throws `V8SerdeDecodeError` at that point.
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+const source = new ReadableStream<unknown>({
+  start(controller) {
+    controller.enqueue(new Date());
+    controller.enqueue(new Map([["a", 1]]));
+    controller.close();
+  },
+});
+
+const decoded = source
+  .pipeThrough(await v8serde.getEncodable())
+  .pipeThrough(await v8serde.getDecodable());
+
+for await (const value of decoded) {
+  console.log(value);
+}
+```
+
+:::warning
+The output of `getEncodable` is a stream-only format and differs from the output of a one-shot `encode`. Combine it with `getDecodable`. Passing a whole stream output to a one-shot `decode` does not restore it correctly.
+:::
+
+## Errors [#errors]
+
+| Error | Error name | Meaning |
+| --- | --- | --- |
+| `V8SerdeEncodeError` | `UniKvsV8SerdeEncodeError` | A value cannot be converted to bytes. The original error is kept in `cause`. |
+| `V8SerdeDecodeError` | `UniKvsV8SerdeDecodeError` | A byte sequence cannot be interpreted as a value. The original error is kept in `cause`. |
+| `UnsupportedRuntimeError` | `UniKvsUnsupportedRuntimeError` | Used on a runtime other than Node.js. A shared error from `@unikvs/core`. |
+
+Conversion failures in `encode` and `getEncodable` become `V8SerdeEncodeError`, and those in `decode` and `getDecodable` become `V8SerdeDecodeError`. Both keep the original error in `cause`. Messages support Japanese display. On a runtime other than Node.js, all four methods throw `UnsupportedRuntimeError`.
+
+```ts
+import { V8Serde, V8SerdeDecodeError, V8SerdeEncodeError } from "@unikvs/v8-serde";
+
+const v8serde = new V8Serde();
+
+try {
+  await v8serde.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof V8SerdeEncodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+
+try {
+  await v8serde.decode({ data: new Uint8Array(0) });
+} catch (error) {
+  if (error instanceof V8SerdeDecodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+An example with `Memory` storage. `Date`, `Map`, `Set`, `bigint`, and `undefined` round-trip with their types intact.
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+  revision: bigint;
+  note: string | undefined;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .appendTransformer(new V8Serde())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const snapshot: Snapshot = {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([
+    ["read", 1],
+    ["write", 2],
+  ]),
+  flags: new Set(["dirty"]),
+  revision: 1n,
+  note: undefined,
+};
+
+await kvs.set("snapshot", snapshot);
+
+const restored = await kvs.get("snapshot");
+console.log(restored.createdAt instanceof Date);
+console.log(restored.counts instanceof Map);
+console.log(restored.flags instanceof Set);
+console.log(typeof restored.revision);
+console.log("note" in restored);
+
+await kvs.close();
+```
