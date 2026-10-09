@@ -25,6 +25,7 @@
     "packages/http",
     "packages/localstorage",
     "packages/hex",
+    "packages/base64url",
     "unikvs"
   ],
   "type": "module",

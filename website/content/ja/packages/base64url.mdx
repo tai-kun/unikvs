@@ -1,0 +1,217 @@
+---
+title: "@unikvs/base64url"
+description: "バイト列を URL 安全な base64 文字列として表すバイト列へ透過的に変換する Transformer プラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/base64url` は、バイト列を URL 安全な base64 (base64url) として表すバイト列へ変換する Transformer プラグインです。<Badge>Transformer</Badge>
+
+書き込み時は `encode` で base64url 化し、読み取り時は `decode` で元のバイト列に戻すため、変換の詳細を意識せずに読み書きできます。URL やファイル名に埋め込む値、テキストしか保存できない保存先への格納に使います。
+
+使用する 64 文字は RFC 4648 §5 の `A-Z`・`a-z`・`0-9`・`-`・`_` です。標準の base64 が使う `+`・`/` は含まず、受け付けもしません。
+
+入出力はどちらも `Uint8Array<ArrayBuffer>` です。変換後のサイズは元のサイズの約 1.37 倍になります。
+
+常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Base64Url"` を返します。
+
+Node.js・Bun・ブラウザーで動作します。実行環境による振る舞いの違いはありません。
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/base64url
+```
+
+:::tip
+小さく保存したい場合は [`@unikvs/compression`](/packages/compression) を、破損や改ざんを検知したい場合は [`@unikvs/checksum`](/packages/checksum) を検討してください。このパッケージに圧縮や検証の機能はありません。
+:::
+
+## 使い方 [#usage]
+
+通常は引数なしで生成します。末尾の `=` を付けたい場合や、UTF-8 変換に使うインスタンスを差し替えたい場合にだけ `Base64UrlOptions` を指定します。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+
+const base64url = new Base64Url();
+```
+
+```ts
+import { Base64Url, type Base64UrlOptions } from "@unikvs/base64url";
+import { FastUtf8 } from "fast-utf8";
+
+const options: Base64UrlOptions = {
+  encoder: new FastUtf8(),
+  decoder: new FastUtf8({ strict: true }),
+  padding: true,
+};
+
+const base64url = new Base64Url(options);
+```
+
+`Base64UrlOptions` の内容は次のとおりです。通常は省略し、既定のまま使います。`padding` を省略すると `false` として扱われ、`=` を付けずに出力します。`decode` は `=` の有無にかかわらず受け付けます。`decoder` に `strict: false` のインスタンスを指定した場合は、不正な UTF-8 は `Base64UrlDecodeError` として投げられます。詳しくは[エラー](#errors)を参照してください。
+
+```ts
+type Base64UrlOptions = {
+  readonly encoder?: FastUtf8 | undefined;
+  readonly decoder?: FastUtf8 | undefined;
+  readonly padding?: boolean | undefined;
+};
+```
+
+主なメンバーは次のとおりです。
+
+| メンバー | 概要 |
+| --- | --- |
+| `new Base64Url(options?)` | オプションなしで初期化します。差し替えが必要な場合だけ `Base64UrlOptions` を渡します。 |
+| `name` | 常に `"Base64Url"` を返します。 |
+| `isOpen` | 常に `true` を返します。 |
+| `encode({ data })` | `Uint8Array<ArrayBuffer>` を base64url の `Uint8Array<ArrayBuffer>` に変換します。 |
+| `decode({ data })` | base64url の `Uint8Array<ArrayBuffer>` を元のバイト列に戻します。 |
+| `getEncodable()` | base64url 化用の `TransformStream` を返します。 |
+| `getDecodable()` | base64url 復元用の `TransformStream` を返します。 |
+
+一括変換の例です。`encode` の結果を UTF-8 文字列として解釈すると base64url になります。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+
+const base64url = new Base64Url();
+
+const encoded = base64url.encode({ data: new TextEncoder().encode("foobar") });
+console.log(new TextDecoder().decode(encoded)); // "Zm9vYmFy"
+
+const decoded = base64url.decode({ data: new TextEncoder().encode("Zm9vYmFy") });
+console.log(new TextDecoder().decode(decoded)); // "foobar"
+```
+
+`padding: true` を指定すると、一括・ストリームいずれも RFC 4648 §5 の正準形どおり `=` で埋めた出力を返します。既定 (`false`) では `=` を付けません。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+
+const omitted = new Base64Url();
+console.log(new TextDecoder().decode(omitted.encode({ data: new TextEncoder().encode("f") }))); // "Zg"
+
+const padded = new Base64Url({ padding: true });
+console.log(new TextDecoder().decode(padded.encode({ data: new TextEncoder().encode("f") }))); // "Zg=="
+```
+
+`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Base64Url())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+```
+
+`set` で base64url 化して保存し、`get` で自動的に元のバイト列へ戻します。
+
+## ストリーム [#streams]
+
+単体値とストリームの両方に対応しています。
+
+- 単体値は `encode`・`decode` で変換します。
+- ストリーム値は `getEncodable`・`getDecodable` の `TransformStream` で変換します。
+
+`getEncodable` は、入力チャンクの境界をまたいでも正しく base64url 化します。`padding` の設定はストリームにも適用され、`=` の有無はストリーム終了時に確定します。
+
+`getDecodable` は、チャンク境界で分割された base64url も正しく復元します。
+
+- 空のストリームと長さ 0 のチャンクは値を 1 つも生成せず、エラーにもなりません。
+- 終了時に文字数が 4 で割って 1 余る場合や、`=` の位置が正しくない場合は `Base64UrlDecodeError` を投げます。
+- base64url として不正な文字が含まれている場合は、その時点で `Base64UrlDecodeError` を投げます。
+- 既定では、不正な UTF-8 や途中で切れたマルチバイト文字が含まれている場合は `TypeError` を投げます。詳しくは[エラー](#errors)を参照してください。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+
+const base64url = new Base64Url();
+
+const source = new ReadableStream({
+  start(controller) {
+    controller.enqueue(new TextEncoder().encode("fo"));
+    controller.enqueue(new TextEncoder().encode("obar"));
+    controller.close();
+  },
+});
+
+const decoded = source.pipeThrough(base64url.getEncodable()).pipeThrough(base64url.getDecodable());
+```
+
+## 注意点 [#notes]
+
+形式の扱いは次のとおりです。
+
+- `+`・`/` は受け付けません。標準の base64 が必要な場合は別パッケージを使ってください。置き換えも自動では行いません。必要な場合は呼び出し側で変換してください。
+- 空白・改行などの区切りは読み飛ばしません。不正文字として拒否されます。
+- `=` は末尾の 1 文字から 2 文字にだけ付けられ、全体が 4 文字境界である場合に限ります。`"Zg="` のような長さ 3 の入力は拒否されます。途中や先頭にある `=` は拒否されます。
+- 空入力は空出力です。`new Uint8Array(0)` を渡してもエラーになりません。
+
+サイズ（バイト長）は元のサイズの約 1.37 倍になります（`padding: false` の既定ではわずかに小さくなります）。圧縮や暗号化、改ざん検知の目的には使えません。
+
+:::warning
+複数の Transformer を組み合わせると、登録順序で結果が変わります。Checksum などと併用する場合は、base64url 化と検証のどちらを先に行うか意識して順序を決め、小さいデータで往復を確認してから本番データに適用してください。
+:::
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+| エラー | 意味 | 対処 |
+| --- | --- | --- |
+| `Base64UrlDecodeError` | base64url として解釈できません。`+`・`/` や空白の混入、`=` の位置の誤り、4 で割って 1 余る長さ（例: `"a"`・`"abcde"`）が原因です。 | 入力が base64url (`A-Z`・`a-z`・`0-9`・`-`・`_` と末尾の `=`) の連続か確認してください。 |
+
+既定では（一括・ストリームいずれも）、UTF-8 として不正なバイト列は `Base64UrlDecodeError` ではなくネイティブの `TypeError` として伝わります。`Base64UrlOptions` で `strict: false` の `decoder` を注入した場合は `Base64UrlDecodeError` として投げられます。
+
+```ts
+import { Base64Url, Base64UrlDecodeError } from "@unikvs/base64url";
+
+const base64url = new Base64Url();
+
+try {
+  base64url.decode({ data: new TextEncoder().encode("ab+c") });
+} catch (error) {
+  if (error instanceof Base64UrlDecodeError) {
+    console.log("base64url として解釈できません。");
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+`Memory` と組み合わせた最小例です。書き込んだ値は base64url 化して保存し、読み取り時に自動的に元のバイト列に戻します。
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(new Base64Url())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = new TextEncoder().encode("foobar");
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+console.log(output.length === input.length);
+
+await kvs.close();
+```
