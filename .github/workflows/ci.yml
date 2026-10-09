@@ -58,6 +58,8 @@ jobs:
             directory: "packages/http"
           - name: "localstorage"
             directory: "packages/localstorage"
+          - name: "hex"
+            directory: "packages/hex"
           - name: "unikvs"
             directory: "unikvs"
     timeout-minutes: 15

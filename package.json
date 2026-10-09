@@ -24,6 +24,7 @@
     "packages/indexeddb",
     "packages/http",
     "packages/localstorage",
+    "packages/hex",
     "unikvs"
   ],
   "type": "module",

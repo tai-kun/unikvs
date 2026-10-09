@@ -9,6 +9,7 @@ export default defineMeta({
     "utils",
     "compression",
     "checksum",
+    "hex",
     "memory",
     "fs-node",
     "fs-bun",

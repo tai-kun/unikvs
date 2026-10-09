@@ -1,0 +1,198 @@
+---
+title: "@unikvs/hex"
+description: "Explains how to use the Transformer plugin that transparently converts byte sequences to hex strings represented as bytes."
+---
+
+## Overview [#overview]
+
+`@unikvs/hex` is a Transformer plugin that converts byte sequences to bytes representing a hex string. <Badge>Transformer</Badge>
+
+Writes hex-encode with `encode` and reads restore the original bytes with `decode`, so you can read and write without thinking about conversion details. Use it for inspecting hash values and binary content, for debug output, and for storing data in destinations that only accept text.
+
+Both input and output are `Uint8Array<ArrayBuffer>`. Output is always lowercase (`0-9`, `a-f`), while input accepts both uppercase and lowercase. The converted size is exactly twice the original size.
+
+It is always open. No explicit `open` or `close` is needed; `isOpen` always returns `true` and `name` is always `"Hex"`.
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/hex
+```
+
+:::tip
+To store data in a smaller size, consider [`@unikvs/compression`](/packages/compression). To detect corruption or tampering, consider [`@unikvs/checksum`](/packages/checksum). This package provides neither compression nor verification.
+:::
+
+## Usage [#usage]
+
+Normally create it with no arguments. Pass `HexOptions` only when you want to replace the instances used for UTF-8 conversion.
+
+```ts
+import { Hex } from "@unikvs/hex";
+
+const hex = new Hex();
+```
+
+```ts
+import { Hex, type HexOptions } from "@unikvs/hex";
+import { FastUtf8 } from "fast-utf8";
+
+const options: HexOptions = {
+  encoder: new FastUtf8(),
+  decoder: new FastUtf8({ strict: true }),
+};
+
+const hex = new Hex(options);
+```
+
+`HexOptions` is as follows. Normally omit it and use the defaults. When a `decoder` instance with `strict: false` is injected, invalid UTF-8 is thrown as `HexDecodeError`. See [Errors](#errors) for details.
+
+```ts
+type HexOptions = {
+  readonly encoder?: FastUtf8 | undefined;
+  readonly decoder?: FastUtf8 | undefined;
+};
+```
+
+Its main members are as follows.
+
+| Member | Summary |
+| --- | --- |
+| `new Hex(options?)` | Initializes with no options. Pass `HexOptions` only when a replacement is needed. |
+| `name` | Always returns `"Hex"`. |
+| `isOpen` | Always returns `true`. |
+| `encode({ data })` | Converts a `Uint8Array<ArrayBuffer>` to a lowercase hex `Uint8Array<ArrayBuffer>`. |
+| `decode({ data })` | Converts a lowercase or uppercase hex `Uint8Array<ArrayBuffer>` back to the original bytes. |
+| `getEncodable()` | Returns a `TransformStream` for hex encoding. |
+| `getDecodable()` | Returns a `TransformStream` for hex decoding. |
+
+Here is a one-shot conversion example. Interpreting the `encode` result as a UTF-8 string yields lowercase hex.
+
+```ts
+import { Hex } from "@unikvs/hex";
+
+const hex = new Hex();
+
+const encoded = hex.encode({ data: Uint8Array.from([0xde, 0xad, 0xbe, 0xef]) });
+console.log(new TextDecoder().decode(encoded)); // "deadbeef"
+
+const decoded = hex.decode({ data: new TextEncoder().encode("DEADBEEF") });
+console.log(decoded); // Uint8Array(4) [ 222, 173, 190, 239 ]
+```
+
+Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+
+```ts
+import { Hex } from "@unikvs/hex";
+import UniKvs from "unikvs";
+
+const kvs = UniKvs.config()
+  .appendTransformer(new Hex())
+  .appendStorage(storage)
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+```
+
+`set` stores values hex-encoded, and `get` restores them to the original bytes automatically.
+
+## Streams [#streams]
+
+Supports both single values and streams.
+
+- Single values are converted with `encode` and `decode`.
+- Stream values are converted with the `TransformStream` from `getEncodable` and `getDecodable`.
+
+`getEncodable` hex-encodes each input chunk independently and emits them in order.
+
+`getDecodable` correctly restores hex split across chunk boundaries.
+
+- An empty stream and zero-length chunks produce zero values and no error.
+- If a single trailing half character remains when the stream ends, it throws `HexDecodeError`.
+- If the input contains a character that is not valid hex, it throws `HexDecodeError` at that point.
+- By default, invalid UTF-8 or a truncated multi-byte character throws a native `TypeError`. See [Errors](#errors) for details.
+
+```ts
+import { Hex } from "@unikvs/hex";
+
+const hex = new Hex();
+
+const source = new ReadableStream({
+  start(controller) {
+    controller.enqueue(Uint8Array.from([0xde, 0xad]));
+    controller.enqueue(Uint8Array.from([0xbe, 0xef]));
+    controller.close();
+  },
+});
+
+const decoded = source.pipeThrough(hex.getEncodable()).pipeThrough(hex.getDecodable());
+```
+
+## Notes [#notes]
+
+The format handling is as follows.
+
+- No `0x` prefix is added or removed. Passing `"0x..."` rejects `x` as an invalid character. Add or strip the prefix on the caller side when needed.
+- Separators such as whitespace, newlines, and colons are not skipped. They are rejected as invalid characters.
+- Empty input produces empty output. Passing `new Uint8Array(0)` is not an error.
+
+The size in bytes becomes exactly twice the original size. Do not use it for compression, encryption, or tamper detection.
+
+:::warning
+When combining multiple Transformers, the result changes with the registration order. When using it with others such as Checksum, decide the order of hex encoding versus verification, and verify a round-trip with small data before applying it to production data.
+:::
+
+## Errors [#errors]
+
+The errors this package throws are as follows.
+
+| Error | Meaning | Action |
+| --- | --- | --- |
+| `HexDecodeError` | The input cannot be interpreted as hex. Caused by an odd length or invalid characters. | Check that the input is an even-length hex sequence (`0-9`, `a-f`, `A-F`). |
+
+By default (for both one-shot and stream conversion), byte sequences that are invalid as UTF-8 propagate as a native `TypeError`, not as `HexDecodeError`. When a `decoder` with `strict: false` is injected via `HexOptions`, they are thrown as `HexDecodeError`.
+
+```ts
+import { Hex, HexDecodeError } from "@unikvs/hex";
+
+const hex = new Hex();
+
+try {
+  hex.decode({ data: new TextEncoder().encode("abc") });
+} catch (error) {
+  if (error instanceof HexDecodeError) {
+    console.log("Cannot be interpreted as hex.");
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+A minimal example with `Memory` storage. Written values are stored hex-encoded and automatically restored to the original bytes on reads.
+
+```ts
+import { Hex } from "@unikvs/hex";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .appendTransformer(new Hex())
+  .appendStorage(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+console.log(output.length === input.length);
+
+await kvs.close();
+```

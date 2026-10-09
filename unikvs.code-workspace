@@ -93,6 +93,10 @@
       "path": "packages/localstorage",
     },
     {
+      "name": "@unikvs/hex",
+      "path": "packages/hex",
+    },
+    {
       "name": "website",
       "path": "website",
     },
