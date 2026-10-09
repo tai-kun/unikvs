@@ -44,6 +44,8 @@ jobs:
             directory: "packages/fs.bun"
           - name: "redis.bun"
             directory: "packages/redis.bun"
+          - name: "redis.node"
+            directory: "packages/redis.node"
           - name: "s3.node"
             directory: "packages/s3.node"
           - name: "s3.bun"

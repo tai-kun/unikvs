@@ -221,5 +221,8 @@ $RECYCLE.BIN/
 .claude/
 .history/
 .temp/
+.tmp/
 .vitest-attachments/
 __screenshots__/
+.temp-*
+.tmp-*

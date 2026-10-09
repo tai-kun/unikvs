@@ -65,6 +65,10 @@
       "path": "packages/redis.bun",
     },
     {
+      "name": "@unikvs/redis.node",
+      "path": "packages/redis.node",
+    },
+    {
       "name": "@unikvs/s3.node",
       "path": "packages/s3.node",
     },

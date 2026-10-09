@@ -39,6 +39,7 @@ packages:
     "packages/fs.node",
     "packages/fs.bun",
     "packages/redis.bun",
+    "packages/redis.node",
     "packages/s3.node",
     "packages/s3.bun",
     "packages/opfs",
