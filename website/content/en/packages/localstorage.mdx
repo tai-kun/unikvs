@@ -1,0 +1,240 @@
+---
+title: "@unikvs/localstorage"
+description: "Learn how to use the storage plugin that saves strings to the browser's localStorage."
+---
+
+## Overview [#overview]
+
+<Badge variant="warning">Browser only</Badge>
+
+`@unikvs/localstorage` is a storage plugin that saves strings to the browser's `localStorage`. It writes values as-is and reads them back as-is.
+
+- Handles strings only. `write` accepts a `string`, and `read` returns a `string`.
+- Reads and writes complete synchronously. Stream operations are not supported.
+- Prefixes every key with `keyPrefix`. The default is `"unikvs:"`.
+- Shares data across tabs and instances within the same origin.
+
+Intended uses are as follows.
+
+- Persist small strings such as settings and session state.
+- Save caches and drafts that live entirely in the browser.
+- Inject a `Storage` implementation to reproduce behavior in tests and SSR.
+
+Non-goals are as follows.
+
+- Direct storage of objects or binaries is not supported. Stringify objects on the caller side, and use [`@unikvs/indexeddb`](/packages/indexeddb) or [`@unikvs/opfs`](/packages/opfs) when binaries are needed.
+- Not suited for large data. See "Limitations" for capacity guidance.
+- Server-side persistence and sharing across devices are not supported.
+
+## Install [#install]
+
+Install it as follows.
+
+```package-install
+npm install @unikvs/localstorage
+```
+
+The main dependency is `@unikvs/core`.
+
+## Usage [#usage]
+
+The central class is `LocalStorage`.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+```
+
+Constructor arguments can be omitted.
+
+| Argument | Type | Default | Description |
+| --- | --- | --- | --- |
+| `keyPrefix` | `string` | `"unikvs:"` | The prefix added to every key. Limits the scope that `clear()` deletes. |
+| `allowRepair` | `boolean` | `false` | Whether to allow repair writes. When `false`, repair `write` calls fail with `RepairNotAllowedError`. |
+| `allowClearWithoutPrefix` | `boolean` | `false` | Whether to allow `clear()` with an empty `keyPrefix`. |
+| `storage` | `Storage` | `globalThis.localStorage` | The `Storage` to use. Inject a fake or alternative implementation for SSR and tests. Uses `globalThis.localStorage` when omitted. |
+
+`name` is `"LocalStorage"`. `isOpen` always returns `true`. `open()` only checks availability and creates no connection. `close()` only validates interruption.
+
+Basic reads and writes are synchronous.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+storage.write({ key: "greeting", data: "hello" });
+
+if (storage.exists({ key: "greeting" })) {
+  const value = storage.read({ key: "greeting" });
+  console.log(value);
+}
+
+storage.delete({ key: "greeting" });
+storage.clear();
+```
+
+Registering with `UniKvs` looks like this.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .appendStorage(new LocalStorage())
+  .create();
+```
+
+### Using prefixes [#prefix]
+
+The physical key is stored as `` `${keyPrefix}${key}` ``. With the default, the logical key `"k1"` is stored as `"unikvs:k1"`.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storageA = new LocalStorage({ keyPrefix: "myapp-a:" });
+const storageB = new LocalStorage({ keyPrefix: "myapp-b:" });
+
+storageA.write({ key: "k1", data: "va" });
+
+// Not visible from storageB.
+console.log(storageB.exists({ key: "k1" }));
+```
+
+`clear()` deletes only keys matching the prefix. Data with a different prefix is left intact.
+
+:::warning
+With an empty `keyPrefix`, `clear()` is a contract that erases the whole `localStorage`. Calling `clear()` with an empty prefix is rejected by default. Pass `allowClearWithoutPrefix: true` to allow it. Always specify a unique prefix on a shared `localStorage`.
+:::
+
+### Injection for SSR and tests [#ssr]
+
+Server-side runtimes and Node.js have no `globalThis.localStorage`. The constructor itself does not fail, but operating without an injected `Storage` results in `LocalStorageNotAvailableError`.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+// Inject an in-memory implementation for tests, for example.
+const storage = new LocalStorage({ storage: myStorage });
+
+storage.write({ key: "k1", data: "v1" });
+console.log(storage.read({ key: "k1" }));
+```
+
+:::tip
+Calling `open()` outside a browser fails as unavailable without an injected `Storage`. For SSR, inject a `Storage` before rendering or operate only in the browser.
+:::
+
+## Data Format [#data]
+
+`write` and `read` handle strings only. Values pass directly to `setItem` and `getItem` with no encoding or markers.
+
+- To store objects, stringify them on the caller side. Pass `write({ key, data: JSON.stringify(value) })` and restore with `JSON.parse` after reading.
+- Converting arbitrary values to strings is the responsibility of an upstream serializer. When combined with `UniKvs`, register [`@unikvs/json`](/packages/json), [`@unikvs/superjson`](/packages/superjson), or [`@unikvs/cbor`](/packages/cbor) in front.
+- Passing a non-string at runtime follows the type conversion of `Storage.setItem`.
+- Value prefixes have no special meaning. Strings starting with `s:`, `b:`, or `j:` are stored as-is and returned as-is.
+
+Stream operations are not supported. There is no `getWritable` or `getReadable`.
+
+:::tip
+To store binaries, use [`@unikvs/indexeddb`](/packages/indexeddb) or [`@unikvs/opfs`](/packages/opfs), which are dedicated to byte sequences. Choose this package only for small strings.
+:::
+
+## Limitations [#limitations]
+
+- Capacity depends on the browser. Roughly 5 MB per origin is a common guideline. A `QuotaExceededError` on overflow propagates as-is. When an overwrite fails on quota, the existing value generally remains.
+- All operations are synchronous. Reading or writing large strings blocks the main thread. Not suited for sequential processing of large data.
+- `localStorage` in the same origin is shared across tabs and windows. The same prefix shares data, while different prefixes isolate it.
+- Persistence is subject to browser storage management. Data may not remain in private mode, and it can be lost through user clearing or deletion under storage pressure. Back up important data separately.
+- `SecurityError` cases such as blocked cookies or site data propagate as-is. Availability can be checked in advance with `open()`.
+- Every method accepts `signal`. When already aborted, operations generally fail with the abort reason before running. However, the repair guard on `write` and the empty-prefix guard on `clear` are evaluated before the `signal` check.
+- `read` and `delete` fail for missing keys. Check beforehand with `exists()`.
+- `clear()` with an empty `keyPrefix` is rejected by default. When allowed, it deletes keys outside the prefix as well. Use it with care.
+
+## Errors [#errors]
+
+| Error | Condition |
+| --- | --- |
+| `KeyNotFoundError` | Thrown when `read` or `delete` targets a missing key. A shared error from `@unikvs/core`, detectable with `instanceof` across packages. |
+| `ClearWithoutPrefixNotAllowedError` | Thrown when `clear()` is called with an empty `keyPrefix` without permission. |
+| `LocalStorageNotAvailableError` | Thrown when operating without an injected `Storage` in an environment without `localStorage` (`open`, `write`, `read`, `exists`, `delete`, `clear`). However, calling `clear()` with an empty `keyPrefix` without permission throws `ClearWithoutPrefixNotAllowedError` first. |
+
+Calling `write` with `vars["unikvs:repair"]` set to `true` while repairs are disallowed throws `RepairNotAllowedError` from `@unikvs/core`. Ordinary `write` calls do not throw it.
+
+```ts
+import { KeyNotFoundError, LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+try {
+  storage.read({ key: "missing" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+## Examples [#examples]
+
+<Tabs>
+  <Tab title="Single operations">
+
+A minimal example.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+storage.write({ key: "greeting", data: "hello" });
+console.log(storage.exists({ key: "greeting" }));
+console.log(storage.read({ key: "greeting" }));
+storage.delete({ key: "greeting" });
+console.log(storage.exists({ key: "greeting" }));
+```
+
+  </Tab>
+  <Tab title="Storing objects">
+
+An example that stringifies with JSON on the caller side.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+const profile = { name: "aoba", tags: ["x", "y"] };
+storage.write({ key: "profile", data: JSON.stringify(profile) });
+
+const restored = JSON.parse(storage.read({ key: "profile" }));
+console.log(restored);
+```
+
+  </Tab>
+  <Tab title="Injection in SSR">
+
+An example that injects a `Storage`.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage({ storage: myStorage });
+
+storage.write({ key: "k1", data: "v1" });
+console.log(storage.read({ key: "k1" }));
+storage.clear();
+```
+
+  </Tab>
+</Tabs>
+
+## Related [#related]
+
+- To handle arbitrary values other than strings, also consider [`@unikvs/memory`](/packages/memory). It suits test doubles and temporary caches.
+- To handle binaries, use [`@unikvs/indexeddb`](/packages/indexeddb) or [`@unikvs/opfs`](/packages/opfs).
+- For object serialization, combine with [`@unikvs/json`](/packages/json), [`@unikvs/superjson`](/packages/superjson), or [`@unikvs/cbor`](/packages/cbor).
+- For shared types and errors, see [`@unikvs/core`](/packages/core).

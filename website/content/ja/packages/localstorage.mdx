@@ -1,0 +1,240 @@
+---
+title: "@unikvs/localstorage"
+description: "ブラウザーの localStorage に文字列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+<Badge variant="warning">ブラウザー専用</Badge>
+
+`@unikvs/localstorage` は、ブラウザーの `localStorage` に文字列を保存するストレージプラグインです。値をそのまま書き込み、そのまま読み戻します。
+
+- 扱うデータは文字列専用です。`write` は `string` を受け付け、`read` は `string` を返します。
+- 読み書きは同期で完了します。ストリーム操作には対応しません。
+- すべてのキーに `keyPrefix` を付けて保存します。既定値は `"unikvs:"` です。
+- 同一オリジンではタブやインスタンス間でデータを共有します。
+
+想定用途は次のとおりです。
+
+- 設定値やセッション状態など、小さな文字列の永続化に使います。
+- ブラウザーだけで完結するキャッシュや下書きの保存に使います。
+- テストや SSR では `Storage` を注入して振る舞いを再現します。
+
+非目標は次のとおりです。
+
+- オブジェクトやバイナリーの直接保存には対応しません。オブジェクトは呼び出し側で文字列化し、バイナリーが必要な場合は [`@unikvs/indexeddb`](/packages/indexeddb) や [`@unikvs/opfs`](/packages/opfs) を使います。
+- 大容量データの保存には向きません。容量の目安は「制限と注意」を参照してください。
+- サーバー側の永続化や複数端末での共有には対応しません。
+
+## インストール [#install]
+
+インストールは次のとおりです。
+
+```package-install
+npm install @unikvs/localstorage
+```
+
+主な依存は `@unikvs/core` です。
+
+## 使い方 [#usage]
+
+中心は `LocalStorage` クラスです。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+```
+
+コンストラクターの引数は省略できます。
+
+| 項目 | 型 | 既定値 | 説明 |
+| --- | --- | --- | --- |
+| `keyPrefix` | `string` | `"unikvs:"` | すべてのキーに付ける接頭辞です。`clear()` の削除範囲を限定します。 |
+| `allowRepair` | `boolean` | `false` | 書き戻しによる書き込みを許可するかどうかです。`false` では書き戻しの `write` が `RepairNotAllowedError` で失敗します。 |
+| `allowClearWithoutPrefix` | `boolean` | `false` | 空の `keyPrefix` での `clear()` を許可するかどうかです。 |
+| `storage` | `Storage` | `globalThis.localStorage` | 使用する `Storage` です。SSR やテストではフェイクや代替実装を注入します。未指定時は `globalThis.localStorage` を使います。 |
+
+`name` は `"LocalStorage"` です。`isOpen` は常に `true` を返します。`open()` は利用可否の確認だけを行い、接続は作りません。`close()` は中断の検証だけを行います。
+
+基本の読み書きは同期です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+storage.write({ key: "greeting", data: "hello" });
+
+if (storage.exists({ key: "greeting" })) {
+  const value = storage.read({ key: "greeting" });
+  console.log(value);
+}
+
+storage.delete({ key: "greeting" });
+storage.clear();
+```
+
+`UniKvs` に登録する例は次のとおりです。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .appendStorage(new LocalStorage())
+  .create();
+```
+
+### 接頭辞の使い分け [#prefix]
+
+実キーは `` `${keyPrefix}${key}` `` として保存します。たとえば既定値では論理キー `"k1"` が `"unikvs:k1"` として保存されます。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storageA = new LocalStorage({ keyPrefix: "myapp-a:" });
+const storageB = new LocalStorage({ keyPrefix: "myapp-b:" });
+
+storageA.write({ key: "k1", data: "va" });
+
+// storageB からは見えません。
+console.log(storageB.exists({ key: "k1" }));
+```
+
+`clear()` は接頭辞に一致するキーだけを削除します。接頭辞が異なるデータは残ります。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear()` は `localStorage` 全体を消す契約になります。空のままの `clear()` は既定で拒否します。許可には `allowClearWithoutPrefix: true` が必要です。共有の `localStorage` では必ず一意な接頭辞を指定してください。
+:::
+
+### SSR やテストでの注入 [#ssr]
+
+サーバー側や Node.js では `globalThis.localStorage` が存在しません。コンストラクター自体は失敗しませんが、注入なしで操作すると `LocalStorageNotAvailableError` になります。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+// テスト用のインメモリー実装などを注入します。
+const storage = new LocalStorage({ storage: myStorage });
+
+storage.write({ key: "k1", data: "v1" });
+console.log(storage.read({ key: "k1" }));
+```
+
+:::tip
+ブラウザー以外で `open()` を呼ぶと、注入なしでは利用不可として失敗します。SSR では描画前に `Storage` を注入するか、ブラウザー側でのみ操作してください。
+:::
+
+## データ形式 [#data]
+
+`write`・`read` は文字列だけを扱います。符号化や印は付けず、値をそのまま `setItem`・`getItem` に渡します。
+
+- オブジェクトを保存する場合は、呼び出し側で文字列化してください。`write({ key, data: JSON.stringify(value) })` のように渡し、読み取り後に `JSON.parse` で復元します。
+- 任意の値を文字列へ変換する責務は、上位のシリアライザーにあります。`UniKvs` と組み合わせる場合は [`@unikvs/json`](/packages/json) や [`@unikvs/superjson`](/packages/superjson)、[`@unikvs/cbor`](/packages/cbor) を前段に登録してください。
+- 実行時に文字列以外を渡した場合は、`Storage.setItem` の型変換に従います。
+- 値の接頭辞に特別扱いはありません。`s:`・`b:`・`j:` で始まる文字列も含め、そのまま保存し、そのまま返します。
+
+ストリーム操作には対応しません。`getWritable`・`getReadable` はありません。
+
+:::tip
+バイナリーを保存したい場合は、バイト列専用の [`@unikvs/indexeddb`](/packages/indexeddb) や [`@unikvs/opfs`](/packages/opfs) を使います。小さな文字列の保存に限って本パッケージを選んでください。
+:::
+
+## 制限と注意 [#limitations]
+
+- 容量はブラウザーに依存します。一般にはオリジンあたり 5 MB 前後が目安です。超過時の `QuotaExceededError` はそのまま伝わります。上書きが quota で失敗した場合、既存の値が残るのが一般的です。
+- 操作はすべて同期です。大きな文字列の読み書きはメインスレッドを占有します。大容量データの逐次処理には適しません。
+- 同一オリジンの `localStorage` はタブやウィンドウ間で共有します。同一の接頭辞ではデータを共有し、異なる接頭辞では分離します。
+- 永続性はブラウザーのストレージ管理の影響を受けます。プライベートモードでは残らない場合があり、ユーザーの消去操作や容量逼迫時の削除で失われることがあります。重要なデータは別途バックアップしてください。
+- Cookie やサイトデータのブロック時などの `SecurityError` はそのまま伝わります。利用可否は `open()` で事前に確認できます。
+- すべてのメソッドは `signal` を受け取ります。中断済みの場合は原則として操作前に中断理由で失敗します。ただし `write` の書き戻しガードと `clear` の空接頭辞ガードは `signal` の確認より先に評価されます。
+- `read`・`delete` は存在しないキーで失敗します。事前に `exists()` で確認できます。
+- 空の `keyPrefix` での `clear()` は既定で拒否します。許可した場合、接頭辞外のキーまで削除します。注意して使ってください。
+
+## エラー [#errors]
+
+| エラー | 発生条件 |
+| --- | --- |
+| `KeyNotFoundError` | 存在しないキーを `read`・`delete` で扱った場合に発生します。`@unikvs/core` の共通エラーで、`instanceof` はパッケージをまたいで判定できます。 |
+| `ClearWithoutPrefixNotAllowedError` | 空の `keyPrefix` のまま許可なく `clear()` を呼んだ場合に発生します。 |
+| `LocalStorageNotAvailableError` | `localStorage` がない環境で注入なしに操作した場合に発生します（`open`・`write`・`read`・`exists`・`delete`・`clear`）。ただし空の `keyPrefix` のまま許可なく `clear()` を呼んだ場合は、先に `ClearWithoutPrefixNotAllowedError` が発生します。 |
+
+書き戻しが禁止された状態で `vars["unikvs:repair"]` が `true` の `write` を呼ぶと、`@unikvs/core` の `RepairNotAllowedError` が発生します。通常の `write` では発生しません。
+
+```ts
+import { KeyNotFoundError, LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+try {
+  storage.read({ key: "missing" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+## 使用例 [#examples]
+
+<Tabs>
+  <Tab title="単体操作">
+
+最小例です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+storage.write({ key: "greeting", data: "hello" });
+console.log(storage.exists({ key: "greeting" }));
+console.log(storage.read({ key: "greeting" }));
+storage.delete({ key: "greeting" });
+console.log(storage.exists({ key: "greeting" }));
+```
+
+  </Tab>
+  <Tab title="オブジェクトの保存">
+
+呼び出し側で JSON 文字列化する例です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+const profile = { name: "aoba", tags: ["x", "y"] };
+storage.write({ key: "profile", data: JSON.stringify(profile) });
+
+const restored = JSON.parse(storage.read({ key: "profile" }));
+console.log(restored);
+```
+
+  </Tab>
+  <Tab title="SSR での注入">
+
+`Storage` を注入する例です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage({ storage: myStorage });
+
+storage.write({ key: "k1", data: "v1" });
+console.log(storage.read({ key: "k1" }));
+storage.clear();
+```
+
+  </Tab>
+</Tabs>
+
+## 関連 [#related]
+
+- 文字列以外の任意の値を扱う場合は、[`@unikvs/memory`](/packages/memory) も検討してください。テスト用のダブルや一時的なキャッシュに適しています。
+- バイナリーを扱う場合は、[`@unikvs/indexeddb`](/packages/indexeddb) や [`@unikvs/opfs`](/packages/opfs) を使います。
+- オブジェクトのシリアライズには、[`@unikvs/json`](/packages/json) や [`@unikvs/superjson`](/packages/superjson)、[`@unikvs/cbor`](/packages/cbor) を組み合わせてください。
+- 共通の型やエラーについては [`@unikvs/core`](/packages/core) を参照してください。

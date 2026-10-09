@@ -89,6 +89,10 @@
       "path": "packages/http",
     },
     {
+      "name": "@unikvs/localstorage",
+      "path": "packages/localstorage",
+    },
+    {
       "name": "website",
       "path": "website",
     },

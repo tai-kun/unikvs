@@ -17,6 +17,7 @@ export default defineMeta({
     "s3-bun",
     "opfs",
     "indexeddb",
+    "localstorage",
     "writeonly",
     "debug",
     "passthrough",

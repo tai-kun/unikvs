@@ -23,6 +23,7 @@
     "packages/opfs",
     "packages/indexeddb",
     "packages/http",
+    "packages/localstorage",
     "unikvs"
   ],
   "type": "module",
