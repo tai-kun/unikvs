@@ -30,6 +30,7 @@ packages:
     "packages/checksum",
     "packages/compression",
     "packages/zstd.wasm",
+    "packages/zstd.node",
     "packages/debug",
     "packages/passthrough",
     "packages/json",

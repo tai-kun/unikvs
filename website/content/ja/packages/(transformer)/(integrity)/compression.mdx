@@ -14,7 +14,7 @@ description: "gzip / deflate / deflate-raw でバイト列を透過的に圧縮�
 - 常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Compression"` を返します。
 
 :::warning
-1 つの KVS では 1 つの形式に統一してください。圧縮時と展開時で形式が異なると展開できないほか、[`@unikvs/zstd.wasm`](/packages/zstd-wasm) で圧縮したバイト列も展開できません。
+1 つの KVS では 1 つの形式に統一してください。圧縮時と展開時で形式が異なると展開できないほか、[`@unikvs/zstd.wasm`](/packages/zstd-wasm) や [`@unikvs/zstd.node`](/packages/zstd.node) で圧縮したバイト列も展開できません。
 :::
 
 インストールは次のコマンドで行います。

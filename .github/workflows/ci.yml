@@ -26,6 +26,8 @@ jobs:
             directory: "packages/compression"
           - name: "zstd.wasm"
             directory: "packages/zstd.wasm"
+          - name: "zstd.node"
+            directory: "packages/zstd.node"
           - name: "debug"
             directory: "packages/debug"
           - name: "passthrough"

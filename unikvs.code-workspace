@@ -29,6 +29,10 @@
       "path": "packages/zstd.wasm",
     },
     {
+      "name": "@unikvs/zstd.node",
+      "path": "packages/zstd.node",
+    },
+    {
       "name": "@unikvs/debug",
       "path": "packages/debug",
     },
