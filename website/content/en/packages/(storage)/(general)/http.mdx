@@ -1,0 +1,246 @@
+---
+title: "@unikvs/http"
+description: "Explains how to use @unikvs/http, the general-purpose HTTP storage for UniKVS, reading and writing with fetch alone."
+---
+
+## Overview [#overview]
+
+`@unikvs/http` is a storage plugin that uses any HTTP endpoint as a KV store.
+
+It runs on minimal runtimes such as Edge and Workers, reading and writing with `fetch` alone.
+
+- `name` always returns `"Http"` and `isOpen` is always `true`. `open` and `close` only validate aborts and create no connection.
+- Data is bytes-only. Keys map to a single segment directly under `baseUrl`.
+- Every key is stored with a `keyPrefix`. The default is `"unikvs:"`.
+
+:::warning
+`clear` requires a server implementation that handles `DELETE ?prefix=`. It cannot be used with servers that do not support it.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/http
+```
+
+Prepare the destination HTTP server separately.
+
+## Usage [#usage]
+
+`Http` implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { Http } from "@unikvs/http";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    baseUrl: {
+      type: "string",
+      description: "Base of the storage destination. Specify an absolute URL without a trailing `/`.",
+    },
+    options: {
+      type: "HttpOptions",
+      description: "Settings for the prefix, authentication, and more. Uses defaults when omitted.",
+    },
+    "options.keyPrefix": {
+      type: "string",
+      default: '"unikvs:"',
+      description: "Prefix added to every key. Limits the deletion scope of `clear`.",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to allow writes via repair.",
+    },
+    "options.allowClearWithoutPrefix": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to allow `clear` with an empty `keyPrefix`.",
+    },
+    "options.fetch": {
+      type: "IFetch",
+      default: "globalThis.fetch",
+      description: "The `fetch` implementation used for sending. Takes a `Request` and returns a `Response`.",
+    },
+    "options.headers": {
+      type: "Record<string, string>",
+      default: "{}",
+      description: "Default request headers. Use string values only.",
+    },
+    "options.token": {
+      type: "string",
+      description: "Default bearer token. Automatically attached when `Authorization` is missing.",
+    },
+  }}
+/>
+
+Below is an example of saving a value and reading it back.
+
+```ts
+import { Http } from "@unikvs/http";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(new Http("https://kv.example.com/store"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", new TextEncoder().encode("hello"));
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation | Supported data type |
+| --- | --- |
+| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` and `read` support bytes only, sent and received with `PUT` and `GET`.
+- Keys map to `` `${baseUrl}/${encoded}` ``, where `encoded` is a single segment encoding `` `${keyPrefix}${key}` ``, with `.` converted to `%2E`.
+- `clear` only uses `DELETE ?prefix=`, deleting data matching the prefix.
+- Stream operations only support `Uint8Array<ArrayBuffer>`.
+- `getWritable` accumulates chunks in memory and sends them in one `PUT` on `close`.
+- `getReadable` returns the response body as-is. Responses without a body return an empty stream.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### KeyNotFoundError
+
+#### Meaning
+
+The specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Check with `exists` before reading, or verify the key spelling.
+
+#### Example
+
+Below is an example of catching `KeyNotFoundError`.
+
+```ts
+import { Http, KeyNotFoundError } from "@unikvs/http";
+
+const storage = new Http("https://kv.example.com/store");
+
+try {
+  await storage.read({ key: "missing.bin", vars: {} });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidBaseUrlError
+
+#### Meaning
+
+`baseUrl` is not an absolute URL. Caused by a relative URL, an empty string, or one with a query or fragment.
+
+#### How to handle
+
+Specify an absolute URL without a query or fragment. A trailing `/` is removed automatically.
+
+### InvalidHeadersError
+
+#### Meaning
+
+The headers contain a non-string value. Includes `actual` in `meta`.
+
+#### How to handle
+
+Specify header values with strings only.
+
+### InvalidTokenError
+
+#### Meaning
+
+The token is an empty string or not a string. Includes `actual` in `meta`.
+
+#### How to handle
+
+Specify a non-empty string, or omit it when no token is used.
+
+### InvalidKeyError
+
+#### Meaning
+
+The key cannot be encoded as a URL path segment. Includes `key` in `meta`.
+
+#### How to handle
+
+Change to an encodable key.
+
+### ClearWithoutPrefixNotAllowedError
+
+#### Meaning
+
+`clear` was called with an empty `keyPrefix` without permission.
+
+#### How to handle
+
+Specify a unique `keyPrefix`, or pass `allowClearWithoutPrefix: true`.
+
+### ClearNotSupportedError
+
+#### Meaning
+
+The server does not support `DELETE ?prefix=`. Includes `prefix` and `status` in `meta`.
+
+#### How to handle
+
+Support bulk deletion on the server side, or avoid using `clear`.
+
+### HttpNetworkError
+
+#### Meaning
+
+Sending itself failed. Includes `method`, `url`, and `key` in `meta`.
+
+#### How to handle
+
+Check the destination and network state, and retry if needed.
+
+### HttpResponseError
+
+#### Meaning
+
+The response has an abnormal status. Includes `method`, `url`, `status`, `statusText`, and `key` in `meta`.
+
+#### How to handle
+
+Check the request and the server implementation against the status code.
+
+### InvalidChunkTypeError
+
+#### Meaning
+
+The chunk type is not `Uint8Array<ArrayBuffer>`. Includes `key`, `chunk`, and `chunkType` in `meta`.
+
+#### How to handle
+
+Only pass `Uint8Array<ArrayBuffer>` through streams.
+
+### RepairNotAllowedError
+
+#### Meaning
+
+A write via repair (`repair`) is not allowed. Includes `name` in `meta`. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Recreate the instance with `allowRepair: true`, or avoid repair writes in your workflow.

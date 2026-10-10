@@ -1,0 +1,87 @@
+---
+title: "@unikvs/writeonly"
+description: "Explains how to use @unikvs/writeonly, which wraps an existing storage as write-only."
+---
+
+## Overview [#overview]
+
+`@unikvs/writeonly` is a storage plugin that wraps an existing storage as write-only.
+
+Use it to keep backups where modification and deletion must be prevented.
+
+- `name` always returns `"WriteOnly"`, and `isOpen`, `open`, and `close` delegate to the inner storage.
+- Writes delegate directly to the inner storage, while reads always fail.
+- `delete` and `clear` do nothing by default, and can be allowed with `allowDelete`.
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/writeonly
+```
+
+## Usage [#usage]
+
+`WriteOnly` implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { WriteOnly } from "@unikvs/writeonly";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    storage: {
+      type: "IStorage",
+      description: "Inner storage to delegate writes to.",
+    },
+    options: {
+      type: "WriteOnlyOptions",
+      description: "Settings for delete permission. Uses defaults when omitted.",
+    },
+    "options.allowDelete": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to delegate `delete` and `clear` to the inner storage.",
+    },
+  }}
+/>
+
+Below is an example of using a readable storage together with a write-only archive.
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+import { WriteOnly } from "@unikvs/writeonly";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  report: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(new NodeFs(".data"))
+  .persist(new WriteOnly(new NodeFs(".archive")))
+  .create();
+
+await kvs.open();
+
+await kvs.set("report", new Uint8Array([1, 2, 3]));
+const report = await kvs.get("report");
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation | Supported data type |
+| --- | --- |
+| `write` | Data type supported by the inner storage |
+| `getWritable` chunks | Chunk type supported by the inner storage |
+
+- Writes delegate directly to the inner storage, so the supported data type follows the inner storage.
+- `read` is not supported. Calls always throw `KeyNotFoundError`.
+- `exists` always returns `false`.
+- `getWritable` is only exposed when the inner storage supports it, and the chunk type also follows the inner storage.
+- `getReadable` is not supported. Calls always throw `KeyNotFoundError`.
+
+## Errors [#errors]
+
+This package has no package-specific errors. `read` and `getReadable` always throw `KeyNotFoundError` from `@unikvs/core`.

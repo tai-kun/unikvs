@@ -1,0 +1,129 @@
+---
+title: "@unikvs/hex"
+description: "Explains how to use the Transformer plugin that transparently converts byte sequences to bytes representing hexadecimal strings."
+---
+
+## Overview [#overview]
+
+`@unikvs/hex` is a Transformer plugin that converts byte sequences to bytes representing hexadecimal (hex) strings. <Badge>Transformer</Badge>
+
+Use it for inspecting hash values or binary contents, for debug output, or for storing into destinations that only hold text.
+
+- Output is always lowercase (`0-9`, `a-f`); input accepts both uppercase and lowercase.
+- It is always open. No `open` or `close` is needed; `isOpen` always returns `true` and `name` always returns `"Hex"`.
+- It runs on Node.js, Bun, and browsers with no runtime-specific behavior differences.
+
+:::tip
+To store smaller, consider [`@unikvs/compression`](/packages/compression); to detect corruption or tampering, consider [`@unikvs/checksum`](/packages/checksum). This package provides neither compression nor verification.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/hex
+```
+
+## Usage [#usage]
+
+`Hex` implements ITransformer. Pass it to UniKvs via transform().
+
+```ts
+import { Hex } from "@unikvs/hex";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    options: {
+      type: "HexOptions",
+      description: "Settings for UTF-8 conversion. Runs with defaults when omitted.",
+    },
+    "options.encoder": {
+      type: "FastUtf8",
+      description: "The encoder that converts hex text to bytes. Specify it only when you need a replacement.",
+    },
+    "options.decoder": {
+      type: "FastUtf8",
+      description: "The decoder that converts bytes to hex text. Specify it only when you need a replacement.",
+    },
+  }}
+/>
+
+Below is an example of saving a written value as hex and restoring it to the original bytes on read.
+
+```ts
+import { Hex } from "@unikvs/hex";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .transform(new Hex())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
+await kvs.set("data", input);
+
+const output = await kvs.get("data");
+
+await kvs.close();
+```
+
+## Data Types [#data-types]
+
+| Method | Input | Output |
+| --- | --- | --- |
+| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` converts bytes to bytes (UTF-8) representing lowercase hex text.
+- `decode` restores bytes representing hex text to the original bytes.
+- The converted size is exactly twice the original size.
+- Empty input produces empty output.
+- It neither adds nor strips the `0x` prefix.
+
+- Chunks are simply concatenated with no delimiter.
+- `getEncodable` hex-encodes each input chunk independently and emits them in order.
+- `getDecodable` restores in 2-character units, holding a remainder (1 character) spanning chunk boundaries internally and joining it with the next chunk.
+- An empty stream and zero-length chunks produce no values.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### HexDecodeError
+
+#### Meaning
+
+The input cannot be interpreted as hex. Caused by an odd length or characters other than `0-9`, `a-f`, and `A-F`.
+
+#### How to handle
+
+Check that the input is even-length hex (a run of `0-9`, `a-f`, `A-F`). Pass it without a `0x` prefix, spaces, or newlines.
+
+#### Example
+
+Below is an example of catching `HexDecodeError`.
+
+```ts
+import { Hex, HexDecodeError } from "@unikvs/hex";
+
+const hex = new Hex();
+
+try {
+  hex.decode({ data: new TextEncoder().encode("abc") });
+} catch (error) {
+  if (error instanceof HexDecodeError) {
+    console.log("Cannot be interpreted as hex.");
+  } else {
+    throw error;
+  }
+}
+```
+
+Bytes that are invalid as UTF-8 propagate as a native `TypeError`, not as `HexDecodeError`.

@@ -1,0 +1,116 @@
+---
+title: "@unikvs/json"
+description: "Explains how to use the Transformer plugin that serializes values with JSON and JSON Lines (JSONL)."
+---
+
+## Overview [#overview]
+
+`@unikvs/json` is a Transformer plugin that serializes values with the standard `JSON.stringify` and `JSON.parse`. <Badge>Transformer</Badge>
+
+Use it to store plain values representable in JSON as text.
+
+- One-shot conversion treats one value as one JSON string; streams treat one value per line as JSON Lines (JSONL / NDJSON).
+- It is always open. No `open` or `close` is needed; `isOpen` always returns `true` and `name` always returns `"Json"`.
+- It has no additional dependencies and runs only on the runtime's `TextEncoder`, `TextDecoder`, and JSON APIs.
+
+:::tip
+To round-trip `Date` as a date and `BigInt`, `Map`, and `Set` with types preserved, use [`@unikvs/superjson`](/packages/superjson). To store smaller in binary form, consider [`@unikvs/cbor`](/packages/cbor).
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/json
+```
+
+## Usage [#usage]
+
+`Json` implements ITransformer. Pass it to UniKvs via transform().
+
+```ts
+import { Json } from "@unikvs/json";
+```
+
+Below is an example of saving an object as JSON and restoring it on read.
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Profile = {
+  name: string;
+  tags: string[];
+};
+
+const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
+  .transform(new Json())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("profile", { name: "tai-kun", tags: ["json", "transformer"] });
+
+const profile = await kvs.get("profile");
+
+await kvs.close();
+```
+
+## Data Types [#data-types]
+
+| Method | Input | Output |
+| --- | --- | --- |
+| `encode` | `unknown` | `Uint8Array<ArrayBuffer>` |
+| `decode` | `Uint8Array<ArrayBuffer>` | `unknown` |
+| `getEncodable` | `unknown` | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown` |
+
+- `encode` converts a value to bytes (UTF-8) of a JSON string.
+- `decode` converts bytes of a JSON string to a value.
+- Supports `null`, booleans, numbers, strings, arrays, and plain objects.
+- `Date` becomes an ISO 8601 string; `Map` and `Set` become empty objects.
+- `undefined`, functions, and symbols cannot be converted as root values; nested ones are omitted with their properties.
+
+- Chunks are joined with newline (`\n`) delimiters.
+- `getEncodable` applies `JSON.stringify` to one input chunk as one value and outputs it with a trailing `\n`.
+- `getDecodable` splits on `\n` and applies `JSON.parse` line by line, stripping a single trailing `\r`.
+- Completely empty lines are skipped, and the final line is processed even without a trailing newline.
+- Line splits at arbitrary byte boundaries are restored.
+- An empty stream outputs no values.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### JsonUnsupportedValueError
+
+#### Meaning
+
+The root value is `undefined`, a function, or a symbol and cannot be serialized to JSON. `meta.type` holds the result of `typeof`.
+
+#### How to handle
+
+Replace it with `null` or convert it to a JSON-representable value.
+
+#### Example
+
+Below is an example of catching `JsonUnsupportedValueError`.
+
+```ts
+import { Json, JsonUnsupportedValueError } from "@unikvs/json";
+
+const json = new Json();
+
+try {
+  json.encode({ data: undefined });
+} catch (error) {
+  if (error instanceof JsonUnsupportedValueError) {
+    console.log(error.meta.type);
+  } else {
+    throw error;
+  }
+}
+```
+
+Failed `BigInt` conversion propagates as a native `TypeError`; `decode` failures propagate as `SyntaxError` for invalid JSON, empty input, or trailing bytes, and as `TypeError` for invalid UTF-8. Streaming decode of an invalid line fails with `SyntaxError`.

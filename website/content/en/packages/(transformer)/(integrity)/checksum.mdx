@@ -1,0 +1,155 @@
+---
+title: "@unikvs/checksum"
+description: "Explains how to use the Transformer plugin that verifies hash values of byte sequences."
+---
+
+## Overview [#overview]
+
+`@unikvs/checksum` is a Transformer plugin that computes the hash value of a byte sequence and compares it against the expected value set in variables. <Badge>Transformer</Badge>
+
+Use it to detect corruption or tampering of stored data.
+
+- The supported algorithms are 6 kinds: MD5, SHA-1, SHA-224, SHA-256, SHA-384, and SHA-512, with each class (such as `ChecksumMd5`) mapped 1-to-1 to a variable key.
+- A successful verification does not change data; it returns the data as is.
+- It is always open. No `open` or `close` is needed; `isOpen` always returns `true`.
+
+:::tip
+Do not hard-code keys as strings; reference them from static properties such as `ChecksumSha256.CHECKSUM_VAR_NAME`. This prevents mismatches.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/checksum @noble/hashes@2.0.0
+```
+
+## Usage [#usage]
+
+`ChecksumSha256` implements ITransformer. Pass it to UniKvs via transform().
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    options: {
+      type: "ChecksumOptions",
+      description: "Settings for making verification mandatory. Passes through without verification when omitted.",
+    },
+    "options.required": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to throw an error when the variables contain no checksum.",
+    },
+  }}
+/>
+
+Below is an example of reading and writing while verifying with the SHA-256 expected value passed via variables.
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
+  .transform(new ChecksumSha256({ required: true }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set(
+  "data",
+  new TextEncoder().encode("test"),
+  {
+    [ChecksumSha256.CHECKSUM_VAR_NAME]:
+      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  },
+);
+
+const output = await kvs.get("data", {
+  [ChecksumSha256.CHECKSUM_VAR_NAME]:
+    "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+});
+
+await kvs.close();
+```
+
+## Data Types [#data-types]
+
+| Method | Input | Output |
+| --- | --- | --- |
+| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` and `decode` perform the same one-shot verification; the process does not differ between writes and reads.
+- `getEncodable` and `getDecodable` perform the same stream verification.
+- Data itself is not converted; the hex string matching the variable key (for example `ChecksumSha256.CHECKSUM_VAR_NAME`) is compared with the computed hash value.
+- When the variables contain no string, it throws an error with `required: true`, and skips computation and returns the data as is with `false` (default).
+
+- Chunks are simply concatenated with no delimiter.
+- Stream verification streams each chunk downstream as is while updating the hash, and compares it with the expected value in `flush` on completion.
+- When there is no checksum, it returns a pass-through `TransformStream`.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### ChecksumMismatchError
+
+#### Meaning
+
+The hash does not match the expected value. `meta` contains `actual` and `expected`.
+
+#### How to handle
+
+Check for a wrong expected value or data corruption, and compare `meta.actual` with `meta.expected` to isolate the cause.
+
+#### Example
+
+Below is an example of catching `ChecksumMismatchError`.
+
+```ts
+import { ChecksumMismatchError, ChecksumSha256 } from "@unikvs/checksum";
+
+const transformer = new ChecksumSha256();
+
+try {
+  transformer.encode({
+    vars: { [ChecksumSha256.CHECKSUM_VAR_NAME]: "0".repeat(64) },
+    data: new TextEncoder().encode("test"),
+  });
+} catch (error) {
+  if (error instanceof ChecksumMismatchError) {
+    console.log(error.meta.expected);
+    console.log(error.meta.actual);
+  } else {
+    throw error;
+  }
+}
+```
+
+### ChecksumRequiredError
+
+#### Meaning
+
+`vars` contains no string checksum even though `required: true` is set.
+
+#### How to handle
+
+Set a hex string on the variable key, or set `required` to `false`.
+
+### ChecksumInvalidVarNameError
+
+#### Meaning
+
+`CHECKSUM_VAR_NAME` is not a string. This does not occur with the regular subclasses.
+
+#### How to handle
+
+When extending the base class yourself, check the static properties.

@@ -1,0 +1,148 @@
+---
+title: "@unikvs/s3.bun"
+description: "Explains how to use @unikvs/s3.bun, which saves data in S3-compatible object storage with Bun's S3 client."
+---
+
+## Overview [#overview]
+
+<Badge variant="warning">Bun only</Badge>
+
+`@unikvs/s3.bun` is a storage plugin that saves data in S3-compatible object storage with Bun's built-in S3 client.
+
+Use it to save bytes in object storage without the AWS SDK.
+
+- `name` always returns `"S3"`. Create the client with `open` before use and dispose it with `close`.
+- Keys map directly to object keys, with no prefixing or encoding.
+- `clear` deletes every object in the bucket.
+
+:::warning
+`clear` deletes every object in the bucket. Use a bucket dedicated to UniKVS.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/s3.bun
+```
+
+Prepare the destination bucket in advance.
+
+## Usage [#usage]
+
+`S3` implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "string",
+      description: "Destination bucket name. Used for every operation.",
+    },
+    options: {
+      type: "S3StorageOptions",
+      description: "Bun's `S3Options` minus `bucket`, plus `allowRepair`.",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to allow writes via repair.",
+    },
+  }}
+/>
+
+Below is an example of saving a value and reading it back.
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(
+    new S3("my-bucket", {
+      region: "ap-northeast-1",
+    }),
+  )
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", new TextEncoder().encode("hello"));
+const data = await kvs.get("data");
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation | Supported data type |
+| --- | --- |
+| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` and `read` support bytes only.
+- `write`, `read`, `exists`, `delete`, and `clear` are all asynchronous.
+- `delete` succeeds even for missing keys.
+- Stream operations only support `Uint8Array<ArrayBuffer>`.
+- `getWritable` uses multipart upload; the part size is given via vars.
+- `getReadable` relays the object contents.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### StorageNotOpenError
+
+#### Meaning
+
+`close` was called while not open.
+
+#### How to handle
+
+Call `open` before use.
+
+### InvalidPartSizeError
+
+#### Meaning
+
+The part size in vars is not a positive integer. Includes `actual` in `meta`. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Specify a positive integer in bytes, or omit the vars to use the default.
+
+### StorageAbortedError
+
+#### Meaning
+
+A write stream was started with an already-aborted `signal`. Includes `key` in `meta`. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Pass a non-aborted `signal`, or check the cause of the abort.
+
+### UnsupportedRuntimeError
+
+#### Meaning
+
+`open` was called on a runtime other than Bun. Includes `name` and `runtime` in `meta`. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Run on the Bun runtime.
+
+### RepairNotAllowedError
+
+#### Meaning
+
+A write via repair (`repair`) is not allowed. Includes `name` in `meta`. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Recreate the instance with `allowRepair: true`, or avoid repair writes in your workflow.

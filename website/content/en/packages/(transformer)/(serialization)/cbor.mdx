@@ -1,0 +1,148 @@
+---
+title: "@unikvs/cbor"
+description: "Explains how to use the Transformer plugin that transparently converts values and CBOR sequences."
+---
+
+## Overview [#overview]
+
+`@unikvs/cbor` is a Transformer plugin that converts JavaScript values to CBOR (RFC 8949) bytes. <Badge>Transformer</Badge>
+
+Use it to store rich types such as `Date`, `Map`, `Set`, and `bigint` while preserving them.
+
+- It wraps [cbor-x](https://github.com/kriszyp/cbor-x) to fit `ITransformer`.
+- It is always open. No `open` or `close` is needed; `isOpen` always returns `true` and `name` always returns `"Cbor"`.
+- It uses cbor-x extension tags for `Date`, `Map`, and the like, so peers that cannot interpret extension tags see them as raw tags.
+
+:::note
+To interoperate with peers that cannot interpret extension tags, consider [`@unikvs/superjson`](/packages/superjson), whose contents can be inspected as text, or [`@unikvs/json`](/packages/json) when plain JSON is enough.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/cbor
+```
+
+## Usage [#usage]
+
+`Cbor` implements ITransformer. Pass it to UniKvs via transform().
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+```
+
+Below is an example of saving a value containing `Date`, `Map`, and `Set` as CBOR and restoring it with types preserved.
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import { Memory } from "@unikvs/memory";
+import UniKvs, { type PlainValue } from "unikvs";
+
+type Snapshot = {
+  createdAt: Date;
+  counts: Map<string, number>;
+  flags: Set<string>;
+};
+
+const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
+  .transform(new Cbor())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("snapshot", {
+  createdAt: new Date("2024-01-02T03:04:05.678Z"),
+  counts: new Map([["read", 1]]),
+  flags: new Set(["dirty"]),
+});
+
+const restored = await kvs.get("snapshot");
+
+await kvs.close();
+```
+
+## Data Types [#data-types]
+
+| Method | Input | Output |
+| --- | --- | --- |
+| `encode` | `unknown` | `Uint8Array<ArrayBuffer>` |
+| `decode` | `Uint8Array<ArrayBuffer>` | `unknown` |
+| `getEncodable` | `unknown` | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown` |
+
+- `encode` converts any value to bytes of a single CBOR data item.
+- `decode` restores bytes of a single data item to a value.
+- Supports `null`, booleans, numbers, `bigint`, strings, arrays, plain objects, `Date`, `Map`, `Set`, typed arrays, `RegExp`, and `Error`.
+- Functions and symbols cannot be converted.
+- Properties with symbol keys are removed.
+
+- Chunks are simply concatenated with no delimiter.
+- `getEncodable` converts each input chunk independently as one value; the output is a CBOR sequence (RFC 8742) concatenating multiple data items.
+- `getDecodable` emits a value as soon as one data item completes, emitting completed ones in order when a single chunk contains multiple items.
+- A truncated item is held internally and joined with the next chunk.
+- An empty stream and zero-length chunks produce no values.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### CborEncodeError
+
+#### Meaning
+
+The value cannot be converted to CBOR. Caused by a function or symbol in the root value or nested inside. The original error is kept in `cause`.
+
+#### How to handle
+
+Save a value that contains no functions or symbols.
+
+#### Example
+
+Below is an example of catching `CborEncodeError`.
+
+```ts
+import { Cbor, CborEncodeError } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+
+try {
+  cbor.encode({ data: () => 1 });
+} catch (error) {
+  if (error instanceof CborEncodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+```
+
+### CborDecodeError
+
+#### Meaning
+
+The bytes cannot be interpreted as a CBOR data item. Caused by empty bytes, indefinite-length strings, trailing bytes, or an incomplete item at stream end. The original error is kept in `cause`.
+
+#### How to handle
+
+Check that the input is the output of this package's `encode` or `getEncodable`. Do not pass stream output to a standalone `decode`; pair it with `getDecodable`.
+
+#### Example
+
+Below is an example of catching `CborDecodeError`.
+
+```ts
+import { Cbor, CborDecodeError } from "@unikvs/cbor";
+
+const cbor = new Cbor();
+
+try {
+  cbor.decode({ data: new Uint8Array(0) });
+} catch (error) {
+  if (error instanceof CborDecodeError) {
+    console.log(error.cause);
+  } else {
+    throw error;
+  }
+}
+```
