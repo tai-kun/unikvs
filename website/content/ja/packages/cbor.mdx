@@ -73,15 +73,15 @@ const cbor = new Cbor();
 | `getEncodable()` | 値を CBOR シーケンスへ変換する `TransformStream` を返します。 |
 | `getDecodable()` | CBOR シーケンスを値へ変換する `TransformStream` を返します。 |
 
-`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+`UniKvs` には `transform` で登録します。以降に登録するストレージの前段になります。
 
 ```ts
 import { Cbor } from "@unikvs/cbor";
 import UniKvs from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendTransformer(new Cbor())
-  .appendStorage(storage)
+  .transform(new Cbor())
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -163,8 +163,8 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .appendTransformer(new Cbor())
-  .appendStorage(new Memory())
+  .transform(new Cbor())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

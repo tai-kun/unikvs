@@ -20,7 +20,8 @@ flowchart LR
 - トランスフォーマーは、データのエンコード・デコードを透過的に行います。
 - ストレージは永続化先です。複数指定すると、すべてに並列で書き込みます。
 
-各ストレージは、登録時点までのトランスフォーマーを前段として使います。読み取り時は、見つかったストレージの前段を逆順に適用してデコードします。
+各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを使います。
+読み取り時は、見つかったストレージの前段を逆順に適用してデコードします。
 
 :::note
 書き込みはすべてに並列で行い、読み取りは登録順に探して最初に見つけたキーで返します。よく読む保存先を先に登録すると読み取りが速くなります。
@@ -40,21 +41,21 @@ const kvs = UniKvs.config({
     logs: StreamValue(v.instance(Uint8Array)),
   },
 })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 ```
 
 Valibot スキーマを使う場合は `valibot` を別途インストールします。`schema` を省略した場合は、型パラメーターでマッピングを指定します。この場合は型チェックのみで、実行時の検証は行いません。
 
 <Steps>
-  <Step title="setVariables(vars)">
-    実行時変数を設定します (任意)。
-  </Step>
-  <Step title="appendTransformer(transformer)">
+  <Step title="transform(transformer)">
     トランスフォーマーを追加します (任意)。
   </Step>
-  <Step title="appendStorage(storage)">
+  <Step title="persist(storage)">
     ストレージを追加します (必須、複数可)。
+  </Step>
+  <Step title="fork(branch)">
+    `UniKvs.branch()` で分岐先にストレージを追加します (任意)。
   </Step>
   <Step title="create()">
     KVS クライアントを作ります。
@@ -98,7 +99,7 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
     const kvs = UniKvs.config<{
       message: PlainValue<string>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("message", "hello");
@@ -114,7 +115,7 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
     const kvs = UniKvs.config<{
       logs: StreamValue<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("logs", new Uint8Array([0x01]));
@@ -130,7 +131,7 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
     const kvs = UniKvs.config<{
       blob: Value<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("blob", new Uint8Array([1, 2, 3]));
@@ -158,7 +159,7 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("message", "hello");
@@ -179,7 +180,7 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
         [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
       ],
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("msg-1", "hello");
@@ -202,12 +203,11 @@ Valibot スキーマを使う場合は `valibot` を別途インストールし�
 
 ## 実行時変数 [#variables]
 
-変数は操作の挙動を切り替える実行時コンテキストです。ビルダーの `setVariables()` で初期値を設定し、操作ごとの `vars` で上書きできます。
+変数は操作の挙動を切り替える実行時コンテキストです。操作ごとの `vars` で渡します。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .setVariables({ region: "ap-northeast-1" })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.set("foo", new Uint8Array([1]), {

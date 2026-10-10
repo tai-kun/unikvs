@@ -282,8 +282,8 @@ class ReadErrorStorage extends MockStorage {
  * 指定したストレージ群から UniKvs インスタンスを生成します。
  */
 function createKvs(storage: IStorage, ...more: IStorage[]): UniKvs {
-  const config = UniKvs.config().appendStorage(storage);
-  return more.reduce((c, s) => c.appendStorage(s), config).create();
+  const config = UniKvs.config().persist(storage);
+  return more.reduce((c, s) => c.persist(s), config).create();
 }
 
 async function createOpenedKvs(storage: IStorage, ...more: IStorage[]): Promise<UniKvs> {
@@ -439,7 +439,7 @@ describe("UniKvs - 設定からの生成", () => {
 
   test("静的メソッド config からも生成できる", ({ expect }) => {
     // 実行
-    const kvs = UniKvs.config().appendStorage(new MockStorage()).create();
+    const kvs = UniKvs.config().persist(new MockStorage()).create();
 
     // 検証
     expect(kvs).toBeInstanceOf(UniKvs);
@@ -649,7 +649,7 @@ describe("UniKvs - オープン / クローズ", () => {
 
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(new SlowOpenStorage())
+      .persist(new SlowOpenStorage())
       .create();
 
     // 実行: open の完了を待たずに close を呼び出す (#con はまだ null)
@@ -774,7 +774,7 @@ describe("UniKvs - 基本操作 (CRUD)", () => {
 describe("UniKvs - AbortSignal", () => {
   test("すでに abort 済みシグナルで各操作が即座に失敗する", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
     await kvs.open();
     const sig = AbortSignal.abort(new Error("aborted!"));
 
@@ -1033,8 +1033,8 @@ describe("UniKvs - トランスフォーマー連携", () => {
     // 準備
     const storage = new MockStorage();
     const kvs = UniKvs.config()
-      .appendTransformer(new MockTransformer())
-      .appendStorage(storage)
+      .transform(new MockTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -1052,8 +1052,8 @@ describe("UniKvs - トランスフォーマー連携", () => {
     // 準備
     const storage = new MockStorage();
     const kvs = UniKvs.config()
-      .appendTransformer(new MockTransformer())
-      .appendStorage(storage)
+      .transform(new MockTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
     await kvs.set("key1", "hello");
@@ -1089,9 +1089,9 @@ describe("UniKvs - トランスフォーマー連携", () => {
 
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new Append("A"))
-      .appendTransformer(new Append("B"))
-      .appendStorage(new Memory())
+      .transform(new Append("A"))
+      .transform(new Append("B"))
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -1118,8 +1118,8 @@ describe("UniKvs - トランスフォーマー連携", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .appendTransformer(new BoomTransformer())
-      .appendStorage(storage)
+      .transform(new BoomTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -1156,13 +1156,13 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
     const storage2 = new Memory();
     const storage3 = new Memory();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new Append("1"))
-      .appendTransformer(new Append("2"))
-      .appendStorage(storage1)
-      .appendTransformer(new Append("3"))
-      .appendStorage(storage2)
-      .appendTransformer(new Append("4"))
-      .appendStorage(storage3)
+      .transform(new Append("1"))
+      .transform(new Append("2"))
+      .persist(storage1)
+      .transform(new Append("3"))
+      .persist(storage2)
+      .transform(new Append("4"))
+      .persist(storage3)
       .create();
     await kvs.open();
 
@@ -1201,13 +1201,13 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
     const storage2 = new Memory();
     const storage3 = new Memory();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new Append("1"))
-      .appendTransformer(new Append("2"))
-      .appendStorage(storage1)
-      .appendTransformer(new Append("3"))
-      .appendStorage(storage2)
-      .appendTransformer(new Append("4"))
-      .appendStorage(storage3)
+      .transform(new Append("1"))
+      .transform(new Append("2"))
+      .persist(storage1)
+      .transform(new Append("3"))
+      .persist(storage2)
+      .transform(new Append("4"))
+      .persist(storage3)
       .create();
     await kvs.open();
     await kvs.set("foo", "x");
@@ -1268,11 +1268,11 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
     const storage1 = new Memory();
     const storage2 = new Memory();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new Suffix(1))
-      .appendTransformer(new Suffix(2))
-      .appendStorage(storage1)
-      .appendTransformer(new Suffix(3))
-      .appendStorage(storage2)
+      .transform(new Suffix(1))
+      .transform(new Suffix(2))
+      .persist(storage1)
+      .transform(new Suffix(3))
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -1300,8 +1300,8 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendStorage(storage)
+      .transform(new ChecksumSha256())
+      .persist(storage)
       .create();
     const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
     await kvs.open();
@@ -1324,8 +1324,8 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendStorage(storage)
+      .transform(new ChecksumSha256())
+      .persist(storage)
       .create();
     const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
     await kvs.open();
@@ -1359,8 +1359,8 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const sum = await sha256Hex(new Uint8Array([4, 5, 6]));
     const kvs = UniKvs.config<{ logs3: StreamValue<Uint8Array> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendStorage(new Memory())
+      .transform(new ChecksumSha256())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -1383,8 +1383,8 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const sum = await sha256Hex(new Uint8Array([1, 2, 3]));
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendStorage(new Memory())
+      .transform(new ChecksumSha256())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -1403,14 +1403,14 @@ describe("UniKvs - 変数とチェックサム", () => {
 });
 
 describe("UniKvs - 変数", () => {
-  test("setVariables で設定した変数が操作時にストレージへ渡される", async ({ expect }) => {
+  test("操作時に指定した vars がストレージへ渡される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().setVariables({ app: "test-app" }).appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     // 実行
-    await kvs.set("key1", "value1");
+    await kvs.set("key1", "value1", { vars: { app: "test-app" } });
 
     // 検証
     expect(storage.lastWriteVars?.["app"]).toBe("test-app");
@@ -1419,10 +1419,10 @@ describe("UniKvs - 変数", () => {
     await kvs.close();
   });
 
-  test("操作時の vars オプションで setVariables の変数を上書きできる", async ({ expect }) => {
+  test("オブジェクト形式の set({ key, value, vars }) でも操作時の vars が渡される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().setVariables({ a: 1 }).appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -1635,7 +1635,7 @@ describe("UniKvs - stream 操作", () => {
   }) => {
     // 準備
     const storage = new ErrorMidwayReadableStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     storage.entries.set("logs", [Uint8Array.from([1])]);
 
@@ -1665,7 +1665,7 @@ describe("UniKvs - stream 操作", () => {
   }) => {
     // 準備
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
@@ -1692,7 +1692,7 @@ describe("UniKvs - stream 操作", () => {
   test("ライブストリーム中でも同一キーの has は可能", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
@@ -1716,8 +1716,8 @@ describe("UniKvs - stream 操作", () => {
     const storage = new CancelObservableStorage();
     storage.entries.set("logs", [Uint8Array.from([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new FailGetDecodableTransformer())
-      .appendStorage(storage)
+      .transform(new FailGetDecodableTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -1781,9 +1781,9 @@ describe("UniKvs - stream 操作", () => {
       },
     });
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new PassThroughTransformer())
-      .appendTransformer(new BoomGetEncodableTransformer())
-      .appendStorage(new Memory())
+      .transform(new PassThroughTransformer())
+      .transform(new BoomGetEncodableTransformer())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -1798,7 +1798,7 @@ describe("UniKvs - stream 操作", () => {
 
   test("stream set → get の意味整合性 (Value 型キー)", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ data: Value<Uint8Array> }>().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config<{ data: Value<Uint8Array> }>().persist(new Memory()).create();
     await kvs.open();
 
     // 実行と検証: ストリーム書き込みした値は結合して取得できる
@@ -1827,8 +1827,8 @@ describe("UniKvs - 競合", () => {
     const s1 = new Memory();
     const s2 = new Memory();
     const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .appendStorage(s1)
-      .appendStorage(s2)
+      .persist(s1)
+      .persist(s2)
       .create();
     await kvs.open();
 
@@ -1846,7 +1846,7 @@ describe("UniKvs - 競合", () => {
 
   test("set と delete の競合でも一貫した状態になる", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
     await kvs.open();
     await kvs.set("foo", "init");
 
@@ -1868,7 +1868,7 @@ describe("UniKvs - 競合", () => {
   test("clear と set の競合でも壊れない", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<string>; bar: PlainValue<string> }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -1885,7 +1885,7 @@ describe("UniKvs - 競合", () => {
 
   test("並行 close しても壊れない", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
     await kvs.open();
 
     // 実行

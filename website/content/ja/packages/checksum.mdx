@@ -85,7 +85,7 @@ import { ChecksumSha256 } from "@unikvs/checksum";
 
 const transformer = new ChecksumSha256({ required: true });
 
-builder.appendTransformer(transformer);
+builder.transform(transformer);
 ```
 
 `builder` は `UniKvs.config()` が返す設定ビルダーです。検証用の変数は実行時に `vars` で渡します。

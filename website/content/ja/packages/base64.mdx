@@ -98,15 +98,15 @@ const omitted = new Base64({ padding: false });
 console.log(new TextDecoder().decode(omitted.encode({ data: new TextEncoder().encode("f") }))); // "Zg"
 ```
 
-`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+`UniKvs` には `transform` で登録します。以降に登録するストレージの前段になります。
 
 ```ts
 import { Base64 } from "@unikvs/base64";
 import UniKvs from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendTransformer(new Base64())
-  .appendStorage(storage)
+  .transform(new Base64())
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -203,8 +203,8 @@ import { Memory } from "@unikvs/memory";
 import UniKvs, { type PlainValue } from "unikvs";
 
 const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
-  .appendTransformer(new Base64())
-  .appendStorage(new Memory())
+  .transform(new Base64())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

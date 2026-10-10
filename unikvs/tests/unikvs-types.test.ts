@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
 
 import { PlainValue, StreamValue, type Value } from "../src/unikvs-config.js";
+import type { IUniKvsConfigBuilder } from "../src/unikvs-config.js";
 import type {
   KeyofKeyValueMappingHasPlainValue,
   KeyofKeyValueMappingHasStreamValue,
@@ -62,8 +63,36 @@ class NumberStorage implements IStorage<number> {
   clear(): void {}
 }
 
+/**
+ * `Bytes` を扱う非ストリーム対応ストレージです。
+ * 分岐内の `never` が親のチャンク型へ伝播するかを検証するために使用します。
+ */
+class BytesStorage implements IStorage<Bytes> {
+  readonly name = "BytesStorage";
+  readonly isOpen = true;
+
+  write(): void {}
+  read(): Bytes {
+    return new Uint8Array() as Bytes;
+  }
+  exists(): boolean {
+    return false;
+  }
+  delete(): void {}
+  clear(): void {}
+}
+
+/**
+ * ビルダーのチャンク入力型を取り出します。
+ * `fork` による `never` 伝播の検証に使用します。
+ */
+type $BuilderChunkInput<T> =
+  T extends IUniKvsConfigBuilder<any, any, any, infer TChunkInput, any, any, any, any, any>
+    ? TChunkInput
+    : never;
+
 function createTypedKvs(): UniKvs<Mapping> {
-  return UniKvs.config<Mapping>().appendStorage(new Memory()).create();
+  return UniKvs.config<Mapping>().persist(new Memory()).create();
 }
 
 describe("UniKvs - 型: 基本契約", () => {
@@ -189,7 +218,7 @@ describe("UniKvs - 型: schema とトランスフォーマーの推論", () => {
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     // 検証
@@ -204,7 +233,7 @@ describe("UniKvs - 型: schema とトランスフォーマーの推論", () => {
     const kvs = UniKvs.config({
       schema: { count: PlainValue(v.pipe(v.string(), v.transform(Number))) },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     // 検証: get は変換後の number、set は変換前の string を受け付ける
@@ -216,17 +245,78 @@ describe("UniKvs - 型: schema とトランスフォーマーの推論", () => {
     expect(typeOf(() => void kvs.set("count", 42))).toBeUndefined();
   });
 
-  test("appendTransformer と appendStorage の型が接続可能な組み合わせを強制する", ({ expect }) => {
+  test("transform と persist は接続可能な組み合わせのみを型で受け付ける", ({ expect }) => {
     // 実行と検証: string を number に変換するチェーンは number ストレージへ接続できる
     UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new StringToNumber())
-      .appendStorage(new NumberStorage())
+      .transform(new StringToNumber())
+      .persist(new NumberStorage())
       .create();
 
     // 実行と検証
     const storage = new NumberStorage();
     // @ts-expect-error 変換なしでは number 専用ストレージへ接続できない
-    const invalidConfig = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage);
+    const invalidConfig = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage);
     expect(invalidConfig).toBeDefined();
+  });
+
+  test("fork のみでは Builder のまま型レベルで create できない", ({ expect }) => {
+    // 準備
+    const branch = UniKvs.branch().persist(new Memory());
+    const config = UniKvs.config().fork(branch);
+
+    // 実行と検証
+    // @ts-expect-error: Builder には create がありません。
+    expect(typeOf(() => config.create())).toBeUndefined();
+    // @ts-expect-error: Branch には create がありません。
+    expect(typeOf(() => branch.create())).toBeUndefined();
+  });
+});
+
+describe("UniKvs - 型: fork の互換検査", () => {
+  test("親出力と分岐入力の不一致は型エラーになる", ({ expect }) => {
+    // 準備: 親は string、分岐先頭は number のため不適合です。
+    // 先頭のみを検査します。
+    // 中間以降は検査しません。
+    const branch = UniKvs.branch().persist(new NumberStorage());
+
+    // 実行と検証
+    // @ts-expect-error 親出力 string は分岐入力 number を受容できない
+    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(branch))).toBeUndefined();
+  });
+
+  test("persist なし分岐は型エラーにならない", ({ expect }) => {
+    // 準備: 空分岐は no-op のため検査を素通りします。
+    const empty = UniKvs.branch();
+
+    // 実行と検証: 空分岐の fork は型エラーになりません。
+    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
+
+    // 準備: 未使用 transformer のみで persist なしの分岐も no-op のため検査しません。
+    const unused = UniKvs.branch().transform(new StringToNumber());
+
+    // 実行と検証: persist なし分岐の不一致は型エラーになりません。
+    expect(
+      typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused)),
+    ).toBeUndefined();
+  });
+
+  test("分岐内の never は親のチャンク型に伝播する", () => {
+    // 準備: 親はストリーム対応、分岐は非ストリーム対応です。
+    const builder = UniKvs.config<{ data: Value<Bytes> }>().fork(
+      UniKvs.branch().persist(new BytesStorage()),
+    );
+
+    // 検証: 親チャンク入力は `never` になります。
+    expectTypeOf<$BuilderChunkInput<typeof builder>>().toEqualTypeOf<never>();
+  });
+
+  test("ストリーム対応の分岐では親のチャンク型を保つ", () => {
+    // 準備
+    const builder = UniKvs.config<{ logs: StreamValue<Bytes> }>()
+      .fork(UniKvs.branch().persist(new Memory()))
+      .persist(new Memory());
+
+    // 検証: fork 後も persist と create が型レベルでつながります。
+    expectTypeOf(typeOf(() => builder.create())).toMatchTypeOf<UniKvs<{ logs: StreamValue<Bytes> }>>();
   });
 });

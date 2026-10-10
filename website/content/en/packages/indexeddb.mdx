@@ -53,7 +53,7 @@ import Indexeddb from "@unikvs/indexeddb";
 import { UniKvs } from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendStorage(new Indexeddb())
+  .persist(new Indexeddb())
   .create();
 
 await kvs.open();

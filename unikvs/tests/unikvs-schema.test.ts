@@ -93,7 +93,7 @@ describe("UniKvs.config - schema からの型推論", () => {
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -124,7 +124,7 @@ describe("UniKvs - schema による入出力検証", () => {
     const kvs = UniKvs.config({
       schema: { message: PlainValue(v.pipe(v.string(), v.minLength(1))) },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -145,7 +145,7 @@ describe("UniKvs - schema による入出力検証", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     await kvs.open();
     mapOf(storage).set("message", 42);
@@ -161,7 +161,7 @@ describe("UniKvs - schema による入出力検証", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -196,7 +196,7 @@ describe("UniKvs - schema による入出力検証", () => {
         ),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     await kvs.open();
     mapOf(storage).set("logs", new Uint8Array());
@@ -216,7 +216,7 @@ describe("UniKvs - schema による入出力検証", () => {
   }) => {
     // 準備
     const kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
     const source = streamOf([new Uint8Array([1, 2])]);
@@ -243,7 +243,7 @@ describe("UniKvs - schema による入出力検証", () => {
   test("Value のスキーマはプレーン値とストリームのどちらも扱える", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config({ schema: { data: Value(v.instance(Uint8Array)) } })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -282,8 +282,8 @@ describe("UniKvs - schema による入出力検証", () => {
 
     const storage = new Memory();
     const kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .appendTransformer(new JsonTransformer())
-      .appendStorage(storage)
+      .transform(new JsonTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -303,7 +303,7 @@ describe("UniKvs - schema による入出力検証", () => {
   }) => {
     // 準備
     const kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -326,7 +326,7 @@ describe("UniKvs - schema による入出力検証", () => {
         [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
       ],
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 

@@ -14,8 +14,8 @@ describe("UniKvs - ストリーム書き込み", () => {
     const storage1 = new FakeStreamStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3]), new Uint8Array([4])];
@@ -36,7 +36,7 @@ describe("UniKvs - ストリーム書き込み", () => {
   }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const chunks = [
       new Uint8Array([]),
@@ -61,7 +61,7 @@ describe("UniKvs - ストリーム書き込み", () => {
   test("空ストリームは空のまま保存され、has は true になる", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -83,7 +83,7 @@ describe("UniKvs - ストリーム書き込み", () => {
   }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const source = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -116,7 +116,7 @@ describe("UniKvs - ストリーム書き込み", () => {
     }
 
     const storage = new FailingWriteStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     let cancelled = false;
     const source = new ReadableStream<Uint8Array>({
@@ -143,7 +143,7 @@ describe("UniKvs - ストリーム書き込み", () => {
     const writeGate = new Gate();
     storage.writeGate = writeGate;
     storage.onWriteStart = () => entered.resolve();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const chunks = [new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])];
     let pulls = 0;
@@ -185,8 +185,8 @@ describe("UniKvs - ストリーム読み取り", () => {
     const storage2 = new FakeStreamStorage("storage2");
     storage2.map.set("logs", [new Uint8Array([2])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -204,7 +204,7 @@ describe("UniKvs - ストリーム読み取り", () => {
   test("stream の存在確認は has と一貫している", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行と検証
@@ -218,7 +218,7 @@ describe("UniKvs - ストリーム読み取り", () => {
   test("getReader で最後まで読むと dispose 後の再書き込みが可能になる", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
@@ -251,7 +251,7 @@ describe("UniKvs - ストリーム読み取り", () => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const vs = await kvs.stream("logs");
 
@@ -267,7 +267,7 @@ describe("UniKvs - ストリーム読み取り", () => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -290,7 +290,7 @@ describe("UniKvs - ストリーム読み取り", () => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1]), new Uint8Array([2])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -310,7 +310,7 @@ describe("UniKvs - ストリーム読み取り", () => {
   test("Memory を介したストリーム往復でバイト列が一致する", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
     const bytes = Uint8Array.from({ length: 1024 }, (_, i) => i % 256);

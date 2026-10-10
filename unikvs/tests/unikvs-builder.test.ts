@@ -2,10 +2,10 @@ import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
 import { MissingStorageError } from "../src/errors.js";
-import type { PlainValue } from "../src/unikvs-config.js";
+import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
-import { FakeStorage, FakeTransformer } from "./_helpers.js";
+import { FakeStorage, FakeStreamStorage, FakeTransformer, collect, streamOf } from "./_helpers.js";
 
 /**
  * encode のたびに自身のタグを末尾へ付与し、decode で除去するトランスフォーマーです。
@@ -36,7 +36,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     const storage = new FakeStorage();
 
     // 実行
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     await kvs.set("foo", "bar");
 
@@ -53,7 +53,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     const storage = new FakeStorage();
 
     // 実行
-    const kvs = UniKvs.config({}).appendStorage(storage).create();
+    const kvs = UniKvs.config({}).persist(storage).create();
     await kvs.open();
 
     // 検証
@@ -66,7 +66,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 
   test("ストレージを登録せず create すると MissingStorageError を投げる", ({ expect }) => {
     // 準備
-    const config = new UniKvsConfig(UniKvs).appendTransformer(new FakeTransformer());
+    const config = new UniKvsConfig(UniKvs).transform(new FakeTransformer());
 
     // 実行と検証
     expect(() => config.create()).toThrow(MissingStorageError);
@@ -74,7 +74,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 
   test("create を複数回呼ぶと独立したインスタンスが生成される", async ({ expect }) => {
     // 準備
-    const config = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory());
+    const config = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory());
 
     // 実行
     const kvs1 = config.create();
@@ -90,13 +90,13 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     await kvs1.close();
   });
 
-  test("同じ Transformer を複数回 append するとその回数だけ適用される", async ({ expect }) => {
+  test("同じ Transformer で transform を重ねた回数分だけ適用される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new TagTransformer("X"))
-      .appendTransformer(new TagTransformer("X"))
-      .appendStorage(storage)
+      .transform(new TagTransformer("X"))
+      .transform(new TagTransformer("X"))
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -110,12 +110,12 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     await kvs.close();
   });
 
-  test("同じ Storage を複数回 append するとすべての登録先へ書き込まれる", async ({ expect }) => {
+  test("同じ Storage を persist で複数回登録するとすべての登録先へ書き込まれる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage)
-      .appendStorage(storage)
+      .persist(storage)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -130,12 +130,12 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     await kvs.close();
   });
 
-  test("多数の Storage を append してもすべてに書き込まれる", async ({ expect }) => {
+  test("多数の Storage を persist で登録してもすべてに書き込まれる", async ({ expect }) => {
     // 準備
     const storages = Array.from({ length: 25 }, (_, i) => new FakeStorage(`storage-${i}`));
     const [first, ...rest] = storages;
-    const config = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(first!);
-    const kvs = rest.reduce((c, storage) => c.appendStorage(storage), config).create();
+    const config = UniKvs.config<{ foo: PlainValue<string> }>().persist(first!);
+    const kvs = rest.reduce((c, storage) => c.persist(storage), config).create();
     await kvs.open();
 
     // 実行
@@ -152,15 +152,15 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 });
 
 describe("UniKvsConfig - トランスフォーマーとストレージの捕捉", () => {
-  test("appendStorage はその時点のトランスフォーマー数を捕捉する", async ({ expect }) => {
+  test("persist では登録時点のパイプラインのスナップショットを捕捉する", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new TagTransformer("1"))
-      .appendStorage(storage1)
-      .appendTransformer(new TagTransformer("2"))
-      .appendStorage(storage2)
+      .transform(new TagTransformer("1"))
+      .persist(storage1)
+      .transform(new TagTransformer("2"))
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -175,16 +175,16 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     await kvs.close();
   });
 
-  test("ストレージ登録後にトランスフォーマーを追加しても既存ストレージの前段は変わらない", async ({
+  test("ストレージ登録後にトランスフォーマーを追加しても既存ストレージのチェーンは変わらない", async ({
     expect,
   }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendTransformer(new TagTransformer("1"))
-      .appendStorage(storage2)
+      .persist(storage1)
+      .transform(new TagTransformer("1"))
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -199,15 +199,15 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     await kvs.close();
   });
 
-  test("get は書き込み時と同じストレージ別チェーンでデコードする", async ({ expect }) => {
+  test("get は書き込み時と同じストレージ別のチェーンでデコードする", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(new TagTransformer("1"))
-      .appendStorage(storage1)
-      .appendTransformer(new TagTransformer("2"))
-      .appendStorage(storage2)
+      .transform(new TagTransformer("1"))
+      .persist(storage1)
+      .transform(new TagTransformer("2"))
+      .persist(storage2)
       .create();
     await kvs.open();
     await kvs.set("foo", "x");
@@ -222,15 +222,46 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     // 後片付け
     await kvs.close();
   });
+
+  test("persist なし末尾 transform は破棄され読み書きに影響しない", async ({ expect }) => {
+    // 準備
+    const storage = new FakeStorage();
+    const trailing = new TagTransformer("Z");
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .persist(storage)
+      .transform(trailing)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("foo", "x");
+    const value = await kvs.get("foo");
+
+    // 検証
+    expect(storage.map.get("foo")).toBe("x");
+    expect(value).toBe("x");
+    expect(trailing.callsOf("encode")).toHaveLength(0);
+    expect(trailing.callsOf("open")).toHaveLength(0);
+
+    // 後片付け
+    await kvs.close();
+    expect(trailing.callsOf("close")).toHaveLength(0);
+  });
 });
 
-describe("UniKvsConfig - setVariables", () => {
-  test("オブジェクト形式の変数はすべての操作へ渡される", async ({ expect }) => {
+describe("UniKvsConfig - fork", () => {
+  test("fork の分岐先ごとに異なるパイプライン出力が保持される", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
+    const storageA = new FakeStorage("storageA");
+    const storageB = new FakeStorage("storageB");
+    const storageC = new FakeStorage("storageC");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ app: "builder", region: "tokyo" })
-      .appendStorage(storage)
+      .transform(new TagTransformer("1"))
+      .fork(UniKvs.branch().transform(new TagTransformer("A")).persist(storageA))
+      .transform(new TagTransformer("2"))
+      .fork(UniKvs.branch().transform(new TagTransformer("B")).persist(storageB))
+      .transform(new TagTransformer("3"))
+      .persist(storageC)
       .create();
     await kvs.open();
 
@@ -238,119 +269,114 @@ describe("UniKvsConfig - setVariables", () => {
     await kvs.set("foo", "x");
 
     // 検証
-    const vars = storage.callsOf("write")[0]?.vars;
-    expect(vars?.["app"]).toBe("builder");
-    expect(vars?.["region"]).toBe("tokyo");
+    expect(storageA.map.get("foo")).toBe("x1A");
+    expect(storageB.map.get("foo")).toBe("x12B");
+    expect(storageC.map.get("foo")).toBe("x123");
+    expect(await kvs.get("foo")).toBe("x");
 
     // 後片付け
     await kvs.close();
   });
 
-  test("エントリー配列形式の変数もオブジェクト形式と同じように渡される", async ({ expect }) => {
-    // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables([
-        ["app", "builder"],
-        ["attempt", 3],
-      ])
-      .appendStorage(storage)
-      .create();
-    await kvs.open();
-
-    // 実行
-    await kvs.set("foo", "x");
-
-    // 検証
-    const vars = storage.callsOf("write")[0]?.vars;
-    expect(vars?.["app"]).toBe("builder");
-    expect(vars?.["attempt"]).toBe(3);
-
-    // 後片付け
-    await kvs.close();
-  });
-
-  test("setVariables を再び呼ぶと以前の変数は置換される", async ({ expect }) => {
-    // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ a: 1, b: 2 })
-      .setVariables({ b: 3 })
-      .appendStorage(storage)
-      .create();
-    await kvs.open();
-
-    // 実行
-    await kvs.set("foo", "x");
-
-    // 検証
-    const vars = storage.callsOf("write")[0]?.vars;
-    expect(vars).not.toHaveProperty("a");
-    expect(vars?.["b"]).toBe(3);
-
-    // 後片付け
-    await kvs.close();
-  });
-
-  test("空オブジェクトを setVariables すると変数は空になる", async ({ expect }) => {
-    // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ a: 1 })
-      .setVariables({})
-      .appendStorage(storage)
-      .create();
-    await kvs.open();
-
-    // 実行
-    await kvs.set("foo", "x");
-
-    // 検証
-    expect(storage.callsOf("write")[0]?.vars).not.toHaveProperty("a");
-
-    // 後片付け
-    await kvs.close();
-  });
-
-  test("setVariables に渡した元オブジェクトを変更しても生成済みクライアントに影響しない", async ({
+  test("fork 内の追加は分岐先に閉じ、後のメインの transform は漏れない", async ({
     expect,
   }) => {
     // 準備
-    const storage = new FakeStorage();
-    const vars = { a: "before" };
+    const storage1 = new FakeStorage("storage1");
+    const storage2 = new FakeStorage("storage2");
+    const storage3 = new FakeStorage("storage3");
+    const storageMain = new FakeStorage("storageMain");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables(vars)
-      .appendStorage(storage)
+      .transform(new TagTransformer("1"))
+      .fork(
+        UniKvs.branch()
+          .transform(new TagTransformer("A"))
+          .persist(storage1)
+          .persist(storage2)
+          .fork(UniKvs.branch().transform(new TagTransformer("N")).persist(storage3)),
+      )
+      .transform(new TagTransformer("2"))
+      .persist(storageMain)
       .create();
     await kvs.open();
 
     // 実行
-    vars.a = "after";
     await kvs.set("foo", "x");
 
     // 検証
-    expect(storage.callsOf("write")[0]?.vars?.["a"]).toBe("before");
+    expect(storage1.map.get("foo")).toBe("x1A");
+    expect(storage2.map.get("foo")).toBe("x1A");
+    expect(storage3.map.get("foo")).toBe("x1AN");
+    expect(storageMain.map.get("foo")).toBe("x12");
+    expect(await kvs.get("foo")).toBe("x");
 
     // 後片付け
     await kvs.close();
   });
 
-  test("create 前に setVariables の元オブジェクトを変更しても影響しない", async ({ expect }) => {
+  test("transform 後に fork 先で追加したストレージも create 対象になる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const vars = { a: "before" };
-    const config = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables(vars)
-      .appendStorage(storage);
+    // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
+    const kvs = new UniKvsConfig(UniKvs)
+      .transform(new TagTransformer("1"))
+      .fork(UniKvs.branch().persist(storage))
+      .create();
+    await kvs.open();
 
     // 実行
-    vars.a = "after";
-    const kvs = config.create();
-    await kvs.open();
     await kvs.set("foo", "x");
 
     // 検証
-    expect(storage.callsOf("write")[0]?.vars?.["a"]).toBe("before");
+    expect(storage.map.get("foo")).toBe("x1");
+    expect(await kvs.get("foo")).toBe("x");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("fork 先のストレージへストリーム書き込みできる", async ({ expect }) => {
+    // 準備
+    const storageA = new FakeStreamStorage("storageA");
+    const storageB = new FakeStreamStorage("storageB");
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .fork(UniKvs.branch().persist(storageA))
+      .persist(storageB)
+      .create();
+    await kvs.open();
+    const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
+
+    // 実行
+    await kvs.set("logs", streamOf(chunks));
+
+    // 検証
+    expect(storageA.map.get("logs")).toStrictEqual(chunks);
+    expect(storageB.map.get("logs")).toStrictEqual(chunks);
+    const valueStream = await kvs.stream("logs");
+    await expect(collect(valueStream)).resolves.toStrictEqual(chunks);
+
+    // 後片付け
+    await valueStream.dispose();
+    await kvs.close();
+  });
+
+  test("空の branch を fork してもストレージは増えず読み書きできる", async ({ expect }) => {
+    // 準備
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .persist(storage)
+      .fork(UniKvs.branch())
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("foo", "x");
+    const value = await kvs.get("foo");
+
+    // 検証
+    expect(value).toBe("x");
+    expect(storage.map.get("foo")).toBe("x");
+    expect(storage.callsOf("write")).toHaveLength(1);
 
     // 後片付け
     await kvs.close();

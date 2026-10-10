@@ -19,7 +19,7 @@ npm i @unikvs/memory
 
 ## 使い方 [#usage]
 
-`Memory` は `IStorage` を実装しています。`UniKvs` には `appendStorage()` で渡し、単体で直接操作もできます。
+`Memory` は `IStorage` を実装しています。`UniKvs` には `persist()` で渡し、単体で直接操作もできます。
 
 <Tabs>
   <Tab title="UniKvs 経由">
@@ -31,7 +31,7 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   foo: Value<string>;
 }>()
-  .appendStorage(new Memory())
+  .persist(new Memory())
   .create();
 ```
 

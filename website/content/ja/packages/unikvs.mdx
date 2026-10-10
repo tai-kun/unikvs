@@ -28,7 +28,7 @@ npm i unikvs
         foo: PlainValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
 
@@ -44,7 +44,7 @@ npm i unikvs
         [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
       ],
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
   </Tab>
@@ -57,7 +57,7 @@ npm i unikvs
     const kvs = UniKvs.config<{
       foo: Value<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
   </Tab>
@@ -70,14 +70,14 @@ npm i unikvs
 設定は以下の順序で行います。
 
 <Steps>
-  <Step title="`setVariables(vars)`">
-    実行時変数の初期値を設定します (任意)。呼ぶたびに置換します。
-  </Step>
-  <Step title="`appendTransformer(transformer)`">
+  <Step title="`transform(transformer)`">
     トランスフォーマーを追加します (任意)。ストレージ登録後にも追加できます。
   </Step>
-  <Step title="`appendStorage(storage)`">
+  <Step title="`persist(storage)`">
     ストレージを追加します (必須、複数可)。
+  </Step>
+  <Step title="`fork(branch)`">
+    分岐したパイプラインでストレージを追加します (任意)。分岐先での追加は親パイプラインに漏れません。
   </Step>
   <Step title="`create()`">
     `UniKvs` クライアントを作ります。ストレージがなければ `MissingStorageError` を投げます。
@@ -85,10 +85,10 @@ npm i unikvs
 </Steps>
 
 :::warning[ストレージ未登録に注意]
-`create()` の前に `appendStorage()` を少なくとも 1 回呼んでください。
+`create()` の前に `persist()` を少なくとも 1 回呼んでください。
 :::
 
-各ストレージは、登録時点までのトランスフォーマーを前段として使います。
+各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを使います。
 
 書き込みはすべてのストレージに並列で行い、読み取りは見つかったストレージの前段を逆順に適用してデコードします。
 
@@ -142,7 +142,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
       message: PlainValue<string>;
       logs: StreamValue<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.open();
@@ -166,7 +166,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.open();
@@ -208,7 +208,7 @@ const kvs = UniKvs.config({
     message: PlainValue(v.pipe(v.string(), v.minLength(1))),
   },
 })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -271,17 +271,16 @@ await using (const valueStream = await kvs.stream("logs")) {
 
 ## 変数とキャンセル [#variables-and-cancellation]
 
-`vars` で操作ごとの設定を渡せます。ビルダーの `setVariables()` を上書きする形で結合します。
+`vars` で操作ごとの設定を渡します。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .setVariables({ region: "ap-northeast-1" })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.open();
 
-// 操作ごとの vars が同じキーを上書きします
+// 操作ごとに vars を渡します
 await kvs.set("foo", new Uint8Array([1]), {
   vars: { region: "us-east-1" },
 });
@@ -356,7 +355,7 @@ try {
     const kvs = UniKvs.config<{
       foo: Value<Uint8Array>;
     }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     await kvs.open();
@@ -383,7 +382,7 @@ try {
         foo: PlainValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     await kvs.open();

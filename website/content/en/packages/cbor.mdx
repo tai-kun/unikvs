@@ -73,15 +73,15 @@ Its main members are as follows.
 | `getEncodable()` | Returns a `TransformStream` that converts values to a CBOR sequence. |
 | `getDecodable()` | Returns a `TransformStream` that converts a CBOR sequence to values. |
 
-Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+Register it with `UniKvs` via `transform`. It becomes the upstream of subsequently registered storages.
 
 ```ts
 import { Cbor } from "@unikvs/cbor";
 import UniKvs from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendTransformer(new Cbor())
-  .appendStorage(storage)
+  .transform(new Cbor())
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -163,8 +163,8 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .appendTransformer(new Cbor())
-  .appendStorage(new Memory())
+  .transform(new Cbor())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

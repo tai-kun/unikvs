@@ -9,8 +9,8 @@ When multiple Storages are registered, writes go to all of them in parallel. Rea
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .appendStorage(new Memory())
-  .appendStorage(new NodeFs(".tmp"))
+  .persist(new Memory())
+  .persist(new NodeFs(".tmp"))
   .create();
 ```
 
@@ -24,14 +24,14 @@ flowchart LR
 
 ## Pipeline branching [#branching]
 
-Each Storage uses the Transformers registered up to that point as its upstream pipeline. Adding them alternately applies different transformations per Storage.
+Each Storage uses a snapshot of the pipeline taken at its `persist()` call as its upstream pipeline. Adding them alternately applies different transformations per Storage.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .appendTransformer(new Compression("gzip"))
-  .appendStorage(new Memory()) // compression only
-  .appendTransformer(new ChecksumSha256())
-  .appendStorage(new NodeFs(".tmp")) // compression + checksum
+  .transform(new Compression("gzip"))
+  .persist(new Memory()) // compression only
+  .transform(new ChecksumSha256())
+  .persist(new NodeFs(".tmp")) // compression + checksum
   .create();
 ```
 
@@ -43,12 +43,38 @@ flowchart LR
   Checksum --> NodeFs
 ```
 
+When you don't want additions in a branch to leak into the main pipeline, use `fork()`. Transformers added inside the branch stay inside it, so divergent pipelines stay readable.
+
+```ts
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .transform(new Compression("gzip")) // shared by A, B, and C
+  .fork(UniKvs.branch().persist(new Memory())) // A: gzip only (fast cache)
+  .transform(new ChecksumSha256()) // shared by B and C
+  .fork(UniKvs.branch().transform(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + two checksums (audit)
+  .persist(new NodeFs(".data")) // C: gzip + checksum (primary)
+  .create();
+```
+
+```mermaid
+flowchart LR
+  Input --> Compression
+  Compression --> Memory
+  Compression --> ChecksumSha256
+  ChecksumSha256 --> ChecksumMd5
+  ChecksumMd5 --> Cache["NodeFs(.cache)"]
+  ChecksumSha256 --> Data["NodeFs(.data)"]
+```
+
+Without `fork()`, the checksum for B would leak into C. Nest `transform()` and `fork()` to extend this shape.
+Type checking covers only the head input of a branch.
+Mismatches after the head are not caught at the type level.
+
 <CodeGroup>
 
 ```ts Caching with persistence
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .appendStorage(new Memory())
-  .appendStorage(new NodeFs(".tmp"))
+  .persist(new Memory())
+  .persist(new NodeFs(".tmp"))
   .create();
 ```
 
@@ -58,7 +84,7 @@ const storages = process.env.NODE_ENV === "production"
   : [new Memory()];
 
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .appendStorage(storages[0])
+  .persist(storages[0])
   .create();
 ```
 
@@ -71,13 +97,15 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 
 ## Write-back on read [#read-repair]
 
-Pass `repair: true` to `get` and `stream` to write data found in a later storage back to earlier storages while decoding. Each storage's format is determined by the number of transformers at registration time, so the intermediate decoded value is already in the right format for its target. No re-encoding is needed.
+Pass `repair: true` to `get` and `stream` to write data found in a later storage back to earlier storages.
+Reads fully decode the hit data to the original value, then re-encode it through each write-back target's own pipeline.
+Intermediate decoded values do not match write-back targets when pipelines branch, so reuse without re-encoding does not hold.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .appendStorage(new Memory()) // before compression
-  .appendTransformer(new Compression("gzip"))
-  .appendStorage(new NodeFs(".tmp")) // after compression
+  .persist(new Memory()) // before compression
+  .transform(new Compression("gzip"))
+  .persist(new NodeFs(".tmp")) // after compression
   .create();
 
 // A value that only exists in NodeFs is restored and also written back to Memory.

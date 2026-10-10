@@ -30,7 +30,7 @@ try {
     | `KeyNotFoundError` | キーがどのストレージにも存在しません。 | キー名と保存済みかを確認します。 |
     | `UniKvsIsNotOpenError` | 未オープンで操作しました。 | `open()` を先に呼びます。 |
     | `UniKvsIsOpenError` | オープン済みで再度 `open()` しました。 | 二重オープンを避けます。 |
-    | `MissingStorageError` | ストレージ未登録で `create()` しました。 | `appendStorage()` を追加します。 |
+    | `MissingStorageError` | ストレージ未登録で `create()` しました。 | `persist()` を追加します。 |
     | `StorageIsNotOpenError` | ストレージが未オープンです。 | `open()` の呼び出しを確認します。 |
     | `TransformerIsNotOpenError` | トランスフォーマーが未オープンです。 | `open()` の呼び出しを確認します。 |
   </AccordionItem>

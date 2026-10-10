@@ -23,6 +23,7 @@ import UniKvsConfig, {
   type UniKvsSchema,
   type KeyValueMapping,
   type ValueSchemaInfo,
+  type IUniKvsBranch,
   type UniKvsConfigOptions,
   type $InferPlainValueData,
   type IUniKvsConfigBuilder,
@@ -31,6 +32,7 @@ import UniKvsConfig, {
   type $InferKeyValueMapping,
   type $InferPlainValueInput,
   type $InferStreamValueChunkData,
+  UniKvsBranch,
 } from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
@@ -124,6 +126,22 @@ function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
   }
 
   return v.parseInput(info.schema, value);
+}
+
+// 指定されたストリームをすべてキャンセルします。
+async function cancelAllBranches(
+  streams: Iterable<{ cancel(reason?: unknown): Promise<void> }>,
+  reason: unknown,
+): Promise<void> {
+  await Promise.all(
+    [...new Set(streams)].map(async (stream) => {
+      try {
+        await stream.cancel(reason);
+      } catch {
+        // キャンセルに失敗しても元の例外の伝播を優先します。
+      }
+    }),
+  );
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -467,31 +485,6 @@ export type UniKvsDestination = {
 };
 
 /**
- * 書き戻し先のストレージを、保持するデータの段階ごとにまとめます。
- *
- * ストレージの保存形式は登録時点のトランスフォーマー数で決まるため、同じ数を持つストレージは同じデータを受け取れます。
- *
- * @param destinations 書き戻し先のストレージです。
- * @returns トランスフォーマー数をキーとしたストレージの一覧を返します。
- */
-function groupDestinationsByTransformerCount(
-  destinations: readonly UniKvsDestination[],
-): Map<number, UniKvsDestination[]> {
-  const groups = new Map<number, UniKvsDestination[]>();
-  for (const dest of destinations) {
-    const count = dest.transformers.length;
-    const group = groups.get(count);
-    if (group) {
-      group.push(dest);
-    } else {
-      groups.set(count, [dest]);
-    }
-  }
-
-  return groups;
-}
-
-/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> {
@@ -516,6 +509,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
   public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder<any> {
     return new UniKvsConfig(this, options);
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public static branch(): IUniKvsBranch {
+    return new UniKvsBranch() as unknown as IUniKvsBranch;
   }
 
   /**
@@ -898,44 +898,30 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const errors: { name: string; index: number; reason: unknown }[] = [];
       const errorStorageSet = new Set<UniKvsDestination>();
       if (isReadableStream(value)) {
-        // 各ストレージ専用の前段パイプラインを通すため、tee で分岐しながらエンコードストリームを構築します。
-        // 最長の前段パイプラインを基準にし、ストレージの登録順に分岐点を作ります。
-        let longest: readonly UniKvsTransformer[] = [];
-        for (const dest of this.#destinations) {
-          if (dest.transformers.length > longest.length) {
-            longest = dest.transformers;
-          }
-        }
+        // 各ストレージ専用のチェーンで独立にエンコードします。
+        const count = this.#destinations.length;
         let cur: ReadableStream = value;
-        const branches: ReadableStream[] = [];
-        // 構築中やキーロックの待機中に失敗した場合、パイプが保持するソースストリームのリソースを解放するために構築済みのストリームをキャンセルします。
-        // キャンセルしないとソースストリームはロックされたままリークします。利用者が渡した元ストリームが対象になる場合もありますが、操作が失敗した以上ロックを残さないことを優先します。
-        const cancelBranches = async (reason: unknown): Promise<void> => {
-          await Promise.all(
-            [...new Set([cur, ...branches])].map(async (branch) => {
-              try {
-                await branch.cancel(reason);
-              } catch {
-                // キャンセルに失敗しても元の例外の伝播を優先します。
-              }
-            }),
-          );
-        };
+        const raws: ReadableStream[] = [];
+        for (let i = 0; i < count - 1; i++) {
+          const [branch, rest] = cur.tee();
+          raws.push(branch);
+          cur = rest;
+        }
+        raws.push(cur);
+        const branches: ReadableStream[] = [...raws];
+        // tee 分岐と中間段が保持するソースのリソースを解放するために全段を保持します。
+        const built = new Set<ReadableStream>(raws);
+        // 構築失敗時にパイプが保持するソースのリソースを解放するために構築済み分岐をキャンセルします。
+        const cancelBranches = (reason: unknown): Promise<void> => cancelAllBranches(built, reason);
         try {
-          let applied = 0;
-          for (let i = 0; i < this.#destinations.length; i++) {
+          for (let i = 0; i < count; i++) {
             const dest = this.#destinations[i]!;
-            while (applied < dest.transformers.length) {
-              const e = await longest[applied]!.getEncodable(vars, signal);
-              cur = cur.pipeThrough(e);
-              applied++;
-            }
-            if (i === this.#destinations.length - 1) {
-              branches[i] = cur;
-            } else {
-              const [branch, rest] = cur.tee();
-              branches[i] = branch;
-              cur = rest;
+            let pipe: ReadableStream = raws[i]!;
+            for (const transformer of dest.transformers) {
+              const e = await transformer.getEncodable(vars, signal);
+              pipe = pipe.pipeThrough(e);
+              branches[i] = pipe;
+              built.add(pipe);
             }
           }
         } catch (ex) {
@@ -978,18 +964,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           lock.release();
         }
       } else {
-        // 各ストレージ専用の前段パイプラインでデータをエンコードします。共有プレフィックスは使い回します。
-        let longest: readonly UniKvsTransformer[] = [];
+        // 各ストレージ専用のチェーンで独立にエンコードします。
+        const encoded: unknown[] = [];
         for (const dest of this.#destinations) {
-          if (dest.transformers.length > longest.length) {
-            longest = dest.transformers;
+          let data: unknown = value;
+          for (const transformer of dest.transformers) {
+            data = await transformer.encode(vars, signal, data);
           }
+          encoded.push(data);
         }
-        const prefix: unknown[] = [value];
-        for (const transformer of longest) {
-          prefix.push(await transformer.encode(vars, signal, prefix[prefix.length - 1]));
-        }
-        const encoded = this.#destinations.map((dest) => prefix[dest.transformers.length]);
 
         const lock = await io.lock({ key, signal });
         try {
@@ -1042,19 +1025,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  /**
-   * 後段ストレージから読み取ったデータをデコードしながら、デコード途中の段階に対応する前段ストレージへ書き戻します。
-   *
-   * 書き戻しはベストエフォートです。前段の失敗で読み取り自体を失敗させないように、失敗はログに残して続行します。
-   *
-   * @param data 読み取ったデータです。
-   * @param transformers 読み取り元ストレージの前段パイプラインです。
-   * @param targets 書き戻し先のストレージです。
-   * @param vars 実行時の変数です。
-   * @param key 対象のキーです。
-   * @param signal 処理の中断を通知するためのシグナルです。
-   * @returns デコード済みのデータを返します。
-   */
+  // 読み取り元を全デコードして原データに戻します。
+  // 各書き戻し先専用のチェーンで再エンコードして書き戻します。
   async #decodeWithRepair(
     data: unknown,
     transformers: readonly UniKvsTransformer[],
@@ -1063,36 +1035,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: IStorage.Key,
     signal: AbortSignal,
   ): Promise<unknown> {
-    const groups = groupDestinationsByTransformerCount(targets);
-
     // 書き戻しによる書き込みであることが分かるように、書き込み専用の変数を用意します。
     const repairVars: Variables = { ...vars, "unikvs:repair": true };
-
-    let level = transformers.length;
-    while (true) {
-      const destinations = groups.get(level);
-      if (destinations) {
-        // 同じ段階のストレージは、同じ形式のデータを受け取れます。
-        await Promise.all(
-          destinations.map(async (dest) => {
-            try {
-              await dest.storage.write(repairVars, signal, key, data);
-            } catch (reason) {
-              logger.error`Failed to repair a storage: ${reason}`;
-            }
-          }),
-        );
-        signal.throwIfAborted();
-      }
-
-      if (level === 0) {
-        return data;
-      }
-
-      data = await transformers[level - 1]!.decode(vars, signal, data);
-      level--;
+    let raw: unknown = data;
+    for (const transformer of transformers.toReversed()) {
+      raw = await transformer.decode(vars, signal, raw);
       signal.throwIfAborted();
     }
+
+    await Promise.all(
+      targets.map(async (dest) => {
+        try {
+          let encoded: unknown = raw;
+          for (const transformer of dest.transformers) {
+            encoded = await transformer.encode(vars, signal, encoded);
+          }
+
+          await dest.storage.write(repairVars, signal, key, encoded);
+        } catch (ex) {
+          // 意図的な中断時はエラーではありません。
+          if (!signal.aborted) {
+            logger.error`Failed to repair a storage: ${ex}`;
+          }
+        }
+      }),
+    );
+
+    signal.throwIfAborted();
+
+    return raw;
   }
 
   /**
@@ -1183,7 +1154,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         if (repair) {
-          // 後段ヒットしたデータをデコードしながら、デコード途中の段階に対応する前段ストレージへ書き戻します。
+          // 後段ヒットしたデータを全デコードして原データに戻します。
+          // 各書き戻し先専用のチェーンで再エンコードして書き戻します。
           data = await this.#decodeWithRepair(data, transformers, missing, vars, key, signal);
         }
       } finally {
@@ -1344,27 +1316,32 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           await Promise.all(fillTasks);
         };
 
-        // 見つかったストレージ専用の前段パイプラインを逆順に適用し、デコード用トランスフォームを連結します。
-        // デコード途中で書き戻し先の段階に到達するたびに tee で分岐し、その時点のデータを書き戻し用にパイプします。
-        const groups = repair ? groupDestinationsByTransformerCount(missing) : null;
-        let level = transformers.length;
-        while (true) {
-          const destinations = groups?.get(level);
-          if (destinations) {
-            for (const dest of destinations) {
-              const [branch, rest] = r.tee();
-              fill(dest, branch);
-              r = rest;
-            }
-          }
-
-          if (level === 0) {
-            break;
-          }
-
-          const d = await transformers[level - 1]!.getDecodable(vars, signal);
+        // 読み取り元を全デコードして原データに戻します。
+        // 各書き戻し先専用のチェーンで再エンコードして書き戻します。
+        for (const transformer of transformers.toReversed()) {
+          const d = await transformer.getDecodable(vars, signal);
           r = r.pipeThrough(d);
-          level--;
+        }
+        if (repair) {
+          for (const dest of missing) {
+            const [repairRaw, rest] = r.tee();
+            r = rest;
+            let pipe: IReadableStream = repairRaw;
+            // 再エンコード失敗時にソースのリソースを解放するために先頭と中間段を保持します。
+            const built = new Set<IReadableStream>([repairRaw]);
+            try {
+              for (const transformer of dest.transformers) {
+                const e = await transformer.getEncodable(vars, signal);
+                pipe = pipe.pipeThrough(e);
+                built.add(pipe);
+              }
+            } catch (ex) {
+              await cancelAllBranches(built, ex);
+              throw ex;
+            }
+
+            fill(dest, pipe);
+          }
         }
 
         // デコード後のチャンクを検証します。

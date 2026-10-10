@@ -85,7 +85,7 @@ import { ChecksumSha256 } from "@unikvs/checksum";
 
 const transformer = new ChecksumSha256({ required: true });
 
-builder.appendTransformer(transformer);
+builder.transform(transformer);
 ```
 
 The `builder` above is the config builder from `UniKvs.config()`. Pass verification variables at runtime as `vars`.

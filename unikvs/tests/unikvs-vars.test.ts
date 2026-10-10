@@ -18,7 +18,7 @@ describe("UniKvs - vars の自動付与", () => {
     // 準備
     const storage = new FakeStreamStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string>; logs: StreamValue<Uint8Array> }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -61,7 +61,7 @@ describe("UniKvs - vars の自動付与", () => {
   test("clear は unikvs:action のみを付与する", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -79,7 +79,7 @@ describe("UniKvs - vars の自動付与", () => {
   test("open と close も unikvs:action を付与する", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
 
     // 実行
     await kvs.open();
@@ -93,7 +93,7 @@ describe("UniKvs - vars の自動付与", () => {
   test("呼び出し側が指定した unikvs:action と unikvs:key は上書きされる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -114,15 +114,10 @@ describe("UniKvs - vars の自動付与", () => {
 });
 
 describe("UniKvs - vars のマージ", () => {
-  test("操作ごとの vars はビルダーの vars にマージされ、同じキーは操作側が優先される", async ({
-    expect,
-  }) => {
+  test("操作ごとの vars はストレージへ渡される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ region: "tokyo", app: "builder" })
-      .appendStorage(storage)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -130,7 +125,8 @@ describe("UniKvs - vars のマージ", () => {
 
     // 検証
     const vars = storage.callsOf("write")[0]?.vars;
-    expect(vars).toMatchObject({ region: "osaka", app: "builder", request: "req-1" });
+    expect(vars).toMatchObject({ region: "osaka", request: "req-1" });
+    expect(vars).toMatchObject({ "unikvs:action": "set", "unikvs:key": "foo" });
 
     // 後片付け
     await kvs.close();
@@ -139,10 +135,7 @@ describe("UniKvs - vars のマージ", () => {
   test("操作ごとの vars をエントリー配列形式でも指定できる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables([["region", "tokyo"]])
-      .appendStorage(storage)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -164,15 +157,15 @@ describe("UniKvs - vars のマージ", () => {
   test("open と close にも操作ごとの vars を渡せる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config().setVariables({ base: "b" }).appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
 
     // 実行
     await kvs.open({ vars: { phase: "open" } });
     await kvs.close({ vars: { phase: "close" } });
 
     // 検証
-    expect(storage.callsOf("open")[0]?.vars).toMatchObject({ base: "b", phase: "open" });
-    expect(storage.callsOf("close")[0]?.vars).toMatchObject({ base: "b", phase: "close" });
+    expect(storage.callsOf("open")[0]?.vars).toMatchObject({ phase: "open" });
+    expect(storage.callsOf("close")[0]?.vars).toMatchObject({ phase: "close" });
   });
 
   test("vars は transformer にも渡される", async ({ expect }) => {
@@ -180,9 +173,8 @@ describe("UniKvs - vars のマージ", () => {
     const storage = new FakeStorage();
     const transformer = new FakeTransformer();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ app: "builder" })
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -192,13 +184,11 @@ describe("UniKvs - vars のマージ", () => {
 
     // 検証
     expect(transformer.callsOf("encode")[0]?.vars).toMatchObject({
-      app: "builder",
       request: "req-3",
       "unikvs:action": "set",
       "unikvs:key": "foo",
     });
     expect(transformer.callsOf("decode")[0]?.vars).toMatchObject({
-      app: "builder",
       request: "req-4",
       "unikvs:action": "get",
       "unikvs:key": "foo",
@@ -222,7 +212,7 @@ describe("UniKvs - vars の分離", () => {
       }
     };
     const kvs = UniKvs.config<{ a: PlainValue<string>; b: PlainValue<string> }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -253,10 +243,7 @@ describe("UniKvs - vars の分離", () => {
         call.vars!["injected"] = true;
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ base: "b" })
-      .appendStorage(storage)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -273,7 +260,7 @@ describe("UniKvs - vars の分離", () => {
   test("操作ごとの vars オブジェクトは変更されない", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const opVars = { request: "req" };
 
@@ -282,26 +269,6 @@ describe("UniKvs - vars の分離", () => {
 
     // 検証
     expect(opVars).toStrictEqual({ request: "req" });
-
-    // 後片付け
-    await kvs.close();
-  });
-
-  test("ビルダーの vars オブジェクトも操作で変更されない", async ({ expect }) => {
-    // 準備
-    const storage = new FakeStorage();
-    const builderVars = { base: "b" };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables(builderVars)
-      .appendStorage(storage)
-      .create();
-    await kvs.open();
-
-    // 実行
-    await kvs.set("foo", "value", { vars: { extra: "e" } });
-
-    // 検証
-    expect(builderVars).toStrictEqual({ base: "b" });
 
     // 後片付け
     await kvs.close();

@@ -22,7 +22,7 @@ describe("UniKvs - open の状態遷移", () => {
         await release.wait();
       }
     };
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
 
     // 実行
     const first = kvs.open();
@@ -47,7 +47,7 @@ describe("UniKvs - open の状態遷移", () => {
         await release.wait();
       }
     };
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
 
     // 実行
     const pending = kvs.open();
@@ -69,7 +69,7 @@ describe("UniKvs - open の状態遷移", () => {
     // 準備
     const reason = new Error("open aborted");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
 
     // 実行と検証
     await expect(kvs.open({ signal: AbortSignal.abort(reason) })).rejects.toBe(reason);
@@ -84,8 +84,8 @@ describe("UniKvs - open の状態遷移", () => {
     const storage = new FakeStorage();
     const transformer = new FakeTransformer();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
 
     // 実行
@@ -116,9 +116,9 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     const ngTransformer = new FakeTransformer("ng");
     ngTransformer.errors["open"] = failure;
     const kvs = UniKvs.config()
-      .appendTransformer(okTransformer)
-      .appendTransformer(ngTransformer)
-      .appendStorage(storage)
+      .transform(okTransformer)
+      .transform(ngTransformer)
+      .persist(storage)
       .create();
 
     // 実行と検証
@@ -139,7 +139,7 @@ describe("UniKvs - open 失敗時のロールバック", () => {
         throw new Error("transient open failure");
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
 
     // 実行と検証
     await expect(kvs.open()).rejects.toThrow(PluginOperationAggregateError);
@@ -171,7 +171,7 @@ describe("UniKvs - open 失敗時のロールバック", () => {
         });
       }
     };
-    const kvs = UniKvs.config().appendStorage(storage).appendStorage(hangingStorage).create();
+    const kvs = UniKvs.config().persist(storage).persist(hangingStorage).create();
     const controller = new AbortController();
 
     // 実行
@@ -199,7 +199,7 @@ describe("UniKvs - close の失敗と回復", () => {
         throw new Error("transient close failure");
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行と検証
@@ -223,7 +223,7 @@ describe("UniKvs - close の失敗と回復", () => {
     // 準備
     const reason = new Error("close aborted");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     // 実行と検証
@@ -234,7 +234,7 @@ describe("UniKvs - close の失敗と回復", () => {
 
   test("close を 2 回呼ぶと 2 回目は UniKvsIsNotOpenError を投げる", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config().appendStorage(new FakeStorage()).create();
+    const kvs = UniKvs.config().persist(new FakeStorage()).create();
     await kvs.open();
 
     // 実行
@@ -258,7 +258,7 @@ describe("UniKvs - close の失敗と回復", () => {
         });
       }
     };
-    const kvs = UniKvs.config().appendStorage(okStorage).appendStorage(hangingStorage).create();
+    const kvs = UniKvs.config().persist(okStorage).persist(hangingStorage).create();
 
     // 実行
     const openPending = kvs.open();
@@ -297,7 +297,7 @@ describe("UniKvs - 操作中の close", () => {
         await gate.wait();
       }
     };
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -327,7 +327,7 @@ describe("UniKvs - 操作中の close", () => {
         await gate.wait();
       }
     };
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -347,7 +347,7 @@ describe("UniKvs - 操作中の close", () => {
 describe("UniKvs - 未オープン時の操作", () => {
   test("stream とオプション形式の操作も UniKvsIsNotOpenError を投げる", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config().appendStorage(new FakeStorage()).create();
+    const kvs = UniKvs.config().persist(new FakeStorage()).create();
 
     // 実行と検証
     await expect(kvs.stream({ key: "logs" })).rejects.toThrow(UniKvsIsNotOpenError);
@@ -359,7 +359,7 @@ describe("UniKvs - 未オープン時の操作", () => {
 
   test("close 前の asyncDispose は何もせず成功する", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config().persist(new Memory()).create();
 
     // 実行と検証
     await expect(kvs[Symbol.asyncDispose]()).resolves.toBeUndefined();

@@ -37,12 +37,12 @@ description: "UniKVS のインストールから基本操作までの最短手�
     ```
   </Step>
   <Step title="保存先を追加して作る">
-    `appendStorage()` で保存先を追加し、`create()` でクライアントを作ります。トランスフォーマーが不要なら省略できます。
+    `persist()` で保存先を追加し、`create()` でクライアントを作ります。トランスフォーマーが不要なら省略できます。
 
     ```ts
     import { Memory } from "@unikvs/memory";
 
-    const kvs = builder.appendStorage(new Memory()).create();
+    const kvs = builder.persist(new Memory()).create();
     ```
   </Step>
   <Step title="開いて操作する">
@@ -71,7 +71,7 @@ description: "UniKVS のインストールから基本操作までの最短手�
 </Steps>
 
 :::tip
-`appendTransformer()` は `appendStorage()` の前後どちらにも追加できます。ストレージ登録後に追加した分は、その後に登録するストレージにだけ適用します。詳しくは基本概念のパイプラインを参照してください。
+`transform()` は `persist()` の前後どちらにも追加できます。ストレージ登録後に追加した分は、その後に登録するストレージにだけ適用します。詳しくは基本概念のパイプラインを参照してください。
 :::
 
 ## トランスフォーマーを足す [#add-transformer]
@@ -86,15 +86,15 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   foo: Value<Uint8Array>;
 }>()
-  .appendTransformer(new Compression("gzip"))
-  .appendStorage(new Memory())
+  .transform(new Compression("gzip"))
+  .persist(new Memory())
   .create();
 ```
 
 利用側の `set`・`get` は変えずに、保存時の圧縮と取得時の展開を自動で行います。
 
 :::warning
-`appendStorage()` なしで `create()` すると `MissingStorageError` を投げます。ストレージ登録は必須です。
+`persist()` なしで `create()` すると `MissingStorageError` を投げます。ストレージ登録は必須です。
 :::
 
 ## 入力値を検証する [#validate-values]
@@ -111,7 +111,7 @@ const kvs = UniKvs.config({
     foo: PlainValue(v.instance(Uint8Array)),
   },
 })
-  .appendStorage(new Memory())
+  .persist(new Memory())
   .create();
 ```
 

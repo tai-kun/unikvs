@@ -49,7 +49,7 @@ const storage = new S3("my-bucket", {
 });
 
 const kvs = UniKvs.config()
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 ```
 

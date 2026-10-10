@@ -16,7 +16,7 @@ function createDynamicKvs(storage = new FakeStorage()): {
   kvs: UniKvs<Record<string, PlainValue<string>>>;
   storage: FakeStorage;
 } {
-  const kvs = UniKvs.config<Record<string, PlainValue<string>>>().appendStorage(storage).create();
+  const kvs = UniKvs.config<Record<string, PlainValue<string>>>().persist(storage).create();
   return { kvs, storage };
 }
 
@@ -278,7 +278,7 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行と検証: schema なしでは検証されないが、値はプレーン書き込みとして扱われる
@@ -294,7 +294,7 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行

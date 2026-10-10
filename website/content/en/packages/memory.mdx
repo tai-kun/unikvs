@@ -19,7 +19,7 @@ npm i @unikvs/memory
 
 ## Usage [#usage]
 
-`Memory` implements `IStorage`. Pass it to `UniKvs` with `appendStorage()`, or operate it directly.
+`Memory` implements `IStorage`. Pass it to `UniKvs` with `persist()`, or operate it directly.
 
 <Tabs>
   <Tab title="Via UniKvs">
@@ -31,7 +31,7 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   foo: Value<string>;
 }>()
-  .appendStorage(new Memory())
+  .persist(new Memory())
   .create();
 ```
 

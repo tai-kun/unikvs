@@ -51,8 +51,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     const root = createRoot();
     const memory = new Memory();
     const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .appendStorage(memory)
-      .appendStorage(new NodeFs(root))
+      .persist(memory)
+      .persist(new NodeFs(root))
       .create();
     await kvs.open();
 
@@ -73,8 +73,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     const root = createRoot();
     const memory = new Memory();
     const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .appendStorage(memory)
-      .appendStorage(new NodeFs(root))
+      .persist(memory)
+      .persist(new NodeFs(root))
       .create();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([4, 5, 6]));
@@ -98,8 +98,8 @@ describe("UniKvs + Memory + NodeFs", () => {
       foo: Value<Uint8Array<ArrayBuffer>>;
       bar: Value<Uint8Array<ArrayBuffer>>;
     }>()
-      .appendStorage(memory)
-      .appendStorage(new NodeFs(root))
+      .persist(memory)
+      .persist(new NodeFs(root))
       .create();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([1]));
@@ -128,8 +128,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     const root = createRoot();
     const memory = new Memory();
     const kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
-      .appendStorage(memory)
-      .appendStorage(new NodeFs(root))
+      .persist(memory)
+      .persist(new NodeFs(root))
       .create();
     await kvs.open();
 
@@ -159,9 +159,9 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備
     const root = createRoot();
     const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendTransformer(new Compression("gzip"))
-      .appendStorage(new NodeFs(root))
+      .transform(new ChecksumSha256())
+      .transform(new Compression("gzip"))
+      .persist(new NodeFs(root))
       .create();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
     const digest = await crypto.subtle.digest("SHA-256", data);
@@ -184,9 +184,9 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備
     const root = createRoot();
     const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .appendTransformer(new ChecksumSha256())
-      .appendTransformer(new Compression("gzip"))
-      .appendStorage(new NodeFs(root))
+      .transform(new ChecksumSha256())
+      .transform(new Compression("gzip"))
+      .persist(new NodeFs(root))
       .create();
     const data = new Uint8Array([7, 8, 9]);
     const digest = await crypto.subtle.digest("SHA-256", data);

@@ -90,12 +90,12 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagTransformer("S");
     const compress = new TagTransformer("C");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(cache1)
-      .appendStorage(cache2)
-      .appendTransformer(serialize)
-      .appendStorage(local)
-      .appendTransformer(compress)
-      .appendStorage(server)
+      .persist(cache1)
+      .persist(cache2)
+      .transform(serialize)
+      .persist(local)
+      .transform(compress)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("foo", "valueSC");
@@ -128,9 +128,9 @@ describe("UniKvs - get の書き戻し", () => {
     const server = new FakeStorage("server");
     const serialize = new TagTransformer("S");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("foo", "valueS");
@@ -152,9 +152,9 @@ describe("UniKvs - get の書き戻し", () => {
     const server = new FakeStorage("server");
     const serialize = new TagTransformer("S");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(server)
       .create();
     await kvs.open();
     cache.map.set("foo", "value");
@@ -182,11 +182,11 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagTransformer("S");
     const compress = new TagTransformer("C");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(local)
-      .appendTransformer(compress)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(local)
+      .transform(compress)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("foo", "valueSC");
@@ -210,9 +210,9 @@ describe("UniKvs - get の書き戻し", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(broken)
-      .appendStorage(cache)
-      .appendStorage(server)
+      .persist(broken)
+      .persist(cache)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("foo", "value");
@@ -239,11 +239,11 @@ describe("UniKvs - stream の書き戻し", () => {
     const serialize = new TagStreamTransformer(0x10);
     const compress = new TagStreamTransformer(0x20);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(local)
-      .appendTransformer(compress)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(local)
+      .transform(compress)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1, 2, 0x10, 0x20]), new Uint8Array([3, 0x10, 0x20])]);
@@ -280,9 +280,9 @@ describe("UniKvs - stream の書き戻し", () => {
     const server = new FakeStreamStorage("server");
     const serialize = new TagStreamTransformer(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1, 0x10])]);
@@ -308,9 +308,9 @@ describe("UniKvs - stream の書き戻し", () => {
     const writeGate = new Gate();
     cache.writeGate = writeGate;
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1, 0x10])]);
@@ -342,9 +342,9 @@ describe("UniKvs - stream の書き戻し", () => {
     const serialize = new TagStreamTransformer(0x10);
     cache.writeGate = new Gate();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(cache)
-      .appendTransformer(serialize)
-      .appendStorage(server)
+      .persist(cache)
+      .transform(serialize)
+      .persist(server)
       .create();
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1, 0x10])]);

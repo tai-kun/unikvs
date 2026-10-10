@@ -64,15 +64,15 @@ Its main members are as follows.
 | `getEncodable()` | Returns a `TransformStream` that converts values to JSONL bytes. |
 | `getDecodable()` | Returns a `TransformStream` that converts JSONL bytes to values. |
 
-Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+Register it with `UniKvs` via `transform`. It becomes the upstream of subsequently registered storages.
 
 ```ts
 import { Json } from "@unikvs/json";
 import UniKvs from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendTransformer(new Json())
-  .appendStorage(storage)
+  .transform(new Json())
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -162,8 +162,8 @@ type Profile = {
 };
 
 const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
-  .appendTransformer(new Json())
-  .appendStorage(new Memory())
+  .transform(new Json())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

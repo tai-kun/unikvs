@@ -50,8 +50,8 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -89,8 +89,8 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
       }
     };
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -122,8 +122,8 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     storage1.errors["write"] = failure;
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -152,8 +152,8 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["write"] = failure;
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -182,9 +182,9 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     storage2.errors["write"] = new Error("write failed 2");
     const storage3 = new FakeStorage("storage3");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
-      .appendStorage(storage3)
+      .persist(storage1)
+      .persist(storage2)
+      .persist(storage3)
       .create();
     await kvs.open();
 
@@ -210,8 +210,8 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["onOtherWriteError"] = new Error("notification failed");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -237,8 +237,8 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage1 = new FailGetWritableStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -262,8 +262,8 @@ describe("UniKvs - 削除系エラーの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -288,8 +288,8 @@ describe("UniKvs - 削除系エラーの集約", () => {
     storage2.errors["delete"] = new Error("delete failed 2");
     storage2.map.set("a", "1");
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -315,8 +315,8 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage1 = new ExistsErrorStorage("storage1");
     const storage2 = new ExistsErrorStorage("storage2");
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -347,8 +347,8 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.hook = storage1.hook;
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -371,8 +371,8 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -402,8 +402,8 @@ describe("UniKvs - 複数ストレージの中断", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
     const controller = new AbortController();
@@ -443,8 +443,8 @@ describe("UniKvs - 複数ストレージの中断", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
     const controller = new AbortController();
@@ -478,8 +478,8 @@ describe("UniKvs - ストレージごとの独立したチェーン", () => {
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
     await kvs.set("foo", "value");
@@ -525,8 +525,8 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
 
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(new BareStorage())
-      .appendStorage(storage2)
+      .persist(new BareStorage())
+      .persist(storage2)
       .create();
     await kvs.open();
 

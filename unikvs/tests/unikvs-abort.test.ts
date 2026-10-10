@@ -58,7 +58,7 @@ describe("UniKvs - 実行前 abort", () => {
     // 準備
     const reason = new Error("stream aborted");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行と検証
@@ -71,7 +71,7 @@ describe("UniKvs - 実行前 abort", () => {
   test("理由なしの abort は AbortError として伝播する", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendStorage(new FakeStorage())
+      .persist(new FakeStorage())
       .create();
     await kvs.open();
 
@@ -97,7 +97,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "write");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -124,7 +124,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "exists");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -146,7 +146,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "exists");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -168,7 +168,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "exists");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -191,7 +191,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "clear");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -216,7 +216,7 @@ describe("UniKvs - 実行中 abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "exists");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -250,8 +250,8 @@ describe("UniKvs - 実行中 abort", () => {
     };
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
     const controller = new AbortController();
@@ -279,7 +279,7 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const holder = await kvs.stream("logs");
     const { promise: cancelled, resolve: onCancelled } = Promise.withResolvers<void>();
@@ -316,8 +316,8 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new FakeStreamTransformer())
-      .appendStorage(storage)
+      .transform(new FakeStreamTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
     const holder = await kvs.stream("logs");
@@ -350,7 +350,7 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     const holder = await kvs.stream("logs");
     let cancelCalled = false;
@@ -394,8 +394,8 @@ describe("UniKvs - transformer の decode 中の abort", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
     const controller = new AbortController();
@@ -422,7 +422,7 @@ describe("UniKvs - ストリーム読み取り中の abort", () => {
     const reason = new Error("read aborted");
     const storage = new AbortableReadableStorage();
     storage.map.set("logs", new Uint8Array([1, 2]));
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
     const vs = await kvs.stream("logs", { signal: controller.signal });
@@ -471,7 +471,7 @@ describe("UniKvs - open のロック待機中の abort", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "open");
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     const controller = new AbortController();
     const created = captureAbortControllers();
 
@@ -501,7 +501,7 @@ describe("UniKvs - open のロック待機中の abort", () => {
   }) => {
     // 準備
     const reason = new Error("open aborted");
-    const kvs = UniKvs.config().appendStorage(new FakeStorage()).create();
+    const kvs = UniKvs.config().persist(new FakeStorage()).create();
     const created = captureAbortControllers();
 
     // 実行と検証: 事前 abort はストレージを開かず abort 理由で失敗する
@@ -521,7 +521,7 @@ describe("UniKvs - abort 後の回復", () => {
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     const { entered, release } = gateMethod(storage, "write");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -546,7 +546,7 @@ describe("UniKvs - abort 後の回復", () => {
   test("操作完了後に abort しても結果は保持される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(storage).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 

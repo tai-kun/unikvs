@@ -20,7 +20,7 @@ npm i @unikvs/writeonly
 
 ## Usage [#usage]
 
-The class name is `WriteOnly`, and `name` is `"WriteOnly"`. Pass it to `appendStorage()` for `UniKvs`.
+The class name is `WriteOnly`, and `name` is `"WriteOnly"`. Pass it to `persist()` for `UniKvs`.
 
 ```ts
 import { Memory } from "@unikvs/memory";
@@ -30,7 +30,7 @@ import { WriteOnly } from "@unikvs/writeonly";
 const kvs = UniKvs.config<{
   foo: Value<string>;
 }>()
-  .appendStorage(new WriteOnly(new Memory()))
+  .persist(new WriteOnly(new Memory()))
   .create();
 
 await kvs.open();
@@ -167,8 +167,8 @@ import { WriteOnly } from "@unikvs/writeonly";
 const kvs = UniKvs.config<{
   report: Value<Uint8Array<ArrayBuffer>>;
 }>()
-  .appendStorage(new NodeFs(".data"))
-  .appendStorage(new WriteOnly(new NodeFs(".archive")))
+  .persist(new NodeFs(".data"))
+  .persist(new WriteOnly(new NodeFs(".archive")))
   .create();
 
 await kvs.open();

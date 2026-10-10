@@ -36,7 +36,7 @@ describe("UniKvs - 決定的ファズ: CRUD モデル", () => {
     // 実行と検証
     await forCasesAsync(SEED, 40, async (rng) => {
       const kvs = UniKvs.config<Record<string, PlainValue<string>>>()
-        .appendStorage(new Memory())
+        .persist(new Memory())
         .create();
       await kvs.open();
       const model = new Map<string, string>();
@@ -84,7 +84,7 @@ describe("UniKvs - 決定的ファズ: ストリーム往復", () => {
     // 実行と検証
     await forCasesAsync(SEED + 1, 40, async (rng) => {
       const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-        .appendStorage(new Memory())
+        .persist(new Memory())
         .create();
       await kvs.open();
 
@@ -124,15 +124,15 @@ describe("UniKvs - 決定的ファズ: トランスフォーマー構成", () =>
 
       let config = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>();
       if (useChecksum) {
-        config = config.appendTransformer(new ChecksumSha256());
+        config = config.transform(new ChecksumSha256());
       }
       if (compression !== "none") {
-        config = config.appendTransformer(new Compression(compression));
+        config = config.transform(new Compression(compression));
       }
       if (usePassthrough) {
-        config = config.appendTransformer(new FakeStreamTransformer("pass-through"));
+        config = config.transform(new FakeStreamTransformer("pass-through"));
       }
-      const kvs = config.appendStorage(new Memory()).create();
+      const kvs = config.persist(new Memory()).create();
       await kvs.open();
 
       try {

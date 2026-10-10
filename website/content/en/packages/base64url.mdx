@@ -98,15 +98,15 @@ const padded = new Base64Url({ padding: true });
 console.log(new TextDecoder().decode(padded.encode({ data: new TextEncoder().encode("f") }))); // "Zg=="
 ```
 
-Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+Register it with `UniKvs` via `transform`. It becomes the upstream of subsequently registered storages.
 
 ```ts
 import { Base64Url } from "@unikvs/base64url";
 import UniKvs from "unikvs";
 
 const kvs = UniKvs.config()
-  .appendTransformer(new Base64Url())
-  .appendStorage(storage)
+  .transform(new Base64Url())
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -201,8 +201,8 @@ import { Memory } from "@unikvs/memory";
 import UniKvs, { type PlainValue } from "unikvs";
 
 const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
-  .appendTransformer(new Base64Url())
-  .appendStorage(new Memory())
+  .transform(new Base64Url())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

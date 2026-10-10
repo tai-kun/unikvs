@@ -51,7 +51,7 @@ const storage = new S3("my-bucket", {
 
 await storage.open();
 
-const kvs = UniKvs.config().appendStorage(storage).create();
+const kvs = UniKvs.config().persist(storage).create();
 ```
 
 :::warning

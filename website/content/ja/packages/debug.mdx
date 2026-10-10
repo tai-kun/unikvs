@@ -19,7 +19,7 @@ npm install @unikvs/debug @logtape/logtape
 
 ## 使い方 [#usage]
 
-LogTape を設定してから、`appendTransformer` で登録します。以降に登録するストレージの前段になります。
+LogTape を設定してから、`transform` で登録します。以降に登録するストレージの前段になります。
 
 ```ts
 import { Debug } from "@unikvs/debug";
@@ -41,8 +41,8 @@ configureSync({
 });
 
 const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
-  .appendTransformer(new Debug())
-  .appendStorage(new Memory())
+  .transform(new Debug())
+  .persist(new Memory())
   .create();
 
 await kvs.open();
@@ -176,8 +176,8 @@ const debug = new Debug({
 });
 
 const kvs = UniKvs.config<{ "user:1": PlainValue<string>; settings: PlainValue<string> }>()
-  .appendTransformer(debug)
-  .appendStorage(new Memory())
+  .transform(debug)
+  .persist(new Memory())
   .create();
 
 await kvs.open();

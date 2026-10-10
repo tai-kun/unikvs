@@ -37,12 +37,12 @@ A minimal example using memory Storage. Configure and create, then open, operate
     ```
   </Step>
   <Step title="Add a storage and create">
-    Add a storage with `appendStorage()`, then create the client with `create()`. Omit Transformers if you don't need them.
+    Add a storage with `persist()`, then create the client with `create()`. Omit Transformers if you don't need them.
 
     ```ts
     import { Memory } from "@unikvs/memory";
 
-    const kvs = builder.appendStorage(new Memory()).create();
+    const kvs = builder.persist(new Memory()).create();
     ```
   </Step>
   <Step title="Open and operate">
@@ -71,7 +71,7 @@ A minimal example using memory Storage. Configure and create, then open, operate
 </Steps>
 
 :::tip
-`appendTransformer()` can be added either before or after `appendStorage()`. Transformers added after a Storage apply only to Storages registered later. See the pipeline in concepts for details.
+`transform()` can be added either before or after `persist()`. Transformers added after a Storage apply only to Storages registered later. See the pipeline in concepts for details.
 :::
 
 ## Add a Transformer [#add-transformer]
@@ -86,15 +86,15 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   foo: Value<Uint8Array>;
 }>()
-  .appendTransformer(new Compression("gzip"))
-  .appendStorage(new Memory())
+  .transform(new Compression("gzip"))
+  .persist(new Memory())
   .create();
 ```
 
 Keep `set` and `get` unchanged; compression on write and decompression on read happen automatically.
 
 :::warning
-Calling `create()` without `appendStorage()` throws `MissingStorageError`. At least one Storage is required.
+Calling `create()` without `persist()` throws `MissingStorageError`. At least one Storage is required.
 :::
 
 ## Validate values [#validate-values]
@@ -111,7 +111,7 @@ const kvs = UniKvs.config({
     foo: PlainValue(v.instance(Uint8Array)),
   },
 })
-  .appendStorage(new Memory())
+  .persist(new Memory())
   .create();
 ```
 

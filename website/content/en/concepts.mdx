@@ -20,7 +20,7 @@ There are two roles:
 - Transformers transparently encode/decode data.
 - Storages are persistence destinations. With multiple Storages, writes go to all of them in parallel.
 
-Each Storage uses the Transformers added up to its registration. On reads, the upstream pipeline of the found Storage is applied in reverse to decode the data.
+Each Storage uses a snapshot of the pipeline taken at its `persist()` call. On reads, the upstream pipeline of the found Storage is applied in reverse to decode the data.
 
 :::note
 Writes go to all Storages in parallel, while reads search in registration order and return the first key found. Register a fast backend first to speed up reads.
@@ -40,21 +40,21 @@ const kvs = UniKvs.config({
     logs: StreamValue(v.instance(Uint8Array)),
   },
 })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 ```
 
 Install `valibot` separately when using Valibot schemas. Omitting `schema` falls back to specifying the mapping with a type parameter. In that case only type checking applies, with no runtime validation.
 
 <Steps>
-  <Step title="setVariables(vars)">
-    Sets runtime variables (optional).
-  </Step>
-  <Step title="appendTransformer(transformer)">
+  <Step title="transform(transformer)">
     Adds a Transformer (optional).
   </Step>
-  <Step title="appendStorage(storage)">
+  <Step title="persist(storage)">
     Adds a Storage (required, multiple allowed).
+  </Step>
+  <Step title="fork(branch)">
+    Adds Storages on a branched pipeline with `UniKvs.branch()` (optional).
   </Step>
   <Step title="create()">
     Creates the KVS client.
@@ -98,7 +98,7 @@ All operations support cancellation via `AbortSignal` and passing of runtime var
     const kvs = UniKvs.config<{
       message: PlainValue<string>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("message", "hello");
@@ -114,7 +114,7 @@ All operations support cancellation via `AbortSignal` and passing of runtime var
     const kvs = UniKvs.config<{
       logs: StreamValue<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("logs", new Uint8Array([0x01]));
@@ -130,7 +130,7 @@ All operations support cancellation via `AbortSignal` and passing of runtime var
     const kvs = UniKvs.config<{
       blob: Value<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("blob", new Uint8Array([1, 2, 3]));
@@ -158,7 +158,7 @@ Passing schemas to `UniKvs.config({ schema })` infers the mapping type from Vali
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("message", "hello");
@@ -179,7 +179,7 @@ Passing schemas to `UniKvs.config({ schema })` infers the mapping type from Vali
         [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
       ],
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.set("msg-1", "hello");
@@ -202,12 +202,11 @@ Passing anything other than `PlainValue()`, `StreamValue()`, or `Value()` as a v
 
 ## Runtime variables [#variables]
 
-Variables are a runtime context that switches operation behavior. Set initial values with `setVariables()`, and override them per operation with `vars`.
+Variables are a runtime context that switches operation behavior. Pass them per operation with `vars`.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .setVariables({ region: "ap-northeast-1" })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.set("foo", new Uint8Array([1]), {

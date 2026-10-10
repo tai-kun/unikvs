@@ -28,7 +28,7 @@ npm i unikvs
         foo: PlainValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
 
@@ -44,7 +44,7 @@ npm i unikvs
         [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
       ],
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
   </Tab>
@@ -57,7 +57,7 @@ npm i unikvs
     const kvs = UniKvs.config<{
       foo: Value<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
     ```
   </Tab>
@@ -70,14 +70,14 @@ A malformed `schema` throws `InvalidInputError` at the `config()` call.
 Configure in the following order.
 
 <Steps>
-  <Step title="`setVariables(vars)`">
-    Sets the initial runtime variables (optional). Each call replaces the existing values.
-  </Step>
-  <Step title="`appendTransformer(transformer)`">
+  <Step title="`transform(transformer)`">
     Adds a transformer (optional). You can also add transformers after registering storages.
   </Step>
-  <Step title="`appendStorage(storage)`">
+  <Step title="`persist(storage)`">
     Adds a storage (required, multiple allowed).
+  </Step>
+  <Step title="`fork(branch)`">
+    Adds storages on a branched pipeline (optional). Transformers added inside the branch stay inside it.
   </Step>
   <Step title="`create()`">
     Creates a `UniKvs` client. It throws `MissingStorageError` if no storage is registered.
@@ -85,10 +85,10 @@ Configure in the following order.
 </Steps>
 
 :::warning[No storage registered]
-Call `appendStorage()` at least once before `create()`.
+Call `persist()` at least once before `create()`.
 :::
 
-Each storage uses the transformers added up to its registration.
+Each storage uses a snapshot of the pipeline taken at its `persist()` call.
 
 Writes go to all storages in parallel. Reads decode by applying the upstream pipeline of the found storage in reverse.
 
@@ -142,7 +142,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
       message: PlainValue<string>;
       logs: StreamValue<Uint8Array>;
     }>()
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.open();
@@ -166,7 +166,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
         logs: StreamValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(storage)
+      .persist(storage)
       .create();
 
     await kvs.open();
@@ -208,7 +208,7 @@ const kvs = UniKvs.config({
     message: PlainValue(v.pipe(v.string(), v.minLength(1))),
   },
 })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.open();
@@ -271,17 +271,16 @@ Don't forget automatic disposal via `await using` or calling `dispose()`.
 
 ## Variables and Cancellation [#variables-and-cancellation]
 
-`vars` passes per-operation settings. Values are merged over those set with `setVariables()`.
+`vars` passes per-operation settings.
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .setVariables({ region: "ap-northeast-1" })
-  .appendStorage(storage)
+  .persist(storage)
   .create();
 
 await kvs.open();
 
-// Per-operation vars overwrite the same keys
+// Pass vars per operation
 await kvs.set("foo", new Uint8Array([1]), {
   vars: { region: "us-east-1" },
 });
@@ -356,7 +355,7 @@ A minimal example using `@unikvs/memory`.
     const kvs = UniKvs.config<{
       foo: Value<Uint8Array>;
     }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     await kvs.open();
@@ -383,7 +382,7 @@ A minimal example using `@unikvs/memory`.
         foo: PlainValue(v.instance(Uint8Array)),
       },
     })
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
 
     await kvs.open();

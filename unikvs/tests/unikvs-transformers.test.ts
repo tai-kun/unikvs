@@ -43,8 +43,8 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     const transformer = new FakeTransformer();
     expect(transformer.isOpen).toBe(false);
     const kvs = UniKvs.config()
-      .appendTransformer(transformer)
-      .appendStorage(new FakeStorage())
+      .transform(transformer)
+      .persist(new FakeStorage())
       .create();
 
     // 実行
@@ -67,8 +67,8 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     const transformer = new FakeTransformer();
     transformer.isOpen = true;
     const kvs = UniKvs.config()
-      .appendTransformer(transformer)
-      .appendStorage(new FakeStorage())
+      .transform(transformer)
+      .persist(new FakeStorage())
       .create();
 
     // 実行
@@ -89,8 +89,8 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
     transformer.isOpen = false;
@@ -123,10 +123,10 @@ describe("UniKvs - チェーンの順序", () => {
       if (call.method === "decode") decodeOrder.push("3");
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(t1)
-      .appendTransformer(t2)
-      .appendTransformer(t3)
-      .appendStorage(storage)
+      .transform(t1)
+      .transform(t2)
+      .transform(t3)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -144,9 +144,7 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.close();
   });
 
-  test("共有プレフィックスの encode はストレージ数に関わらず 1 回だけ呼ばれる", async ({
-    expect,
-  }) => {
+  test("ストレージごとに encode が独立に実行される", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
@@ -154,11 +152,11 @@ describe("UniKvs - チェーンの順序", () => {
     const t1 = new TagTransformer("1");
     const t2 = new TagTransformer("2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(t1)
-      .appendTransformer(t2)
-      .appendStorage(storage1)
-      .appendStorage(storage2)
-      .appendStorage(storage3)
+      .transform(t1)
+      .transform(t2)
+      .persist(storage1)
+      .persist(storage2)
+      .persist(storage3)
       .create();
     await kvs.open();
 
@@ -166,8 +164,8 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.set("foo", "x");
 
     // 検証
-    expect(t1.callsOf("encode")).toHaveLength(1);
-    expect(t2.callsOf("encode")).toHaveLength(1);
+    expect(t1.callsOf("encode")).toHaveLength(3);
+    expect(t2.callsOf("encode")).toHaveLength(3);
     expect(storage1.map.get("foo")).toBe("x12");
     expect(storage2.map.get("foo")).toBe("x12");
     expect(storage3.map.get("foo")).toBe("x12");
@@ -182,10 +180,9 @@ describe("UniKvs - チェーンの順序", () => {
     const t1 = new FakeTransformer("t1");
     const t2 = new FakeTransformer("t2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .setVariables({ base: "b" })
-      .appendTransformer(t1)
-      .appendTransformer(t2)
-      .appendStorage(storage)
+      .transform(t1)
+      .transform(t2)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -193,8 +190,8 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.set("foo", "x", { vars: { request: "r" } });
 
     // 検証
-    expect(t1.callsOf("encode")[0]?.vars).toMatchObject({ base: "b", request: "r" });
-    expect(t2.callsOf("encode")[0]?.vars).toMatchObject({ base: "b", request: "r" });
+    expect(t1.callsOf("encode")[0]?.vars).toMatchObject({ request: "r" });
+    expect(t2.callsOf("encode")[0]?.vars).toMatchObject({ request: "r" });
     expect(t2.callsOf("encode")[0]?.data).toBe("x");
 
     // 後片付け
@@ -203,19 +200,17 @@ describe("UniKvs - チェーンの順序", () => {
 });
 
 describe("UniKvs - ストリーム対応トランスフォーマー", () => {
-  test("ストリーム書き込みでは共有プレフィックスの getEncodable が 1 回ずつ呼ばれる", async ({
-    expect,
-  }) => {
+  test("ストリーム書き込みではストレージごとに getEncodable が呼ばれる", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStreamStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
     const t1 = new FakeStreamTransformer("t1");
     const t2 = new FakeStreamTransformer("t2");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(t1)
-      .appendTransformer(t2)
-      .appendStorage(storage1)
-      .appendStorage(storage2)
+      .transform(t1)
+      .transform(t2)
+      .persist(storage1)
+      .persist(storage2)
       .create();
     await kvs.open();
 
@@ -223,8 +218,8 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(t1.callsOf("getEncodable")).toHaveLength(1);
-    expect(t2.callsOf("getEncodable")).toHaveLength(1);
+    expect(t1.callsOf("getEncodable")).toHaveLength(2);
+    expect(t2.callsOf("getEncodable")).toHaveLength(2);
 
     // 後片付け
     await kvs.close();
@@ -248,10 +243,10 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
       if (call.method === "getDecodable") decodableOrder.push("t3");
     };
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(t1)
-      .appendTransformer(t2)
-      .appendTransformer(t3)
-      .appendStorage(storage)
+      .transform(t1)
+      .transform(t2)
+      .transform(t3)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -274,8 +269,8 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
   }) => {
     // 準備
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new FakeTransformer())
-      .appendStorage(new FakeStreamStorage())
+      .transform(new FakeTransformer())
+      .persist(new FakeStreamStorage())
       .create();
     await kvs.open();
 
@@ -295,8 +290,8 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .appendTransformer(new FakeTransformer())
-      .appendStorage(storage)
+      .transform(new FakeTransformer())
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -316,8 +311,8 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
 
@@ -334,8 +329,8 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
     transformer.errors["encode"] = new Error("encode boom");
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .appendTransformer(transformer)
-      .appendStorage(storage)
+      .transform(transformer)
+      .persist(storage)
       .create();
     await kvs.open();
 

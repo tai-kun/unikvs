@@ -82,7 +82,7 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   greeting: Value<string>;
 }>()
-  .appendStorage(new LocalStorage())
+  .persist(new LocalStorage())
   .create();
 ```
 

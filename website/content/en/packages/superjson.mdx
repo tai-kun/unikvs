@@ -72,7 +72,7 @@ Its main members are as follows.
 | `getEncodable()` | Returns a `TransformStream` that converts values into JSON Lines byte sequences. |
 | `getDecodable()` | Returns a `TransformStream` that restores values from JSON Lines byte sequences. |
 
-Register it with `UniKvs` via `appendTransformer`. It becomes the upstream of subsequently registered storages.
+Register it with `UniKvs` via `transform`. It becomes the upstream of subsequently registered storages.
 
 ```ts
 import { Superjson } from "@unikvs/superjson";
@@ -86,8 +86,8 @@ type Profile = {
 };
 
 const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
-  .appendTransformer(new Superjson())
-  .appendStorage(new Memory())
+  .transform(new Superjson())
+  .persist(new Memory())
   .create();
 
 await kvs.open();
@@ -195,8 +195,8 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .appendTransformer(new Superjson())
-  .appendStorage(new Memory())
+  .transform(new Superjson())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

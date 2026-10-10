@@ -30,7 +30,7 @@ try {
     | `KeyNotFoundError` | The key does not exist in any Storage. | Check the key name and whether it was stored. |
     | `UniKvsIsNotOpenError` | Operated before opening. | Call `open()` first. |
     | `UniKvsIsOpenError` | Called `open()` while already open. | Avoid double-opening. |
-    | `MissingStorageError` | Called `create()` with no Storage registered. | Add `appendStorage()`. |
+    | `MissingStorageError` | Called `create()` with no Storage registered. | Add `persist()`. |
     | `StorageIsNotOpenError` | A Storage is not open. | Check the `open()` call. |
     | `TransformerIsNotOpenError` | A Transformer is not open. | Check the `open()` call. |
   </AccordionItem>

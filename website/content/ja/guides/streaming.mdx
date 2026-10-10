@@ -12,7 +12,7 @@ const kvs = UniKvs.config<{
   logs: StreamValue<Uint8Array>;
   blob: Value<Uint8Array>;
 }>()
-  .appendStorage(new Memory())
+  .persist(new Memory())
   .create();
 ```
 

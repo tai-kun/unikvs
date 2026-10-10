@@ -24,7 +24,7 @@ function createKvs(rootSuffix = "") {
   const root = `.tmp-unikvs-nodefs-${Date.now()}${rootSuffix}`;
   roots.push(root);
   const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-    .appendStorage(new NodeFs(root))
+    .persist(new NodeFs(root))
     .create();
   return { kvs, root };
 }

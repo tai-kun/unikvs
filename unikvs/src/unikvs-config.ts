@@ -1,6 +1,5 @@
 import type {
   IStorage,
-  Variables,
   ITransformer,
   IReadableStreamStorage,
   IWritableStreamStorage,
@@ -23,7 +22,6 @@ import {
 import { MissingStorageError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
-import type { VariablesSource } from "./variables.types.js";
 
 export {
   type UniKvsSchema,
@@ -47,7 +45,9 @@ export {
  * @template TTransformer 対象となるトランスフォーマーの型です。
  */
 type $InferDecodeDataInput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<any, infer TDecodeDataInput> ? TDecodeDataInput : never;
+  TTransformer extends ITransformer<any, infer TDecodeDataInput, any, any, any, any, any, any>
+    ? TDecodeDataInput
+    : never;
 
 /**
  * トランスフォーマーから、エンコード時の出力データの型を推論するユーティリティー型です。
@@ -55,7 +55,31 @@ type $InferDecodeDataInput<TTransformer extends ITransformer> =
  * @template TTransformer 対象となるトランスフォーマーの型です。
  */
 type $InferEncodeDataOutput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<any, any, infer TEncodeDataOutput> ? TEncodeDataOutput : never;
+  TTransformer extends ITransformer<any, any, infer TEncodeDataOutput, any, any, any, any, any>
+    ? TEncodeDataOutput
+    : never;
+
+/**
+ * トランスフォーマーから、エンコード時の入力データの型を推論するユーティリティー型です。
+ * 分岐先頭の親出力受容検査に使用します。
+ *
+ * @template TTransformer 対象となるトランスフォーマーの型です。
+ */
+type $InferEncodeDataInput<TTransformer extends ITransformer> =
+  TTransformer extends ITransformer<infer TEncodeDataInput, any, any, any, any, any, any, any>
+    ? TEncodeDataInput
+    : never;
+
+/**
+ * トランスフォーマーから、デコード時の出力データの型を推論するユーティリティー型です。
+ * 分岐先頭の親入力受容検査に使用します。
+ *
+ * @template TTransformer 対象となるトランスフォーマーの型です。
+ */
+type $InferDecodeDataOutput<TTransformer extends ITransformer> =
+  TTransformer extends ITransformer<any, any, any, infer TDecodeDataOutput, any, any, any, any>
+    ? TDecodeDataOutput
+    : never;
 
 /**
  * トランスフォーマーから、デコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
@@ -78,6 +102,46 @@ type $InferEncodeChunkOutput<TTransformer extends ITransformer> =
     : never;
 
 /**
+ * トランスフォーマーから、エンコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
+ * 分岐先頭のチャンク検査に使用します。
+ *
+ * @template TTransformer 対象となるトランスフォーマーの型です。
+ */
+type $InferEncodeChunkInput<TTransformer extends ITransformer> =
+  TTransformer extends IEncodableStreamTransformer<infer TEncodeChunkInput, any>
+    ? TEncodeChunkInput
+    : never;
+
+/**
+ * トランスフォーマーから、デコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
+ * 分岐先頭のチャンク検査に使用します。
+ *
+ * @template TTransformer 対象となるトランスフォーマーの型です。
+ */
+type $InferDecodeChunkOutput<TTransformer extends ITransformer> =
+  TTransformer extends IDecodableStreamTransformer<any, infer TDecodeChunkOutput>
+    ? TDecodeChunkOutput
+    : never;
+
+/**
+ * ストレージから、書き込みデータの入力型を推論するユーティリティー型です。
+ * 分岐先頭の親出力受容検査に使用します。
+ *
+ * @template TStorage 対象となるストレージの型です。
+ */
+type $InferWriteDataInput<TStorage extends IStorage> =
+  TStorage extends IStorage<infer TWriteDataInput, any, any, any> ? TWriteDataInput : never;
+
+/**
+ * ストレージから、読み込みデータの出力型を推論するユーティリティー型です。
+ * 分岐先頭の親入力受容検査に使用します。
+ *
+ * @template TStorage 対象となるストレージの型です。
+ */
+type $InferReadDataOutput<TStorage extends IStorage> =
+  TStorage extends IStorage<any, infer TReadDataOutput, any, any> ? TReadDataOutput : never;
+
+/**
  * ストレージから、書き込みストリームの入力チャンクデータの型を推論するユーティリティー型です。
  *
  * @template TStorage 対象となるストレージの型です。
@@ -94,6 +158,105 @@ type $InferReadChunkOutput<TStorage extends IStorage> =
   TStorage extends IReadableStreamStorage<infer TReadChunkOutput> ? TReadChunkOutput : never;
 
 /**
+ * `any` かどうかを判定するユーティリティー型です。
+ * 分岐先頭の空判定で `any` を `unknown` と区別するために使用します。
+ *
+ * @template T 判定する型です。
+ */
+type $IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * `unknown` かどうかを判定するユーティリティー型です。
+ * 空ブランチの先頭マーカー検出に使用します。
+ *
+ * @template T 判定する型です。
+ */
+type $IsUnknown<T> =
+  $IsAny<T> extends true ? false : [T] extends [unknown]
+    ? [unknown] extends [T]
+      ? true
+      : false
+    : false;
+
+/**
+ * `never` かどうかを判定するユーティリティー型です。
+ * チャンクの非対応判定に使用します。
+ *
+ * @template T 判定する型です。
+ */
+type $IsNever<T> = [T] extends [never] ? true : false;
+
+/**
+ * 親出力が分岐先頭のエンコード入力を受容できるかを検査するユーティリティー型です。
+ * 不適合時は `never` を返し、`fork` 引数を `never` 化して型エラーを発生させます。
+ * 先頭のみを検査します。
+ * 中間以降は検査しません。
+ *
+ * @template TParentOutput 親の現出力型です。
+ * @template TBranchHeadInput 分岐先頭の入力型です。
+ */
+type $CheckForkEncodeData<TParentOutput, TBranchHeadInput> =
+  $IsUnknown<TBranchHeadInput> extends true ? unknown
+  : $IsAny<TBranchHeadInput> extends true ? unknown
+  : $IsAny<TParentOutput> extends true ? unknown
+  : [TParentOutput] extends [TBranchHeadInput] ? unknown
+  : never;
+
+/**
+ * 分岐先頭のデコード出力が親入力を受容できるかを検査するユーティリティー型です。
+ * 不適合時は `never` を返します。
+ * 先頭のみを検査します。
+ * 中間以降は検査しません。
+ *
+ * @template TParentInput 親の現入力型です。
+ * @template TBranchHeadOutput 分岐先頭の出力型です。
+ */
+type $CheckForkDecodeData<TParentInput, TBranchHeadOutput> =
+  $IsUnknown<TBranchHeadOutput> extends true ? unknown
+  : $IsAny<TBranchHeadOutput> extends true ? unknown
+  : $IsAny<TParentInput> extends true ? unknown
+  : [TBranchHeadOutput] extends [TParentInput] ? unknown
+  : never;
+
+/**
+ * 親チャンク出力が分岐先頭チャンク入力を受容できるかを検査するユーティリティー型です。
+ * ストリーム非対応の `never` は許容します。
+ * 先頭のみを検査します。
+ * 中間以降は検査しません。
+ *
+ * @template TParentOutput 親の現チャンク出力型です。
+ * @template TBranchHeadInput 分岐先頭のチャンク入力型です。
+ */
+type $CheckForkEncodeChunk<TParentOutput, TBranchHeadInput> =
+  $IsUnknown<TBranchHeadInput> extends true ? unknown
+  : $IsAny<TBranchHeadInput> extends true ? unknown
+  : $IsAny<TParentOutput> extends true ? unknown
+  : $IsUnknown<TParentOutput> extends true ? unknown
+  : $IsNever<TParentOutput> extends true ? unknown
+  : $IsNever<TBranchHeadInput> extends true ? unknown
+  : [TParentOutput] extends [TBranchHeadInput] ? unknown
+  : never;
+
+/**
+ * 分岐先頭チャンク出力が親チャンク入力を受容できるかを検査するユーティリティー型です。
+ * ストリーム非対応の `never` は許容します。
+ * 先頭のみを検査します。
+ * 中間以降は検査しません。
+ *
+ * @template TParentInput 親の現チャンク入力型です。
+ * @template TBranchHeadOutput 分岐先頭のチャンク出力型です。
+ */
+type $CheckForkDecodeChunk<TParentInput, TBranchHeadOutput> =
+  $IsUnknown<TBranchHeadOutput> extends true ? unknown
+  : $IsAny<TBranchHeadOutput> extends true ? unknown
+  : $IsAny<TParentInput> extends true ? unknown
+  : $IsUnknown<TParentInput> extends true ? unknown
+  : $IsNever<TParentInput> extends true ? unknown
+  : $IsNever<TBranchHeadOutput> extends true ? unknown
+  : [TBranchHeadOutput] extends [TParentInput] ? unknown
+  : never;
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> };
@@ -103,6 +266,185 @@ export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> 
  */
 export type KeyofKeyValueMapping<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> =
   Extract<keyof TKeyValueMapping, IStorage.Key>;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ */
+export interface IUniKvsBranch<
+  TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
+  TBranchChunkInput = any,
+  TBranchChunkOutput = any,
+  THeadEncodeDataInput = unknown,
+  THeadDecodeDataOutput = unknown,
+  THeadEncodeChunkInput = unknown,
+  THeadDecodeChunkOutput = unknown,
+  TLastDecodeDataInput = any,
+  TLastEncodeDataOutput = any,
+  TLastDecodeChunkInput = any,
+  TLastEncodeChunkOutput = any,
+  TBranchHasPersist extends boolean = false,
+> {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  transform<
+    TTransformer extends ITransformer<
+      [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
+      any,
+      any,
+      [TLastDecodeDataInput] extends [never] ? any : TLastDecodeDataInput,
+      [TLastEncodeChunkOutput] extends [never] ? any : TLastEncodeChunkOutput,
+      any,
+      any,
+      [TLastDecodeChunkInput] extends [never] ? any : TLastDecodeChunkInput
+    >,
+  >(
+    transformer: TTransformer,
+  ): IUniKvsBranch<
+    TKeyValueMapping,
+    [TBranchChunkInput] extends [never]
+      ? never
+      : [$InferDecodeChunkInput<TTransformer>] extends [never]
+        ? never
+        : TBranchChunkInput,
+    [TBranchChunkOutput] extends [never]
+      ? never
+      : [$InferEncodeChunkOutput<TTransformer>] extends [never]
+        ? never
+        : TBranchChunkOutput,
+    $IsUnknown<THeadEncodeDataInput> extends true ? $InferEncodeDataInput<TTransformer>
+    : THeadEncodeDataInput,
+    $IsUnknown<THeadDecodeDataOutput> extends true ? $InferDecodeDataOutput<TTransformer>
+    : THeadDecodeDataOutput,
+    $IsUnknown<THeadEncodeChunkInput> extends true ? $InferEncodeChunkInput<TTransformer>
+    : THeadEncodeChunkInput,
+    $IsUnknown<THeadDecodeChunkOutput> extends true ? $InferDecodeChunkOutput<TTransformer>
+    : THeadDecodeChunkOutput,
+    $InferDecodeDataInput<TTransformer>,
+    $InferEncodeDataOutput<TTransformer>,
+    $InferDecodeChunkInput<TTransformer>,
+    $InferEncodeChunkOutput<TTransformer>,
+    TBranchHasPersist
+  >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  persist<
+    TStorage extends IStorage<
+      [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
+      [TLastDecodeDataInput] extends [never] ? any : TLastDecodeDataInput,
+      [TLastEncodeChunkOutput] extends [never] ? any : TLastEncodeChunkOutput,
+      [TLastDecodeChunkInput] extends [never] ? any : TLastDecodeChunkInput
+    >,
+  >(
+    storage: TStorage,
+  ): IUniKvsBranch<
+    TKeyValueMapping,
+    [TBranchChunkInput] extends [never]
+      ? never
+      : [$InferWriteChunkInput<TStorage>] extends [never]
+        ? never
+        : TBranchChunkInput,
+    [TBranchChunkOutput] extends [never]
+      ? never
+      : [$InferReadChunkOutput<TStorage>] extends [never]
+        ? never
+        : TBranchChunkOutput,
+    $IsUnknown<THeadEncodeDataInput> extends true ? $InferWriteDataInput<TStorage>
+    : THeadEncodeDataInput,
+    $IsUnknown<THeadDecodeDataOutput> extends true ? $InferReadDataOutput<TStorage>
+    : THeadDecodeDataOutput,
+    $IsUnknown<THeadEncodeChunkInput> extends true ? $InferWriteChunkInput<TStorage>
+    : THeadEncodeChunkInput,
+    $IsUnknown<THeadDecodeChunkOutput> extends true ? $InferReadChunkOutput<TStorage>
+    : THeadDecodeChunkOutput,
+    TLastDecodeDataInput,
+    TLastEncodeDataOutput,
+    TLastDecodeChunkInput,
+    TLastEncodeChunkOutput,
+    true
+  >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  fork<
+    TSubChunkInput,
+    TSubChunkOutput,
+    TSubHeadEncodeDataInput,
+    TSubHeadDecodeDataOutput,
+    TSubHeadEncodeChunkInput,
+    TSubHeadDecodeChunkOutput,
+    TSubLastDecodeDataInput,
+    TSubLastEncodeDataOutput,
+    TSubLastDecodeChunkInput,
+    TSubLastEncodeChunkOutput,
+    TSubHasPersist extends boolean,
+  >(
+    branch: IUniKvsBranch<
+      any,
+      TSubChunkInput,
+      TSubChunkOutput,
+      TSubHeadEncodeDataInput,
+      TSubHeadDecodeDataOutput,
+      TSubHeadEncodeChunkInput,
+      TSubHeadDecodeChunkOutput,
+      TSubLastDecodeDataInput,
+      TSubLastEncodeDataOutput,
+      TSubLastDecodeChunkInput,
+      TSubLastEncodeChunkOutput,
+      TSubHasPersist
+    > &
+      (TSubHasPersist extends true ? $CheckForkEncodeData<
+        TLastEncodeDataOutput,
+        TSubHeadEncodeDataInput
+      > : unknown) &
+      (TSubHasPersist extends true ? $CheckForkDecodeData<
+        TLastDecodeDataInput,
+        TSubHeadDecodeDataOutput
+      > : unknown) &
+      (TSubHasPersist extends true ? $CheckForkEncodeChunk<
+        TLastEncodeChunkOutput,
+        TSubHeadEncodeChunkInput
+      > : unknown) &
+      (TSubHasPersist extends true ? $CheckForkDecodeChunk<
+        TLastDecodeChunkInput,
+        TSubHeadDecodeChunkOutput
+      > : unknown),
+  ): IUniKvsBranch<
+    TKeyValueMapping,
+    TSubHasPersist extends true
+      ? ([TBranchChunkInput] extends [never] ? never : [TSubChunkInput] extends [never] ? never
+        : TBranchChunkInput)
+      : TBranchChunkInput,
+    TSubHasPersist extends true
+      ? ([TBranchChunkOutput] extends [never] ? never : [TSubChunkOutput] extends [never] ? never
+        : TBranchChunkOutput)
+      : TBranchChunkOutput,
+    TSubHasPersist extends true
+      ? ($IsUnknown<THeadEncodeDataInput> extends true ? TSubHeadEncodeDataInput
+        : THeadEncodeDataInput)
+      : THeadEncodeDataInput,
+    TSubHasPersist extends true
+      ? ($IsUnknown<THeadDecodeDataOutput> extends true ? TSubHeadDecodeDataOutput
+        : THeadDecodeDataOutput)
+      : THeadDecodeDataOutput,
+    TSubHasPersist extends true
+      ? ($IsUnknown<THeadEncodeChunkInput> extends true ? TSubHeadEncodeChunkInput
+        : THeadEncodeChunkInput)
+      : THeadEncodeChunkInput,
+    TSubHasPersist extends true
+      ? ($IsUnknown<THeadDecodeChunkOutput> extends true ? TSubHeadDecodeChunkOutput
+        : THeadDecodeChunkOutput)
+      : THeadDecodeChunkOutput,
+    TLastDecodeDataInput,
+    TLastEncodeDataOutput,
+    TLastDecodeChunkInput,
+    TLastEncodeChunkOutput,
+    TBranchHasPersist extends true ? true : TSubHasPersist
+  >;
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -127,12 +469,43 @@ export interface IUniKvsConfigBuilder<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  setVariables(vars: VariablesSource): this;
+  transform<
+    TTransformer extends ITransformer<
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      any,
+      any,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      any,
+      any,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+    >,
+  >(
+    transformer: TTransformer,
+  ): IUniKvsConfigBuilder<
+    TKeyValueMapping,
+    TUniKvsDataInput,
+    TUniKvsDataOutput,
+    [TUniKvsChunkInput] extends [never]
+      ? never
+      : [$InferDecodeChunkInput<TTransformer>] extends [never]
+        ? never
+        : TUniKvsChunkInput,
+    [TUniKvsChunkOutput] extends [never]
+      ? never
+      : [$InferEncodeChunkOutput<TTransformer>] extends [never]
+        ? never
+        : TUniKvsChunkOutput,
+    $InferDecodeDataInput<TTransformer>,
+    $InferEncodeDataOutput<TTransformer>,
+    $InferDecodeChunkInput<TTransformer>,
+    $InferEncodeChunkOutput<TTransformer>
+  >;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  appendStorage<
+  persist<
     TStorage extends IStorage<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
@@ -164,45 +537,65 @@ export interface IUniKvsConfigBuilder<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  appendTransformer<
-    TTransformer extends ITransformer<
-      // 最後のトランスファーマーのエンコード出力を、入力値として受け入れられる必要があります。
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      // ここではまだ、後段のトランスフォーマーのデコード出力を気にしません。
-      any,
-      // ここではまだ、後段のトランスフォーマーのエンコード入力を気にしません。
-      any,
-      // 最後のトランスフォーマーのデコード入力を出力する必要があります。
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      // 最後のトランスファーマーのエンコード出力を、入力値として受け入れられる必要があります。
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      // ここではまだ、後段のトランスフォーマーのデコード出力を気にしません。
-      any,
-      // ここではまだ、後段のトランスフォーマーのエンコード入力を気にしません。
-      any,
-      // 最後のトランスフォーマーのデコード入力を出力する必要があります。
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
-    >,
+  fork<
+    TBranchChunkInput,
+    TBranchChunkOutput,
+    TBranchHeadEncodeDataInput,
+    TBranchHeadDecodeDataOutput,
+    TBranchHeadEncodeChunkInput,
+    TBranchHeadDecodeChunkOutput,
+    TBranchLastDecodeDataInput,
+    TBranchLastEncodeDataOutput,
+    TBranchLastDecodeChunkInput,
+    TBranchLastEncodeChunkOutput,
+    TBranchHasPersist extends boolean,
   >(
-    transformer: TTransformer,
+    branch: IUniKvsBranch<
+      any,
+      TBranchChunkInput,
+      TBranchChunkOutput,
+      TBranchHeadEncodeDataInput,
+      TBranchHeadDecodeDataOutput,
+      TBranchHeadEncodeChunkInput,
+      TBranchHeadDecodeChunkOutput,
+      TBranchLastDecodeDataInput,
+      TBranchLastEncodeDataOutput,
+      TBranchLastDecodeChunkInput,
+      TBranchLastEncodeChunkOutput,
+      TBranchHasPersist
+    > &
+      (TBranchHasPersist extends true ? $CheckForkEncodeData<
+        TLastTransformerEncodeDataOutput,
+        TBranchHeadEncodeDataInput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkDecodeData<
+        TLastTransformerDecodeDataInput,
+        TBranchHeadDecodeDataOutput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkEncodeChunk<
+        TLastTransformerEncodeChunkOutput,
+        TBranchHeadEncodeChunkInput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkDecodeChunk<
+        TLastTransformerDecodeChunkInput,
+        TBranchHeadDecodeChunkOutput
+      > : unknown),
   ): IUniKvsConfigBuilder<
     TKeyValueMapping,
     TUniKvsDataInput,
     TUniKvsDataOutput,
-    [TUniKvsChunkInput] extends [never]
-      ? never
-      : [$InferDecodeChunkInput<TTransformer>] extends [never]
-        ? never
-        : TUniKvsChunkInput,
-    [TUniKvsChunkOutput] extends [never]
-      ? never
-      : [$InferEncodeChunkOutput<TTransformer>] extends [never]
-        ? never
-        : TUniKvsChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>
+    TBranchHasPersist extends true
+      ? ([TUniKvsChunkInput] extends [never] ? never : [TBranchChunkInput] extends [never] ? never
+        : TUniKvsChunkInput)
+      : TUniKvsChunkInput,
+    TBranchHasPersist extends true
+      ? ([TUniKvsChunkOutput] extends [never] ? never : [TBranchChunkOutput] extends [never] ? never
+        : TUniKvsChunkOutput)
+      : TUniKvsChunkOutput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
   >;
 }
 
@@ -228,12 +621,35 @@ export interface IUniKvsConfigFinalizer<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  setVariables(vars: VariablesSource): this;
+  transform<
+    TTransformer extends ITransformer<
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      any,
+      any,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      any,
+      any,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+    >,
+  >(
+    transformer: TTransformer,
+  ): IUniKvsConfigFinalizer<
+    TKeyValueMapping,
+    TWriteDataInput,
+    TReadDataOutput,
+    TWriteChunkInput,
+    TReadChunkOutput,
+    $InferDecodeDataInput<TTransformer>,
+    $InferEncodeDataOutput<TTransformer>,
+    $InferDecodeChunkInput<TTransformer>,
+    $InferEncodeChunkOutput<TTransformer>
+  >;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  appendStorage<
+  persist<
     TStorage extends IStorage<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
@@ -265,29 +681,65 @@ export interface IUniKvsConfigFinalizer<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  appendTransformer<
-    TTransformer extends ITransformer<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      any,
-      any,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      any,
-      any,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
-    >,
+  fork<
+    TBranchChunkInput,
+    TBranchChunkOutput,
+    TBranchHeadEncodeDataInput,
+    TBranchHeadDecodeDataOutput,
+    TBranchHeadEncodeChunkInput,
+    TBranchHeadDecodeChunkOutput,
+    TBranchLastDecodeDataInput,
+    TBranchLastEncodeDataOutput,
+    TBranchLastDecodeChunkInput,
+    TBranchLastEncodeChunkOutput,
+    TBranchHasPersist extends boolean,
   >(
-    transformer: TTransformer,
+    branch: IUniKvsBranch<
+      any,
+      TBranchChunkInput,
+      TBranchChunkOutput,
+      TBranchHeadEncodeDataInput,
+      TBranchHeadDecodeDataOutput,
+      TBranchHeadEncodeChunkInput,
+      TBranchHeadDecodeChunkOutput,
+      TBranchLastDecodeDataInput,
+      TBranchLastEncodeDataOutput,
+      TBranchLastDecodeChunkInput,
+      TBranchLastEncodeChunkOutput,
+      TBranchHasPersist
+    > &
+      (TBranchHasPersist extends true ? $CheckForkEncodeData<
+        TLastTransformerEncodeDataOutput,
+        TBranchHeadEncodeDataInput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkDecodeData<
+        TLastTransformerDecodeDataInput,
+        TBranchHeadDecodeDataOutput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkEncodeChunk<
+        TLastTransformerEncodeChunkOutput,
+        TBranchHeadEncodeChunkInput
+      > : unknown) &
+      (TBranchHasPersist extends true ? $CheckForkDecodeChunk<
+        TLastTransformerDecodeChunkInput,
+        TBranchHeadDecodeChunkOutput
+      > : unknown),
   ): IUniKvsConfigFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
-    TWriteChunkInput,
-    TReadChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>
+    TBranchHasPersist extends true
+      ? ([TWriteChunkInput] extends [never] ? never : [TBranchChunkInput] extends [never] ? never
+        : TWriteChunkInput)
+      : TWriteChunkInput,
+    TBranchHasPersist extends true
+      ? ([TReadChunkOutput] extends [never] ? never : [TBranchChunkOutput] extends [never] ? never
+        : TReadChunkOutput)
+      : TReadChunkOutput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
   >;
 }
 
@@ -313,31 +765,97 @@ const UniKvsConfigArgsSchema = v.tuple([v.optional(UniKvsConfigOptionsSchema)]);
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
+export class UniKvsBranch {
+  // 自前の相対パイプラインです。
+  // 登録順に保持します。
+  #transformers: ITransformer[];
+
+  // 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
+  #destinations: { readonly storage: IStorage; readonly transformers: ITransformer[] }[];
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public constructor() {
+    this.#transformers = [];
+    this.#destinations = [];
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public transform(transformer: ITransformer): this {
+    this.#transformers.push(transformer);
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public persist(storage: IStorage): this {
+    this.#destinations.push({ storage, transformers: [...this.#transformers] });
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public fork(branch: IUniKvsBranch): this {
+    if (!(branch instanceof UniKvsBranch)) {
+      throw new TypeError("fork() expects a branch created by UniKvs.branch().");
+    }
+
+    const subDestinations = branch._getDestinationsForFork();
+
+    // 自前の接頭辞を付加して解決済みにします。
+    // 末尾未使用トランスフォーマーは破棄します。
+    const prefix = [...this.#transformers];
+    for (const dest of subDestinations) {
+      this.#destinations.push({ storage: dest.storage, transformers: [...prefix, ...dest.transformers] });
+    }
+
+    return this;
+  }
+
+  /**
+   * 分岐先のスナップショットを返します。
+   * 親の `fork` で接頭辞付加するために使用します。
+   * 外部からは使用しません。
+   *
+   * @internal
+   * @returns 分岐先のコピーを返します。
+   */
+  private _getDestinationsForFork(): readonly {
+    readonly storage: IStorage;
+    readonly transformers: readonly ITransformer[];
+  }[] {
+    return this.#destinations.map((dest) => ({
+      storage: dest.storage,
+      transformers: [...dest.transformers],
+    }));
+  }
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ */
 export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfigFinalizer {
   /**
    * UniKvs のコンストラクターです。
    */
   readonly #UniKvs: typeof UniKvs;
 
-  /**
-   * アプリケーションの実行時情報を保持する変数オブジェクトです。
-   */
-  #vars: Variables;
+  // 登録済みストレージと各登録時点のパイプラインのスナップショットです。
+  #destinations: { readonly storage: IStorage; readonly transformers: ITransformer[] }[];
 
-  /**
-   * データの永続化先となるストレージのリストです。各ストレージは登録時点のトランスフォーマー数を保持します。
-   */
-  readonly #destinations: { readonly storage: IStorage; readonly transformerCount: number }[];
+  // 現在のメインのパイプラインです。
+  // 登録順に保持します。
+  #transformers: ITransformer[];
 
-  /**
-   * データを変換するためのトランスフォーマーのリストです。登録順に保持します。
-   */
-  readonly #transformers: ITransformer[];
-
-  /**
-   * キーに対応する値のスキーマ情報を解決するリゾルバーです。スキーマ未設定時は null となります。
-   */
-  readonly #valueSchemaResolver: IValueSchemaResolver | null;
+  // キーに対応する値のスキーマ情報を解決するリゾルバーです。
+  #valueSchemaResolver: IValueSchemaResolver | null;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -346,7 +864,6 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     const [parsed = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
 
     this.#UniKvs = UniKvsConstructor;
-    this.#vars = {};
     this.#destinations = [];
     this.#transformers = [];
     this.#valueSchemaResolver = parsed.schema ? createValueSchemaResolver(parsed.schema) : null;
@@ -356,45 +873,82 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public create(): UniKvs {
-    const transformers = this.#transformers.map((tf) => new UniKvsTransformer(tf));
-
-    const [first, ...rest] = this.#destinations.map(({ storage, transformerCount }) => ({
+    const wrappers = new Map<ITransformer, UniKvsTransformer>();
+    const wrap = (tf: ITransformer): UniKvsTransformer => {
+      let w = wrappers.get(tf);
+      if (!w) {
+        w = new UniKvsTransformer(tf);
+        wrappers.set(tf, w);
+      }
+      return w;
+    };
+    const destinations = this.#destinations.map(({ storage, transformers }) => ({
       storage: new UniKvsStorage(storage),
-      transformers: transformers.slice(0, transformerCount),
+      transformers: transformers.map(wrap),
     }));
+    const [first, ...rest] = destinations;
 
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (!first) {
       throw new MissingStorageError();
     }
 
-    // 変数の参照を切り離すために浅いコピーを作成して UniKvs を初期化します。
-    return new this.#UniKvs(this.#vars, [first, ...rest], transformers, this.#valueSchemaResolver);
+    // 登録済みストレージのチェーンに含まれるトランスフォーマーのみを保持します。
+    // 末尾未使用トランスフォーマーは破棄します。
+    // 分岐側の `fork` と整合させます。
+    const allTransformers: UniKvsTransformer[] = [];
+    for (const dest of destinations) {
+      for (const tf of dest.transformers) {
+        if (!allTransformers.includes(tf)) {
+          allTransformers.push(tf);
+        }
+      }
+    }
+
+    return new this.#UniKvs({}, [first, ...rest], allTransformers, this.#valueSchemaResolver);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public setVariables(vars: VariablesSource): this {
-    this.#vars = Array.isArray(vars) ? Object.fromEntries(vars) : { ...vars };
-
-    return this;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public appendStorage(storage: IStorage): this {
-    this.#destinations.push({ storage, transformerCount: this.#transformers.length });
-
-    return this;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public appendTransformer(transformer: ITransformer): this {
+  public transform(transformer: ITransformer): this {
     this.#transformers.push(transformer);
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public persist(storage: IStorage): this {
+    this.#destinations.push({ storage, transformers: [...this.#transformers] });
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public fork(branch: IUniKvsBranch): this {
+    if (!(branch instanceof UniKvsBranch)) {
+      throw new TypeError("fork() expects a branch created by UniKvs.branch().");
+    }
+
+    // 非公開メソッドへの同一ファイルからの参照です。
+    // 型可視性を回避するために構造型へ変換します。
+    const subDestinations = (branch as unknown as {
+      _getDestinationsForFork(): readonly {
+        readonly storage: IStorage;
+        readonly transformers: readonly ITransformer[];
+      }[];
+    })._getDestinationsForFork();
+
+    // fork 時点の親パイプラインを接頭辞として付加します。
+    // ブランチの末尾未使用トランスフォーマーは破棄します。
+    const prefix = [...this.#transformers];
+    for (const dest of subDestinations) {
+      this.#destinations.push({ storage: dest.storage, transformers: [...prefix, ...dest.transformers] });
+    }
 
     return this;
   }

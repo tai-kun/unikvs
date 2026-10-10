@@ -20,7 +20,7 @@ npm install @unikvs/writeonly
 
 ## 使い方 [#usage]
 
-クラス名は `WriteOnly`、`name` は `"WriteOnly"` です。`UniKvs` には `appendStorage()` で渡します。
+クラス名は `WriteOnly`、`name` は `"WriteOnly"` です。`UniKvs` には `persist()` で渡します。
 
 ```ts
 import { Memory } from "@unikvs/memory";
@@ -30,7 +30,7 @@ import { WriteOnly } from "@unikvs/writeonly";
 const kvs = UniKvs.config<{
   foo: Value<string>;
 }>()
-  .appendStorage(new WriteOnly(new Memory()))
+  .persist(new WriteOnly(new Memory()))
   .create();
 
 await kvs.open();
@@ -167,8 +167,8 @@ import { WriteOnly } from "@unikvs/writeonly";
 const kvs = UniKvs.config<{
   report: Value<Uint8Array<ArrayBuffer>>;
 }>()
-  .appendStorage(new NodeFs(".data"))
-  .appendStorage(new WriteOnly(new NodeFs(".archive")))
+  .persist(new NodeFs(".data"))
+  .persist(new WriteOnly(new NodeFs(".archive")))
   .create();
 
 await kvs.open();

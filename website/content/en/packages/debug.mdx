@@ -19,7 +19,7 @@ npm install @unikvs/debug @logtape/logtape
 
 ## Usage [#usage]
 
-Configure LogTape first, then register it with `appendTransformer`. It becomes the upstream of subsequently registered storages.
+Configure LogTape first, then register it with `transform`. It becomes the upstream of subsequently registered storages.
 
 ```ts
 import { Debug } from "@unikvs/debug";
@@ -41,8 +41,8 @@ configureSync({
 });
 
 const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
-  .appendTransformer(new Debug())
-  .appendStorage(new Memory())
+  .transform(new Debug())
+  .persist(new Memory())
   .create();
 
 await kvs.open();
@@ -176,8 +176,8 @@ const debug = new Debug({
 });
 
 const kvs = UniKvs.config<{ "user:1": PlainValue<string>; settings: PlainValue<string> }>()
-  .appendTransformer(debug)
-  .appendStorage(new Memory())
+  .transform(debug)
+  .persist(new Memory())
   .create();
 
 await kvs.open();

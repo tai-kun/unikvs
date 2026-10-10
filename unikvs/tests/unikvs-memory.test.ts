@@ -9,7 +9,7 @@ describe("UniKvs + Memory", () => {
   test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .appendStorage(new Memory())
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -28,7 +28,7 @@ describe("UniKvs + Memory", () => {
 
   test("存在しないキーへの操作", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().appendStorage(new Memory()).create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
     await kvs.open();
 
     // 実行と検証

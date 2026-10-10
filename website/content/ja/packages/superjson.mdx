@@ -72,7 +72,7 @@ const superjson = new Superjson();
 | `getEncodable()` | 値を JSON Lines のバイト列へ変換する `TransformStream` を返します。 |
 | `getDecodable()` | JSON Lines のバイト列を値へ復元する `TransformStream` を返します。 |
 
-`UniKvs` には `appendTransformer` で登録します。以降に登録するストレージの前段になります。
+`UniKvs` には `transform` で登録します。以降に登録するストレージの前段になります。
 
 ```ts
 import { Superjson } from "@unikvs/superjson";
@@ -86,8 +86,8 @@ type Profile = {
 };
 
 const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
-  .appendTransformer(new Superjson())
-  .appendStorage(new Memory())
+  .transform(new Superjson())
+  .persist(new Memory())
   .create();
 
 await kvs.open();
@@ -195,8 +195,8 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .appendTransformer(new Superjson())
-  .appendStorage(new Memory())
+  .transform(new Superjson())
+  .persist(new Memory())
   .create();
 
 await kvs.open();

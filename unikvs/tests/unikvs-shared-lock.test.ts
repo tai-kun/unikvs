@@ -88,7 +88,7 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -118,7 +118,7 @@ describe("UniKvs - 共有ロック", () => {
   test("stream のセットアップが保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     storage.map.set("a", [Uint8Array.from([1])]);
 
@@ -162,7 +162,7 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの set は完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -195,7 +195,7 @@ describe("UniKvs - 共有ロック", () => {
   }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -230,7 +230,7 @@ describe("UniKvs - 共有ロック", () => {
     // 準備: stream("a") がキー a の読み取りロックを保持し続ける
     const storage = new GatedExistsStorage();
     storage.map.set("a", [Uint8Array.from([1])]);
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     const vs = await kvs.stream("a");
 
@@ -261,7 +261,7 @@ describe("UniKvs - 共有ロック", () => {
     // 準備
     const storage = new GatedExistsStorage();
     storage.map.set("a", "value");
-    const kvs = UniKvs.config().appendStorage(storage).create();
+    const kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
