@@ -29,6 +29,7 @@ packages:
     "packages/utils",
     "packages/checksum",
     "packages/compression",
+    "packages/zstd.wasm",
     "packages/debug",
     "packages/passthrough",
     "packages/json",

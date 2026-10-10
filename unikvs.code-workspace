@@ -25,6 +25,10 @@
       "path": "packages/compression",
     },
     {
+      "name": "@unikvs/zstd.wasm",
+      "path": "packages/zstd.wasm",
+    },
+    {
       "name": "@unikvs/debug",
       "path": "packages/debug",
     },
