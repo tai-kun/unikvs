@@ -12,7 +12,6 @@ describe("初期化と接続管理", () => {
 
     // 検証
     expect(storage.name).toBe("LocalStorage");
-    expect(storage.allowRepair).toBe(false);
     expect(storage.allowClearWithoutPrefix).toBe(false);
     expect(storage.isOpen).toBe(true);
   });

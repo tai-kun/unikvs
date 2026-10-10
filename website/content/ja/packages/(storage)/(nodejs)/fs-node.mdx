@@ -38,15 +38,6 @@ import { NodeFs } from "@unikvs/fs.node";
       default: '".unikvs"',
       description: "保存先のルートディレクトリーです。",
     },
-    options: {
-      type: "NodeFsOptions",
-      description: "書き戻しの許可の設定です。省略時は既定値で動作します。",
-    },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
-    },
   }}
 />
 
@@ -86,4 +77,4 @@ await kvs.close();
 
 ## エラー [#errors]
 
-このパッケージ固有のエラーはありません。書き戻しが禁止された状態での書き込みは `@unikvs/core` の `RepairNotAllowedError` で失敗し、存在しないキーの読み取りや削除はネイティブの `ENOENT` で失敗します。
+このパッケージ固有のエラーはありません。存在しないキーの読み取りや削除はネイティブの `ENOENT` で失敗します。

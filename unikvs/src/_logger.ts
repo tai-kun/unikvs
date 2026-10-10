@@ -1,5 +1,7 @@
 import { getLogger } from "@logtape/logtape";
 
-const logger = getLogger("unikvs");
+// 既定のロガーです。
+export const logger = getLogger("unikvs");
 
-export default logger;
+// 書き戻しに関する警告専用のロガーです。
+export const repairLogger = getLogger(["@unikvs/*", "@unikvs/allow-repair"]);

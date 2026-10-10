@@ -175,28 +175,43 @@ describe("InvalidUsageErrorBase", () => {
 });
 
 describe("RepairNotAllowedError", () => {
-  test("ErrorBase と globalThis.Error を継承する", ({ expect }) => {
+  test("ErrorBase を継承し name は UniKvsRepairNotAllowedError である", ({ expect }) => {
     // 実行
-    const error = new RepairNotAllowedError({ name: "Memory" });
+    const error = new RepairNotAllowedError({ names: ["Memory"] });
 
     // 検証
     expect(error).toBeInstanceOf(globalThis.Error);
     expect(error).toBeInstanceOf(ErrorBase);
     expect(error).toBeInstanceOf(RepairNotAllowedError);
+    expect(error.name).toBe("UniKvsRepairNotAllowedError");
   });
 
-  test("meta にストレージ名を保持する", ({ expect }) => {
+  test("meta にストレージ名一覧を保持する", ({ expect }) => {
     // 実行
-    const error = new RepairNotAllowedError({ name: "Memory" });
+    const error = new RepairNotAllowedError({ names: ["Memory"] });
 
     // 検証
-    expect(error.meta).toStrictEqual({ name: "Memory" });
+    expect(error.meta).toStrictEqual({ names: ["Memory"] });
   });
 
   test("既定のメッセージはストレージ名を含む", ({ expect }) => {
     // 実行と検証
-    expect(new RepairNotAllowedError({ name: "Memory" }).message).toBe(
-      'Storage "Memory" does not allow repair writes',
+    expect(new RepairNotAllowedError({ names: ["Memory"] }).message).toBe(
+      'Repair writes via "Memory" are not allowed',
+    );
+  });
+
+  test("複数名のときは列挙したメッセージになる", ({ expect }) => {
+    // 実行と検証
+    expect(new RepairNotAllowedError({ names: ["a", "b"] }).message).toBe(
+      'Repair writes via "a, b" are not allowed',
+    );
+  });
+
+  test("空配列のときは不明名で組み立てる", ({ expect }) => {
+    // 実行と検証
+    expect(new RepairNotAllowedError({ names: [] }).message).toBe(
+      'Repair writes via "(unknown)" are not allowed',
     );
   });
 
@@ -205,8 +220,28 @@ describe("RepairNotAllowedError", () => {
     setLang("ja");
 
     // 実行と検証
-    expect(new RepairNotAllowedError({ name: "Memory" }).message).toBe(
-      'ストレージ "Memory" は書き戻しを許可していません',
+    expect(new RepairNotAllowedError({ names: ["Memory"] }).message).toBe(
+      '"Memory" への書き戻しは許可されていません',
+    );
+  });
+
+  test("日本語では複数名を列挙する", ({ expect, setLang }) => {
+    // 準備
+    setLang("ja");
+
+    // 実行と検証
+    expect(new RepairNotAllowedError({ names: ["a", "b"] }).message).toBe(
+      '"a, b" への書き戻しは許可されていません',
+    );
+  });
+
+  test("日本語では空配列は不明名になる", ({ expect, setLang }) => {
+    // 準備
+    setLang("ja");
+
+    // 実行と検証
+    expect(new RepairNotAllowedError({ names: [] }).message).toBe(
+      '"(unknown)" への書き戻しは許可されていません',
     );
   });
 });

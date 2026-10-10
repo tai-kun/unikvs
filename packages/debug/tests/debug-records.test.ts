@@ -15,7 +15,7 @@ describe("ログのメタデータ", () => {
 
     // 検証
     expect(records).toHaveLength(1);
-    expect(records[0]!.category).toStrictEqual(["unikvs", "@unikvs/debug"]);
+    expect(records[0]!.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
     expect(records[0]!.level).toBe("debug");
     expect(records[0]!.properties["direction"]).toBe("write");
     expect(records[0]!.message).toStrictEqual([
@@ -36,7 +36,7 @@ describe("ログのメタデータ", () => {
 
     // 検証
     expect(records).toHaveLength(1);
-    expect(records[0]!.category).toStrictEqual(["unikvs", "@unikvs/debug"]);
+    expect(records[0]!.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
     expect(records[0]!.level).toBe("debug");
     expect(records[0]!.properties["direction"]).toBe("read");
     expect(records[0]!.message).toStrictEqual([

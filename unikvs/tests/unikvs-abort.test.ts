@@ -70,9 +70,7 @@ describe("UniKvs - 実行前 abort", () => {
 
   test("理由なしの abort は AbortError として伝播する", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .persist(new FakeStorage())
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new FakeStorage()).create();
     await kvs.open();
 
     // 実行

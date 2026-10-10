@@ -10,23 +10,12 @@ import {
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import {
-  InvalidPartSizeError,
-  RepairNotAllowedError,
-  StorageAbortedError,
-  type IStorage,
-  type Variables,
-} from "@unikvs/core";
+import { InvalidPartSizeError, StorageAbortedError, type IStorage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
  */
-export type S3StorageOptions = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
-  readonly allowRepair?: boolean | undefined;
-};
+export type S3StorageOptions = {};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
@@ -59,29 +48,11 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public readonly allowRepair: boolean;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
-  public constructor(bucket: string, config: S3ClientConfig = {}, options: S3StorageOptions = {}) {
-    const { allowRepair = false } = options;
+  public constructor(bucket: string, config: S3ClientConfig = {}, _options: S3StorageOptions = {}) {
     this.name = "S3";
     this.client = null;
     this.bucket = bucket;
     this.config = config;
-    this.allowRepair = allowRepair;
-  }
-
-  /**
-   * 書き戻しによる書き込みが許可されているかを検証します。
-   *
-   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
-   */
-  private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
-    }
   }
 
   /**
@@ -112,7 +83,6 @@ export default class S3 implements IStorage {
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
-    this.assertRepairAllowed(args);
     const { key, data, signal: abortSignal } = args;
 
     const command = new PutObjectCommand({
@@ -224,7 +194,6 @@ export default class S3 implements IStorage {
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
-    this.assertRepairAllowed(args);
     const { key, vars, signal } = args;
 
     if (signal.aborted) {

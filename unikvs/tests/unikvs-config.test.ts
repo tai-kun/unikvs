@@ -77,10 +77,7 @@ describe("UniKvsConfig", () => {
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config
-      .transform(new MockTransformer())
-      .persist(new MockStorage())
-      .create();
+    const result = config.transform(new MockTransformer()).persist(new MockStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);

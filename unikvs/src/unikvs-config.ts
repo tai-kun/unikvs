@@ -172,11 +172,13 @@ type $IsAny<T> = 0 extends 1 & T ? true : false;
  * @template T 判定する型です。
  */
 type $IsUnknown<T> =
-  $IsAny<T> extends true ? false : [T] extends [unknown]
-    ? [unknown] extends [T]
-      ? true
-      : false
-    : false;
+  $IsAny<T> extends true
+    ? false
+    : [T] extends [unknown]
+      ? [unknown] extends [T]
+        ? true
+        : false
+      : false;
 
 /**
  * `never` かどうかを判定するユーティリティー型です。
@@ -196,11 +198,15 @@ type $IsNever<T> = [T] extends [never] ? true : false;
  * @template TBranchHeadInput 分岐先頭の入力型です。
  */
 type $CheckForkEncodeData<TParentOutput, TBranchHeadInput> =
-  $IsUnknown<TBranchHeadInput> extends true ? unknown
-  : $IsAny<TBranchHeadInput> extends true ? unknown
-  : $IsAny<TParentOutput> extends true ? unknown
-  : [TParentOutput] extends [TBranchHeadInput] ? unknown
-  : never;
+  $IsUnknown<TBranchHeadInput> extends true
+    ? unknown
+    : $IsAny<TBranchHeadInput> extends true
+      ? unknown
+      : $IsAny<TParentOutput> extends true
+        ? unknown
+        : [TParentOutput] extends [TBranchHeadInput]
+          ? unknown
+          : never;
 
 /**
  * 分岐先頭のデコード出力が親入力を受容できるかを検査するユーティリティー型です。
@@ -212,11 +218,15 @@ type $CheckForkEncodeData<TParentOutput, TBranchHeadInput> =
  * @template TBranchHeadOutput 分岐先頭の出力型です。
  */
 type $CheckForkDecodeData<TParentInput, TBranchHeadOutput> =
-  $IsUnknown<TBranchHeadOutput> extends true ? unknown
-  : $IsAny<TBranchHeadOutput> extends true ? unknown
-  : $IsAny<TParentInput> extends true ? unknown
-  : [TBranchHeadOutput] extends [TParentInput] ? unknown
-  : never;
+  $IsUnknown<TBranchHeadOutput> extends true
+    ? unknown
+    : $IsAny<TBranchHeadOutput> extends true
+      ? unknown
+      : $IsAny<TParentInput> extends true
+        ? unknown
+        : [TBranchHeadOutput] extends [TParentInput]
+          ? unknown
+          : never;
 
 /**
  * 親チャンク出力が分岐先頭チャンク入力を受容できるかを検査するユーティリティー型です。
@@ -228,14 +238,21 @@ type $CheckForkDecodeData<TParentInput, TBranchHeadOutput> =
  * @template TBranchHeadInput 分岐先頭のチャンク入力型です。
  */
 type $CheckForkEncodeChunk<TParentOutput, TBranchHeadInput> =
-  $IsUnknown<TBranchHeadInput> extends true ? unknown
-  : $IsAny<TBranchHeadInput> extends true ? unknown
-  : $IsAny<TParentOutput> extends true ? unknown
-  : $IsUnknown<TParentOutput> extends true ? unknown
-  : $IsNever<TParentOutput> extends true ? unknown
-  : $IsNever<TBranchHeadInput> extends true ? unknown
-  : [TParentOutput] extends [TBranchHeadInput] ? unknown
-  : never;
+  $IsUnknown<TBranchHeadInput> extends true
+    ? unknown
+    : $IsAny<TBranchHeadInput> extends true
+      ? unknown
+      : $IsAny<TParentOutput> extends true
+        ? unknown
+        : $IsUnknown<TParentOutput> extends true
+          ? unknown
+          : $IsNever<TParentOutput> extends true
+            ? unknown
+            : $IsNever<TBranchHeadInput> extends true
+              ? unknown
+              : [TParentOutput] extends [TBranchHeadInput]
+                ? unknown
+                : never;
 
 /**
  * 分岐先頭チャンク出力が親チャンク入力を受容できるかを検査するユーティリティー型です。
@@ -247,14 +264,21 @@ type $CheckForkEncodeChunk<TParentOutput, TBranchHeadInput> =
  * @template TBranchHeadOutput 分岐先頭のチャンク出力型です。
  */
 type $CheckForkDecodeChunk<TParentInput, TBranchHeadOutput> =
-  $IsUnknown<TBranchHeadOutput> extends true ? unknown
-  : $IsAny<TBranchHeadOutput> extends true ? unknown
-  : $IsAny<TParentInput> extends true ? unknown
-  : $IsUnknown<TParentInput> extends true ? unknown
-  : $IsNever<TParentInput> extends true ? unknown
-  : $IsNever<TBranchHeadOutput> extends true ? unknown
-  : [TBranchHeadOutput] extends [TParentInput] ? unknown
-  : never;
+  $IsUnknown<TBranchHeadOutput> extends true
+    ? unknown
+    : $IsAny<TBranchHeadOutput> extends true
+      ? unknown
+      : $IsAny<TParentInput> extends true
+        ? unknown
+        : $IsUnknown<TParentInput> extends true
+          ? unknown
+          : $IsNever<TParentInput> extends true
+            ? unknown
+            : $IsNever<TBranchHeadOutput> extends true
+              ? unknown
+              : [TBranchHeadOutput] extends [TParentInput]
+                ? unknown
+                : never;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
@@ -312,14 +336,18 @@ export interface IUniKvsBranch<
       : [$InferEncodeChunkOutput<TTransformer>] extends [never]
         ? never
         : TBranchChunkOutput,
-    $IsUnknown<THeadEncodeDataInput> extends true ? $InferEncodeDataInput<TTransformer>
-    : THeadEncodeDataInput,
-    $IsUnknown<THeadDecodeDataOutput> extends true ? $InferDecodeDataOutput<TTransformer>
-    : THeadDecodeDataOutput,
-    $IsUnknown<THeadEncodeChunkInput> extends true ? $InferEncodeChunkInput<TTransformer>
-    : THeadEncodeChunkInput,
-    $IsUnknown<THeadDecodeChunkOutput> extends true ? $InferDecodeChunkOutput<TTransformer>
-    : THeadDecodeChunkOutput,
+    $IsUnknown<THeadEncodeDataInput> extends true
+      ? $InferEncodeDataInput<TTransformer>
+      : THeadEncodeDataInput,
+    $IsUnknown<THeadDecodeDataOutput> extends true
+      ? $InferDecodeDataOutput<TTransformer>
+      : THeadDecodeDataOutput,
+    $IsUnknown<THeadEncodeChunkInput> extends true
+      ? $InferEncodeChunkInput<TTransformer>
+      : THeadEncodeChunkInput,
+    $IsUnknown<THeadDecodeChunkOutput> extends true
+      ? $InferDecodeChunkOutput<TTransformer>
+      : THeadDecodeChunkOutput,
     $InferDecodeDataInput<TTransformer>,
     $InferEncodeDataOutput<TTransformer>,
     $InferDecodeChunkInput<TTransformer>,
@@ -351,14 +379,18 @@ export interface IUniKvsBranch<
       : [$InferReadChunkOutput<TStorage>] extends [never]
         ? never
         : TBranchChunkOutput,
-    $IsUnknown<THeadEncodeDataInput> extends true ? $InferWriteDataInput<TStorage>
-    : THeadEncodeDataInput,
-    $IsUnknown<THeadDecodeDataOutput> extends true ? $InferReadDataOutput<TStorage>
-    : THeadDecodeDataOutput,
-    $IsUnknown<THeadEncodeChunkInput> extends true ? $InferWriteChunkInput<TStorage>
-    : THeadEncodeChunkInput,
-    $IsUnknown<THeadDecodeChunkOutput> extends true ? $InferReadChunkOutput<TStorage>
-    : THeadDecodeChunkOutput,
+    $IsUnknown<THeadEncodeDataInput> extends true
+      ? $InferWriteDataInput<TStorage>
+      : THeadEncodeDataInput,
+    $IsUnknown<THeadDecodeDataOutput> extends true
+      ? $InferReadDataOutput<TStorage>
+      : THeadDecodeDataOutput,
+    $IsUnknown<THeadEncodeChunkInput> extends true
+      ? $InferWriteChunkInput<TStorage>
+      : THeadEncodeChunkInput,
+    $IsUnknown<THeadDecodeChunkOutput> extends true
+      ? $InferReadChunkOutput<TStorage>
+      : THeadDecodeChunkOutput,
     TLastDecodeDataInput,
     TLastEncodeDataOutput,
     TLastDecodeChunkInput,
@@ -396,47 +428,53 @@ export interface IUniKvsBranch<
       TSubLastEncodeChunkOutput,
       TSubHasPersist
     > &
-      (TSubHasPersist extends true ? $CheckForkEncodeData<
-        TLastEncodeDataOutput,
-        TSubHeadEncodeDataInput
-      > : unknown) &
-      (TSubHasPersist extends true ? $CheckForkDecodeData<
-        TLastDecodeDataInput,
-        TSubHeadDecodeDataOutput
-      > : unknown) &
-      (TSubHasPersist extends true ? $CheckForkEncodeChunk<
-        TLastEncodeChunkOutput,
-        TSubHeadEncodeChunkInput
-      > : unknown) &
-      (TSubHasPersist extends true ? $CheckForkDecodeChunk<
-        TLastDecodeChunkInput,
-        TSubHeadDecodeChunkOutput
-      > : unknown),
+      (TSubHasPersist extends true
+        ? $CheckForkEncodeData<TLastEncodeDataOutput, TSubHeadEncodeDataInput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkDecodeData<TLastDecodeDataInput, TSubHeadDecodeDataOutput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastEncodeChunkOutput, TSubHeadEncodeChunkInput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastDecodeChunkInput, TSubHeadDecodeChunkOutput>
+        : unknown),
   ): IUniKvsBranch<
     TKeyValueMapping,
     TSubHasPersist extends true
-      ? ([TBranchChunkInput] extends [never] ? never : [TSubChunkInput] extends [never] ? never
-        : TBranchChunkInput)
+      ? [TBranchChunkInput] extends [never]
+        ? never
+        : [TSubChunkInput] extends [never]
+          ? never
+          : TBranchChunkInput
       : TBranchChunkInput,
     TSubHasPersist extends true
-      ? ([TBranchChunkOutput] extends [never] ? never : [TSubChunkOutput] extends [never] ? never
-        : TBranchChunkOutput)
+      ? [TBranchChunkOutput] extends [never]
+        ? never
+        : [TSubChunkOutput] extends [never]
+          ? never
+          : TBranchChunkOutput
       : TBranchChunkOutput,
     TSubHasPersist extends true
-      ? ($IsUnknown<THeadEncodeDataInput> extends true ? TSubHeadEncodeDataInput
-        : THeadEncodeDataInput)
+      ? $IsUnknown<THeadEncodeDataInput> extends true
+        ? TSubHeadEncodeDataInput
+        : THeadEncodeDataInput
       : THeadEncodeDataInput,
     TSubHasPersist extends true
-      ? ($IsUnknown<THeadDecodeDataOutput> extends true ? TSubHeadDecodeDataOutput
-        : THeadDecodeDataOutput)
+      ? $IsUnknown<THeadDecodeDataOutput> extends true
+        ? TSubHeadDecodeDataOutput
+        : THeadDecodeDataOutput
       : THeadDecodeDataOutput,
     TSubHasPersist extends true
-      ? ($IsUnknown<THeadEncodeChunkInput> extends true ? TSubHeadEncodeChunkInput
-        : THeadEncodeChunkInput)
+      ? $IsUnknown<THeadEncodeChunkInput> extends true
+        ? TSubHeadEncodeChunkInput
+        : THeadEncodeChunkInput
       : THeadEncodeChunkInput,
     TSubHasPersist extends true
-      ? ($IsUnknown<THeadDecodeChunkOutput> extends true ? TSubHeadDecodeChunkOutput
-        : THeadDecodeChunkOutput)
+      ? $IsUnknown<THeadDecodeChunkOutput> extends true
+        ? TSubHeadDecodeChunkOutput
+        : THeadDecodeChunkOutput
       : THeadDecodeChunkOutput,
     TLastDecodeDataInput,
     TLastEncodeDataOutput,
@@ -564,33 +602,35 @@ export interface IUniKvsConfigBuilder<
       TBranchLastEncodeChunkOutput,
       TBranchHasPersist
     > &
-      (TBranchHasPersist extends true ? $CheckForkEncodeData<
-        TLastTransformerEncodeDataOutput,
-        TBranchHeadEncodeDataInput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkDecodeData<
-        TLastTransformerDecodeDataInput,
-        TBranchHeadDecodeDataOutput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkEncodeChunk<
-        TLastTransformerEncodeChunkOutput,
-        TBranchHeadEncodeChunkInput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkDecodeChunk<
-        TLastTransformerDecodeChunkInput,
-        TBranchHeadDecodeChunkOutput
-      > : unknown),
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        : unknown),
   ): IUniKvsConfigBuilder<
     TKeyValueMapping,
     TUniKvsDataInput,
     TUniKvsDataOutput,
     TBranchHasPersist extends true
-      ? ([TUniKvsChunkInput] extends [never] ? never : [TBranchChunkInput] extends [never] ? never
-        : TUniKvsChunkInput)
+      ? [TUniKvsChunkInput] extends [never]
+        ? never
+        : [TBranchChunkInput] extends [never]
+          ? never
+          : TUniKvsChunkInput
       : TUniKvsChunkInput,
     TBranchHasPersist extends true
-      ? ([TUniKvsChunkOutput] extends [never] ? never : [TBranchChunkOutput] extends [never] ? never
-        : TUniKvsChunkOutput)
+      ? [TUniKvsChunkOutput] extends [never]
+        ? never
+        : [TBranchChunkOutput] extends [never]
+          ? never
+          : TUniKvsChunkOutput
       : TUniKvsChunkOutput,
     TLastTransformerDecodeDataInput,
     TLastTransformerEncodeDataOutput,
@@ -708,33 +748,35 @@ export interface IUniKvsConfigFinalizer<
       TBranchLastEncodeChunkOutput,
       TBranchHasPersist
     > &
-      (TBranchHasPersist extends true ? $CheckForkEncodeData<
-        TLastTransformerEncodeDataOutput,
-        TBranchHeadEncodeDataInput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkDecodeData<
-        TLastTransformerDecodeDataInput,
-        TBranchHeadDecodeDataOutput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkEncodeChunk<
-        TLastTransformerEncodeChunkOutput,
-        TBranchHeadEncodeChunkInput
-      > : unknown) &
-      (TBranchHasPersist extends true ? $CheckForkDecodeChunk<
-        TLastTransformerDecodeChunkInput,
-        TBranchHeadDecodeChunkOutput
-      > : unknown),
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        : unknown),
   ): IUniKvsConfigFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
     TBranchHasPersist extends true
-      ? ([TWriteChunkInput] extends [never] ? never : [TBranchChunkInput] extends [never] ? never
-        : TWriteChunkInput)
+      ? [TWriteChunkInput] extends [never]
+        ? never
+        : [TBranchChunkInput] extends [never]
+          ? never
+          : TWriteChunkInput
       : TWriteChunkInput,
     TBranchHasPersist extends true
-      ? ([TReadChunkOutput] extends [never] ? never : [TBranchChunkOutput] extends [never] ? never
-        : TReadChunkOutput)
+      ? [TReadChunkOutput] extends [never]
+        ? never
+        : [TBranchChunkOutput] extends [never]
+          ? never
+          : TReadChunkOutput
       : TReadChunkOutput,
     TLastTransformerDecodeDataInput,
     TLastTransformerEncodeDataOutput,
@@ -813,7 +855,10 @@ export class UniKvsBranch {
     // 末尾未使用トランスフォーマーは破棄します。
     const prefix = [...this.#transformers];
     for (const dest of subDestinations) {
-      this.#destinations.push({ storage: dest.storage, transformers: [...prefix, ...dest.transformers] });
+      this.#destinations.push({
+        storage: dest.storage,
+        transformers: [...prefix, ...dest.transformers],
+      });
     }
 
     return this;
@@ -836,6 +881,33 @@ export class UniKvsBranch {
       transformers: [...dest.transformers],
     }));
   }
+}
+
+// 最長共通 prefix 長を算出します。
+// 比較は共有後のインスタンス同一性で行います。
+// 構造同一性は判定しません。
+function commonPrefixLength(
+  destinations: readonly { readonly transformers: readonly UniKvsTransformer[] }[],
+): number {
+  if (destinations.length === 0) {
+    return 0;
+  }
+  const first = destinations[0]!.transformers;
+  let prefixLength = first.length;
+  for (const dest of destinations.slice(1)) {
+    const transformers = dest.transformers;
+    prefixLength = Math.min(prefixLength, transformers.length);
+    for (let i = 0; i < prefixLength; i++) {
+      if (transformers[i] !== first[i]) {
+        prefixLength = i;
+        break;
+      }
+    }
+    if (prefixLength === 0) {
+      break;
+    }
+  }
+  return prefixLength;
 }
 
 /**
@@ -905,7 +977,25 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
       }
     }
 
-    return new this.#UniKvs({}, [first, ...rest], allTransformers, this.#valueSchemaResolver);
+    // 書き戻しの許可を宛先単位で判定します。
+    // 全体スコープの判定は行いません。
+    const repairFlags: readonly boolean[] = this.#destinations.map(({ transformers }) =>
+      transformers.some((tf) => tf.name === "AllowRepair"),
+    );
+
+    // 全宛先の最長共通 prefix を共有実行用に算出します。
+    // 名簿は実行時に都度生成するため保持しません。
+    const prefixLength = commonPrefixLength(destinations);
+    const prefixTransformers = destinations[0]?.transformers.slice(0, prefixLength) ?? [];
+
+    return new this.#UniKvs(
+      {},
+      [first, ...rest],
+      allTransformers,
+      this.#valueSchemaResolver,
+      repairFlags,
+      { prefixLength, prefixTransformers },
+    );
   }
 
   /**
@@ -936,18 +1026,23 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
 
     // 非公開メソッドへの同一ファイルからの参照です。
     // 型可視性を回避するために構造型へ変換します。
-    const subDestinations = (branch as unknown as {
-      _getDestinationsForFork(): readonly {
-        readonly storage: IStorage;
-        readonly transformers: readonly ITransformer[];
-      }[];
-    })._getDestinationsForFork();
+    const subDestinations = (
+      branch as unknown as {
+        _getDestinationsForFork(): readonly {
+          readonly storage: IStorage;
+          readonly transformers: readonly ITransformer[];
+        }[];
+      }
+    )._getDestinationsForFork();
 
     // fork 時点の親パイプラインを接頭辞として付加します。
     // ブランチの末尾未使用トランスフォーマーは破棄します。
     const prefix = [...this.#transformers];
     for (const dest of subDestinations) {
-      this.#destinations.push({ storage: dest.storage, transformers: [...prefix, ...dest.transformers] });
+      this.#destinations.push({
+        storage: dest.storage,
+        transformers: [...prefix, ...dest.transformers],
+      });
     }
 
     return this;

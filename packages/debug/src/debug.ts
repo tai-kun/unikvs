@@ -2,7 +2,7 @@ import { getLogger } from "@logtape/logtape";
 import type { ITransformer, Variables } from "@unikvs/core";
 import getTypeName from "type-name";
 
-const logger = getLogger(["unikvs", "@unikvs/debug"]);
+const logger = getLogger(["@unikvs/*", "@unikvs/debug"]);
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#records)

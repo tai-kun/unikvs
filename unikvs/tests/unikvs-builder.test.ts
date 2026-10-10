@@ -110,7 +110,9 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     await kvs.close();
   });
 
-  test("同じ Storage を persist で複数回登録するとすべての登録先へ書き込まれる", async ({ expect }) => {
+  test("同じ Storage を persist で複数回登録するとすべての登録先へ書き込まれる", async ({
+    expect,
+  }) => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -278,9 +280,7 @@ describe("UniKvsConfig - fork", () => {
     await kvs.close();
   });
 
-  test("fork 内の追加は分岐先に閉じ、後のメインの transform は漏れない", async ({
-    expect,
-  }) => {
+  test("fork 内の追加は分岐先に閉じ、後のメインの transform は漏れない", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");

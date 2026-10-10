@@ -259,7 +259,6 @@ describe("Node 固有の振る舞い", () => {
 
     // 検証
     expect(storage.isOpen).toBe(false);
-    expect(storage.allowRepair).toBe(false);
     await storage.open();
 
     try {

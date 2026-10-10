@@ -1,15 +1,10 @@
-import { RepairNotAllowedError, type IStorage, type Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
 import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
  */
-export type OpfsOptions = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
-  readonly allowRepair?: boolean | undefined;
-};
+export type OpfsOptions = {};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
@@ -35,18 +30,11 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public readonly allowRepair: boolean;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public constructor(
     root: string | FileSystemDirectoryHandle = ".unikvs",
-    options: OpfsOptions = {},
+    _options: OpfsOptions = {},
   ) {
-    const { allowRepair = false } = options;
     this.name = "Opfs";
-    this.allowRepair = allowRepair;
     if (typeof root === "string") {
       if (root === "" || root === "." || root === "/") {
         this.root = "";
@@ -68,17 +56,6 @@ export default class Opfs implements IStorage {
     } else {
       this.root = root.name;
       this.rootHandle = root;
-    }
-  }
-
-  /**
-   * 書き戻しによる書き込みが許可されているかを検証します。
-   *
-   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
-   */
-  private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
     }
   }
 
@@ -122,7 +99,6 @@ export default class Opfs implements IStorage {
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
-    this.assertRepairAllowed(args);
     const { key, data, signal } = args;
 
     assertValidFilename(key);
@@ -238,7 +214,6 @@ export default class Opfs implements IStorage {
   public async getWritable(
     args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    this.assertRepairAllowed(args);
     const { key, signal } = args;
 
     assertValidFilename(key);

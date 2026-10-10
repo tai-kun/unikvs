@@ -1,9 +1,4 @@
-import {
-  KeyNotFoundError,
-  RepairNotAllowedError,
-  type IStorage,
-  type Variables,
-} from "@unikvs/core";
+import { KeyNotFoundError, type IStorage } from "@unikvs/core";
 
 import { ClearWithoutPrefixNotAllowedError, LocalStorageNotAvailableError } from "./errors.js";
 
@@ -15,11 +10,6 @@ export type LocalStorageOptions = {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
   readonly keyPrefix?: string | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
-  readonly allowRepair?: boolean | undefined;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
@@ -44,11 +34,6 @@ export default class LocalStorage implements IStorage<string> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public readonly allowRepair: boolean;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public readonly allowClearWithoutPrefix: boolean;
 
   // 注入された `Storage` です。
@@ -62,24 +47,11 @@ export default class LocalStorage implements IStorage<string> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
   public constructor(options: LocalStorageOptions = {}) {
-    const {
-      keyPrefix = "unikvs:",
-      allowRepair = false,
-      allowClearWithoutPrefix = false,
-      storage,
-    } = options;
+    const { keyPrefix = "unikvs:", allowClearWithoutPrefix = false, storage } = options;
     this.name = "LocalStorage";
-    this.allowRepair = allowRepair;
     this.allowClearWithoutPrefix = allowClearWithoutPrefix;
     this.injectedStorage = storage;
     this.keyPrefix = keyPrefix;
-  }
-
-  // 書き戻しが許可されていることを検証します。
-  private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
-    }
   }
 
   // 使用する `Storage` を解決します。
@@ -130,7 +102,6 @@ export default class LocalStorage implements IStorage<string> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
   public write(args: Pick<IStorage.WriteArgs<string>, "key" | "data" | "vars" | "signal">): void {
-    this.assertRepairAllowed(args);
     const { key, data, signal } = args;
 
     signal.throwIfAborted();

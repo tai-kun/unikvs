@@ -1,9 +1,4 @@
-import {
-  RepairNotAllowedError,
-  UnsupportedRuntimeError,
-  type IStorage,
-  type Variables,
-} from "@unikvs/core";
+import { UnsupportedRuntimeError, type IStorage } from "@unikvs/core";
 import { assertValidFilename } from "@unikvs/utils";
 
 /**
@@ -26,12 +21,7 @@ type Connection = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
  */
-export type BunFsOptions = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
-  readonly allowRepair?: boolean | undefined;
-};
+export type BunFsOptions = {};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
@@ -57,16 +47,9 @@ export default class BunFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
    */
-  public readonly allowRepair: boolean;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
-  public constructor(root: string = ".unikvs", options: BunFsOptions = {}) {
-    const { allowRepair = false } = options;
+  public constructor(root: string = ".unikvs", _options: BunFsOptions = {}) {
     this.name = "BunFs";
     this.root = root;
-    this.allowRepair = allowRepair;
     this.con = null;
   }
 
@@ -94,17 +77,6 @@ export default class BunFs implements IStorage {
   }
 
   /**
-   * 書き戻しによる書き込みが許可されているかを検証します。
-   *
-   * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
-   */
-  private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
-    }
-  }
-
-  /**
    * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
    *
    * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
@@ -124,7 +96,6 @@ export default class BunFs implements IStorage {
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
-    this.assertRepairAllowed(args);
     const { fs } = this.con!;
     const { key, data, signal } = args;
 
@@ -204,7 +175,6 @@ export default class BunFs implements IStorage {
   public async getWritable(
     args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    this.assertRepairAllowed(args);
     const { fs } = this.con!;
     const { key, signal } = args;
 

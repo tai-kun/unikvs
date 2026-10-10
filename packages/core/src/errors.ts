@@ -122,7 +122,11 @@ export class UnsupportedRuntimeError extends InvalidUsageErrorBase<UnsupportedRu
   public constructor(args: UnsupportedRuntimeErrorArgs) {
     const { name, runtime, ...options } = args;
     const meta: UnsupportedRuntimeErrorMeta = { name, runtime };
-    super(meta, ({ name, runtime }) => `${name} can only be used in the ${runtime} runtime`, options);
+    super(
+      meta,
+      ({ name, runtime }) => `${name} can only be used in the ${runtime} runtime`,
+      options,
+    );
   }
 }
 
@@ -235,7 +239,7 @@ export type RepairNotAllowedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
    */
-  readonly name: string;
+  readonly names: readonly string[];
 };
 
 /**
@@ -247,18 +251,33 @@ export type RepairNotAllowedErrorArgs = ErrorOptions & RepairNotAllowedErrorMeta
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
  */
 export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsRepairNotAllowedError";
+  }
+
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
    */
   public constructor(args: RepairNotAllowedErrorArgs) {
-    const { name, ...options } = args;
-    const meta: RepairNotAllowedErrorMeta = { name };
-    super(meta, ({ name }) => `Storage "${name}" does not allow repair writes`, options);
+    const { names, ...options } = args;
+    const meta: RepairNotAllowedErrorMeta = { names: Object.freeze([...names]) };
+    super(
+      meta,
+      ({ names }) => `Repair writes via "${formatRepairNames(names)}" are not allowed`,
+      options,
+    );
   }
+}
+
+// 書き戻し拒否の表示名を組み立てます。
+// 空のときは不明名を返します。
+function formatRepairNames(names: readonly string[]): string {
+  const joined = names.join(", ");
+  return joined !== "" ? joined : "(unknown)";
 }
 
 setErrorMessage(
   RepairNotAllowedError,
-  ({ name }) => `ストレージ "${name}" は書き戻しを許可していません`,
+  ({ names }) => `"${formatRepairNames(names)}" への書き戻しは許可されていません`,
   "ja",
 );

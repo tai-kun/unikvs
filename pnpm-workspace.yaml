@@ -50,6 +50,7 @@ packages:
     "packages/base64",
     "packages/base64url",
     "packages/v8-serde",
+    "packages/allow-repair",
     "unikvs",
     "website",
   ]

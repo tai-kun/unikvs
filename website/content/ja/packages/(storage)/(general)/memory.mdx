@@ -38,17 +38,12 @@ import { Memory } from "@unikvs/memory";
   type={{
     options: {
       type: "MemoryOptions",
-      description: "複製方法と書き戻しの許可の設定です。省略時は既定値で動作します。",
+      description: "複製方法の設定です。省略時は既定値で動作します。",
     },
     "options.clone": {
       type: "<T>(value: T) => T",
       default: "structuredClone",
       description: "保存時と読出時の複製に使う関数です。",
-    },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
     },
   }}
 />
@@ -148,37 +143,6 @@ try {
 } catch (error) {
   if (error instanceof InvalidChunkTypeError) {
     console.log(error.meta.chunkType);
-  } else {
-    throw error;
-  }
-}
-```
-
-### RepairNotAllowedError
-
-#### 意味
-
-書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
-
-#### 対処方法
-
-`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。
-
-#### 例
-
-以下は、`RepairNotAllowedError` を捕捉する例です。
-
-```ts
-import { RepairNotAllowedError } from "@unikvs/core";
-import { Memory } from "@unikvs/memory";
-
-const storage = new Memory();
-
-try {
-  storage.write({ key: "k1", data: "v1", vars: { "unikvs:repair": true } });
-} catch (error) {
-  if (error instanceof RepairNotAllowedError) {
-    console.log(error.meta.name);
   } else {
     throw error;
   }

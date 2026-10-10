@@ -309,9 +309,7 @@ describe("UniKvs - ストリーム読み取り", () => {
 
   test("Memory を介したストリーム往復でバイト列が一致する", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .persist(new Memory())
-      .create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(new Memory()).create();
     await kvs.open();
     const bytes = Uint8Array.from({ length: 1024 }, (_, i) => i % 256);
 

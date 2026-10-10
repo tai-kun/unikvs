@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@tai-kun/valibot-extra-lab": "0.0.5",
+    "@unikvs/allow-repair": "workspace:*",
     "@unikvs/core": "workspace:*",
     "abort-signal-utils": "0.0.3",
     "asyncmux": "0.0.10",

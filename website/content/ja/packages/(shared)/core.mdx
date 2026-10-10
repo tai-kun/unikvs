@@ -56,7 +56,7 @@ UniKVS のエラーはすべて `ErrorBase` を継承し、日本語と英語の
 | `UnsupportedRuntimeError` | 対応ランタイム以外で使われました。Bun 専用ストレージを Node.js で開く場合などに発生します。 |
 | `InvalidPartSizeError` | マルチパートアップロードのパートサイズ指定が不正です。 |
 | `StorageAbortedError` | 中断済みのシグナルで書き込みストリームを要求しました。 |
-| `RepairNotAllowedError` | 書き戻しが許可されていないストレージへの書き戻しです。 |
+| `RepairNotAllowedError` | 書き戻しが許可されていません。`meta.names` に書き戻し先の表示名一覧が入り、複数ある場合は `", "` 区切りで表示します。エラーの `name` は `UniKvsRepairNotAllowedError` です。 |
 | `InvalidUsageErrorBase` | 使い方の誤りを示すエラーの基底クラスです。 |
 
 ```ts

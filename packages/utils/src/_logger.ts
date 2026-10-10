@@ -1,5 +1,4 @@
 import { getLogger } from "@logtape/logtape";
 
-const logger = getLogger(["unikvs", "@unikvs/utils"]);
-
-export default logger;
+// 既定のロガーです。
+export const logger = getLogger(["@unikvs/*", "@unikvs/utils"]);

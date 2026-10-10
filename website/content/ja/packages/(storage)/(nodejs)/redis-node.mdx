@@ -52,11 +52,6 @@ import { Redis } from "@unikvs/redis.node";
       default: '"unikvs:"',
       description: "すべてのキーに付ける接頭辞です。`clear` の削除範囲を限定します。",
     },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
-    },
     "options.closeTimeout": {
       type: "number",
       default: "5000",
@@ -166,13 +161,3 @@ try {
 #### 対処方法
 
 接続先とネットワークの状態を確認し、必要なら `connectTimeout` を見直してください。
-
-### RepairNotAllowedError
-
-#### 意味
-
-書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
-
-#### 対処方法
-
-`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。

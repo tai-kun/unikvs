@@ -1,7 +1,7 @@
 import type { IReadableStream } from "@unikvs/core";
 import { callAsyncableFnOnce } from "call-fn-once";
 
-import logger from "./_logger.js";
+import { logger } from "./_logger.js";
 import type { ValueStream } from "./value-stream.types.js";
 
 /**

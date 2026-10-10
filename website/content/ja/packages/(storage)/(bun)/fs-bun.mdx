@@ -38,15 +38,6 @@ import { BunFs } from "@unikvs/fs.bun";
       default: '".unikvs"',
       description: "保存先のルートディレクトリーです。",
     },
-    options: {
-      type: "BunFsOptions",
-      description: "書き戻しの許可の設定です。省略時は既定値で動作します。",
-    },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
-    },
   }}
 />
 
@@ -86,4 +77,4 @@ await kvs.close();
 
 ## エラー [#errors]
 
-このパッケージ固有のエラーはありません。Bun 以外での `open` は `@unikvs/core` の `UnsupportedRuntimeError` で失敗し、書き戻しが禁止された状態での書き込みは `RepairNotAllowedError` で失敗します。
+このパッケージ固有のエラーはありません。Bun 以外での `open` は `@unikvs/core` の `UnsupportedRuntimeError` で失敗します。

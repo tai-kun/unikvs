@@ -13,7 +13,7 @@ import type {
 import UniKvs from "../src/unikvs.js";
 import type { ValueStream } from "../src/value-stream.types.js";
 
-type Bytes = Uint8Array<ArrayBufferLike>;
+type Bytes = Uint8Array<ArrayBuffer>;
 
 type Mapping = {
   message: PlainValue<string>;
@@ -295,9 +295,7 @@ describe("UniKvs - 型: fork の互換検査", () => {
     const unused = UniKvs.branch().transform(new StringToNumber());
 
     // 実行と検証: persist なし分岐の不一致は型エラーになりません。
-    expect(
-      typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused)),
-    ).toBeUndefined();
+    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused))).toBeUndefined();
   });
 
   test("分岐内の never は親のチャンク型に伝播する", () => {
@@ -317,6 +315,8 @@ describe("UniKvs - 型: fork の互換検査", () => {
       .persist(new Memory());
 
     // 検証: fork 後も persist と create が型レベルでつながります。
-    expectTypeOf(typeOf(() => builder.create())).toMatchTypeOf<UniKvs<{ logs: StreamValue<Bytes> }>>();
+    expectTypeOf(typeOf(() => builder.create())).toMatchTypeOf<
+      UniKvs<{ logs: StreamValue<Bytes> }>
+    >();
   });
 });

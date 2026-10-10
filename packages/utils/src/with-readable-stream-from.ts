@@ -1,4 +1,4 @@
-import logger from "./_logger.js";
+import { logger } from "./_logger.js";
 
 /**
  * `from` 静的メソッドを持つ `ReadableStream` の拡張型定義です。

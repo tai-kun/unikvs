@@ -83,9 +83,7 @@ describe("UniKvs - 決定的ファズ: ストリーム往復", () => {
   test("ランダムなチャンク分割でもバイト列が一致する", async ({ expect }) => {
     // 実行と検証
     await forCasesAsync(SEED + 1, 40, async (rng) => {
-      const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-        .persist(new Memory())
-        .create();
+      const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(new Memory()).create();
       await kvs.open();
 
       try {

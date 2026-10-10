@@ -1032,10 +1032,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config()
-      .transform(new MockTransformer())
-      .persist(storage)
-      .create();
+    const kvs = UniKvs.config().transform(new MockTransformer()).persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -1051,10 +1048,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   test("get 時にトランスフォーマーでデコードされた値が返される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config()
-      .transform(new MockTransformer())
-      .persist(storage)
-      .create();
+    const kvs = UniKvs.config().transform(new MockTransformer()).persist(storage).create();
     await kvs.open();
     await kvs.set("key1", "hello");
 
@@ -1419,7 +1413,9 @@ describe("UniKvs - 変数", () => {
     await kvs.close();
   });
 
-  test("オブジェクト形式の set({ key, value, vars }) でも操作時の vars が渡される", async ({ expect }) => {
+  test("オブジェクト形式の set({ key, value, vars }) でも操作時の vars が渡される", async ({
+    expect,
+  }) => {
     // 準備
     const storage = new MockStorage();
     const kvs = UniKvs.config().persist(storage).create();
@@ -1664,9 +1660,7 @@ describe("UniKvs - stream 操作", () => {
     expect,
   }) => {
     // 準備
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .persist(new Memory())
-      .create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(new Memory()).create();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
@@ -1691,9 +1685,7 @@ describe("UniKvs - stream 操作", () => {
 
   test("ライブストリーム中でも同一キーの has は可能", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .persist(new Memory())
-      .create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(new Memory()).create();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
     const vs = await kvs.stream("logs");
@@ -1826,10 +1818,7 @@ describe("UniKvs - 競合", () => {
     // 準備
     const s1 = new Memory();
     const s2 = new Memory();
-    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .persist(s1)
-      .persist(s2)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>().persist(s1).persist(s2).create();
     await kvs.open();
 
     // 実行

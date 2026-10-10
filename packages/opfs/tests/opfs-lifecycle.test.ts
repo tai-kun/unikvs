@@ -345,10 +345,11 @@ describe("ライフサイクルの振る舞い", () => {
 
     // 実行と検証
     expectTypeOf(Opfs).constructorParameters.toEqualTypeOf<
-      [root?: string | FileSystemDirectoryHandle | undefined, options?: OpfsOptions | undefined]
+      [root?: string | FileSystemDirectoryHandle | undefined, _options?: OpfsOptions | undefined]
     >();
     expect(withString).toStrictEqual(["valid-root"]);
     expect(new Opfs("valid-root")).toBeInstanceOf(Opfs);
+    expect(new Opfs("valid-root", {})).toBeInstanceOf(Opfs);
     expect(new Opfs({} as FileSystemDirectoryHandle).isOpen).toBe(true);
     // @ts-expect-error 数値はルートとして受け付けません。
     expect(new Opfs(1)).toBeInstanceOf(Opfs);

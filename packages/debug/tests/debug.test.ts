@@ -13,7 +13,7 @@ configureSync({
   },
   loggers: [
     {
-      category: ["unikvs", "@unikvs/debug"],
+      category: ["@unikvs/*", "@unikvs/debug"],
       sinks: ["test"],
       lowestLevel: "debug",
     },

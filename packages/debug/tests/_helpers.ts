@@ -17,7 +17,7 @@ export function createRecordsTest() {
     },
     loggers: [
       {
-        category: ["unikvs", "@unikvs/debug"],
+        category: ["@unikvs/*", "@unikvs/debug"],
         sinks: ["test"],
         lowestLevel: "debug",
       },

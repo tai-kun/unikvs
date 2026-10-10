@@ -1,9 +1,4 @@
-import {
-  KeyNotFoundError,
-  RepairNotAllowedError,
-  type IStorage,
-  type Variables,
-} from "@unikvs/core";
+import { KeyNotFoundError, type IStorage, type Variables } from "@unikvs/core";
 
 import {
   ClearNotSupportedError,
@@ -32,11 +27,6 @@ export type HttpOptions = {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
   readonly keyPrefix?: string | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
-  readonly allowRepair?: boolean | undefined;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
@@ -103,11 +93,6 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public readonly allowRepair: boolean;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public readonly allowClearWithoutPrefix: boolean;
 
   // 正規化済みのベース URL です。
@@ -133,7 +118,6 @@ export default class Http implements IStorage {
   public constructor(baseUrl: string, options: HttpOptions = {}) {
     const {
       keyPrefix = "unikvs:",
-      allowRepair = false,
       allowClearWithoutPrefix = false,
       fetch,
       headers,
@@ -180,18 +164,10 @@ export default class Http implements IStorage {
     this.name = "Http";
     this.baseUrl = normalized;
     this.keyPrefix = keyPrefix;
-    this.allowRepair = allowRepair;
     this.allowClearWithoutPrefix = allowClearWithoutPrefix;
     this.fetchImpl = fetch;
     this.baseHeaders = headers === undefined ? {} : assertHeadersRecord(headers);
     this.baseToken = assertTokenValue(token);
-  }
-
-  // 書き戻しが許可されていることを検証します。
-  private assertRepairAllowed(args: { readonly vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
-    }
   }
 
   // 使用する `fetch` 実装を解決します。
@@ -304,7 +280,6 @@ export default class Http implements IStorage {
     const { key, data, signal, vars } = args;
 
     signal.throwIfAborted();
-    this.assertRepairAllowed(args);
 
     const headers = this.resolveHeaders(vars);
     const url = this.keyUrl(key);
@@ -546,7 +521,6 @@ export default class Http implements IStorage {
     const { key, signal, vars } = args;
 
     signal.throwIfAborted();
-    this.assertRepairAllowed(args);
 
     const headers = this.resolveHeaders(vars);
     const url = this.keyUrl(key);

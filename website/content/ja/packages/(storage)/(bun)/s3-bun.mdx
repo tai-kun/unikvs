@@ -45,12 +45,7 @@ import { S3 } from "@unikvs/s3.bun";
     },
     options: {
       type: "S3StorageOptions",
-      description: "Bun の `S3Options` から `bucket` を除き、`allowRepair` を加えた設定です。",
-    },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
+      description: "Bun の `S3Options` から `bucket` を除いた設定です。",
     },
   }}
 />
@@ -136,13 +131,3 @@ Bun 以外のランタイムで `open` を呼びました。`meta` に `name` �
 #### 対処方法
 
 Bun ランタイムで実行してください。
-
-### RepairNotAllowedError
-
-#### 意味
-
-書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
-
-#### 対処方法
-
-`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。

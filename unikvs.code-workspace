@@ -109,6 +109,10 @@
       "path": "packages/v8-serde",
     },
     {
+      "name": "@unikvs/allow-repair",
+      "path": "packages/allow-repair",
+    },
+    {
       "name": "website",
       "path": "website",
     },

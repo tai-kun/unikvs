@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import {
-  KeyNotFoundError,
-  RepairNotAllowedError,
-  type IStorage,
-  type Variables,
-} from "@unikvs/core";
+import { KeyNotFoundError, type IStorage } from "@unikvs/core";
 import {
   Redis as Ioredis,
   type ClusterNode,
@@ -37,8 +32,6 @@ export type RedisStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"
 
   readonly cluster?: RedisClusterSpec | undefined;
 
-  readonly allowRepair?: boolean | undefined;
-
   readonly closeTimeout?: number | undefined;
 };
 
@@ -59,20 +52,12 @@ export default class Redis implements IStorage {
   // `closeTimeout` は本パッケージ固有の拡張です。
   // `this.options` には含めず、別フィールドで保管します。
   // `this.options` は `new Ioredis` にそのまま spread できる透過バッグです。
-  private readonly options: Omit<
-    RedisStorageOptions,
-    "keyPrefix" | "allowRepair" | "cluster" | "closeTimeout"
-  >;
+  private readonly options: Omit<RedisStorageOptions, "keyPrefix" | "cluster" | "closeTimeout">;
 
   // `ioredis` の `disconnectTimeout` (ソケット切断待機) とは別物です。
   private readonly closeTimeout: number;
 
   private readonly keyPrefix: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
-  public readonly allowRepair: boolean;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
@@ -85,7 +70,6 @@ export default class Redis implements IStorage {
   public constructor(url?: string, options: RedisStorageOptions = {}) {
     const {
       keyPrefix = "unikvs:",
-      allowRepair = false,
       cluster,
       closeTimeout = DEFAULT_CLOSE_TIMEOUT_MS,
       ...redisOptions
@@ -109,13 +93,6 @@ export default class Redis implements IStorage {
     this.options = redisOptions;
     this.closeTimeout = closeTimeout;
     this.keyPrefix = keyPrefix;
-    this.allowRepair = allowRepair;
-  }
-
-  private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.allowRepair) {
-      throw new RepairNotAllowedError({ name: this.name });
-    }
   }
 
   /**
@@ -232,7 +209,6 @@ export default class Redis implements IStorage {
   public async write(
     args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
   ): Promise<void> {
-    this.assertRepairAllowed(args);
     const { client } = this.con!;
     const { key, data, signal } = args;
 
@@ -304,7 +280,6 @@ export default class Redis implements IStorage {
   public getWritable(
     args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
   ): WritableStream<Uint8Array<ArrayBuffer>> {
-    this.assertRepairAllowed(args);
     const { client } = this.con!;
     const { key, signal } = args;
 

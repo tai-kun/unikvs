@@ -42,10 +42,7 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     // 準備
     const transformer = new FakeTransformer();
     expect(transformer.isOpen).toBe(false);
-    const kvs = UniKvs.config()
-      .transform(transformer)
-      .persist(new FakeStorage())
-      .create();
+    const kvs = UniKvs.config().transform(transformer).persist(new FakeStorage()).create();
 
     // 実行
     await kvs.open();
@@ -66,10 +63,7 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     // 準備
     const transformer = new FakeTransformer();
     transformer.isOpen = true;
-    const kvs = UniKvs.config()
-      .transform(transformer)
-      .persist(new FakeStorage())
-      .create();
+    const kvs = UniKvs.config().transform(transformer).persist(new FakeStorage()).create();
 
     // 実行
     await kvs.open();
@@ -164,8 +158,8 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.set("foo", "x");
 
     // 検証
-    expect(t1.callsOf("encode")).toHaveLength(3);
-    expect(t2.callsOf("encode")).toHaveLength(3);
+    expect(t1.callsOf("encode")).toHaveLength(1);
+    expect(t2.callsOf("encode")).toHaveLength(1);
     expect(storage1.map.get("foo")).toBe("x12");
     expect(storage2.map.get("foo")).toBe("x12");
     expect(storage3.map.get("foo")).toBe("x12");
@@ -218,8 +212,8 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(t1.callsOf("getEncodable")).toHaveLength(2);
-    expect(t2.callsOf("getEncodable")).toHaveLength(2);
+    expect(t1.callsOf("getEncodable")).toHaveLength(1);
+    expect(t2.callsOf("getEncodable")).toHaveLength(1);
 
     // 後片付け
     await kvs.close();

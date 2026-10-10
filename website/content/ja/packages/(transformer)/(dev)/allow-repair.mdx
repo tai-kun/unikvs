@@ -1,0 +1,73 @@
+---
+title: "@unikvs/allow-repair"
+description: "書き戻しによる書き込みの許可を切り替える @unikvs/allow-repair の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/allow-repair` は、書き戻しによる書き込みの許可を切り替える Transformer プラグインです。<Badge>Transformer</Badge>
+
+読み取り時の書き戻しを使う場合に、書き戻し先の許可・拒否を制御するために使います。
+
+- データの変換は行いません。
+- 常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"AllowRepair"` を返します。
+- 生成直後は許可状態です。`disable()` で拒否に切り替え、`enable()` で許可に戻せます。`toggle()` は状態を反転し、反転後の状態を返します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/allow-repair
+```
+
+## 使い方 [#usage]
+
+AllowRepair は ITransformer を実装しています。UniKvs には transform() で渡します。
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+```
+
+以下は、後段にしかない値を読み取り、前段への書き戻しを拒否する例です。
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+import { NodeFs } from "@unikvs/fs.node";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const allowRepair = new AllowRepair();
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .transform(allowRepair)
+  .persist(new Memory())
+  .persist(new NodeFs("./.tmp"))
+  .create();
+
+await kvs.open();
+
+// NodeFs にしかない値は、Memory への書き戻しなしで返ります。
+allowRepair.disable(); // 以降の書き戻しを拒否します (既定では読み取りは成功し、警告ログに残ります)。
+const greeting = await kvs.get("greeting", { repair: true });
+allowRepair.enable(); // 書き戻しを再び許可します。
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド | 入力 | 出力 |
+| --- | --- | --- |
+| `encode` | `TData` | `TData` |
+| `decode` | `TData` | `TData` |
+| `getEncodable` | `any` | `any` |
+| `getDecodable` | `any` | `any` |
+
+- `encode`・`decode` は任意の型のデータをそのまま返します。
+- `getEncodable`・`getDecodable` はチャンクをそのまま流す `TransformStream` を返します。
+- 書き戻しの可否の判定は `encode`・`getEncodable` でのみ行い、`decode` 系は変換せずそのまま返します。
+- データの内容にもチャンクの分割にも影響しません。
+- チャンクは区切り文字なしで単純に透過します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。書き戻しが拒否された場合の `encode`・`getEncodable` は [`@unikvs/core`](/packages/core) の `RepairNotAllowedError` で失敗します。`meta.names` に書き戻し先の表示名一覧が入り、複数ある場合は `", "` 区切りでメッセージに含みます。エラーの `name` は `UniKvsRepairNotAllowedError` です。UniKvs 経由では既定で読み取りは成功し、警告ログに残ります。読み取りも失敗させる場合は `throwOnRepairDenied: true` を指定します。詳細は複数ストレージのガイドを参照してください。

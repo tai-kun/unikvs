@@ -302,7 +302,7 @@ await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 
 ## 読み取り時の書き戻し [#read-repair]
 
-`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しに失敗しても読み取りは成功します。詳細は複数ストレージのガイドを参照してください。
+`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しが拒否されても既定では読み取りは成功し、警告ログに残ります。拒否時に読み取りも失敗させる場合は `throwOnRepairDenied: true` を指定します (既定は `false`)。書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御し、拒否時の `meta.names` に書き戻し先の表示名が入ります。詳細は複数ストレージのガイドを参照してください。
 
 ```ts
 const bytes = await kvs.get("foo", { repair: true });

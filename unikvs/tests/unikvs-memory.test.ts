@@ -8,9 +8,7 @@ import UniKvs from "../src/unikvs.js";
 describe("UniKvs + Memory", () => {
   test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .persist(new Memory())
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>().persist(new Memory()).create();
     await kvs.open();
 
     // 実行

@@ -47,15 +47,6 @@ import { S3 } from "@unikvs/s3.node";
       type: "S3ClientConfig",
       description: "`S3Client` に渡す設定です。認証情報やエンドポイントを含めます。",
     },
-    options: {
-      type: "S3StorageOptions",
-      description: "書き戻しの許可の設定です。省略時は既定値で動作します。",
-    },
-    "options.allowRepair": {
-      type: "boolean",
-      default: "false",
-      description: "書き戻しによる書き込みを許可するかどうかです。",
-    },
   }}
 />
 
