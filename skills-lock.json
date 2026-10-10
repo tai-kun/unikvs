@@ -29,7 +29,13 @@
       "source": "tai-kun/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/pc-safety-guard/SKILL.md",
-      "computedHash": "fa420cb2b157f777d142d0227fdcc022683874c4ea12a7d198b51574bc159529"
+      "computedHash": "1f5e0266e76f57412b7588d364678246f89188a5a6b6b3b91357c1cc84f3a792"
+    },
+    "test-audit": {
+      "source": "tai-kun/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/test-audit/SKILL.md",
+      "computedHash": "c4f506e5a2a5816c45c7eeabed1622145b7ceec7ed2b4152c2820b3e26d6d923"
     },
     "vitest": {
       "source": "tai-kun/agent-skills",
