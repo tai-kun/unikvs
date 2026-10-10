@@ -53,6 +53,10 @@
       "path": "packages/writeonly",
     },
     {
+      "name": "@unikvs/null",
+      "path": "packages/null",
+    },
+    {
       "name": "@unikvs/fs.node",
       "path": "packages/fs.node",
     },

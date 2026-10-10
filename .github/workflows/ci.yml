@@ -38,6 +38,8 @@ jobs:
             directory: "packages/memory"
           - name: "writeonly"
             directory: "packages/writeonly"
+          - name: "null"
+            directory: "packages/null"
           - name: "fs.node"
             directory: "packages/fs.node"
           - name: "fs.bun"

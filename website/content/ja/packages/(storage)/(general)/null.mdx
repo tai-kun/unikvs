@@ -1,0 +1,73 @@
+---
+title: "@unikvs/null"
+description: "書き込みを破棄し読み出しを常に見つからないものとして扱う @unikvs/null の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/null` は、書き込みを破棄し読み出しを常に見つからないものとして扱うストレージプラグインです。
+
+`/dev/null` のキー・バリュー版に相当します。
+
+ストレージの無効化やテスト、ベンチマークに使います。
+
+- `isOpen` は常に `true`、`name` は常に `"Null"` を返します。`open`・`close` は不要です。
+- 書き込みは常に成功し、読み出しは常に失敗します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/null
+```
+
+## 使い方 [#usage]
+
+Null は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Null } from "@unikvs/null";
+```
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Null } from "@unikvs/null";
+import { KeyNotFoundError, UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .persist(new Null())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+try {
+  await kvs.get("greeting");
+} catch (error) {
+  if (!(error instanceof KeyNotFoundError)) {
+    throw error;
+  }
+}
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                     | 対応するデータ型                         |
+| ------------------------ | ---------------------------------------- |
+| `write`                  | 任意の値（保存せず破棄します）           |
+| `getWritable` のチャンク | 任意の型のチャンク（型の検証をしません） |
+
+- `write` は文字列やオブジェクトなど任意の値に対応しますが、保存せず破棄します。常に成功します。
+- `getWritable` は任意の型のチャンクを受け入れる `WritableStream` を返します。書き込んだ内容は破棄され、型の検証をしません。
+- `read`・`getReadable` に対応せず、呼び出すと常に `KeyNotFoundError` を投げます。
+- `exists` は常に `false` を返します。
+- `delete` は常に `KeyNotFoundError` を投げます。`clear` は何もせず常に成功します。
+- UniKvs 経由の `delete` は `exists` が常に `false` のためスキップされ、成功します。直接 API の `delete` の成否は UniKvs 経由では観測できません。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。`read`・`delete`・`getReadable` を直接呼び出すと `@unikvs/core` の `KeyNotFoundError` を投げます。Null を単独構成で使う場合、UniKvs 経由の `get` の失敗は `cause` のない `KeyNotFoundError` として UniKvs 本体が投げます。
