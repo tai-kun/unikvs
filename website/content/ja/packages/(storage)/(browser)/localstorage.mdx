@@ -1,0 +1,161 @@
+---
+title: "@unikvs/localstorage"
+description: "ブラウザーの localStorage に文字列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+<Badge variant="warning">ブラウザー専用</Badge>
+
+`@unikvs/localstorage` は、ブラウザーの `localStorage` に文字列を保存するストレージプラグインです。
+
+設定値や下書きなど、小さな文字列の永続化に使います。
+
+- `name` は常に `"LocalStorage"` を返し、`isOpen` は常に `true` です。`open` は利用可否の確認だけを行い、`close` は中断の検証だけを行います。
+- 読み書きは同期で完了し、ストリーム操作には対応しません。
+- すべてのキーに `keyPrefix` を付けて保存します。既定値は `"unikvs:"` です。
+- 同一オリジンではタブやインスタンス間でデータを共有します。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear` は `localStorage` 全体を消す契約になります。共有の `localStorage` では必ず一意な接頭辞を指定してください。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/localstorage
+```
+
+## 使い方 [#usage]
+
+LocalStorage は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    options: {
+      type: "LocalStorageOptions",
+      description: "接頭辞と使用する `Storage` の設定です。省略時は既定値で動作します。",
+    },
+    "options.keyPrefix": {
+      type: "string",
+      default: '"unikvs:"',
+      description: "すべてのキーに付ける接頭辞です。`clear` の削除範囲を限定します。",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "書き戻しによる書き込みを許可するかどうかです。",
+    },
+    "options.allowClearWithoutPrefix": {
+      type: "boolean",
+      default: "false",
+      description: "空の `keyPrefix` での `clear` を許可するかどうかです。",
+    },
+    "options.storage": {
+      type: "Storage",
+      default: "globalThis.localStorage",
+      description: "使用する `Storage` です。SSR やテストでは代替実装を注入します。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .persist(new LocalStorage())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作 | 対応するデータ型 |
+| --- | --- |
+| `write`・`read` | 文字列 |
+
+- `write`・`read` は文字列だけに対応し、値をそのまま `setItem`・`getItem` に渡します。
+- オブジェクトを保存する場合は、呼び出し側で文字列化してから渡してください。
+- `write`・`read`・`exists`・`delete`・`clear` はいずれも同期です。
+- ストリーム操作には対応しません。`getWritable`・`getReadable` はありません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError
+
+#### 意味
+
+指定したキーが存在しません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出すか、キーの指定誤りを確認してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError, LocalStorage } from "@unikvs/localstorage";
+
+const storage = new LocalStorage();
+
+try {
+  storage.read({ key: "missing" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+### ClearWithoutPrefixNotAllowedError
+
+#### 意味
+
+空の `keyPrefix` のまま許可なく `clear` を呼びました。
+
+#### 対処方法
+
+一意な `keyPrefix` を指定するか、`allowClearWithoutPrefix: true` を指定してください。
+
+### LocalStorageNotAvailableError
+
+#### 意味
+
+利用できる `localStorage` がありません。`Storage` の注入なしにブラウザー以外で操作したことが原因です。
+
+#### 対処方法
+
+`storage` に代替実装を注入するか、ブラウザー側でのみ操作してください。
+
+### RepairNotAllowedError
+
+#### 意味
+
+書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。

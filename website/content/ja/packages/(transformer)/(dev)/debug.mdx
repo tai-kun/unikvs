@@ -1,0 +1,109 @@
+---
+title: "@unikvs/debug"
+description: "読み書きされる操作とデータを @logtape/logtape で記録する @unikvs/debug の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/debug` は、読み書きされるデータをそのまま透過させつつ、操作の種類・対象のキー・データの情報を記録する Transformer プラグインです。<Badge>Transformer</Badge>
+
+`UniKvs` 経由で使うと「どの操作で、どのキーに対するデータが読み書きされたか」がログに残ります。
+
+- データの変換は行いません。
+- 常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"Debug"` を返します。
+- ロガーカテゴリーは `["unikvs", "@unikvs/debug"]`、レベルは `debug` です。
+
+:::tip
+既定ではデータの中身を記録せず、型と大きさだけを記録します。中身が必要な場合は `getDebugInfo` で追加できます。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/debug @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+Debug は ITransformer を実装しています。UniKvs には transform() で渡します。
+
+```ts
+import { Debug } from "@unikvs/debug";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    options: {
+      type: "DebugOptions",
+      description: "記録対象の絞り込みと追加情報の設定です。省略時はすべて記録します。",
+    },
+    "options.keyFilter": {
+      type: "(key: string) => boolean",
+      description: "`true` を返したキーだけを記録します。",
+    },
+    "options.actionFilter": {
+      type: "(action: string) => boolean",
+      description: "`true` を返した操作だけを記録します。",
+    },
+    "options.getDebugInfo": {
+      type: "(args: DebugInfoArgs) => Record<string, unknown>",
+      description: "追加のデバッグ情報を返します。戻り値はログのプロパティーに展開します。",
+    },
+  }}
+/>
+
+以下は、読み書きをコンソールに記録しながら値を保存する例です。
+
+```ts
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { configureSync, getConsoleSink } from "@logtape/logtape";
+import { UniKvs, type PlainValue } from "unikvs";
+
+configureSync({
+  sinks: { console: getConsoleSink() },
+  loggers: [
+    {
+      category: ["unikvs", "@unikvs/debug"],
+      sinks: ["console"],
+      lowestLevel: "debug",
+    },
+  ],
+});
+
+const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
+  .transform(new Debug())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド | 入力 | 出力 |
+| --- | --- | --- |
+| `encode` | `unknown` | `unknown` |
+| `decode` | `unknown` | `unknown` |
+| `getEncodable` | `unknown` | `unknown` |
+| `getDecodable` | `unknown` | `unknown` |
+
+- `encode`・`decode` は入力をそのまま返します。
+- `getEncodable`・`getDecodable` はチャンクをそのまま流します。
+- データの変換は行わず、変数の `unikvs:action` と `unikvs:key` を参照して LogTape に記録します。
+- `vars` に両方がないデータは記録しません。
+
+- チャンクは区切り文字なしで単純に透過します。
+- ストリーム値の `set` と `stream` はチャンクごとに 1 件のログを出力し、フィルターもチャンクごとに適用します。
+- 巨大なストリームではログが増えるため、`keyFilter` や `actionFilter` で絞り込んでください。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。ログを表示するには LogTape の設定が別途必要で、設定していない場合もエラーにはならず、ログはどこにも出力されません。

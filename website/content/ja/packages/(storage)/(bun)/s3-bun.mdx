@@ -1,0 +1,148 @@
+---
+title: "@unikvs/s3.bun"
+description: "Bun の S3 クライアントで S3 互換オブジェクトストレージに保存する @unikvs/s3.bun の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+<Badge variant="warning">Bun 専用</Badge>
+
+`@unikvs/s3.bun` は、Bun 組み込みの S3 クライアントで S3 互換オブジェクトストレージに保存するストレージプラグインです。
+
+AWS SDK なしでオブジェクトストレージにバイト列を保存する場合に使います。
+
+- `name` は常に `"S3"` を返します。使う前に `open` でクライアントを作り、`close` で破棄します。
+- キーはオブジェクトキーにそのまま対応し、接頭辞の付与や符号化は行いません。
+- `clear` はバケット内のすべてのオブジェクトを削除します。
+
+:::warning
+`clear` はバケット内のすべてのオブジェクトを削除します。UniKVS 専用のバケットを使ってください。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/s3.bun
+```
+
+保存先のバケットは事前に用意してください。
+
+## 使い方 [#usage]
+
+S3 は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "string",
+      description: "保存先のバケット名です。すべての操作で使います。",
+    },
+    options: {
+      type: "S3StorageOptions",
+      description: "Bun の `S3Options` から `bucket` を除き、`allowRepair` を加えた設定です。",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "書き戻しによる書き込みを許可するかどうかです。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(
+    new S3("my-bucket", {
+      region: "ap-northeast-1",
+    }),
+  )
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", new TextEncoder().encode("hello"));
+const data = await kvs.get("data");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作 | 対応するデータ型 |
+| --- | --- |
+| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` はバイト列だけに対応しています。
+- `write`・`read`・`exists`・`delete`・`clear` はいずれも非同期です。
+- `delete` は存在しないキーでも成功します。
+- ストリーム操作は `Uint8Array<ArrayBuffer>` だけに対応しています。
+- `getWritable` はマルチパートアップロードを使い、パートサイズは変数で指定します。
+- `getReadable` はオブジェクトの内容を中継します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### StorageNotOpenError
+
+#### 意味
+
+オープンされていない状態で `close` を呼びました。
+
+#### 対処方法
+
+使う前に `open` を呼び出してください。
+
+### InvalidPartSizeError
+
+#### 意味
+
+変数のパートサイズが正の整数ではありません。`meta` に `actual` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+バイト単位の正の整数を指定するか、変数を省略して既定値を使ってください。
+
+### StorageAbortedError
+
+#### 意味
+
+`signal` が中断済みのまま書き込みストリームを開始しました。`meta` に `key` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+中断していない `signal` を渡すか、中断の原因を確認してください。
+
+### UnsupportedRuntimeError
+
+#### 意味
+
+Bun 以外のランタイムで `open` を呼びました。`meta` に `name` と `runtime` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+Bun ランタイムで実行してください。
+
+### RepairNotAllowedError
+
+#### 意味
+
+書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。

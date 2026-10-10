@@ -1,0 +1,186 @@
+---
+title: "@unikvs/memory"
+description: "データをメモリーに保存するストレージプラグイン @unikvs/memory の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/memory` は、データをメモリーに保存するストレージプラグインです。
+
+テスト用のダブルや一時的なキャッシュに使います。
+
+- 読み書きは同期で完了し、`open`・`close` は不要です。`isOpen` は常に `true`、`name` は常に `"Memory"` を返します。
+- 文字列やオブジェクトなど任意の値をそのまま保存できます。
+- 書き込み時と読み取り時に値を複製するため、呼び出し側の変更は保存値に影響しません。
+- 永続化されません。プロセス終了時に破棄されます。
+
+:::tip
+複製方法を変えたい場合は `clone` オプションで差し替えられます。既定値は `structuredClone` です。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/memory
+```
+
+## 使い方 [#usage]
+
+Memory は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    options: {
+      type: "MemoryOptions",
+      description: "複製方法と書き戻しの許可の設定です。省略時は既定値で動作します。",
+    },
+    "options.clone": {
+      type: "<T>(value: T) => T",
+      default: "structuredClone",
+      description: "保存時と読出時の複製に使う関数です。",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "書き戻しによる書き込みを許可するかどうかです。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作 | 対応するデータ型 |
+| --- | --- |
+| `write`・`read` | 任意の値（文字列・オブジェクト・`null`・`undefined`・`Uint8Array` など） |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` は文字列・オブジェクト・`null`・`undefined`・`Uint8Array` など任意の値に対応し、そのまま保存できます。
+- 書き込み時と読み取り時に `clone` で複製します。既定値は `structuredClone` です。
+- `write`・`read`・`exists`・`delete`・`clear` はいずれも同期です。
+- ストリーム操作は `Uint8Array<ArrayBuffer>` のみに対応しています。
+- `getWritable` はチャンクを内部に保持し、`close` 時に結合して保存します。保存は `close` まで確定しません。
+- `getReadable` は保存値を単一チャンクとして送出します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError
+
+#### 意味
+
+指定したキーが存在しません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出すか、キーの指定誤りを確認してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError, Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+try {
+  storage.read({ key: "unknown" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidChunkTypeError
+
+#### 意味
+
+チャンクの型が `Uint8Array<ArrayBuffer>` ではありません。書き込み時に `Uint8Array` 以外を渡したか、バイト列でない保存値を `getReadable` で読み取ったことが原因です。`meta` に `key`・`chunk`・`chunkType` を含みます。
+
+#### 対処方法
+
+ストリームには `Uint8Array<ArrayBuffer>` だけを流し、ストリームで読み取るキーにはバイト列を保存してください。
+
+#### 例
+
+以下は、`InvalidChunkTypeError` を捕捉する例です。
+
+```ts
+import { InvalidChunkTypeError, Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+storage.write({ key: "greeting", data: "hello", vars: {} });
+
+const reader = storage.getReadable({ key: "greeting" }).getReader();
+
+try {
+  await reader.read();
+} catch (error) {
+  if (error instanceof InvalidChunkTypeError) {
+    console.log(error.meta.chunkType);
+  } else {
+    throw error;
+  }
+}
+```
+
+### RepairNotAllowedError
+
+#### 意味
+
+書き戻し（`repair`）による書き込みが許可されていません。`meta` に `name` を含みます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`allowRepair: true` を指定して生成し直すか、書き戻しを行わない運用にしてください。
+
+#### 例
+
+以下は、`RepairNotAllowedError` を捕捉する例です。
+
+```ts
+import { RepairNotAllowedError } from "@unikvs/core";
+import { Memory } from "@unikvs/memory";
+
+const storage = new Memory();
+
+try {
+  storage.write({ key: "k1", data: "v1", vars: { "unikvs:repair": true } });
+} catch (error) {
+  if (error instanceof RepairNotAllowedError) {
+    console.log(error.meta.name);
+  } else {
+    throw error;
+  }
+}
+```

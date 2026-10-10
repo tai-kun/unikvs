@@ -1,0 +1,99 @@
+---
+title: "@unikvs/redis.bun"
+description: "Bun の Redis クライアントで Redis にバイト列を保存するストレージプラグインの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+<Badge variant="warning">Bun 専用</Badge>
+
+`@unikvs/redis.bun` は、Bun 組み込みの Redis クライアントで Redis に保存するストレージプラグインです。
+
+キーに接頭辞を付けて名前空間を分ける場合に使います。
+
+- `name` は常に `"Redis"` を返します。使う前に `open` で接続し、`close` で閉じます。
+- `url` を省略すると `REDIS_URL`・`VALKEY_URL` の順に解決します。
+- すべてのキーに `keyPrefix` を付けて保存します。既定値は `"unikvs:"` です。
+
+:::warning
+`keyPrefix` を空文字にすると、`clear` は選択中のデータベースの全キーを削除します。共有データベースでは必ず一意な接頭辞を指定してください。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/redis.bun
+```
+
+Redis サーバーは別途用意してください。
+
+## 使い方 [#usage]
+
+Redis は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    url: {
+      type: "string",
+      description: "接続先です。省略時は環境変数から解決します。",
+    },
+    options: {
+      type: "RedisStorageOptions",
+      description: "接頭辞とクライアントの設定です。省略時は既定値で動作します。",
+    },
+    "options.keyPrefix": {
+      type: "string",
+      default: '"unikvs:"',
+      description: "すべてのキーに付ける接頭辞です。`clear` の削除範囲を限定します。",
+    },
+    "options.allowRepair": {
+      type: "boolean",
+      default: "false",
+      description: "書き戻しによる書き込みを許可するかどうかです。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  data: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(new Redis("redis://localhost:6379", { keyPrefix: "myapp:" }))
+  .create();
+
+await kvs.open();
+
+await kvs.set("data", new TextEncoder().encode("hello"));
+const data = await kvs.get("data");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作 | 対応するデータ型 |
+| --- | --- |
+| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` はバイト列だけに対応しています。
+- `write`・`read`・`exists`・`delete`・`clear` はいずれも非同期です。
+- `delete` は存在しないキーでも成功します。
+- ストリーム操作は `Uint8Array<ArrayBuffer>` だけに対応しています。
+- `getWritable` は一時キーへ追記し、`close` 時に最終キーへ置き換えます。
+- `getReadable` は保存値を単一チャンクとして送出します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。存在しないキーの読み取りは `@unikvs/core` の `KeyNotFoundError` で失敗し、Bun 以外での `open` は `UnsupportedRuntimeError` で失敗します。
