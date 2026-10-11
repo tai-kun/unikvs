@@ -1,7 +1,8 @@
+import { captureThrown } from "@unikvs/testings";
 import { describe, test as vitest } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
-import { captureThrown, createFakeStorage } from "./_helpers.js";
+import { createFakeStorage } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

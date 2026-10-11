@@ -74,6 +74,8 @@ jobs:
             directory: "packages/v8-serde"
           - name: "allow-repair"
             directory: "packages/allow-repair"
+          - name: "testings"
+            directory: "packages/testings"
           - name: "unikvs"
             directory: "unikvs"
     timeout-minutes: 15

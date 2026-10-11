@@ -1,6 +1,7 @@
+import { bytesEqual, createAllByteValues } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { bytesEqual, createAllByteValues, listKeys, test } from "./_helpers.js";
+import { listKeys, test } from "./_helpers.js";
 
 describe("基本データ操作 (CRUD)", () => {
   test("全 256 種類のバイト値を含むデータが byte-for-byte で往復する", async ({

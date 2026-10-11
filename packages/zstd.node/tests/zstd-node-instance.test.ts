@@ -1,7 +1,7 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
-import { createPseudoRandomBytes } from "./helpers.js";
 
 describe("インスタンスの状態", () => {
   test("初期状態で isOpen が true であり name は変化しない", async ({ expect }) => {

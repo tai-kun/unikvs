@@ -33,33 +33,3 @@ export function createRecordsTest() {
     },
   });
 }
-
-/**
- * 変換ストリームにチャンクを順に流し込み、出力されたチャンクを返します。
- * ストリームが入力をそのまま透過することを検証するために使用します。
- */
-export async function pipeChunks<T>(
-  stream: TransformStream<T, T>,
-  chunks: readonly T[],
-): Promise<T[]> {
-  const readable = new ReadableStream<T>({
-    start: (controller) => {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
-  const reader = readable.pipeThrough(stream).getReader();
-  const output: T[] = [];
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    output.push(value);
-  }
-
-  return output;
-}

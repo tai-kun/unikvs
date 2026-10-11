@@ -1,5 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
 import * as core from "@unikvs/core";
+import { captureThrown } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import {
@@ -8,7 +9,7 @@ import {
   LocalStorageNotAvailableError,
 } from "../src/errors.js";
 import LocalStorage from "../src/localstorage.js";
-import { captureThrown, createFakeStorage, createSecurityErrorStorage } from "./_helpers.js";
+import { createFakeStorage, createSecurityErrorStorage } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

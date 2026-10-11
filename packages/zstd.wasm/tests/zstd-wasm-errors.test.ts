@@ -1,3 +1,4 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test as vitest, vi } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
@@ -8,7 +9,6 @@ import {
   ZstdWasmInvalidLevelError,
 } from "../src/errors.js";
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";
-import { createPseudoRandomBytes } from "./helpers.js";
 
 /**
  * 中断されていないシグナルを作成します。

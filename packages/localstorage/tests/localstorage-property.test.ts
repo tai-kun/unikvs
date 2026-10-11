@@ -1,9 +1,9 @@
+import { forCases, type Random } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import LocalStorage from "../src/localstorage.js";
 import { createFakeStorage } from "./_helpers.js";
-import { forCases, type Random } from "./_random.js";
 
 const { signal } = new AbortController();
 

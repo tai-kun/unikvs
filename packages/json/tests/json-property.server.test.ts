@@ -1,8 +1,8 @@
+import { forCasesAsync, type Random } from "@unikvs/testings";
+import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Json from "../src/json.js";
-import { forCasesAsync, type Random } from "./_random.js";
-import { concatBytes, pumpThrough, splitIntoChunks } from "./helpers.js";
 
 const SEED = 20240928;
 const CASE_COUNT = 50;

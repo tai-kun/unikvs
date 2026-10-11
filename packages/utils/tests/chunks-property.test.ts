@@ -1,7 +1,7 @@
+import { forCases } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import chunks from "../src/chunks.js";
-import { forCases } from "./_random.js";
 
 const SEED = 20260930;
 const FRACTIONAL_SIZES = [0.5, 1.5, 2.5, 3.9, 7.25, 15.99] as const;

@@ -1,8 +1,8 @@
+import { forCasesAsync, type Random } from "@unikvs/testings";
+import { concatBytes, pumpThrough } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import V8Serde from "../src/v8-serde.js";
-import { forCasesAsync, type Random } from "./_random.js";
-import { concatBytes, pumpThrough } from "./helpers.js";
 
 const v8serde = new V8Serde();
 const SEED = 20240927;

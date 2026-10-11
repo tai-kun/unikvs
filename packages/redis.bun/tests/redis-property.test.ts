@@ -1,7 +1,8 @@
+import { bytesEqual, concatBytes } from "@unikvs/testings";
+import { forCasesAsync } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { bytesEqual, concatBytes, listKeys, test } from "./_helpers.js";
-import { forCasesAsync } from "./_random.js";
+import { listKeys, test } from "./_helpers.js";
 
 describe("プロパティーベースの検証", () => {
   test("ランダムなキーとデータの CRUD が往復する", async ({ expect, signal, storage }) => {

@@ -1,8 +1,8 @@
+import { forCasesAsync } from "@unikvs/testings";
+import { bytesEqual } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdWasm from "../src/zstd-wasm.js";
-import { forCasesAsync } from "./_random.js";
-import { bytesEqual } from "./helpers.js";
 
 /**
  * 中断されていないシグナルを作成します。

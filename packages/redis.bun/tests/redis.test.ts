@@ -1,7 +1,8 @@
+import { collectBytes } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import Redis from "../src/redis.js";
-import { collectBytes, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 describe("初期化と接続管理", () => {
   test("ストレージ名は Redis である", ({ expect, storage }) => {

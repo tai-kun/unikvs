@@ -1,7 +1,8 @@
+import { collectBytes } from "@unikvs/testings";
+import { type Random, forCasesAsync } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { readAll, test } from "./_helpers.js";
-import { type Random, forCasesAsync } from "./_random.js";
+import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 
@@ -86,7 +87,7 @@ describe("決定的ファズテストの振る舞い", () => {
       }
 
       await writer.close();
-      const loaded = await readAll(await storage.getReadable({ key, signal }));
+      const loaded = await collectBytes(await storage.getReadable({ key, signal }));
 
       // 検証
       expect(loaded).toStrictEqual(data);

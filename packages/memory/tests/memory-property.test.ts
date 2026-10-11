@@ -1,8 +1,8 @@
+import { forCases, forCasesAsync, type Random } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import Memory from "../src/memory.js";
-import { forCases, forCasesAsync, type Random } from "./_random.js";
 
 const seed = 20260930;
 

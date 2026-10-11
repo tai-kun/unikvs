@@ -1,8 +1,8 @@
+import { forCasesAsync, type Random } from "@unikvs/testings";
+import { concatBytes, pumpThrough } from "@unikvs/testings";
 import { test } from "vitest";
 
 import Superjson from "../src/superjson.js";
-import { forCasesAsync, type Random } from "./_random.js";
-import { concatBytes, pumpThrough } from "./helpers.js";
 
 /**
  * 葉として生成できる値の種類です。
@@ -52,6 +52,21 @@ function generateObject(random: Random, depth: number): Record<string, unknown> 
 }
 
 /**
+ * Map のキーとして使う値を生成します。
+ * 上流の superjson が同一オブジェクト内の複数の NaN キーを欠落させるため、NaN を避けます。
+ * 上流が修正されたらこの限定を外せます。
+ */
+function generateMapKey(random: Random, depth: number): unknown {
+  for (;;) {
+    const key = generateValue(random, depth);
+
+    if (typeof key !== "number" || !Number.isNaN(key)) {
+      return key;
+    }
+  }
+}
+
+/**
  * SuperJSON が保持できる型を組み合わせた値を決定的に生成します。
  */
 function generateValue(random: Random, depth: number): unknown {
@@ -79,7 +94,7 @@ function generateValue(random: Random, depth: number): unknown {
     case "map":
       return new Map(
         random.array(random.int(0, 4), (generator) => [
-          generateValue(generator, depth - 1),
+          generateMapKey(generator, depth - 1),
           generateValue(generator, depth - 1),
         ]),
       );
@@ -135,4 +150,20 @@ test("ランダムな値の列をランダムな境界で分割してもスト�
     expect(decoded.readError, `ケース ${index}`).toBeUndefined();
     expect(decoded.outputChunks, `ケース ${index}`).toStrictEqual(values);
   });
+});
+
+test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を往復できる", ({ expect }) => {
+  // 準備: 上流 superjson@2.2.6 が 2 つ目の NaN キーを欠落させる既知の不具合の再現です。
+  // 修正されると「予期せぬ成功」として失敗するため、そのときは generateMapKey の限定を外します。
+  const codec = new Superjson();
+  const value = {
+    first: new Map<unknown, unknown>([[Number.NaN, 1]]),
+    second: new Map<unknown, unknown>([[Number.NaN, 2]]),
+  };
+
+  // 実行
+  const decoded = codec.decode({ data: codec.encode({ data: value }) });
+
+  // 検証
+  expect(decoded).toStrictEqual(value);
 });

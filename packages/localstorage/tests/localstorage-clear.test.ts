@@ -1,8 +1,9 @@
+import { abortedSignal, captureThrown } from "@unikvs/testings";
 import { describe, test as vitest } from "vitest";
 
 import { ClearWithoutPrefixNotAllowedError } from "../src/errors.js";
 import LocalStorage from "../src/localstorage.js";
-import { abortedSignal, captureThrown, createFakeStorage } from "./_helpers.js";
+import { createFakeStorage } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

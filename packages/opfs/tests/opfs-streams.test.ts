@@ -1,7 +1,8 @@
+import { concatBytes, collectBytes } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import type Opfs from "../src/opfs.js";
-import { concatBytes, readAll, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 
@@ -108,7 +109,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const streamed = await readAll(await storage.getReadable({ key, signal }));
+    const streamed = await collectBytes(await storage.getReadable({ key, signal }));
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -217,7 +218,7 @@ describe("読み取りストリームの振る舞い", () => {
     // 検証
     expect(afterCancel.done).toBe(true);
 
-    const again = await readAll(await storage.getReadable({ key, signal }));
+    const again = await collectBytes(await storage.getReadable({ key, signal }));
     expect(again).toStrictEqual(data);
   });
 
@@ -261,7 +262,7 @@ describe("読み取りストリームの振る舞い", () => {
     await storage.write({ key, data, signal, vars: {} });
 
     // 実行
-    const loaded = await readAll(await storage.getReadable({ key, signal }));
+    const loaded = await collectBytes(await storage.getReadable({ key, signal }));
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -297,7 +298,7 @@ describe("読み取りストリームの振る舞い", () => {
       storage.getReadable({ key, signal }),
       storage.getReadable({ key, signal }),
     ]);
-    const [firstData, secondData] = await Promise.all([readAll(first), readAll(second)]);
+    const [firstData, secondData] = await Promise.all([collectBytes(first), collectBytes(second)]);
 
     // 検証
     expect(firstData).toStrictEqual(data);

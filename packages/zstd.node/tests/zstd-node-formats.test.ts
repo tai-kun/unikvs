@@ -1,8 +1,8 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { ZstdNodeDecompressError } from "../src/errors.js";
 import ZstdNode from "../src/zstd-node.js";
-import { createPseudoRandomBytes } from "./helpers.js";
 
 describe("zstd フレーム", () => {
   test("encode したデータは zstd のマジックバイトで始まる", async ({ expect }) => {

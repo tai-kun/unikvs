@@ -1,7 +1,7 @@
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
-import { bytesEqual, createPseudoRandomBytes } from "./helpers.js";
 
 /**
  * 反復テキストの入力データを作成します。

@@ -1,7 +1,8 @@
+import { acquireFreePort } from "@unikvs/testings/node";
 import { describe } from "vitest";
 
 import S3 from "../src/s3.js";
-import { acquireFreePort, createClientConfig, test } from "./_helpers.js";
+import { createClientConfig, test } from "./_helpers.js";
 
 describe("異常系とエラー伝播", () => {
   test("存在しないバケットへの write/delete/clear/getReadable は NoSuchBucket で拒否される", async ({

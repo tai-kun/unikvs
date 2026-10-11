@@ -1,8 +1,8 @@
+import { collectChunks } from "@unikvs/testings";
+import { forCases, forCasesAsync, type Random } from "@unikvs/testings";
 import { test } from "vitest";
 
 import PassThrough from "../src/passthrough.js";
-import { collectChunks } from "./_helpers.js";
-import { forCases, forCasesAsync, type Random } from "./_random.js";
 
 const SEED = 20260930;
 

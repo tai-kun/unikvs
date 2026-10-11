@@ -1,6 +1,7 @@
+import { collectBytes } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { collectBytes, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 describe("基本操作 (CRUD)", () => {
   test("データを読み込んだとき、書き込まれたデータが Uint8Array として正しく返される", async ({

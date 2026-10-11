@@ -1,8 +1,9 @@
+import { abortedSignal, captureRejection } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import Http, { type IFetch } from "../src/http.js";
-import { abortedSignal, captureRejection, createMockServer } from "./_helpers.js";
+import { createMockServer } from "./_helpers.js";
 
 /**
  * 毎回新しい疑似サーバーと Http を組み立てます。

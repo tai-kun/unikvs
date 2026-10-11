@@ -1,7 +1,7 @@
+import { bytesEqual } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";
-import { bytesEqual } from "./helpers.js";
 
 /**
  * 中断されていないシグナルを作成します。

@@ -1,7 +1,8 @@
+import { pipeChunks } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import Debug from "../src/debug.js";
-import { createRecordsTest, pipeChunks } from "./_helpers.js";
+import { createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
 

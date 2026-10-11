@@ -1,7 +1,7 @@
+import { collectChunks } from "@unikvs/testings";
 import { describe, test as vitest } from "vitest";
 
 import PassThrough from "../src/passthrough.js";
-import { collectChunks } from "./_helpers.js";
 
 const test = vitest.extend<{ passthrough: PassThrough }>({
   // oxlint-disable-next-line no-empty-pattern

@@ -28,56 +28,6 @@ export async function removeRoot(root: string): Promise<void> {
 }
 
 /**
- * バイト列の配列を 1 つのバイト列に連結します。
- * チャンク境界に依存せずストリームの内容を比較するために使用します。
- */
-export function concatBytes(chunks: readonly Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer> {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const result = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
-}
-
-/**
- * ReadableStream の全チャンクを連結したバイト列を返します。
- * ストリーム経由の読み取り結果を書き込み内容と比較するために使用します。
- */
-export async function readAll(
-  stream: ReadableStream<Uint8Array<ArrayBuffer>>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const chunks: Uint8Array<ArrayBuffer>[] = [];
-  const reader = stream.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    chunks.push(value);
-  }
-
-  return concatBytes(chunks);
-}
-
-/**
- * バイト列を 16 進文字列へ変換します。
- * プロパティベーステストで常に有効なファイル名を生成するために使用します。
- */
-export function toHex(bytes: Uint8Array): string {
-  let hex = "";
-  for (const byte of bytes) {
-    hex += byte.toString(16).padStart(2, "0");
-  }
-
-  return hex;
-}
-
-/**
  * テストごとに一意なルートを用意し、後始末するフィクスチャーを提供します。
  * 各テストは必要なフィクスチャーだけを受け取ります。
  */

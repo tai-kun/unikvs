@@ -1,8 +1,8 @@
+import { forCasesAsync } from "@unikvs/testings";
+import { bytesEqual } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
-import { forCasesAsync } from "./_random.js";
-import { bytesEqual } from "./helpers.js";
 
 const SEED = 20240927;
 const CASE_COUNT = 50;

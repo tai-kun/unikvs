@@ -1,7 +1,8 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
-import { FORMATS, createPseudoRandomBytes } from "./helpers.js";
+import { FORMATS } from "./helpers.js";
 
 /**
  * 形式ごとの判定に使う代表的な入力データを作成します。

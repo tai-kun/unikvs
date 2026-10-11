@@ -1,7 +1,8 @@
+import { bytesEqual, createAllByteValues } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import S3 from "../src/s3.js";
-import { bytesEqual, createAllByteValues, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 /**
  * 多数のキーを少量ずつ並列に書き込みます。

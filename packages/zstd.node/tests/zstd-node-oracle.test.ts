@@ -1,9 +1,9 @@
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
-import { createPseudoRandomBytes } from "./helpers.js";
 
 // node:zlib の zstd 系 API が利用できない Node 版では当該 2 件をスキップする。
 const hasZstd = typeof zstdCompressSync === "function" && typeof zstdDecompressSync === "function";

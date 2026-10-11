@@ -1,7 +1,7 @@
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdWasm from "../src/zstd-wasm.js";
-import { bytesEqual, createPseudoRandomBytes } from "./helpers.js";
 
 /**
  * 中断されていないシグナルを作成します。

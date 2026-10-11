@@ -1,8 +1,9 @@
+import { captureThrown } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { LocalStorageNotAvailableError } from "../src/errors.js";
 import LocalStorage from "../src/localstorage.js";
-import { captureThrown, createFakeStorage, runWithGlobalLocalStorage } from "./_helpers.js";
+import { createFakeStorage, runWithGlobalLocalStorage } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

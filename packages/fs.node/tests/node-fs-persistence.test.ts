@@ -1,7 +1,8 @@
+import { bytesEqual } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import NodeFs from "../src/node-fs.js";
-import { bytesEqual, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 describe("永続化", () => {
   test("書き込み後に別インスタンスで open したとき、同じデータを読み取れる", async ({

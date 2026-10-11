@@ -1,8 +1,9 @@
+import { captureRejection } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { InvalidHeadersError, InvalidTokenError } from "../src/errors.js";
 import Http from "../src/http.js";
-import { captureRejection, createMockServer } from "./_helpers.js";
+import { createMockServer } from "./_helpers.js";
 
 const baseUrl = "https://kv.example.com/store";
 

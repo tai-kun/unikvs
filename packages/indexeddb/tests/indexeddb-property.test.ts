@@ -1,7 +1,8 @@
+import { concatChunks } from "@unikvs/testings";
+import { forCasesAsync, type Random } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { concatChunks, test } from "./_helpers.js";
-import { forCasesAsync, type Random } from "./_random.js";
+import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

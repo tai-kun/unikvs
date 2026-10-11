@@ -1,13 +1,13 @@
 import { ChecksumSha256 } from "@unikvs/checksum";
 import { Compression } from "@unikvs/compression";
 import { Memory } from "@unikvs/memory";
+import { type Random, forCasesAsync } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import type { PlainValue, StreamValue, Value } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStreamTransformer, collectBytes, streamOf } from "./_helpers.js";
-import { type Random, forCasesAsync } from "./_random.js";
 
 const SEED = 20260930;
 const KEYS = ["a", "b", "c", ""] as const;

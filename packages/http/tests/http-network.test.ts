@@ -1,10 +1,9 @@
+import { abortedSignal, captureRejection } from "@unikvs/testings";
 import { afterEach, describe, test, vi } from "vitest";
 
 import { HttpNetworkError, HttpResponseError } from "../src/errors.js";
 import Http, { type IFetch } from "../src/http.js";
 import {
-  abortedSignal,
-  captureRejection,
   createMockServer,
   errorResponse,
   fallbackResponse,

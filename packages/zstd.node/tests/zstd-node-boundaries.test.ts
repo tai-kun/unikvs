@@ -1,7 +1,7 @@
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test as vitest } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
-import { bytesEqual, createPseudoRandomBytes } from "./helpers.js";
 
 /**
  * 境界サイズと特殊パターンの入力データをまとめて生成します。

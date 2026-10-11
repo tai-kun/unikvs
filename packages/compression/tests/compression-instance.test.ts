@@ -1,7 +1,8 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
-import { FORMATS, createPseudoRandomBytes } from "./helpers.js";
+import { FORMATS } from "./helpers.js";
 
 describe("インスタンスの状態", () => {
   test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {

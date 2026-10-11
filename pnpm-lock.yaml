@@ -51,6 +51,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -100,6 +103,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -146,6 +152,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -195,6 +204,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -247,6 +259,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -293,6 +308,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -342,6 +360,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -391,6 +412,9 @@ importers:
       '@types/type-name':
         specifier: 1.0.32
         version: 1.0.32
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -440,6 +464,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-istanbul':
         specifier: 4.1.11
         version: 4.1.11(supports-color@7.2.0)(vitest@4.1.11)
@@ -474,6 +501,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -511,6 +541,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -560,6 +593,9 @@ importers:
       '@types/type-name':
         specifier: 1.0.32
         version: 1.0.32
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -594,6 +630,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -634,6 +673,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -677,6 +719,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -726,6 +771,9 @@ importers:
       '@types/type-name':
         specifier: 1.0.32
         version: 1.0.32
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -815,6 +863,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -855,6 +906,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -901,6 +955,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-istanbul':
         specifier: 4.1.11
         version: 4.1.11(supports-color@7.2.0)(vitest@4.1.11)
@@ -935,6 +992,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -969,6 +1029,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-istanbul':
         specifier: 4.1.11
         version: 4.1.11(supports-color@7.2.0)(vitest@4.1.11)
@@ -1006,6 +1069,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -1030,6 +1096,49 @@ importers:
       superjson:
         specifier: 2.2.6
         version: 2.2.6
+    devDependencies:
+      '@tsconfig/node24':
+        specifier: 24.0.5
+        version: 24.0.5
+      '@tsconfig/strictest':
+        specifier: 2.0.8
+        version: 2.0.8
+      '@types/node':
+        specifier: 24.13.6
+        version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
+      '@vitest/browser':
+        specifier: 4.1.11
+        version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
+      '@vitest/browser-playwright':
+        specifier: 4.1.11
+        version: 4.1.11(playwright@1.63.0)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
+      '@vitest/coverage-istanbul':
+        specifier: 4.1.11
+        version: 4.1.11(supports-color@7.2.0)(vitest@4.1.11)
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
+      npm-check-updates:
+        specifier: 20.0.2
+        version: 20.0.2
+      playwright:
+        specifier: 1.63.0
+        version: 1.63.0
+      vite:
+        specifier: 8.3.0
+        version: 8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.13.6)(@vitest/browser-playwright@4.1.11)(@vitest/coverage-istanbul@4.1.11)(@vitest/coverage-v8@4.1.11)(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
+  packages/testings:
+    dependencies:
+      '@logtape/logtape':
+        specifier: 2.0.0
+        version: 2.0.0
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5
@@ -1095,6 +1204,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -1144,6 +1256,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -1175,6 +1290,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -1227,6 +1345,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
@@ -1270,6 +1391,9 @@ importers:
       '@types/node':
         specifier: 24.13.6
         version: 24.13.6
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../testings
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.0(@types/node@24.13.6)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -1349,6 +1473,9 @@ importers:
       '@unikvs/opfs':
         specifier: workspace:*
         version: link:../packages/opfs
+      '@unikvs/testings':
+        specifier: workspace:*
+        version: link:../packages/testings
       '@unikvs/utils':
         specifier: workspace:*
         version: link:../packages/utils

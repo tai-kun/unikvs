@@ -1,4 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
+import { collectBytes } from "@unikvs/testings";
+import { acquireFreePort } from "@unikvs/testings/node";
 import { describe } from "vitest";
 
 import {
@@ -8,7 +10,7 @@ import {
   UnsupportedRuntimeError,
 } from "../src/errors.js";
 import S3 from "../src/s3.js";
-import { acquireFreePort, collectBytes, createClientConfig, test } from "./_helpers.js";
+import { createClientConfig, test } from "./_helpers.js";
 
 describe("エラークラス", () => {
   test("UnsupportedRuntimeError は name と基本メッセージを持つ", ({ expect }) => {

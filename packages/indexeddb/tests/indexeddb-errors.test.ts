@@ -1,7 +1,8 @@
+import { captureRejection } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
-import { STORE_NAME, captureRejection, createEmptyDatabase, test } from "./_helpers.js";
+import { STORE_NAME, createEmptyDatabase, test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

@@ -1,8 +1,8 @@
+import { forCases } from "@unikvs/testings";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
 import { ErrorBase, type ErrorOptions, setErrorMessage } from "../src/errors.js";
-import { forCases } from "./_random.js";
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。

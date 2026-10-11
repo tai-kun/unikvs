@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
 
+import { forCases } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import bytesToHex from "../src/bytes-to-hex.js";
-import { forCases } from "./_random.js";
 
 describe("bytesToHex (server)", () => {
   test("任意のバイト列で Buffer の hex 表現と一致する", ({ expect }) => {

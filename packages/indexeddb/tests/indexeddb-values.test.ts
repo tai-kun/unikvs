@@ -1,6 +1,7 @@
+import { captureRejection } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { captureRejection, test } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 

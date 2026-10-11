@@ -1,8 +1,8 @@
 import { RepairNotAllowedError } from "@unikvs/core";
+import { collectChunks } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import AllowRepair from "../src/allow-repair.js";
-import { collectChunks } from "./_helpers.js";
 
 describe("getEncodable の透過と拒否", () => {
   test("非修復 vars では素通しの TransformStream を返す", async ({ expect }) => {

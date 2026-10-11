@@ -1,7 +1,7 @@
+import { forCases } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import bytesToHex from "../src/bytes-to-hex.js";
-import { forCases } from "./_random.js";
 
 /**
  * Uint8Array.prototype.toHex を一時的に無効化し、事前計算テーブルを使う実装経路を検証できるようにします。

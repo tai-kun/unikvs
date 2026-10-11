@@ -1,7 +1,7 @@
+import { bytesEqual } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import ZstdNode, { type ZstdNodeOptions } from "../src/zstd-node.js";
-import { bytesEqual } from "./helpers.js";
 
 describe("コンストラクターオプション", () => {
   test("空のオプションでは既定と等価に往復できる", async ({ expect }) => {

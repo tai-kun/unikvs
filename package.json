@@ -32,6 +32,7 @@
     "packages/base64url",
     "packages/v8-serde",
     "packages/allow-repair",
+    "packages/testings",
     "unikvs"
   ],
   "type": "module",

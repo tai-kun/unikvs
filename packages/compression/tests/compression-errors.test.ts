@@ -1,7 +1,8 @@
+import { createPseudoRandomBytes, pumpThrough } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
-import { FORMATS, createPseudoRandomBytes, pumpThrough } from "./helpers.js";
+import { FORMATS } from "./helpers.js";
 
 const INVALID_FORMATS = ["unknown-format", "zstd", ""] as const;
 

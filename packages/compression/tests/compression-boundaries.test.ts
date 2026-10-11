@@ -1,7 +1,8 @@
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test as vitest } from "vitest";
 
 import Compression from "../src/compression.js";
-import { FORMATS, bytesEqual, createPseudoRandomBytes } from "./helpers.js";
+import { FORMATS } from "./helpers.js";
 
 /**
  * 境界サイズと特殊パターンの入力データをまとめて生成します。

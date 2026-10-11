@@ -1,3 +1,4 @@
+import { createPseudoRandomBytes } from "@unikvs/testings";
 import { describe, test as vitest, vi } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
@@ -7,7 +8,6 @@ import {
   ZstdNodeInvalidLevelError,
 } from "../src/errors.js";
 import ZstdNode, { type ZstdNodeOptions } from "../src/zstd-node.js";
-import { createPseudoRandomBytes } from "./helpers.js";
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。

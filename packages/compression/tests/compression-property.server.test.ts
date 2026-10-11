@@ -1,8 +1,9 @@
+import { forCasesAsync } from "@unikvs/testings";
+import { concatBytes, pumpThrough } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
-import { forCasesAsync } from "./_random.js";
-import { FORMATS, concatBytes, pumpThrough } from "./helpers.js";
+import { FORMATS } from "./helpers.js";
 
 const SEED = 20240927;
 const CASE_COUNT = 50;

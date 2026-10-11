@@ -1,8 +1,9 @@
+import { pipeChunks } from "@unikvs/testings";
+import { forCases, forCasesAsync, type Random } from "@unikvs/testings";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
-import { createRecordsTest, pipeChunks } from "./_helpers.js";
-import { forCases, forCasesAsync, type Random } from "./_random.js";
+import { createRecordsTest } from "./_helpers.js";
 
 const SEED = 20260930;
 const CASE_COUNT = 100;

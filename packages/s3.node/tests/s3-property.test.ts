@@ -1,7 +1,8 @@
+import { bytesEqual, collectBytes } from "@unikvs/testings";
+import { forCasesAsync } from "@unikvs/testings";
 import { describe } from "vitest";
 
-import { bytesEqual, collectBytes, test } from "./_helpers.js";
-import { forCasesAsync } from "./_random.js";
+import { test } from "./_helpers.js";
 
 const seed = 20260930;
 const caseCount = 25;

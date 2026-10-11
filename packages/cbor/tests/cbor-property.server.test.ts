@@ -1,8 +1,8 @@
+import { forCasesAsync, type Random } from "@unikvs/testings";
+import { concatBytes, pumpThrough } from "@unikvs/testings";
 import { describe, test } from "vitest";
 
 import Cbor from "../src/cbor.js";
-import { forCasesAsync, type Random } from "./_random.js";
-import { concatBytes, pumpThrough } from "./helpers.js";
 
 const cbor = new Cbor();
 const SEED = 20240927;

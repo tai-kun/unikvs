@@ -1,8 +1,8 @@
+import { concatBytes } from "@unikvs/testings";
 import { describe, expect, test } from "vitest";
 
 import Cbor from "../src/cbor.js";
 import { CborDecodeError, CborEncodeError } from "../src/errors.js";
-import { concatBytes } from "./helpers.js";
 
 const cbor = new Cbor();
 

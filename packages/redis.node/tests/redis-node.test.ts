@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 
+import { waitForPort } from "@unikvs/testings/node";
 import { Redis as Ioredis } from "ioredis";
 import { afterEach, describe, expectTypeOf, vi } from "vitest";
 
 import { ClusterNotSupportedError, InvalidCloseTimeoutError } from "../src/errors.js";
 import Redis, { type RedisStorageOptions } from "../src/redis.js";
-import { test, waitForPort } from "./_helpers.js";
+import { test } from "./_helpers.js";
 
 afterEach(() => {
   vi.unstubAllEnvs();

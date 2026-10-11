@@ -51,35 +51,6 @@ export async function createEmptyDatabase(name: string, version: number): Promis
 }
 
 /**
- * Promise の拒否理由を返します。
- * 非同期 API が投げる例外の種類やメッセージを検証するために使用します。
- */
-export async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("Promise が拒否されませんでした");
-}
-
-/**
- * 複数のチャンクを 1 つのバイト列に連結します。
- * ストリームへ書き込んだ内容の期待値を組み立てるために使用します。
- */
-export function concatChunks(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
-  const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return result;
-}
-
-/**
  * テストごとに一意なデータベースを用意し、後始末で削除するテストを提供します。
  * IndexedDB はブラウザー全体で共有されるため、テスト同士の汚染を防ぐために使用します。
  */
