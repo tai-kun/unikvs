@@ -1,5 +1,5 @@
-import { forCasesAsync } from "@unikvs/testings";
-import { bytesEqual } from "@unikvs/testings";
+import { forCasesAsync } from "@unikvs/testing";
+import { bytesEqual } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";

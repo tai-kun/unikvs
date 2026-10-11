@@ -1,4 +1,4 @@
-import { concatBytes, pumpThrough, readAll, sourceFrom, splitIntoChunks } from "@unikvs/testings";
+import { concatBytes, pumpThrough, readAll, sourceFrom, splitIntoChunks } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Base64 from "../src/base64.js";

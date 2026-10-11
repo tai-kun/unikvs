@@ -1,4 +1,4 @@
-import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testings";
+import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Cbor from "../src/cbor.js";

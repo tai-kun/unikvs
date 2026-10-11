@@ -1,4 +1,4 @@
-# @unikvs/testings
+# @unikvs/testing
 
 UniKvs パッケージ群のテストで使用する共通ヘルパーです。
 
@@ -8,4 +8,4 @@ UniKvs パッケージ群のテストで使用する共通ヘルパーです。
 - `bytes`: バイト列の生成と比較と分割
 - `streams`: ストリームの組み立てと読み取り
 - `abort`: 中断と失敗理由の取得
-- `node`: Node.js 専用のヘルパー (`@unikvs/testings/node` から import します)
+- `node`: Node.js 専用のヘルパー (`@unikvs/testing/node` から import します)

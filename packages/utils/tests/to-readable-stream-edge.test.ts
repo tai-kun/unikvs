@@ -1,4 +1,4 @@
-import { forCasesAsync } from "@unikvs/testings";
+import { forCasesAsync } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import toReadableStream from "../src/to-readable-stream.js";

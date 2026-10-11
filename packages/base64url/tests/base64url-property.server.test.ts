@@ -1,5 +1,5 @@
-import { forCasesAsync, type Random } from "@unikvs/testings";
-import { concatBytes, pumpThrough } from "@unikvs/testings";
+import { forCasesAsync, type Random } from "@unikvs/testing";
+import { concatBytes, pumpThrough } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Base64Url from "../src/base64url.js";

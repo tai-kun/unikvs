@@ -1,4 +1,4 @@
-import { abortedSignal, captureRejection } from "@unikvs/testings";
+import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidChunkTypeError, KeyNotFoundError } from "../src/errors.js";

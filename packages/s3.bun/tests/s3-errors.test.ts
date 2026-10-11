@@ -1,6 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
-import { collectBytes } from "@unikvs/testings";
-import { acquireFreePort } from "@unikvs/testings/node";
+import { collectBytes } from "@unikvs/testing";
+import { acquireFreePort } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import {

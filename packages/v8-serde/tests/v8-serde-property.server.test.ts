@@ -1,5 +1,5 @@
-import { forCasesAsync, type Random } from "@unikvs/testings";
-import { concatBytes, pumpThrough } from "@unikvs/testings";
+import { forCasesAsync, type Random } from "@unikvs/testing";
+import { concatBytes, pumpThrough } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import V8Serde from "../src/v8-serde.js";

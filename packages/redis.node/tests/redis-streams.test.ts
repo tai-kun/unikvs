@@ -4,7 +4,7 @@ import {
   concatBytes,
   createAllByteValues,
   createPseudoRandomBytes,
-} from "@unikvs/testings";
+} from "@unikvs/testing";
 import { Redis as Ioredis } from "ioredis";
 import { describe, vi } from "vitest";
 

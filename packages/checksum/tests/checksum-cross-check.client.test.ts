@@ -1,5 +1,5 @@
-import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testings";
-import { forCasesAsync } from "@unikvs/testings";
+import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
+import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
 import {

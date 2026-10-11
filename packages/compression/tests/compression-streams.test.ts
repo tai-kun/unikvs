@@ -5,7 +5,7 @@ import {
   readAll,
   sourceFrom,
   splitIntoChunks,
-} from "@unikvs/testings";
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";

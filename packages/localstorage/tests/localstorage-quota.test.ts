@@ -1,4 +1,4 @@
-import { captureThrown } from "@unikvs/testings";
+import { captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";

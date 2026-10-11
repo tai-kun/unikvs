@@ -1,4 +1,4 @@
-import { bytesEqual, createAllByteValues, createPseudoRandomBytes } from "@unikvs/testings";
+import { bytesEqual, createAllByteValues, createPseudoRandomBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

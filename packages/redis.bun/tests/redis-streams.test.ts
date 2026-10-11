@@ -4,7 +4,7 @@ import {
   concatBytes,
   createAllByteValues,
   createPseudoRandomBytes,
-} from "@unikvs/testings";
+} from "@unikvs/testing";
 import { describe, vi } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";

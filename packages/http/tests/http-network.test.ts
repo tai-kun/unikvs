@@ -1,4 +1,4 @@
-import { abortedSignal, captureRejection } from "@unikvs/testings";
+import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { afterEach, describe, test, vi } from "vitest";
 
 import { HttpNetworkError, HttpResponseError } from "../src/errors.js";

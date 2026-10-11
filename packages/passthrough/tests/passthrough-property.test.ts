@@ -1,5 +1,5 @@
-import { collectChunks } from "@unikvs/testings";
-import { forCases, forCasesAsync, type Random } from "@unikvs/testings";
+import { collectChunks } from "@unikvs/testing";
+import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
 import { test } from "vitest";
 
 import PassThrough from "../src/passthrough.js";

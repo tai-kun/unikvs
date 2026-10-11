@@ -1,5 +1,5 @@
-import { concatChunks } from "@unikvs/testings";
-import { forCasesAsync, type Random } from "@unikvs/testings";
+import { concatChunks } from "@unikvs/testing";
+import { forCasesAsync, type Random } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

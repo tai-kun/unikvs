@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
-import { acquireFreePort, waitForPort } from "@unikvs/testings/node";
+import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { afterAll, beforeAll, test as vitest } from "vitest";
 
 import S3 from "../src/s3.js";

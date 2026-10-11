@@ -1,4 +1,4 @@
-import { bytesEqual } from "@unikvs/testings";
+import { bytesEqual } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdNode, { type ZstdNodeOptions } from "../src/zstd-node.js";

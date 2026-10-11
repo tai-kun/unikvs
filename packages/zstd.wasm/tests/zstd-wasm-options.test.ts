@@ -1,4 +1,4 @@
-import { bytesEqual } from "@unikvs/testings";
+import { bytesEqual } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";

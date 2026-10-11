@@ -1,4 +1,4 @@
-import { captureRejection } from "@unikvs/testings";
+import { captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidHeadersError, InvalidTokenError } from "../src/errors.js";

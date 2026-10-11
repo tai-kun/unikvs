@@ -1,5 +1,5 @@
-import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
-import { listTemporaryFiles } from "@unikvs/testings/node";
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testing";
+import { listTemporaryFiles } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import NodeFs from "../src/node-fs.js";

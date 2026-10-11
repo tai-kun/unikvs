@@ -1,4 +1,4 @@
-import { concatBytes, pumpThrough, readAll } from "@unikvs/testings";
+import { concatBytes, pumpThrough, readAll } from "@unikvs/testing";
 import { FastUtf8 } from "fast-utf8";
 import { describe, test } from "vitest";
 

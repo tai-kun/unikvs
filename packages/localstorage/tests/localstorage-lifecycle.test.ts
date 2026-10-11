@@ -1,4 +1,4 @@
-import { abortedSignal, captureThrown } from "@unikvs/testings";
+import { abortedSignal, captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { LocalStorageNotAvailableError } from "../src/errors.js";

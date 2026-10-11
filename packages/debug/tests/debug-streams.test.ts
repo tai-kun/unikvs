@@ -1,4 +1,4 @@
-import { pipeChunks } from "@unikvs/testings";
+import { pipeChunks } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug from "../src/debug.js";

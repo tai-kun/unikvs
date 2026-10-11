@@ -37,7 +37,7 @@ describe("acquireFreePort と waitForPort", () => {
 describe("listTemporaryFiles", () => {
   test("*.tmp のみを返す", async ({ expect }) => {
     // 準備
-    const root = await mkdtemp(join(tmpdir(), "unikvs-testings-"));
+    const root = await mkdtemp(join(tmpdir(), "unikvs-testing-"));
 
     try {
       await writeFile(join(root, "a.tmp"), "x");

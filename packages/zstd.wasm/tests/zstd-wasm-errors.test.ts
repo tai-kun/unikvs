@@ -1,4 +1,4 @@
-import { createPseudoRandomBytes } from "@unikvs/testings";
+import { createPseudoRandomBytes } from "@unikvs/testing";
 import { describe, test as vitest, vi } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";

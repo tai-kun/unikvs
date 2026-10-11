@@ -5,7 +5,7 @@ import {
   sourceFromValues,
   splitIntoChunks,
   toText,
-} from "@unikvs/testings";
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { SuperjsonUnsupportedValueError } from "../src/errors.js";

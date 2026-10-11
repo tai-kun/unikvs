@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testings";
-import { forCases, forCasesAsync } from "@unikvs/testings";
+import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
+import { forCases, forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
 import {

@@ -1,4 +1,4 @@
-import { createRandom, forCasesAsync } from "@unikvs/testings";
+import { createRandom, forCasesAsync } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";

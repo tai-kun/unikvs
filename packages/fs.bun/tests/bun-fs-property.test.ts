@@ -1,5 +1,5 @@
-import { bytesEqual, collectBytes } from "@unikvs/testings";
-import { forCasesAsync, type Random } from "@unikvs/testings";
+import { bytesEqual, collectBytes } from "@unikvs/testing";
+import { forCasesAsync, type Random } from "@unikvs/testing";
 import { isValidFilename } from "@unikvs/utils";
 import { describe } from "vitest";
 

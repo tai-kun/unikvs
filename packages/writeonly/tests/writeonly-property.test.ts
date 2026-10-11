@@ -1,4 +1,4 @@
-import { forCasesAsync, type Random } from "@unikvs/testings";
+import { forCasesAsync, type Random } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Memory from "../../memory/src/memory.js";

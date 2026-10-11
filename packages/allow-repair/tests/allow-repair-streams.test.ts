@@ -1,5 +1,5 @@
 import { RepairNotAllowedError } from "@unikvs/core";
-import { collectChunks } from "@unikvs/testings";
+import { collectChunks } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import AllowRepair from "../src/allow-repair.js";

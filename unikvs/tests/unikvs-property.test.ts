@@ -1,7 +1,7 @@
 import { ChecksumSha256 } from "@unikvs/checksum";
 import { Compression } from "@unikvs/compression";
 import { Memory } from "@unikvs/memory";
-import { type Random, forCasesAsync } from "@unikvs/testings";
+import { type Random, forCasesAsync } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";

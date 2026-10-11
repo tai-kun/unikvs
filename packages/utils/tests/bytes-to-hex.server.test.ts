@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { forCases } from "@unikvs/testings";
+import { forCases } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import bytesToHex from "../src/bytes-to-hex.js";

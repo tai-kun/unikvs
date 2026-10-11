@@ -1,4 +1,4 @@
-import { forCases } from "@unikvs/testings";
+import { forCases } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 

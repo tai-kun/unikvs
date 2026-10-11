@@ -1,4 +1,4 @@
-import { createPseudoRandomBytes } from "@unikvs/testings";
+import { createPseudoRandomBytes } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { ZstdNodeDecompressError } from "../src/errors.js";

@@ -37,7 +37,7 @@
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.13.6",
     "@types/type-name": "1.0.32",
-    "@unikvs/testings": "workspace:*",
+    "@unikvs/testing": "workspace:*",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
     "@vitest/coverage-istanbul": "4.1.11",

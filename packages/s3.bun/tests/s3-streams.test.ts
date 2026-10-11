@@ -1,4 +1,4 @@
-import { bytesEqual, collectBytes, createAllByteValues } from "@unikvs/testings";
+import { bytesEqual, collectBytes, createAllByteValues } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { InvalidPartSizeError, StorageAbortedError } from "../src/errors.js";

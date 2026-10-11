@@ -1,4 +1,4 @@
-import { collectChunks } from "@unikvs/testings";
+import { collectChunks } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import PassThrough from "../src/passthrough.js";

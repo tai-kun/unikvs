@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { acquireFreePort, waitForPort } from "@unikvs/testings/node";
+import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { afterAll, beforeAll, test as vitest } from "vitest";
 
 import S3, { type S3StorageOptions } from "../src/s3.js";

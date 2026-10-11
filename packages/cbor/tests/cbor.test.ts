@@ -1,4 +1,4 @@
-import { concatBytes } from "@unikvs/testings";
+import { concatBytes } from "@unikvs/testing";
 import { describe, expect, test } from "vitest";
 
 import Cbor from "../src/cbor.js";

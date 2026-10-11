@@ -1,5 +1,5 @@
-import { pipeChunks } from "@unikvs/testings";
-import { forCases, forCasesAsync, type Random } from "@unikvs/testings";
+import { pipeChunks } from "@unikvs/testing";
+import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";

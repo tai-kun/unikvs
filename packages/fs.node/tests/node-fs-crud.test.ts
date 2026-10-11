@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { listTemporaryFiles } from "@unikvs/testings/node";
+import { listTemporaryFiles } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

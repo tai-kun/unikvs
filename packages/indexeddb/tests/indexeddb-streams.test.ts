@@ -1,4 +1,4 @@
-import { captureRejection, concatChunks } from "@unikvs/testings";
+import { captureRejection, concatChunks } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

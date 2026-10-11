@@ -1,4 +1,4 @@
-import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testings";
+import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";

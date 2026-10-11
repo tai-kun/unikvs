@@ -1,8 +1,8 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import { bytesEqual, collectBytes, concatBytes, createPseudoRandomBytes } from "@unikvs/testings";
-import { listTemporaryFiles } from "@unikvs/testings/node";
+import { bytesEqual, collectBytes, concatBytes, createPseudoRandomBytes } from "@unikvs/testing";
+import { listTemporaryFiles } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

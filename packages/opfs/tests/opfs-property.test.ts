@@ -1,5 +1,5 @@
-import { collectBytes } from "@unikvs/testings";
-import { type Random, forCasesAsync } from "@unikvs/testings";
+import { collectBytes } from "@unikvs/testing";
+import { type Random, forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

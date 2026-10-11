@@ -1,4 +1,4 @@
-import { acquireFreePort } from "@unikvs/testings/node";
+import { acquireFreePort } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import S3 from "../src/s3.js";

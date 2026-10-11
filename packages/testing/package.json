@@ -1,5 +1,5 @@
 {
-  "name": "@unikvs/testings",
+  "name": "@unikvs/testing",
   "version": "0.0.0",
   "private": true,
   "description": "Shared test helpers for UniKvs packages.",

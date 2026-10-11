@@ -46,7 +46,7 @@
     "@unikvs/fs.node": "workspace:*",
     "@unikvs/memory": "workspace:*",
     "@unikvs/opfs": "workspace:*",
-    "@unikvs/testings": "workspace:*",
+    "@unikvs/testing": "workspace:*",
     "@unikvs/utils": "workspace:*",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",

@@ -1,4 +1,4 @@
-import { collectBytes } from "@unikvs/testings";
+import { collectBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Redis from "../src/redis.js";

@@ -1,4 +1,4 @@
-import { bytesEqual } from "@unikvs/testings";
+import { bytesEqual } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import BunFs from "../src/bun-fs.js";

@@ -1,5 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testings";
+import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {

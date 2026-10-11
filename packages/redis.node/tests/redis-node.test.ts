@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-import { waitForPort } from "@unikvs/testings/node";
+import { waitForPort } from "@unikvs/testing/node";
 import { Redis as Ioredis } from "ioredis";
 import { afterEach, describe, expectTypeOf, vi } from "vitest";
 

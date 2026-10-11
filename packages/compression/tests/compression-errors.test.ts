@@ -1,4 +1,4 @@
-import { createPseudoRandomBytes, pumpThrough } from "@unikvs/testings";
+import { createPseudoRandomBytes, pumpThrough } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";

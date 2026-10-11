@@ -1,4 +1,4 @@
-import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testings";
+import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testing";
 import { describe, expect, test } from "vitest";
 
 import { V8SerdeDecodeError, V8SerdeEncodeError } from "../src/errors.js";

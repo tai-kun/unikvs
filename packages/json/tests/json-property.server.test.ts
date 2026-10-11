@@ -1,5 +1,5 @@
-import { forCasesAsync, type Random } from "@unikvs/testings";
-import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testings";
+import { forCasesAsync, type Random } from "@unikvs/testing";
+import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Json from "../src/json.js";

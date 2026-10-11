@@ -1,5 +1,5 @@
-import { bytesEqual, collectBytes } from "@unikvs/testings";
-import { forCasesAsync } from "@unikvs/testings";
+import { bytesEqual, collectBytes } from "@unikvs/testing";
+import { forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

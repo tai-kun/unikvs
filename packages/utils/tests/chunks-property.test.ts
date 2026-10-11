@@ -1,4 +1,4 @@
-import { forCases } from "@unikvs/testings";
+import { forCases } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import chunks from "../src/chunks.js";

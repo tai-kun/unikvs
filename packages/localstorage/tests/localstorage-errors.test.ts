@@ -1,6 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
 import * as core from "@unikvs/core";
-import { captureThrown } from "@unikvs/testings";
+import { captureThrown } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {

@@ -1,4 +1,4 @@
-import { concatBytes, collectBytes } from "@unikvs/testings";
+import { concatBytes, collectBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import type Opfs from "../src/opfs.js";

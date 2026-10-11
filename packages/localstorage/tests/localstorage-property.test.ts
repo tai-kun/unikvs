@@ -1,4 +1,4 @@
-import { forCases, type Random } from "@unikvs/testings";
+import { forCases, type Random } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";

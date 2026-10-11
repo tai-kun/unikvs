@@ -1,5 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { runTransform, toHex } from "@unikvs/testings";
+import { runTransform, toHex } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { ChecksumMismatchError, ChecksumRequiredError, ChecksumSha256 } from "../src/index.js";

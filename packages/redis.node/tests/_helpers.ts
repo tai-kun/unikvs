@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 
-import { acquireFreePort, waitForPort } from "@unikvs/testings/node";
+import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { Redis as Ioredis } from "ioredis";
 import { afterAll, beforeAll, test as vitest } from "vitest";
 

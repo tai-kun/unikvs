@@ -1,4 +1,4 @@
-import { captureRejection } from "@unikvs/testings";
+import { captureRejection } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

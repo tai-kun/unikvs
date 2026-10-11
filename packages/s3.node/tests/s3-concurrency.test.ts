@@ -1,4 +1,4 @@
-import { bytesEqual, createAllByteValues } from "@unikvs/testings";
+import { bytesEqual, createAllByteValues } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";

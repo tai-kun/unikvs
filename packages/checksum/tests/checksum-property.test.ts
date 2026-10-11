@@ -1,7 +1,7 @@
 import { md5, sha1 } from "@noble/hashes/legacy.js";
 import { sha224, sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
-import { concatChunks, runTransform, toHex } from "@unikvs/testings";
-import { forCases, forCasesAsync } from "@unikvs/testings";
+import { concatChunks, runTransform, toHex } from "@unikvs/testing";
+import { forCases, forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
 import {

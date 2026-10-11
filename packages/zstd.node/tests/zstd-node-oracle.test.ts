@@ -1,6 +1,6 @@
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
-import { createPseudoRandomBytes } from "@unikvs/testings";
+import { createPseudoRandomBytes } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";

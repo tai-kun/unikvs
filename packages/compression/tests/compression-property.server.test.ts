@@ -1,5 +1,5 @@
-import { forCasesAsync } from "@unikvs/testings";
-import { concatBytes, pumpThrough } from "@unikvs/testings";
+import { forCasesAsync } from "@unikvs/testing";
+import { concatBytes, pumpThrough } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
