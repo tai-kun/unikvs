@@ -149,12 +149,13 @@ for (const chunk of chunks(data, 2)) {
 function toOwnedView(view: Uint8Array): Uint8Array<ArrayBuffer>;
 ```
 
-バイト列を `ArrayBuffer` を所有する `Uint8Array` へ正規化します。所有済みなら複写せずに返し、共有域を参照していれば複写します。
+バイト列を `ArrayBuffer` を所有する `Uint8Array` へ正規化します。所有済みなら複写せずに返し、共有域を参照していれば複写します。`Buffer` など子クラスの場合も、専有域であれば複写せず素の `Uint8Array` で包んで返します。
 
 ```ts
 import { toOwnedView } from "@unikvs/utils";
 
 const owned = toOwnedView(new Uint8Array([1, 2, 3]));
+const fromBuffer = toOwnedView(Buffer.allocUnsafeSlow(3));
 ```
 
 ## ストリーム変換 [#streams]

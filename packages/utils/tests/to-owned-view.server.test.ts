@@ -35,6 +35,24 @@ describe("toOwnedView", () => {
     expect(result.buffer).toBeInstanceOf(ArrayBuffer);
   });
 
+  test("専有域の Buffer は複写せず所有化する", ({ expect }) => {
+    // 準備
+    // allocUnsafeSlow は共有プールを使わないため、背後の ArrayBuffer をそのまま引き継げる。
+    const dedicated = Buffer.allocUnsafeSlow(4);
+    dedicated.set([1, 2, 3, 4]);
+
+    // 実行
+    const result = toOwnedView(dedicated);
+
+    // 検証
+    expect(result).not.toBe(dedicated);
+    expect(result).toStrictEqual(new Uint8Array([1, 2, 3, 4]));
+    expect(result.constructor).toBe(Uint8Array);
+    expect(result.buffer).toBe(dedicated.buffer);
+    expect(result.byteOffset).toBe(0);
+    expect(result.byteLength).toBe(result.buffer.byteLength);
+  });
+
   test("SharedArrayBuffer 背後は複写して所有化する", ({ expect }) => {
     // 準備
     const shared = new Uint8Array(new SharedArrayBuffer(4));

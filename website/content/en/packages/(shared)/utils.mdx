@@ -149,12 +149,13 @@ for (const chunk of chunks(data, 2)) {
 function toOwnedView(view: Uint8Array): Uint8Array<ArrayBuffer>;
 ```
 
-Normalizes bytes to a `Uint8Array` that owns its `ArrayBuffer`. Returns owned views as-is, and copies views that reference shared memory.
+Normalizes bytes to a `Uint8Array` that owns its `ArrayBuffer`. Returns owned views as-is, and copies views that reference shared memory. Subclass instances such as `Buffer` are wrapped in a plain `Uint8Array` without copying when they exclusively own their buffer.
 
 ```ts
 import { toOwnedView } from "@unikvs/utils";
 
 const owned = toOwnedView(new Uint8Array([1, 2, 3]));
+const fromBuffer = toOwnedView(Buffer.allocUnsafeSlow(3));
 ```
 
 ## Stream conversion [#streams]
