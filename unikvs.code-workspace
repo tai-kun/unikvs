@@ -17,12 +17,96 @@
       "path": "packages/utils",
     },
     {
-      "name": "@unikvs/checksum",
-      "path": "packages/checksum",
+      "name": "@unikvs/testing",
+      "path": "packages/testing",
+    },
+    {
+      "name": "@unikvs/memory",
+      "path": "packages/memory",
+    },
+    {
+      "name": "@unikvs/http",
+      "path": "packages/http",
+    },
+    {
+      "name": "@unikvs/null",
+      "path": "packages/null",
+    },
+    {
+      "name": "@unikvs/opfs",
+      "path": "packages/opfs",
+    },
+    {
+      "name": "@unikvs/indexeddb",
+      "path": "packages/indexeddb",
+    },
+    {
+      "name": "@unikvs/localstorage",
+      "path": "packages/localstorage",
+    },
+    {
+      "name": "@unikvs/fs.node",
+      "path": "packages/fs.node",
+    },
+    {
+      "name": "@unikvs/s3.node",
+      "path": "packages/s3.node",
+    },
+    {
+      "name": "@unikvs/redis.node",
+      "path": "packages/redis.node",
+    },
+    {
+      "name": "@unikvs/fs.bun",
+      "path": "packages/fs.bun",
+    },
+    {
+      "name": "@unikvs/s3.bun",
+      "path": "packages/s3.bun",
+    },
+    {
+      "name": "@unikvs/redis.bun",
+      "path": "packages/redis.bun",
+    },
+    {
+      "name": "@unikvs/writeonly",
+      "path": "packages/writeonly",
+    },
+    {
+      "name": "@unikvs/json",
+      "path": "packages/json",
+    },
+    {
+      "name": "@unikvs/superjson",
+      "path": "packages/superjson",
+    },
+    {
+      "name": "@unikvs/cbor",
+      "path": "packages/cbor",
+    },
+    {
+      "name": "@unikvs/v8-serde",
+      "path": "packages/v8-serde",
+    },
+    {
+      "name": "@unikvs/base64",
+      "path": "packages/base64",
+    },
+    {
+      "name": "@unikvs/base64url",
+      "path": "packages/base64url",
+    },
+    {
+      "name": "@unikvs/hex",
+      "path": "packages/hex",
     },
     {
       "name": "@unikvs/compression",
       "path": "packages/compression",
+    },
+    {
+      "name": "@unikvs/checksum",
+      "path": "packages/checksum",
     },
     {
       "name": "@unikvs/zstd.wasm",
@@ -39,86 +123,6 @@
     {
       "name": "@unikvs/passthrough",
       "path": "packages/passthrough",
-    },
-    {
-      "name": "@unikvs/json",
-      "path": "packages/json",
-    },
-    {
-      "name": "@unikvs/superjson",
-      "path": "packages/superjson",
-    },
-    {
-      "name": "@unikvs/cbor",
-      "path": "packages/cbor",
-    },
-    {
-      "name": "@unikvs/memory",
-      "path": "packages/memory",
-    },
-    {
-      "name": "@unikvs/writeonly",
-      "path": "packages/writeonly",
-    },
-    {
-      "name": "@unikvs/null",
-      "path": "packages/null",
-    },
-    {
-      "name": "@unikvs/fs.node",
-      "path": "packages/fs.node",
-    },
-    {
-      "name": "@unikvs/fs.bun",
-      "path": "packages/fs.bun",
-    },
-    {
-      "name": "@unikvs/redis.bun",
-      "path": "packages/redis.bun",
-    },
-    {
-      "name": "@unikvs/redis.node",
-      "path": "packages/redis.node",
-    },
-    {
-      "name": "@unikvs/s3.node",
-      "path": "packages/s3.node",
-    },
-    {
-      "name": "@unikvs/s3.bun",
-      "path": "packages/s3.bun",
-    },
-    {
-      "name": "@unikvs/opfs",
-      "path": "packages/opfs",
-    },
-    {
-      "name": "@unikvs/indexeddb",
-      "path": "packages/indexeddb",
-    },
-    {
-      "name": "@unikvs/http",
-      "path": "packages/http",
-    },
-    {
-      "name": "@unikvs/localstorage",
-      "path": "packages/localstorage",
-    },
-    {
-      "name": "@unikvs/hex",
-      "path": "packages/hex",
-    },
-    {
-      "name": "@unikvs/base64",
-      "path": "packages/base64",
-    },
-    {
-      "name": "@unikvs/base64url",
-      "path": "packages/base64url",
-    },
-    {
-      "name": "@unikvs/v8-serde",
-      "path": "packages/v8-serde",
     },
     {
       "name": "@unikvs/allow-repair",
