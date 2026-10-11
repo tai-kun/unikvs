@@ -1,4 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
+import { toOwnedView } from "@unikvs/utils";
 import { Decoder, decode, encode } from "cbor-x";
 
 import { CborDecodeError, CborEncodeError } from "./errors.js";
@@ -34,16 +35,6 @@ type IncompleteDecodeError = Error & {
 function isPossiblyIncompleteInputError(error: unknown): error is IncompleteDecodeError {
   // プリミティブ値が渡されても安全にプロパティーを参照できるよう、Object で包みます。
   return Object(error).incomplete === true || error instanceof SyntaxError;
-}
-
-/**
- * バイト列をコピーせずに `Uint8Array<ArrayBuffer>` へ正規化します。
- *
- * @param view 正規化するバイト列です。
- * @returns 同じメモリーを参照する `Uint8Array<ArrayBuffer>` を返します。
- */
-function toAllocatedView(view: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(view.buffer as ArrayBuffer, view.byteOffset, view.byteLength);
 }
 
 /**
@@ -265,7 +256,7 @@ export default class Cbor implements ITransformer {
    */
   #encode(data: unknown): Uint8Array<ArrayBuffer> {
     try {
-      return toAllocatedView(encode(data));
+      return toOwnedView(encode(data));
     } catch (error) {
       throw new CborEncodeError({ cause: error });
     }

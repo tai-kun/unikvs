@@ -35,6 +35,7 @@
   "dependencies": {
     "@bokuweb/zstd-wasm": "0.0.27",
     "@unikvs/core": "workspace:*",
+    "@unikvs/utils": "workspace:*",
     "call-fn-once": "0.0.6",
     "inspect-lite": "0.0.2"
   },

@@ -23,6 +23,7 @@ import {
   chunks,
   isValidFilename,
   isValidDirname,
+  toOwnedView,
   toReadableStream,
   withReadableStreamFrom,
   InvalidDirnameError,
@@ -140,6 +141,20 @@ const data = new Uint8Array([1, 2, 3, 4, 5]);
 for (const chunk of chunks(data, 2)) {
   console.log(chunk);
 }
+```
+
+### toOwnedView [#to-owned-view]
+
+```ts
+function toOwnedView(view: Uint8Array): Uint8Array<ArrayBuffer>;
+```
+
+Normalizes bytes to a `Uint8Array` that owns its `ArrayBuffer`. Returns owned views as-is, and copies views that reference shared memory.
+
+```ts
+import { toOwnedView } from "@unikvs/utils";
+
+const owned = toOwnedView(new Uint8Array([1, 2, 3]));
 ```
 
 ## Stream conversion [#streams]

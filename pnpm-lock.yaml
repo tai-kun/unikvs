@@ -179,6 +179,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       cbor-x:
         specifier: 1.6.6
         version: 1.6.6
@@ -1125,6 +1128,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       call-fn-once:
         specifier: 0.0.6
         version: 0.0.6
@@ -1202,6 +1208,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       call-fn-once:
         specifier: 0.0.6
         version: 0.0.6
@@ -1242,6 +1251,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       call-fn-once:
         specifier: 0.0.6
         version: 0.0.6

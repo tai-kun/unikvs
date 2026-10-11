@@ -1,4 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
+import { toOwnedView } from "@unikvs/utils";
 import { callAsyncableFnOnce } from "call-fn-once";
 
 import { zlibBridge } from "./_zlib.js";
@@ -36,25 +37,6 @@ async function loadZlib(): Promise<typeof import("node:zlib")> {
 
     throw new UnsupportedRuntimeError({ name: "ZstdNode", runtime: "Node.js", cause: error });
   }
-}
-
-// 返却 view が ArrayBuffer を所有する素の Uint8Array であれば複写せずに返します。
-// v8-serde の toAllocatedView とは異なり、共有域の公開を避けるため所有判定を行います。
-// node:zlib は Buffer（Uint8Array の子クラス）を返すため、素の Uint8Array であることも確認します。
-function ownBytes(view: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (
-    view.constructor === Uint8Array &&
-    view.buffer instanceof ArrayBuffer &&
-    view.byteOffset === 0 &&
-    view.byteLength === view.buffer.byteLength
-  ) {
-    return view as Uint8Array<ArrayBuffer>;
-  }
-
-  const copy = new Uint8Array(view.byteLength);
-  copy.set(view);
-
-  return copy;
 }
 
 /**
@@ -109,7 +91,7 @@ export default class ZstdNode implements ITransformer {
     const zlib = await loadZlib();
     const view = zlibBridge.compress(zlib, args.data, this.level);
 
-    return ownBytes(view);
+    return toOwnedView(view);
   }
 
   /**
@@ -127,6 +109,6 @@ export default class ZstdNode implements ITransformer {
       throw new ZstdNodeDecompressError({ cause: error });
     }
 
-    return ownBytes(view);
+    return toOwnedView(view);
   }
 }

@@ -1,4 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
+import { toOwnedView } from "@unikvs/utils";
 import { callAsyncableFnOnce } from "call-fn-once";
 
 import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from "./errors.js";
@@ -30,16 +31,6 @@ async function loadV8(): Promise<typeof import("node:v8")> {
       throw new UnsupportedRuntimeError({ name: "V8Serde", runtime: "Node.js", cause: ex });
     }
   });
-}
-
-/**
- * バイト列をコピーせずに `Uint8Array<ArrayBuffer>` へ正規化します。
- *
- * @param view 正規化するバイト列です。
- * @returns 同じメモリーを参照する `Uint8Array<ArrayBuffer>` を返します。
- */
-function toAllocatedView(view: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(view.buffer as ArrayBuffer, view.byteOffset, view.byteLength);
 }
 
 /**
@@ -198,7 +189,7 @@ export default class V8Serde implements ITransformer {
     const { serialize } = await loadV8();
 
     try {
-      return toAllocatedView(serialize(args.data));
+      return toOwnedView(serialize(args.data));
     } catch (ex) {
       throw new V8SerdeEncodeError({ cause: ex });
     }

@@ -1,4 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
+import { toOwnedView } from "@unikvs/utils";
 import { callAsyncableFnOnce } from "call-fn-once";
 
 import { wasmBridge } from "./_zstd-wasm.js";
@@ -14,23 +15,6 @@ async function ensureInit(): Promise<void> {
   } catch (error) {
     throw new ZstdWasmInitError({ cause: error });
   }
-}
-
-// 返却 view が ArrayBuffer を所有していれば複写せずに返します。
-// v8-serde の toAllocatedView とは異なり、共有域の公開を避けるため所有判定を行います。
-function ownBytes(view: Uint8Array): Uint8Array<ArrayBuffer> {
-  if (
-    view.buffer instanceof ArrayBuffer &&
-    view.byteOffset === 0 &&
-    view.byteLength === view.buffer.byteLength
-  ) {
-    return view as Uint8Array<ArrayBuffer>;
-  }
-
-  const copy = new Uint8Array(view.byteLength);
-  copy.set(view);
-
-  return copy;
 }
 
 /**
@@ -97,7 +81,7 @@ export default class ZstdWasm implements ITransformer {
   ): Promise<Uint8Array<ArrayBuffer>> {
     const view = wasmBridge.compress(args.data, this.level);
 
-    return ownBytes(view);
+    return toOwnedView(view);
   }
 
   /**
@@ -114,7 +98,7 @@ export default class ZstdWasm implements ITransformer {
       throw new ZstdWasmDecompressError({ cause: error });
     }
 
-    return ownBytes(view);
+    return toOwnedView(view);
   }
 
   // 初期化が成功したら開済みにします。

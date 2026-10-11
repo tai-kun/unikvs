@@ -24,6 +24,9 @@ export { default as isValidDirname } from "./is-valid-dirname.js";
 export type * from "./is-valid-filename.js";
 export { default as isValidFilename } from "./is-valid-filename.js";
 
+export type * from "./to-owned-view.js";
+export { default as toOwnedView } from "./to-owned-view.js";
+
 export type * from "./to-readable-stream.js";
 export { default as toReadableStream } from "./to-readable-stream.js";
 

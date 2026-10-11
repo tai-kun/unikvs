@@ -1,0 +1,53 @@
+import { describe, test } from "vitest";
+
+import toOwnedView from "../src/to-owned-view.js";
+
+describe("toOwnedView", () => {
+  test("プールを共有する Buffer は複写して所有化する", ({ expect }) => {
+    // 準備
+    // 小さな Buffer は Node.js の共有プールを参照するため、共有域の公開を避けて複写する。
+    const pooled = Buffer.from([1, 2, 3]);
+
+    // 実行
+    const result = toOwnedView(pooled);
+
+    // 検証
+    expect(result).not.toBe(pooled);
+    expect(result).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(result.constructor).toBe(Uint8Array);
+    expect(result.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(result.byteOffset).toBe(0);
+    expect(result.byteLength).toBe(result.buffer.byteLength);
+  });
+
+  test("専用域の空 Buffer は複写して所有化する", ({ expect }) => {
+    // 準備
+    // 長さ 0 の Buffer は専用域を持つため、所有判定だけでは素の Uint8Array と区別できない。
+    const empty = Buffer.alloc(0);
+
+    // 実行
+    const result = toOwnedView(empty);
+
+    // 検証
+    expect(result).not.toBe(empty);
+    expect(result).toStrictEqual(new Uint8Array(0));
+    expect(result.constructor).toBe(Uint8Array);
+    expect(result.buffer).toBeInstanceOf(ArrayBuffer);
+  });
+
+  test("SharedArrayBuffer 背後は複写して所有化する", ({ expect }) => {
+    // 準備
+    const shared = new Uint8Array(new SharedArrayBuffer(4));
+    shared.set([5, 6, 7, 8]);
+
+    // 実行
+    const result = toOwnedView(shared);
+
+    // 検証
+    expect(result).not.toBe(shared);
+    expect(result).toStrictEqual(new Uint8Array([5, 6, 7, 8]));
+    expect(result.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(result.byteOffset).toBe(0);
+    expect(result.byteLength).toBe(result.buffer.byteLength);
+  });
+});
