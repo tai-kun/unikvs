@@ -9,9 +9,10 @@ import ZstdNode from "../src/zstd-node.js";
 const hasZstd = typeof zstdCompressSync === "function" && typeof zstdDecompressSync === "function";
 
 describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
-  test("node:zlib で圧縮したフレームを decode で展開できる", async ({ expect }) => {
+  test("node:zlib で圧縮したフレームを decode で展開できる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
+    await target.open({ signal });
     const input = createPseudoRandomBytes(1024, 15);
     const compressed = zstdCompressSync(input);
 
@@ -22,9 +23,10 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
     expect(decoded).toStrictEqual(input);
   });
 
-  test("encode の出力を node:zlib で展開できる", async ({ expect }) => {
+  test("encode の出力を node:zlib で展開できる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
+    await target.open({ signal });
     const input = createPseudoRandomBytes(1024, 16);
 
     // 実行

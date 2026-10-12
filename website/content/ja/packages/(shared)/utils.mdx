@@ -23,7 +23,8 @@ import {
   chunks,
   isValidFilename,
   isValidDirname,
-  toOwnedView,
+  proxyTransformStream,
+  toOwnedBytes,
   toReadableStream,
   withReadableStreamFrom,
   InvalidDirnameError,
@@ -143,24 +144,24 @@ for (const chunk of chunks(data, 2)) {
 }
 ```
 
-### toOwnedView [#to-owned-view]
+### toOwnedBytes [#to-owned-bytes]
 
 ```ts
-function toOwnedView(view: Uint8Array): Uint8Array<ArrayBuffer>;
+function toOwnedBytes(view: Uint8Array): Uint8Array<ArrayBuffer>;
 ```
 
 バイト列を `ArrayBuffer` を所有する `Uint8Array` へ正規化します。所有済みなら複写せずに返し、共有域を参照していれば複写します。`Buffer` など子クラスの場合も、専有域であれば複写せず素の `Uint8Array` で包んで返します。
 
 ```ts
-import { toOwnedView } from "@unikvs/utils";
+import { toOwnedBytes } from "@unikvs/utils";
 
-const owned = toOwnedView(new Uint8Array([1, 2, 3]));
-const fromBuffer = toOwnedView(Buffer.allocUnsafeSlow(3));
+const owned = toOwnedBytes(new Uint8Array([1, 2, 3]));
+const fromBuffer = toOwnedBytes(Buffer.allocUnsafeSlow(3));
 ```
 
 ## ストリーム変換 [#streams]
 
-反復可能オブジェクトを `ReadableStream` に変換します。
+ストリームの変換や中継を行います。
 
 ### toReadableStream [#to-readable-stream]
 
@@ -198,6 +199,55 @@ import { withReadableStreamFrom } from "@unikvs/utils";
 const stream = withReadableStreamFrom((ReadableStream) =>
   ReadableStream.from([1, 2, 3]),
 );
+```
+
+### proxyTransformStream [#proxy-transform-stream]
+
+```ts
+function proxyTransformStream<TSourceInput, TSourceOutput, TInput, TOutput>(
+  source: ITransformStream<TSourceInput, TSourceOutput>,
+  proxyInput: Transformer<TInput, TSourceInput> | TransformerTransformCallback<TInput, TSourceInput>,
+  proxyOutput: Transformer<TSourceOutput, TOutput> | TransformerTransformCallback<TSourceOutput, TOutput>,
+): IProxiedTransformStream<TInput, TOutput>;
+```
+
+ソースの前後に入出力変換を挟んだ新しいストリームを作ります。書き込みと読み取りは並行して行い、`writable` を閉じると `closePromise` が解決します。
+
+```ts
+import { proxyTransformStream } from "@unikvs/utils";
+
+const source = new TransformStream<string, string>({
+  transform(chunk, controller) {
+    controller.enqueue(chunk.toUpperCase());
+  },
+});
+
+const proxied = proxyTransformStream(
+  source,
+  (chunk: number, controller) => {
+    controller.enqueue(String(chunk));
+  },
+  (chunk: string, controller) => {
+    controller.enqueue(chunk.length);
+  },
+);
+
+const reader = proxied.readable.getReader();
+const writer = proxied.writable.getWriter();
+const readAll = (async () => {
+  const values: number[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    values.push(value);
+  }
+  return values;
+})();
+
+await writer.write(22);
+await writer.close();
+await proxied.closePromise;
+console.log(await readAll); // [2]
 ```
 
 ## エラー [#errors]

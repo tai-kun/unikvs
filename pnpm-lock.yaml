@@ -1191,6 +1191,9 @@ importers:
       i18n-error-base:
         specifier: 0.0.7
         version: 0.0.7(valibot@1.0.0(typescript@7.0.2))
+      ninja-promise:
+        specifier: 0.0.5
+        version: 0.0.5
       try-capture-stack-trace:
         specifier: 0.0.3
         version: 0.0.3
@@ -1321,7 +1324,7 @@ importers:
   packages/zstd.node:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1329,11 +1332,14 @@ importers:
       '@unikvs/utils':
         specifier: workspace:*
         version: link:../utils
+      abort-signal-utils:
+        specifier: ^0.0.6
+        version: 0.0.6(@logtape/logtape@2.0.0)
       call-fn-once:
-        specifier: 0.0.6
+        specifier: ^0.0.6
         version: 0.0.6
       inspect-lite:
-        specifier: 0.0.2
+        specifier: ^0.0.2
         version: 0.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -3698,6 +3704,11 @@ packages:
   abort-signal-utils@0.0.3:
     resolution: {integrity: sha512-gV93kxcFZs74x89PBX9YfatMs9FLHpwBzgJFnl0g+urHJgwWiCxNe4nyVr3DnNBX1GOAFjg6WsvQI38igYpN0w==}
 
+  abort-signal-utils@0.0.6:
+    resolution: {integrity: sha512-E/vQ1mSHE9j3eRvMGO/y78BJM3PghYwCg8X6f53+wjuZr+S4juvGZNJtr0ob/AecxrsnrRJFYq1JX+ul2vD5HA==}
+    peerDependencies:
+      '@logtape/logtape': ^2.0.0
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -5393,6 +5404,9 @@ packages:
   neotraverse@1.0.1:
     resolution: {integrity: sha512-WmmLty1YWwJl9yZi77v2dVIV6X2kuYV8YYBI/G3LWGKdGHmHUvL1z7FW0iDvEvGAwNEoc5x1tOOOyDnf5jJw/w==}
     engines: {node: '>= 10'}
+
+  ninja-promise@0.0.5:
+    resolution: {integrity: sha512-3V5HtpPn+NB7/0Jr3eiRPa6a50a4q7IuIFtj2imssjpcVX0Pumy+YV36q1gLVS/Cs6CvYZLgIPIblHVHhjzLNw==}
 
   nlcst-to-string@4.0.0:
     resolution: {integrity: sha512-YKLBCcUYKAg0FNlOBT6aI91qFmSiFKiluk655WzPF+DDMA02qIyy8uiRqI8QXtcFpEvll12LpL5MXqEmAZ+dcA==}
@@ -8662,6 +8676,12 @@ snapshots:
     dependencies:
       try-capture-stack-trace: 0.0.3
 
+  abort-signal-utils@0.0.6(@logtape/logtape@2.0.0):
+    dependencies:
+      '@logtape/logtape': 2.0.0
+      ninja-promise: 0.0.5
+      try-capture-stack-trace: 0.0.3
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -10664,6 +10684,10 @@ snapshots:
       content-type: 2.1.0
 
   neotraverse@1.0.1: {}
+
+  ninja-promise@0.0.5:
+    dependencies:
+      maypromise: 0.0.4
 
   nlcst-to-string@4.0.0:
     dependencies:

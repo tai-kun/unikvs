@@ -1,10 +1,6 @@
 import { describe, expectTypeOf, test } from "vitest";
 
-import {
-  UnsupportedRuntimeError,
-  ZstdNodeDecompressError,
-  ZstdNodeInvalidLevelError,
-} from "../src/errors.js";
+import { UnsupportedRuntimeError, ZstdNodeInvalidLevelError } from "../src/errors.js";
 import * as index from "../src/index.js";
 import type {
   UnsupportedRuntimeErrorArgs,
@@ -18,9 +14,10 @@ describe("index のエクスポート", () => {
   test("トランスフォーマーとエラーがエクスポートされている", ({ expect }) => {
     // 実行と検証
     expect(index.ZstdNode).toBe(ZstdNode);
-    expect(index.ZstdNodeDecompressError).toBe(ZstdNodeDecompressError);
     expect(index.ZstdNodeInvalidLevelError).toBe(ZstdNodeInvalidLevelError);
     expect(index.UnsupportedRuntimeError).toBe(UnsupportedRuntimeError);
+    // 実装は展開失敗を専用エラーで包まないため、ZstdNodeDecompressError は公開しない。
+    expect("ZstdNodeDecompressError" in index).toBe(false);
   });
 
   test("エラーの型が公開されている", ({ expect }) => {

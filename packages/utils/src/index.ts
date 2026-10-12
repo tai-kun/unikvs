@@ -24,8 +24,11 @@ export { default as isValidDirname } from "./is-valid-dirname.js";
 export type * from "./is-valid-filename.js";
 export { default as isValidFilename } from "./is-valid-filename.js";
 
-export type * from "./to-owned-view.js";
-export { default as toOwnedView } from "./to-owned-view.js";
+export type * from "./proxy-transform-stream.js";
+export { default as proxyTransformStream } from "./proxy-transform-stream.js";
+
+export type * from "./to-owned-bytes.js";
+export { default as toOwnedBytes } from "./to-owned-bytes.js";
 
 export type * from "./to-readable-stream.js";
 export { default as toReadableStream } from "./to-readable-stream.js";

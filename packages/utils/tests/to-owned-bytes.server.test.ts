@@ -1,15 +1,15 @@
 import { describe, test } from "vitest";
 
-import toOwnedView from "../src/to-owned-view.js";
+import toOwnedBytes from "../src/to-owned-bytes.js";
 
-describe("toOwnedView", () => {
+describe("toOwnedBytes", () => {
   test("プールを共有する Buffer は複写して所有化する", ({ expect }) => {
     // 準備
     // 小さな Buffer は Node.js の共有プールを参照するため、共有域の公開を避けて複写する。
     const pooled = Buffer.from([1, 2, 3]);
 
     // 実行
-    const result = toOwnedView(pooled);
+    const result = toOwnedBytes(pooled);
 
     // 検証
     expect(result).not.toBe(pooled);
@@ -26,7 +26,7 @@ describe("toOwnedView", () => {
     const empty = Buffer.alloc(0);
 
     // 実行
-    const result = toOwnedView(empty);
+    const result = toOwnedBytes(empty);
 
     // 検証
     expect(result).not.toBe(empty);
@@ -42,7 +42,7 @@ describe("toOwnedView", () => {
     dedicated.set([1, 2, 3, 4]);
 
     // 実行
-    const result = toOwnedView(dedicated);
+    const result = toOwnedBytes(dedicated);
 
     // 検証
     expect(result).not.toBe(dedicated);
@@ -59,7 +59,7 @@ describe("toOwnedView", () => {
     shared.set([5, 6, 7, 8]);
 
     // 実行
-    const result = toOwnedView(shared);
+    const result = toOwnedBytes(shared);
 
     // 検証
     expect(result).not.toBe(shared);

@@ -35,9 +35,14 @@ const test = vitest.extend<{
 });
 
 describe("境界サイズと特殊パターンの往復", () => {
-  test("0 バイトから 1 KiB までの入力で元のデータに戻る", async ({ boundaryInputs, expect }) => {
+  test("0 バイトから 1 KiB までの入力で元のデータに戻る", async ({
+    boundaryInputs,
+    expect,
+    signal,
+  }) => {
     // 準備
     const target = new ZstdNode();
+    await target.open({ signal });
 
     // 実行と検証
     for (const [label, input] of boundaryInputs) {
@@ -47,9 +52,10 @@ describe("境界サイズと特殊パターンの往復", () => {
     }
   });
 
-  test("1 MiB のランダムデータを往復しても元のデータに戻る", async ({ expect }) => {
+  test("1 MiB のランダムデータを往復しても元のデータに戻る", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
+    await target.open({ signal });
     const input = createPseudoRandomBytes(1024 * 1024, 4);
 
     // 実行

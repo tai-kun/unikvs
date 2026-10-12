@@ -1,6 +1,7 @@
 import type { MaybePromise } from "maypromise";
 
 import type { ErrorBase } from "./errors.js";
+import type { IReadableStream, IWritableStream } from "./interface.types.js";
 import type { Variables } from "./variables.types.js";
 
 /**
@@ -218,22 +219,12 @@ export namespace IStorage {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
  */
-export interface IWritableStream<TData = any> extends WritableStream<TData> {}
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
- */
 export interface IWritableStreamStorage<TData = any> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
    */
   getWritable(args: IStorage.GetWritableArgs): MaybePromise<IWritableStream<TData>>;
 }
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
- */
-export interface IReadableStream<TData = any> extends ReadableStream<TData> {}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)

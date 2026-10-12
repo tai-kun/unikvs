@@ -1,14 +1,14 @@
 import { describe, test } from "vitest";
 
-import toOwnedView from "../src/to-owned-view.js";
+import toOwnedBytes from "../src/to-owned-bytes.js";
 
-describe("toOwnedView", () => {
+describe("toOwnedBytes", () => {
   test("所有済みなら複写せず同一参照を返す", ({ expect }) => {
     // 準備
     const owned = new Uint8Array([9, 8, 7]);
 
     // 実行
-    const result = toOwnedView(owned);
+    const result = toOwnedBytes(owned);
 
     // 検証
     expect(result).toBe(owned);
@@ -20,7 +20,7 @@ describe("toOwnedView", () => {
     const owned = new Uint8Array(0);
 
     // 実行
-    const result = toOwnedView(owned);
+    const result = toOwnedBytes(owned);
 
     // 検証
     expect(result).toBe(owned);
@@ -34,7 +34,7 @@ describe("toOwnedView", () => {
     const child = new ChildBytes([5, 6, 7]);
 
     // 実行
-    const result = toOwnedView(child);
+    const result = toOwnedBytes(child);
 
     // 検証
     expect(result).not.toBe(child);
@@ -50,7 +50,7 @@ describe("toOwnedView", () => {
     const partial = new Uint8Array([0, 1, 2, 3, 4]).subarray(1, 4);
 
     // 実行
-    const result = toOwnedView(partial);
+    const result = toOwnedBytes(partial);
 
     // 検証
     expect(result).not.toBe(partial);
@@ -66,7 +66,7 @@ describe("toOwnedView", () => {
     view.set([7, 8]);
 
     // 実行
-    const result = toOwnedView(view);
+    const result = toOwnedBytes(view);
 
     // 検証
     expect(result).not.toBe(view);
@@ -90,7 +90,7 @@ describe("toOwnedView", () => {
     });
 
     // 実行
-    const result = toOwnedView(foreign);
+    const result = toOwnedBytes(foreign);
 
     // 検証
     expect(result === foreign).toBe(false);

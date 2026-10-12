@@ -33,6 +33,7 @@
     "fast-utf8": "0.0.7",
     "filename-reserved-regex": "4.0.1",
     "i18n-error-base": "0.0.7",
+    "ninja-promise": "0.0.5",
     "try-capture-stack-trace": "0.0.3"
   },
   "devDependencies": {

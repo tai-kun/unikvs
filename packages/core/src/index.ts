@@ -23,6 +23,8 @@ export {
   UnsupportedRuntimeError,
 } from "./errors.js";
 
+export type * from "./interface.types.js";
+
 export type * from "./storage.types.js";
 
 export type * from "./transformer.types.js";

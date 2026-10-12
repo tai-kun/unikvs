@@ -1,12 +1,13 @@
 minimumReleaseAge: 10080 # 7 日
 minimumReleaseAgeExclude:
-  - blume
   - "@scalar/astro@0.4.21"
   - "@scalar/client-side-rendering@0.4.3"
   - "@scalar/helpers@0.13.0"
   - "@scalar/schemas@0.11.0"
   - "@scalar/types@0.21.0"
   - "@scalar/validation@0.6.4"
+  - abort-signal-utils
+  - blume
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:

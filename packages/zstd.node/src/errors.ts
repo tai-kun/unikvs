@@ -1,23 +1,8 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
- */
-export class ZstdNodeDecompressError extends ErrorBase<undefined> {
-  static {
-    this.prototype.name = "UniKvsZstdNodeDecompressError";
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
-   */
-  public constructor(options?: ErrorOptions) {
-    super("Failed to decompress the zstd data", options);
-  }
-}
-
-setErrorMessage(ZstdNodeDecompressError, "zstd データの展開に失敗しました", "ja");
+export type { UnsupportedRuntimeErrorArgs, UnsupportedRuntimeErrorMeta } from "@unikvs/core";
+export { UnsupportedRuntimeError } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
@@ -37,7 +22,7 @@ export type ZstdNodeInvalidLevelErrorArgs = ErrorOptions & ZstdNodeInvalidLevelE
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
  */
-export class ZstdNodeInvalidLevelError extends ErrorBase<ZstdNodeInvalidLevelErrorMeta> {
+export class ZstdNodeInvalidLevelError extends InvalidUsageErrorBase<ZstdNodeInvalidLevelErrorMeta> {
   static {
     this.prototype.name = "UniKvsZstdNodeInvalidLevelError";
   }
@@ -57,6 +42,3 @@ setErrorMessage(
   ({ actual }) => `無効な zstd 圧縮レベル: ${inspect(actual)}`,
   "ja",
 );
-
-export type { UnsupportedRuntimeErrorArgs, UnsupportedRuntimeErrorMeta } from "@unikvs/core";
-export { UnsupportedRuntimeError } from "@unikvs/core";

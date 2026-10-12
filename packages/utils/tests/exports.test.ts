@@ -8,7 +8,8 @@ import { InvalidDirnameError, InvalidFilenameError } from "../src/errors.js";
 import * as index from "../src/index.js";
 import isValidDirname from "../src/is-valid-dirname.js";
 import isValidFilename from "../src/is-valid-filename.js";
-import toOwnedView from "../src/to-owned-view.js";
+import proxyTransformStream from "../src/proxy-transform-stream.js";
+import toOwnedBytes from "../src/to-owned-bytes.js";
 import toReadableStream from "../src/to-readable-stream.js";
 import withReadableStreamFrom from "../src/with-readable-stream-from.js";
 
@@ -21,7 +22,8 @@ describe("index のエクスポート", () => {
     expect(index.chunks).toBe(chunks);
     expect(index.isValidDirname).toBe(isValidDirname);
     expect(index.isValidFilename).toBe(isValidFilename);
-    expect(index.toOwnedView).toBe(toOwnedView);
+    expect(index.toOwnedBytes).toBe(toOwnedBytes);
+    expect(index.proxyTransformStream).toBe(proxyTransformStream);
     expect(index.toReadableStream).toBe(toReadableStream);
     expect(index.withReadableStreamFrom).toBe(withReadableStreamFrom);
   });

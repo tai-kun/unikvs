@@ -6,8 +6,4 @@ export type {
   ZstdNodeInvalidLevelErrorArgs,
   ZstdNodeInvalidLevelErrorMeta,
 } from "./errors.js";
-export {
-  UnsupportedRuntimeError,
-  ZstdNodeDecompressError,
-  ZstdNodeInvalidLevelError,
-} from "./errors.js";
+export { UnsupportedRuntimeError, ZstdNodeInvalidLevelError } from "./errors.js";

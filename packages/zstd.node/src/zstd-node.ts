@@ -1,43 +1,10 @@
-import type { ITransformer } from "@unikvs/core";
-import { toOwnedView } from "@unikvs/utils";
-import { callAsyncableFnOnce } from "call-fn-once";
+import type { ITransformer, ITransformStream } from "@unikvs/core";
+import { toOwnedBytes, proxyTransformStream } from "@unikvs/utils";
+import { toAbortPromise } from "abort-signal-utils";
+import { callAbortableFnOnce } from "call-fn-once";
 
-import { zlibBridge } from "./_zlib.js";
-import {
-  UnsupportedRuntimeError,
-  ZstdNodeDecompressError,
-  ZstdNodeInvalidLevelError,
-} from "./errors.js";
-
-// node:zlib の解決結果を保持するキャッシュです。
-// 同一キーへの同時呼び出しは同一の promise を共有します。
-const zlibCache: callAsyncableFnOnce.CacheMap = new Map();
-
-// node:zlib を遅延解決します。
-// 解決は初回のみ実行し、失敗時はキャッシュを破棄して再試行できるようにします。
-async function loadZlib(): Promise<typeof import("node:zlib")> {
-  try {
-    return await callAsyncableFnOnce(zlibCache, "zlib", async () => {
-      const zlib = await zlibBridge.load();
-
-      // 理由: zstd に対応しない Node.js ではプロパティーが未定義になるため、実行時に検出します。
-      if (
-        typeof zlib.zstdCompressSync !== "function" ||
-        typeof zlib.zstdDecompressSync !== "function"
-      ) {
-        throw new UnsupportedRuntimeError({ name: "ZstdNode", runtime: "Node.js" });
-      }
-
-      return zlib;
-    });
-  } catch (error) {
-    if (error instanceof UnsupportedRuntimeError) {
-      throw error;
-    }
-
-    throw new UnsupportedRuntimeError({ name: "ZstdNode", runtime: "Node.js", cause: error });
-  }
-}
+import { type IEnv, api } from "./_core.js";
+import { UnsupportedRuntimeError, ZstdNodeInvalidLevelError } from "./errors.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
@@ -49,29 +16,60 @@ export type ZstdNodeOptions = {
   readonly level?: number | undefined;
 };
 
+function toOwnedBytesTransformStream(
+  transform: ITransformStream<Buffer, Buffer>,
+): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  return proxyTransformStream(
+    transform,
+    (chunk: Uint8Array<ArrayBuffer>, controller) => {
+      const buffer = Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      controller.enqueue(buffer);
+    },
+    (buffer: Buffer, controller) => {
+      const chunk = toOwnedBytes(buffer);
+      controller.enqueue(chunk);
+    },
+  );
+}
+
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
  */
 export default class ZstdNode implements ITransformer {
   /**
+   * 実行環境の解決結果を保持するキャッシュです。
+   */
+  private static readonly cache: callAbortableFnOnce.CacheMap = new Map();
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "ZstdNode";
 
-  // 圧縮レベルを保持します。
+  /**
+   * 実行環境です。
+   */
+  private env: IEnv | null;
+
+  /**
+   * 圧縮レベルです。
+   */
   private readonly level: number;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
   public constructor(options: ZstdNodeOptions = {}) {
-    const level = options.level ?? 3;
-
-    if (typeof level !== "number" || !Number.isInteger(level) || level < 1 || level > 22) {
-      throw new ZstdNodeInvalidLevelError({ actual: options.level });
+    const { level = 3 } = options;
+    const isValidLevel =
+      Number.isInteger(level) && Number.isInteger(level) && level >= 1 && level <= 22;
+    if (!isValidLevel) {
+      throw new ZstdNodeInvalidLevelError({ actual: level });
     }
 
-    this.name = "ZstdNode";
+    this.env = null;
     this.level = level;
   }
 
@@ -79,7 +77,34 @@ export default class ZstdNode implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
   public get isOpen(): boolean {
-    return true;
+    return this.env !== null;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+   */
+  public async open(args: Pick<ITransformer.OpenArgs, "signal">): Promise<void> {
+    const { signal } = args;
+    try {
+      this.env = await callAbortableFnOnce(
+        ZstdNode.cache,
+        "api.init",
+        async (signal) => {
+          using abortPrommise = toAbortPromise(signal);
+          const env = await Promise.race([api.init(), abortPrommise]);
+
+          return env;
+        },
+        signal,
+      );
+    } catch (ex) {
+      signal.throwIfAborted();
+      throw new UnsupportedRuntimeError({
+        name: "ZstdNode",
+        cause: ex,
+        runtime: "Node.js",
+      });
+    }
   }
 
   /**
@@ -88,10 +113,13 @@ export default class ZstdNode implements ITransformer {
   public async encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Promise<Uint8Array<ArrayBuffer>> {
-    const zlib = await loadZlib();
-    const view = zlibBridge.compress(zlib, args.data, this.level);
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { data } = args;
+    const buffer = await api.compress(env, data, {
+      level: this.level,
+    });
 
-    return toOwnedView(view);
+    return toOwnedBytes(buffer);
   }
 
   /**
@@ -100,15 +128,32 @@ export default class ZstdNode implements ITransformer {
   public async decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Promise<Uint8Array<ArrayBuffer>> {
-    const zlib = await loadZlib();
-    let view: Uint8Array;
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { data } = args;
+    const buffer = await api.decompress(env, data);
 
-    try {
-      view = zlibBridge.decompress(zlib, args.data);
-    } catch (error) {
-      throw new ZstdNodeDecompressError({ cause: error });
-    }
+    return toOwnedBytes(buffer);
+  }
 
-    return toOwnedView(view);
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+   */
+  public getEncodable(): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const transform = api.createCompress(env, {
+      level: this.level,
+    });
+
+    return toOwnedBytesTransformStream(transform);
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+   */
+  public getDecodable(): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const transform = api.createDecompress(env);
+
+    return toOwnedBytesTransformStream(transform);
   }
 }
