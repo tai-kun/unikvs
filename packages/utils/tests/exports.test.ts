@@ -4,6 +4,7 @@ import assertValidDirname from "../src/assert-valid-dirname.js";
 import assertValidFilename from "../src/assert-valid-filename.js";
 import bytesToHex from "../src/bytes-to-hex.js";
 import chunks from "../src/chunks.js";
+import { defaultUtf8Decoder, defaultUtf8Encoder } from "../src/default-utf8.js";
 import { InvalidDirnameError, InvalidFilenameError } from "../src/errors.js";
 import * as index from "../src/index.js";
 import isValidDirname from "../src/is-valid-dirname.js";
@@ -20,6 +21,8 @@ describe("index のエクスポート", () => {
     expect(index.assertValidFilename).toBe(assertValidFilename);
     expect(index.bytesToHex).toBe(bytesToHex);
     expect(index.chunks).toBe(chunks);
+    expect(index.defaultUtf8Decoder).toBe(defaultUtf8Decoder);
+    expect(index.defaultUtf8Encoder).toBe(defaultUtf8Encoder);
     expect(index.isValidDirname).toBe(isValidDirname);
     expect(index.isValidFilename).toBe(isValidFilename);
     expect(index.toOwnedBytes).toBe(toOwnedBytes);

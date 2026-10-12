@@ -1,21 +1,8 @@
 import type { ITransformer } from "@unikvs/core";
-import { bytesToHex } from "@unikvs/utils";
-import { FastUtf8 } from "fast-utf8";
+import { bytesToHex, defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
+import type { FastUtf8 } from "fast-utf8";
 
 import { HexDecodeError } from "./errors.js";
-
-// エンコード用の共有インスタンスです。
-// 入力は bytesToHex の出力 (ASCII のみ) のため strict 検証は不要です。
-// 注入がない場合の既定値として使います。
-const defaultUtf8Encoder = /*#__PURE__*/ new FastUtf8({
-  strict: false,
-  allocateSize: 1024,
-});
-
-// 一括デコード用の共有インスタンスです。
-// 不正な入力は TextDecoder の fatal 相当として TypeError を投げます。
-// 注入がない場合の既定値として使います。
-const defaultUtf8Decoder = /*#__PURE__*/ new FastUtf8({ strict: true });
 
 /**
  * 文字コードからニブル値へ変換します。
@@ -160,10 +147,10 @@ export default class Hex implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#streams)
    */
   public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    // 注入された decoder の strict 設定のみを引き継いでストリーム毎に新規作成します。
+    // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
     // ignoreBOM:true 注入時は引き継がないため BOM単体 [EF BB BF] は一括 HexDecodeError・ストリーム空成功に分岐します。
-    const utf8 = new FastUtf8({ strict: this.decoder.strict });
+    const utf8 = this.decoder.clone({ ignoreBOM: false });
     let carry = "";
 
     return new TransformStream({

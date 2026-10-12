@@ -159,6 +159,21 @@ const owned = toOwnedBytes(new Uint8Array([1, 2, 3]));
 const fromBuffer = toOwnedBytes(Buffer.allocUnsafeSlow(3));
 ```
 
+### defaultUtf8Encoder / defaultUtf8Decoder [#default-utf8]
+
+```ts
+const defaultUtf8Encoder: FastUtf8;
+const defaultUtf8Decoder: FastUtf8;
+```
+
+Shared UTF-8 instances used when no instance is injected. `defaultUtf8Encoder` is for encoding, and `defaultUtf8Decoder` is for one-shot decoding.
+
+```ts
+import { defaultUtf8Encoder } from "@unikvs/utils";
+
+const bytes = defaultUtf8Encoder.encode("hello");
+```
+
 ## Stream conversion [#streams]
 
 Converts and relays streams.

@@ -96,6 +96,22 @@ describe("コンストラクター注入", () => {
     expect(error).not.toBeInstanceOf(TypeError);
   });
 
+  test("ストリームは ignoreBOM を引き継がず BOM 単体は空成功する", async ({ expect }) => {
+    // 準備
+    const target = new Hex({
+      decoder: new FastUtf8({ strict: true, ignoreBOM: true }),
+    });
+    const bom = Uint8Array.from([0xef, 0xbb, 0xbf]);
+
+    // 実行
+    const single = await pumpThrough(target.getDecodable(), [bom]);
+
+    // 検証
+    expect(single.writeError).toBeUndefined();
+    expect(single.readError).toBeUndefined();
+    expect(single.outputChunks).toStrictEqual([]);
+  });
+
   test("並行する 2 つのデコードストリームは互いに干渉しない", async ({ expect }) => {
     // 準備
     const target = new Hex({ decoder: new FastUtf8({ strict: true }) });

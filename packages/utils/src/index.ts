@@ -10,6 +10,8 @@ export { default as bytesToHex } from "./bytes-to-hex.js";
 export type * from "./chunks.js";
 export { default as chunks } from "./chunks.js";
 
+export { defaultUtf8Decoder, defaultUtf8Encoder } from "./default-utf8.js";
+
 export type {
   InvalidDirnameErrorArgs,
   InvalidDirnameErrorMeta,

@@ -8,6 +8,7 @@ minimumReleaseAgeExclude:
   - "@scalar/validation@0.6.4"
   - abort-signal-utils
   - blume
+  - fast-utf8
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
 trustPolicyExclude:

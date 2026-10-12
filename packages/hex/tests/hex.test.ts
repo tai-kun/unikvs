@@ -1,3 +1,4 @@
+import { FastUtf8 } from "fast-utf8";
 import { describe, test } from "vitest";
 
 import { HexDecodeError } from "../src/errors.js";
@@ -187,6 +188,27 @@ describe("デコードの受理系", () => {
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
+  });
+
+  test("BOM 単体は既定で空にデコードされる", ({ expect }) => {
+    // 準備
+    const input = Uint8Array.from([0xef, 0xbb, 0xbf]);
+
+    // 実行
+    const output = hex.decode({ data: input });
+
+    // 検証
+    expect(output).toStrictEqual(new Uint8Array(0));
+  });
+
+  test("ignoreBOM 注入時の BOM 単体は HexDecodeError で拒否される", ({ expect }) => {
+    // 準備
+    const target = new Hex({ decoder: new FastUtf8({ strict: true, ignoreBOM: true }) });
+
+    // 実行と検証
+    expect(() => target.decode({ data: Uint8Array.from([0xef, 0xbb, 0xbf]) })).toThrow(
+      HexDecodeError,
+    );
   });
 });
 

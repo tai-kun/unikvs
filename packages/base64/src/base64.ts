@@ -1,20 +1,8 @@
 import type { ITransformer } from "@unikvs/core";
-import { FastUtf8 } from "fast-utf8";
+import { defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
+import type { FastUtf8 } from "fast-utf8";
 
 import { Base64DecodeError, Base64InvalidPaddingError } from "./errors.js";
-
-// エンコード用の共有インスタンスです。
-// 入力は base64 alphabet の ASCII のみのため strict 検証は不要です。
-// 注入がない場合の既定値として使います。
-const defaultUtf8Encoder = /*#__PURE__*/ new FastUtf8({
-  strict: false,
-  allocateSize: 1024,
-});
-
-// 一括デコード用の共有インスタンスです。
-// 不正な入力は TextDecoder の fatal 相当として TypeError を投げます。
-// 注入がない場合の既定値として使います。
-const defaultUtf8Decoder = /*#__PURE__*/ new FastUtf8({ strict: true });
 
 // base64 の alphabet です。
 // RFC 4648 §4 の 64 文字であり、`+` と `/` を含みます。
@@ -316,11 +304,11 @@ export default class Base64 implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#streams)
    */
   public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    // 注入された decoder の strict 設定のみを引き継いでストリーム毎に新規作成します。
+    // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 設計の const strict 中間変数と同義のインラインであり、hex と同形です。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
     // ignoreBOM:true 注入時は引き継がないため BOM単体 [0xEF, 0xBB, 0xBF] は一括 Base64DecodeError・ストリーム空成功に分岐します。
-    const utf8 = new FastUtf8({ strict: this.decoder.strict });
+    const utf8 = this.decoder.clone({ ignoreBOM: false });
     let carry = "";
     let paddedTail = "";
     let seenPadding = false;

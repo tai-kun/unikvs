@@ -159,6 +159,21 @@ const owned = toOwnedBytes(new Uint8Array([1, 2, 3]));
 const fromBuffer = toOwnedBytes(Buffer.allocUnsafeSlow(3));
 ```
 
+### defaultUtf8Encoder / defaultUtf8Decoder [#default-utf8]
+
+```ts
+const defaultUtf8Encoder: FastUtf8;
+const defaultUtf8Decoder: FastUtf8;
+```
+
+注入がない場合に使う共有 UTF-8 インスタンスです。`defaultUtf8Encoder` はエンコード用、`defaultUtf8Decoder` は一括デコード用です。
+
+```ts
+import { defaultUtf8Encoder } from "@unikvs/utils";
+
+const bytes = defaultUtf8Encoder.encode("hello");
+```
+
 ## ストリーム変換 [#streams]
 
 ストリームの変換や中継を行います。

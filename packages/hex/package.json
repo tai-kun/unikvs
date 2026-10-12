@@ -35,7 +35,7 @@
   "dependencies": {
     "@unikvs/core": "workspace:*",
     "@unikvs/utils": "workspace:*",
-    "fast-utf8": "^0.0.7"
+    "fast-utf8": "^0.0.8"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",

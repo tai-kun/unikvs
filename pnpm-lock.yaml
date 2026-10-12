@@ -90,9 +90,12 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       fast-utf8:
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2))
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5
@@ -139,9 +142,12 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/utils':
+        specifier: workspace:*
+        version: link:../utils
       fast-utf8:
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2))
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5
@@ -529,8 +535,8 @@ importers:
         specifier: workspace:*
         version: link:../utils
       fast-utf8:
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2))
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5
@@ -1183,8 +1189,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       fast-utf8:
-        specifier: ^0.0.7
-        version: 0.0.7
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2))
       filename-reserved-regex:
         specifier: ^4.0.1
         version: 4.0.1
@@ -4598,6 +4604,12 @@ packages:
 
   fast-utf8@0.0.7:
     resolution: {integrity: sha512-tx02jdpgf/ZkDijnvFiOdRzgn0AYLtK+duvK/9Q57iaAigxJSDfmTnIe0rO9wF6bnYLNQEpBWhZFWRDFlxD+EQ==}
+
+  fast-utf8@0.0.8:
+    resolution: {integrity: sha512-wJMEvBlirXQmCdKmFQXxf8iIPjN/dDe5zvHaMZQEQcXlojW4iYT6f8yRauLBg8VQWV6GQE+jC8bGw4iB9O1ARg==}
+    peerDependencies:
+      '@logtape/logtape': ^2.0.0
+      valibot: ^1.0.0
 
   fast-wrap-ansi@0.2.2:
     resolution: {integrity: sha512-7F2Fl+TjRSenLqlU3UjSH0iyqopqoZIu7eZVpEirP2g1GtWa2G/ecEmBdgz31+Mxr+ELclgg6sokpSFIQiZ02Q==}
@@ -9785,6 +9797,11 @@ snapshots:
   fast-utf8@0.0.7:
     dependencies:
       try-capture-stack-trace: 0.0.3
+
+  fast-utf8@0.0.8(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2)):
+    dependencies:
+      '@logtape/logtape': 2.0.0
+      valibot: 1.0.0(typescript@7.0.2)
 
   fast-wrap-ansi@0.2.2:
     dependencies:
