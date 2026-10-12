@@ -66,6 +66,8 @@ jobs:
             directory: "packages/http"
           - name: "localstorage"
             directory: "packages/localstorage"
+          - name: "session-storage"
+            directory: "packages/session-storage"
           - name: "hex"
             directory: "packages/hex"
           - name: "base64"

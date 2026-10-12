@@ -28,6 +28,7 @@
     "packages/indexeddb",
     "packages/http",
     "packages/localstorage",
+    "packages/session-storage",
     "packages/hex",
     "packages/base64",
     "packages/base64url",

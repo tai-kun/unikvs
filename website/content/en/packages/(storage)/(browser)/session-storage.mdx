@@ -1,0 +1,146 @@
+---
+title: "@unikvs/session-storage"
+description: "Explains how to use the storage plugin that saves strings in the browser's sessionStorage."
+---
+
+## Overview [#overview]
+
+<Badge variant="warning">Browser only</Badge>
+
+`@unikvs/session-storage` is a storage plugin that saves strings in the browser's `sessionStorage`.
+
+Use it to temporarily store small strings such as in-tab state and wizard input.
+
+- `name` always returns `"SessionStorage"` and `isOpen` is always `true`. `open` only checks availability, and `close` only validates aborts.
+- Reads and writes finish synchronously, and stream operations are not supported.
+- Every key is stored with a `keyPrefix`. The default is `"unikvs:"`.
+- Within the same tab, instances share the data. Data is cleared when the tab is closed.
+
+:::warning
+With an empty `keyPrefix`, `clear` is contracted to erase the whole `sessionStorage`. Always specify a unique prefix for shared `sessionStorage`.
+:::
+
+Install with the following command.
+
+```package-install
+npm install @unikvs/session-storage
+```
+
+## Usage [#usage]
+
+`SessionStorage` implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { SessionStorage } from "@unikvs/session-storage";
+```
+
+The constructor arguments are as follows.
+
+<TypeTable
+  type={{
+    options: {
+      type: "SessionStorageOptions",
+      description: "Settings for the prefix and the `Storage` to use. Uses defaults when omitted.",
+    },
+    "options.keyPrefix": {
+      type: "string",
+      default: '"unikvs:"',
+      description: "Prefix added to every key. Limits the deletion scope of `clear`.",
+    },
+    "options.allowClearWithoutPrefix": {
+      type: "boolean",
+      default: "false",
+      description: "Whether to allow `clear` with an empty `keyPrefix`.",
+    },
+    "options.storage": {
+      type: "Storage",
+      default: "globalThis.sessionStorage",
+      description: "The `Storage` to use. Inject an alternative implementation for SSR and tests.",
+    },
+  }}
+/>
+
+Below is an example of saving a value and reading it back.
+
+```ts
+import { SessionStorage } from "@unikvs/session-storage";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .persist(new SessionStorage())
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation       | Supported data type |
+| --------------- | ------------------- |
+| `write`・`read` | Strings             |
+
+- `write` and `read` support strings only, passing values directly to `setItem` and `getItem`.
+- To store objects, stringify them on the caller side before passing.
+- `write`, `read`, `exists`, `delete`, and `clear` are all synchronous.
+- Stream operations are not supported. There is no `getWritable` or `getReadable`.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### KeyNotFoundError
+
+#### Meaning
+
+The specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to handle
+
+Check with `exists` before reading, or verify the key spelling.
+
+#### Example
+
+Below is an example of catching `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError, SessionStorage } from "@unikvs/session-storage";
+
+const storage = new SessionStorage();
+
+try {
+  storage.read({ key: "missing" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+### ClearWithoutPrefixNotAllowedError
+
+#### Meaning
+
+`clear` was called with an empty `keyPrefix` without permission.
+
+#### How to handle
+
+Specify a unique `keyPrefix`, or pass `allowClearWithoutPrefix: true`.
+
+### SessionStorageNotAvailableError
+
+#### Meaning
+
+No usable `sessionStorage` exists. Caused by operating outside the browser without an injected `Storage`.
+
+#### How to handle
+
+Inject an alternative implementation into `storage`, or operate only in the browser.

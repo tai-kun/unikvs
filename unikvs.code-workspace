@@ -49,6 +49,10 @@
       "path": "packages/localstorage",
     },
     {
+      "name": "@unikvs/session-storage",
+      "path": "packages/session-storage",
+    },
+    {
       "name": "@unikvs/fs.node",
       "path": "packages/fs.node",
     },
