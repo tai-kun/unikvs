@@ -105,6 +105,41 @@ export namespace ITransformer {
      */
     signal: AbortSignal;
   };
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  export type MapKeyArgs = {
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    vars: Variables;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    key: string;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    signal: AbortSignal;
+  };
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  export type ClearArgs = {
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    vars: Variables;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    signal: AbortSignal;
+  };
 }
 
 /**
@@ -150,6 +185,26 @@ export interface IDecodableStreamTransformer<TChunkInput = any, TChunkOutput = a
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
  */
+export interface IKeyMappableTransformer {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  mapKey(args: ITransformer.MapKeyArgs): MaybePromise<string>;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+ */
+export interface IClearHookTransformer {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  onClear(args: ITransformer.ClearArgs): MaybePromise<void>;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+ */
 export interface ITransformer<
   TEncodeDataInput = any,
   TDecodeDataInput = any,
@@ -162,7 +217,9 @@ export interface ITransformer<
 >
   extends
     Partial<IEncodableStreamTransformer<TEncodeChunkInput, TEncodeChunkOutput>>,
-    Partial<IDecodableStreamTransformer<TDecodeChunkInput, TDecodeChunkOutput>> {
+    Partial<IDecodableStreamTransformer<TDecodeChunkInput, TDecodeChunkOutput>>,
+    Partial<IKeyMappableTransformer>,
+    Partial<IClearHookTransformer> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */

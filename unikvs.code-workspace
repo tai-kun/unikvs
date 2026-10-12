@@ -137,6 +137,10 @@
       "path": "packages/allow-repair",
     },
     {
+      "name": "@unikvs/key-prefix",
+      "path": "packages/key-prefix",
+    },
+    {
       "name": "website",
       "path": "website",
     },

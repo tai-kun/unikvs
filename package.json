@@ -34,6 +34,7 @@
     "packages/base64url",
     "packages/v8-serde",
     "packages/allow-repair",
+    "packages/key-prefix",
     "packages/testing",
     "unikvs"
   ],

@@ -78,6 +78,8 @@ jobs:
             directory: "packages/v8-serde"
           - name: "allow-repair"
             directory: "packages/allow-repair"
+          - name: "key-prefix"
+            directory: "packages/key-prefix"
           - name: "testing"
             directory: "packages/testing"
           - name: "unikvs"

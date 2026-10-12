@@ -129,4 +129,28 @@ export default class UniKvsTransformer {
 
     return parsed;
   }
+
+  public async mapKey(vars: Variables, signal: AbortSignal, key: string): Promise<string> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.mapKey !== "function") {
+      return key;
+    }
+
+    return await this.tf.mapKey({ key, vars, signal });
+  }
+
+  public async onClear(vars: Variables, signal: AbortSignal): Promise<void> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.onClear !== "function") {
+      return;
+    }
+
+    await this.tf.onClear({ vars, signal });
+  }
 }
