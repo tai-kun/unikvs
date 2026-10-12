@@ -1,6 +1,6 @@
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import { JsonUnsupportedValueError } from "../src/index.js";
 import Json from "../src/json.js";
 
@@ -9,8 +9,6 @@ import Json from "../src/json.js";
  * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
  *
  * valibot は json の直接依存ではないため、@unikvs/core が使う実体を
- * 明示的に参照しています。ブラウザーでモジュール実体が分かれないよう、
- * vitest.client.ts の optimizeDeps から valibot を除外しています。
  */
 const test = vitest.extend<{
   setLang: (lang: string) => void;

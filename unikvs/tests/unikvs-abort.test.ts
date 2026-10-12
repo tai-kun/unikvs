@@ -508,8 +508,11 @@ describe("UniKvs - open のロック待機中の abort", () => {
 
     // 検証: Set に追加されていれば close() の一括 abort に巻き込まれる
     await expect(kvs.close()).rejects.toThrow(UniKvsIsNotOpenError);
-    expect(created).toHaveLength(1);
-    expect(created[0]!.signal.aborted).toBe(false);
+    // combineSignals が中断済み入力のために内部で AbortController を生成する場合があるため、
+    // 未中断のものだけを対象に Set への追加漏れを検証します。
+    const notAborted = created.filter((ac) => !ac.signal.aborted);
+    expect(notAborted).toHaveLength(1);
+    expect(notAborted[0]!.signal.aborted).toBe(false);
   });
 });
 

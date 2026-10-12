@@ -1,7 +1,7 @@
 import { captureRejection } from "@unikvs/testing";
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from "../src/errors.js";
 
 /**

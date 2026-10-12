@@ -1,9 +1,6 @@
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-// valibot は @unikvs/core の peerDependency であり @unikvs/lru-cache からは解決できないため、
-// core の node_modules を直接参照して言語設定を切り替えます。
-// ブラウザーでモジュール実体が分かれないよう、vitest.client.ts の optimizeDeps から valibot を除外しています。
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import {
   InvalidChunkTypeError,
   InvalidMaxBytesError,

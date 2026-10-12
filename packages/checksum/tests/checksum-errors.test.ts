@@ -1,8 +1,8 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { Variables } from "@unikvs/core";
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import {
   Checksum,
   ChecksumInvalidRequiredError,
@@ -16,10 +16,6 @@ import {
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
  * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
- *
- * valibot は checksum の直接依存ではないため、@unikvs/core が使う実体を
- * 明示的に参照しています。ブラウザーでは読み込まれるモジュール実体が
- * 分かれるため、日本語メッセージの検証はサーバーでのみ行います。
  */
 const test = vitest.extend<{
   setLang: (lang: string) => void;
@@ -60,7 +56,7 @@ describe("ChecksumMismatchError", () => {
     expect(error.message).toBe("Expected bbbb, but got aaaa");
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 準備
     const error = new ChecksumMismatchError({ actual: "aaaa", expected: "bbbb" });
 
@@ -125,7 +121,7 @@ describe("ChecksumRequiredError", () => {
     expect(error.message).toBe("Checksum is required");
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 実行
     const error = new ChecksumRequiredError();
     setLang("ja");
@@ -186,7 +182,7 @@ describe("ChecksumInvalidVarNameError", () => {
     expect(error.message).toBe("Invalid vars key: 42");
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 実行
     const error = new ChecksumInvalidVarNameError({ actual: 42 });
     setLang("ja");
@@ -219,7 +215,7 @@ describe("ChecksumInvalidRequiredError", () => {
     expect(error.cause).toBe(cause);
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 準備
     const error = new ChecksumInvalidRequiredError({ actual: null });
 

@@ -351,7 +351,7 @@ describe("複合値のラウンドトリップ", () => {
     ["Error", () => new Error("something went wrong"), "Error"],
     ["TypeError", () => new TypeError("bad type"), "TypeError"],
     ["RangeError", () => new RangeError("out of range"), "RangeError"],
-  ])(
+  ] as [string, () => Error, string][])(
     "%s を往復すると名前とメッセージが戻る",
     async ([_label, create, name], { expect, signal }) => {
       // 準備
@@ -380,7 +380,7 @@ describe("複合値のラウンドトリップ", () => {
     const output = await target.decode({ data: await target.encode({ data: input }) });
 
     // 検証
-    expect(output).toBeInstanceOf(input.constructor);
+    expect(output).toBeInstanceOf(input!.constructor);
     expect(output).toStrictEqual(input);
   });
 
@@ -578,7 +578,7 @@ describe("デコードの異常系", () => {
   }) => {
     // 準備: 先頭の 4 バイトは長さヘッダーのため、バージョン検査で失敗します。
     const target = await createOpenedTarget(signal);
-    const { outputChunks } = await pumpThrough(await target.getEncodable(), [1]);
+    const { outputChunks } = await pumpThrough(target.getEncodable(), [1]);
     const input = concatBytes(outputChunks);
 
     // 実行

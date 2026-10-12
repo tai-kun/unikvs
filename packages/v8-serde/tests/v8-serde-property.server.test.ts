@@ -125,7 +125,7 @@ function splitRandomly(random: Random, bytes: Uint8Array<ArrayBuffer>): Uint8Arr
  * 値を 4 バイトの長さヘッダー付きフレームへ変換します。
  */
 async function encodeFrame(target: V8Serde, data: unknown): Promise<Uint8Array<ArrayBuffer>> {
-  const { outputChunks } = await pumpThrough(await target.getEncodable(), [data]);
+  const { outputChunks } = await pumpThrough(target.getEncodable(), [data]);
 
   return concatBytes(outputChunks);
 }
@@ -159,7 +159,7 @@ describe("決定的ファズテスト", () => {
       const frame = await encodeFrame(target, value);
       const chunks = splitRandomly(random, frame);
 
-      const decoded = await pumpThrough(await target.getDecodable(), chunks);
+      const decoded = await pumpThrough(target.getDecodable(), chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();
@@ -180,7 +180,7 @@ describe("決定的ファズテスト", () => {
       const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
       const chunks = splitRandomly(random, concatBytes(frames));
 
-      const decoded = await pumpThrough(await target.getDecodable(), chunks);
+      const decoded = await pumpThrough(target.getDecodable(), chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();

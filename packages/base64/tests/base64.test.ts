@@ -142,7 +142,7 @@ describe("一括のラウンドトリップ", () => {
     const text = textDecoder.decode(target.encode({ data: input }));
 
     // 検証
-    expect(text).toMatch(/^[A-Za-z0-9+\/]*$/);
+    expect(text).toMatch(/^[A-Za-z0-9+/]*$/);
     expect(text).toContain("+");
     expect(text).toContain("/");
     expect(text).not.toContain("-");

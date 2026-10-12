@@ -1,17 +1,13 @@
 import { captureRejection, createPseudoRandomBytes } from "@unikvs/testing";
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import { ZstdWasmInitError, ZstdWasmInvalidLevelError } from "../src/errors.js";
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
  * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
- *
- * valibot は zstd の直接依存ではないため、@unikvs/core が使う実体を
- * 明示的に参照しています。ブラウザーでは読み込まれるモジュール実体が
- * 分かれるため、日本語メッセージの検証はサーバーでのみ行います。
  */
 const test = vitest.extend<{
   setLang: (lang: string) => void;
@@ -91,7 +87,7 @@ describe("ZstdWasmInitError", () => {
     expect(error.cause).toBe(cause);
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 準備
     const error = new ZstdWasmInitError();
 
@@ -126,7 +122,7 @@ describe("ZstdWasmInvalidLevelError", () => {
     expect(error.cause).toBe(cause);
   });
 
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
     // 準備
     const error = new ZstdWasmInvalidLevelError({ actual: 0 });
 

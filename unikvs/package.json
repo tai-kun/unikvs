@@ -32,7 +32,7 @@
     "@tai-kun/valibot-extra-lab": "^0.0.5",
     "@unikvs/allow-repair": "workspace:*",
     "@unikvs/core": "workspace:*",
-    "abort-signal-utils": "^0.0.4",
+    "abort-signal-utils": "^0.0.6",
     "asyncmux": "^0.0.12",
     "call-fn-once": "^0.0.6",
     "try-capture-stack-trace": "^0.0.3"

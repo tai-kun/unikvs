@@ -1,7 +1,7 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import { KeyNotFoundError, UnsupportedRuntimeError } from "../src/errors.js";
 
 /**

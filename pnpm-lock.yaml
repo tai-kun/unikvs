@@ -127,6 +127,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -179,6 +182,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -231,6 +237,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -286,6 +295,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -479,6 +491,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -568,6 +583,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -608,6 +626,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -700,6 +721,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -804,6 +828,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -856,6 +883,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -908,6 +938,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1080,6 +1113,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1117,6 +1153,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1154,6 +1193,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1240,6 +1282,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1289,6 +1334,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1390,6 +1438,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1433,6 +1484,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1479,6 +1533,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1525,6 +1582,9 @@ importers:
       npm-check-updates:
         specifier: 20.0.2
         version: 20.0.2
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1586,6 +1646,9 @@ importers:
       playwright:
         specifier: 1.63.0
         version: 1.63.0
+      valibot:
+        specifier: 1.5.0
+        version: 1.5.0(typescript@7.0.2)
       vite:
         specifier: 8.3.2
         version: 8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -1608,8 +1671,8 @@ importers:
         specifier: workspace:*
         version: link:../packages/core
       abort-signal-utils:
-        specifier: ^0.0.4
-        version: 0.0.4
+        specifier: ^0.0.6
+        version: 0.0.6(@logtape/logtape@2.3.11)
       asyncmux:
         specifier: ^0.0.12
         version: 0.0.12(@logtape/logtape@2.3.11)(valibot@1.5.0(typescript@7.0.2))
@@ -3879,9 +3942,6 @@ packages:
 
   abort-signal-utils@0.0.2:
     resolution: {integrity: sha512-dkti+X9MEn6rSbQ9mDoO9Eco9JO2eqlrvTaiJ6T/yXT8PyfT62xnX3dtmjdyEfIxonmJtav+MqmSFd71HX4S0Q==}
-
-  abort-signal-utils@0.0.4:
-    resolution: {integrity: sha512-htPCTsHMUxy0kRBAw2hLjcqlGY8zaPtmG+XYZQUDd7Q+728ZxdhZL33+KsojkFQXe1grPMomGtIFm3WCtyNlGw==}
 
   abort-signal-utils@0.0.6:
     resolution: {integrity: sha512-E/vQ1mSHE9j3eRvMGO/y78BJM3PghYwCg8X6f53+wjuZr+S4juvGZNJtr0ob/AecxrsnrRJFYq1JX+ul2vD5HA==}
@@ -8875,10 +8935,6 @@ snapshots:
       event-target-shim: 5.0.1
 
   abort-signal-utils@0.0.2:
-    dependencies:
-      try-capture-stack-trace: 0.0.3
-
-  abort-signal-utils@0.0.4:
     dependencies:
       try-capture-stack-trace: 0.0.3
 

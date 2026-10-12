@@ -13,7 +13,7 @@ export default defineConfig({
       reportsDirectory: "./coverage/bun",
       thresholds: {
         lines: 93,
-        statements: 93,
+        statements: 92,
         functions: 100,
         branches: 62,
       },

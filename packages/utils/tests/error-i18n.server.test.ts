@@ -1,6 +1,6 @@
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import assertValidDirname from "../src/assert-valid-dirname.js";
 import assertValidFilename from "../src/assert-valid-filename.js";
 import { InvalidDirnameError, InvalidFilenameError } from "../src/errors.js";

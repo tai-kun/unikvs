@@ -17,6 +17,7 @@ export default defineConfig({
       provider: "istanbul",
       enabled: true,
       include: ["src/**/*.ts"],
+      exclude: ["src/node.ts"],
       reporter: ["text", "json-summary", "lcov"],
       reportsDirectory: "./coverage/client",
       thresholds: {
