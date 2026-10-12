@@ -1,12 +1,12 @@
 import type { ITransformer } from "@unikvs/core";
 import { FastUtf8 } from "fast-utf8";
 
-import { Base64UrlDecodeError } from "./errors.js";
+import { Base64UrlDecodeError, Base64UrlInvalidPaddingError } from "./errors.js";
 
 // エンコード用の共有インスタンスです。
 // 入力は base64url alphabet の ASCII のみのため strict 検証は不要です。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Encoder = new FastUtf8({
+const defaultUtf8Encoder = /*#__PURE__*/ new FastUtf8({
   strict: false,
   allocateSize: 1024,
 });
@@ -14,7 +14,7 @@ const defaultUtf8Encoder = new FastUtf8({
 // 一括デコード用の共有インスタンスです。
 // 不正な入力は TextDecoder の fatal 相当として TypeError を投げます。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Decoder = new FastUtf8({ strict: true });
+const defaultUtf8Decoder = /*#__PURE__*/ new FastUtf8({ strict: true });
 
 // base64url の alphabet です。
 // RFC 4648 §5 の 64 文字であり、標準 base64 の `+` と `/` を含みません。
@@ -201,7 +201,7 @@ export default class Base64Url implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "Base64Url";
 
   /**
    * エンコードに使い回す実体です。
@@ -222,10 +222,14 @@ export default class Base64Url implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
    */
   public constructor(options: Base64UrlOptions = {}) {
-    this.name = "Base64Url";
-    this.encoder = options.encoder ?? defaultUtf8Encoder;
-    this.decoder = options.decoder ?? defaultUtf8Decoder;
-    this.padding = options.padding ?? false;
+    const { decoder = defaultUtf8Decoder, encoder = defaultUtf8Encoder, padding = false } = options;
+    if (typeof padding !== "boolean") {
+      throw new Base64UrlInvalidPaddingError({ actual: padding });
+    }
+
+    this.encoder = encoder;
+    this.decoder = decoder;
+    this.padding = padding;
   }
 
   /**
@@ -241,7 +245,9 @@ export default class Base64Url implements ITransformer {
   public encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    return this.encoder.encode(base64UrlEncodeText(args.data, this.padding));
+    const { data } = args;
+
+    return this.encoder.encode(base64UrlEncodeText(data, this.padding));
   }
 
   /**
@@ -250,7 +256,8 @@ export default class Base64Url implements ITransformer {
   public decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    const text = this.decoder.decode(args.data);
+    const { data } = args;
+    const text = this.decoder.decode(data);
 
     if (text.length === 0) {
       return new Uint8Array(0);

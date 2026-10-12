@@ -1,21 +1,9 @@
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import { captureRejection, createPseudoRandomBytes } from "@unikvs/testing";
 import { describe, test as vitest, vi } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
-import { wasmBridge } from "../src/_zstd-wasm.js";
-import {
-  ZstdWasmDecompressError,
-  ZstdWasmInitError,
-  ZstdWasmInvalidLevelError,
-} from "../src/errors.js";
+import { ZstdWasmInitError, ZstdWasmInvalidLevelError } from "../src/errors.js";
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";
-
-/**
- * 中断されていないシグナルを作成します。
- */
-function createSignal(): AbortSignal {
-  return new AbortController().signal;
-}
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
@@ -37,57 +25,48 @@ const test = vitest.extend<{
   },
 });
 
+// 上流モジュールの解決は open() 時に共有キャッシュで1回だけ実行されるため、
+// 解決失敗の検証はモジュールを再読み込みした新鮮な実体で行う。
+// 静的 import の実体とはキャッシュを共有しないため、後続の往復群に影響しない。
 describe("WASM 初期化の失敗", () => {
-  test("初期化失敗時は open を ZstdWasmInitError で拒否する", async ({ expect }) => {
+  test("初期化失敗時は open を ZstdWasmInitError で拒否する", async ({ expect, signal }) => {
     // 準備
-    // ファイル内では最初の初期化のため、共有キャッシュは未登録である。
-    const initSpy = vi.spyOn(wasmBridge, "init").mockRejectedValueOnce(new Error("init failure"));
+    vi.resetModules();
 
     try {
-      const target = new ZstdWasm();
+      const fresh = await import("../src/zstd-wasm.js");
+      const freshErrors = await import("../src/errors.js");
+      const freshCore = await import("../src/_core.js");
+      const cause = new Error("init failure");
+      const initSpy = vi.spyOn(freshCore.api, "init").mockRejectedValueOnce(cause);
+      const target = new fresh.default();
 
-      // 実行と検証
-      await expect(target.open({ signal: createSignal() })).rejects.toThrow(ZstdWasmInitError);
-      expect(target.isOpen).toBe(false);
-      expect(initSpy).toHaveBeenCalledTimes(1);
+      try {
+        // 実行
+        const error = await captureRejection(target.open({ signal }));
+
+        // 検証
+        // 失敗は ZstdWasmInitError で包み、原因を保持する。
+        expect(error).toBeInstanceOf(freshErrors.ZstdWasmInitError);
+        expect(
+          (error as InstanceType<typeof freshErrors.ZstdWasmInitError>).cause,
+        ).toBe(cause);
+        expect(target.isOpen).toBe(false);
+
+        // 実行と検証
+        // 失敗はキャッシュされないため、再試行では解決が再実行される。
+        await target.open({ signal });
+        const input = createPseudoRandomBytes(64, 41);
+        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        expect(decoded).toStrictEqual(input);
+        expect(target.isOpen).toBe(true);
+        expect(initSpy).toHaveBeenCalledTimes(2);
+      } finally {
+        initSpy.mockRestore();
+      }
     } finally {
-      initSpy.mockRestore();
+      vi.restoreAllMocks();
     }
-  });
-});
-
-describe("ZstdWasmDecompressError", () => {
-  test("既定では英語メッセージを返す", ({ expect }) => {
-    // 実行
-    const error = new ZstdWasmDecompressError();
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error.name).toBe("UniKvsZstdWasmDecompressError");
-    expect(error.meta).toBeUndefined();
-    expect(error.message).toBe("Failed to decompress the zstd data");
-  });
-
-  test("cause を保持する", ({ expect }) => {
-    // 準備
-    const cause = new Error("原因");
-
-    // 実行
-    const error = new ZstdWasmDecompressError({ cause });
-
-    // 検証
-    expect(error.cause).toBe(cause);
-  });
-
-  test.skipIf(__CLIENT__)("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
-    const error = new ZstdWasmDecompressError();
-
-    // 実行
-    setLang("ja");
-
-    // 検証
-    expect(error.message).toBe("zstd データの展開に失敗しました");
   });
 });
 
@@ -162,39 +141,40 @@ describe("ZstdWasmInvalidLevelError", () => {
 });
 
 describe("壊れた圧縮データの decode", () => {
-  test("圧縮データではないバイト列を ZstdWasmDecompressError で拒否する", async ({ expect }) => {
+  test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await target.open({ signal });
     const garbage = createPseudoRandomBytes(64, 21);
 
     // 実行と検証
-    await expect(target.decode({ data: garbage })).rejects.toThrow(ZstdWasmDecompressError);
+    // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
+    await expect(target.decode({ data: garbage })).rejects.toThrow(Error);
   });
 
-  test("末尾を欠いたデータを ZstdWasmDecompressError で拒否する", async ({ expect }) => {
+  test("末尾を欠いたデータをエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await target.open({ signal });
     const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 22) });
 
     // 実行と検証
     await expect(target.decode({ data: encoded.subarray(0, encoded.length - 4) })).rejects.toThrow(
-      ZstdWasmDecompressError,
+      Error,
     );
   });
 
-  test("先頭を壊したデータを ZstdWasmDecompressError で拒否する", async ({ expect }) => {
+  test("先頭を壊したデータをエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     // 末尾破壊は検出できない場合があるため、先頭のマジックバイトを壊して検証する。
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await target.open({ signal });
     const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 23) });
     const corrupted = encoded.slice();
     corrupted[0] = corrupted[0]! ^ 0xff;
 
     // 実行と検証
-    await expect(target.decode({ data: corrupted })).rejects.toThrow(ZstdWasmDecompressError);
+    await expect(target.decode({ data: corrupted })).rejects.toThrow(Error);
   });
 });
 
@@ -208,7 +188,19 @@ describe("範囲外レベルのコンストラクター", () => {
   test("無効値は ZstdWasmInvalidLevelError で拒否する", ({ expect }) => {
     // 準備
     // 本ループは拒否区分のみを扱う。有効区分は往復群とオプション節で検証する。
-    const invalidValues = [0, 23, -1, -7, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "3", true];
+    // null は既定値に吸収されず無効値として拒否される。
+    const invalidValues = [
+      0,
+      23,
+      -1,
+      -7,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "3",
+      true,
+      null,
+    ];
 
     // 実行と検証
     for (const value of invalidValues) {
@@ -221,8 +213,19 @@ describe("範囲外レベルのコンストラクター", () => {
 
   test("meta.actual に指定値をそのまま保持する", ({ expect }) => {
     // 実行と検証
-    // 拒否区分の全 9 値で指定値そのまま保持の契約を検証する。
-    for (const value of [0, 23, -1, -7, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "3", true]) {
+    // 拒否区分の全 10 値で指定値そのまま保持の契約を検証する。
+    for (const value of [
+      0,
+      23,
+      -1,
+      -7,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      "3",
+      true,
+      null,
+    ]) {
       let thrown: unknown;
 
       try {

@@ -43,14 +43,7 @@ export default class Json implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
-   */
-  public constructor() {
-    this.name = "Json";
-  }
+  public readonly name: string = "Json";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
@@ -63,16 +56,19 @@ export default class Json implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
   public encode(args: Pick<ITransformer.EncodeArgs<unknown>, "data">): Uint8Array<ArrayBuffer> {
-    return new TextEncoder().encode(stringify(args.data));
+    const { data } = args;
+
+    return new TextEncoder().encode(stringify(data));
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
   public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
+    const { data } = args;
     const decoder = new TextDecoder("utf-8", { fatal: true });
 
-    return JSON.parse(decoder.decode(args.data));
+    return JSON.parse(decoder.decode(data));
   }
 
   /**

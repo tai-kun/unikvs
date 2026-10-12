@@ -133,3 +133,13 @@ try {
 ```
 
 Bytes that are invalid as UTF-8 propagate as a native `TypeError`, not as `Base64DecodeError`.
+
+### Base64InvalidPaddingError
+
+#### Meaning
+
+`padding` is not a boolean. `meta` contains `actual`.
+
+#### How to handle
+
+Specify `true` or `false` for `padding`, or omit it to use the default.

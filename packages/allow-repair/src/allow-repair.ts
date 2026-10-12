@@ -23,7 +23,7 @@ export default class AllowRepair implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/allow-repair#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "AllowRepair";
 
   /**
    * 書き戻し許可状態の内部保持です。
@@ -34,7 +34,6 @@ export default class AllowRepair implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/allow-repair#usage)
    */
   public constructor() {
-    this.name = "AllowRepair";
     this.isEnabled = true;
   }
 
@@ -80,8 +79,9 @@ export default class AllowRepair implements ITransformer {
    * @param args 書き込みの引数です。実行時変数に書き戻しの目印がある場合に判定します。
    */
   private assertRepairAllowed(args: { vars: Variables }): void {
-    if (args.vars["unikvs:repair"] === true && !this.isEnabled) {
-      throw new RepairNotAllowedError({ names: resolveRepairNames(args.vars, this.name) });
+    const { vars } = args;
+    if (vars["unikvs:repair"] === true && !this.isEnabled) {
+      throw new RepairNotAllowedError({ names: resolveRepairNames(vars, this.name) });
     }
   }
 
@@ -89,15 +89,19 @@ export default class AllowRepair implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/allow-repair#usage)
    */
   public encode<TData>(args: Pick<ITransformer.EncodeArgs<TData>, "vars" | "data">): TData {
+    const { data } = args;
     this.assertRepairAllowed(args);
-    return args.data;
+
+    return data;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/allow-repair#usage)
    */
   public decode<TData>(args: Pick<ITransformer.DecodeArgs<TData>, "data">): TData {
-    return args.data;
+    const { data } = args;
+
+    return data;
   }
 
   /**

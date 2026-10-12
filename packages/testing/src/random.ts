@@ -166,8 +166,8 @@ export function forCases(
   for (let index = 0; index < count; index++) {
     try {
       run(createRandom(deriveSeed(seed, index)), index);
-    } catch (error) {
-      throw new Error(`ケースが失敗しました (seed: ${seed}, index: ${index})`, { cause: error });
+    } catch (ex) {
+      throw new Error(`ケースが失敗しました (seed: ${seed}, index: ${index})`, { cause: ex });
     }
   }
 }
@@ -184,8 +184,8 @@ export async function forCasesAsync(
   for (let index = 0; index < count; index++) {
     try {
       await run(createRandom(deriveSeed(seed, index)), index);
-    } catch (error) {
-      throw new Error(`ケースが失敗しました (seed: ${seed}, index: ${index})`, { cause: error });
+    } catch (ex) {
+      throw new Error(`ケースが失敗しました (seed: ${seed}, index: ${index})`, { cause: ex });
     }
   }
 }

@@ -1,7 +1,7 @@
 import { describe, test } from "vitest";
 
 import Base64 from "../src/base64.js";
-import { Base64DecodeError } from "../src/errors.js";
+import { Base64DecodeError, Base64InvalidPaddingError } from "../src/errors.js";
 import * as index from "../src/index.js";
 
 describe("index のエクスポート", () => {
@@ -9,5 +9,6 @@ describe("index のエクスポート", () => {
     // 実行と検証
     expect(index.Base64).toBe(Base64);
     expect(index.Base64DecodeError).toBe(Base64DecodeError);
+    expect(index.Base64InvalidPaddingError).toBe(Base64InvalidPaddingError);
   });
 });

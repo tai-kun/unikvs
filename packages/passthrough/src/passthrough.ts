@@ -7,14 +7,7 @@ export default class PassThrough implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
    */
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
-   */
-  public constructor() {
-    this.name = "PassThrough";
-  }
+  public readonly name: string = "PassThrough";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
@@ -27,14 +20,18 @@ export default class PassThrough implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
    */
   public encode<TData>(args: Pick<ITransformer.EncodeArgs<TData>, "data">): TData {
-    return args.data;
+    const { data } = args;
+
+    return data;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
    */
   public decode<TData>(args: Pick<ITransformer.DecodeArgs<TData>, "data">): TData {
-    return args.data;
+    const { data } = args;
+
+    return data;
   }
 
   /**

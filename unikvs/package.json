@@ -29,13 +29,13 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@tai-kun/valibot-extra-lab": "0.0.5",
+    "@tai-kun/valibot-extra-lab": "^0.0.5",
     "@unikvs/allow-repair": "workspace:*",
     "@unikvs/core": "workspace:*",
-    "abort-signal-utils": "0.0.3",
-    "asyncmux": "0.0.10",
-    "call-fn-once": "0.0.6",
-    "try-capture-stack-trace": "0.0.3"
+    "abort-signal-utils": "^0.0.3",
+    "asyncmux": "^0.0.10",
+    "call-fn-once": "^0.0.6",
+    "try-capture-stack-trace": "^0.0.3"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
@@ -58,7 +58,7 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@logtape/logtape": "2.0.0",
-    "valibot": "1.0.0"
+    "@logtape/logtape": "^2.0.0",
+    "valibot": "^1.0.0"
   }
 }

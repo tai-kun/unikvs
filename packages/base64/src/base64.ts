@@ -1,12 +1,12 @@
 import type { ITransformer } from "@unikvs/core";
 import { FastUtf8 } from "fast-utf8";
 
-import { Base64DecodeError } from "./errors.js";
+import { Base64DecodeError, Base64InvalidPaddingError } from "./errors.js";
 
 // エンコード用の共有インスタンスです。
 // 入力は base64 alphabet の ASCII のみのため strict 検証は不要です。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Encoder = new FastUtf8({
+const defaultUtf8Encoder = /*#__PURE__*/ new FastUtf8({
   strict: false,
   allocateSize: 1024,
 });
@@ -14,7 +14,7 @@ const defaultUtf8Encoder = new FastUtf8({
 // 一括デコード用の共有インスタンスです。
 // 不正な入力は TextDecoder の fatal 相当として TypeError を投げます。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Decoder = new FastUtf8({ strict: true });
+const defaultUtf8Decoder = /*#__PURE__*/ new FastUtf8({ strict: true });
 
 // base64 の alphabet です。
 // RFC 4648 §4 の 64 文字であり、`+` と `/` を含みます。
@@ -22,11 +22,11 @@ const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 
 // alphabet の検査用正規表現です。
 // `=` を含まない省略形のみに合致します。
-const UNPADDED_PATTERN = /^[A-Za-z0-9+\/]*$/;
+const UNPADDED_PATTERN = /^[A-Za-z0-9+/]*$/;
 
 // alphabet と `=` 配置の検査用正規表現です。
 // `=` は末尾の 1 文字から 2 文字にのみ現れます。
-const PADDED_PATTERN = /^[A-Za-z0-9+\/]*={1,2}$/;
+const PADDED_PATTERN = /^[A-Za-z0-9+/]*={1,2}$/;
 
 // 文字コードから 6 ビット値へ変換する参照表です。
 // 検証済みの入力のみを通すため、不正文字の検査は行いません。
@@ -201,7 +201,7 @@ export default class Base64 implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "Base64";
 
   /**
    * エンコードに使い回す実体です。
@@ -222,10 +222,14 @@ export default class Base64 implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
    */
   public constructor(options: Base64Options = {}) {
-    this.name = "Base64";
-    this.encoder = options.encoder ?? defaultUtf8Encoder;
-    this.decoder = options.decoder ?? defaultUtf8Decoder;
-    this.padding = options.padding ?? true;
+    const { decoder = defaultUtf8Decoder, encoder = defaultUtf8Encoder, padding = true } = options;
+    if (typeof padding !== "boolean") {
+      throw new Base64InvalidPaddingError({ actual: padding });
+    }
+
+    this.encoder = encoder;
+    this.decoder = decoder;
+    this.padding = padding;
   }
 
   /**
@@ -241,7 +245,9 @@ export default class Base64 implements ITransformer {
   public encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    return this.encoder.encode(base64EncodeText(args.data, this.padding));
+    const { data } = args;
+
+    return this.encoder.encode(base64EncodeText(data, this.padding));
   }
 
   /**
@@ -250,7 +256,8 @@ export default class Base64 implements ITransformer {
   public decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    const text = this.decoder.decode(args.data);
+    const { data } = args;
+    const text = this.decoder.decode(data);
 
     if (text.length === 0) {
       return new Uint8Array(0);

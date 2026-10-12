@@ -95,8 +95,8 @@ export async function pumpThrough<TInput, TOutput>(
       }
 
       await writer.close();
-    } catch (error) {
-      writeError = error;
+    } catch (ex) {
+      writeError = ex;
     }
   })();
 
@@ -110,8 +110,8 @@ export async function pumpThrough<TInput, TOutput>(
 
       outputChunks.push(value);
     }
-  } catch (error) {
-    readError = error;
+  } catch (ex) {
+    readError = ex;
   }
 
   await pumping;
@@ -140,8 +140,8 @@ export async function runTransform(
       }
 
       await writer.close();
-    } catch (error) {
-      closeError = error;
+    } catch (ex) {
+      closeError = ex;
     }
   })();
 
@@ -154,8 +154,8 @@ export async function runTransform(
       }
 
       outputChunks.push(value);
-    } catch (error) {
-      closeError ??= error;
+    } catch (ex) {
+      closeError ??= ex;
       break;
     }
   }

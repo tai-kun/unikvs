@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
 /**
@@ -63,7 +63,7 @@ export type ChecksumInvalidVarNameErrorArgs = ErrorOptions & ChecksumInvalidVarN
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
  */
-export class ChecksumInvalidVarNameError extends ErrorBase<ChecksumInvalidVarNameErrorMeta> {
+export class ChecksumInvalidVarNameError extends InvalidUsageErrorBase<ChecksumInvalidVarNameErrorMeta> {
   static {
     this.prototype.name = "UniKvsChecksumInvalidVarNameError";
   }
@@ -101,3 +101,42 @@ export class ChecksumRequiredError extends ErrorBase<undefined> {
 }
 
 setErrorMessage(ChecksumRequiredError, "チェックサムは必須です", "ja");
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ */
+export type ChecksumInvalidRequiredErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   */
+  readonly actual: unknown;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ */
+export type ChecksumInvalidRequiredErrorArgs = ErrorOptions & ChecksumInvalidRequiredErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ */
+export class ChecksumInvalidRequiredError extends InvalidUsageErrorBase<ChecksumInvalidRequiredErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsChecksumInvalidRequiredError";
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   */
+  public constructor(args: ChecksumInvalidRequiredErrorArgs) {
+    const { actual, ...options } = args;
+    const meta: ChecksumInvalidRequiredErrorMeta = { actual };
+    super(meta, ({ actual }) => `Invalid checksum required option: ${inspect(actual)}`, options);
+  }
+}
+
+setErrorMessage(
+  ChecksumInvalidRequiredError,
+  ({ actual }) => `無効な checksum required オプション: ${inspect(actual)}`,
+  "ja",
+);

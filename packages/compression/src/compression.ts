@@ -21,13 +21,12 @@ export default class Compression implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "Compression";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public constructor(format: CompressionFormat) {
-    this.name = "Compression";
     this.format = format;
   }
 
@@ -85,9 +84,10 @@ export default class Compression implements ITransformer {
       ): ReadableWritablePair<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
     },
   ) {
-    const data = toReadableStream([args.data]);
+    const { data } = args;
+    const stream = toReadableStream([data]);
     const comp = new Stream(this.format);
-    const body = data.pipeThrough(comp);
+    const body = stream.pipeThrough(comp);
     const buff = await new Response(body).arrayBuffer();
     const view = new Uint8Array(buff);
 

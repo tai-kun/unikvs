@@ -30,11 +30,11 @@
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
-    "fast-utf8": "0.0.7",
-    "filename-reserved-regex": "4.0.1",
-    "i18n-error-base": "0.0.7",
-    "ninja-promise": "0.0.5",
-    "try-capture-stack-trace": "0.0.3"
+    "fast-utf8": "^0.0.7",
+    "filename-reserved-regex": "^4.0.1",
+    "i18n-error-base": "^0.0.7",
+    "ninja-promise": "^0.0.5",
+    "try-capture-stack-trace": "^0.0.3"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
@@ -51,6 +51,6 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@logtape/logtape": "2.0.0"
+    "@logtape/logtape": "^2.0.0"
   }
 }

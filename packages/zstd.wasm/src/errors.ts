@@ -1,23 +1,5 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { ErrorBase, setErrorMessage, type ErrorOptions, InvalidUsageErrorBase } from "@unikvs/core";
 import { inspect } from "inspect-lite";
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
- */
-export class ZstdWasmDecompressError extends ErrorBase<undefined> {
-  static {
-    this.prototype.name = "UniKvsZstdWasmDecompressError";
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
-   */
-  public constructor(options?: ErrorOptions) {
-    super("Failed to decompress the zstd data", options);
-  }
-}
-
-setErrorMessage(ZstdWasmDecompressError, "zstd データの展開に失敗しました", "ja");
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
@@ -55,7 +37,7 @@ export type ZstdWasmInvalidLevelErrorArgs = ErrorOptions & ZstdWasmInvalidLevelE
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
  */
-export class ZstdWasmInvalidLevelError extends ErrorBase<ZstdWasmInvalidLevelErrorMeta> {
+export class ZstdWasmInvalidLevelError extends InvalidUsageErrorBase<ZstdWasmInvalidLevelErrorMeta> {
   static {
     this.prototype.name = "UniKvsZstdWasmInvalidLevelError";
   }

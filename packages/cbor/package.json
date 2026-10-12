@@ -35,7 +35,7 @@
   "dependencies": {
     "@unikvs/core": "workspace:*",
     "@unikvs/utils": "workspace:*",
-    "cbor-x": "1.6.6"
+    "cbor-x": "^1.6.6"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
@@ -52,6 +52,6 @@
     "vitest": "4.1.11"
   },
   "peerDependencies": {
-    "@logtape/logtape": "2.0.0"
+    "@logtape/logtape": "^2.0.0"
   }
 }

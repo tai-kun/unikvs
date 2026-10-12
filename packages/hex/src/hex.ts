@@ -7,7 +7,7 @@ import { HexDecodeError } from "./errors.js";
 // エンコード用の共有インスタンスです。
 // 入力は bytesToHex の出力 (ASCII のみ) のため strict 検証は不要です。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Encoder = new FastUtf8({
+const defaultUtf8Encoder = /*#__PURE__*/ new FastUtf8({
   strict: false,
   allocateSize: 1024,
 });
@@ -15,7 +15,7 @@ const defaultUtf8Encoder = new FastUtf8({
 // 一括デコード用の共有インスタンスです。
 // 不正な入力は TextDecoder の fatal 相当として TypeError を投げます。
 // 注入がない場合の既定値として使います。
-const defaultUtf8Decoder = new FastUtf8({ strict: true });
+const defaultUtf8Decoder = /*#__PURE__*/ new FastUtf8({ strict: true });
 
 /**
  * 文字コードからニブル値へ変換します。
@@ -84,7 +84,7 @@ export default class Hex implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "Hex";
 
   /**
    * エンコードに使い回す実体です。
@@ -100,9 +100,9 @@ export default class Hex implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
   public constructor(options: HexOptions = {}) {
-    this.name = "Hex";
-    this.encoder = options.encoder ?? defaultUtf8Encoder;
-    this.decoder = options.decoder ?? defaultUtf8Decoder;
+    const { decoder = defaultUtf8Decoder, encoder = defaultUtf8Encoder } = options;
+    this.encoder = encoder;
+    this.decoder = decoder;
   }
 
   /**
@@ -118,7 +118,9 @@ export default class Hex implements ITransformer {
   public encode(
     args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    return this.encoder.encode(bytesToHex(args.data));
+    const { data } = args;
+
+    return this.encoder.encode(bytesToHex(data));
   }
 
   /**
@@ -127,7 +129,8 @@ export default class Hex implements ITransformer {
   public decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Uint8Array<ArrayBuffer> {
-    const text = this.decoder.decode(args.data);
+    const { data } = args;
+    const text = this.decoder.decode(data);
 
     if (text.length % 2 === 1) {
       throw new HexDecodeError();

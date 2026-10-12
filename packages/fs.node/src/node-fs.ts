@@ -114,10 +114,10 @@ export default class NodeFs implements IStorage {
     try {
       await fs.promises.writeFile(file.tmp, data, { signal });
       await fs.promises.rename(file.tmp, file.dest);
-    } catch (err) {
+    } catch (ex) {
       // 失敗・中断時には一時ファイルを削除し、既存のデータを保全します。
       await fs.promises.rm(file.tmp, { force: true }).catch(() => {});
-      throw err;
+      throw ex;
     }
   }
 

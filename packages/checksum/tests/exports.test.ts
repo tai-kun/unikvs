@@ -2,6 +2,7 @@ import { describe, test } from "vitest";
 
 import Checksum from "../src/checksum.js";
 import {
+  ChecksumInvalidRequiredError,
   ChecksumInvalidVarNameError,
   ChecksumMismatchError,
   ChecksumRequiredError,
@@ -31,5 +32,6 @@ describe("index のエクスポート", () => {
     expect(index.ChecksumMismatchError).toBe(ChecksumMismatchError);
     expect(index.ChecksumRequiredError).toBe(ChecksumRequiredError);
     expect(index.ChecksumInvalidVarNameError).toBe(ChecksumInvalidVarNameError);
+    expect(index.ChecksumInvalidRequiredError).toBe(ChecksumInvalidRequiredError);
   });
 });

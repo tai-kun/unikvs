@@ -153,3 +153,13 @@ Set a hex string on the variable key, or set `required` to `false`.
 #### How to handle
 
 When extending the base class yourself, check the static properties.
+
+### ChecksumInvalidRequiredError
+
+#### Meaning
+
+`required` is not a boolean. `meta` contains `actual`.
+
+#### How to handle
+
+Specify `true` or `false` for `required`, or omit it to use the default (`false`).

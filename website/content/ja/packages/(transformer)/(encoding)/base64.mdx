@@ -133,3 +133,13 @@ try {
 ```
 
 UTF-8 として不正なバイト列は `Base64DecodeError` ではなくネイティブの `TypeError` として伝わります。
+
+### Base64InvalidPaddingError
+
+#### 意味
+
+`padding` が真偽値ではありません。`meta` に `actual` を含みます。
+
+#### 対処方法
+
+`padding` に `true` または `false` を指定するか、省略して既定値を使ってください。

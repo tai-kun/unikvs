@@ -64,7 +64,7 @@ export default class ZstdNode implements ITransformer {
   public constructor(options: ZstdNodeOptions = {}) {
     const { level = 3 } = options;
     const isValidLevel =
-      Number.isInteger(level) && Number.isInteger(level) && level >= 1 && level <= 22;
+      Number.isInteger(level) && level >= 1 && level <= 22;
     if (!isValidLevel) {
       throw new ZstdNodeInvalidLevelError({ actual: level });
     }
@@ -90,8 +90,8 @@ export default class ZstdNode implements ITransformer {
         ZstdNode.cache,
         "api.init",
         async (signal) => {
-          using abortPrommise = toAbortPromise(signal);
-          const env = await Promise.race([api.init(), abortPrommise]);
+          using abortPromise = toAbortPromise(signal);
+          const env = await Promise.race([api.init(), abortPromise]);
 
           return env;
         },

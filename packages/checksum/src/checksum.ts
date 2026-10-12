@@ -2,6 +2,7 @@ import type { Variables, ITransformer } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
+  ChecksumInvalidRequiredError,
   ChecksumMismatchError,
   ChecksumRequiredError,
   ChecksumInvalidVarNameError,
@@ -99,9 +100,14 @@ export default abstract class Checksum implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public constructor(name: string, hash: IHash, options: ChecksumOptions = {}) {
+    const { required = false } = options;
+    if (typeof required !== "boolean") {
+      throw new ChecksumInvalidRequiredError({ actual: required });
+    }
+
     this.name = name;
     this.hash = hash;
-    this.required = Boolean(options.required);
+    this.required = required;
   }
 
   /**

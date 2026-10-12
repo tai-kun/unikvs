@@ -1,5 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
-import { toOwnedView } from "@unikvs/utils";
+import { toOwnedBytes } from "@unikvs/utils";
 import { Decoder, decode, encode } from "cbor-x";
 
 import { CborDecodeError, CborEncodeError } from "./errors.js";
@@ -153,21 +153,21 @@ function drain(
       controller.enqueue(value);
     }
     queue.consume(view.byteLength);
-  } catch (error) {
+  } catch (ex) {
     if (isFinal) {
       // 終了時に残ったデータは入力不足でもエラーです。完成済みの値は流してからエラーにします。
-      enqueueValues(controller, error);
-      throw new CborDecodeError({ cause: error });
+      enqueueValues(controller, ex);
+      throw new CborDecodeError({ cause: ex });
     }
 
     // 入力不足の可能性があるエラーは、終了時まで待ってからエラーにします。
-    if (!isPossiblyIncompleteInputError(error)) {
-      throw new CborDecodeError({ cause: error });
+    if (!isPossiblyIncompleteInputError(ex)) {
+      throw new CborDecodeError({ cause: ex });
     }
 
     // データが途中で切れているため、完成済みの分だけ流して次のチャンクの到着を待ちます。
-    enqueueValues(controller, error);
-    queue.consume(error.lastPosition);
+    enqueueValues(controller, ex);
+    queue.consume(ex.lastPosition);
   }
 }
 
@@ -178,14 +178,7 @@ export default class Cbor implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
-   */
-  public constructor() {
-    this.name = "Cbor";
-  }
+  public readonly name: string = "Cbor";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
@@ -198,17 +191,21 @@ export default class Cbor implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
   public encode(args: Pick<ITransformer.EncodeArgs<unknown>, "data">): Uint8Array<ArrayBuffer> {
-    return this.#encode(args.data);
+    const { data } = args;
+
+    return this.#encode(data);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
   public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
+    const { data } = args;
+
     try {
-      return decode(args.data);
-    } catch (error) {
-      throw new CborDecodeError({ cause: error });
+      return decode(data);
+    } catch (ex) {
+      throw new CborDecodeError({ cause: ex });
     }
   }
 
@@ -256,9 +253,9 @@ export default class Cbor implements ITransformer {
    */
   #encode(data: unknown): Uint8Array<ArrayBuffer> {
     try {
-      return toOwnedView(encode(data));
-    } catch (error) {
-      throw new CborEncodeError({ cause: error });
+      return toOwnedBytes(encode(data));
+    } catch (ex) {
+      throw new CborEncodeError({ cause: ex });
     }
   }
 }

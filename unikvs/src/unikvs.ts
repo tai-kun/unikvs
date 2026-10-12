@@ -732,8 +732,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         openFns.map(async ([f, plugin, name, index]) => {
           try {
             await f();
-          } catch (reason) {
-            errors.push({ plugin, name, index, reason });
+          } catch (ex) {
+            errors.push({ plugin, name, index, reason: ex });
           }
         }),
       );
@@ -823,8 +823,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           closeFns.map(async ([f, plugin, name, index]) => {
             try {
               await f();
-            } catch (reason) {
-              errors.push({ plugin, name, index, reason });
+            } catch (ex) {
+              errors.push({ plugin, name, index, reason: ex });
             }
           }),
         );
@@ -888,8 +888,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               async (plugin) => {
                 try {
                   await plugin.close(vars, disposeSignal);
-                } catch (reason) {
-                  logger.error`Failed to close plugin after close failure: ${reason}`;
+                } catch (ex) {
+                  logger.error`Failed to close plugin after close failure: ${ex}`;
                 }
               },
             ),
@@ -1054,14 +1054,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 const destVars = withStorageNames(vars, dest.storage.name);
                 const w = await dest.storage.getWritable(destVars, signal, key);
                 await branch.pipeTo(w, { signal });
-              } catch (reason) {
+              } catch (ex) {
                 try {
-                  await branch.cancel(reason);
+                  await branch.cancel(ex);
                 } catch {
                   // キャンセルに失敗してもエラー集約を優先します。
                 }
 
-                errors.push({ name: dest.storage.name, index: i, reason });
+                errors.push({ name: dest.storage.name, index: i, reason: ex });
                 errorStorageSet.add(dest);
               }
             }),
@@ -1103,8 +1103,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               try {
                 const destVars = withStorageNames(vars, dest.storage.name);
                 await dest.storage.write(destVars, signal, key, encoded[i]);
-              } catch (reason) {
-                errors.push({ name: dest.storage.name, index: i, reason });
+              } catch (ex) {
+                errors.push({ name: dest.storage.name, index: i, reason: ex });
                 errorStorageSet.add(dest);
               }
             }),
@@ -1515,23 +1515,23 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               try {
                 const w = await dest.storage.getWritable(destRepairVars, repairSignal, key);
                 await branch.pipeTo(w, { signal: repairSignal });
-              } catch (reason) {
+              } catch (ex) {
                 // パイプが中断された場合は分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
                 try {
-                  await branch.cancel(reason);
+                  await branch.cancel(ex);
                 } catch {}
 
                 // 意図的な中断時はエラーではありません。
                 if (repairSignal.aborted) {
                   return;
                 }
-                if (reason instanceof RepairNotAllowedError) {
-                  repairLogger.warn`Failed to repair a storage: ${reason}`;
+                if (ex instanceof RepairNotAllowedError) {
+                  repairLogger.warn`Failed to repair a storage: ${ex}`;
 
                   return;
                 }
 
-                logger.error`Failed to repair a storage: ${reason}`;
+                logger.error`Failed to repair a storage: ${ex}`;
               }
             })(),
           );
@@ -1926,8 +1926,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               if (await storage.exists(destVars, signal, key)) {
                 await storage.delete(destVars, signal, key);
               }
-            } catch (reason) {
-              errors.push({ name: storage.name, index, reason });
+            } catch (ex) {
+              errors.push({ name: storage.name, index, reason: ex });
             }
           }),
         );
@@ -1978,8 +1978,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             const destVars = withStorageNames(vars, storage.name);
             try {
               await storage.clear(destVars, signal);
-            } catch (reason) {
-              errors.push({ name: storage.name, index, reason });
+            } catch (ex) {
+              errors.push({ name: storage.name, index, reason: ex });
             }
           }),
         );

@@ -39,14 +39,7 @@ export default class Superjson implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
-  public constructor() {
-    this.name = "Superjson";
-  }
+  public readonly name: string = "Superjson";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
@@ -69,7 +62,8 @@ export default class Superjson implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
   public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(args.data);
+    const { data } = args;
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(data);
 
     return SuperjsonCodec.parse(text);
   }

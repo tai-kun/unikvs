@@ -1,4 +1,5 @@
-import { describe, test as vitest } from "vitest";
+import { captureRejection } from "@unikvs/testing";
+import { describe, test as vitest, vi } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
 import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from "../src/errors.js";
@@ -20,6 +21,57 @@ const test = vitest.extend<{
     });
     deleteGlobalConfig();
   },
+});
+
+// 上流モジュールの解決は open() 時に共有キャッシュで1回だけ実行されるため、
+// 解決失敗の検証はモジュールを再読み込みした新鮮な実体で行う。
+// 静的 import の実体とはキャッシュを共有しないため、後続の往復群に影響しない。
+describe("対応しない実行環境", () => {
+  test("node:v8 の解決に失敗すると open を UnsupportedRuntimeError で拒否する", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    vi.resetModules();
+
+    try {
+      const fresh = await import("../src/v8-serde.js");
+      const freshErrors = await import("../src/errors.js");
+      const freshCore = await import("../src/_core.js");
+      const cause = new Error("load failure");
+      const loadSpy = vi.spyOn(freshCore.api, "init").mockRejectedValueOnce(cause);
+      const target = new fresh.default();
+
+      try {
+        // 実行
+        const error = await captureRejection(target.open({ signal }));
+
+        // 検証
+        // 失敗は UnsupportedRuntimeError で包み、原因と識別子を保持する。
+        expect(error).toBeInstanceOf(freshErrors.UnsupportedRuntimeError);
+        expect((error as InstanceType<typeof freshErrors.UnsupportedRuntimeError>).cause).toBe(
+          cause,
+        );
+        expect(
+          (error as InstanceType<typeof freshErrors.UnsupportedRuntimeError>).meta,
+        ).toStrictEqual({ name: "V8Serde", runtime: "Node.js" });
+        expect(target.isOpen).toBe(false);
+
+        // 実行と検証
+        // 失敗はキャッシュされないため、再試行では解決が再実行される。
+        await target.open({ signal });
+        const input = { value: 1 };
+        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        expect(decoded).toStrictEqual(input);
+        expect(target.isOpen).toBe(true);
+        expect(loadSpy).toHaveBeenCalledTimes(2);
+      } finally {
+        loadSpy.mockRestore();
+      }
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
 });
 
 describe("V8SerdeEncodeError", () => {

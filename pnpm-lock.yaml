@@ -85,13 +85,13 @@ importers:
   packages/base64:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       fast-utf8:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7
     devDependencies:
       '@tsconfig/node24':
@@ -134,13 +134,13 @@ importers:
   packages/base64url:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       fast-utf8:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7
     devDependencies:
       '@tsconfig/node24':
@@ -183,7 +183,7 @@ importers:
   packages/cbor:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -192,7 +192,7 @@ importers:
         specifier: workspace:*
         version: link:../utils
       cbor-x:
-        specifier: 1.6.6
+        specifier: ^1.6.6
         version: 1.6.6
     devDependencies:
       '@tsconfig/node24':
@@ -235,10 +235,10 @@ importers:
   packages/checksum:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@noble/hashes':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -247,7 +247,7 @@ importers:
         specifier: workspace:*
         version: link:../utils
       inspect-lite:
-        specifier: 0.0.2
+        specifier: ^0.0.2
         version: 0.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -290,7 +290,7 @@ importers:
   packages/compression:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -339,16 +339,16 @@ importers:
   packages/core:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       i18n-error-base:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7(valibot@1.0.0(typescript@7.0.2))
       maypromise:
-        specifier: 0.0.4
+        specifier: ^0.0.4
         version: 0.0.4
       valibot:
-        specifier: 1.0.0
+        specifier: ^1.0.0
         version: 1.0.0(typescript@7.0.2)
     devDependencies:
       '@tsconfig/node24':
@@ -391,13 +391,13 @@ importers:
   packages/debug:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       type-name:
-        specifier: 2.0.2
+        specifier: ^2.0.2
         version: 2.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -443,7 +443,7 @@ importers:
   packages/fs.bun:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -483,7 +483,7 @@ importers:
   packages/fs.node:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -520,7 +520,7 @@ importers:
   packages/hex:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -529,7 +529,7 @@ importers:
         specifier: workspace:*
         version: link:../utils
       fast-utf8:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7
     devDependencies:
       '@tsconfig/node24':
@@ -572,13 +572,13 @@ importers:
   packages/http:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       type-name:
-        specifier: 2.0.2
+        specifier: ^2.0.2
         version: 2.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -612,13 +612,13 @@ importers:
   packages/indexeddb:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       idb:
-        specifier: 8.0.3
+        specifier: ^8.0.3
         version: 8.0.3
     devDependencies:
       '@tsconfig/node24':
@@ -658,7 +658,7 @@ importers:
   packages/json:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -704,7 +704,7 @@ importers:
   packages/localstorage:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -750,13 +750,13 @@ importers:
   packages/memory:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       type-name:
-        specifier: 2.0.2
+        specifier: ^2.0.2
         version: 2.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -802,7 +802,7 @@ importers:
   packages/null:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -845,7 +845,7 @@ importers:
   packages/opfs:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -891,7 +891,7 @@ importers:
   packages/passthrough:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -937,7 +937,7 @@ importers:
   packages/redis.bun:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -974,7 +974,7 @@ importers:
   packages/redis.node:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1011,7 +1011,7 @@ importers:
   packages/s3.bun:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1054,7 +1054,7 @@ importers:
         specifier: ~3.1136.0
         version: 3.1136.0(@aws-sdk/client-s3@3.1136.0)
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1088,13 +1088,13 @@ importers:
   packages/superjson:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       superjson:
-        specifier: 2.2.6
+        specifier: ^2.2.6
         version: 2.2.6
     devDependencies:
       '@tsconfig/node24':
@@ -1137,7 +1137,7 @@ importers:
   packages/testing:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
     devDependencies:
       '@tsconfig/node24':
@@ -1177,25 +1177,25 @@ importers:
   packages/utils:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
       fast-utf8:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7
       filename-reserved-regex:
-        specifier: 4.0.1
+        specifier: ^4.0.1
         version: 4.0.1
       i18n-error-base:
-        specifier: 0.0.7
+        specifier: ^0.0.7
         version: 0.0.7(valibot@1.0.0(typescript@7.0.2))
       ninja-promise:
-        specifier: 0.0.5
+        specifier: ^0.0.5
         version: 0.0.5
       try-capture-stack-trace:
-        specifier: 0.0.3
+        specifier: ^0.0.3
         version: 0.0.3
     devDependencies:
       '@tsconfig/node24':
@@ -1238,7 +1238,7 @@ importers:
   packages/v8-serde:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1246,8 +1246,11 @@ importers:
       '@unikvs/utils':
         specifier: workspace:*
         version: link:../utils
+      abort-signal-utils:
+        specifier: ^0.0.6
+        version: 0.0.6(@logtape/logtape@2.0.0)
       call-fn-once:
-        specifier: 0.0.6
+        specifier: ^0.0.6
         version: 0.0.6
     devDependencies:
       '@tsconfig/node24':
@@ -1278,7 +1281,7 @@ importers:
   packages/writeonly:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1370,10 +1373,10 @@ importers:
   packages/zstd.wasm:
     dependencies:
       '@bokuweb/zstd-wasm':
-        specifier: 0.0.27
+        specifier: ^0.0.27
         version: 0.0.27
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@unikvs/core':
         specifier: workspace:*
@@ -1381,11 +1384,14 @@ importers:
       '@unikvs/utils':
         specifier: workspace:*
         version: link:../utils
+      abort-signal-utils:
+        specifier: ^0.0.6
+        version: 0.0.6(@logtape/logtape@2.0.0)
       call-fn-once:
-        specifier: 0.0.6
+        specifier: ^0.0.6
         version: 0.0.6
       inspect-lite:
-        specifier: 0.0.2
+        specifier: ^0.0.2
         version: 0.0.2
     devDependencies:
       '@tsconfig/node24':
@@ -1428,10 +1434,10 @@ importers:
   unikvs:
     dependencies:
       '@logtape/logtape':
-        specifier: 2.0.0
+        specifier: ^2.0.0
         version: 2.0.0
       '@tai-kun/valibot-extra-lab':
-        specifier: 0.0.5
+        specifier: ^0.0.5
         version: 0.0.5(fast-utf8@0.0.7)(valibot@1.0.0(typescript@7.0.2))
       '@unikvs/allow-repair':
         specifier: workspace:*
@@ -1440,19 +1446,19 @@ importers:
         specifier: workspace:*
         version: link:../packages/core
       abort-signal-utils:
-        specifier: 0.0.3
+        specifier: ^0.0.3
         version: 0.0.3
       asyncmux:
-        specifier: 0.0.10
+        specifier: ^0.0.10
         version: 0.0.10(@logtape/logtape@2.0.0)(valibot@1.0.0(typescript@7.0.2))
       call-fn-once:
-        specifier: 0.0.6
+        specifier: ^0.0.6
         version: 0.0.6
       try-capture-stack-trace:
-        specifier: 0.0.3
+        specifier: ^0.0.3
         version: 0.0.3
       valibot:
-        specifier: 1.0.0
+        specifier: ^1.0.0
         version: 1.0.0(typescript@7.0.2)
     devDependencies:
       '@tsconfig/node24':

@@ -1,7 +1,9 @@
 import type { ITransformer } from "@unikvs/core";
-import { toOwnedView } from "@unikvs/utils";
-import { callAsyncableFnOnce } from "call-fn-once";
+import { toOwnedBytes } from "@unikvs/utils";
+import { toAbortPromise } from "abort-signal-utils";
+import { callAbortableFnOnce } from "call-fn-once";
 
+import { type IEnv, api } from "./_core.js";
 import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from "./errors.js";
 
 /**
@@ -9,29 +11,6 @@ import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from 
  * 4 バイトのビッグエンディアン長で表せる上限であり、単発のエンコードには適用しません。
  */
 const MAX_PAYLOAD_LENGTH = 0xffffffff;
-
-/**
- * `node:v8` モジュールの解決結果を保持するキャッシュです。
- * 同一キーへの同時呼び出しは同一の promise を共有します。
- */
-const v8Cache: callAsyncableFnOnce.CacheMap = new Map();
-
-/**
- * `node:v8` モジュールを遅延解決します。
- * 解決は初回のみ実行し、失敗時はキャッシュを破棄して再試行できるようにします。
- *
- * @returns 解決した `node:v8` モジュールを返します。
- */
-async function loadV8(): Promise<typeof import("node:v8")> {
-  return await callAsyncableFnOnce(v8Cache, "v8", async () => {
-    // 理由: 非 Node 環境での import 失敗は Node.js の CI では再現できないため、カバレッジから除外します。
-    try {
-      return await import("node:v8");
-    } catch (ex) /* v8 ignore next */ {
-      throw new UnsupportedRuntimeError({ name: "V8Serde", runtime: "Node.js", cause: ex });
-    }
-  });
-}
 
 /**
  * 受信チャンクを蓄積する、容量が自動で拡張されるバイトバッファーです。
@@ -116,7 +95,7 @@ class ByteQueue {
 function drain(
   queue: ByteQueue,
   controller: TransformStreamDefaultController<unknown>,
-  deserialize: (data: Uint8Array<ArrayBuffer>) => unknown,
+  deserialize: IEnv["deserialize"],
   isFinal: boolean,
 ): void {
   while (queue.length >= 4) {
@@ -162,22 +141,52 @@ function drain(
  */
 export default class V8Serde implements ITransformer {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
+   * 実行環境の解決結果を保持するキャッシュです。
    */
-  public readonly name: string;
+  private static readonly cache: callAbortableFnOnce.CacheMap = new Map();
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
    */
-  public constructor() {
-    this.name = "V8Serde";
-  }
+  public readonly name: string = "V8Serde";
+
+  /**
+   * 実行環境です。
+   */
+  private env: IEnv | null = null;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
    */
   public get isOpen(): boolean {
-    return true;
+    return this.env !== null;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
+   */
+  public async open(args: Pick<ITransformer.OpenArgs, "signal">): Promise<void> {
+    const { signal } = args;
+    try {
+      this.env = await callAbortableFnOnce(
+        V8Serde.cache,
+        "api.init",
+        async (signal) => {
+          using abortPromise = toAbortPromise(signal);
+          const env = await Promise.race([api.init(), abortPromise]);
+
+          return env;
+        },
+        signal,
+      );
+    } catch (ex) {
+      signal.throwIfAborted();
+      throw new UnsupportedRuntimeError({
+        name: "V8Serde",
+        cause: ex,
+        runtime: "Node.js",
+      });
+    }
   }
 
   /**
@@ -186,10 +195,11 @@ export default class V8Serde implements ITransformer {
   public async encode(
     args: Pick<ITransformer.EncodeArgs<unknown>, "data">,
   ): Promise<Uint8Array<ArrayBuffer>> {
-    const { serialize } = await loadV8();
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { data } = args;
 
     try {
-      return toOwnedView(serialize(args.data));
+      return toOwnedBytes(api.serialize(env, data));
     } catch (ex) {
       throw new V8SerdeEncodeError({ cause: ex });
     }
@@ -201,10 +211,11 @@ export default class V8Serde implements ITransformer {
   public async decode(
     args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
   ): Promise<unknown> {
-    const { deserialize } = await loadV8();
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { data } = args;
 
     try {
-      return deserialize(args.data);
+      return api.deserialize(env, data);
     } catch (ex) {
       throw new V8SerdeDecodeError({ cause: ex });
     }
@@ -213,8 +224,11 @@ export default class V8Serde implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
    */
-  public async getEncodable(): Promise<TransformStream<unknown, Uint8Array<ArrayBuffer>>> {
-    const { serialize } = await loadV8();
+  public getEncodable(): TransformStream<unknown, Uint8Array<ArrayBuffer>> {
+    // 理由: ITransformer.getEncodable は MaybePromise を返すため同期返却でも型互換があり、既存テストの `await target.getEncodable()` も非 Promise 値をそのまま受け取れる。
+    // zstd.node と同様に open() 済み前提で同期化する。
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { serialize } = env;
 
     return new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
       transform: (chunk, controller) => {
@@ -226,8 +240,11 @@ export default class V8Serde implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
    */
-  public async getDecodable(): Promise<TransformStream<Uint8Array<ArrayBuffer>, unknown>> {
-    const { deserialize } = await loadV8();
+  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, unknown> {
+    // 理由: ITransformer.getDecodable は MaybePromise を返すため同期返却でも型互換があり、既存テストの `await target.getDecodable()` も非 Promise 値をそのまま受け取れる。
+    // zstd.node と同様に open() 済み前提で同期化する。
+    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const { deserialize } = env;
     const queue = new ByteQueue();
 
     return new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
@@ -253,7 +270,7 @@ export default class V8Serde implements ITransformer {
    * @param data 変換する値です。
    * @returns フレーム化した `Uint8Array<ArrayBuffer>` を返します。
    */
-  #encodeFrame(serialize: (data: unknown) => Uint8Array, data: unknown): Uint8Array<ArrayBuffer> {
+  #encodeFrame(serialize: IEnv["serialize"], data: unknown): Uint8Array<ArrayBuffer> {
     try {
       const payload = serialize(data);
       const length = payload.byteLength;

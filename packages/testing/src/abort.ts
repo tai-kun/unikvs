@@ -5,8 +5,8 @@
 export async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
   try {
     await promise;
-  } catch (error) {
-    return error;
+  } catch (ex) {
+    return ex;
   }
 
   throw new Error("Promise が拒否されませんでした");
@@ -19,8 +19,8 @@ export async function captureRejection(promise: Promise<unknown>): Promise<unkno
 export function captureThrown(fn: () => unknown): unknown {
   try {
     fn();
-  } catch (error) {
-    return error;
+  } catch (ex) {
+    return ex;
   }
 
   throw new Error("例外が投げられませんでした");

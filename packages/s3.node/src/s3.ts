@@ -125,8 +125,9 @@ export default class S3 implements IStorage {
       await this.client!.send(command, { abortSignal });
 
       return true;
-    } catch (ex: any) {
-      if (ex.name === "NotFound" || ex.$metadata?.httpStatusCode === 404) {
+    } catch (ex) {
+      const s3Error = ex as { name?: unknown; $metadata?: { httpStatusCode?: unknown } };
+      if (s3Error.name === "NotFound" || s3Error.$metadata?.httpStatusCode === 404) {
         return false;
       }
 

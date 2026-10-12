@@ -4,10 +4,19 @@ import { describe, test } from "vitest";
 
 import V8Serde from "../src/v8-serde.js";
 
-const v8serde = new V8Serde();
 const SEED = 20240927;
 const CASE_COUNT = 50;
 const STREAM_CASE_COUNT = 30;
+
+/**
+ * 開済みのターゲットを作成します。
+ */
+async function createOpenedTarget(signal: AbortSignal): Promise<V8Serde> {
+  const target = new V8Serde();
+  await target.open({ signal });
+
+  return target;
+}
 
 /**
  * 往復対象になる決定的なランダム値を生成します。
@@ -115,20 +124,23 @@ function splitRandomly(random: Random, bytes: Uint8Array<ArrayBuffer>): Uint8Arr
 /**
  * 値を 4 バイトの長さヘッダー付きフレームへ変換します。
  */
-async function encodeFrame(data: unknown): Promise<Uint8Array<ArrayBuffer>> {
-  const { outputChunks } = await pumpThrough(await v8serde.getEncodable(), [data]);
+async function encodeFrame(target: V8Serde, data: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const { outputChunks } = await pumpThrough(await target.getEncodable(), [data]);
 
   return concatBytes(outputChunks);
 }
 
 describe("決定的ファズテスト", () => {
-  test("ランダムな値を一括で往復すると元の値に戻る", async ({ expect }) => {
+  test("ランダムな値を一括で往復すると元の値に戻る", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行と検証
     await forCasesAsync(SEED, CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
 
-      const encoded = await v8serde.encode({ data: value });
-      const decoded = await v8serde.decode({ data: encoded });
+      const encoded = await target.encode({ data: value });
+      const decoded = await target.decode({ data: encoded });
 
       expect(decoded, `case ${index}`).toStrictEqual(value);
     });
@@ -136,14 +148,18 @@ describe("決定的ファズテスト", () => {
 
   test("ランダムな値をランダムなチャンクに分割してストリームで往復すると元の値に戻る", async ({
     expect,
+    signal,
   }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行と検証
     await forCasesAsync(SEED + 1, STREAM_CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
-      const frame = await encodeFrame(value);
+      const frame = await encodeFrame(target, value);
       const chunks = splitRandomly(random, frame);
 
-      const decoded = await pumpThrough(await v8serde.getDecodable(), chunks);
+      const decoded = await pumpThrough(await target.getDecodable(), chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();
@@ -151,14 +167,20 @@ describe("決定的ファズテスト", () => {
     });
   });
 
-  test("ランダムな値のシーケンスをストリームで往復すると元の値に戻る", async ({ expect }) => {
+  test("ランダムな値のシーケンスをストリームで往復すると元の値に戻る", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行と検証
     await forCasesAsync(SEED + 2, STREAM_CASE_COUNT, async (random, index) => {
       const values = random.array(random.uint(6), (childRandom) => generateValue(childRandom));
-      const frames = await Promise.all(values.map((value) => encodeFrame(value)));
+      const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
       const chunks = splitRandomly(random, concatBytes(frames));
 
-      const decoded = await pumpThrough(await v8serde.getDecodable(), chunks);
+      const decoded = await pumpThrough(await target.getDecodable(), chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();

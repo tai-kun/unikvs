@@ -105,7 +105,7 @@ export default class Debug implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
    */
-  public readonly name: string;
+  public readonly name: string = "Debug";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
@@ -131,7 +131,6 @@ export default class Debug implements ITransformer {
       actionFilter = () => true,
       getDebugInfo = Debug.getDefaultDebugInfo,
     } = options;
-    this.name = "Debug";
     this.keyFilter = keyFilter;
     this.actionFilter = actionFilter;
     this.getDebugInfo = getDebugInfo;
@@ -148,18 +147,20 @@ export default class Debug implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
    */
   public encode(args: Pick<ITransformer.EncodeArgs, "vars" | "data">): unknown {
-    this.#log("write", args.vars, args.data);
+    const { vars, data } = args;
+    this.#log("write", vars, data);
 
-    return args.data;
+    return data;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
    */
   public decode(args: Pick<ITransformer.DecodeArgs, "vars" | "data">): unknown {
-    this.#log("read", args.vars, args.data);
+    const { vars, data } = args;
+    this.#log("read", vars, data);
 
-    return args.data;
+    return data;
   }
 
   /**
@@ -168,7 +169,9 @@ export default class Debug implements ITransformer {
   public getEncodable(
     args: Pick<ITransformer.GetEncodableArgs, "vars">,
   ): TransformStream<any, any> {
-    return this.#createTransformStream("write", args.vars);
+    const { vars } = args;
+
+    return this.#createTransformStream("write", vars);
   }
 
   /**
@@ -177,7 +180,9 @@ export default class Debug implements ITransformer {
   public getDecodable(
     args: Pick<ITransformer.GetDecodableArgs, "vars">,
   ): TransformStream<any, any> {
-    return this.#createTransformStream("read", args.vars);
+    const { vars } = args;
+
+    return this.#createTransformStream("read", vars);
   }
 
   /**

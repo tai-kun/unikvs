@@ -6,11 +6,14 @@ export type {
   ChecksumMismatchErrorMeta,
   ChecksumInvalidVarNameErrorArgs,
   ChecksumInvalidVarNameErrorMeta,
+  ChecksumInvalidRequiredErrorArgs,
+  ChecksumInvalidRequiredErrorMeta,
 } from "./errors.js";
 export {
   ChecksumMismatchError,
   ChecksumRequiredError,
   ChecksumInvalidVarNameError,
+  ChecksumInvalidRequiredError,
 } from "./errors.js";
 
 export type * from "./md5.js";

@@ -153,3 +153,13 @@ try {
 #### 対処方法
 
 基底クラスを独自継承した場合に静的プロパティーを確認してください。
+
+### ChecksumInvalidRequiredError
+
+#### 意味
+
+`required` が真偽値ではありません。`meta` に `actual` を含みます。
+
+#### 対処方法
+
+`required` に `true` または `false` を指定するか、省略して既定値（`false`）を使ってください。

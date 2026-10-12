@@ -1,23 +1,32 @@
 import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testing";
-import { describe, expect, test } from "vitest";
+import { describe, test } from "vitest";
 
 import { V8SerdeDecodeError, V8SerdeEncodeError } from "../src/errors.js";
 import V8Serde from "../src/v8-serde.js";
 
-const v8serde = new V8Serde();
+/**
+ * 開済みのターゲットを作成します。
+ */
+async function createOpenedTarget(signal: AbortSignal): Promise<V8Serde> {
+  const target = new V8Serde();
+  await target.open({ signal });
+
+  return target;
+}
 
 /**
  * 値を 4 バイトの長さヘッダー付きフレームへ変換します。
  */
-async function encodeFrame(data: unknown): Promise<Uint8Array<ArrayBuffer>> {
-  const { outputChunks } = await pumpThrough(await v8serde.getEncodable(), [data]);
+async function encodeFrame(target: V8Serde, data: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const { outputChunks } = await pumpThrough(await target.getEncodable(), [data]);
 
   return concatBytes(outputChunks);
 }
 
 describe("フレームの往復", () => {
-  test("複数の値をストリームで往復すると元の値に戻る", async ({ expect }) => {
+  test("複数の値をストリームで往復すると元の値に戻る", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const values = [
       1,
       "two",
@@ -35,8 +44,8 @@ describe("フレームの往復", () => {
     ];
 
     // 実行
-    const encoded = await pumpThrough(await v8serde.getEncodable(), values);
-    const decoded = await pumpThrough(await v8serde.getDecodable(), encoded.outputChunks);
+    const encoded = await pumpThrough(await target.getEncodable(), values);
+    const decoded = await pumpThrough(await target.getDecodable(), encoded.outputChunks);
 
     // 検証
     expect(encoded.writeError).toBeUndefined();
@@ -54,13 +63,14 @@ describe("フレームの往復", () => {
     }
   });
 
-  test("単体の値をストリームで往復すると元の値に戻る", async ({ expect }) => {
+  test("単体の値をストリームで往復すると元の値に戻る", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const value = { message: "hello", count: 42 };
 
     // 実行
-    const encoded = await pumpThrough(await v8serde.getEncodable(), [value]);
-    const decoded = await pumpThrough(await v8serde.getDecodable(), encoded.outputChunks);
+    const encoded = await pumpThrough(await target.getEncodable(), [value]);
+    const decoded = await pumpThrough(await target.getDecodable(), encoded.outputChunks);
 
     // 検証
     expect(encoded.writeError).toBeUndefined();
@@ -70,14 +80,18 @@ describe("フレームの往復", () => {
     expect(decoded.outputChunks).toStrictEqual([value]);
   });
 
-  test("1 つのチャンクに複数のフレームが含まれていても順にデコードされる", async ({ expect }) => {
+  test("1 つのチャンクに複数のフレームが含まれていても順にデコードされる", async ({
+    expect,
+    signal,
+  }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const values = [1, "two", [3]];
-    const frames = await Promise.all(values.map((value) => encodeFrame(value)));
+    const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
     const input = concatBytes(frames);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [input]);
+    const decoded = await pumpThrough(await target.getDecodable(), [input]);
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -85,10 +99,13 @@ describe("フレームの往復", () => {
     expect(decoded.outputChunks).toStrictEqual(values);
   });
 
-  test("空のストリームは値を 1 つも生成しない", async ({ expect }) => {
+  test("空のストリームは値を 1 つも生成しない", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行
-    const encoded = await pumpThrough(await v8serde.getEncodable(), []);
-    const decoded = await pumpThrough(await v8serde.getDecodable(), []);
+    const encoded = await pumpThrough(await target.getEncodable(), []);
+    const decoded = await pumpThrough(await target.getDecodable(), []);
 
     // 検証
     expect(encoded.writeError).toBeUndefined();
@@ -99,18 +116,19 @@ describe("フレームの往復", () => {
     expect(decoded.outputChunks).toStrictEqual([]);
   });
 
-  test("長さ 0 のチャンクは無視される", async ({ expect }) => {
+  test("長さ 0 のチャンクは無視される", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const chunks = [
       new Uint8Array(0),
-      await encodeFrame(1),
+      await encodeFrame(target, 1),
       new Uint8Array(0),
-      await encodeFrame(2),
+      await encodeFrame(target, 2),
       new Uint8Array(0),
     ];
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), chunks);
+    const decoded = await pumpThrough(await target.getDecodable(), chunks);
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -120,9 +138,10 @@ describe("フレームの往復", () => {
 });
 
 describe("フレーム形式", () => {
-  test("先頭の 4 バイトはビッグエンディアンのペイロード長である", async ({ expect }) => {
+  test("先頭の 4 バイトはビッグエンディアンのペイロード長である", async ({ expect, signal }) => {
     // 準備
-    const frame = await encodeFrame({ value: "hello" });
+    const target = await createOpenedTarget(signal);
+    const frame = await encodeFrame(target, { value: "hello" });
 
     // 実行
     const length = new DataView(frame.buffer, frame.byteOffset, frame.byteLength).getUint32(
@@ -134,13 +153,14 @@ describe("フレーム形式", () => {
     expect(length).toBe(frame.byteLength - 4);
   });
 
-  test("フレームの本体は単発のエンコード結果と一致する", async ({ expect }) => {
+  test("フレームの本体は単発のエンコード結果と一致する", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const value = { value: [1, "two"] };
 
     // 実行
-    const frame = await encodeFrame(value);
-    const encoded = await v8serde.encode({ data: value });
+    const frame = await encodeFrame(target, value);
+    const encoded = await target.encode({ data: value });
 
     // 検証
     expect(frame.slice(4)).toStrictEqual(encoded);
@@ -148,14 +168,15 @@ describe("フレーム形式", () => {
 });
 
 describe("チャンク境界", () => {
-  test("1 バイトずつ届くフレーム列をデコードできる", async ({ expect }) => {
+  test("1 バイトずつ届くフレーム列をデコードできる", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const values = [1, "abcdef", { nested: [true, null] }, 18446744073709551615n];
-    const frames = await Promise.all(values.map((value) => encodeFrame(value)));
+    const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
     const input = concatBytes(frames);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), splitIntoChunks(input, 1));
+    const decoded = await pumpThrough(await target.getDecodable(), splitIntoChunks(input, 1));
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -163,14 +184,15 @@ describe("チャンク境界", () => {
     expect(decoded.outputChunks).toStrictEqual(values);
   });
 
-  test("RegExp を 1 バイトずつ届くチャンクでデコードできる", async ({ expect }) => {
+  test("RegExp を 1 バイトずつ届くチャンクでデコードできる", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const values = [/ab/gi, new RegExp("a".repeat(200), "g")];
-    const frames = await Promise.all(values.map((value) => encodeFrame(value)));
+    const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
     const input = concatBytes(frames);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), splitIntoChunks(input, 1));
+    const decoded = await pumpThrough(await target.getDecodable(), splitIntoChunks(input, 1));
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -178,14 +200,15 @@ describe("チャンク境界", () => {
     expect(decoded.outputChunks).toStrictEqual(values);
   });
 
-  test("7 バイトずつ届くフレーム列をデコードできる", async ({ expect }) => {
+  test("7 バイトずつ届くフレーム列をデコードできる", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const values = [new Map([[1, "one"]]), new Set([1, 2]), new Date(0)];
-    const frames = await Promise.all(values.map((value) => encodeFrame(value)));
+    const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
     const input = concatBytes(frames);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), splitIntoChunks(input, 7));
+    const decoded = await pumpThrough(await target.getDecodable(), splitIntoChunks(input, 7));
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -193,10 +216,11 @@ describe("チャンク境界", () => {
     expect(decoded.outputChunks).toStrictEqual(values);
   });
 
-  test("途中までしか届いていない値は送出されない", async ({ expect }) => {
+  test("途中までしか届いていない値は送出されない", async ({ expect, signal }) => {
     // 準備
-    const frame = await encodeFrame("hello world");
-    const transform = await v8serde.getDecodable();
+    const target = await createOpenedTarget(signal);
+    const frame = await encodeFrame(target, "hello world");
+    const transform = await target.getDecodable();
     const writer = transform.writable.getWriter();
     const reader = transform.readable.getReader();
 
@@ -223,12 +247,16 @@ describe("チャンク境界", () => {
     expect(await reader.read()).toStrictEqual({ done: true, value: undefined });
   });
 
-  test("完成済みの値と未完成の値が同じチャンクにあれば完成分だけ送出される", async ({ expect }) => {
+  test("完成済みの値と未完成の値が同じチャンクにあれば完成分だけ送出される", async ({
+    expect,
+    signal,
+  }) => {
     // 準備
-    const first = await encodeFrame(1);
-    const second = await encodeFrame(2);
-    const partial = (await encodeFrame("three")).subarray(0, 1);
-    const transform = await v8serde.getDecodable();
+    const target = await createOpenedTarget(signal);
+    const first = await encodeFrame(target, 1);
+    const second = await encodeFrame(target, 2);
+    const partial = (await encodeFrame(target, "three")).subarray(0, 1);
+    const transform = await target.getDecodable();
     const writer = transform.writable.getWriter();
     const reader = transform.readable.getReader();
 
@@ -260,16 +288,17 @@ describe("チャンク境界", () => {
     await writer.closed.catch(() => {});
   });
 
-  test("大きな値を 1 バイトずつ届くチャンクでデコードできる", async ({ expect }) => {
+  test("大きな値を 1 バイトずつ届くチャンクでデコードできる", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const input = new Uint8Array(64 * 1024);
     for (let index = 0; index < input.length; index++) {
       input[index] = index % 251;
     }
 
     // 実行
-    const frame = await encodeFrame(input);
-    const decoded = await pumpThrough(await v8serde.getDecodable(), splitIntoChunks(frame, 1));
+    const frame = await encodeFrame(target, input);
+    const decoded = await pumpThrough(await target.getDecodable(), splitIntoChunks(frame, 1));
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -277,16 +306,17 @@ describe("チャンク境界", () => {
     expect(decoded.outputChunks).toStrictEqual([input]);
   });
 
-  test("1 MiB の値を適度なチャンクに分割してもデコードできる", async ({ expect }) => {
+  test("1 MiB の値を適度なチャンクに分割してもデコードできる", async ({ expect, signal }) => {
     // 準備
+    const target = await createOpenedTarget(signal);
     const input = new Uint8Array(1024 * 1024);
     for (let index = 0; index < input.length; index++) {
       input[index] = index % 251;
     }
 
     // 実行
-    const frame = await encodeFrame(input);
-    const decoded = await pumpThrough(await v8serde.getDecodable(), splitIntoChunks(frame, 1024));
+    const frame = await encodeFrame(target, input);
+    const decoded = await pumpThrough(await target.getDecodable(), splitIntoChunks(frame, 1024));
 
     // 検証
     expect(decoded.writeError).toBeUndefined();
@@ -296,20 +326,21 @@ describe("チャンク境界", () => {
 });
 
 describe("内部バッファーの参照共有の防止", () => {
-  test.each([[3], [16], [1024], [65536]])(
+  test.for([[3], [16], [1024], [65536]])(
     "%i バイトの型付き配列は内部バッファーの上書き後も不変である",
-    async (size) => {
+    async ([size], { expect, signal }) => {
       // 準備
+      const target = await createOpenedTarget(signal);
       const input = new Uint8Array(size);
       for (let index = 0; index < input.length; index++) {
         input[index] = index % 251;
       }
-      const frame = await encodeFrame(input);
+      const frame = await encodeFrame(target, input);
       // 復元値の本体はペイロードの末尾にあるため、上書きはそこまで届く長さにします。
       // 再確保が起きると古いバッファーが残り検証にならないため、容量内に収めます。
       const capacity = Math.max(frame.byteLength, 16);
       const filler = new Uint8Array(Math.min(capacity, 32)).fill(0xab);
-      const transform = await v8serde.getDecodable();
+      const transform = await target.getDecodable();
       const writer = transform.writable.getWriter();
       const reader = transform.readable.getReader();
 
@@ -339,13 +370,15 @@ describe("内部バッファーの参照共有の防止", () => {
 describe("ストリームの異常系", () => {
   test("終了時に未完成のフレームが残ると完成済みの値を送出してから拒否される", async ({
     expect,
+    signal,
   }) => {
     // 準備
-    const frame = await encodeFrame({ a: 1 });
-    const input = concatBytes([await encodeFrame(1), frame.subarray(0, frame.byteLength - 1)]);
+    const target = await createOpenedTarget(signal);
+    const frame = await encodeFrame(target, { a: 1 });
+    const input = concatBytes([await encodeFrame(target, 1), frame.subarray(0, frame.byteLength - 1)]);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [input]);
+    const decoded = await pumpThrough(await target.getDecodable(), [input]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -354,12 +387,16 @@ describe("ストリームの異常系", () => {
     expect(decoded.outputChunks).toStrictEqual([1]);
   });
 
-  test("終了時に未完成のフレームだけが残ると値を送出せずに拒否される", async ({ expect }) => {
+  test("終了時に未完成のフレームだけが残ると値を送出せずに拒否される", async ({
+    expect,
+    signal,
+  }) => {
     // 準備
-    const frame = await encodeFrame({ a: 1 });
+    const target = await createOpenedTarget(signal);
+    const frame = await encodeFrame(target, { a: 1 });
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [
+    const decoded = await pumpThrough(await target.getDecodable(), [
       frame.subarray(0, frame.byteLength - 1),
     ]);
 
@@ -370,9 +407,15 @@ describe("ストリームの異常系", () => {
     expect(decoded.outputChunks).toStrictEqual([]);
   });
 
-  test("終了時にヘッダー断片だけが残ると V8SerdeDecodeError で拒否される", async ({ expect }) => {
+  test("終了時にヘッダー断片だけが残ると V8SerdeDecodeError で拒否される", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [Uint8Array.of(0, 0)]);
+    const decoded = await pumpThrough(await target.getDecodable(), [Uint8Array.of(0, 0)]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -386,14 +429,16 @@ describe("ストリームの異常系", () => {
 
   test("終了時に本体が不足したフレームが残ると V8SerdeDecodeError で拒否される", async ({
     expect,
+    signal,
   }) => {
     // 準備: 本体 16 バイトを主張するヘッダーに 2 バイトだけ添えます。
+    const target = await createOpenedTarget(signal);
     const header = new Uint8Array(4);
     new DataView(header.buffer).setUint32(0, 16, false);
     const input = concatBytes([header, Uint8Array.of(0, 0)]);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [input]);
+    const decoded = await pumpThrough(await target.getDecodable(), [input]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -405,12 +450,16 @@ describe("ストリームの異常系", () => {
     expect(decoded.outputChunks).toStrictEqual([]);
   });
 
-  test("巨大な長さを主張するヘッダーは確保せずに待機し終了時に拒否される", async ({ expect }) => {
+  test("巨大な長さを主張するヘッダーは確保せずに待機し終了時に拒否される", async ({
+    expect,
+    signal,
+  }) => {
     // 準備: 4GiB-1 バイトを主張するヘッダーだけを送り、本体は送りません。
+    const target = await createOpenedTarget(signal);
     const input = Uint8Array.of(0xff, 0xff, 0xff, 0xff);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [input]);
+    const decoded = await pumpThrough(await target.getDecodable(), [input]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -422,14 +471,15 @@ describe("ストリームの異常系", () => {
     expect(decoded.outputChunks).toStrictEqual([]);
   });
 
-  test("本体が破損したフレームは V8SerdeDecodeError で拒否される", async ({ expect }) => {
+  test("本体が破損したフレームは V8SerdeDecodeError で拒否される", async ({ expect, signal }) => {
     // 準備: 長さは正しいまま本体の先頭バイトを反転させ、バージョン検査で失敗させます。
-    const valid = await encodeFrame({ value: 1 });
+    const target = await createOpenedTarget(signal);
+    const valid = await encodeFrame(target, { value: 1 });
     const corrupt = valid.slice();
     corrupt[4] = (valid[4] ?? 0) ^ 0xff;
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [corrupt]);
+    const decoded = await pumpThrough(await target.getDecodable(), [corrupt]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -443,15 +493,17 @@ describe("ストリームの異常系", () => {
 
   test("完成済みの値の直後に破損したフレームが届くと完成分を送出してから拒否される", async ({
     expect,
+    signal,
   }) => {
     // 準備
-    const valid = await encodeFrame({ value: 1 });
+    const target = await createOpenedTarget(signal);
+    const valid = await encodeFrame(target, { value: 1 });
     const corrupt = valid.slice();
     corrupt[4] = (valid[4] ?? 0) ^ 0xff;
-    const input = concatBytes([await encodeFrame(1), corrupt]);
+    const input = concatBytes([await encodeFrame(target, 1), corrupt]);
 
     // 実行
-    const decoded = await pumpThrough(await v8serde.getDecodable(), [input]);
+    const decoded = await pumpThrough(await target.getDecodable(), [input]);
 
     // 検証
     const error = decoded.writeError ?? decoded.readError;
@@ -460,20 +512,27 @@ describe("ストリームの異常系", () => {
     expect(decoded.outputChunks).toStrictEqual([1]);
   });
 
-  test("エンコードできない値を流すと V8SerdeEncodeError で拒否される", async ({ expect }) => {
+  test("エンコードできない値を流すと V8SerdeEncodeError で拒否される", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
     // 実行
-    const encoded = await pumpThrough(await v8serde.getEncodable(), [1, () => {}, 3]);
+    const encoded = await pumpThrough(await target.getEncodable(), [1, () => {}, 3]);
 
     // 検証
     const error = encoded.writeError ?? encoded.readError;
     expect(error).toBeInstanceOf(V8SerdeEncodeError);
     expect((error as V8SerdeEncodeError).cause).toBeInstanceOf(Error);
-    expect(encoded.outputChunks).toStrictEqual([await encodeFrame(1)]);
+    expect(encoded.outputChunks).toStrictEqual([await encodeFrame(target, 1)]);
   });
 
-  test("読み取り側のキャンセルは書き込み側へ伝播する", async ({ expect }) => {
+  test("読み取り側のキャンセルは書き込み側へ伝播する", async ({ expect, signal }) => {
     // 準備
-    const transform = await v8serde.getDecodable();
+    const target = await createOpenedTarget(signal);
+    const transform = await target.getDecodable();
     const writer = transform.writable.getWriter();
     const reader = transform.readable.getReader();
     const reason = new Error("キャンセル");
@@ -482,13 +541,14 @@ describe("ストリームの異常系", () => {
     await reader.cancel(reason);
 
     // 検証
-    await expect(writer.write(await encodeFrame(1))).rejects.toBe(reason);
+    await expect(writer.write(await encodeFrame(target, 1))).rejects.toBe(reason);
     await expect(writer.closed).rejects.toBe(reason);
   });
 
-  test("書き込み側の abort は読み取り側へ伝播する", async ({ expect }) => {
+  test("書き込み側の abort は読み取り側へ伝播する", async ({ expect, signal }) => {
     // 準備
-    const transform = await v8serde.getDecodable();
+    const target = await createOpenedTarget(signal);
+    const transform = await target.getDecodable();
     const writer = transform.writable.getWriter();
     const reader = transform.readable.getReader();
     const reason = new Error("中断");
