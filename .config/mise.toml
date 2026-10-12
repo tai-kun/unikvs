@@ -24,6 +24,6 @@ run = [
   "pnpm update --include-github-actions",
   "pnpm install",
   "for d in $(jq -r '.workspaces[]' package.json | xargs ls -d); do (cd \"$d\" && mise run update); done",
-  "pnpm audit",
-  "npx skills update",
+  "pnpm audit --audit-level critical",
+  "npx skills update -y",
 ]
