@@ -33,6 +33,10 @@
       "path": "packages/null",
     },
     {
+      "name": "@unikvs/lru-cache",
+      "path": "packages/lru-cache",
+    },
+    {
       "name": "@unikvs/opfs",
       "path": "packages/opfs",
     },

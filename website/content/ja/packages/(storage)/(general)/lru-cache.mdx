@@ -1,0 +1,278 @@
+---
+title: "@unikvs/lru-cache"
+description: "件数や容量の上限付きでデータをメモリーに保存するストレージプラグイン @unikvs/lru-cache の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/lru-cache` は、件数や容量の上限付きでデータをメモリーに保存するストレージプラグインです。
+
+プロセス内キャッシュや、テスト用の上限付きキャッシュに使います。上限を超えると、直近使用順で最も古いものから追い出します。
+
+- 読み書きは同期で完了します。`name` は常に `"LruCache"` を返します。
+- `open` でオープン状態になり、`isOpen` が `true` になります。`open` は冪等であり、データを消しません。
+- ストレージの `close` でキャッシュが消え、`isOpen` が `false` になります。二重 `close` も成功します。再利用するときは再度 `open` を呼び出します。UniKvs の `open`・`close` はストレージの `open`・`close` を呼び出すため、UniKvs を閉じるとキャッシュは消えます。
+- 文字列やオブジェクトなど任意の値をそのまま保存できます。
+- 書き込み時と読み取り時に値を複製するため、呼び出し側の変更は保存値に影響しません。
+- 上限を指定しない場合は `memory` と同じように動作します。ただし、ライフサイクルは `open`・`close` で `isOpen` が切り替わる方式であり、`memory`・`http` と異なります。
+- 永続化されません。プロセス終了時に破棄されます。
+- TTL による追い出しは行いません。
+
+:::tip
+複製方法を変えたい場合は `clone` オプションで差し替えられます。既定値は `structuredClone` です。
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/lru-cache
+```
+
+## 使い方 [#usage]
+
+LruCache は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { LruCache } from "@unikvs/lru-cache";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    options: {
+      type: "LruCacheOptions",
+      description: "上限と複製方法の設定です。省略時は上限なしで動作します。",
+    },
+    "options.clone": {
+      type: "<T>(value: T) => T",
+      default: "structuredClone",
+      description: "保存時と読出時の複製に使う関数です。",
+    },
+    "options.maxEntries": {
+      type: "number",
+      description:
+        "保持する最大件数です。省略時は無制限です。`0` を指定すると書き込みは受理しますが直ちに追い出します。",
+    },
+    "options.maxBytes": {
+      type: "number",
+      description:
+        "保持する総バイト数の上限です。省略時は無制限です。単独で上限を超えるエントリーは保持します。",
+    },
+    "options.sizeOf": {
+      type: "(value: any, key: string) => number",
+      description:
+        "キーごとのバイト数を求める関数です。`maxBytes` 設定時のみ使います。既定値は `Uint8Array` の `byteLength`、それ以外は `1` です。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { LruCache } from "@unikvs/lru-cache";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: Value<string>;
+}>()
+  .persist(new LruCache({ maxEntries: 1000 }))
+  .create();
+
+await kvs.open();
+
+await kvs.set("greeting", "hello");
+const greeting = await kvs.get("greeting");
+
+await kvs.close();
+```
+
+UniKvs の `open`・`close` はストレージの `open`・`close` を呼び出すため、この例で `kvs.close()` を呼ぶとキャッシュは消えます。再利用するときは再度 `kvs.open()` を呼び出します。
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                                                         |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| `write`・`read`                         | 任意の値（文字列・オブジェクト・`null`・`undefined`・`Uint8Array` など） |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>`                                                |
+
+:::warning
+`maxBytes` 未設定時の `bytes` は常に `0` であり、実使用量を示しません。
+:::
+
+- `write`・`read` は文字列・オブジェクト・`null`・`undefined`・`Uint8Array` など任意の値に対応し、そのまま保存できます。
+- 書き込み時と読み取り時に `clone` で複製します。既定値は `structuredClone` です。
+- `write`・`read`・`exists`・`delete`・`clear` はいずれも同期です。
+- `write`・`read`・`exists`・`delete`・`getWritable`・`getReadable` は `open` の呼び出し後に使います。`open` の前や `close` の後に呼び出すと `TypeError` を投げます。UniKvs 経由ではラッパーが StorageIsNotOpenError を投げます。`clear`・`size`・`bytes` はいつでも呼び出せます。
+- ストレージの `close` は `clear` と同じくキャッシュをすべて消去し、`isOpen` を `false` にします。二重 `close` も成功します。ストリームの `close`（保存確定）とは異なります。
+- `getWritable`・`getReadable` の呼び出し自体は同期ですが、返されるストリームの読み書きは非同期です。
+- ストリーム操作は `Uint8Array<ArrayBuffer>` のみに対応しています。
+- `getWritable` はチャンクを内部に保持し、`close` 時に結合して保存します。保存は `close` まで確定しません。
+- `getReadable` は保存値を単一チャンクとして送出します。
+- 上限を超えると直近使用順で最も古いものから追い出します。件数上限を先に適用し、容量上限を後に適用します。
+- `read` のヒット時・`getReadable` の取得時・`getWritable` の `close` による保存時・上書き時に直近使用順を更新し、最も新しいものとして扱います。
+- `exists` は直近使用順を更新しません。
+- `size` は現在の件数、`bytes` は現在の総バイト数を返します。`bytes` は `maxBytes` を設定した場合のみ追跡します。
+- `storage.maxEntries`・`storage.maxBytes` で設定値を読み出せます。`undefined` のときは無制限です。
+- `maxEntries` に `0` を指定すると、書き込みは受理しますが直ちに追い出すため、`size` は常に `0` です。
+- 単独で `maxBytes` を超えるエントリーは保持します。このとき `bytes` が `maxBytes` を上回ります。
+- `sizeOf` は `maxBytes` を設定した場合のみ、複製済みの保存値とキーごとに呼び出します。上書き時も毎回呼び出し、`read`・`exists`・`delete`・`clear`・`getReadable` では呼び出しません。`getWritable` では取得時に呼び出さず `close` 時に 1 回呼び出します。
+- `sizeOf` の既定値は `Uint8Array` の `byteLength`、それ以外は `1` です。キー長は含みません。キー長を含める場合はキー長のバイト数を加算してください。例: `(value, key) => (value instanceof Uint8Array ? value.byteLength : 1) + key.length` のように指定します。
+- `sizeOf` は小数を許容しますが、丸め誤差で境界判定がずれる場合があるため、実用上は整数を推奨します。`-0` の戻り値は `0` 相当として受理します。
+- `maxBytes` に `0` を指定して空の `Uint8Array` を保存すると、追い出されずに蓄積されます。`maxEntries` の併用を推奨します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError
+
+#### 意味
+
+指定したキーが存在しません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出すか、キーの指定誤りを確認してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError, LruCache } from "@unikvs/lru-cache";
+
+const storage = new LruCache();
+await storage.open({ signal: AbortSignal.timeout(5000) });
+
+try {
+  storage.read({ key: "unknown" });
+} catch (error) {
+  if (error instanceof KeyNotFoundError) {
+    console.log(error.meta.key);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidChunkTypeError
+
+#### 意味
+
+チャンクの型が `Uint8Array<ArrayBuffer>` ではありません。書き込み時に `Uint8Array` 以外を渡したか、バイト列でない保存値を `getReadable` で読み取ったことが原因です。`meta` に `key`・`chunk`・`chunkType` を含みます。
+
+#### 対処方法
+
+ストリームには `Uint8Array<ArrayBuffer>` だけを流し、ストリームで読み取るキーにはバイト列を保存してください。
+
+#### 例
+
+以下は、`InvalidChunkTypeError` を捕捉する例です。
+
+```ts
+import { InvalidChunkTypeError, LruCache } from "@unikvs/lru-cache";
+
+const storage = new LruCache();
+await storage.open({ signal: AbortSignal.timeout(5000) });
+storage.write({ key: "greeting", data: "hello", vars: {} });
+
+const reader = storage.getReadable({ key: "greeting" }).getReader();
+
+try {
+  await reader.read();
+} catch (error) {
+  if (error instanceof InvalidChunkTypeError) {
+    console.log(error.meta.chunkType);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidMaxEntriesError
+
+#### 意味
+
+`maxEntries` が 0 以上の整数ではありません。`meta` に `actual` を含みます。
+
+#### 対処方法
+
+0 以上の整数を指定するか、省略してください。
+
+#### 例
+
+以下は、`InvalidMaxEntriesError` を捕捉する例です。
+
+```ts
+import { InvalidMaxEntriesError, LruCache } from "@unikvs/lru-cache";
+
+try {
+  new LruCache({ maxEntries: -1 });
+} catch (error) {
+  if (error instanceof InvalidMaxEntriesError) {
+    console.log(error.meta.actual);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidMaxBytesError
+
+#### 意味
+
+`maxBytes` が 0 以上の有限数ではありません。`meta` に `actual` を含みます。
+
+#### 対処方法
+
+0 以上の有限数を指定するか、省略してください。
+
+#### 例
+
+以下は、`InvalidMaxBytesError` を捕捉する例です。
+
+```ts
+import { InvalidMaxBytesError, LruCache } from "@unikvs/lru-cache";
+
+try {
+  new LruCache({ maxBytes: -1 });
+} catch (error) {
+  if (error instanceof InvalidMaxBytesError) {
+    console.log(error.meta.actual);
+  } else {
+    throw error;
+  }
+}
+```
+
+### InvalidSizeOfResultError
+
+#### 意味
+
+`sizeOf` の戻り値が 0 以上の有限数ではありません。`meta` に `key` と `actual` を含みます。
+
+#### 対処方法
+
+0 以上の有限数を返すよう `sizeOf` を修正してください。
+
+#### 例
+
+以下は、`InvalidSizeOfResultError` を捕捉する例です。
+
+```ts
+import { InvalidSizeOfResultError, LruCache } from "@unikvs/lru-cache";
+
+const storage = new LruCache({ maxBytes: 100, sizeOf: () => -1 });
+await storage.open({ signal: AbortSignal.timeout(5000) });
+
+try {
+  storage.write({ key: "greeting", data: "hello", vars: {} });
+} catch (error) {
+  if (error instanceof InvalidSizeOfResultError) {
+    console.log(error.meta.actual);
+  } else {
+    throw error;
+  }
+}
+```

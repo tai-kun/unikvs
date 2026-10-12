@@ -44,6 +44,8 @@ jobs:
             directory: "packages/writeonly"
           - name: "null"
             directory: "packages/null"
+          - name: "lru-cache"
+            directory: "packages/lru-cache"
           - name: "fs.node"
             directory: "packages/fs.node"
           - name: "fs.bun"

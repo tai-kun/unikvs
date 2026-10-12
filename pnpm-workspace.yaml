@@ -41,6 +41,7 @@ packages:
     "packages/memory",
     "packages/writeonly",
     "packages/null",
+    "packages/lru-cache",
     "packages/fs.node",
     "packages/fs.bun",
     "packages/redis.bun",
