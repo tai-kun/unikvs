@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import LruCache from "../src/lru-cache.js";
@@ -26,10 +27,10 @@ const test = vitest.extend<{ storage: LruCache }>({
 describe("容量上限による追い出し", () => {
   test("上限を超えたとき、最も古いものから追い出される", ({ expect, storage }) => {
     // 準備と実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
-    storage.write({ vars: {}, key: "k3", data: "v3" });
-    storage.write({ vars: {}, key: "k4", data: "v4" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k4", data: "v4" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -44,8 +45,8 @@ describe("容量上限による追い出し", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1, 2, 3]) });
-    storage.write({ vars: {}, key: "k2", data: new Uint8Array([4]) });
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1, 2, 3]) });
+    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([4]) });
 
     // 検証
     expect(storage.bytes).toBe(4);
@@ -58,8 +59,8 @@ describe("容量上限による追い出し", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "hello" });
-    storage.write({ vars: {}, key: "k2", data: { a: 1 } });
+    storage.write({ vars: new Variables(), key: "k1", data: "hello" });
+    storage.write({ vars: new Variables(), key: "k2", data: { a: 1 } });
 
     // 検証
     expect(storage.bytes).toBe(2);
@@ -72,8 +73,8 @@ describe("容量上限による追い出し", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -87,7 +88,7 @@ describe("容量上限による追い出し", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1, 2, 3]) });
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1, 2, 3]) });
 
     // 検証
     expect(storage.bytes).toBe(0);
@@ -100,8 +101,8 @@ describe("容量上限による追い出し", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "ab" });
-    storage.write({ vars: {}, key: "k1", data: "abcde" });
+    storage.write({ vars: new Variables(), key: "k1", data: "ab" });
+    storage.write({ vars: new Variables(), key: "k1", data: "abcde" });
 
     // 検証
     expect(storage.bytes).toBe(5);
@@ -112,7 +113,7 @@ describe("容量上限による追い出し", () => {
     // 準備
     const storage = new LruCache({ maxBytes: 10, sizeOf: fixedSizeOf(4) });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     storage.delete({ key: "k1" });
@@ -126,7 +127,7 @@ describe("容量上限による追い出し", () => {
     // 準備
     const storage = new LruCache({ maxBytes: 10, sizeOf: fixedSizeOf(4) });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     storage.clear();
@@ -144,7 +145,7 @@ describe("単独で上限を超えた値の保持", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "big", data: "v" });
+    storage.write({ vars: new Variables(), key: "big", data: "v" });
 
     // 検証
     expect(storage.read({ key: "big" })).toBe("v");
@@ -155,10 +156,10 @@ describe("単独で上限を超えた値の保持", () => {
     // 準備
     const storage = new LruCache({ maxBytes: 5, sizeOf: () => 10 });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "big", data: "v1" });
+    storage.write({ vars: new Variables(), key: "big", data: "v1" });
 
     // 実行
-    storage.write({ vars: {}, key: "small", data: "v2" });
+    storage.write({ vars: new Variables(), key: "small", data: "v2" });
 
     // 検証
     expect(storage.exists({ key: "big" })).toBe(false);
@@ -171,7 +172,7 @@ describe("単独で上限を超えた値の保持", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("v1");
@@ -186,8 +187,8 @@ describe("単独で上限を超えた値の保持", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array(0) });
-    storage.write({ vars: {}, key: "k2", data: new Uint8Array(0) });
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array(0) });
+    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array(0) });
 
     // 検証
     expect(storage.size).toBe(2);

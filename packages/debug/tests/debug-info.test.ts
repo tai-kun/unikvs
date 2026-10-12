@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -10,7 +11,7 @@ const test = createRecordsTest();
  * 型名と大きさの検証ではデータだけを差し替えるために使用します。
  */
 function argsFor(data: unknown): DebugInfoArgs {
-  return { vars: {}, action: undefined, key: undefined, direction: "write", data };
+  return { vars: new Variables({}), action: undefined, key: undefined, direction: "write", data };
 }
 
 class Example {}
@@ -105,7 +106,10 @@ describe("追加のデバッグ情報", () => {
     const debug = new Debug({ getDebugInfo: () => ({ custom: 1 }) });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "k" }, data: "d" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
+      data: "d",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -127,7 +131,10 @@ describe("追加のデバッグ情報", () => {
     });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "real" }, data: "d" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "real" }),
+      data: "d",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -144,7 +151,10 @@ describe("追加のデバッグ情報", () => {
     const debug = new Debug({ getDebugInfo: () => ({ custom: 1 }) });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "k" }, data: "hello" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
+      data: "hello",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -159,7 +169,10 @@ describe("追加のデバッグ情報", () => {
     });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "k" }, data: "hello" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
+      data: "hello",
+    });
 
     // 検証
     expect(records).toHaveLength(1);

@@ -64,12 +64,12 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `unknown` |
-| `getEncodable` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown` |
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `getEncodable` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
 
 - `encode` は任意の値を 1 つの CBOR データアイテムのバイト列へ変換します。
 - `decode` は 1 つのデータアイテムのバイト列を値に戻します。

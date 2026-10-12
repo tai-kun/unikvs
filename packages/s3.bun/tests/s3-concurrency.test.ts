@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, createAllByteValues, createPseudoRandomBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -18,7 +19,9 @@ describe("並行実行", () => {
     ];
 
     // 実行
-    await Promise.all(candidates.map((data) => storage.write({ key, data, signal, vars: {} })));
+    await Promise.all(
+      candidates.map((data) => storage.write({ key, data, signal, vars: new Variables({}) })),
+    );
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -36,7 +39,9 @@ describe("並行実行", () => {
 
     // 実行
     await Promise.all(
-      Array.from({ length: 30 }, () => storage.write({ key, data, signal, vars: {} })),
+      Array.from({ length: 30 }, () =>
+        storage.write({ key, data, signal, vars: new Variables({}) }),
+      ),
     );
     const result = await storage.read({ key, signal });
 
@@ -53,7 +58,7 @@ describe("並行実行", () => {
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
     );
     const results = await Promise.all(entries.map(({ key }) => storage.read({ key, signal })));
 
@@ -72,7 +77,7 @@ describe("並行実行", () => {
     // 準備
     const key = "parallel-read.bin";
     const data = createPseudoRandomBytes(64 * 1024, 999);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 実行
     const results = await Promise.all(
@@ -88,7 +93,7 @@ describe("並行実行", () => {
   test("同じキーへの並列 delete が全て成功する", async ({ expect, signal, storage }) => {
     // 準備
     const key = "parallel-delete.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
 
     // 実行
     await Promise.all(Array.from({ length: 5 }, () => storage.delete({ key, signal })));
@@ -108,7 +113,7 @@ describe("並行実行", () => {
       data: new Uint8Array([index]),
     }));
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
     );
 
     // 実行

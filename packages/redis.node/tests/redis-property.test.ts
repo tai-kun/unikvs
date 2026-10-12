@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, concatBytes } from "@unikvs/testing";
 import { forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
@@ -12,7 +13,7 @@ describe("プロパティーベースの検証", () => {
       const data = random.bytes(random.uint(4096));
 
       // 実行
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables() });
 
       // 検証
       await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -20,7 +21,7 @@ describe("プロパティーベースの検証", () => {
 
       // 実行
       const next = random.bytes(random.uint(4096));
-      await storage.write({ key, data: next, signal, vars: {} });
+      await storage.write({ key, data: next, signal, vars: new Variables() });
 
       // 検証
       expect(bytesEqual(await storage.read({ key, signal }), next)).toBe(true);
@@ -42,7 +43,7 @@ describe("プロパティーベースの検証", () => {
       // 準備
       const key = `prop-stream/${random.uint(1_000_000_000)}/${random.string(6)}`;
       const chunks = random.array(random.int(1, 4), () => random.bytes(random.uint(8192)));
-      const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+      const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
       // 実行
       for (const chunk of chunks) {
@@ -70,7 +71,7 @@ describe("プロパティーベースの検証", () => {
         data: random.bytes(random.uint(128)),
       }));
       await Promise.all(
-        entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+        entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
       );
 
       // 実行

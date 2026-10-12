@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 
+import { Variables } from "@unikvs/core";
 import { waitForPort } from "@unikvs/testing/node";
 import { Redis as Ioredis } from "ioredis";
 import { afterEach, describe, expectTypeOf, vi } from "vitest";
@@ -26,7 +27,7 @@ describe("Node 固有の振る舞い", () => {
     try {
       // 検証
       expect(storage.isOpen).toBe(true);
-      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: {} });
+      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: new Variables() });
       await expect(storage.read({ key: "a", signal })).resolves.toStrictEqual(new Uint8Array([1]));
     } finally {
       await storage.close();
@@ -105,7 +106,7 @@ describe("Node 固有の振る舞い", () => {
 
       // 検証
       expect(storage.isOpen).toBe(true);
-      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: {} });
+      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: new Variables() });
       await expect(storage.read({ key: "a", signal })).resolves.toStrictEqual(new Uint8Array([1]));
     } finally {
       if (storage.isOpen) {
@@ -231,7 +232,7 @@ describe("Node 固有の振る舞い", () => {
 
     try {
       // 実行
-      await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+      await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
 
       // 検証
       const raw = new Ioredis(url);
@@ -268,7 +269,7 @@ describe("Node 固有の振る舞い", () => {
         key: "omitted-options.bin",
         data: new Uint8Array([1]),
         signal,
-        vars: {},
+        vars: new Variables(),
       });
       await expect(storage.read({ key: "omitted-options.bin", signal })).resolves.toStrictEqual(
         new Uint8Array([1]),

@@ -2,7 +2,12 @@ import type { MaybePromise } from "maypromise";
 
 import type { ErrorBase } from "./errors.js";
 import type { IReadableStream, IWritableStream } from "./interface.types.js";
-import type { Variables } from "./variables.types.js";
+import type { default as Variables } from "./variables.js";
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
+ */
+export type { IReadableStream, IWritableStream };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage)

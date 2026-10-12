@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { pipeChunks } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -6,8 +7,8 @@ import { createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
 
-const WRITE_VARS = { "unikvs:action": "set", "unikvs:key": "stream" };
-const READ_VARS = { "unikvs:action": "stream", "unikvs:key": "stream" };
+const WRITE_VARS = new Variables({ "unikvs:action": "set", "unikvs:key": "stream" });
+const READ_VARS = new Variables({ "unikvs:action": "stream", "unikvs:key": "stream" });
 
 describe("ストリームのチャンク", () => {
   test("チャンクが 0 個のときは何も記録しない", async ({ expect, records }) => {

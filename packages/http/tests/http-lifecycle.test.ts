@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -67,12 +68,16 @@ describe("ライフサイクル", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
     expect(
-      await storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([1]));
   });
 
@@ -105,7 +110,7 @@ describe("ライフサイクル", () => {
         key: "k",
         data: new Uint8Array([1]),
         signal: abortedSignal(reason),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 

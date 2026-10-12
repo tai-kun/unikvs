@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import { ChecksumMismatchError, ChecksumRequiredError } from "../src/errors.js";
@@ -67,7 +68,7 @@ test("期待値と一致するチェックサムを指定して encode すると
 }) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH };
+  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 実行
   const result = checksum.encode({ vars, data: TEST_DATA });
@@ -80,7 +81,7 @@ test("空のデータを SHA-256 のハッシュ値で検証できる", ({ expec
   // 準備
   const checksum = new ChecksumSha256();
   const data = new Uint8Array(0);
-  const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: EMPTY_HASH };
+  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
   // 実行
   const result = checksum.encode({ vars, data });
@@ -94,7 +95,7 @@ test("期待値と一致しないチェックサムを指定すると、実際�
 }) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH };
+  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH });
 
   // 実行と検証
   try {
@@ -109,7 +110,7 @@ test("期待値と一致しないチェックサムを指定すると、実際�
 test("期待値と一致するチェックサムを指定して decode すると、データをそのまま返す", ({ expect }) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH };
+  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 実行
   const result = checksum.decode({ vars, data: TEST_DATA });
@@ -125,7 +126,9 @@ test("検証が必須のときにチェックサムが指定されていなけ�
   const checksum = new ChecksumSha256({ required: true });
 
   // 実行と検証
-  expect(() => checksum.encode({ vars: {}, data: TEST_DATA })).toThrow(ChecksumRequiredError);
+  expect(() => checksum.encode({ vars: new Variables({}), data: TEST_DATA })).toThrow(
+    ChecksumRequiredError,
+  );
 });
 
 describe("ストリームによる検証", () => {
@@ -135,7 +138,7 @@ describe("ストリームによる検証", () => {
     // 準備
     const checksum = new ChecksumSha256();
     const transformStream = checksum.getEncodable({
-      vars: { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH },
+      vars: new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH }),
     });
 
     // 実行
@@ -152,7 +155,7 @@ describe("ストリームによる検証", () => {
     // 準備
     const checksum = new ChecksumSha256();
     const transformStream = checksum.getEncodable({
-      vars: { [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH },
+      vars: new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH }),
     });
 
     // 実行

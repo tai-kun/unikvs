@@ -41,16 +41,19 @@ import { Base64Url } from "@unikvs/base64url";
     },
     "options.encoder": {
       type: "FastUtf8",
-      description: "base64url テキストをバイト列へ変換するエンコーダーです。差し替えが必要な場合にだけ指定します。",
+      description:
+        "base64url テキストをバイト列へ変換するエンコーダーです。差し替えが必要な場合にだけ指定します。",
     },
     "options.decoder": {
       type: "FastUtf8",
-      description: "バイト列を base64url テキストへ変換するデコーダーです。差し替えが必要な場合にだけ指定します。",
+      description:
+        "バイト列を base64url テキストへ変換するデコーダーです。差し替えが必要な場合にだけ指定します。",
     },
     "options.padding": {
       type: "boolean",
       default: "false",
-      description: "末尾に `=` を付けて出力するかどうかです。`decode` は有無にかかわらず受け付けます。",
+      description:
+        "末尾に `=` を付けて出力するかどうかです。`decode` は有無にかかわらず受け付けます。",
     },
   }}
 />
@@ -79,10 +82,10 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 

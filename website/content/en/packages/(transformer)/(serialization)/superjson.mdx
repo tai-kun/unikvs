@@ -64,12 +64,12 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `unknown` |
-| `getEncodable` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown` |
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `getEncodable` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
 
 - `encode` converts any value to bytes (UTF-8) of a SuperJSON payload.
 - `decode` restores bytes of a payload to a value.

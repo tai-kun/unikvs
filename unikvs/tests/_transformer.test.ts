@@ -1,4 +1,5 @@
-import type { Variables, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
+import type { IDecodable, ITransformer, IEncodable } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvsTransformer from "../src/_transformer.js";
@@ -9,7 +10,7 @@ import {
   DecodableStreamNotSupportedError,
 } from "../src/errors.js";
 
-const TEST_VARS: Variables = {};
+const TEST_VARS: Variables = new Variables();
 const TEST_SIGNAL = new AbortController().signal;
 
 /**

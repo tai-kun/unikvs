@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -80,7 +81,12 @@ describe("読み出しの拒否", () => {
   }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key,
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 実行と検証
     expect(() => storage.read({ key })).toThrow(KeyNotFoundError);
@@ -109,10 +115,15 @@ describe("存在確認の拒否", () => {
     await storage.write({
       key: "saved",
       data: "v1",
-      vars: {},
+      vars: new Variables(),
       signal: new AbortController().signal,
     });
-    await storage.write({ key: "", data: "v2", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key: "",
+      data: "v2",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 実行と検証
     expect(inner.map.has("saved")).toBe(true);

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, collectBytes } from "@unikvs/testing";
 import { forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
@@ -18,7 +19,7 @@ describe("決定的ファズ検証", () => {
       const key = `prop/${random.string(random.int(1, 32), KEY_CHARS)}`;
       const data = random.bytes(random.uint(64 * 1024 + 1));
 
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
       const result = await storage.read({ key, signal });
 
       expect(bytesEqual(result, data)).toBe(true);
@@ -51,7 +52,7 @@ describe("決定的ファズ検証", () => {
         chunks.push(expected.subarray(offset));
       }
 
-      const writer = storage.getWritable({ key, vars: {}, signal }).getWriter();
+      const writer = storage.getWritable({ key, vars: new Variables({}), signal }).getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }

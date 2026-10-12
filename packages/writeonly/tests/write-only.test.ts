@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import type { IStorage } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
@@ -118,7 +119,7 @@ describe("初期化と接続管理", () => {
     storage,
   }) => {
     // 実行
-    await storage.open({ vars: {}, signal: new AbortController().signal });
+    await storage.open({ vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.openCount).toBe(1);
@@ -130,7 +131,7 @@ describe("初期化と接続管理", () => {
     storage,
   }) => {
     // 実行
-    await storage.close({ vars: {}, signal: new AbortController().signal });
+    await storage.close({ vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.closeCount).toBe(1);
@@ -144,7 +145,7 @@ describe("初期化と接続管理", () => {
     // 準備
     const args = {
       key: "k1",
-      vars: {},
+      vars: new Variables(),
       signal: new AbortController().signal,
       error: {} as IStorage.OnOtherWriteErrorArgs["error"],
     };
@@ -168,7 +169,7 @@ describe("書き込み", () => {
     const data = "v1";
 
     // 実行
-    await storage.write({ key, data, vars: {}, signal: new AbortController().signal });
+    await storage.write({ key, data, vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.map.get(key)).toBe(data);
@@ -183,7 +184,7 @@ describe("書き込み", () => {
     const key = "s1";
     const writable = await storage.getWritable!({
       key,
-      vars: {},
+      vars: new Variables(),
       signal: new AbortController().signal,
     });
     const writer = writable.getWriter();
@@ -215,7 +216,12 @@ describe("読み出し", () => {
   }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key,
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 実行と検証
     expect(() => storage.read({ key })).toThrow(KeyNotFoundError);
@@ -224,7 +230,12 @@ describe("読み出し", () => {
   test("read が投げる KeyNotFoundError はキーを保持する", async ({ expect, storage }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key,
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
     let error: unknown;
 
     // 実行
@@ -245,7 +256,12 @@ describe("読み出し", () => {
   }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key,
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 実行と検証
     expect(() => storage.getReadable({ key })).toThrow(KeyNotFoundError);
@@ -254,7 +270,12 @@ describe("読み出し", () => {
   test("データが保存されていても、exists は false を返す", async ({ expect, inner, storage }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key,
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 実行
     const result = storage.exists({ key });
@@ -281,7 +302,7 @@ describe("削除", () => {
     inner.map.set(key, "v1");
 
     // 実行
-    await storage.delete({ key, vars: {}, signal: new AbortController().signal });
+    await storage.delete({ key, vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.map.has(key)).toBe(true);
@@ -297,7 +318,7 @@ describe("削除", () => {
     inner.map.set("k2", "v2");
 
     // 実行
-    await storage.clear({ vars: {}, signal: new AbortController().signal });
+    await storage.clear({ vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.map.size).toBe(2);
@@ -313,7 +334,7 @@ describe("削除", () => {
     const storage = new WriteOnly(inner, { allowDelete: true });
 
     // 実行
-    await storage.delete({ key, vars: {}, signal: new AbortController().signal });
+    await storage.delete({ key, vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.map.has(key)).toBe(false);
@@ -329,7 +350,7 @@ describe("削除", () => {
     const storage = new WriteOnly(inner, { allowDelete: true });
 
     // 実行
-    await storage.clear({ vars: {}, signal: new AbortController().signal });
+    await storage.clear({ vars: new Variables(), signal: new AbortController().signal });
 
     // 検証
     expect(inner.map.size).toBe(0);

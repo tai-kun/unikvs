@@ -62,11 +62,11 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `unknown` | `Promise<Uint8Array<ArrayBuffer>>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Promise<unknown>` |
-| `getEncodable` | `unknown` | `Promise<TransformStream<unknown, Uint8Array<ArrayBuffer>>>` |
+| メソッド       | 入力                      | 出力                                                         |
+| -------------- | ------------------------- | ------------------------------------------------------------ |
+| `encode`       | `unknown`                 | `Promise<Uint8Array<ArrayBuffer>>`                           |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Promise<unknown>`                                           |
+| `getEncodable` | `unknown`                 | `Promise<TransformStream<unknown, Uint8Array<ArrayBuffer>>>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Promise<TransformStream<Uint8Array<ArrayBuffer>, unknown>>` |
 
 - `encode` は任意の値を `v8.serialize` のバイト列へ変換します。

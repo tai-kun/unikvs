@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -27,7 +28,7 @@ describe("データの透過", () => {
     const debug = new Debug();
 
     // 実行
-    const output = debug.encode({ vars: {}, data: value });
+    const output = debug.encode({ vars: new Variables({}), data: value });
 
     // 検証
     expect(output).toBe(value);
@@ -38,7 +39,7 @@ describe("データの透過", () => {
     const debug = new Debug();
 
     // 実行
-    const output = debug.decode({ vars: {}, data: value });
+    const output = debug.decode({ vars: new Variables({}), data: value });
 
     // 検証
     expect(output).toBe(value);
@@ -47,7 +48,7 @@ describe("データの透過", () => {
   test("encode と decode は vars を変更しない", ({ expect }) => {
     // 準備
     const debug = new Debug();
-    const vars = Object.freeze({
+    const vars = new Variables({
       "unikvs:action": "set",
       "unikvs:key": "greeting",
       extra: true,
@@ -61,7 +62,7 @@ describe("データの透過", () => {
     // 検証
     expect(encoded).toBe(data);
     expect(decoded).toBe(data);
-    expect(vars).toStrictEqual({
+    expect(Object.fromEntries(vars.entries())).toStrictEqual({
       "unikvs:action": "set",
       "unikvs:key": "greeting",
       extra: true,
@@ -73,10 +74,10 @@ describe("データの透過", () => {
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: {}, data: "a" });
-    debug.decode({ vars: {}, data: "b" });
-    debug.getEncodable({ vars: {} });
-    debug.getDecodable({ vars: {} });
+    debug.encode({ vars: new Variables({}), data: "a" });
+    debug.decode({ vars: new Variables({}), data: "b" });
+    debug.getEncodable({ vars: new Variables({}) });
+    debug.getDecodable({ vars: new Variables({}) });
 
     // 検証
     expect(debug.isOpen).toBe(true);

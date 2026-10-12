@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { concatBytes, collectBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -15,7 +16,7 @@ async function writeChunks(
   key: string,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<void> {
-  const writable = await storage.getWritable({ key, signal, vars: {} });
+  const writable = await storage.getWritable({ key, signal, vars: new Variables() });
   const writer = writable.getWriter();
   for (const chunk of chunks) {
     await writer.write(chunk);
@@ -28,7 +29,7 @@ describe("書き込みストリームの振る舞い", () => {
   test("何も書き込まずに閉じたとき、空のデータが保存される", async ({ expect, storage }) => {
     // 準備
     const key = "empty-stream.bin";
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
 
     // 実行
     await writable.close();
@@ -124,8 +125,8 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "visibility.bin";
     const original = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: original, signal, vars: {} });
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    await storage.write({ key, data: original, signal, vars: new Variables() });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9]));
 
@@ -145,7 +146,7 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "new-file-visibility.bin";
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
@@ -165,8 +166,8 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "aborted.bin";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: {} });
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    await storage.write({ key, data: original, signal, vars: new Variables() });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
@@ -184,7 +185,7 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "aborted-new.bin";
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
@@ -206,7 +207,7 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "cancelled.bin";
     const data = new Uint8Array(200_000).fill(7);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
     const readable = await storage.getReadable({ key, signal });
     const reader = readable.getReader();
     await reader.read();
@@ -259,7 +260,7 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "write-then-stream.bin";
     const data = new Uint8Array([5, 6, 7, 8]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const loaded = await collectBytes(await storage.getReadable({ key, signal }));
@@ -274,7 +275,7 @@ describe("読み取りストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "empty-file.bin";
-    await storage.write({ key, data: new Uint8Array(), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array(), signal, vars: new Variables() });
 
     // 実行
     const readable = await storage.getReadable({ key, signal });
@@ -291,7 +292,7 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "multi-reader.bin";
     const data = new Uint8Array(150_000).fill(3);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const [first, second] = await Promise.all([

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { RepairNotAllowedError } from "@unikvs/core";
 import { describe, test } from "vitest";
 
@@ -13,7 +14,7 @@ describe("storageNames の表示名解決", () => {
     const error = (() => {
       try {
         gate.encode({
-          vars: { "unikvs:repair": true, "unikvs:storageNames": ["cache"] },
+          vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": ["cache"] }),
           data: "x",
         });
       } catch (ex) {
@@ -36,7 +37,7 @@ describe("storageNames の表示名解決", () => {
     const error = (() => {
       try {
         gate.encode({
-          vars: { "unikvs:repair": true, "unikvs:storageNames": ["a", "b"] },
+          vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": ["a", "b"] }),
           data: "x",
         });
       } catch (ex) {
@@ -58,7 +59,10 @@ describe("storageNames の表示名解決", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true, "unikvs:storageNames": [] }, data: "x" });
+        gate.encode({
+          vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": [] }),
+          data: "x",
+        });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }
@@ -77,7 +81,10 @@ describe("storageNames の表示名解決", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true, "unikvs:storageNames": "cache" }, data: "x" });
+        gate.encode({
+          vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": "cache" }),
+          data: "x",
+        });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }
@@ -98,7 +105,7 @@ describe("storageNames の表示名解決", () => {
     const error = (() => {
       try {
         gate.encode({
-          vars: { "unikvs:repair": true, "unikvs:storageNames": ["a", 1, null] },
+          vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": ["a", 1, null] }),
           data: "x",
         });
       } catch (ex) {
@@ -118,7 +125,9 @@ describe("storageNames の表示名解決", () => {
 
     // 実行と検証
     expect(() =>
-      gate.getEncodable({ vars: { "unikvs:repair": true, "unikvs:storageNames": ["cache"] } }),
+      gate.getEncodable({
+        vars: new Variables({ "unikvs:repair": true, "unikvs:storageNames": ["cache"] }),
+      }),
     ).toThrowError('Repair writes via "cache" are not allowed');
   });
 });

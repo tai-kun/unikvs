@@ -1,4 +1,5 @@
 import { AllowRepair } from "@unikvs/allow-repair";
+import { Variables } from "@unikvs/core";
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { abortedSignal, captureRejection, sourceFrom } from "@unikvs/testing";
@@ -119,13 +120,13 @@ describe("宛先ごとのプレフィックス", () => {
       .fork(UniKvs.branch().transform(new KeyPrefix("b:")).persist(storageB))
       .create();
     await kvs.open();
-    storageA.write({ key: "b:k1", data: "contamination", vars: {} });
+    storageA.write({ key: "b:k1", data: "contamination", vars: new Variables() });
 
     // 実行と検証: 別宛先の物理キーが混入しても論理キーでは見えない。
     expect(await kvs.has("k1")).toBe(false);
 
     // 実行と検証: 自宛先の解決キーで書くと見える。
-    storageB.write({ key: "b:k1", data: "v1", vars: {} });
+    storageB.write({ key: "b:k1", data: "v1", vars: new Variables() });
     expect(await kvs.has("k1")).toBe(true);
 
     // 実行
@@ -202,7 +203,7 @@ describe("論理キーの維持", () => {
     await kvs.set("k1", "v1");
 
     // 検証
-    expect(storage.lastWriteArgs?.vars?.["unikvs:key"]).toBe("k1");
+    expect(storage.lastWriteArgs?.vars?.get("unikvs:key")).toBe("k1");
     expect(storage.lastWriteArgs?.key).toBe("tenant:k1");
 
     // 後片付け
@@ -322,7 +323,7 @@ describe("repair との連動", () => {
       .persist(storageB)
       .create();
     await kvs.open();
-    storageB.write({ key: "tenant:k1", data: "v1", vars: {} });
+    storageB.write({ key: "tenant:k1", data: "v1", vars: new Variables() });
 
     // 実行
     const value = await kvs.get("k1", { repair: true });
@@ -349,7 +350,7 @@ describe("repair との連動", () => {
       .create();
     await kvs.open();
     const data = new Uint8Array([4, 5, 6]);
-    storageB.write({ key: "tenant:logs", data, vars: {} });
+    storageB.write({ key: "tenant:logs", data, vars: new Variables() });
 
     // 実行
     const vs = await kvs.stream("logs", { repair: true });

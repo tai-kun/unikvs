@@ -87,9 +87,9 @@ await kvs.close();
 
 ## Data types [#data-types]
 
-| Operation | Supported data type |
-| --- | --- |
-| `write`・`read` | Strings |
+| Operation       | Supported data type |
+| --------------- | ------------------- |
+| `write`・`read` | Strings             |
 
 - `write` and `read` support strings only, passing values directly to `setItem` and `getItem`.
 - To store objects, stringify them on the caller side before passing.

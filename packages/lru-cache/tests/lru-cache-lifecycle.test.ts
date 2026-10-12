@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection, captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -25,11 +26,17 @@ const unopenedOperations: readonly {
   readonly label: string;
   readonly run: (storage: LruCache) => unknown;
 }[] = [
-  { label: "write", run: (storage) => storage.write({ vars: {}, key: "k", data: "v" }) },
+  {
+    label: "write",
+    run: (storage) => storage.write({ vars: new Variables(), key: "k", data: "v" }),
+  },
   { label: "read", run: (storage) => storage.read({ key: "k" }) },
   { label: "exists", run: (storage) => storage.exists({ key: "k" }) },
   { label: "delete", run: (storage) => storage.delete({ key: "k" }) },
-  { label: "getWritable", run: (storage) => storage.getWritable({ vars: {}, key: "k" }) },
+  {
+    label: "getWritable",
+    run: (storage) => storage.getWritable({ vars: new Variables(), key: "k" }),
+  },
   { label: "getReadable", run: (storage) => storage.getReadable({ key: "k" }) },
 ];
 
@@ -106,7 +113,7 @@ describe("ライフサイクル", () => {
   test("open はデータを消さずにオープン状態へ移す", async ({ expect, storage, signal }) => {
     // 準備
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     await storage.open({ signal });
@@ -149,7 +156,7 @@ describe("ライフサイクル", () => {
     // 準備
     const sized = new LruCache({ maxBytes: 10, sizeOf: () => 3 });
     await sized.open({ signal });
-    sized.write({ vars: {}, key: "k1", data: "v1" });
+    sized.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     await sized.close({ signal });
@@ -166,7 +173,7 @@ describe("ライフサイクル", () => {
     // 準備
     const storage = new LruCache();
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     await storage.close({ signal });
 
     // 実行
@@ -181,7 +188,7 @@ describe("ライフサイクル", () => {
     // 準備
     const storage = new LruCache();
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     await storage.close({ signal });
 
     // 実行と検証
@@ -193,7 +200,7 @@ describe("ライフサイクル", () => {
     // 二重 close のクラッシュ前例 (`indexeddb` の `db!.close()`、`redis` の `con!`) には合わせない。
     // close の実体は冪等な clear とフラグの解除だけであり、外部ハンドルを持たないため、冪等な成功を仕様とする。
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     await storage.close({ signal });
 
     // 実行
@@ -217,7 +224,7 @@ describe("ライフサイクル", () => {
     // 準備
     const storage = new LruCache();
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     const error = await captureRejection(storage.close({ signal: abortedSignal() }));
@@ -231,12 +238,12 @@ describe("ライフサイクル", () => {
   test("close 後に再 open すると再利用できる", async ({ expect, storage, signal }) => {
     // 準備
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     await storage.close({ signal });
 
     // 実行
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -249,7 +256,7 @@ describe("ライフサイクル", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     storage.read({ key: "k1" });
     storage.delete({ key: "k1" });
     storage.clear();
@@ -261,10 +268,10 @@ describe("ライフサイクル", () => {
   test("ストリーム操作の後も isOpen は true のままである", async ({ expect, storage, signal }) => {
     // 準備
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1]) });
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
 
     // 実行
-    const writer = storage.getWritable({ vars: {}, key: "k2" }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key: "k2" }).getWriter();
     await writer.write(new Uint8Array([2]));
     await writer.close();
     const reader = storage.getReadable({ key: "k2" }).getReader();
@@ -281,7 +288,7 @@ describe("ライフサイクル", () => {
   }) => {
     // 準備
     await storage.open({ signal });
-    const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
     await writer.write(new Uint8Array([1]));
     await storage.close({ signal });
 
@@ -320,7 +327,7 @@ describe("ライフサイクル", () => {
     await openViaUnikvs(storage, signal, state);
     expect(state.managed).toBe(true);
     expect(storage.isOpen).toBe(true);
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     // managed が true のため UniKvs 経由では close が実際に呼ばれる。
     await closeViaUnikvs(storage, signal, state);
 
@@ -335,12 +342,12 @@ describe("ライフサイクル", () => {
     const storage = new LruCache();
     const state: ManagedState = { managed: false };
     await openViaUnikvs(storage, signal, state);
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     await closeViaUnikvs(storage, signal, state);
 
     // 実行
     await openViaUnikvs(storage, signal, state);
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
 
     // 検証
     expect(storage.isOpen).toBe(true);

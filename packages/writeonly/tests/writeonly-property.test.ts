@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { forCasesAsync, type Random } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -9,7 +10,7 @@ const seed = 20260930;
 
 const signal = new AbortController().signal;
 
-const vars = {};
+const vars = new Variables();
 
 type Value = string | number | boolean | null | readonly number[] | Uint8Array;
 

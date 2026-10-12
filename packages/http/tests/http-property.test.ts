@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { createRandom, forCasesAsync } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -19,12 +20,21 @@ describe("任意値の往復", () => {
     await forCasesAsync(seed, 50, async (random) => {
       const key = random.bool() ? random.pick(keyAlphabet) : random.string(random.int(0, 12));
       const data = random.bytes(random.int(0, 1024));
-      await storage.write({ key, data, signal: AbortSignal.timeout(5_000), vars: {} });
-      const result = await storage.read({ key, signal: AbortSignal.timeout(5_000), vars: {} });
+      await storage.write({
+        key,
+        data,
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      });
+      const result = await storage.read({
+        key,
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      });
       expect(result).toStrictEqual(data);
-      expect(await storage.exists({ key, signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-        true,
-      );
+      expect(
+        await storage.exists({ key, signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      ).toBe(true);
     });
   });
 

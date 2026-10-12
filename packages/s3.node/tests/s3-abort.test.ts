@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { StorageAbortedError } from "../src/errors.js";
@@ -48,7 +49,12 @@ describe("AbortSignal による中断", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "pre-aborted.bin", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({
+        key: "pre-aborted.bin",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toMatchObject({ name: "AbortError" });
     await expect(storage.read({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
       name: "AbortError",
@@ -78,7 +84,7 @@ describe("AbortSignal による中断", () => {
 
     // 実行
     try {
-      storage.getWritable({ key, vars: {}, signal: controller.signal });
+      storage.getWritable({ key, vars: new Variables({}), signal: controller.signal });
     } catch (error) {
       caught = error;
     }
@@ -98,7 +104,12 @@ describe("AbortSignal による中断", () => {
     // 準備
     const targetKey = "in-flight-target.bin";
     storage.open();
-    await storage.write({ key: targetKey, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({
+      key: targetKey,
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables({}),
+    });
 
     await withDelayedProxy(endpoint, async (proxyEndpoint) => {
       const proxyStorage = new S3(bucket, createClientConfig(proxyEndpoint));
@@ -112,7 +123,7 @@ describe("AbortSignal による中断", () => {
               key: "in-flight-write.bin",
               data: new Uint8Array([2]),
               signal: abortSignal,
-              vars: {},
+              vars: new Variables({}),
             }),
           (abortSignal) => proxyStorage.read({ key: targetKey, signal: abortSignal }),
           (abortSignal) => proxyStorage.exists({ key: targetKey, signal: abortSignal }),
@@ -153,7 +164,7 @@ describe("AbortSignal による中断", () => {
             key: "first-attempt.bin",
             data: new Uint8Array([1]),
             signal: controller.signal,
-            vars: {},
+            vars: new Variables({}),
           }),
         ).rejects.toMatchObject({ name: "AbortError" });
 
@@ -162,7 +173,7 @@ describe("AbortSignal による中断", () => {
           key: "second-attempt.bin",
           data: new Uint8Array([2]),
           signal,
-          vars: {},
+          vars: new Variables({}),
         });
         const result = await proxyStorage.read({ key: "second-attempt.bin", signal });
 
@@ -186,7 +197,7 @@ describe("AbortSignal による中断", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal: controller.signal, vars: {} });
+    await storage.write({ key, data, signal: controller.signal, vars: new Variables({}) });
     controller.abort();
 
     // 検証

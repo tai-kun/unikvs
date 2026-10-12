@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -75,7 +76,7 @@ describe("ライフサイクル", () => {
 
   test("close しても backend に触れないため操作を継続できる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
     storage.close({ signal });
@@ -86,7 +87,7 @@ describe("ライフサイクル", () => {
 
   test("open せずに直接操作できる", ({ expect, storage }) => {
     // 実行
-    storage.write({ key: "k", data: "v", vars: {}, signal });
+    storage.write({ key: "k", data: "v", vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "k", signal })).toBe("v");
@@ -95,12 +96,12 @@ describe("ライフサイクル", () => {
   test("中断済みシグナルでは全 CRUD が中断例外を投げる", ({ expect, storage }) => {
     // 準備
     const aborted = abortedSignal();
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行と検証
-    expect(() => storage.write({ key: "k", data: "v", vars: {}, signal: aborted })).toThrow(
-      DOMException,
-    );
+    expect(() =>
+      storage.write({ key: "k", data: "v", vars: new Variables(), signal: aborted }),
+    ).toThrow(DOMException);
     expect(() => storage.read({ key: "k1", signal: aborted })).toThrow(DOMException);
     expect(() => storage.exists({ key: "k1", signal: aborted })).toThrow(DOMException);
     expect(() => storage.delete({ key: "k1", signal: aborted })).toThrow(DOMException);
@@ -113,7 +114,7 @@ describe("ライフサイクル", () => {
 
     // 実行
     const error = captureThrown(() =>
-      storage.write({ key: "k", data: "v", vars: {}, signal: abortedSignal(reason) }),
+      storage.write({ key: "k", data: "v", vars: new Variables(), signal: abortedSignal(reason) }),
     );
 
     // 検証

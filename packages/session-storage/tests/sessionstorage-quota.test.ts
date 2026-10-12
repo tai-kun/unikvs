@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -23,10 +24,12 @@ const test = vitest.extend<{ backend: Storage; storage: SessionStorage }>({
 describe("クォータ超過", () => {
   test("write の QuotaExceededError はそのまま伝播する", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
-    const error = captureThrown(() => storage.write({ key: "k2", data: "v2", vars: {}, signal }));
+    const error = captureThrown(() =>
+      storage.write({ key: "k2", data: "v2", vars: new Variables(), signal }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -35,10 +38,10 @@ describe("クォータ超過", () => {
 
   test("クォータ超過で失敗した write の後も既存値は残る", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
-    captureThrown(() => storage.write({ key: "k1", data: "v2", vars: {}, signal }));
+    captureThrown(() => storage.write({ key: "k1", data: "v2", vars: new Variables(), signal }));
 
     // 検証
     expect(storage.read({ key: "k1", signal })).toBe("v1");
@@ -46,10 +49,10 @@ describe("クォータ超過", () => {
 
   test("クォータ超過で失敗した新規キーは存在しない", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
-    captureThrown(() => storage.write({ key: "k2", data: "v2", vars: {}, signal }));
+    captureThrown(() => storage.write({ key: "k2", data: "v2", vars: new Variables(), signal }));
 
     // 検証
     expect(storage.exists({ key: "k2", signal })).toBe(false);

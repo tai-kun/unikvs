@@ -178,20 +178,20 @@ export default class Http implements IStorage {
   // 送信ヘッダーを三層優先度で解決します。
   private resolveHeaders(vars: Variables): Record<string, string> {
     const headers: Record<string, string> = { ...this.baseHeaders };
-    const commonHeaders = vars["@unikvs/fetch:headers"];
+    const commonHeaders = vars.get("@unikvs/fetch:headers");
 
     if (commonHeaders !== undefined) {
       Object.assign(headers, assertHeadersRecord(commonHeaders));
     }
 
-    const specificHeaders = vars["@unikvs/http:headers"];
+    const specificHeaders = vars.get("@unikvs/http:headers");
 
     if (specificHeaders !== undefined) {
       Object.assign(headers, assertHeadersRecord(specificHeaders));
     }
 
-    const commonToken = assertTokenValue(vars["@unikvs/fetch:token"]);
-    const specificToken = assertTokenValue(vars["@unikvs/http:token"]);
+    const commonToken = assertTokenValue(vars.get("@unikvs/fetch:token"));
+    const specificToken = assertTokenValue(vars.get("@unikvs/http:token"));
     const token = specificToken ?? commonToken ?? this.baseToken;
 
     if (token !== undefined) {

@@ -8,15 +8,9 @@ description: "The shortest path from installing UniKVS to basic operations."
 Install the `unikvs` package plus the Storage and Transformer packages you plan to use.
 
 <Tabs>
-  <Tab title="Try with memory">
-    ```package-install
-    npm i unikvs @unikvs/memory
-    ```
-  </Tab>
+  <Tab title="Try with memory">```package-install npm i unikvs @unikvs/memory ```</Tab>
   <Tab title="Save to files">
-    ```package-install
-    npm i unikvs @unikvs/fs.node @unikvs/compression
-    ```
+    ```package-install npm i unikvs @unikvs/fs.node @unikvs/compression ```
   </Tab>
 </Tabs>
 
@@ -35,6 +29,7 @@ A minimal example using memory Storage. Configure and create, then open, operate
       foo: Value<Uint8Array>;
     }>();
     ```
+
   </Step>
   <Step title="Add a storage and create">
     Add a storage with `persist()`, then create the client with `create()`. Omit Transformers if you don't need them.
@@ -44,6 +39,7 @@ A minimal example using memory Storage. Configure and create, then open, operate
 
     const kvs = builder.persist(new Memory()).create();
     ```
+
   </Step>
   <Step title="Open and operate">
     Initialize with `open()`, then use operations such as `set`, `get`, `has`, and `delete`.
@@ -60,6 +56,7 @@ A minimal example using memory Storage. Configure and create, then open, operate
 
     await kvs.delete("foo");
     ```
+
   </Step>
   <Step title="Close">
     Call `close()` when you are done.
@@ -67,6 +64,7 @@ A minimal example using memory Storage. Configure and create, then open, operate
     ```ts
     await kvs.close();
     ```
+
   </Step>
 </Steps>
 

@@ -8,15 +8,9 @@ description: "UniKVS のインストールから基本操作までの最短手�
 `unikvs` 本体に加えて、利用するストレージやトランスフォーマーのパッケージをインストールします。
 
 <Tabs>
-  <Tab title="メモリーで試す">
-    ```package-install
-    npm i unikvs @unikvs/memory
-    ```
-  </Tab>
+  <Tab title="メモリーで試す">```package-install npm i unikvs @unikvs/memory ```</Tab>
   <Tab title="ファイルに保存する">
-    ```package-install
-    npm i unikvs @unikvs/fs.node @unikvs/compression
-    ```
+    ```package-install npm i unikvs @unikvs/fs.node @unikvs/compression ```
   </Tab>
 </Tabs>
 
@@ -35,6 +29,7 @@ description: "UniKVS のインストールから基本操作までの最短手�
       foo: Value<Uint8Array>;
     }>();
     ```
+
   </Step>
   <Step title="保存先を追加して作る">
     `persist()` で保存先を追加し、`create()` でクライアントを作ります。トランスフォーマーが不要なら省略できます。
@@ -44,6 +39,7 @@ description: "UniKVS のインストールから基本操作までの最短手�
 
     const kvs = builder.persist(new Memory()).create();
     ```
+
   </Step>
   <Step title="開いて操作する">
     `open()` で初期化し、`set`・`get`・`has`・`delete` などを操作します。
@@ -60,6 +56,7 @@ description: "UniKVS のインストールから基本操作までの最短手�
 
     await kvs.delete("foo");
     ```
+
   </Step>
   <Step title="閉じる">
     使い終わったら `close()` で終了します。
@@ -67,6 +64,7 @@ description: "UniKVS のインストールから基本操作までの最短手�
     ```ts
     await kvs.close();
     ```
+
   </Step>
 </Steps>
 

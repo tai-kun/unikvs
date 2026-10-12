@@ -37,7 +37,8 @@ The constructor arguments are as follows.
   type={{
     options: {
       type: "ChecksumOptions",
-      description: "Settings for making verification mandatory. Passes through without verification when omitted.",
+      description:
+        "Settings for making verification mandatory. Passes through without verification when omitted.",
     },
     "options.required": {
       type: "boolean",
@@ -61,14 +62,10 @@ const kvs = UniKvs.config<{ data: PlainValue<Uint8Array<ArrayBuffer>> }>()
 
 await kvs.open();
 
-await kvs.set(
-  "data",
-  new TextEncoder().encode("test"),
-  {
-    [ChecksumSha256.CHECKSUM_VAR_NAME]:
-      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-  },
-);
+await kvs.set("data", new TextEncoder().encode("test"), {
+  [ChecksumSha256.CHECKSUM_VAR_NAME]:
+    "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+});
 
 const output = await kvs.get("data", {
   [ChecksumSha256.CHECKSUM_VAR_NAME]:
@@ -80,10 +77,10 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 

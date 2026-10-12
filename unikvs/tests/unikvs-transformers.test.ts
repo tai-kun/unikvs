@@ -184,8 +184,8 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.set("foo", "x", { vars: { request: "r" } });
 
     // 検証
-    expect(t1.callsOf("encode")[0]?.vars).toMatchObject({ request: "r" });
-    expect(t2.callsOf("encode")[0]?.vars).toMatchObject({ request: "r" });
+    expect(t1.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ request: "r" });
+    expect(t2.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ request: "r" });
     expect(t2.callsOf("encode")[0]?.data).toBe("x");
 
     // 後片付け

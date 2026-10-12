@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import { InvalidBaseUrlError } from "../src/errors.js";
@@ -15,7 +16,7 @@ describe("baseUrl の検証", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証

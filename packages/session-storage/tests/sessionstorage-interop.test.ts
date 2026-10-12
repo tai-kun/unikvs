@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -33,7 +34,7 @@ describe("他アプリとの相互運用", () => {
 
   test("本ストレージが書いた値を他アプリが素通しで読める", ({ expect, backend, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 検証
     expect(backend.getItem("unikvs:k1")).toBe("v1");
@@ -50,7 +51,7 @@ describe("他アプリとの相互運用", () => {
     const storage = new SessionStorage({ storage: backend });
 
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 検証
     expect(calls).toStrictEqual([["unikvs:k1", "v1"]]);

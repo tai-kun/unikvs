@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test, beforeEach, afterEach } from "vitest";
 
 import Opfs from "../src/opfs.js";
@@ -68,14 +69,16 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行と検証
-    await expect(storage.write({ key, data, signal, vars: {} })).resolves.not.toThrow();
+    await expect(
+      storage.write({ key, data, signal, vars: new Variables() }),
+    ).resolves.not.toThrow();
   });
 
   test("保存されたデータを読み取ったとき、書き込み時と同じ内容が取得できる", async ({ expect }) => {
     // 準備
     const key = "test.bin";
     const expectedData = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: expectedData, signal, vars: {} });
+    await storage.write({ key, data: expectedData, signal, vars: new Variables() });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -87,7 +90,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
   test("存在するキーに対して存在確認をしたとき、真を返す", async ({ expect }) => {
     // 準備
     const key = "exists.bin";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     const exists = await storage.exists({ key, signal });
@@ -110,7 +113,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
   test("データを削除したとき、その後の存在確認で偽を返す", async ({ expect }) => {
     // 準備
     const key = "delete_me.bin";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     await storage.delete({ key, signal });
@@ -124,7 +127,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     // 準備
     const key = "atomic.bin";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: {} });
+    await storage.write({ key, data: original, signal, vars: new Variables() });
     expect(await storage.read({ key, signal })).toStrictEqual(original);
 
     // createWritable を差し替え、write() が必ず失敗するが close() は成功する (＝ 部分的な書き込み内容がコミットされる) ストリームを返します。
@@ -160,7 +163,7 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     try {
       // 実行と検証
       await expect(
-        storage.write({ key, data: new Uint8Array([9, 9, 9]), signal, vars: {} }),
+        storage.write({ key, data: new Uint8Array([9, 9, 9]), signal, vars: new Variables() }),
       ).rejects.toThrow(/quota exceeded/);
     } finally {
       FileSystemFileHandle.prototype.createWritable = originalCreateWritable;
@@ -183,7 +186,7 @@ describe("ストリーム操作の振る舞い", () => {
     const key = "stream_write.bin";
 
     // 実行
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
 
     // 検証
     expect(writable).toBeInstanceOf(WritableStream);
@@ -195,7 +198,7 @@ describe("ストリーム操作の振る舞い", () => {
   }) => {
     // 準備
     const key = "stream_read.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables() });
 
     // 実行
     const readable = await storage.getReadable({ key, signal });
@@ -221,8 +224,8 @@ describe("一括削除 (Clear) の振る舞い", () => {
     await storage.open({ signal });
     const key1 = "file1.bin";
     const key2 = "file2.bin";
-    await storage.write({ key: key1, data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: key2, data: new Uint8Array([2]), signal, vars: {} });
+    await storage.write({ key: key1, data: new Uint8Array([1]), signal, vars: new Variables() });
+    await storage.write({ key: key2, data: new Uint8Array([2]), signal, vars: new Variables() });
 
     // 実行
     await storage.clear({ signal });
@@ -244,7 +247,7 @@ describe("境界値・異常系の振る舞い", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: invalidKey, data: new Uint8Array(), signal, vars: {} }),
+      storage.write({ key: invalidKey, data: new Uint8Array(), signal, vars: new Variables() }),
     ).rejects.toThrow();
   });
 
@@ -256,7 +259,7 @@ describe("境界値・異常系の振る舞い", () => {
     const emptyData = new Uint8Array(0);
 
     // 実行
-    await storage.write({ key, data: emptyData, signal, vars: {} });
+    await storage.write({ key, data: emptyData, signal, vars: new Variables() });
     const result = await storage.read({ key, signal });
 
     // 検証

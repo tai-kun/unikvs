@@ -1,4 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
+import { Variables } from "@unikvs/core";
 import { describe, vi } from "vitest";
 
 import S3 from "../src/s3.js";
@@ -24,7 +25,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行
     storage.open();
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -46,7 +47,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
       storage.close();
       storage.open();
     }
@@ -80,7 +81,12 @@ describe("ライフサイクル管理", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "after-close.bin", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({
+        key: "after-close.bin",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toThrow(TypeError);
   });
 
@@ -126,9 +132,9 @@ describe("ライフサイクル管理", () => {
     storage.close();
 
     // 実行と検証
-    expect(() => storage.getWritable({ key: "after-close.bin", vars: {}, signal })).toThrow(
-      /AWS client/,
-    );
+    expect(() =>
+      storage.getWritable({ key: "after-close.bin", vars: new Variables({}), signal }),
+    ).toThrow(/AWS client/);
   });
 
   test("close を 2 回呼び出すと 2 回目は TypeError になる", ({ expect, storage }) => {
@@ -149,7 +155,7 @@ describe("ライフサイクル管理", () => {
     const key = "reopen-same-instance.bin";
     const data = new Uint8Array([9, 8, 7, 6]);
     storage.open();
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 実行
     storage.close();
@@ -170,7 +176,7 @@ describe("ライフサイクル管理", () => {
     const key = "shared-bucket.bin";
     const data = new Uint8Array([1, 3, 5, 7]);
     storage.open();
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     storage.close();
 
     const other = new S3(bucket, createClientConfig(endpoint));
@@ -192,7 +198,7 @@ describe("ライフサイクル管理", () => {
     // 準備
     const key = "cleared.bin";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
     await storage.clear({ signal });
 
     // 実行

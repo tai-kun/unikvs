@@ -63,8 +63,7 @@ export default class ZstdNode implements ITransformer {
    */
   public constructor(options: ZstdNodeOptions = {}) {
     const { level = 3 } = options;
-    const isValidLevel =
-      Number.isInteger(level) && level >= 1 && level <= 22;
+    const isValidLevel = Number.isInteger(level) && level >= 1 && level <= 22;
     if (!isValidLevel) {
       throw new ZstdNodeInvalidLevelError({ actual: level });
     }

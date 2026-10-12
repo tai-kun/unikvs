@@ -5,28 +5,22 @@ description: "保存先の選択に使うストレージ比較表と選択指針
 
 ## 比較表 [#comparison]
 
-| 項目 | `@unikvs/memory` | `@unikvs/fs.node` | `@unikvs/fs.bun` | `@unikvs/redis.bun` | `@unikvs/s3.node` | `@unikvs/s3.bun` | `@unikvs/opfs` | `@unikvs/indexeddb` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 環境 | <Badge>すべて</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="warning">ブラウザー</Badge> | <Badge variant="warning">ブラウザー</Badge> |
-| 永続性 | なし。 | あり。 | あり。 | あり。 | あり。 | あり。 | あり。 | あり。 |
-| 対応データ | 任意の値。 | バイト列。 | バイト列。 | バイト列。 | バイト列。 | バイト列。 | バイト列。 | 任意の値。 |
-| ストリーム | 制限あり。 | 対応します。 | 対応します。 | 対応します。 | 対応します。 | 対応します。 | 対応します。 | 制約を確認します。 |
-| 主な用途 | テスト・一時保持。 | 単一サーバー保存。 | 単一サーバー保存。 | 共有・キャッシュ。 | 共有・大容量保存。 | 共有・大容量保存。 | ブラウザー大容量保存。 | ブラウザー構造化保存。 |
+| 項目       | `@unikvs/memory`      | `@unikvs/fs.node`                       | `@unikvs/fs.bun`                    | `@unikvs/redis.bun`                 | `@unikvs/s3.node`                       | `@unikvs/s3.bun`                    | `@unikvs/opfs`                              | `@unikvs/indexeddb`                         |
+| ---------- | --------------------- | --------------------------------------- | ----------------------------------- | ----------------------------------- | --------------------------------------- | ----------------------------------- | ------------------------------------------- | ------------------------------------------- |
+| 環境       | <Badge>すべて</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="warning">ブラウザー</Badge> | <Badge variant="warning">ブラウザー</Badge> |
+| 永続性     | なし。                | あり。                                  | あり。                              | あり。                              | あり。                                  | あり。                              | あり。                                      | あり。                                      |
+| 対応データ | 任意の値。            | バイト列。                              | バイト列。                          | バイト列。                          | バイト列。                              | バイト列。                          | バイト列。                                  | 任意の値。                                  |
+| ストリーム | 制限あり。            | 対応します。                            | 対応します。                        | 対応します。                        | 対応します。                            | 対応します。                        | 対応します。                                | 制約を確認します。                          |
+| 主な用途   | テスト・一時保持。    | 単一サーバー保存。                      | 単一サーバー保存。                  | 共有・キャッシュ。                  | 共有・大容量保存。                      | 共有・大容量保存。                  | ブラウザー大容量保存。                      | ブラウザー構造化保存。                      |
 
 各ストレージの詳細はパッケージリファレンスを参照してください。`@unikvs/writeonly` は保存先ではなく、既存のストレージを読み出し不可にするラッパーのため比較表には含めていません。
 
 ## 選択指針 [#guide]
 
 <Tabs>
-  <Tab title="テスト・一時保持">
-    メモリーを使います。最も単純で、すべての環境で動作します。
-  </Tab>
-  <Tab title="単一サーバー">
-    ファイルを使います。設定が少なく、小規模から中規模に適しています。
-  </Tab>
-  <Tab title="共有・大容量">
-    S3 互換ストレージを使います。マルチパート転送に対応します。
-  </Tab>
+  <Tab title="テスト・一時保持">メモリーを使います。最も単純で、すべての環境で動作します。</Tab>
+  <Tab title="単一サーバー">ファイルを使います。設定が少なく、小規模から中規模に適しています。</Tab>
+  <Tab title="共有・大容量">S3 互換ストレージを使います。マルチパート転送に対応します。</Tab>
   <Tab title="ブラウザー">
     バイト列を大量に扱うなら OPFS、文字列やオブジェクトなど構造化データなら IndexedDB を使います。
   </Tab>

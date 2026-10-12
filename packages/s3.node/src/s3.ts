@@ -203,9 +203,9 @@ export default class S3 implements IStorage {
 
     let partSize: number | undefined = undefined;
     const rawPartSize =
-      vars["@unikvs/s3.node:partSize"] !== undefined
-        ? vars["@unikvs/s3.node:partSize"]
-        : vars["@unikvs/s3:partSize"];
+      vars.get("@unikvs/s3.node:partSize") !== undefined
+        ? vars.get("@unikvs/s3.node:partSize")
+        : vars.get("@unikvs/s3:partSize");
     if (rawPartSize !== undefined) {
       if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
         throw new InvalidPartSizeError({ actual: rawPartSize });

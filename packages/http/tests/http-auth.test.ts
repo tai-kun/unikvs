@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -18,7 +19,7 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -31,7 +32,9 @@ describe("トークンとヘッダーの解決", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }).catch(() => {});
+    await storage
+      .read({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) })
+      .catch(() => {});
 
     // 検証
     expect(calls[0]?.headers["authorization"]).toBe(undefined);
@@ -47,7 +50,7 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -69,7 +72,7 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -90,7 +93,7 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -108,10 +111,10 @@ describe("トークンとヘッダーの解決", () => {
       .read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {
+        vars: new Variables({
           "@unikvs/fetch:headers": { "X-Common": "common", "X-Both": "common" },
           "@unikvs/http:headers": { "X-Both": "specific" },
-        },
+        }),
       })
       .catch(() => {});
 
@@ -131,17 +134,19 @@ describe("トークンとヘッダーの解決", () => {
       .read({
         key: "a",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/fetch:token": "common" },
+        vars: new Variables({ "@unikvs/fetch:token": "common" }),
       })
       .catch(() => {});
     await storage
       .read({
         key: "b",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/fetch:token": "common", "@unikvs/http:token": "specific" },
+        vars: new Variables({ "@unikvs/fetch:token": "common", "@unikvs/http:token": "specific" }),
       })
       .catch(() => {});
-    await storage.read({ key: "c", signal: AbortSignal.timeout(5_000), vars: {} }).catch(() => {});
+    await storage
+      .read({ key: "c", signal: AbortSignal.timeout(5_000), vars: new Variables({}) })
+      .catch(() => {});
 
     // 検証
     expect(calls[0]?.headers["authorization"]).toBe("Bearer common");
@@ -159,7 +164,7 @@ describe("トークンとヘッダーの解決", () => {
       .read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/fetch:token": "shared" },
+        vars: new Variables({ "@unikvs/fetch:token": "shared" }),
       })
       .catch(() => {});
 
@@ -177,10 +182,10 @@ describe("トークンとヘッダーの解決", () => {
       .read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {
+        vars: new Variables({
           "@unikvs/fetch:headers": { "X-App": "shared" },
           "@unikvs/http:headers": { "X-App": "isolated" },
-        },
+        }),
       })
       .catch(() => {});
 
@@ -198,11 +203,11 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {
+      vars: new Variables({
         "@unikvs/http:baseUrl": "https://evil.example.com",
         "@unikvs/http:keyPrefix": "evil:",
         "@unikvs/http:fetch": "not-a-fetch",
-      },
+      }),
     });
 
     // 検証
@@ -219,7 +224,7 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -238,9 +243,13 @@ describe("トークンとヘッダーの解決", () => {
       key: "k",
       data: new Uint8Array([1, 2, 3]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -285,7 +294,7 @@ describe("認証値の検証", () => {
       storage.read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/http:headers": { "X-A": 42 } },
+        vars: new Variables({ "@unikvs/http:headers": { "X-A": 42 } }),
       }),
     );
 
@@ -303,7 +312,7 @@ describe("認証値の検証", () => {
       storage.read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/http:token": "" },
+        vars: new Variables({ "@unikvs/http:token": "" }),
       }),
     );
 
@@ -321,7 +330,7 @@ describe("認証値の検証", () => {
       storage.read({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: { "@unikvs/fetch:token": 42 },
+        vars: new Variables({ "@unikvs/fetch:token": 42 }),
       }),
     );
 

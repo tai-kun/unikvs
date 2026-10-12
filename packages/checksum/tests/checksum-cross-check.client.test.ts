@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
 import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
@@ -67,7 +68,7 @@ test.for(SUBTLE_ALGORITHMS)(
 
     // 実行と検証
     for (const data of FIXED_INPUTS) {
-      const vars = { [varName]: await subtleDigest(subtleName, data) };
+      const vars = new Variables({ [varName]: await subtleDigest(subtleName, data) });
       expect(checksum.encode({ vars, data })).toBe(data);
     }
   },
@@ -78,7 +79,7 @@ test.for(SUBTLE_ALGORITHMS)(
   async ({ create, subtleName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = { [varName]: await subtleDigest(subtleName, LARGE_DATA) };
+    const vars = new Variables({ [varName]: await subtleDigest(subtleName, LARGE_DATA) });
     const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
 
     // 実行
@@ -102,7 +103,9 @@ test("SHA-256 はランダムなデータとチャンク分割でも WebCrypto �
     const data = random.bytes(random.int(0, 512));
     const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
     const chunks = splitBySizes(data, sizes);
-    const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: await subtleDigest("SHA-256", data) };
+    const vars = new Variables({
+      [ChecksumSha256.CHECKSUM_VAR_NAME]: await subtleDigest("SHA-256", data),
+    });
 
     const { outputChunks, closeError } = await runTransform(
       checksum.getEncodable({ vars }),
@@ -125,7 +128,7 @@ test("MD5 は既知のベクターを検証できる", ({ expect }) => {
   // 実行と検証
   for (const [text, digest] of vectors) {
     const data = Uint8Array.from(new TextEncoder().encode(text));
-    const vars = { [ChecksumMd5.CHECKSUM_VAR_NAME]: digest };
+    const vars = new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: digest });
     expect(checksum.encode({ vars, data })).toBe(data);
   }
 });
@@ -141,13 +144,13 @@ test("MD5 はランダムなデータでも一括検証とストリーム検証�
     const data = random.bytes(random.int(0, 256));
     let actual = "";
     try {
-      checksum.encode({ vars: { [ChecksumMd5.CHECKSUM_VAR_NAME]: "" }, data });
+      checksum.encode({ vars: new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: "" }), data });
     } catch (error) {
       actual = (error as ChecksumMismatchError).meta.actual;
     }
 
     const { closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [ChecksumMd5.CHECKSUM_VAR_NAME]: actual } }),
+      checksum.getEncodable({ vars: new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: actual }) }),
       [data],
     );
 

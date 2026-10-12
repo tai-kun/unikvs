@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
@@ -62,7 +63,7 @@ describe("required を省略した場合", () => {
       const checksum = create();
 
       // 実行
-      const result = checksum.encode({ vars: {}, data: ABC });
+      const result = checksum.encode({ vars: new Variables({}), data: ABC });
 
       // 検証
       expect(result).toBe(ABC);
@@ -76,7 +77,7 @@ describe("required を省略した場合", () => {
       const checksum = create();
 
       // 実行
-      const result = checksum.decode({ vars: {}, data: ABC });
+      const result = checksum.decode({ vars: new Variables({}), data: ABC });
 
       // 検証
       expect(result).toBe(ABC);
@@ -92,7 +93,9 @@ describe("required を有効にした場合", () => {
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.encode({ vars: {}, data: ABC })).toThrow(ChecksumRequiredError);
+      expect(() => checksum.encode({ vars: new Variables({}), data: ABC })).toThrow(
+        ChecksumRequiredError,
+      );
     },
   );
 
@@ -103,7 +106,9 @@ describe("required を有効にした場合", () => {
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.decode({ vars: {}, data: ABC })).toThrow(ChecksumRequiredError);
+      expect(() => checksum.decode({ vars: new Variables({}), data: ABC })).toThrow(
+        ChecksumRequiredError,
+      );
     },
   );
 
@@ -112,7 +117,7 @@ describe("required を有効にした場合", () => {
     ({ create, varName }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
-      const vars = { [varName]: 12345 };
+      const vars = new Variables({ [varName]: 12345 });
 
       // 実行と検証
       expect(() => checksum.encode({ vars, data: ABC })).toThrow(ChecksumRequiredError);
@@ -124,7 +129,7 @@ describe("required を有効にした場合", () => {
     ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
-      const vars = { [varName]: abcDigest };
+      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
       const result = checksum.encode({ vars, data: ABC });
@@ -141,7 +146,9 @@ describe("required を有効にした場合", () => {
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.getEncodable({ vars: {} })).toThrow(ChecksumRequiredError);
+      expect(() => checksum.getEncodable({ vars: new Variables({}) })).toThrow(
+        ChecksumRequiredError,
+      );
     },
   );
 
@@ -152,7 +159,9 @@ describe("required を有効にした場合", () => {
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.getDecodable({ vars: {} })).toThrow(ChecksumRequiredError);
+      expect(() => checksum.getDecodable({ vars: new Variables({}) })).toThrow(
+        ChecksumRequiredError,
+      );
     },
   );
 });

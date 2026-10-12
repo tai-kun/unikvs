@@ -52,11 +52,7 @@ export const api = {
    * @param options オプションです。
    * @returns 圧縮したバイト列を返します。
    */
-  compress(
-    env: IEnv,
-    data: Uint8Array<ArrayBuffer>,
-    options: CompressOptions,
-  ): Uint8Array {
+  compress(env: IEnv, data: Uint8Array<ArrayBuffer>, options: CompressOptions): Uint8Array {
     const { level } = options;
 
     return env.compress(data, level);

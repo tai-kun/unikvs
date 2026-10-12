@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
@@ -16,7 +17,7 @@ describe("永続化と共有", () => {
     const backend = createSharedBackend();
     const prefix = createKeyPrefix();
     const first = new LocalStorage({ storage: backend, keyPrefix: prefix });
-    first.write({ key: "k1", data: "v1", vars: {}, signal });
+    first.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
     const second = new LocalStorage({ storage: backend, keyPrefix: prefix });
@@ -36,7 +37,7 @@ describe("永続化と共有", () => {
     if (globalBackend) {
       // 実行
       const storage = new LocalStorage({ keyPrefix: prefix });
-      storage.write({ key: "k1", data: "v1", vars: {}, signal });
+      storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
       // 検証
       expect(storage.read({ key: "k1", signal })).toBe("v1");
@@ -47,7 +48,7 @@ describe("永続化と共有", () => {
       // 実行と検証
       runWithGlobalLocalStorage(createFakeStorage(), () => {
         const storage = new LocalStorage({ keyPrefix: prefix });
-        storage.write({ key: "k1", data: "v1", vars: {}, signal });
+        storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
         expect(storage.read({ key: "k1", signal })).toBe("v1");
         storage.clear({ signal });
       });
@@ -59,11 +60,11 @@ describe("永続化と共有", () => {
     const backend = createSharedBackend();
     const prefix = createKeyPrefix();
     const storage = new LocalStorage({ storage: backend, keyPrefix: prefix });
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
     storage.clear({ signal });
 
     // 実行
-    storage.write({ key: "k2", data: "v2", vars: {}, signal });
+    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
 
     // 検証
     expect(storage.exists({ key: "k1", signal })).toBe(false);
@@ -81,7 +82,7 @@ describe("永続化と共有", () => {
     const storageA1 = new LocalStorage({ storage: backend, keyPrefix: prefixA });
     const storageA2 = new LocalStorage({ storage: backend, keyPrefix: prefixA });
     const storageB = new LocalStorage({ storage: backend, keyPrefix: prefixB });
-    storageA1.write({ key: "k1", data: "va", vars: {}, signal });
+    storageA1.write({ key: "k1", data: "va", vars: new Variables(), signal });
 
     // 実行と検証
     expect(storageA2.read({ key: "k1", signal })).toBe("va");
@@ -96,7 +97,7 @@ describe("永続化と共有", () => {
     const backend = createSharedBackend();
     const prefix = createKeyPrefix();
     const first = new LocalStorage({ storage: backend, keyPrefix: prefix });
-    first.write({ key: "k1", data: "v1", vars: {}, signal });
+    first.write({ key: "k1", data: "v1", vars: new Variables(), signal });
     first.delete({ key: "k1", signal });
 
     // 実行

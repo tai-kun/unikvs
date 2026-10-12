@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
@@ -12,7 +13,7 @@ describe("永続化", () => {
   }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: { message: "hello" }, signal, vars: {} });
+    await storage.write({ key: "k1", data: { message: "hello" }, signal, vars: new Variables() });
     await storage.close({ signal });
 
     // 実行
@@ -29,7 +30,7 @@ describe("永続化", () => {
   }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
     await storage.close({ signal });
 
     // 実行
@@ -47,7 +48,7 @@ describe("永続化", () => {
   test("clear して再度 open すると空の状態になっている", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
     await storage.clear({ signal });
 
     // 実行
@@ -60,7 +61,7 @@ describe("永続化", () => {
   test("close と open を複数回繰り返してもデータは失われない", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
 
     // 実行
     for (let i = 0; i < 3; i++) {
@@ -75,7 +76,7 @@ describe("永続化", () => {
   test("ストリームで書いたデータも再度 open した後で読み取れる", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    const writer = storage.getWritable({ key: "s1", signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key: "s1", signal, vars: new Variables() }).getWriter();
     await writer.write(new Uint8Array([1, 2]));
     await writer.write(new Uint8Array([3]));
     await writer.close();
@@ -91,7 +92,7 @@ describe("永続化", () => {
   test("削除したデータは再度 open しても復活しない", async ({ expect, dbName, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
     await storage.delete({ key: "k1", signal });
     await storage.close({ signal });
 

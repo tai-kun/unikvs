@@ -38,16 +38,19 @@ import { KeyPrefix } from "@unikvs/key-prefix";
     prefix: {
       type: "string",
       required: true,
-      description: "すべてのキーの先頭に付ける文字列です。必須です。省略すると型エラーになります。`\"\"` を渡すとキーを変えずに透過します。",
+      description:
+        'すべてのキーの先頭に付ける文字列です。必須です。省略すると型エラーになります。`""` を渡すとキーを変えずに透過します。',
     },
     options: {
       type: "KeyPrefixOptions",
-      description: "`clear` の挙動を設定します。省略時は `clearBehavior: \"allow\"` として動作します。",
+      description:
+        '`clear` の挙動を設定します。省略時は `clearBehavior: "allow"` として動作します。',
     },
     "options.clearBehavior": {
       type: '"allow" | "deny"',
       default: '"allow"',
-      description: "`clear` 時の挙動です。`\"allow\"` では保存先の全件を削除し、`\"deny\"` ではエラーを投げて削除を拒否します。不正な値は構築時に `InvalidClearBehaviorError` を投げます。",
+      description:
+        '`clear` 時の挙動です。`"allow"` では保存先の全件を削除し、`"deny"` ではエラーを投げて削除を拒否します。不正な値は構築時に `InvalidClearBehaviorError` を投げます。',
     },
   }}
 />
@@ -74,12 +77,12 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `TData` | `TData` |
-| `decode` | `TData` | `TData` |
-| `getEncodable` | `any` | `any` |
-| `getDecodable` | `any` | `any` |
+| メソッド       | 入力    | 出力    |
+| -------------- | ------- | ------- |
+| `encode`       | `TData` | `TData` |
+| `decode`       | `TData` | `TData` |
+| `getEncodable` | `any`   | `any`   |
+| `getDecodable` | `any`   | `any`   |
 
 - `encode`・`decode` は任意の型のデータをそのまま返します。
 - `getEncodable`・`getDecodable` はチャンクをそのまま流す `TransformStream` を返します。

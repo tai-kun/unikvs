@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import type { IStorage } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
@@ -42,8 +43,18 @@ describe("基本情報", () => {
     const other = new WriteOnly(second);
 
     // 実行
-    await storage.write({ key: "k1", data: "v1", vars: {}, signal: new AbortController().signal });
-    await other.write({ key: "k2", data: "v2", vars: {}, signal: new AbortController().signal });
+    await storage.write({
+      key: "k1",
+      data: "v1",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
+    await other.write({
+      key: "k2",
+      data: "v2",
+      vars: new Variables(),
+      signal: new AbortController().signal,
+    });
 
     // 検証
     expect(first.map.get("k1")).toBe("v1");
@@ -63,7 +74,7 @@ describe("書き込みの委譲", () => {
     const args = {
       key: "k1",
       data: "v1",
-      vars: {},
+      vars: new Variables(),
       signal: new AbortController().signal,
     };
 
@@ -84,7 +95,12 @@ describe("書き込みの委譲", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "k1", data: "v1", vars: {}, signal: new AbortController().signal }),
+      storage.write({
+        key: "k1",
+        data: "v1",
+        vars: new Variables(),
+        signal: new AbortController().signal,
+      }),
     ).rejects.toBe(error);
     expect(inner.writeCount).toBe(0);
   });
@@ -97,7 +113,7 @@ describe("ライフサイクルの委譲", () => {
     storage,
   }) => {
     // 準備
-    const args = { vars: {}, signal: new AbortController().signal };
+    const args = { vars: new Variables(), signal: new AbortController().signal };
 
     // 実行
     const result = await storage.open(args);
@@ -114,7 +130,7 @@ describe("ライフサイクルの委譲", () => {
     storage,
   }) => {
     // 準備
-    const args = { vars: {}, signal: new AbortController().signal };
+    const args = { vars: new Variables(), signal: new AbortController().signal };
 
     // 実行
     const result = await storage.close(args);
@@ -133,7 +149,7 @@ describe("ライフサイクルの委譲", () => {
     // 準備
     const args = {
       key: "k1",
-      vars: {},
+      vars: new Variables(),
       signal: new AbortController().signal,
       error: {} as IStorage.OnOtherWriteErrorArgs["error"],
     };
@@ -161,16 +177,16 @@ describe("ライフサイクルの委譲", () => {
     inner.otherWriteError = otherWriteError;
 
     // 実行と検証
-    await expect(storage.open({ vars: {}, signal: new AbortController().signal })).rejects.toBe(
-      openError,
-    );
-    await expect(storage.close({ vars: {}, signal: new AbortController().signal })).rejects.toBe(
-      closeError,
-    );
+    await expect(
+      storage.open({ vars: new Variables(), signal: new AbortController().signal }),
+    ).rejects.toBe(openError);
+    await expect(
+      storage.close({ vars: new Variables(), signal: new AbortController().signal }),
+    ).rejects.toBe(closeError);
     await expect(
       storage.onOtherWriteError({
         key: "k1",
-        vars: {},
+        vars: new Variables(),
         signal: new AbortController().signal,
         error: {} as IStorage.OnOtherWriteErrorArgs["error"],
       }),
@@ -183,15 +199,15 @@ describe("ライフサイクルの委譲", () => {
 
     // 実行と検証
     await expect(
-      storage.open({ vars: {}, signal: new AbortController().signal }),
+      storage.open({ vars: new Variables(), signal: new AbortController().signal }),
     ).resolves.toBeUndefined();
     await expect(
-      storage.close({ vars: {}, signal: new AbortController().signal }),
+      storage.close({ vars: new Variables(), signal: new AbortController().signal }),
     ).resolves.toBeUndefined();
     await expect(
       storage.onOtherWriteError({
         key: "k1",
-        vars: {},
+        vars: new Variables(),
         signal: new AbortController().signal,
         error: {} as IStorage.OnOtherWriteErrorArgs["error"],
       }),
@@ -233,7 +249,7 @@ describe("書き込み用ストリームの委譲", () => {
     // 準備
     const inner = new StreamStorage();
     const storage = new WriteOnly(inner);
-    const args = { key: "s1", vars: {}, signal: new AbortController().signal };
+    const args = { key: "s1", vars: new Variables(), signal: new AbortController().signal };
 
     // 実行
     const writable = await storage.getWritable?.(args);
@@ -249,7 +265,7 @@ describe("書き込み用ストリームの委譲", () => {
 describe("削除の抑止", () => {
   test("既定では delete は内部ストレージを呼び出さない", async ({ expect, inner, storage }) => {
     // 準備
-    const args = { key: "k1", vars: {}, signal: new AbortController().signal };
+    const args = { key: "k1", vars: new Variables(), signal: new AbortController().signal };
     inner.map.set("k1", "v1");
 
     // 実行
@@ -263,7 +279,7 @@ describe("削除の抑止", () => {
 
   test("既定では clear は内部ストレージを呼び出さない", async ({ expect, inner, storage }) => {
     // 準備
-    const args = { vars: {}, signal: new AbortController().signal };
+    const args = { vars: new Variables(), signal: new AbortController().signal };
     inner.map.set("k1", "v1");
 
     // 実行
@@ -281,7 +297,7 @@ describe("削除の抑止", () => {
   }) => {
     // 準備
     const storage = new WriteOnly(inner, { allowDelete: true });
-    const args = { key: "k1", vars: {}, signal: new AbortController().signal };
+    const args = { key: "k1", vars: new Variables(), signal: new AbortController().signal };
     inner.map.set("k1", "v1");
 
     // 実行
@@ -300,7 +316,7 @@ describe("削除の抑止", () => {
   }) => {
     // 準備
     const storage = new WriteOnly(inner, { allowDelete: true });
-    const args = { vars: {}, signal: new AbortController().signal };
+    const args = { vars: new Variables(), signal: new AbortController().signal };
     inner.map.set("k1", "v1");
     inner.map.set("k2", "v2");
 
@@ -324,8 +340,8 @@ describe("削除の抑止", () => {
     const clearError = new Error("clear failed");
     inner.deleteError = deleteError;
     inner.clearError = clearError;
-    const deleteArgs = { key: "k1", vars: {}, signal: new AbortController().signal };
-    const clearArgs = { vars: {}, signal: new AbortController().signal };
+    const deleteArgs = { key: "k1", vars: new Variables(), signal: new AbortController().signal };
+    const clearArgs = { vars: new Variables(), signal: new AbortController().signal };
     let thrownOnDelete: unknown;
     let thrownOnClear: unknown;
 

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -15,16 +16,29 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map((data) =>
-        storage.write({ key: "k", data, signal: AbortSignal.timeout(5_000), vars: {} }),
+        storage.write({
+          key: "k",
+          data,
+          signal: AbortSignal.timeout(5_000),
+          vars: new Variables({}),
+        }),
       ),
     );
-    const result = await storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.read({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(values.some((v) => v[0] === result[0] && v.length === result.length)).toBe(true);
-    expect(await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      true,
-    );
+    expect(
+      await storage.exists({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(true);
   });
 
   test("異なるキーへの並行 write はすべて保存される", async ({ expect }) => {
@@ -39,7 +53,7 @@ describe("並行操作", () => {
           key: `k${i}`,
           data: new Uint8Array([i]),
           signal: AbortSignal.timeout(5_000),
-          vars: {},
+          vars: new Variables({}),
         }),
       ),
     );
@@ -47,7 +61,11 @@ describe("並行操作", () => {
     // 検証
     for (let i = 0; i < 5; i += 1) {
       expect(
-        await storage.read({ key: `k${i}`, signal: AbortSignal.timeout(5_000), vars: {} }),
+        await storage.read({
+          key: `k${i}`,
+          signal: AbortSignal.timeout(5_000),
+          vars: new Variables({}),
+        }),
       ).toStrictEqual(new Uint8Array([i]));
     }
   });

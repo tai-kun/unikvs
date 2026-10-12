@@ -3,7 +3,7 @@ import { RepairNotAllowedError, type ITransformer, type Variables } from "@unikv
 // vars から書き戻し先の表示名一覧を解決します。
 // 配列でないときや空のときは代替名を1件返します。
 function resolveRepairNames(vars: Variables, fallback: string): readonly string[] {
-  const list = vars["unikvs:storageNames"];
+  const list = vars.get("unikvs:storageNames");
   if (!Array.isArray(list)) {
     return [fallback];
   }
@@ -80,7 +80,7 @@ export default class AllowRepair implements ITransformer {
    */
   private assertRepairAllowed(args: { vars: Variables }): void {
     const { vars } = args;
-    if (vars["unikvs:repair"] === true && !this.isEnabled) {
+    if (vars.get("unikvs:repair") === true && !this.isEnabled) {
       throw new RepairNotAllowedError({ names: resolveRepairNames(vars, this.name) });
     }
   }

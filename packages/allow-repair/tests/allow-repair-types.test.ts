@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import type { ITransformer } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
@@ -22,12 +23,16 @@ test("encode はデータの型をそのまま戻り値にする", () => {
   const gate = new AllowRepair();
 
   // 実行と検証
-  expectTypeOf(gate.encode<string>({ vars: {}, data: "hello" })).toEqualTypeOf<string>();
-  expectTypeOf(gate.encode({ vars: {}, data: 123 })).toEqualTypeOf<number>();
-  expectTypeOf(gate.encode({ vars: {}, data: { id: 1 } })).toEqualTypeOf<{ id: number }>();
+  expectTypeOf(
+    gate.encode<string>({ vars: new Variables({}), data: "hello" }),
+  ).toEqualTypeOf<string>();
+  expectTypeOf(gate.encode({ vars: new Variables({}), data: 123 })).toEqualTypeOf<number>();
+  expectTypeOf(gate.encode({ vars: new Variables({}), data: { id: 1 } })).toEqualTypeOf<{
+    id: number;
+  }>();
   expectTypeOf(
     // @ts-expect-error signal の混入は Pick の絞り込みで拒否されます。
-    gate.encode({ vars: {}, data: "hello", signal: AbortSignal.timeout(1000) }),
+    gate.encode({ vars: new Variables({}), data: "hello", signal: AbortSignal.timeout(1000) }),
   ).toEqualTypeOf<string>();
 });
 
@@ -45,7 +50,9 @@ test("getEncodable と getDecodable は TransformStream を返す", () => {
   const gate = new AllowRepair();
 
   // 実行と検証
-  expectTypeOf(gate.getEncodable({ vars: {} })).toEqualTypeOf<TransformStream<any, any>>();
+  expectTypeOf(gate.getEncodable({ vars: new Variables({}) })).toEqualTypeOf<
+    TransformStream<any, any>
+  >();
   expectTypeOf(gate.getDecodable()).toEqualTypeOf<TransformStream<any, any>>();
 });
 

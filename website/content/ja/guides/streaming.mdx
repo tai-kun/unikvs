@@ -16,11 +16,11 @@ const kvs = UniKvs.config<{
   .create();
 ```
 
-| 型 | `set` | `get` | `stream` |
-| --- | --- | --- | --- |
-| `PlainValue<T>` | 対応します。 | 対応します。 | 対応しません。 |
-| `StreamValue<T>` | 値またはストリームに対応します。 | 対応しません。 | 対応します。 |
-| `Value<T>` | 値またはストリームに対応します。 | 対応します。 | 対応します。 |
+| 型               | `set`                            | `get`          | `stream`       |
+| ---------------- | -------------------------------- | -------------- | -------------- |
+| `PlainValue<T>`  | 対応します。                     | 対応します。   | 対応しません。 |
+| `StreamValue<T>` | 値またはストリームに対応します。 | 対応しません。 | 対応します。   |
+| `Value<T>`       | 値またはストリームに対応します。 | 対応します。   | 対応します。   |
 
 `schema` を指定した場合はチャンクごとに検証します。書き込みチャンクの不良は `InvalidInputError` を含む `PluginOperationAggregateError` として報告し、読み取りチャンクの不良は `InvalidOutputError` として報告します。
 
@@ -35,6 +35,7 @@ const kvs = UniKvs.config<{
     ```ts
     await kvs.set("logs", new Uint8Array([1, 2, 3]));
     ```
+
   </Step>
   <Step title="ストリームで保存する">
     大きなデータは `ReadableStream` を渡して逐次書き込みします。
@@ -49,6 +50,7 @@ const kvs = UniKvs.config<{
     });
     await kvs.set("logs", src);
     ```
+
   </Step>
 </Steps>
 
@@ -70,6 +72,7 @@ const kvs = UniKvs.config<{
       console.log(value);
     }
     ```
+
   </Tab>
   <Tab title="for-await">
     短く書く場合に使います。
@@ -79,6 +82,7 @@ const kvs = UniKvs.config<{
       console.log(chunk);
     }
     ```
+
   </Tab>
   <Tab title="await-using">
     ロック解放を自動化する場合に使います。
@@ -90,6 +94,7 @@ const kvs = UniKvs.config<{
       console.log(value);
     }
     ```
+
   </Tab>
 </Tabs>
 

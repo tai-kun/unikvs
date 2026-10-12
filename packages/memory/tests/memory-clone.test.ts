@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import Memory from "../src/memory.js";
@@ -23,7 +24,7 @@ describe("clone オプション", () => {
     const source = { nested: { value: 1 } };
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: source });
+    storage.write({ vars: new Variables(), key: "k1", data: source });
     source.nested.value = 99;
 
     // 検証
@@ -36,7 +37,7 @@ describe("clone オプション", () => {
     const source = new Uint8Array([1, 2, 3]);
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: source });
+    storage.write({ vars: new Variables(), key: "k1", data: source });
     source[0] = 99;
 
     // 検証
@@ -54,7 +55,7 @@ describe("clone オプション", () => {
     });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     storage.read({ key: "k1" });
 
     // 検証
@@ -68,7 +69,7 @@ describe("clone オプション", () => {
     });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: new Date("2024-01-02T03:04:05.678Z") });
+    storage.write({ vars: new Variables(), key: "k1", data: new Date("2024-01-02T03:04:05.678Z") });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("2024-01-02T03:04:05.678Z");
@@ -83,7 +84,9 @@ describe("clone オプション", () => {
     });
 
     // 実行
-    const error = captureThrown(() => storage.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() =>
+      storage.write({ vars: new Variables(), key: "k1", data: "v1" }),
+    );
 
     // 検証
     expect((error as Error).message).toBe("clone failed");
@@ -102,7 +105,7 @@ describe("clone オプション", () => {
         return structuredClone(value);
       },
     });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
     const error = captureThrown(() => storage.read({ key: "k1" }));

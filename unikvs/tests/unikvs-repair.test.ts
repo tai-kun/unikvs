@@ -115,12 +115,12 @@ describe("UniKvs - get の書き戻し", () => {
     expect(server.map.get("foo")).toBe("valueSC");
 
     // 検証: 書き戻しの書き込みにだけ unikvs:repair が付与される
-    expect(cache1.callsOf("write")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(cache2.callsOf("write")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(local.callsOf("write")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(server.callsOf("read")[0]?.vars).not.toHaveProperty("unikvs:repair");
-    expect(serialize.callsOf("decode")[0]?.vars).not.toHaveProperty("unikvs:repair");
-    expect(compress.callsOf("decode")[0]?.vars).not.toHaveProperty("unikvs:repair");
+    expect(cache1.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
+    expect(cache2.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
+    expect(local.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
+    expect(server.callsOf("read")[0]?.vars?.has("unikvs:repair")).toBe(false);
+    expect(serialize.callsOf("decode")[0]?.vars?.has("unikvs:repair")).toBe(false);
+    expect(compress.callsOf("decode")[0]?.vars?.has("unikvs:repair")).toBe(false);
 
     // 後片付け
     await kvs.close();
@@ -272,9 +272,13 @@ describe("UniKvs - stream の書き戻し", () => {
     ]);
 
     // 検証: 書き戻しの書き込みにだけ unikvs:repair が付与される
-    expect(cache.callsOf("getWritable")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(local.callsOf("getWritable")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(server.callsOf("getReadable")[0]?.vars).not.toHaveProperty("unikvs:repair");
+    expect(cache.callsOf("getWritable")[0]?.vars?.toJSON()).toMatchObject({
+      "unikvs:repair": true,
+    });
+    expect(local.callsOf("getWritable")[0]?.vars?.toJSON()).toMatchObject({
+      "unikvs:repair": true,
+    });
+    expect(server.callsOf("getReadable")[0]?.vars?.has("unikvs:repair")).toBe(false);
 
     // 後片付け
     await vs.dispose();
@@ -607,7 +611,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
       await kvs.get("foo", { repair: true });
 
       // 検証
-      expect(probe.callsOf("encode")[0]?.vars).toMatchObject({ "unikvs:repair": true });
+      expect(probe.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
     } finally {
       await kvs.close();
     }
@@ -699,7 +703,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
 
   test("非拒否の書き戻し失敗は error で記録され読み取り成功する", async ({ expect }) => {
     // 準備
-    using warnSpy = vi.spyOn(repairLogger, "warn");
+    using _warnSpy = vi.spyOn(repairLogger, "warn");
     using errorSpy = vi.spyOn(logger, "error");
     const cache = new FakeStorage("cache");
     const local = new FakeStorage("local");
@@ -870,7 +874,9 @@ describe("UniKvs - stream の書き戻し不許可", () => {
       await collect(vs);
 
       // 検証
-      expect(probe.callsOf("getEncodable")[0]?.vars).toMatchObject({ "unikvs:repair": true });
+      expect(probe.callsOf("getEncodable")[0]?.vars?.toJSON()).toMatchObject({
+        "unikvs:repair": true,
+      });
       await vs.dispose();
     } finally {
       await kvs.close();
@@ -883,7 +889,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
       public override getWritable(
         args: Parameters<FakeStreamStorage["getWritable"]>[0],
       ): WritableStream<Uint8Array> {
-        if (args.vars?.["unikvs:repair"] === true) {
+        if (args.vars?.get("unikvs:repair") === true) {
           throw new RepairNotAllowedError({ names: [this.name] });
         }
         return super.getWritable(args);
@@ -1193,11 +1199,11 @@ describe("UniKvs - 共有 prefix の修復", () => {
 
     // 検証
     expect(
-      prefix.callsOf("getEncodable").map((call) => call.vars?.["unikvs:storageNames"]),
+      prefix.callsOf("getEncodable").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["cacheA", "cacheB"]]);
-    expect(Object.isFrozen(prefix.callsOf("getEncodable")[0]?.vars?.["unikvs:storageNames"])).toBe(
-      true,
-    );
+    expect(
+      Object.isFrozen(prefix.callsOf("getEncodable")[0]?.vars?.get("unikvs:storageNames")),
+    ).toBe(true);
     expect(cacheA.callsOf("getWritable")).toHaveLength(1);
     expect(cacheB.callsOf("getWritable")).toHaveLength(1);
     expect(chunks).toStrictEqual([new Uint8Array([1, 2]), new Uint8Array([3])]);

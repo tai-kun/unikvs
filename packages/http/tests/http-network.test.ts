@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { afterEach, describe, test, vi } from "vitest";
 
@@ -31,7 +32,7 @@ describe("通信失敗の分類", () => {
         key: "k",
         data: new Uint8Array([1]),
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 
@@ -51,10 +52,10 @@ describe("通信失敗の分類", () => {
 
     // 実行
     const readError = await captureRejection(
-      storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
     const deleteError = await captureRejection(
-      storage.delete({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.delete({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -73,7 +74,7 @@ describe("通信失敗の分類", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -96,7 +97,7 @@ describe("通信失敗の分類", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -114,7 +115,7 @@ describe("通信失敗の分類", () => {
         key: "k",
         data: new Uint8Array([1]),
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 
@@ -139,7 +140,7 @@ describe("通信失敗の分類", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -160,7 +161,7 @@ describe("通信失敗の分類", () => {
         key: "k",
         data: new Uint8Array([1]),
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 
@@ -175,7 +176,7 @@ describe("通信失敗の分類", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.delete({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.delete({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -190,7 +191,11 @@ describe("通信失敗の分類", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.getReadable({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     );
 
     // 検証
@@ -212,7 +217,7 @@ describe("中断の透過", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "k", signal: controller.signal, vars: {} }),
+      storage.read({ key: "k", signal: controller.signal, vars: new Variables({}) }),
     );
 
     // 検証
@@ -232,7 +237,7 @@ describe("中断の透過", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: controller.signal, vars: {} }),
+      storage.exists({ key: "k", signal: controller.signal, vars: new Variables({}) }),
     );
 
     // 検証
@@ -259,7 +264,7 @@ describe("中断の透過", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: controller.signal, vars: {} }),
+      storage.exists({ key: "k", signal: controller.signal, vars: new Variables({}) }),
     );
 
     // 検証
@@ -279,7 +284,7 @@ describe("中断の透過", () => {
 
     // 実行
     const deleteError = await captureRejection(
-      storage.delete({ key: "k", signal: controller.signal, vars: {} }),
+      storage.delete({ key: "k", signal: controller.signal, vars: new Variables({}) }),
     );
 
     // 検証
@@ -298,7 +303,9 @@ describe("中断の透過", () => {
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
     // 実行
-    const error = await captureRejection(storage.clear({ signal: controller.signal, vars: {} }));
+    const error = await captureRejection(
+      storage.clear({ signal: controller.signal, vars: new Variables({}) }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -317,7 +324,7 @@ describe("中断の透過", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({ key: "k", signal: controller.signal, vars: {} }),
+      storage.getReadable({ key: "k", signal: controller.signal, vars: new Variables({}) }),
     );
 
     // 検証
@@ -335,7 +342,7 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
     const writer = storage
-      .getWritable({ key: "k", signal: controller.signal, vars: {} })
+      .getWritable({ key: "k", signal: controller.signal, vars: new Variables({}) })
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
@@ -357,7 +364,7 @@ describe("中断の透過", () => {
       .getWritable({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
     await writer.write(new Uint8Array([1]));
@@ -378,7 +385,7 @@ describe("中断の透過", () => {
       .getWritable({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
     await writer.write(new Uint8Array([1]));
@@ -406,7 +413,7 @@ describe("中断の透過", () => {
         key: "k",
         data: new Uint8Array([1]),
         signal: abortedSignal(),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 
@@ -425,11 +432,15 @@ describe("exists のフォールバック", () => {
       key: "k",
       data: new Uint8Array([1, 2, 3]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -450,7 +461,11 @@ describe("exists のフォールバック", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -469,7 +484,11 @@ describe("exists のフォールバック", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -489,7 +508,7 @@ describe("exists のフォールバック", () => {
       const result = await storage.exists({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       });
       expect(result).toBe(false);
     }
@@ -511,7 +530,7 @@ describe("exists のフォールバック", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -533,7 +552,7 @@ describe("exists のフォールバック", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -556,7 +575,11 @@ describe("exists のフォールバック", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -575,7 +598,11 @@ describe("exists のフォールバック", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const result = await storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    const result = await storage.exists({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toBe(true);
@@ -595,7 +622,7 @@ describe("exists のフォールバック", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -616,7 +643,7 @@ describe("exists のフォールバック", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -637,7 +664,7 @@ describe("exists のフォールバック", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -652,7 +679,7 @@ describe("exists のフォールバック", () => {
       const result = await storage.exists({
         key: "k",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       });
       expect(result).toBe(false);
     }

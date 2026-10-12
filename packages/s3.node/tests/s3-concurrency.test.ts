@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, createAllByteValues } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -19,7 +20,9 @@ describe("並行実行", () => {
     storage.open();
 
     // 実行
-    await Promise.all(candidates.map((data) => storage.write({ key, data, signal, vars: {} })));
+    await Promise.all(
+      candidates.map((data) => storage.write({ key, data, signal, vars: new Variables({}) })),
+    );
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -38,7 +41,9 @@ describe("並行実行", () => {
 
     // 実行
     await Promise.all(
-      Array.from({ length: 30 }, () => storage.write({ key, data, signal, vars: {} })),
+      Array.from({ length: 30 }, () =>
+        storage.write({ key, data, signal, vars: new Variables({}) }),
+      ),
     );
     const result = await storage.read({ key, signal });
 
@@ -56,7 +61,7 @@ describe("並行実行", () => {
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
     );
     const results = await Promise.all(entries.map(({ key }) => storage.read({ key, signal })));
 
@@ -77,12 +82,14 @@ describe("並行実行", () => {
     const oldData = createAllByteValues(256).fill(1);
     const newData = createAllByteValues(512).fill(2);
     storage.open();
-    await Promise.all(keys.map((key) => storage.write({ key, data: oldData, signal, vars: {} })));
+    await Promise.all(
+      keys.map((key) => storage.write({ key, data: oldData, signal, vars: new Variables({}) })),
+    );
 
     // 実行
     const observations: boolean[] = [];
     await Promise.all([
-      ...keys.map((key) => storage.write({ key, data: newData, signal, vars: {} })),
+      ...keys.map((key) => storage.write({ key, data: newData, signal, vars: new Variables({}) })),
       ...keys.map(async (key) => {
         const result = await storage.read({ key, signal });
         observations.push(bytesEqual(result, oldData) || bytesEqual(result, newData));
@@ -103,7 +110,7 @@ describe("並行実行", () => {
     // 準備
     const key = "parallel-delete.bin";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
 
     // 実行
     await Promise.all(Array.from({ length: 5 }, () => storage.delete({ key, signal })));
@@ -124,7 +131,7 @@ describe("並行実行", () => {
     }));
     storage.open();
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
     );
 
     // 実行

@@ -181,9 +181,7 @@ Converts and relays streams.
 ### toReadableStream [#to-readable-stream]
 
 ```ts
-function toReadableStream<T>(
-  iterable: Iterable<T> | AsyncIterable<T>,
-): ReadableStream<T>;
+function toReadableStream<T>(iterable: Iterable<T> | AsyncIterable<T>): ReadableStream<T>;
 ```
 
 Creates a `ReadableStream` from a sync or async iterable.
@@ -201,9 +199,7 @@ for await (const value of stream) {
 ### withReadableStreamFrom [#with-readable-stream-from]
 
 ```ts
-function withReadableStreamFrom<T>(
-  cb: (ReadableStream: ReadableStreamWithFrom) => T,
-): T;
+function withReadableStreamFrom<T>(cb: (ReadableStream: ReadableStreamWithFrom) => T): T;
 ```
 
 Runs `ReadableStream.from` code in the same way, even on runtimes without it.
@@ -211,9 +207,7 @@ Runs `ReadableStream.from` code in the same way, even on runtimes without it.
 ```ts
 import { withReadableStreamFrom } from "@unikvs/utils";
 
-const stream = withReadableStreamFrom((ReadableStream) =>
-  ReadableStream.from([1, 2, 3]),
-);
+const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1, 2, 3]));
 ```
 
 ### proxyTransformStream [#proxy-transform-stream]
@@ -221,8 +215,10 @@ const stream = withReadableStreamFrom((ReadableStream) =>
 ```ts
 function proxyTransformStream<TSourceInput, TSourceOutput, TInput, TOutput>(
   source: ITransformStream<TSourceInput, TSourceOutput>,
-  proxyInput: Transformer<TInput, TSourceInput> | TransformerTransformCallback<TInput, TSourceInput>,
-  proxyOutput: Transformer<TSourceOutput, TOutput> | TransformerTransformCallback<TSourceOutput, TOutput>,
+  proxyInput:
+    Transformer<TInput, TSourceInput> | TransformerTransformCallback<TInput, TSourceInput>,
+  proxyOutput:
+    Transformer<TSourceOutput, TOutput> | TransformerTransformCallback<TSourceOutput, TOutput>,
 ): IProxiedTransformStream<TInput, TOutput>;
 ```
 
@@ -269,10 +265,10 @@ console.log(await readAll); // [2]
 
 Validation errors for filenames and dirnames. Thrown for unusable names.
 
-| Error | Condition |
-| --- | --- |
+| Error                  | Condition                       |
+| ---------------------- | ------------------------------- |
 | `InvalidFilenameError` | An unusable filename was given. |
-| `InvalidDirnameError` | An unusable dirname was given. |
+| `InvalidDirnameError`  | An unusable dirname was given.  |
 
 ```ts
 import { InvalidFilenameError } from "@unikvs/utils";
@@ -285,12 +281,7 @@ throw new InvalidFilenameError({ filename: "../evil" });
 A combined example of validation, splitting, and stream conversion.
 
 ```ts
-import {
-  assertValidFilename,
-  chunks,
-  InvalidFilenameError,
-  toReadableStream,
-} from "@unikvs/utils";
+import { assertValidFilename, chunks, InvalidFilenameError, toReadableStream } from "@unikvs/utils";
 
 async function saveChunks(filename: string, data: Uint8Array): Promise<void> {
   try {

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureRejection, captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -28,7 +29,7 @@ describe("sizeOf の検証", () => {
     await bad.open({ signal });
 
     // 実行
-    const error = captureThrown(() => bad.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() => bad.write({ vars: new Variables(), key: "k1", data: "v1" }));
 
     // 検証
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
@@ -42,7 +43,7 @@ describe("sizeOf の検証", () => {
     await bad.open({ signal });
 
     // 実行
-    const error = captureThrown(() => bad.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() => bad.write({ vars: new Variables(), key: "k1", data: "v1" }));
 
     // 検証
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
@@ -55,7 +56,7 @@ describe("sizeOf の検証", () => {
     await bad.open({ signal });
 
     // 実行
-    const error = captureThrown(() => bad.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() => bad.write({ vars: new Variables(), key: "k1", data: "v1" }));
 
     // 検証
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
@@ -67,7 +68,7 @@ describe("sizeOf の検証", () => {
     await bad.open({ signal });
 
     // 実行
-    const error = captureThrown(() => bad.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() => bad.write({ vars: new Variables(), key: "k1", data: "v1" }));
 
     // 検証
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
@@ -87,11 +88,11 @@ describe("sizeOf の検証", () => {
       },
     });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "old" });
+    storage.write({ vars: new Variables(), key: "k1", data: "old" });
     bad = true;
 
     // 実行
-    captureThrown(() => storage.write({ vars: {}, key: "k1", data: "new" }));
+    captureThrown(() => storage.write({ vars: new Variables(), key: "k1", data: "new" }));
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("old");
@@ -112,7 +113,9 @@ describe("sizeOf の検証", () => {
     await storage.open({ signal });
 
     // 実行
-    const error = captureThrown(() => storage.write({ vars: {}, key: "k1", data: "v1" }));
+    const error = captureThrown(() =>
+      storage.write({ vars: new Variables(), key: "k1", data: "v1" }),
+    );
 
     // 検証
     expect((error as Error).message).toBe("sizeOf failed");
@@ -125,7 +128,7 @@ describe("sizeOf の検証", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("v1");
@@ -144,7 +147,7 @@ describe("sizeOf の検証", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 検証
     expect(calls).toBe(0);
@@ -163,8 +166,8 @@ describe("sizeOf の検証", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k1", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v2" });
 
     // 検証
     expect(calls).toBe(2);
@@ -184,7 +187,7 @@ describe("sizeOf の検証", () => {
       },
     });
     await storage.open({ signal });
-    const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -208,7 +211,7 @@ describe("sizeOf の検証", () => {
       },
     });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
     calls = 0;
 
     // 実行
@@ -231,8 +234,8 @@ describe("sizeOf の検証", () => {
       },
     });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
     calls = 0;
 
     // 実行
@@ -251,7 +254,7 @@ describe("sizeOf の検証", () => {
     // 準備
     const storage = new LruCache({ maxBytes: 10, sizeOf: () => -1 });
     await storage.open({ signal });
-    const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
     await writer.write(new Uint8Array([1]));
 
     // 実行
@@ -278,9 +281,9 @@ describe("sizeOf の検証", () => {
       },
     });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "old" });
+    storage.write({ vars: new Variables(), key: "k1", data: "old" });
     bad = true;
-    const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
     await writer.write(new Uint8Array([9]));
 
     // 実行

@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { Variables } from "@unikvs/core";
 import { runTransform, toHex } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -15,7 +16,7 @@ describe("データの透過", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const result = checksum.encode({ vars: { [VAR_NAME]: DIGEST }, data: DATA });
+    const result = checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
 
     // 検証
     expect(result).toBe(DATA);
@@ -26,7 +27,7 @@ describe("データの透過", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const result = checksum.decode({ vars: { [VAR_NAME]: DIGEST }, data: DATA });
+    const result = checksum.decode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
 
     // 検証
     expect(result).toBe(DATA);
@@ -37,7 +38,7 @@ describe("データの透過", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const result = checksum.encode({ vars: {}, data: DATA });
+    const result = checksum.encode({ vars: new Variables({}), data: DATA });
 
     // 検証
     expect(result).toBe(DATA);
@@ -48,7 +49,7 @@ describe("データの透過", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const result = checksum.decode({ vars: {}, data: DATA });
+    const result = checksum.decode({ vars: new Variables({}), data: DATA });
 
     // 検証
     expect(result).toBe(DATA);
@@ -59,14 +60,14 @@ describe("副作用のなさ", () => {
   test("encode は vars を変更しない", ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const vars = Object.freeze({ [VAR_NAME]: DIGEST });
+    const vars = new Variables({ [VAR_NAME]: DIGEST });
 
     // 実行
     checksum.encode({ vars, data: DATA });
 
     // 検証
-    expect(Object.keys(vars)).toStrictEqual([VAR_NAME]);
-    expect(vars[VAR_NAME]).toBe(DIGEST);
+    expect(Object.keys(Object.fromEntries(vars.entries()))).toStrictEqual([VAR_NAME]);
+    expect(vars.get(VAR_NAME)).toBe(DIGEST);
   });
 
   test("encode は入力データの内容を変更しない", ({ expect }) => {
@@ -76,7 +77,7 @@ describe("副作用のなさ", () => {
     const before = Array.from(data);
 
     // 実行
-    checksum.encode({ vars: { [VAR_NAME]: DIGEST }, data });
+    checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data });
 
     // 検証
     expect(Array.from(data)).toStrictEqual(before);
@@ -91,11 +92,11 @@ describe("失敗後の再利用", () => {
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars: { [VAR_NAME]: WRONG_DIGEST }, data: DATA });
+      checksum.encode({ vars: new Variables({ [VAR_NAME]: WRONG_DIGEST }), data: DATA });
     } catch (error) {
       thrown = error;
     }
-    const result = checksum.decode({ vars: { [VAR_NAME]: DIGEST }, data: DATA });
+    const result = checksum.decode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
 
     // 検証
     expect(thrown).toBeInstanceOf(ChecksumMismatchError);
@@ -109,11 +110,11 @@ describe("失敗後の再利用", () => {
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars: {}, data: DATA });
+      checksum.encode({ vars: new Variables({}), data: DATA });
     } catch (error) {
       thrown = error;
     }
-    const result = checksum.encode({ vars: { [VAR_NAME]: DIGEST }, data: DATA });
+    const result = checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
 
     // 検証
     expect(thrown).toBeInstanceOf(ChecksumRequiredError);
@@ -126,12 +127,13 @@ describe("失敗後の再利用", () => {
 
     // 実行
     const first = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: WRONG_DIGEST } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: WRONG_DIGEST }) }),
       [DATA],
     );
-    const second = await runTransform(checksum.getDecodable({ vars: { [VAR_NAME]: DIGEST } }), [
-      DATA,
-    ]);
+    const second = await runTransform(
+      checksum.getDecodable({ vars: new Variables({ [VAR_NAME]: DIGEST }) }),
+      [DATA],
+    );
 
     // 検証
     expect(first.closeError).toBeInstanceOf(ChecksumMismatchError);

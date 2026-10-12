@@ -6,6 +6,7 @@ import type {
   IDecodableStreamTransformer,
   IEncodableStreamTransformer,
 } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
@@ -989,7 +990,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     const prefixTransformers = destinations[0]?.transformers.slice(0, prefixLength) ?? [];
 
     return new this.#UniKvs(
-      {},
+      new Variables(),
       [first, ...rest],
       allTransformers,
       this.#valueSchemaResolver,

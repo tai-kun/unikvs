@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -11,7 +12,10 @@ describe("ログのメタデータ", () => {
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "greeting" }, data: "hello" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" }),
+      data: "hello",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -32,7 +36,10 @@ describe("ログのメタデータ", () => {
     const debug = new Debug();
 
     // 実行
-    debug.decode({ vars: { "unikvs:action": "get", "unikvs:key": "greeting" }, data: "hello" });
+    debug.decode({
+      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "greeting" }),
+      data: "hello",
+    });
 
     // 検証
     expect(records).toHaveLength(1);

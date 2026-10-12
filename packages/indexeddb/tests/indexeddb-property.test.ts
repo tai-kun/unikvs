@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { concatChunks } from "@unikvs/testing";
 import { forCasesAsync, type Random } from "@unikvs/testing";
 import { describe } from "vitest";
@@ -82,7 +83,7 @@ describe("Indexeddb のプロパティー", () => {
       const key = randomKey(random);
       const value = randomValue(random);
 
-      await storage.write({ key, data: value, signal, vars: {} });
+      await storage.write({ key, data: value, signal, vars: new Variables() });
       expect(await storage.read({ key, signal })).toStrictEqual(value);
     });
   });
@@ -95,7 +96,7 @@ describe("Indexeddb のプロパティー", () => {
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const bytes = random.bytes(random.uint(257));
 
-      await storage.write({ key: "bytes", data: bytes, signal, vars: {} });
+      await storage.write({ key: "bytes", data: bytes, signal, vars: new Variables() });
       const result = await storage.read({ key: "bytes", signal });
 
       expect(result).toStrictEqual(bytes);
@@ -116,7 +117,12 @@ describe("Indexeddb のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            await storage.write({ key: operation.key, data: operation.value, signal, vars: {} });
+            await storage.write({
+              key: operation.key,
+              data: operation.value,
+              signal,
+              vars: new Variables(),
+            });
             model.set(operation.key, operation.value);
             break;
           }
@@ -158,7 +164,9 @@ describe("Indexeddb のプロパティー", () => {
     // 実行と検証
     await forCasesAsync(seed + 3, caseCount, async (random) => {
       const chunks = random.array(random.uint(9), () => random.bytes(random.uint(65)));
-      const writer = storage.getWritable({ key: "stream", signal, vars: {} }).getWriter();
+      const writer = storage
+        .getWritable({ key: "stream", signal, vars: new Variables() })
+        .getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }

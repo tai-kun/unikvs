@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { Variables } from "@unikvs/core";
 import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -59,7 +60,7 @@ describe("ストリームの透過", () => {
 
     // 実行
     const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: DIGEST } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: DIGEST }) }),
       chunks,
     );
 
@@ -74,7 +75,7 @@ describe("ストリームの透過", () => {
 
     // 実行
     const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: EMPTY_DIGEST } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: EMPTY_DIGEST }) }),
       [],
     );
 
@@ -93,7 +94,7 @@ describe("ストリームの透過", () => {
 
     // 実行
     const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: expected } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: expected }) }),
       chunks,
     );
 
@@ -110,7 +111,7 @@ describe("ストリームの透過", () => {
 
     // 実行
     const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: toHex(sha256(data)) } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: toHex(sha256(data)) }) }),
       chunks,
     );
 
@@ -126,7 +127,7 @@ describe("ストリームの透過", () => {
 
     // 実行
     const { outputChunks, closeError } = await runTransform(
-      checksum.getDecodable({ vars: { [VAR_NAME]: DIGEST } }),
+      checksum.getDecodable({ vars: new Variables({ [VAR_NAME]: DIGEST }) }),
       chunks,
     );
 
@@ -140,9 +141,10 @@ describe("ストリームの透過", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const { outputChunks, closeError } = await runTransform(checksum.getDecodable({ vars: {} }), [
-      DATA,
-    ]);
+    const { outputChunks, closeError } = await runTransform(
+      checksum.getDecodable({ vars: new Variables({}) }),
+      [DATA],
+    );
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -160,7 +162,7 @@ describe("不一致の検出", () => {
 
     // 実行
     const { closeError } = await runTransform(
-      checksum.getEncodable({ vars: { [VAR_NAME]: expected } }),
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: expected }) }),
       [DATA],
     );
 
@@ -178,7 +180,7 @@ describe("不一致の検出", () => {
     // 準備
     const checksum = new ChecksumSha256();
     const transformStream = checksum.getEncodable({
-      vars: { [VAR_NAME]: "0".repeat(DIGEST.length) },
+      vars: new Variables({ [VAR_NAME]: "0".repeat(DIGEST.length) }),
     });
     const sink = new WritableStream<Uint8Array<ArrayBuffer>>();
 
@@ -201,7 +203,7 @@ describe("処理中のエラー", () => {
     // 準備
     const checksum = new FailingChecksum();
     const transformStream = checksum.getEncodable({
-      vars: { [FailingChecksum.CHECKSUM_VAR_NAME]: "" },
+      vars: new Variables({ [FailingChecksum.CHECKSUM_VAR_NAME]: "" }),
     });
 
     // 実行

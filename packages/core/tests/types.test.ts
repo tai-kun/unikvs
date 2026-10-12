@@ -4,6 +4,7 @@ import { expectTypeOf, test } from "vitest";
 import {
   ErrorBase,
   InvalidUsageErrorBase,
+  Variables,
   setErrorMessage,
   type ErrorMeta,
   type ErrorOptions,
@@ -13,7 +14,6 @@ import {
   type IStorage,
   type ITransformer,
   type IWritableStream,
-  type Variables,
 } from "../src/index.js";
 
 type AnyStorage = IStorage;
@@ -87,17 +87,19 @@ test("ITransformer はエンコードとデコードそれぞれの入出力型�
   >();
 });
 
-test("Variables のプロパティーへのアクセス結果は unknown である", () => {
+test("Variables の get は unknown を返す", () => {
   // 準備
-  const vars: Variables = { "unikvs:key": "foo" };
+  const vars = new Variables({ "unikvs:key": "foo" });
 
   // 検証
-  expectTypeOf(vars["unikvs:key"]).toEqualTypeOf<unknown>();
+  expectTypeOf(vars.get("unikvs:key")).toEqualTypeOf<unknown>();
+  expectTypeOf(vars.get<string>("unikvs:key")).toEqualTypeOf<string | undefined>();
 });
 
-test("Variables は string キーと unknown 値のレコードである", () => {
+test("Variables は Map ライクなクラスである", () => {
   // 実行と検証
-  expectTypeOf<Variables>().toEqualTypeOf<Record<string, unknown>>();
+  expectTypeOf<Variables>().toExtend<{ get(key: string): unknown }>();
+  expectTypeOf<Variables>().toExtend<{ set(key: string, value: unknown): unknown }>();
 });
 
 test("IStorage の name と isOpen は必須のプロパティーである", () => {

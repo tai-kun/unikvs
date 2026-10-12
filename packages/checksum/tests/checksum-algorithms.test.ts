@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
@@ -77,7 +78,7 @@ describe("既知ベクターによる一括検証", () => {
     ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = { [varName]: abcDigest };
+      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
       const result = checksum.encode({ vars, data: ABC });
@@ -92,7 +93,7 @@ describe("既知ベクターによる一括検証", () => {
     ({ create, varName, unicodeDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = { [varName]: unicodeDigest };
+      const vars = new Variables({ [varName]: unicodeDigest });
 
       // 実行
       const result = checksum.encode({ vars, data: UNICODE });
@@ -107,7 +108,7 @@ describe("既知ベクターによる一括検証", () => {
     ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = { [varName]: abcDigest };
+      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
       const result = checksum.decode({ vars, data: ABC });

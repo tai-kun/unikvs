@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { acquireFreePort } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
@@ -18,7 +19,12 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        missing.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+        missing.write({
+          key: "x.bin",
+          data: new Uint8Array([1]),
+          signal,
+          vars: new Variables({}),
+        }),
       ).rejects.toMatchObject({ name: "NoSuchBucket" });
       await expect(missing.delete({ key: "x.bin", signal })).rejects.toMatchObject({
         name: "NoSuchBucket",
@@ -62,7 +68,12 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        unreachable.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+        unreachable.write({
+          key: "x.bin",
+          data: new Uint8Array([1]),
+          signal,
+          vars: new Variables({}),
+        }),
       ).rejects.toThrow(/ECONNREFUSED|fetch failed/);
       await expect(unreachable.exists({ key: "x.bin", signal })).rejects.toThrow(
         /ECONNREFUSED|fetch failed/,
@@ -82,7 +93,12 @@ describe("異常系とエラー伝播", () => {
 
     // 実行と検証
     await expect(
-      unauthorizedStorage.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+      unauthorizedStorage.write({
+        key: "x.bin",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toThrow();
     await expect(unauthorizedStorage.read({ key: "x.bin", signal })).rejects.toThrow();
     await expect(unauthorizedStorage.delete({ key: "x.bin", signal })).rejects.toThrow();

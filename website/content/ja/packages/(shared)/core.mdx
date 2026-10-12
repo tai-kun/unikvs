@@ -33,16 +33,36 @@ pnpm add @unikvs/core
 
 ## 変数 [#variables]
 
-操作の挙動を切り替える実行時コンテキストを変数として渡せます。操作ごとの `vars` で渡します。
+操作の挙動を切り替える実行時コンテキストを変数として渡せます。操作ごとの `vars` で渡します。`Variables` は Map ライクなクラスです。
 
 ```ts
-import type { Variables } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 
-const vars: Variables = {
+const vars = Variables.from({
   locale: "ja",
   retryCount: 3,
-};
+});
+
+vars.set("traceId", "xxx");
+vars.get("locale");
+vars.setReadonly("tenant", "acme");
 ```
+
+操作への入力は `Record`・`Map`・エントリー配列・`Variables` のいずれでも指定できます。`Variables.from` で正規化されます。
+
+旧 `Record<string, unknown>` からの移行は次の表を参照してください。
+
+| 旧                         | 新                                                           |
+| -------------------------- | ------------------------------------------------------------ |
+| `vars.foo` / `vars["foo"]` | `vars.get("foo")`                                            |
+| `vars.foo = value`         | `vars.set("foo", value)`                                     |
+| `{ ...vars, a: 1 }`        | `vars.clone().set("a", 1)`                                   |
+| `Object.entries(vars)`     | `[...vars.entries()]` / `vars.toObject()`                    |
+| リテラル入力               | `Variables.from(input)` (入力としては従来どおり `Record` 可) |
+
+:::note
+`unikvs:*` は予約キーです。利用者側で設定しないでください。操作ごとに UniKvs が付与・上書きします。
+:::
 
 ## エラー [#errors]
 
@@ -50,14 +70,15 @@ UniKVS のエラーはすべて `ErrorBase` を継承し、日本語と英語の
 
 ### 共通エラー [#errors-common]
 
-| エラークラス | 説明 |
-| --- | --- |
-| `KeyNotFoundError` | キーが見つかりません。存在しないキーの読み取りなどで発生します。各ストレージパッケージから再エクスポートされています。 |
-| `UnsupportedRuntimeError` | 対応ランタイム以外で使われました。Bun 専用ストレージを Node.js で開く場合などに発生します。 |
-| `InvalidPartSizeError` | マルチパートアップロードのパートサイズ指定が不正です。 |
-| `StorageAbortedError` | 中断済みのシグナルで書き込みストリームを要求しました。 |
-| `RepairNotAllowedError` | 書き戻しが許可されていません。`meta.names` に書き戻し先の表示名一覧が入り、複数ある場合は `", "` 区切りで表示します。エラーの `name` は `UniKvsRepairNotAllowedError` です。 |
-| `InvalidUsageErrorBase` | 使い方の誤りを示すエラーの基底クラスです。 |
+| エラークラス              | 説明                                                                                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KeyNotFoundError`        | キーが見つかりません。存在しないキーの読み取りなどで発生します。各ストレージパッケージから再エクスポートされています。                                                       |
+| `UnsupportedRuntimeError` | 対応ランタイム以外で使われました。Bun 専用ストレージを Node.js で開く場合などに発生します。                                                                                  |
+| `InvalidPartSizeError`    | マルチパートアップロードのパートサイズ指定が不正です。                                                                                                                       |
+| `StorageAbortedError`     | 中断済みのシグナルで書き込みストリームを要求しました。                                                                                                                       |
+| `RepairNotAllowedError`   | 書き戻しが許可されていません。`meta.names` に書き戻し先の表示名一覧が入り、複数ある場合は `", "` 区切りで表示します。エラーの `name` は `UniKvsRepairNotAllowedError` です。 |
+| `ReadonlyVariableError`   | 読み取り専用の変数を変更しようとしました。`meta.key` にキー名が入ります。                                                                                                    |
+| `InvalidUsageErrorBase`   | 使い方の誤りを示すエラーの基底クラスです。                                                                                                                                   |
 
 ```ts
 import { KeyNotFoundError } from "@unikvs/core";

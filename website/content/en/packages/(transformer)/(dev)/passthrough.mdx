@@ -52,12 +52,12 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `TData` | `TData` |
-| `decode` | `TData` | `TData` |
-| `getEncodable` | `any` | `any` |
-| `getDecodable` | `any` | `any` |
+| Method         | Input   | Output  |
+| -------------- | ------- | ------- |
+| `encode`       | `TData` | `TData` |
+| `decode`       | `TData` | `TData` |
+| `getEncodable` | `any`   | `any`   |
+| `getDecodable` | `any`   | `any`   |
 
 - `encode` and `decode` return data of any type as is.
 - `getEncodable` and `getDecodable` return a `TransformStream` that passes chunks through as is.

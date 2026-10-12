@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
@@ -24,7 +25,7 @@ describe("書き込みストリーム", () => {
       new Uint8Array([200, 201]),
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
     // 実行
     for (const chunk of chunks) {
@@ -47,7 +48,7 @@ describe("書き込みストリーム", () => {
       createAllByteValues(1024 * 1024 + index),
     );
     const expected = concatBytes(chunks);
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
     // 実行
     for (const chunk of chunks) {
@@ -67,7 +68,7 @@ describe("書き込みストリーム", () => {
   }) => {
     // 準備
     const key = "stream-empty.dat";
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
     // 実行
     await writer.close();
@@ -82,8 +83,8 @@ describe("書き込みストリーム", () => {
     const key = "stream-swap.dat";
     const original = new Uint8Array([1, 2, 3]);
     const replacement = createPseudoRandomBytes(4096, 1);
-    await storage.write({ key, data: original, signal, vars: {} });
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    await storage.write({ key, data: original, signal, vars: new Variables() });
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
     // 実行
     await writer.write(replacement);
@@ -109,8 +110,8 @@ describe("書き込みストリーム", () => {
     // 準備
     const key = "stream-rename-failure.dat";
     const original = new Uint8Array([4, 5, 6]);
-    await storage.write({ key, data: original, signal, vars: {} });
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    await storage.write({ key, data: original, signal, vars: new Variables() });
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
     const temporaryKeys = (await listKeys(client, `${keyPrefix}*`)).filter((entry) =>
       entry.endsWith(".tmp"),
@@ -136,9 +137,11 @@ describe("書き込みストリームの中断", () => {
     // 準備
     const key = "stream-abort.dat";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: {} });
+    await storage.write({ key, data: original, signal, vars: new Variables() });
     const controller = new AbortController();
-    const writer = storage.getWritable({ key, signal: controller.signal, vars: {} }).getWriter();
+    const writer = storage
+      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWriter();
     await writer.write(new Uint8Array(1024).fill(0x41));
 
     // 実行
@@ -158,7 +161,9 @@ describe("書き込みストリームの中断", () => {
     // 準備
     const key = "stream-abort-write.dat";
     const controller = new AbortController();
-    const writer = storage.getWritable({ key, signal: controller.signal, vars: {} }).getWriter();
+    const writer = storage
+      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWriter();
     await writer.write(new Uint8Array([1]));
 
     // 実行
@@ -178,7 +183,9 @@ describe("書き込みストリームの中断", () => {
     // 準備
     const key = "stream-abort-new.dat";
     const controller = new AbortController();
-    const writer = storage.getWritable({ key, signal: controller.signal, vars: {} }).getWriter();
+    const writer = storage
+      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWriter();
     await writer.write(new Uint8Array(1024).fill(0x42));
 
     // 実行
@@ -201,7 +208,7 @@ describe("書き込みストリームの中断", () => {
   }) => {
     // 準備
     const key = "stream-writer-abort.dat";
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行
@@ -219,7 +226,7 @@ describe("書き込みストリームの中断", () => {
 
     // 実行と検証
     expect(() =>
-      storage.getWritable({ key: "aborted.dat", signal: controller.signal, vars: {} }),
+      storage.getWritable({ key: "aborted.dat", signal: controller.signal, vars: new Variables() }),
     ).toThrow();
   });
 });
@@ -233,7 +240,7 @@ describe("読み取りストリーム", () => {
     // 準備
     const key = "stream-read.dat";
     const expected = createPseudoRandomBytes(1536 * 1024, 2);
-    await storage.write({ key, data: expected, signal, vars: {} });
+    await storage.write({ key, data: expected, signal, vars: new Variables() });
 
     // 実行
     const result = await collectBytes(storage.getReadable({ key, signal }));
@@ -277,7 +284,9 @@ describe("同一キーへの並行ストリーム書き込み", () => {
     // 準備
     const key = "stream-race.dat";
     const payloads = [createAllByteValues(2048), createPseudoRandomBytes(2048, 3)];
-    const writers = payloads.map(() => storage.getWritable({ key, signal, vars: {} }).getWriter());
+    const writers = payloads.map(() =>
+      storage.getWritable({ key, signal, vars: new Variables() }).getWriter(),
+    );
 
     // 実行
     await Promise.all(writers.map((writer, index) => writer.write(payloads[index]!)));

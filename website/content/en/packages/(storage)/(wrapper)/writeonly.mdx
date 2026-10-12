@@ -71,9 +71,9 @@ await kvs.close();
 
 ## Data types [#data-types]
 
-| Operation | Supported data type |
-| --- | --- |
-| `write` | Data type supported by the inner storage |
+| Operation            | Supported data type                       |
+| -------------------- | ----------------------------------------- |
+| `write`              | Data type supported by the inner storage  |
 | `getWritable` chunks | Chunk type supported by the inner storage |
 
 - Writes delegate directly to the inner storage, so the supported data type follows the inner storage.

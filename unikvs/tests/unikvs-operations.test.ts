@@ -72,13 +72,14 @@ describe("UniKvs - 引数形式の等価性", () => {
     await kvs.delete("a", { vars: { via: "delete" } });
 
     // 検証
-    expect(storage.callsOf("write")[0]?.vars?.["via"]).toBe("positional");
+    expect(storage.callsOf("write")[0]?.vars?.get("via")).toBe("positional");
     expect(storage.callsOf("write")[0]?.signal).toBeInstanceOf(AbortSignal);
-    expect(storage.callsOf("read")[0]?.vars?.["via"]).toBe("get");
+    expect(storage.callsOf("read")[0]?.vars?.get("via")).toBe("get");
     expect(
-      storage.callsOf("exists").find((call) => call.vars?.["unikvs:action"] === "has")?.vars?.[
-        "via"
-      ],
+      storage
+        .callsOf("exists")
+        .find((call) => call.vars?.get("unikvs:action") === "has")
+        ?.vars?.get("via"),
     ).toBe("has");
 
     // 後片付け

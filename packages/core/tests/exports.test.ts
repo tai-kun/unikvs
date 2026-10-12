@@ -4,6 +4,7 @@ import * as errors from "../src/errors.js";
 import * as core from "../src/index.js";
 import * as storage from "../src/storage.types.js";
 import * as transformer from "../src/transformer.types.js";
+import * as variables from "../src/variables.js";
 
 test("エントリーポイントは実行時の公開値をすべて再エクスポートする", ({ expect }) => {
   // 実行と検証
@@ -12,9 +13,11 @@ test("エントリーポイントは実行時の公開値をすべて再エク�
     "InvalidPartSizeError",
     "InvalidUsageErrorBase",
     "KeyNotFoundError",
+    "ReadonlyVariableError",
     "RepairNotAllowedError",
     "StorageAbortedError",
     "UnsupportedRuntimeError",
+    "Variables",
     "setErrorMessage",
   ]);
 });
@@ -28,7 +31,9 @@ test("エントリーポイントの実行時の値は errors モジュールと
   expect(core.InvalidPartSizeError).toBe(errors.InvalidPartSizeError);
   expect(core.StorageAbortedError).toBe(errors.StorageAbortedError);
   expect(core.RepairNotAllowedError).toBe(errors.RepairNotAllowedError);
+  expect(core.ReadonlyVariableError).toBe(errors.ReadonlyVariableError);
   expect(core.setErrorMessage).toBe(errors.setErrorMessage);
+  expect(core.Variables).toBe(variables.default);
 });
 
 test("storage と transformer のサブパスは実行時の値を公開しない", ({ expect }) => {

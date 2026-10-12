@@ -83,13 +83,9 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 ```
 
 ```ts 環境別の切り替え
-const storages = process.env.NODE_ENV === "production"
-  ? [new NodeFs(".data")]
-  : [new Memory()];
+const storages = process.env.NODE_ENV === "production" ? [new NodeFs(".data")] : [new Memory()];
 
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .persist(storages[0])
-  .create();
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().persist(storages[0]).create();
 ```
 
 </CodeGroup>

@@ -39,7 +39,8 @@ The constructor arguments are as follows.
   type={{
     baseUrl: {
       type: "string",
-      description: "Base of the storage destination. Specify an absolute URL without a trailing `/`.",
+      description:
+        "Base of the storage destination. Specify an absolute URL without a trailing `/`.",
     },
     options: {
       type: "HttpOptions",
@@ -63,7 +64,8 @@ The constructor arguments are as follows.
     "options.fetch": {
       type: "IFetch",
       default: "globalThis.fetch",
-      description: "The `fetch` implementation used for sending. Takes a `Request` and returns a `Response`.",
+      description:
+        "The `fetch` implementation used for sending. Takes a `Request` and returns a `Response`.",
     },
     "options.headers": {
       type: "Record<string, string>",
@@ -99,9 +101,9 @@ await kvs.close();
 
 ## Data types [#data-types]
 
-| Operation | Supported data type |
-| --- | --- |
-| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+| Operation                           | Supported data type       |
+| ----------------------------------- | ------------------------- |
+| `write`・`read`                     | `Uint8Array<ArrayBuffer>` |
 | `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
 
 - `write` and `read` support bytes only, sent and received with `PUT` and `GET`.

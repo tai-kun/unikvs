@@ -47,6 +47,7 @@ npm i unikvs
       .persist(storage)
       .create();
     ```
+
   </Tab>
   <Tab title="Without schema">
     The type parameter `T` is a mapping from keys to values (`{ [key]: PlainValue | StreamValue | Value }`), and decides which operations are available per key at the type level. No runtime validation is performed.
@@ -60,6 +61,7 @@ npm i unikvs
       .persist(storage)
       .create();
     ```
+
   </Tab>
 </Tabs>
 
@@ -73,11 +75,10 @@ Configure in the following order.
   <Step title="`transform(transformer)`">
     Adds a transformer (optional). You can also add transformers after registering storages.
   </Step>
-  <Step title="`persist(storage)`">
-    Adds a storage (required, multiple allowed).
-  </Step>
+  <Step title="`persist(storage)`">Adds a storage (required, multiple allowed).</Step>
   <Step title="`fork(branch)`">
-    Adds storages on a branched pipeline (optional). Additions inside the branch do not leak to the parent pipeline.
+    Adds storages on a branched pipeline (optional). Additions inside the branch do not leak to the
+    parent pipeline.
   </Step>
   <Step title="`create()`">
     Creates a `UniKvs` client. It throws `MissingStorageError` if no storage is registered.
@@ -96,16 +97,16 @@ Writes go to all storages in parallel. Reads decode by applying the upstream pip
 
 The created client provides the following operations. Initialize it with `open()` and close it with `close()` when you are done (`await using` also works).
 
-| Method          | Description                                        |
-| --------------- | -------------------------------------------------- |
-| `open()`          | Initializes the storages and transformers.           |
-| `close()`         | Closes all storages and transformers.                |
-| `set(key, value)` | Saves a value under a key.                           |
-| `get(key)`        | Gets the value for a key.                            |
-| `stream(key)`     | Gets a stream for a key.                             |
-| `has(key)`        | Checks whether a key exists.                         |
-| `delete(key)`     | Deletes a key.                                       |
-| `clear()`         | Deletes all data.                                    |
+| Method            | Description                                |
+| ----------------- | ------------------------------------------ |
+| `open()`          | Initializes the storages and transformers. |
+| `close()`         | Closes all storages and transformers.      |
+| `set(key, value)` | Saves a value under a key.                 |
+| `get(key)`        | Gets the value for a key.                  |
+| `stream(key)`     | Gets a stream for a key.                   |
+| `has(key)`        | Checks whether a key exists.               |
+| `delete(key)`     | Deletes a key.                             |
+| `clear()`         | Deletes all data.                          |
 
 All operations support `AbortSignal` cancellation and passing runtime variables (`vars`). Arguments can be specified either as an options object or as positional arguments.
 
@@ -125,11 +126,11 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
 
 `PlainValue`, `StreamValue`, and `Value` are both types and functions. Used as types, they restrict the methods available per key; used as functions, they infer types from Valibot schemas.
 
-| Type               | Write                              | Read            | Stream read                   |
-| ------------------ | ---------------------------------- | --------------- | ----------------------------- |
-| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T` | Not available.                |
+| Type             | Write                              | Read           | Stream read                   |
+| ---------------- | ---------------------------------- | -------------- | ----------------------------- |
+| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T`  | Not available.                |
 | `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available. | `stream(key): ValueStream<T>` |
-| `Value<T>`       | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
+| `Value<T>`       | `set(key, T \| ReadableStream<T>)` | `get(key): T`  | `stream(key): ValueStream<T>` |
 
 `Value<T>` is sugar for both, equivalent to `PlainValue<T> | StreamValue<T>`.
 
@@ -154,6 +155,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
     await kvs.set("logs", new Uint8Array([0x01]));
     const valueStream = await kvs.stream("logs");
     ```
+
   </Tab>
   <Tab title="Specify with schemas">
     ```ts
@@ -175,6 +177,7 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
     const msg = await kvs.get("message");
     // msg is typed as string
     ```
+
   </Tab>
 </Tabs>
 
@@ -192,12 +195,12 @@ kvs.get("logs");
 
 Specifying `schema` validates input and output values against Valibot schemas.
 
-| Operation | What is validated | Error on failure |
-| --------- | ----------------- | ---------------- |
-| `set` | Validates the input value. | `InvalidInputError` |
-| `get` | Validates the output value. | `InvalidOutputError` |
-| `stream` | Validates each chunk. | `InvalidOutputError` |
-| `has` / `delete` | Only in the array form, validates the key. | `InvalidInputError` |
+| Operation        | What is validated                          | Error on failure     |
+| ---------------- | ------------------------------------------ | -------------------- |
+| `set`            | Validates the input value.                 | `InvalidInputError`  |
+| `get`            | Validates the output value.                | `InvalidOutputError` |
+| `stream`         | Validates each chunk.                      | `InvalidOutputError` |
+| `has` / `delete` | Only in the array form, validates the key. | `InvalidInputError`  |
 
 ```ts
 import { PlainValue, UniKvs } from "unikvs";
@@ -274,9 +277,7 @@ Don't forget automatic disposal via `await using` or calling `dispose()`.
 `vars` passes per-operation settings.
 
 ```ts
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .persist(storage)
-  .create();
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().persist(storage).create();
 
 await kvs.open();
 
@@ -310,21 +311,21 @@ const bytes = await kvs.get("foo", { repair: true });
 
 ## Errors [#errors]
 
-| Error class | Description |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `KeyNotFoundError` | The key does not exist in any storage. |
-| `UniKvsIsNotOpenError` | Operated before opening. |
-| `UniKvsIsOpenError` | Called `open()` while already open. |
-| `MissingStorageError` | Called `create()` with no storage registered. |
-| `StorageIsNotOpenError` | A storage is not open. |
-| `TransformerIsNotOpenError` | A transformer is not open. |
-| `PluginOperationAggregateError` | Aggregate error for multiple plugin operations. |
-| `InvalidInputError` | The input format is invalid. |
-| `InvalidOutputError` | The output format is invalid. |
-| `ReadableStreamNotSupportedError` | Read streams are not supported. |
-| `WritableStreamNotSupportedError` | Write streams are not supported. |
-| `EncodableStreamNotSupportedError` | Encode streams are not supported. |
-| `DecodableStreamNotSupportedError` | Decode streams are not supported. |
+| Error class                        | Description                                     |
+| ---------------------------------- | ----------------------------------------------- |
+| `KeyNotFoundError`                 | The key does not exist in any storage.          |
+| `UniKvsIsNotOpenError`             | Operated before opening.                        |
+| `UniKvsIsOpenError`                | Called `open()` while already open.             |
+| `MissingStorageError`              | Called `create()` with no storage registered.   |
+| `StorageIsNotOpenError`            | A storage is not open.                          |
+| `TransformerIsNotOpenError`        | A transformer is not open.                      |
+| `PluginOperationAggregateError`    | Aggregate error for multiple plugin operations. |
+| `InvalidInputError`                | The input format is invalid.                    |
+| `InvalidOutputError`               | The output format is invalid.                   |
+| `ReadableStreamNotSupportedError`  | Read streams are not supported.                 |
+| `WritableStreamNotSupportedError`  | Write streams are not supported.                |
+| `EncodableStreamNotSupportedError` | Encode streams are not supported.               |
+| `DecodableStreamNotSupportedError` | Decode streams are not supported.               |
 
 ```ts
 import { KeyNotFoundError } from "unikvs";
@@ -370,6 +371,7 @@ A minimal example using `@unikvs/memory`.
     await kvs.delete("foo");
     await kvs.close();
     ```
+
   </Tab>
   <Tab title="With validation">
     ```ts
@@ -394,5 +396,6 @@ A minimal example using `@unikvs/memory`.
 
     await kvs.close();
     ```
+
   </Tab>
 </Tabs>

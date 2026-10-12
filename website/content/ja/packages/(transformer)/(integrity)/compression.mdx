@@ -67,12 +67,12 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
-| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| メソッド       | 入力                      | 出力                               |
+| -------------- | ------------------------- | ---------------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
+| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>`          |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>`          |
 
 - `encode` はバイト列を圧縮します。
 - `decode` は圧縮済みのバイト列を展開します。

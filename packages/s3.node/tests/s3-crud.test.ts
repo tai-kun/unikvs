@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, createAllByteValues } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -19,7 +20,7 @@ async function writeInBatches(
     await Promise.all(
       entries
         .slice(start, start + concurrency)
-        .map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+        .map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
     );
   }
 }
@@ -36,7 +37,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -50,7 +51,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -64,7 +65,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -78,7 +79,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
@@ -91,7 +92,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -109,7 +110,7 @@ describe("基本データ操作 (CRUD)", () => {
 
     // 実行
     const before = await storage.exists({ key, signal });
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
     const after = await storage.exists({ key, signal });
 
     // 検証
@@ -128,7 +129,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -141,7 +142,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data: new Uint8Array(0), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array(0), signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -151,7 +152,7 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "delete-twice.bin";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
     await storage.delete({ key, signal });
 
     // 実行と検証
@@ -165,10 +166,10 @@ describe("基本データ操作 (CRUD)", () => {
     const longData = createAllByteValues(1024);
     const shortData = new Uint8Array([1, 2, 3]);
     storage.open();
-    await storage.write({ key, data: longData, signal, vars: {} });
+    await storage.write({ key, data: longData, signal, vars: new Variables({}) });
 
     // 実行
-    await storage.write({ key, data: shortData, signal, vars: {} });
+    await storage.write({ key, data: shortData, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(shortData);
@@ -180,10 +181,10 @@ describe("基本データ操作 (CRUD)", () => {
     const shortData = new Uint8Array([1, 2, 3]);
     const longData = createAllByteValues(1024);
     storage.open();
-    await storage.write({ key, data: shortData, signal, vars: {} });
+    await storage.write({ key, data: shortData, signal, vars: new Variables({}) });
 
     // 実行
-    await storage.write({ key, data: longData, signal, vars: {} });
+    await storage.write({ key, data: longData, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -193,9 +194,24 @@ describe("基本データ操作 (CRUD)", () => {
   test("1 つのキーを削除しても他のキーは残る", async ({ expect, signal, storage }) => {
     // 準備
     storage.open();
-    await storage.write({ key: "keep-a.bin", data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: "remove.bin", data: new Uint8Array([2]), signal, vars: {} });
-    await storage.write({ key: "keep-b.bin", data: new Uint8Array([3]), signal, vars: {} });
+    await storage.write({
+      key: "keep-a.bin",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables({}),
+    });
+    await storage.write({
+      key: "remove.bin",
+      data: new Uint8Array([2]),
+      signal,
+      vars: new Variables({}),
+    });
+    await storage.write({
+      key: "keep-b.bin",
+      data: new Uint8Array([3]),
+      signal,
+      vars: new Variables({}),
+    });
 
     // 実行
     await storage.delete({ key: "remove.bin", signal });
@@ -217,7 +233,7 @@ describe("基本データ操作 (CRUD)", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
     }
     await storage.delete({ key: "data.bak", signal });
 
@@ -232,12 +248,27 @@ describe("基本データ操作 (CRUD)", () => {
   test("clear の後に同じバケットを引き続き使用できる", async ({ expect, signal, storage }) => {
     // 準備
     storage.open();
-    await storage.write({ key: "before-clear-1.bin", data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: "before-clear-2.bin", data: new Uint8Array([2]), signal, vars: {} });
+    await storage.write({
+      key: "before-clear-1.bin",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables({}),
+    });
+    await storage.write({
+      key: "before-clear-2.bin",
+      data: new Uint8Array([2]),
+      signal,
+      vars: new Variables({}),
+    });
 
     // 実行
     await storage.clear({ signal });
-    await storage.write({ key: "after-clear.bin", data: new Uint8Array([3]), signal, vars: {} });
+    await storage.write({
+      key: "after-clear.bin",
+      data: new Uint8Array([3]),
+      signal,
+      vars: new Variables({}),
+    });
 
     // 検証
     await expect(storage.exists({ key: "before-clear-1.bin", signal })).resolves.toBe(false);

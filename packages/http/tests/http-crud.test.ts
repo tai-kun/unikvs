@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -27,8 +28,17 @@ describe("バイナリーの往復", () => {
     }
 
     // 実行
-    await storage.write({ key: "all", data, signal: AbortSignal.timeout(5_000), vars: {} });
-    const result = await storage.read({ key: "all", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.write({
+      key: "all",
+      data,
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
+    const result = await storage.read({
+      key: "all",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toStrictEqual(data);
@@ -40,11 +50,16 @@ describe("バイナリーの往復", () => {
     const data = new Uint8Array([0x00, 0xff, 0x00, 0xff]);
 
     // 実行
-    await storage.write({ key: "edge", data, signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.write({
+      key: "edge",
+      data,
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
     const result = await storage.read({
       key: "edge",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -57,8 +72,17 @@ describe("バイナリーの往復", () => {
     const data = new Uint8Array(1_048_576).fill(7);
 
     // 実行
-    await storage.write({ key: "big", data, signal: AbortSignal.timeout(5_000), vars: {} });
-    const result = await storage.read({ key: "big", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.write({
+      key: "big",
+      data,
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
+    const result = await storage.read({
+      key: "big",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
     expect(result).toStrictEqual(data);
@@ -73,15 +97,23 @@ describe("バイナリーの往復", () => {
       key: "empty",
       data: new Uint8Array(0),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
     expect(
-      await storage.exists({ key: "empty", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.exists({
+        key: "empty",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toBe(true);
     expect(
-      await storage.read({ key: "empty", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "empty",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array(0));
   });
 
@@ -92,7 +124,7 @@ describe("バイナリーの往復", () => {
       key: "k1",
       data: new Uint8Array([1, 2, 3, 4]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
@@ -100,12 +132,16 @@ describe("バイナリーの往復", () => {
       key: "k1",
       data: new Uint8Array([9]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
     expect(
-      await storage.read({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([9]));
   });
 });
@@ -116,9 +152,17 @@ describe("削除の冪等性", () => {
     const { storage } = setup();
 
     // 実行と検証
-    await storage.delete({ key: "none", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.delete({
+      key: "none",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
     expect(
-      await storage.exists({ key: "none", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.exists({
+        key: "none",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toBe(false);
   });
 
@@ -129,15 +173,27 @@ describe("削除の冪等性", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
-    await storage.delete({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.delete({
+      key: "k1",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 実行と検証
-    await storage.delete({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} });
-    expect(await storage.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
+    await storage.delete({
+      key: "k1",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
+    expect(
+      await storage.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
   });
 
   test("410 応答のキーを削除しても成功する", async ({ expect }) => {
@@ -147,7 +203,7 @@ describe("削除の冪等性", () => {
 
     // 実行と検証
     await expect(
-      storage.delete({ key: "gone", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.delete({ key: "gone", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     ).resolves.toBeUndefined();
   });
 });
@@ -159,7 +215,11 @@ describe("欠番の読み取り", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "unknown", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.read({
+        key: "unknown",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     );
 
     // 検証
@@ -174,7 +234,7 @@ describe("欠番の読み取り", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "gone", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.read({ key: "gone", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -188,7 +248,7 @@ describe("欠番の読み取り", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "k1", signal: abortedSignal(), vars: {} }),
+      storage.read({ key: "k1", signal: abortedSignal(), vars: new Variables({}) }),
     );
 
     // 検証

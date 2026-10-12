@@ -1,5 +1,6 @@
 import { md5, sha1 } from "@noble/hashes/legacy.js";
 import { sha224, sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
+import { Variables } from "@unikvs/core";
 import { concatChunks, runTransform, toHex } from "@unikvs/testing";
 import { forCases, forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
@@ -64,7 +65,7 @@ test("ランダムなチャンク分割でもストリーム検証が一括検�
       generator.bytes(generator.int(0, 32)),
     );
     const data = concatChunks(chunks);
-    const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: toHex(sha256(data)) };
+    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: toHex(sha256(data)) });
 
     const { outputChunks, closeError } = await runTransform(
       checksum.getEncodable({ vars }),
@@ -85,7 +86,7 @@ test("期待値が実際のダイジェストと異なれば必ず ChecksumMisma
     const data = random.bytes(random.int(0, 256));
     const actual = toHex(sha256(data));
     const expected = `${actual}0`;
-    const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: expected };
+    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
 
     let thrown: unknown;
     try {
@@ -104,7 +105,7 @@ test("全 6 アルゴリズムでランダムデータのダイジェスト検�
   forCases(67890, 50, (random) => {
     const algorithm = random.pick(ALGORITHMS);
     const data = random.bytes(random.int(0, 128));
-    const vars = { [algorithm.varName]: algorithm.digestOf(data) };
+    const vars = new Variables({ [algorithm.varName]: algorithm.digestOf(data) });
 
     const result = algorithm.create().encode({ vars, data });
 

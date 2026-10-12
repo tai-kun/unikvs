@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -30,7 +31,7 @@ describe("プリミティブ値", () => {
   for (const { label, value } of primitiveValues) {
     test(`${label} を保存したとき、同じ値として取得できる`, ({ expect, storage }) => {
       // 実行
-      storage.write({ vars: {}, key: "k1", data: value });
+      storage.write({ vars: new Variables(), key: "k1", data: value });
 
       // 検証
       expect(storage.read({ key: "k1" })).toBe(value);
@@ -39,7 +40,7 @@ describe("プリミティブ値", () => {
 
   test("NaN を保存しても NaN として取得できる", ({ expect, storage }) => {
     // 実行
-    storage.write({ vars: {}, key: "k1", data: Number.NaN });
+    storage.write({ vars: new Variables(), key: "k1", data: Number.NaN });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe(Number.NaN);
@@ -47,8 +48,8 @@ describe("プリミティブ値", () => {
 
   test("Infinity と -Infinity を保存できる", ({ expect, storage }) => {
     // 実行
-    storage.write({ vars: {}, key: "positive", data: Number.POSITIVE_INFINITY });
-    storage.write({ vars: {}, key: "negative", data: Number.NEGATIVE_INFINITY });
+    storage.write({ vars: new Variables(), key: "positive", data: Number.POSITIVE_INFINITY });
+    storage.write({ vars: new Variables(), key: "negative", data: Number.NEGATIVE_INFINITY });
 
     // 検証
     expect(storage.read({ key: "positive" })).toBe(Number.POSITIVE_INFINITY);
@@ -57,8 +58,8 @@ describe("プリミティブ値", () => {
 
   test("0 と -0 は区別して保存される", ({ expect, storage }) => {
     // 実行
-    storage.write({ vars: {}, key: "zero", data: 0 });
-    storage.write({ vars: {}, key: "negative-zero", data: -0 });
+    storage.write({ vars: new Variables(), key: "zero", data: 0 });
+    storage.write({ vars: new Variables(), key: "negative-zero", data: -0 });
 
     // 検証
     expect(storage.read({ key: "zero" })).toBe(0);
@@ -72,7 +73,7 @@ describe("複合値", () => {
     const value = { list: [1, "two", { three: true }], nested: { deep: null } };
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
 
     // 検証
     expect(storage.read({ key: "k1" })).toStrictEqual(value);
@@ -83,7 +84,7 @@ describe("複合値", () => {
     const value = new Date("2024-01-02T03:04:05.678Z");
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
     const result = storage.read({ key: "k1" });
 
     // 検証
@@ -99,7 +100,7 @@ describe("複合値", () => {
     ]);
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
     const result = storage.read({ key: "k1" });
 
     // 検証
@@ -113,7 +114,7 @@ describe("複合値", () => {
     const value = new Set([1, 2, 3]);
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
     const result = storage.read({ key: "k1" });
 
     // 検証
@@ -127,7 +128,7 @@ describe("複合値", () => {
     const value = new Error("boom");
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
     const result = storage.read({ key: "k1" });
 
     // 検証
@@ -143,7 +144,7 @@ describe("複合値", () => {
     value.self = value;
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: value });
+    storage.write({ vars: new Variables(), key: "k1", data: value });
     const result = storage.read({ key: "k1" }) as Node;
 
     // 検証
@@ -164,7 +165,7 @@ describe("Uint8Array", () => {
   for (const { label, bytes } of byteCases) {
     test(`${label} の Uint8Array を byte-for-byte で保存できる`, ({ expect, storage }) => {
       // 実行
-      storage.write({ vars: {}, key: "k1", data: bytes });
+      storage.write({ vars: new Variables(), key: "k1", data: bytes });
       const result = storage.read({ key: "k1" });
 
       // 検証
@@ -182,7 +183,7 @@ describe("Uint8Array", () => {
     const view = new Uint8Array(buffer, 1, 2);
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: view });
+    storage.write({ vars: new Variables(), key: "k1", data: view });
 
     // 検証
     expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1, 2]));
@@ -195,7 +196,9 @@ describe("複製できない値", () => {
     const fn = () => {};
 
     // 実行
-    const error = captureThrown(() => storage.write({ vars: {}, key: "fn", data: fn }));
+    const error = captureThrown(() =>
+      storage.write({ vars: new Variables(), key: "fn", data: fn }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -208,7 +211,9 @@ describe("複製できない値", () => {
     const symbol = Symbol("value");
 
     // 実行
-    const error = captureThrown(() => storage.write({ vars: {}, key: "sym", data: symbol }));
+    const error = captureThrown(() =>
+      storage.write({ vars: new Variables(), key: "sym", data: symbol }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -218,10 +223,10 @@ describe("複製できない値", () => {
 
   test("複製に失敗しても既存の値は残る", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: {}, key: "k1", data: "old" });
+    storage.write({ vars: new Variables(), key: "k1", data: "old" });
 
     // 実行
-    captureThrown(() => storage.write({ vars: {}, key: "k1", data: () => {} }));
+    captureThrown(() => storage.write({ vars: new Variables(), key: "k1", data: () => {} }));
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("old");
@@ -233,11 +238,11 @@ describe("上限付きでの値の種類", () => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "string" });
-    storage.write({ vars: {}, key: "k2", data: { nested: true } });
+    storage.write({ vars: new Variables(), key: "k1", data: "string" });
+    storage.write({ vars: new Variables(), key: "k2", data: { nested: true } });
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: new Uint8Array([1, 2, 3]) });
+    storage.write({ vars: new Variables(), key: "k3", data: new Uint8Array([1, 2, 3]) });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);

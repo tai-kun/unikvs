@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import {
@@ -118,7 +119,7 @@ describe("中断された signal", () => {
         key: "aborted.bin",
         data: new Uint8Array([1]),
         signal: controller.signal,
-        vars: {},
+        vars: new Variables(),
       }),
     ).rejects.toThrow();
   });
@@ -126,7 +127,7 @@ describe("中断された signal", () => {
   test("read は拒否される", async ({ expect, signal, storage }) => {
     // 準備
     const key = "aborted-read.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
     const controller = new AbortController();
     controller.abort();
 

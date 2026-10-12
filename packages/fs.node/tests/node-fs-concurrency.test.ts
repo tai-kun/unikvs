@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testing";
 import { listTemporaryFiles } from "@unikvs/testing/node";
 import { describe } from "vitest";
@@ -16,7 +17,9 @@ describe("並行操作", () => {
     const values = Array.from({ length: 10 }, (_, index) => new Uint8Array(4096).fill(index + 1));
 
     // 実行
-    await Promise.all(values.map((data) => storage.write({ key, data, signal, vars: {} })));
+    await Promise.all(
+      values.map((data) => storage.write({ key, data, signal, vars: new Variables() })),
+    );
 
     // 検証
     const result = new Uint8Array(await storage.read({ key, signal }));
@@ -39,7 +42,9 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map(async (data) => {
-        const writer = (await storage.getWritable({ key, signal, vars: {} })).getWriter();
+        const writer = (
+          await storage.getWritable({ key, signal, vars: new Variables() })
+        ).getWriter();
         await writer.write(data);
         await writer.close();
       }),
@@ -65,7 +70,7 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
     );
 
     // 検証
@@ -83,10 +88,10 @@ describe("並行操作", () => {
     const key = "during-write.bin";
     const oldData = new Uint8Array([1, 1, 1]);
     const newData = createPseudoRandomBytes(4 * 1024 * 1024);
-    await storage.write({ key, data: oldData, signal, vars: {} });
+    await storage.write({ key, data: oldData, signal, vars: new Variables() });
 
     // 実行
-    const writing = storage.write({ key, data: newData, signal, vars: {} });
+    const writing = storage.write({ key, data: newData, signal, vars: new Variables() });
     const during = new Uint8Array(await storage.read({ key, signal }));
     await writing;
 
@@ -107,7 +112,7 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all([storage.open(), storage.open(), storage.open()]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -119,7 +124,9 @@ describe("並行操作", () => {
     const keys = Array.from({ length: 30 }, (_, index) => `mixed-${index}.bin`);
     const data = keys.map((_, index) => new Uint8Array([index % 256, (index * 7) % 256]));
     await Promise.all(
-      keys.map((key, index) => storage.write({ key, data: data[index]!, signal, vars: {} })),
+      keys.map((key, index) =>
+        storage.write({ key, data: data[index]!, signal, vars: new Variables() }),
+      ),
     );
 
     // 実行

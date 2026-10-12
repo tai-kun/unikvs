@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { Variables } from "@unikvs/core";
 import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
 import { forCases, forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
@@ -81,7 +82,7 @@ test.for(ALGORITHMS)(
 
     // 実行と検証
     for (const data of FIXED_INPUTS) {
-      const vars = { [varName]: nodeDigest(nodeName, data) };
+      const vars = new Variables({ [varName]: nodeDigest(nodeName, data) });
       expect(checksum.encode({ vars, data })).toBe(data);
     }
   },
@@ -92,7 +93,7 @@ test.for(ALGORITHMS)(
   ({ create, nodeName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = { [varName]: nodeDigest(nodeName, LARGE_DATA) };
+    const vars = new Variables({ [varName]: nodeDigest(nodeName, LARGE_DATA) });
 
     // 実行
     const result = checksum.encode({ vars, data: LARGE_DATA });
@@ -107,7 +108,7 @@ test.for(ALGORITHMS)(
   async ({ create, nodeName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = { [varName]: nodeDigest(nodeName, LARGE_DATA) };
+    const vars = new Variables({ [varName]: nodeDigest(nodeName, LARGE_DATA) });
     const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
 
     // 実行
@@ -131,7 +132,7 @@ test("ランダムなデータとチャンク分割でもストリーム検証�
     const data = random.bytes(random.int(0, 512));
     const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
     const chunks = splitBySizes(data, sizes);
-    const vars = { [algorithm.varName]: nodeDigest(algorithm.nodeName, data) };
+    const vars = new Variables({ [algorithm.varName]: nodeDigest(algorithm.nodeName, data) });
 
     const { outputChunks, closeError } = await runTransform(
       algorithm.create().getEncodable({ vars }),
@@ -153,7 +154,7 @@ test("不一致時の meta.actual が node:crypto のダイジェストと一致
 
     let thrown: unknown;
     try {
-      algorithm.create().encode({ vars: { [algorithm.varName]: expected }, data });
+      algorithm.create().encode({ vars: new Variables({ [algorithm.varName]: expected }), data });
     } catch (error) {
       thrown = error;
     }

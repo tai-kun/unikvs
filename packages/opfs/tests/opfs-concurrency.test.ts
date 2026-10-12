@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import Opfs from "../src/opfs.js";
@@ -18,7 +19,7 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: {} })),
+      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
     );
 
     // 検証
@@ -42,7 +43,9 @@ describe("並行実行の振る舞い", () => {
     ];
 
     // 実行
-    await Promise.all(payloads.map((data) => storage.write({ key, data, signal, vars: {} })));
+    await Promise.all(
+      payloads.map((data) => storage.write({ key, data, signal, vars: new Variables() })),
+    );
     const loaded = await storage.read({ key, signal });
 
     // 検証
@@ -59,7 +62,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index]),
     }));
     for (const { key, data } of existing) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables() });
     }
 
     const fresh = Array.from({ length: 16 }, (_, index) => ({
@@ -70,7 +73,9 @@ describe("並行実行の振る舞い", () => {
     // 実行
     const [readResults] = await Promise.all([
       Promise.all(existing.map(({ key }) => storage.read({ key, signal }))),
-      Promise.all(fresh.map(({ key, data }) => storage.write({ key, data, signal, vars: {} }))),
+      Promise.all(
+        fresh.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
+      ),
     ]);
 
     // 検証
@@ -103,8 +108,12 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     await Promise.all([
-      ...firstEntries.map(({ key, data }) => first.write({ key, data, signal, vars: {} })),
-      ...secondEntries.map(({ key, data }) => second.write({ key, data, signal, vars: {} })),
+      ...firstEntries.map(({ key, data }) =>
+        first.write({ key, data, signal, vars: new Variables() }),
+      ),
+      ...secondEntries.map(({ key, data }) =>
+        second.write({ key, data, signal, vars: new Variables() }),
+      ),
     ]);
 
     // 検証
@@ -127,7 +136,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index, index + 1]),
     }));
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables() });
     }
 
     // 実行

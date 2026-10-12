@@ -2,6 +2,7 @@ import { access, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import BunFs from "../src/bun-fs.js";
@@ -51,7 +52,7 @@ describe("初期化と接続管理", () => {
       process.chdir(cwdB);
       const key = "test.txt";
       const data = new TextEncoder().encode("Hello World");
-      await relative.write({ key, data, signal, vars: {} });
+      await relative.write({ key, data, signal, vars: new Variables() });
 
       // 検証
       const savedData = await readFile(join(cwdA, "rel-root", key));
@@ -80,7 +81,7 @@ describe("基本操作 (CRUD)", () => {
     const data = new TextEncoder().encode("Hello World");
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 検証
     const filePath = join(root, key);
@@ -96,7 +97,7 @@ describe("基本操作 (CRUD)", () => {
     // 準備
     const key = "read-test.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -113,7 +114,7 @@ describe("基本操作 (CRUD)", () => {
   }) => {
     // 準備
     const key = "exists.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     const result = await storage.exists({ key });
@@ -141,7 +142,7 @@ describe("基本操作 (CRUD)", () => {
   }) => {
     // 準備
     const key = "delete-me.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     await storage.delete({ key });
@@ -158,8 +159,18 @@ describe("基本操作 (CRUD)", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal, vars: {} });
+    await storage.write({
+      key: "file1.txt",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables(),
+    });
+    await storage.write({
+      key: "file2.txt",
+      data: new Uint8Array([2]),
+      signal,
+      vars: new Variables(),
+    });
 
     // 実行
     await storage.clear();
@@ -180,7 +191,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
 
     // 実行
     const writer = writable.getWriter();
@@ -201,10 +212,14 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "atomic-stream.txt";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: {} });
+    await storage.write({ key, data: original, signal, vars: new Variables() });
 
     const controller = new AbortController();
-    const writable = await storage.getWritable({ key, signal: controller.signal, vars: {} });
+    const writable = await storage.getWritable({
+      key,
+      signal: controller.signal,
+      vars: new Variables(),
+    });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
 
@@ -228,7 +243,11 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "atomic-stream-new.txt";
     const controller = new AbortController();
-    const writable = await storage.getWritable({ key, signal: controller.signal, vars: {} });
+    const writable = await storage.getWritable({
+      key,
+      signal: controller.signal,
+      vars: new Variables(),
+    });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
 
@@ -249,7 +268,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "rename-conflict.txt";
     await mkdir(join(root, key), { recursive: true });
-    const writable = await storage.getWritable({ key, signal, vars: {} });
+    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
@@ -268,7 +287,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-read.txt";
     const data = new TextEncoder().encode("Readable Stream Content");
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const readable = storage.getReadable({ key, signal });
@@ -330,7 +349,7 @@ describe("境界値・異常系テスト", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data, signal: controller.signal, vars: {} }),
+      storage.write({ key, data, signal: controller.signal, vars: new Variables() }),
     ).rejects.toThrow();
   });
 
@@ -352,7 +371,7 @@ describe("境界値・異常系テスト", () => {
     const data = new Uint8Array(0);
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 検証
     const result = await storage.read({ key, signal });

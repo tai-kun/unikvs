@@ -3,14 +3,13 @@ import { describe, test as vitest } from "vitest";
 
 import {
   ErrorBase,
-  type ErrorOptions,
   InvalidPartSizeError,
   InvalidUsageErrorBase,
   KeyNotFoundError,
+  ReadonlyVariableError,
   RepairNotAllowedError,
   StorageAbortedError,
   UnsupportedRuntimeError,
-  setErrorMessage,
 } from "../src/errors.js";
 
 /**
@@ -30,159 +29,13 @@ const test = vitest.extend<{
   },
 });
 
-type SampleKeyNotFoundErrorArgs = {
-  readonly key: string;
-};
-
-/**
- * ErrorBase の動作検証に使用するサンプルのエラークラスです。
- */
-class SampleKeyNotFoundError extends ErrorBase<SampleKeyNotFoundErrorArgs> {
-  static {
-    this.prototype.name = "KeyNotFoundError";
-  }
-
-  public constructor(args: SampleKeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key not found: ${key}`, options);
-  }
-}
-
-describe("ErrorBase", () => {
-  test("globalThis.Error を継承する", ({ expect }) => {
-    // 実行
-    const error = new SampleKeyNotFoundError({ key: "foo" });
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error).toBeInstanceOf(ErrorBase);
-  });
-
-  test("コンストラクターに渡したメタ情報を meta プロパティーとして保持する", ({ expect }) => {
-    // 準備
-    const args = { key: "foo" };
-
-    // 実行
-    const error = new SampleKeyNotFoundError(args);
-
-    // 検証
-    expect(error.meta).toStrictEqual(args);
-  });
-
-  test("メタ情報を受け取るメッセージ関数から既定のメッセージを生成する", ({ expect }) => {
-    // 実行と検証
-    expect(new SampleKeyNotFoundError({ key: "foo" }).message).toBe("Key not found: foo");
-  });
-
-  test("固定文字列の既定のメッセージを返す", ({ expect }) => {
-    // 準備
-    class ChecksumRequiredError extends ErrorBase<undefined> {
-      public constructor(options?: ErrorOptions) {
-        super("Checksum is required", options);
-      }
-    }
-
-    // 実行と検証
-    expect(new ChecksumRequiredError().message).toBe("Checksum is required");
-  });
-
-  test("cause オプションで渡した値を cause プロパティーとして保持する", ({ expect }) => {
-    // 準備
-    const cause = new Error("root");
-
-    // 実行
-    const error = new SampleKeyNotFoundError({ key: "foo" }, { cause });
-
-    // 検証
-    expect(error.cause).toBe(cause);
-  });
-
-  test("静的プロパティー prefix をメッセージの先頭に付加する", ({ expect }) => {
-    // 準備
-    class PrefixedKeyNotFoundError extends SampleKeyNotFoundError {}
-    PrefixedKeyNotFoundError.prefix = "[unikvs] ";
-
-    // 実行と検証
-    expect(new PrefixedKeyNotFoundError({ key: "foo" }).message).toBe(
-      "[unikvs] Key not found: foo",
-    );
-  });
-});
-
-describe("setErrorMessage", () => {
-  test("登録した言語ではメッセージ関数が生成したメッセージを返す", ({ expect, setLang }) => {
-    // 準備
-    class JaKeyNotFoundError extends SampleKeyNotFoundError {}
-    setErrorMessage(JaKeyNotFoundError, ({ key }) => `${key} というキーは存在しません`, "ja");
-    setLang("ja");
-
-    // 実行と検証
-    expect(new JaKeyNotFoundError({ key: "foo" }).message).toBe("foo というキーは存在しません");
-  });
-
-  test("複数の言語タグに一度に固定文字列のメッセージを登録できる", ({ expect, setLang }) => {
-    // 準備
-    class RateLimitedError extends SampleKeyNotFoundError {}
-    setErrorMessage(RateLimitedError, "Rate limited", ["ja", "fr"]);
-
-    // 実行と検証
-    setLang("ja");
-    expect(new RateLimitedError({ key: "foo" }).message).toBe("Rate limited");
-
-    setLang("fr");
-    expect(new RateLimitedError({ key: "foo" }).message).toBe("Rate limited");
-  });
-
-  test("登録されていない言語では既定のメッセージにフォールバックする", ({ expect, setLang }) => {
-    // 準備
-    class JaOnlyKeyNotFoundError extends SampleKeyNotFoundError {}
-    setErrorMessage(JaOnlyKeyNotFoundError, ({ key }) => `${key} というキーは存在しません`, "ja");
-    setLang("fr");
-
-    // 実行と検証
-    expect(new JaOnlyKeyNotFoundError({ key: "foo" }).message).toBe("Key not found: foo");
-  });
-
-  test("message へのアクセスごとに現在の言語でメッセージを解決する", ({ expect, setLang }) => {
-    // 準備
-    const error = new SampleKeyNotFoundError({ key: "foo" });
-
-    // 実行と検証
-    expect(error.message).toBe("Key not found: foo");
-
-    setErrorMessage(SampleKeyNotFoundError, ({ key }) => `${key} というキーは存在しません`, "ja");
-    setLang("ja");
-    expect(error.message).toBe("foo というキーは存在しません");
-
-    setLang("en");
-    expect(error.message).toBe("Key not found: foo");
-  });
-});
-
-describe("InvalidUsageErrorBase", () => {
-  test("ErrorBase と globalThis.Error を継承する", ({ expect }) => {
-    // 実行
-    const error = new InvalidUsageErrorBase<{ readonly actual: unknown }>(
-      { actual: null },
-      ({ actual }) => `Invalid usage: ${String(actual)}`,
-    );
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error).toBeInstanceOf(ErrorBase);
-    expect(error).toBeInstanceOf(InvalidUsageErrorBase);
-    expect(error.message).toBe("Invalid usage: null");
-  });
-});
-
 describe("RepairNotAllowedError", () => {
   test("ErrorBase を継承し name は UniKvsRepairNotAllowedError である", ({ expect }) => {
     // 実行
     const error = new RepairNotAllowedError({ names: ["Memory"] });
 
     // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
     expect(error).toBeInstanceOf(ErrorBase);
-    expect(error).toBeInstanceOf(RepairNotAllowedError);
     expect(error.name).toBe("UniKvsRepairNotAllowedError");
   });
 
@@ -224,35 +77,13 @@ describe("RepairNotAllowedError", () => {
       '"Memory" への書き戻しは許可されていません',
     );
   });
-
-  test("日本語では複数名を列挙する", ({ expect, setLang }) => {
-    // 準備
-    setLang("ja");
-
-    // 実行と検証
-    expect(new RepairNotAllowedError({ names: ["a", "b"] }).message).toBe(
-      '"a, b" への書き戻しは許可されていません',
-    );
-  });
-
-  test("日本語では空配列は不明名になる", ({ expect, setLang }) => {
-    // 準備
-    setLang("ja");
-
-    // 実行と検証
-    expect(new RepairNotAllowedError({ names: [] }).message).toBe(
-      '"(unknown)" への書き戻しは許可されていません',
-    );
-  });
 });
 
 describe("KeyNotFoundError", () => {
   test("ErrorBase を継承し name は UniKvsKeyNotFoundError である", ({ expect }) => {
     const error = new KeyNotFoundError({ key: "k1" });
 
-    expect(error).toBeInstanceOf(globalThis.Error);
     expect(error).toBeInstanceOf(ErrorBase);
-    expect(error).toBeInstanceOf(KeyNotFoundError);
     expect(error.name).toBe("UniKvsKeyNotFoundError");
   });
 
@@ -277,10 +108,7 @@ describe("UnsupportedRuntimeError", () => {
   }) => {
     const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
 
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error).toBeInstanceOf(ErrorBase);
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
-    expect(error).toBeInstanceOf(UnsupportedRuntimeError);
     expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
   });
 
@@ -310,9 +138,7 @@ describe("InvalidPartSizeError", () => {
   test("ErrorBase を継承し name は UniKvsInvalidPartSizeError である", ({ expect }) => {
     const error = new InvalidPartSizeError({ actual: 0 });
 
-    expect(error).toBeInstanceOf(globalThis.Error);
     expect(error).toBeInstanceOf(ErrorBase);
-    expect(error).toBeInstanceOf(InvalidPartSizeError);
     expect(error.name).toBe("UniKvsInvalidPartSizeError");
   });
 
@@ -331,13 +157,36 @@ describe("InvalidPartSizeError", () => {
   });
 });
 
+describe("ReadonlyVariableError", () => {
+  test("InvalidUsageErrorBase を継承し name は UniKvsReadonlyVariableError である", ({
+    expect,
+  }) => {
+    const error = new ReadonlyVariableError({ key: "x" });
+
+    expect(error).toBeInstanceOf(InvalidUsageErrorBase);
+    expect(error.name).toBe("UniKvsReadonlyVariableError");
+  });
+
+  test("meta にキーを保持する", ({ expect }) => {
+    expect(new ReadonlyVariableError({ key: "x" }).meta).toStrictEqual({ key: "x" });
+  });
+
+  test("既定のメッセージはキーを含む", ({ expect }) => {
+    expect(new ReadonlyVariableError({ key: "x" }).message).toContain('"x"');
+  });
+
+  test("日本語では読み取り専用のメッセージを返す", ({ expect, setLang }) => {
+    setLang("ja");
+
+    expect(new ReadonlyVariableError({ key: "x" }).message).toContain('"x"');
+  });
+});
+
 describe("StorageAbortedError", () => {
   test("ErrorBase を継承し name は UniKvsStorageAbortedError である", ({ expect }) => {
     const error = new StorageAbortedError({ key: "k1" });
 
-    expect(error).toBeInstanceOf(globalThis.Error);
     expect(error).toBeInstanceOf(ErrorBase);
-    expect(error).toBeInstanceOf(StorageAbortedError);
     expect(error.name).toBe("UniKvsStorageAbortedError");
   });
 

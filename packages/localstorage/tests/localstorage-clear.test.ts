@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureThrown } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -22,8 +23,8 @@ describe("clear の振る舞い", () => {
   test("prefix 配下のみ消去する", ({ expect, backend }) => {
     // 準備
     const storage = new LocalStorage({ storage: backend });
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
-    storage.write({ key: "k2", data: "v2", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
 
     // 実行
     storage.clear({ signal });
@@ -37,8 +38,8 @@ describe("clear の振る舞い", () => {
     // 準備
     const storageA = new LocalStorage({ storage: backend, keyPrefix: "a:" });
     const storageB = new LocalStorage({ storage: backend, keyPrefix: "b:" });
-    storageA.write({ key: "k1", data: "va", vars: {}, signal });
-    storageB.write({ key: "k1", data: "vb", vars: {}, signal });
+    storageA.write({ key: "k1", data: "va", vars: new Variables(), signal });
+    storageB.write({ key: "k1", data: "vb", vars: new Variables(), signal });
 
     // 実行
     storageA.clear({ signal });
@@ -51,7 +52,7 @@ describe("clear の振る舞い", () => {
   test("空 prefix の既定では走査前に拒否する", ({ expect, backend }) => {
     // 準備
     const storage = new LocalStorage({ storage: backend, keyPrefix: "" });
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
     const error = captureThrown(() => storage.clear({ signal }));
@@ -80,7 +81,7 @@ describe("clear の振る舞い", () => {
       allowClearWithoutPrefix: true,
     });
     backend.setItem("other:k1", "v1");
-    storage.write({ key: "k2", data: "v2", vars: {}, signal });
+    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
 
     // 実行
     storage.clear({ signal });

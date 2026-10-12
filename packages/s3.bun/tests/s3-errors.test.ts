@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { InvalidUsageErrorBase } from "@unikvs/core";
 import { collectBytes } from "@unikvs/testing";
 import { acquireFreePort } from "@unikvs/testing/node";
@@ -67,7 +68,12 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        missing.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+        missing.write({
+          key: "x.bin",
+          data: new Uint8Array([1]),
+          signal,
+          vars: new Variables({}),
+        }),
       ).rejects.toMatchObject({ code: "NoSuchBucket" });
       await expect(missing.read({ key: "x.bin", signal })).rejects.toMatchObject({
         code: "NoSuchBucket",
@@ -112,7 +118,12 @@ describe("異常系とエラー伝播", () => {
     try {
       // 実行と検証
       await expect(
-        unreachable.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+        unreachable.write({
+          key: "x.bin",
+          data: new Uint8Array([1]),
+          signal,
+          vars: new Variables({}),
+        }),
       ).rejects.toMatchObject({ code: "ConnectionRefused" });
       await expect(unreachable.exists({ key: "x.bin", signal })).rejects.toMatchObject({
         code: "ConnectionRefused",
@@ -129,7 +140,12 @@ describe("異常系とエラー伝播", () => {
   }) => {
     // 実行と検証
     await expect(
-      unauthorizedStorage.write({ key: "x.bin", data: new Uint8Array([1]), signal, vars: {} }),
+      unauthorizedStorage.write({
+        key: "x.bin",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toMatchObject({ code: "InvalidAccessKeyId" });
     await expect(unauthorizedStorage.read({ key: "x.bin", signal })).rejects.toMatchObject({
       code: "InvalidAccessKeyId",

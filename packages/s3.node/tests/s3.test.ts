@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { InvalidPartSizeError, StorageAbortedError } from "../src/errors.js";
@@ -43,7 +44,7 @@ describe("ライフサイクル管理", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
@@ -62,7 +63,7 @@ describe("基本データ操作 (CRUD)", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -77,7 +78,7 @@ describe("基本データ操作 (CRUD)", () => {
     const key = "read-test.txt";
     const expectedData = new TextEncoder().encode("Read Content");
     storage.open();
-    await storage.write({ key, data: expectedData, signal, vars: {} });
+    await storage.write({ key, data: expectedData, signal, vars: new Variables({}) });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -96,10 +97,10 @@ describe("基本データ操作 (CRUD)", () => {
     const firstData = new TextEncoder().encode("first version");
     const secondData = new TextEncoder().encode("second version");
     storage.open();
-    await storage.write({ key, data: firstData, signal, vars: {} });
+    await storage.write({ key, data: firstData, signal, vars: new Variables({}) });
 
     // 実行
-    await storage.write({ key, data: secondData, signal, vars: {} });
+    await storage.write({ key, data: secondData, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(secondData);
@@ -138,7 +139,7 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "delete-test.txt";
     storage.open();
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables({}) });
 
     // 実行
     await storage.delete({ key, signal });
@@ -176,7 +177,7 @@ describe("ストリーム操作", () => {
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
     storage.open();
-    const writable = storage.getWritable({ key, vars: {}, signal });
+    const writable = storage.getWritable({ key, vars: new Variables({}), signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -203,7 +204,7 @@ describe("ストリーム操作", () => {
     }
     const key = "multipart-write.dat";
     storage.open();
-    const writable = storage.getWritable({ key, vars: {}, signal });
+    const writable = storage.getWritable({ key, vars: new Variables({}), signal });
     const writer = writable.getWriter();
 
     // 実行
@@ -231,7 +232,7 @@ describe("ストリーム操作", () => {
     expect(() =>
       storage.getWritable({
         key,
-        vars: { "@unikvs/s3.node:partSize": 1024 },
+        vars: new Variables({ "@unikvs/s3.node:partSize": 1024 }),
         signal,
       }),
     ).toThrow(/EntityTooSmall/);
@@ -250,7 +251,7 @@ describe("ストリーム操作", () => {
       expect(() =>
         storage.getWritable({
           key: "invalid-part-size.dat",
-          vars: { "@unikvs/s3.node:partSize": partSize },
+          vars: new Variables({ "@unikvs/s3.node:partSize": partSize }),
           signal,
         }),
       ).toThrow(InvalidPartSizeError);
@@ -270,7 +271,7 @@ describe("ストリーム操作", () => {
     expect(() =>
       storage.getWritable({
         key: "aborted-writable.dat",
-        vars: {},
+        vars: new Variables({}),
         signal: controller.signal,
       }),
     ).toThrow(StorageAbortedError);
@@ -284,7 +285,11 @@ describe("ストリーム操作", () => {
     const key = "abort-mid-upload.dat";
     const controller = new AbortController();
     storage.open();
-    const writable = storage.getWritable({ key, vars: {}, signal: controller.signal });
+    const writable = storage.getWritable({
+      key,
+      vars: new Variables({}),
+      signal: controller.signal,
+    });
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024 * 6));
 
@@ -308,7 +313,7 @@ describe("ストリーム操作", () => {
     }
     const key = "stream-read.dat";
     storage.open();
-    await storage.write({ key, data: expectedData, signal, vars: {} });
+    await storage.write({ key, data: expectedData, signal, vars: new Variables({}) });
 
     // 実行
     const readable = await storage.getReadable({ key, signal });
@@ -342,8 +347,18 @@ describe("バケット一括削除 (clear)", () => {
   }) => {
     // 準備
     storage.open();
-    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal, vars: {} });
+    await storage.write({
+      key: "file1.txt",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables({}),
+    });
+    await storage.write({
+      key: "file2.txt",
+      data: new Uint8Array([2]),
+      signal,
+      vars: new Variables({}),
+    });
 
     // 実行
     await storage.clear({ signal });
@@ -374,7 +389,7 @@ describe("境界値・異常系テスト", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data: emptyData, signal, vars: {} });
+    await storage.write({ key, data: emptyData, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(emptyData);
@@ -391,7 +406,7 @@ describe("境界値・異常系テスト", () => {
     storage.open();
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
     const result = await storage.read({ key, signal });
 
     // 検証
@@ -414,7 +429,7 @@ describe("境界値・異常系テスト", () => {
         key,
         data: new Uint8Array([1]),
         signal: controller.signal,
-        vars: {},
+        vars: new Variables({}),
       });
     }).rejects.toThrow();
   });
@@ -431,7 +446,7 @@ describe("書き込みストリームのエラーハンドリング", () => {
     // デフォルトのパートサイズ (5 MiB) を超えてマルチパートアップロードが開始するサイズを使用する。
     const data = new Uint8Array(1024 * 1024 * 6);
     unauthorizedStorage.open();
-    const writable = unauthorizedStorage.getWritable({ key, vars: {}, signal });
+    const writable = unauthorizedStorage.getWritable({ key, vars: new Variables({}), signal });
     const writer = writable.getWriter();
     await writer.write(data);
 
@@ -446,7 +461,11 @@ describe("書き込みストリームのエラーハンドリング", () => {
   }) => {
     // 準備
     storage.open();
-    const writable = storage.getWritable({ key: "abort-stream.bin", vars: {}, signal });
+    const writable = storage.getWritable({
+      key: "abort-stream.bin",
+      vars: new Variables({}),
+      signal,
+    });
     const writer = writable.getWriter();
     const unhandledRejections: unknown[] = [];
     const listener = (reason: unknown): void => {

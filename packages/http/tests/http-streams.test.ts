@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -48,7 +49,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -60,7 +61,11 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
   });
 
@@ -73,7 +78,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -84,7 +89,11 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
@@ -96,7 +105,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -105,15 +114,19 @@ describe("getWritable", () => {
     const existsBeforeClose = await storage.exists({
       key: "s1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     await writer.close();
 
     // 検証
     expect(existsBeforeClose).toBe(false);
-    expect(await storage.exists({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      true,
-    );
+    expect(
+      await storage.exists({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(true);
   });
 
   test("空のストリームを close したとき、長さ 0 の値が保存される", async ({ expect }) => {
@@ -124,7 +137,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -132,11 +145,19 @@ describe("getWritable", () => {
     await writer.close();
 
     // 検証
-    expect(await storage.exists({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      true,
-    );
     expect(
-      await storage.read({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.exists({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(true);
+    expect(
+      await storage.read({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array(0));
   });
 
@@ -148,7 +169,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -158,9 +179,13 @@ describe("getWritable", () => {
 
     // 検証
     expect(calls.length).toBe(0);
-    expect(await storage.exists({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
+    expect(
+      await storage.exists({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
   });
 
   test("Uint8Array 以外のチャンクは InvalidChunkTypeError で拒否される", async ({ expect }) => {
@@ -171,7 +196,7 @@ describe("getWritable", () => {
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -197,13 +222,13 @@ describe("getWritable", () => {
       key: "s1",
       data: new Uint8Array([9]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     const writer = storage
       .getWritable({
         key: "s1",
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       })
       .getWriter();
 
@@ -213,7 +238,11 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([1, 2]));
   });
 
@@ -223,9 +252,9 @@ describe("getWritable", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行と検証
-    expect(() => storage.getWritable({ key: "s1", signal: abortedSignal(), vars: {} })).toThrow(
-      DOMException,
-    );
+    expect(() =>
+      storage.getWritable({ key: "s1", signal: abortedSignal(), vars: new Variables({}) }),
+    ).toThrow(DOMException);
   });
 
   test("close 進行中の中断は中断例外を優先する", async ({ expect }) => {
@@ -234,7 +263,7 @@ describe("getWritable", () => {
     const storage = new Http(baseUrl, { fetch });
     const controller = new AbortController();
     const writer = storage
-      .getWritable({ key: "s1", signal: controller.signal, vars: {} })
+      .getWritable({ key: "s1", signal: controller.signal, vars: new Variables({}) })
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
@@ -255,7 +284,11 @@ describe("getReadable", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({ key: "unknown", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.getReadable({
+        key: "unknown",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     );
 
     // 検証
@@ -270,7 +303,11 @@ describe("getReadable", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({ key: "gone", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.getReadable({
+        key: "gone",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     );
 
     // 検証
@@ -282,13 +319,18 @@ describe("getReadable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const data = new Uint8Array([0, 1, 2, 255]);
-    await storage.write({ key: "s1", data, signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.write({
+      key: "s1",
+      data,
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 実行
     const stream = await storage.getReadable({
       key: "s1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -305,7 +347,7 @@ describe("getReadable", () => {
     const stream = await storage.getReadable({
       key: "s1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -320,10 +362,14 @@ describe("getReadable", () => {
       key: "s1",
       data: new Uint8Array([1, 2, 3]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     const controller = new AbortController();
-    const stream = await storage.getReadable({ key: "s1", signal: controller.signal, vars: {} });
+    const stream = await storage.getReadable({
+      key: "s1",
+      signal: controller.signal,
+      vars: new Variables({}),
+    });
 
     // 実行
     controller.abort();
@@ -338,11 +384,16 @@ describe("getReadable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const data = new Uint8Array([1, 2, 3]);
-    await storage.write({ key: "s1", data, signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.write({
+      key: "s1",
+      data,
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
     const stream = await storage.getReadable({
       key: "s1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
@@ -350,7 +401,11 @@ describe("getReadable", () => {
 
     // 検証
     expect(
-      await storage.read({ key: "s1", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({
+        key: "s1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(data);
   });
 });

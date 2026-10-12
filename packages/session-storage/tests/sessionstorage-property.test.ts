@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { forCases, type Random } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -75,7 +76,12 @@ describe("SessionStorage のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            storage.write({ key: operation.key, data: operation.value, vars: {}, signal });
+            storage.write({
+              key: operation.key,
+              data: operation.value,
+              vars: new Variables(),
+              signal,
+            });
             model.set(operation.key, operation.value);
             break;
           }
@@ -124,7 +130,7 @@ describe("SessionStorage のプロパティー", () => {
       const value = nextValue(random) + random.string(random.int(0, 512));
 
       // 実行
-      storage.write({ key: "k1", data: value, vars: {}, signal });
+      storage.write({ key: "k1", data: value, vars: new Variables(), signal });
       const result = storage.read({ key: "k1", signal });
 
       // 検証
@@ -141,7 +147,7 @@ describe("SessionStorage のプロパティー", () => {
 
       // 実行
       for (const key of keys) {
-        storage.write({ key, data: nextValue(random), vars: {}, signal });
+        storage.write({ key, data: nextValue(random), vars: new Variables(), signal });
       }
       storage.clear({ signal });
 

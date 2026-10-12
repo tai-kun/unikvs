@@ -26,9 +26,9 @@ const DELETE_CONCURRENCY = 25;
  */
 function resolvePartSize(vars: Variables): number | undefined {
   const rawPartSize =
-    vars["@unikvs/s3.bun:partSize"] !== undefined
-      ? vars["@unikvs/s3.bun:partSize"]
-      : vars["@unikvs/s3:partSize"];
+    vars.get("@unikvs/s3.bun:partSize") !== undefined
+      ? vars.get("@unikvs/s3.bun:partSize")
+      : vars.get("@unikvs/s3:partSize");
 
   if (rawPartSize === undefined) {
     return undefined;

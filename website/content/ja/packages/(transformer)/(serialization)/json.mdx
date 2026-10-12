@@ -59,12 +59,12 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `unknown` |
-| `getEncodable` | `unknown` | `Uint8Array<ArrayBuffer>` |
-| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown` |
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `getEncodable` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
 
 - `encode` は値を JSON 文字列のバイト列（UTF-8）へ変換します。
 - `decode` は JSON 文字列のバイト列を値へ変換します。

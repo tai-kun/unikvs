@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { createStorage, listKeys, test } from "./_helpers.js";
@@ -30,7 +31,7 @@ describe("キーの扱い", () => {
       const data = new Uint8Array([index, index + 1]);
 
       // 実行
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables() });
 
       // 検証
       await expect(storage.exists({ key, signal })).resolves.toBe(true);
@@ -56,7 +57,7 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 検証
     await expect(client.exists(`${keyPrefix}${key}`)).resolves.toBe(true);
@@ -72,7 +73,12 @@ describe("キーの扱い", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "mine.bin", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({
+      key: "mine.bin",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables(),
+    });
     await client.set("unikvs-other:key", "keep");
 
     // 実行
@@ -92,7 +98,7 @@ describe("キーの扱い", () => {
   }) => {
     // 準備
     const key = "stream.bin";
-    const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -108,8 +114,13 @@ describe("キーの扱い", () => {
 
   test("clear は書き込み途中で残った一時キーも削除する", async ({ expect, signal, storage }) => {
     // 準備
-    await storage.write({ key: "normal.bin", data: new Uint8Array([1]), signal, vars: {} });
-    const writable = storage.getWritable({ key: "abandoned.bin", signal, vars: {} });
+    await storage.write({
+      key: "normal.bin",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables(),
+    });
+    const writable = storage.getWritable({ key: "abandoned.bin", signal, vars: new Variables() });
     await writable.getWriter().write(new Uint8Array([2]));
 
     // 実行
@@ -133,7 +144,7 @@ describe("キーの扱い", () => {
 
     try {
       // 実行
-      await raw.write({ key: "raw-key", data: new Uint8Array([1]), signal, vars: {} });
+      await raw.write({ key: "raw-key", data: new Uint8Array([1]), signal, vars: new Variables() });
 
       // 検証
       await expect(client.exists("raw-key")).resolves.toBe(true);

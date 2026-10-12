@@ -1,6 +1,6 @@
 import type { MaybePromise } from "maypromise";
 
-import type { Variables } from "./variables.types.js";
+import type { default as Variables } from "./variables.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)

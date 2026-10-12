@@ -1407,7 +1407,7 @@ describe("UniKvs - 変数", () => {
     await kvs.set("key1", "value1", { vars: { app: "test-app" } });
 
     // 検証
-    expect(storage.lastWriteVars?.["app"]).toBe("test-app");
+    expect(storage.lastWriteVars?.get("app")).toBe("test-app");
 
     // 後片付け
     await kvs.close();
@@ -1425,7 +1425,7 @@ describe("UniKvs - 変数", () => {
     await kvs.set({ key: "key1", value: "value1", vars: { a: 2 } });
 
     // 検証
-    expect(storage.lastWriteVars?.["a"]).toBe(2);
+    expect(storage.lastWriteVars?.get("a")).toBe(2);
 
     // 後片付け
     await kvs.close();

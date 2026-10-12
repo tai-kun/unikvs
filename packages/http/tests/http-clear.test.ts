@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { abortedSignal, captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -21,18 +22,22 @@ describe("clear の振る舞い", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
 
     // 検証
     expect(calls.at(-1)?.method).toBe("DELETE");
     expect(calls.at(-1)?.url).toBe(`${baseUrl}/?prefix=${encodeURIComponent("unikvs:")}`);
-    expect(await storage.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
+    expect(
+      await storage.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
   });
 
   test("異なる prefix の値は消去されない", async ({ expect }) => {
@@ -44,25 +49,33 @@ describe("clear の振る舞い", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     await storageB.write({
       key: "k1",
       data: new Uint8Array([2]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    await storageA.clear({ signal: AbortSignal.timeout(5_000), vars: {} });
+    await storageA.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
 
     // 検証
-    expect(await storageA.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
-    expect(await storageB.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      true,
-    );
+    expect(
+      await storageA.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
+    expect(
+      await storageB.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(true);
   });
 
   test("空 prefix の既定では送信前に拒否する", async ({ expect }) => {
@@ -72,7 +85,7 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -86,7 +99,9 @@ describe("clear の振る舞い", () => {
     const storage = new Http(baseUrl, { fetch, keyPrefix: "" });
 
     // 実行
-    const error = await captureRejection(storage.clear({ signal: abortedSignal(), vars: {} }));
+    const error = await captureRejection(
+      storage.clear({ signal: abortedSignal(), vars: new Variables({}) }),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(ClearWithoutPrefixNotAllowedError);
@@ -98,7 +113,7 @@ describe("clear の振る舞い", () => {
     const storage = new Http(baseUrl, { fetch, keyPrefix: "", allowClearWithoutPrefix: true });
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
 
     // 検証
     expect(calls.length).toBe(1);
@@ -112,7 +127,7 @@ describe("clear の振る舞い", () => {
         new Response(null, { status, statusText: "Unsupported" });
       const storage = new Http(baseUrl, { fetch: failingFetch });
       const error = await captureRejection(
-        storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+        storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
       );
 
       expect(error).toBeInstanceOf(ClearNotSupportedError);
@@ -130,7 +145,7 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -145,7 +160,7 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証
@@ -160,7 +175,7 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証

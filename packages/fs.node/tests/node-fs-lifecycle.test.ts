@@ -1,6 +1,7 @@
 import { access, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import NodeFs from "../src/node-fs.js";
@@ -63,7 +64,7 @@ describe("ライフサイクル", () => {
     // 準備
     const key = "reopen.bin";
     const data = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     await storage.open();
@@ -106,12 +107,16 @@ describe("open 前の操作", () => {
     const data = new Uint8Array([1]);
 
     // 実行と検証
-    await expect(storage.write({ key, data, signal, vars: {} })).rejects.toThrow(TypeError);
+    await expect(storage.write({ key, data, signal, vars: new Variables() })).rejects.toThrow(
+      TypeError,
+    );
     await expect(storage.read({ key, signal })).rejects.toThrow(TypeError);
     await expect(storage.exists({ key })).rejects.toThrow(TypeError);
     await expect(storage.delete({ key })).rejects.toThrow(TypeError);
     await expect(storage.clear()).rejects.toThrow(TypeError);
-    await expect(storage.getWritable({ key, signal, vars: {} })).rejects.toThrow(TypeError);
+    await expect(storage.getWritable({ key, signal, vars: new Variables() })).rejects.toThrow(
+      TypeError,
+    );
     expect(() => storage.getReadable({ key, signal })).toThrow(TypeError);
   });
 });

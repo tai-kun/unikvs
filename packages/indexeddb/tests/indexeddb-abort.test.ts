@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -9,7 +10,7 @@ describe("AbortSignal による中断", () => {
     // 準備
     const key = "pre-aborted";
     await storage.open({ signal });
-    await storage.write({ key, data: "value", signal, vars: {} });
+    await storage.write({ key, data: "value", signal, vars: new Variables() });
     const controller = new AbortController();
     const reason = new Error("独自の中断理由");
     controller.abort(reason);
@@ -17,14 +18,16 @@ describe("AbortSignal による中断", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data: "next", signal: abortedSignal, vars: {} }),
+      storage.write({ key, data: "next", signal: abortedSignal, vars: new Variables() }),
     ).rejects.toBe(reason);
     await expect(storage.read({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.exists({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.delete({ key, signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.clear({ signal: abortedSignal })).rejects.toBe(reason);
     await expect(storage.close({ signal: abortedSignal })).rejects.toBe(reason);
-    expect(() => storage.getWritable({ key, signal: abortedSignal, vars: {} })).toThrow(reason);
+    expect(() =>
+      storage.getWritable({ key, signal: abortedSignal, vars: new Variables() }),
+    ).toThrow(reason);
     expect(() => storage.getReadable({ key, signal: abortedSignal })).toThrow(reason);
     expect(storage.isOpen).toBe(true);
   });
@@ -58,7 +61,7 @@ describe("AbortSignal による中断", () => {
     // 準備
     await storage.open({ signal });
     const key = "aborted-read";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables() });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
 
@@ -76,7 +79,9 @@ describe("AbortSignal による中断", () => {
     const key = "aborted-writable";
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
-    const writer = storage.getWritable({ key, signal: controller.signal, vars: {} }).getWriter();
+    const writer = storage
+      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行
@@ -94,7 +99,7 @@ describe("AbortSignal による中断", () => {
     // 準備
     await storage.open({ signal });
     const key = "aborted-readable";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables() });
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
     const reader = storage.getReadable({ key, signal: controller.signal }).getReader();

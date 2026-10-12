@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase } from "@unikvs/core";
+import { InvalidUsageErrorBase, Variables } from "@unikvs/core";
 import * as core from "@unikvs/core";
 import { captureThrown } from "@unikvs/testing";
 import { describe, test } from "vitest";
@@ -75,7 +75,7 @@ describe("背後例外の素通し", () => {
 
     // 実行と検証
     for (const fn of [
-      () => storage.write({ key: "k", data: "v", vars: {}, signal }),
+      () => storage.write({ key: "k", data: "v", vars: new Variables(), signal }),
       () => storage.read({ key: "k", signal }),
       () => storage.exists({ key: "k", signal }),
       () => storage.delete({ key: "k", signal }),

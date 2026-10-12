@@ -77,10 +77,10 @@ await kvs.close();
 
 ## Data types [#data-types]
 
-| Operation | Supported data type |
-| --- | --- |
-| `write`・`read` | Arbitrary values (strings, objects, and so on) |
-| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+| Operation                           | Supported data type                            |
+| ----------------------------------- | ---------------------------------------------- |
+| `write`・`read`                     | Arbitrary values (strings, objects, and so on) |
+| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>`                      |
 
 - `write` and `read` support arbitrary values such as strings and objects, and store them as-is.
 - `write`, `read`, `exists`, `delete`, and `clear` are all asynchronous.

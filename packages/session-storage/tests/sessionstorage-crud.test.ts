@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -20,7 +21,7 @@ const test = vitest.extend<{ storage: SessionStorage }>({
 describe("CRUD の不変条件", () => {
   test("削除したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
     storage.delete({ key: "k1", signal });
@@ -31,7 +32,7 @@ describe("CRUD の不変条件", () => {
 
   test("clear したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 実行
     storage.clear({ signal });
@@ -48,7 +49,7 @@ describe("CRUD の不変条件", () => {
 
   test("空文字を保存したキーの exists は true を返す", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "", vars: {}, signal });
+    storage.write({ key: "k1", data: "", vars: new Variables(), signal });
 
     // 実行
     const exists = storage.exists({ key: "k1", signal });
@@ -59,7 +60,7 @@ describe("CRUD の不変条件", () => {
 
   test("空文字を保存したキーの read は空文字を返す", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "", vars: {}, signal });
+    storage.write({ key: "k1", data: "", vars: new Variables(), signal });
 
     // 実行
     const result = storage.read({ key: "k1", signal });
@@ -70,11 +71,11 @@ describe("CRUD の不変条件", () => {
 
   test("削除したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
     storage.delete({ key: "k1", signal });
 
     // 実行
-    storage.write({ key: "k1", data: "v2", vars: {}, signal });
+    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "k1", signal })).toBe("v2");
@@ -82,11 +83,11 @@ describe("CRUD の不変条件", () => {
 
   test("clear したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
     storage.clear({ signal });
 
     // 実行
-    storage.write({ key: "k1", data: "v2", vars: {}, signal });
+    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "k1", signal })).toBe("v2");

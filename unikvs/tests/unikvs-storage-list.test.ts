@@ -1,9 +1,10 @@
 import { AllowRepair } from "@unikvs/allow-repair";
 import { RepairNotAllowedError } from "@unikvs/core";
+import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
-import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import { PluginOperationAggregateError } from "../src/errors.js";
+import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import {
   FakeStorage,
@@ -31,13 +32,15 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.set("foo", "value");
 
     // 検証
-    expect(a.callsOf("write")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["a"]);
-    expect(b.callsOf("write")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["b"]);
-    expect(Object.isFrozen(a.callsOf("write")[0]?.vars?.["unikvs:storageNames"])).toBe(true);
-    expect(probe.callsOf("encode").map((call) => call.vars?.["unikvs:storageNames"])).toStrictEqual(
-      [["a", "b"]],
+    expect(a.callsOf("write")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["a"]);
+    expect(b.callsOf("write")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["b"]);
+    expect(Object.isFrozen(a.callsOf("write")[0]?.vars?.get("unikvs:storageNames"))).toBe(true);
+    expect(
+      probe.callsOf("encode").map((call) => call.vars?.get("unikvs:storageNames")),
+    ).toStrictEqual([["a", "b"]]);
+    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.get("unikvs:storageNames"))).toBe(
+      true,
     );
-    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.["unikvs:storageNames"])).toBe(true);
 
     // 後片付け
     await kvs.close();
@@ -60,8 +63,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.get("foo");
 
     // 検証
-    expect(server.callsOf("read")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["server"]);
-    expect(probe.callsOf("decode")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["server"]);
+    expect(server.callsOf("read")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["server"]);
+    expect(probe.callsOf("decode")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["server"]);
 
     // 後片付け
     await kvs.close();
@@ -85,15 +88,15 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.get("foo", { repair: true });
 
     // 検証
-    expect(probe.callsOf("decode")[0]?.vars).toMatchObject({
+    expect(probe.callsOf("decode")[0]?.vars?.toJSON()).toMatchObject({
       "unikvs:storageNames": ["server"],
     });
-    expect(probe.callsOf("decode")[0]?.vars).not.toHaveProperty("unikvs:repair");
-    expect(probe.callsOf("encode")[0]?.vars).toMatchObject({
+    expect(probe.callsOf("decode")[0]?.vars?.has("unikvs:repair")).toBe(false);
+    expect(probe.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({
       "unikvs:repair": true,
       "unikvs:storageNames": ["cache"],
     });
-    expect(cache.callsOf("write")[0]?.vars).toMatchObject({
+    expect(cache.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({
       "unikvs:repair": true,
       "unikvs:storageNames": ["cache"],
     });
@@ -111,20 +114,21 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.set("foo", "value");
 
     // 実行
+    // @ts-expect-error
     await kvs.has("missing");
     await kvs.delete("foo");
     await kvs.clear();
 
     // 検証
     const existsLists = [...a.callsOf("exists"), ...b.callsOf("exists")]
-      .filter((call) => call.vars?.["unikvs:action"] === "has")
-      .map((call) => call.vars?.["unikvs:storageNames"]);
+      .filter((call) => call.vars?.get("unikvs:action") === "has")
+      .map((call) => call.vars?.get("unikvs:storageNames"));
     expect(existsLists).toContainEqual(["a"]);
     expect(existsLists).toContainEqual(["b"]);
-    expect(a.callsOf("delete")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["a"]);
-    expect(b.callsOf("delete")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["b"]);
-    expect(a.callsOf("clear")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["a"]);
-    expect(b.callsOf("clear")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["b"]);
+    expect(a.callsOf("delete")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["a"]);
+    expect(b.callsOf("delete")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["b"]);
+    expect(a.callsOf("clear")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["a"]);
+    expect(b.callsOf("clear")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["b"]);
 
     // 後片付け
     await kvs.close();
@@ -147,10 +151,10 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await collect(vs);
 
     // 検証
-    expect(server.callsOf("getReadable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual([
+    expect(server.callsOf("getReadable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual([
       "server",
     ]);
-    expect(cache.callsOf("getWritable")[0]?.vars).toMatchObject({
+    expect(cache.callsOf("getWritable")[0]?.vars?.toJSON()).toMatchObject({
       "unikvs:repair": true,
       "unikvs:storageNames": ["cache"],
     });
@@ -171,8 +175,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(a.callsOf("getWritable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["a"]);
-    expect(b.callsOf("getWritable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["b"]);
+    expect(a.callsOf("getWritable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["a"]);
+    expect(b.callsOf("getWritable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["b"]);
 
     // 後片付け
     await kvs.close();
@@ -186,6 +190,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .transform(probe)
       .fork(UniKvs.branch().persist(a).persist(b))
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -193,19 +198,21 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.set("foo", "value");
 
     // 検証: 共有1回実行のため複数名で1回が正しい
-    expect(probe.callsOf("encode").map((call) => call.vars?.["unikvs:storageNames"])).toStrictEqual(
-      [["a", "b"]],
+    expect(
+      probe.callsOf("encode").map((call) => call.vars?.get("unikvs:storageNames")),
+    ).toStrictEqual([["a", "b", "Memory"]]);
+    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.get("unikvs:storageNames"))).toBe(
+      true,
     );
-    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.["unikvs:storageNames"])).toBe(true);
 
     // 実行: 読み取り時は単一読取元に由来する
     probe.calls.length = 0;
     await kvs.get("foo");
 
     // 検証
-    expect(probe.callsOf("decode").map((call) => call.vars?.["unikvs:storageNames"])).toStrictEqual(
-      [["a"]],
-    );
+    expect(
+      probe.callsOf("decode").map((call) => call.vars?.get("unikvs:storageNames")),
+    ).toStrictEqual([["a"]]);
 
     // 後片付け
     await kvs.close();
@@ -228,13 +235,13 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
 
     // 検証: getEncodable は複数名で1回実行される
     expect(
-      probe.callsOf("getEncodable").map((call) => call.vars?.["unikvs:storageNames"]),
+      probe.callsOf("getEncodable").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["a", "b"]]);
-    expect(Object.isFrozen(probe.callsOf("getEncodable")[0]?.vars?.["unikvs:storageNames"])).toBe(
-      true,
-    );
-    expect(a.callsOf("getWritable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["a"]);
-    expect(b.callsOf("getWritable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual(["b"]);
+    expect(
+      Object.isFrozen(probe.callsOf("getEncodable")[0]?.vars?.get("unikvs:storageNames")),
+    ).toBe(true);
+    expect(a.callsOf("getWritable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["a"]);
+    expect(b.callsOf("getWritable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual(["b"]);
 
     // 後片付け
     await kvs.close();
@@ -260,14 +267,16 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
 
     // 検証: decode は単一読取元、repair の再 encode は宛先別単一
     expect(
-      probe.callsOf("getDecodable").map((call) => call.vars?.["unikvs:storageNames"]),
+      probe.callsOf("getDecodable").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["server"]]);
-    expect(probe.callsOf("getDecodable")[0]?.vars).not.toHaveProperty("unikvs:repair");
+    expect(probe.callsOf("getDecodable")[0]?.vars?.has("unikvs:repair")).toBe(false);
     expect(
-      probe.callsOf("getEncodable").map((call) => call.vars?.["unikvs:storageNames"]),
+      probe.callsOf("getEncodable").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["cache"]]);
-    expect(probe.callsOf("getEncodable")[0]?.vars).toMatchObject({ "unikvs:repair": true });
-    expect(server.callsOf("getReadable")[0]?.vars?.["unikvs:storageNames"]).toStrictEqual([
+    expect(probe.callsOf("getEncodable")[0]?.vars?.toJSON()).toMatchObject({
+      "unikvs:repair": true,
+    });
+    expect(server.callsOf("getReadable")[0]?.vars?.get("unikvs:storageNames")).toStrictEqual([
       "server",
     ]);
 
@@ -302,8 +311,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
       expect(error?.meta).toStrictEqual({ names: ["cache"] });
       expect(error?.message).toContain("cache");
       expect(error?.cause).toBeInstanceOf(RepairNotAllowedError);
-      expect((error?.cause as RepairNotAllowedError).meta).toStrictEqual({ names: ["cache"] });
-      expect((error?.cause as RepairNotAllowedError).message).toContain("cache");
+      expect((error!.cause as RepairNotAllowedError).meta).toStrictEqual({ names: ["cache"] });
+      expect((error!.cause as RepairNotAllowedError).message).toContain("cache");
     } finally {
       await kvs.close();
     }
@@ -353,10 +362,12 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     await kvs.get("foo", { repair: true });
 
     // 検証
-    expect(probe.callsOf("encode").map((call) => call.vars?.["unikvs:storageNames"])).toStrictEqual(
-      [["cacheA", "cacheB"]],
+    expect(
+      probe.callsOf("encode").map((call) => call.vars?.get("unikvs:storageNames")),
+    ).toStrictEqual([["cacheA", "cacheB"]]);
+    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.get("unikvs:storageNames"))).toBe(
+      true,
     );
-    expect(Object.isFrozen(probe.callsOf("encode")[0]?.vars?.["unikvs:storageNames"])).toBe(true);
     expect(cacheA.map.get("foo")).toBe("value");
     expect(cacheB.map.get("foo")).toBe("value");
     expect(server.callsOf("write")).toHaveLength(0);
@@ -374,6 +385,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .fork(UniKvs.branch().transform(probeA).persist(a))
       .fork(UniKvs.branch().transform(probeB).persist(b))
+      .persist(new Memory())
       .create();
     await kvs.open();
 
@@ -382,10 +394,10 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
 
     // 検証
     expect(
-      probeA.callsOf("encode").map((call) => call.vars?.["unikvs:storageNames"]),
+      probeA.callsOf("encode").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["a"]]);
     expect(
-      probeB.callsOf("encode").map((call) => call.vars?.["unikvs:storageNames"]),
+      probeB.callsOf("encode").map((call) => call.vars?.get("unikvs:storageNames")),
     ).toStrictEqual([["b"]]);
 
     // 後片付け

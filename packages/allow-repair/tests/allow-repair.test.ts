@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { RepairNotAllowedError } from "@unikvs/core";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
@@ -102,10 +103,10 @@ describe("encode の透過と拒否", () => {
     const data = "hello";
 
     // 実行と検証
-    expect(gate.encode({ vars: {}, data })).toBe(data);
-    expect(gate.encode({ vars: { "unikvs:repair": false }, data })).toBe(data);
-    expect(gate.encode({ vars: { "unikvs:repair": 1 }, data })).toBe(data);
-    expect(gate.encode({ vars: { "unikvs:repair": "true" }, data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({}), data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": false }), data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": 1 }), data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": "true" }), data })).toBe(data);
   });
 
   test("disable 中でも非修復 vars では同一参照を返す", ({ expect }) => {
@@ -115,9 +116,9 @@ describe("encode の透過と拒否", () => {
     const data = { foo: "bar" };
 
     // 実行と検証
-    expect(gate.encode({ vars: {}, data })).toBe(data);
-    expect(gate.encode({ vars: { "unikvs:repair": false }, data })).toBe(data);
-    expect(gate.encode({ vars: { "unikvs:repair": 1 }, data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({}), data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": false }), data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": 1 }), data })).toBe(data);
   });
 
   test("修復 vars でも既定状態では同一参照を返す", ({ expect }) => {
@@ -126,7 +127,7 @@ describe("encode の透過と拒否", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行と検証
-    expect(gate.encode({ vars: { "unikvs:repair": true }, data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": true }), data })).toBe(data);
   });
 
   test("disable 後に修復 vars で RepairNotAllowedError を投げる", ({ expect }) => {
@@ -135,9 +136,9 @@ describe("encode の透過と拒否", () => {
     gate.disable();
 
     // 実行と検証
-    expect(() => gate.encode({ vars: { "unikvs:repair": true }, data: "x" })).toThrow(
-      RepairNotAllowedError,
-    );
+    expect(() =>
+      gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" }),
+    ).toThrow(RepairNotAllowedError);
   });
 
   test("enable 後に修復 vars で再び同一参照を返す", ({ expect }) => {
@@ -148,7 +149,7 @@ describe("encode の透過と拒否", () => {
     const data = "hello";
 
     // 実行と検証
-    expect(gate.encode({ vars: { "unikvs:repair": true }, data })).toBe(data);
+    expect(gate.encode({ vars: new Variables({ "unikvs:repair": true }), data })).toBe(data);
   });
 
   test("文字列とバイト列とオブジェクトを同一参照で返す", ({ expect }) => {
@@ -159,9 +160,9 @@ describe("encode の透過と拒否", () => {
     const object = { foo: "bar" };
 
     // 実行と検証
-    expect(gate.encode({ vars: {}, data: text })).toBe(text);
-    expect(gate.encode({ vars: {}, data: bytes })).toBe(bytes);
-    expect(gate.encode({ vars: {}, data: object })).toBe(object);
+    expect(gate.encode({ vars: new Variables({}), data: text })).toBe(text);
+    expect(gate.encode({ vars: new Variables({}), data: bytes })).toBe(bytes);
+    expect(gate.encode({ vars: new Variables({}), data: object })).toBe(object);
   });
 });
 
@@ -195,7 +196,7 @@ describe("エラーの同一性", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true }, data: "x" });
+        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
       } catch (ex) {
         return ex;
       }
@@ -214,7 +215,7 @@ describe("エラーの同一性", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true }, data: "x" });
+        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }
@@ -233,7 +234,7 @@ describe("エラーの同一性", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true }, data: "x" });
+        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }
@@ -252,7 +253,7 @@ describe("エラーの同一性", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true }, data: "x" });
+        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }
@@ -272,7 +273,7 @@ describe("エラーの同一性", () => {
     // 実行
     const error = (() => {
       try {
-        gate.encode({ vars: { "unikvs:repair": true }, data: "x" });
+        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
       } catch (ex) {
         return ex as RepairNotAllowedError;
       }

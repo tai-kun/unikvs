@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import LruCache from "../src/lru-cache.js";
@@ -9,10 +10,10 @@ describe("件数上限と容量上限の併用", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
-    storage.write({ vars: {}, key: "k3", data: "v3" });
-    storage.write({ vars: {}, key: "k4", data: "v4" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k4", data: "v4" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -34,9 +35,9 @@ describe("件数上限と容量上限の併用", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -52,7 +53,7 @@ describe("件数上限と容量上限の併用", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 検証
     expect(storage.size).toBe(0);

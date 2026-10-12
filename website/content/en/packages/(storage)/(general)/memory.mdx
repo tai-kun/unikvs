@@ -38,7 +38,8 @@ The constructor arguments are as follows.
   type={{
     options: {
       type: "MemoryOptions",
-      description: "Settings for the cloning method and repair-write permission. Uses defaults when omitted.",
+      description:
+        "Settings for the cloning method and repair-write permission. Uses defaults when omitted.",
     },
     "options.clone": {
       type: "<T>(value: T) => T",
@@ -75,10 +76,10 @@ await kvs.close();
 
 ## Data types [#data-types]
 
-| Operation | Supported data type |
-| --- | --- |
-| `write`・`read` | Arbitrary values (strings, objects, `null`, `undefined`, `Uint8Array`, and so on) |
-| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+| Operation                           | Supported data type                                                               |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `write`・`read`                     | Arbitrary values (strings, objects, `null`, `undefined`, `Uint8Array`, and so on) |
+| `getWritable`・`getReadable` chunks | `Uint8Array<ArrayBuffer>`                                                         |
 
 - `write` and `read` support arbitrary values such as strings, objects, `null`, `undefined`, and `Uint8Array`, and store them as-is.
 - Values are cloned with `clone` on write and on read. The default is `structuredClone`.

@@ -1,4 +1,5 @@
 import { configureSync, resetSync, type LogRecord } from "@logtape/logtape";
+import { Variables } from "@unikvs/core";
 import { afterAll, describe, test as vitest } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -87,7 +88,7 @@ describe("初期化と基本属性", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = debug.encode({ vars: {}, data });
+    const output = debug.encode({ vars: new Variables({}), data });
 
     // 検証
     expect(output).toBe(data);
@@ -99,7 +100,7 @@ describe("初期化と基本属性", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = debug.decode({ vars: {}, data });
+    const output = debug.decode({ vars: new Variables({}), data });
 
     // 検証
     expect(output).toBe(data);
@@ -110,7 +111,7 @@ describe("ログの記録", () => {
   test("encode は操作とキーと文字列長を書き込みとして記録する", ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = { "unikvs:action": "set", "unikvs:key": "greeting" };
+    const vars = new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" });
 
     // 実行
     debug.encode({ vars, data: "hello" });
@@ -129,7 +130,7 @@ describe("ログの記録", () => {
   test("decode は操作とキーとバイト数を読み込みとして記録する", ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = { "unikvs:action": "get", "unikvs:key": "blob" };
+    const vars = new Variables({ "unikvs:action": "get", "unikvs:key": "blob" });
 
     // 実行
     debug.decode({ vars, data: new Uint16Array(3) });
@@ -150,9 +151,9 @@ describe("ログの記録", () => {
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: {}, data: 42 });
-    debug.encode({ vars: { "unikvs:action": "set" }, data: 42 });
-    debug.encode({ vars: { "unikvs:key": "foo" }, data: 42 });
+    debug.encode({ vars: new Variables({}), data: 42 });
+    debug.encode({ vars: new Variables({ "unikvs:action": "set" }), data: 42 });
+    debug.encode({ vars: new Variables({ "unikvs:key": "foo" }), data: 42 });
 
     // 検証
     expect(records).toHaveLength(0);
@@ -165,7 +166,10 @@ describe("ログの記録", () => {
     });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "foo" }, data: "hello" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "foo" }),
+      data: "hello",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -184,7 +188,7 @@ describe("ログの記録", () => {
         return {};
       },
     });
-    const vars = { "unikvs:action": "get", "unikvs:key": "foo", extra: true };
+    const vars = new Variables({ "unikvs:action": "get", "unikvs:key": "foo", extra: true });
     const data = new Uint8Array([1]);
 
     // 実行
@@ -210,7 +214,7 @@ describe("既定のデバッグ情報", () => {
   ] as const)("%o の型と大きさを返す", ([data, type, size], { expect }) => {
     // 実行
     const info = Debug.getDefaultDebugInfo({
-      vars: {},
+      vars: new Variables({}),
       action: undefined,
       key: undefined,
       direction: "write",
@@ -228,8 +232,14 @@ describe("フィルター", () => {
     const debug = new Debug({ keyFilter: (key) => key === "target" });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "target" }, data: "a" });
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "other" }, data: "b" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "target" }),
+      data: "a",
+    });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "other" }),
+      data: "b",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -241,8 +251,14 @@ describe("フィルター", () => {
     const debug = new Debug({ actionFilter: (action) => action === "get" });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "foo" }, data: "a" });
-    debug.decode({ vars: { "unikvs:action": "get", "unikvs:key": "foo" }, data: "b" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "foo" }),
+      data: "a",
+    });
+    debug.decode({
+      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "foo" }),
+      data: "b",
+    });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -260,9 +276,9 @@ describe("フィルター", () => {
     });
 
     // 実行
-    debug.encode({ vars: {}, data: "a" });
-    debug.encode({ vars: { "unikvs:action": "set" }, data: "b" });
-    debug.encode({ vars: { "unikvs:key": "foo" }, data: "c" });
+    debug.encode({ vars: new Variables({}), data: "a" });
+    debug.encode({ vars: new Variables({ "unikvs:action": "set" }), data: "b" });
+    debug.encode({ vars: new Variables({ "unikvs:key": "foo" }), data: "c" });
 
     // 検証
     expect(records).toHaveLength(0);
@@ -273,9 +289,18 @@ describe("フィルター", () => {
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "a" }, data: "1" });
-    debug.decode({ vars: { "unikvs:action": "get", "unikvs:key": "b" }, data: "2" });
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "c" }, data: "3" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "a" }),
+      data: "1",
+    });
+    debug.decode({
+      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "b" }),
+      data: "2",
+    });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "c" }),
+      data: "3",
+    });
 
     // 検証
     expect(records).toHaveLength(3);
@@ -286,7 +311,7 @@ describe("ストリーム", () => {
   test("getEncodable はチャンクごとに書き込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = { "unikvs:action": "set", "unikvs:key": "stream" };
+    const vars = new Variables({ "unikvs:action": "set", "unikvs:key": "stream" });
     const input = [new Uint8Array([1]), new Uint8Array([2, 3])];
 
     // 実行
@@ -312,7 +337,7 @@ describe("ストリーム", () => {
   test("getDecodable はチャンクごとに読み込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = { "unikvs:action": "stream", "unikvs:key": "stream" };
+    const vars = new Variables({ "unikvs:action": "stream", "unikvs:key": "stream" });
     const input = ["a", "bc"];
 
     // 実行
@@ -343,11 +368,15 @@ describe("ストリーム", () => {
 
     // 実行
     await pipeChunks(
-      debug.getEncodable({ vars: { "unikvs:action": "set", "unikvs:key": "other" } }),
+      debug.getEncodable({
+        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "other" }),
+      }),
       [new Uint8Array([1])],
     );
     await pipeChunks(
-      debug.getEncodable({ vars: { "unikvs:action": "set", "unikvs:key": "target" } }),
+      debug.getEncodable({
+        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "target" }),
+      }),
       [new Uint8Array([2])],
     );
 

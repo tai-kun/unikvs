@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import { deleteGlobalConfig, setGlobalConfig } from "../../core/node_modules/valibot/dist/index.js";
@@ -74,7 +75,7 @@ describe("ChecksumMismatchError", () => {
     // 準備
     const checksum = new ChecksumSha256();
     const expected = ABC_DIGEST.toUpperCase();
-    const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: expected };
+    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
 
     // 実行
     let thrown: unknown;
@@ -95,7 +96,7 @@ describe("ChecksumMismatchError", () => {
   test("期待値が空文字のときは不一致として拒否する", ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const vars = { [ChecksumSha256.CHECKSUM_VAR_NAME]: "" };
+    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: "" });
 
     // 実行
     let thrown: unknown;
@@ -140,7 +141,9 @@ describe("ChecksumInvalidVarNameError", () => {
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.encode({ vars: {}, data: DATA })).toThrow(ChecksumInvalidVarNameError);
+    expect(() => checksum.encode({ vars: new Variables({}), data: DATA })).toThrow(
+      ChecksumInvalidVarNameError,
+    );
   });
 
   test("CHECKSUM_VAR_NAME が文字列でないサブクラスは decode で拒否する", ({ expect }) => {
@@ -148,7 +151,9 @@ describe("ChecksumInvalidVarNameError", () => {
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.decode({ vars: {}, data: DATA })).toThrow(ChecksumInvalidVarNameError);
+    expect(() => checksum.decode({ vars: new Variables({}), data: DATA })).toThrow(
+      ChecksumInvalidVarNameError,
+    );
   });
 
   test("CHECKSUM_VAR_NAME が文字列でないサブクラスは getEncodable で拒否する", ({ expect }) => {
@@ -156,7 +161,9 @@ describe("ChecksumInvalidVarNameError", () => {
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.getEncodable({ vars: {} })).toThrow(ChecksumInvalidVarNameError);
+    expect(() => checksum.getEncodable({ vars: new Variables({}) })).toThrow(
+      ChecksumInvalidVarNameError,
+    );
   });
 
   test("CHECKSUM_VAR_NAME が文字列でないサブクラスは getDecodable で拒否する", ({ expect }) => {
@@ -164,7 +171,9 @@ describe("ChecksumInvalidVarNameError", () => {
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.getDecodable({ vars: {} })).toThrow(ChecksumInvalidVarNameError);
+    expect(() => checksum.getDecodable({ vars: new Variables({}) })).toThrow(
+      ChecksumInvalidVarNameError,
+    );
   });
 
   test("meta.actual に無効な値を保持し、既定では英語メッセージを返す", ({ expect }) => {

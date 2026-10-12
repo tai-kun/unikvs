@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
@@ -27,7 +28,7 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: {}, signal });
+      storage.write({ key, data, vars: new Variables(), signal });
     }
 
     // 検証
@@ -49,7 +50,7 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: {}, signal });
+      storage.write({ key, data, vars: new Variables(), signal });
     }
 
     // 検証
@@ -63,7 +64,7 @@ describe("文字列値の往復", () => {
     const data = "1 行目\n2 行目\r\n3 行目\ttab 付き";
 
     // 実行
-    storage.write({ key: "multiline", data, vars: {}, signal });
+    storage.write({ key: "multiline", data, vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "multiline", signal })).toBe(data);
@@ -74,7 +75,7 @@ describe("文字列値の往復", () => {
     const data = "あ".repeat(1024 * 1024);
 
     // 実行
-    storage.write({ key: "large", data, vars: {}, signal });
+    storage.write({ key: "large", data, vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "large", signal })).toBe(data);
@@ -93,7 +94,7 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: {}, signal });
+      storage.write({ key, data, vars: new Variables(), signal });
     }
 
     // 検証
@@ -108,7 +109,7 @@ describe("文字列値の往復", () => {
     const data = JSON.stringify(profile);
 
     // 実行
-    storage.write({ key: "profile", data, vars: {}, signal });
+    storage.write({ key: "profile", data, vars: new Variables(), signal });
     const restored = JSON.parse(storage.read({ key: "profile", signal }) as string);
 
     // 検証

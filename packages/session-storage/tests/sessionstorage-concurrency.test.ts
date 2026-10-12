@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -23,7 +24,7 @@ describe("並列操作", () => {
 
     // 実行
     for (const key of keys) {
-      storage.write({ key, data: `v-${key}`, vars: {}, signal });
+      storage.write({ key, data: `v-${key}`, vars: new Variables(), signal });
     }
 
     // 検証
@@ -34,8 +35,8 @@ describe("並列操作", () => {
 
   test("同一キーへの並列書き込みは最終書き勝ちで確定する", ({ expect, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
-    storage.write({ key: "k1", data: "v2", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
 
     // 検証
     expect(storage.read({ key: "k1", signal })).toBe("v2");

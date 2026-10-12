@@ -166,7 +166,7 @@ export default abstract class Checksum implements ITransformer {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = vars[CHECKSUM_VAR_NAME];
+    const checksum = vars.get(CHECKSUM_VAR_NAME);
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
       const hash = bytesToHex(this.hash(data));
@@ -196,7 +196,7 @@ export default abstract class Checksum implements ITransformer {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = vars[CHECKSUM_VAR_NAME];
+    const checksum = vars.get(CHECKSUM_VAR_NAME);
     if (typeof checksum !== "string") {
       if (this.required) {
         throw new ChecksumRequiredError();

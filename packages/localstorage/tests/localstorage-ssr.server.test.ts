@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureThrown } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -27,7 +28,7 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new LocalStorage();
-      expect(() => storage.write({ key: "k", data: "v", vars: {}, signal })).toThrow(
+      expect(() => storage.write({ key: "k", data: "v", vars: new Variables(), signal })).toThrow(
         LocalStorageNotAvailableError,
       );
       expect(() => storage.read({ key: "k", signal })).toThrow(LocalStorageNotAvailableError);
@@ -42,7 +43,7 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new LocalStorage({ storage: createFakeStorage() });
-      storage.write({ key: "k", data: "v", vars: {}, signal });
+      storage.write({ key: "k", data: "v", vars: new Variables(), signal });
       expect(storage.read({ key: "k", signal })).toBe("v");
     });
   });

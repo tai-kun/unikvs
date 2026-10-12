@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -15,7 +16,9 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all(
-      values.map(async (value) => storage.write({ key: "k1", data: value, signal, vars: {} })),
+      values.map(async (value) =>
+        storage.write({ key: "k1", data: value, signal, vars: new Variables() }),
+      ),
     );
 
     // 検証
@@ -33,7 +36,9 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map(async (value) => {
-        const writer = storage.getWritable({ key: "k1", signal, vars: {} }).getWriter();
+        const writer = storage
+          .getWritable({ key: "k1", signal, vars: new Variables() })
+          .getWriter();
         await writer.write(value);
         await writer.close();
       }),
@@ -54,7 +59,9 @@ describe("並行操作", () => {
 
     // 実行
     await Promise.all(
-      entries.map(async ({ key, value }) => storage.write({ key, data: value, signal, vars: {} })),
+      entries.map(async ({ key, value }) =>
+        storage.write({ key, data: value, signal, vars: new Variables() }),
+      ),
     );
 
     // 検証
@@ -77,7 +84,7 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       entries.map(async ({ key, chunks }) => {
-        const writer = storage.getWritable({ key, signal, vars: {} }).getWriter();
+        const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
         for (const chunk of chunks) {
           await writer.write(chunk);
         }
@@ -96,7 +103,7 @@ describe("並行操作", () => {
   test("write と read を同時に実行してもすべて成功する", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "initial", signal, vars: {} });
+    await storage.write({ key: "k1", data: "initial", signal, vars: new Variables() });
     const written: string[] = [];
     const tasks: Promise<unknown>[] = [];
 
@@ -105,7 +112,7 @@ describe("並行操作", () => {
       if (i % 2 === 0) {
         const value = `v${i}`;
         written.push(value);
-        tasks.push(storage.write({ key: "k1", data: value, signal, vars: {} }));
+        tasks.push(storage.write({ key: "k1", data: value, signal, vars: new Variables() }));
       } else {
         tasks.push(storage.read({ key: "k1", signal }));
       }
@@ -119,7 +126,7 @@ describe("並行操作", () => {
   test("同じキーへ並行に delete してもすべて成功し、キーは消える", async ({ expect, storage }) => {
     // 準備
     await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: {} });
+    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
 
     // 実行
     const results = await Promise.allSettled(

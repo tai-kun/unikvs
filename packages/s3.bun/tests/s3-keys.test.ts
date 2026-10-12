@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -13,7 +14,7 @@ describe("キーの扱い", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
     }
     await storage.delete({ key: "dir/sub.txt", signal });
 
@@ -36,7 +37,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
       await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
     }
   });
@@ -52,14 +53,19 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables({}) });
       await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
     }
   });
 
   test("大文字と小文字を区別する", async ({ expect, signal, storage }) => {
     // 準備
-    await storage.write({ key: "Case.txt", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({
+      key: "Case.txt",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables({}),
+    });
 
     // 実行
     const lowerExists = await storage.exists({ key: "case.txt", signal });
@@ -76,7 +82,7 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     expect(key).toHaveLength(255);
@@ -89,7 +95,7 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) }),
     ).rejects.toMatchObject({
       code: "ERR_S3_INVALID_PATH",
     });
@@ -102,7 +108,7 @@ describe("キーの扱い", () => {
   }) => {
     // 実行と検証
     await expect(
-      storage.write({ key: "", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({ key: "", data: new Uint8Array([1]), signal, vars: new Variables({}) }),
     ).rejects.toMatchObject({ code: "ERR_S3_INVALID_PATH" });
     await expect(storage.read({ key: "", signal })).rejects.toMatchObject({
       code: "ERR_S3_INVALID_PATH",
@@ -116,7 +122,12 @@ describe("キーの扱い", () => {
   }) => {
     // 実行と検証
     await expect(
-      storage.write({ key: "dir/../escape.txt", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({
+        key: "dir/../escape.txt",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toThrow();
     await expect(storage.exists({ key: "escape.txt", signal })).resolves.toBe(false);
   });
@@ -124,7 +135,12 @@ describe("キーの扱い", () => {
   test("連続するスラッシュを含むキーは拒否される", async ({ expect, signal, storage }) => {
     // 実行と検証
     await expect(
-      storage.write({ key: "dir//file.txt", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({
+        key: "dir//file.txt",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables({}),
+      }),
     ).rejects.toThrow();
   });
 
@@ -134,7 +150,7 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables({}) });
 
     // 検証
     await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);

@@ -55,12 +55,12 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `TData` | `TData` |
-| `decode` | `TData` | `TData` |
-| `getEncodable` | `any` | `any` |
-| `getDecodable` | `any` | `any` |
+| メソッド       | 入力    | 出力    |
+| -------------- | ------- | ------- |
+| `encode`       | `TData` | `TData` |
+| `decode`       | `TData` | `TData` |
+| `getEncodable` | `any`   | `any`   |
+| `getDecodable` | `any`   | `any`   |
 
 - `encode`・`decode` は任意の型のデータをそのまま返します。
 - `getEncodable`・`getDecodable` はチャンクをそのまま流す `TransformStream` を返します。

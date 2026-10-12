@@ -67,12 +67,12 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
-| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| Method         | Input                     | Output                             |
+| -------------- | ------------------------- | ---------------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Promise<Uint8Array<ArrayBuffer>>` |
+| `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>`          |
+| `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>`          |
 
 - `encode` compresses a byte sequence.
 - `decode` decompresses a compressed byte sequence.

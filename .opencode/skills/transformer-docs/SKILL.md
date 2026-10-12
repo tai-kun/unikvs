@@ -18,8 +18,11 @@ UniKvs のトランスフォーマープラグイン（`ITransformer` 実装）�
 
 ```md
 ## 概要 [#overview]
+
 ## 使い方 [#usage]
+
 ## データ型 [#data-types]
+
 ## エラー [#errors]
 ```
 
@@ -79,10 +82,10 @@ import { Memory } from "@unikvs/memory";
 - `encode`・`decode` の入出力の型と、対応していればストリームのチャンクの型を表で記載します（必須）。
 
 ```md
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 ```
@@ -128,13 +131,13 @@ import { Memory } from "@unikvs/memory";
 
 型・振る舞い・エラーは `packages/<name>/src` から読み取ります。
 
-| 確認対象 | 読み取り箇所 |
-| --- | --- |
-| クラス名・コンストラクター引数 | クラス定義と `*Options` 型 |
-| `encode`・`decode` の入出力・同期／非同期 | メソッドシグネチャー |
-| ストリームのチャンク型・結合方式 | `getEncodable`・`getDecodable` の `TransformStream` 型と `transform`・`flush` の実装 |
-| エラークラス・送出条件 | `errors.ts` と `throw` 箇所 |
-| `name`・`isOpen` の値、ピア依存 | クラス定義と `package.json` |
+| 確認対象                                  | 読み取り箇所                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| クラス名・コンストラクター引数            | クラス定義と `*Options` 型                                                           |
+| `encode`・`decode` の入出力・同期／非同期 | メソッドシグネチャー                                                                 |
+| ストリームのチャンク型・結合方式          | `getEncodable`・`getDecodable` の `TransformStream` 型と `transform`・`flush` の実装 |
+| エラークラス・送出条件                    | `errors.ts` と `throw` 箇所                                                          |
+| `name`・`isOpen` の値、ピア依存           | クラス定義と `package.json`                                                          |
 
 ## 検証
 

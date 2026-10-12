@@ -37,7 +37,8 @@ The constructor arguments are as follows.
   type={{
     options: {
       type: "DebugOptions",
-      description: "Settings for narrowing the recorded targets and adding extra information. Records everything when omitted.",
+      description:
+        "Settings for narrowing the recorded targets and adding extra information. Records everything when omitted.",
     },
     "options.keyFilter": {
       type: "(key: string) => boolean",
@@ -49,7 +50,8 @@ The constructor arguments are as follows.
     },
     "options.getDebugInfo": {
       type: "(args: DebugInfoArgs) => Record<string, unknown>",
-      description: "Returns additional debug information. The return value is spread into the log properties.",
+      description:
+        "Returns additional debug information. The return value is spread into the log properties.",
     },
   }}
 />
@@ -88,10 +90,10 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `unknown` | `unknown` |
-| `decode` | `unknown` | `unknown` |
+| Method         | Input     | Output    |
+| -------------- | --------- | --------- |
+| `encode`       | `unknown` | `unknown` |
+| `decode`       | `unknown` | `unknown` |
 | `getEncodable` | `unknown` | `unknown` |
 | `getDecodable` | `unknown` | `unknown` |
 

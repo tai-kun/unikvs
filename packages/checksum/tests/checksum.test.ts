@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { afterEach, describe, test, vi } from "vitest";
 
 import Checksum, { type IHash, type IHasher } from "../src/checksum.js";
@@ -117,7 +118,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: CHECKSUM_HEX };
+    const vars = new Variables({ [VAR_NAME]: CHECKSUM_HEX });
 
     // 実行
     const result = checksum.encode({ vars, data });
@@ -136,7 +137,7 @@ describe("一括データの検証", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const result = checksum.encode({ vars: {}, data });
+    const result = checksum.encode({ vars: new Variables({}), data });
 
     // 検証
     expect(result).toStrictEqual(data);
@@ -150,7 +151,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: 12345 };
+    const vars = new Variables({ [VAR_NAME]: 12345 });
 
     // 実行
     const result = checksum.encode({ vars, data });
@@ -169,7 +170,7 @@ describe("一括データの検証", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行と検証
-    expect(() => checksum.encode({ vars: {}, data })).toThrow(ChecksumRequiredError);
+    expect(() => checksum.encode({ vars: new Variables({}), data })).toThrow(ChecksumRequiredError);
   });
 
   test("検証が必須のときにチェックサムの値が文字列以外であれば encode は ChecksumRequiredError を投げる", ({
@@ -179,7 +180,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash, { required: true });
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: 12345 };
+    const vars = new Variables({ [VAR_NAME]: 12345 });
 
     // 実行と検証
     expect(() => checksum.encode({ vars, data })).toThrow(ChecksumRequiredError);
@@ -192,7 +193,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: "incorrect" };
+    const vars = new Variables({ [VAR_NAME]: "incorrect" });
 
     // 実行
     let thrown: unknown;
@@ -217,7 +218,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: CHECKSUM_HEX };
+    const vars = new Variables({ [VAR_NAME]: CHECKSUM_HEX });
 
     // 実行
     const result = checksum.decode({ vars, data });
@@ -234,7 +235,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: "incorrect" };
+    const vars = new Variables({ [VAR_NAME]: "incorrect" });
 
     // 実行と検証
     expect(() => checksum.decode({ vars, data })).toThrow(ChecksumMismatchError);
@@ -249,7 +250,7 @@ describe("一括データの検証", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行と検証
-    expect(() => checksum.decode({ vars: {}, data })).toThrow(ChecksumRequiredError);
+    expect(() => checksum.decode({ vars: new Variables({}), data })).toThrow(ChecksumRequiredError);
   });
 
   test("CHECKSUM_VAR_NAME が文字列でなければ encode は ChecksumInvalidVarNameError を投げる", ({
@@ -261,7 +262,7 @@ describe("一括データの検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const data = new Uint8Array([1, 2, 3]);
-    const vars = { [VAR_NAME]: CHECKSUM_HEX };
+    const vars = new Variables({ [VAR_NAME]: CHECKSUM_HEX });
 
     // 実行と検証
     expect(() => checksum.encode({ vars, data })).toThrow(ChecksumInvalidVarNameError);
@@ -275,7 +276,9 @@ describe("ストリームによる検証", () => {
     // 準備
     const { hash, update, digest } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getEncodable({ vars: { [VAR_NAME]: CHECKSUM_HEX } });
+    const transformStream = checksum.getEncodable({
+      vars: new Variables({ [VAR_NAME]: CHECKSUM_HEX }),
+    });
     const chunk1 = new Uint8Array([1, 2]);
     const chunk2 = new Uint8Array([3, 4]);
 
@@ -295,7 +298,7 @@ describe("ストリームによる検証", () => {
     // 準備
     const { hash, create } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getEncodable({ vars: {} });
+    const transformStream = checksum.getEncodable({ vars: new Variables({}) });
     const chunk = new Uint8Array([1, 2, 3]);
 
     // 実行
@@ -313,7 +316,7 @@ describe("ストリームによる検証", () => {
     // 準備
     const { hash, create } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getEncodable({ vars: { [VAR_NAME]: 123 } });
+    const transformStream = checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: 123 }) });
     const chunk = new Uint8Array([1, 2, 3]);
 
     // 実行
@@ -333,7 +336,7 @@ describe("ストリームによる検証", () => {
     const checksum = new TestChecksum("sha256", hash, { required: true });
 
     // 実行と検証
-    expect(() => checksum.getEncodable({ vars: {} })).toThrow(ChecksumRequiredError);
+    expect(() => checksum.getEncodable({ vars: new Variables({}) })).toThrow(ChecksumRequiredError);
   });
 
   test("期待値と一致しないチェックサムを指定して getEncodable すると、ストリームを閉じたときに ChecksumMismatchError で失敗する", async ({
@@ -343,7 +346,7 @@ describe("ストリームによる検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const transformStream = checksum.getEncodable({
-      vars: { [VAR_NAME]: "incorrect" },
+      vars: new Variables({ [VAR_NAME]: "incorrect" }),
     });
 
     // 実行
@@ -359,7 +362,9 @@ describe("ストリームによる検証", () => {
     // 準備
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getDecodable({ vars: { [VAR_NAME]: CHECKSUM_HEX } });
+    const transformStream = checksum.getDecodable({
+      vars: new Variables({ [VAR_NAME]: CHECKSUM_HEX }),
+    });
     const chunk1 = new Uint8Array([1, 2]);
     const chunk2 = new Uint8Array([3, 4]);
 
@@ -378,7 +383,7 @@ describe("ストリームによる検証", () => {
     const { hash } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
     const transformStream = checksum.getDecodable({
-      vars: { [VAR_NAME]: "incorrect" },
+      vars: new Variables({ [VAR_NAME]: "incorrect" }),
     });
 
     // 実行
@@ -398,9 +403,9 @@ describe("ストリームによる検証", () => {
     const checksum = new TestChecksum("sha256", hash);
 
     // 実行と検証
-    expect(() => checksum.getEncodable({ vars: { [VAR_NAME]: CHECKSUM_HEX } })).toThrow(
-      ChecksumInvalidVarNameError,
-    );
+    expect(() =>
+      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: CHECKSUM_HEX }) }),
+    ).toThrow(ChecksumInvalidVarNameError);
   });
 });
 
@@ -409,7 +414,9 @@ describe("大きなチャンクの分割処理", () => {
     // 準備
     const { hash, update } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getEncodable({ vars: { [VAR_NAME]: CHECKSUM_HEX } });
+    const transformStream = checksum.getEncodable({
+      vars: new Variables({ [VAR_NAME]: CHECKSUM_HEX }),
+    });
     // メモリーの枯渇を避けるため、length を偽装した Uint8Array のようなオブジェクトを使用する。
     const subarray = vi.fn<(start: number, end: number) => Uint8Array<ArrayBuffer>>(
       () => new Uint8Array([1]),
@@ -428,7 +435,9 @@ describe("大きなチャンクの分割処理", () => {
     // 準備
     const { hash, update } = createHashMock();
     const checksum = new TestChecksum("sha256", hash);
-    const transformStream = checksum.getEncodable({ vars: { [VAR_NAME]: CHECKSUM_HEX } });
+    const transformStream = checksum.getEncodable({
+      vars: new Variables({ [VAR_NAME]: CHECKSUM_HEX }),
+    });
     const subarray = vi.fn<(start: number, end: number) => Uint8Array<ArrayBuffer>>(
       () => new Uint8Array([1]),
     );

@@ -281,3 +281,48 @@ setErrorMessage(
   ({ names }) => `"${formatRepairNames(names)}" への書き戻しは許可されていません`,
   "ja",
 );
+
+// -------------------------------------------------------------------------------------------------
+//
+// 変数の読み取り専用違反
+//
+// -------------------------------------------------------------------------------------------------
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ */
+export type ReadonlyVariableErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   */
+  readonly key: string;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ */
+export type ReadonlyVariableErrorArgs = ErrorOptions & ReadonlyVariableErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ */
+export class ReadonlyVariableError extends InvalidUsageErrorBase<ReadonlyVariableErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsReadonlyVariableError";
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   */
+  public constructor(args: ReadonlyVariableErrorArgs) {
+    const { key, ...options } = args;
+    const meta: ReadonlyVariableErrorMeta = { key };
+    super(meta, ({ key }) => `Cannot modify readonly variable: ${JSON.stringify(key)}`, options);
+  }
+}
+
+setErrorMessage(
+  ReadonlyVariableError,
+  ({ key }) => `読み取り専用の変数 ${JSON.stringify(key)} は変更できません`,
+  "ja",
+);

@@ -48,9 +48,7 @@ describe("WASM 初期化の失敗", () => {
         // 検証
         // 失敗は ZstdWasmInitError で包み、原因を保持する。
         expect(error).toBeInstanceOf(freshErrors.ZstdWasmInitError);
-        expect(
-          (error as InstanceType<typeof freshErrors.ZstdWasmInitError>).cause,
-        ).toBe(cause);
+        expect((error as InstanceType<typeof freshErrors.ZstdWasmInitError>).cause).toBe(cause);
         expect(target.isOpen).toBe(false);
 
         // 実行と検証

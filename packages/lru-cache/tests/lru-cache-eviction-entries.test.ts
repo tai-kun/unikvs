@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -19,9 +20,9 @@ const test = vitest.extend<{ storage: LruCache }>({
 describe("件数上限による追い出し", () => {
   test("上限を超えたとき、最も古いものから追い出される", ({ expect, storage }) => {
     // 準備と実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -32,12 +33,12 @@ describe("件数上限による追い出し", () => {
 
   test("read のヒット時は追い出し対象から除外される", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
     storage.read({ key: "k1" });
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.exists({ key: "k2" })).toBe(false);
@@ -47,12 +48,12 @@ describe("件数上限による追い出し", () => {
 
   test("上書きしたキーは最も新しいものとして扱われる", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
-    storage.write({ vars: {}, key: "k1", data: "v1-updated" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1-updated" });
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.exists({ key: "k2" })).toBe(false);
@@ -62,12 +63,12 @@ describe("件数上限による追い出し", () => {
 
   test("exists は直近使用順を更新しない", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
     storage.exists({ key: "k1" });
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.exists({ key: "k1" })).toBe(false);
@@ -77,12 +78,12 @@ describe("件数上限による追い出し", () => {
 
   test("delete した分だけ追い出しが遅れる", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
     storage.delete({ key: "k1" });
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: "v3" });
+    storage.write({ vars: new Variables(), key: "k3", data: "v3" });
 
     // 検証
     expect(storage.size).toBe(2);
@@ -97,7 +98,7 @@ describe("件数上限による追い出し", () => {
 
     // 実行
     for (let i = 0; i < 100; i += 1) {
-      unbounded.write({ vars: {}, key: `k${i}`, data: `v${i}` });
+      unbounded.write({ vars: new Variables(), key: `k${i}`, data: `v${i}` });
     }
 
     // 検証
@@ -117,7 +118,7 @@ describe("maxEntries が 0 のとき", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 検証
     expect(storage.size).toBe(0);
@@ -131,8 +132,8 @@ describe("maxEntries が 0 のとき", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "v1" });
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
 
     // 検証
     expect(storage.size).toBe(0);

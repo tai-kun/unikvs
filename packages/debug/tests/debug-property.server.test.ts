@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { pipeChunks } from "@unikvs/testing";
 import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
 import { describe } from "vitest";
@@ -16,7 +17,7 @@ const test = createRecordsTest();
  * ケースごとにデータだけを差し替えて検証するために使用します。
  */
 function argsFor(data: unknown): DebugInfoArgs {
-  return { vars: {}, action: undefined, key: undefined, direction: "write", data };
+  return { vars: new Variables({}), action: undefined, key: undefined, direction: "write", data };
 }
 
 const VIEW_FACTORIES = [
@@ -154,7 +155,7 @@ describe("Debug (決定的ファズ)", () => {
     forCases(SEED, CASE_COUNT, (random) => {
       const data = randomValue(random);
 
-      expect(debug.encode({ vars: {}, data })).toBe(data);
+      expect(debug.encode({ vars: new Variables({}), data })).toBe(data);
     });
   });
 
@@ -166,7 +167,7 @@ describe("Debug (決定的ファズ)", () => {
     forCases(SEED + 1, CASE_COUNT, (random) => {
       const data = randomValue(random);
 
-      expect(debug.decode({ vars: {}, data })).toBe(data);
+      expect(debug.decode({ vars: new Variables({}), data })).toBe(data);
     });
   });
 
@@ -226,7 +227,7 @@ describe("Debug (決定的ファズ)", () => {
   }) => {
     // 準備
     const debug = new Debug();
-    const vars = { "unikvs:action": "stream", "unikvs:key": "stream" };
+    const vars = new Variables({ "unikvs:action": "stream", "unikvs:key": "stream" });
 
     // 実行と検証
     await forCasesAsync(SEED + 6, STREAM_CASE_COUNT, async (random) => {

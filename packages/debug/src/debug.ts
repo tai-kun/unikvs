@@ -215,12 +215,12 @@ export default class Debug implements ITransformer {
    * @param data 読み書きされたデータです。ストリームの場合はチャンクです。
    */
   #log(direction: DebugDirection, vars: Variables, data: unknown): void {
-    const action = toStringVariable(vars["unikvs:action"]);
+    const action = toStringVariable(vars.get("unikvs:action"));
     if (action === undefined || !this.actionFilter(action)) {
       return;
     }
 
-    const key = toStringVariable(vars["unikvs:key"]);
+    const key = toStringVariable(vars.get("unikvs:key"));
     if (key === undefined || !this.keyFilter(key)) {
       return;
     }

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -29,7 +30,7 @@ describe("キーの境界値", () => {
       await storage.open({ signal });
 
       // 実行
-      storage.write({ vars: {}, key, data: "value" });
+      storage.write({ vars: new Variables(), key, data: "value" });
 
       // 検証
       expect(storage.read({ key })).toBe("value");
@@ -49,8 +50,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "Key", data: "upper" });
-    storage.write({ vars: {}, key: "key", data: "lower" });
+    storage.write({ vars: new Variables(), key: "Key", data: "upper" });
+    storage.write({ vars: new Variables(), key: "key", data: "lower" });
 
     // 検証
     expect(storage.read({ key: "Key" })).toBe("upper");
@@ -64,8 +65,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k", data: "plain" });
-    storage.write({ vars: {}, key: " k ", data: "padded" });
+    storage.write({ vars: new Variables(), key: "k", data: "plain" });
+    storage.write({ vars: new Variables(), key: " k ", data: "padded" });
 
     // 検証
     expect(storage.read({ key: "k" })).toBe("plain");
@@ -78,8 +79,8 @@ describe("キーの同一性", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "k1", data: "first" });
-    storage.write({ vars: {}, key: `k${1}`, data: "second" });
+    storage.write({ vars: new Variables(), key: "k1", data: "first" });
+    storage.write({ vars: new Variables(), key: `k${1}`, data: "second" });
 
     // 検証
     expect(storage.read({ key: "k1" })).toBe("second");
@@ -93,7 +94,7 @@ describe("プロトタイプ汚染キー", () => {
     await storage.open({ signal });
 
     // 実行
-    storage.write({ vars: {}, key: "__proto__", data: { polluted: true } });
+    storage.write({ vars: new Variables(), key: "__proto__", data: { polluted: true } });
 
     // 検証
     expect(storage.read({ key: "__proto__" })).toStrictEqual({ polluted: true });
@@ -105,10 +106,10 @@ describe("プロトタイプ汚染キー", () => {
     // 準備
     const storage = new LruCache();
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
-    storage.write({ vars: {}, key: "constructor", data: "shadowed" });
+    storage.write({ vars: new Variables(), key: "constructor", data: "shadowed" });
 
     // 検証
     expect(storage.read({ key: "constructor" })).toBe("shadowed");
@@ -121,11 +122,11 @@ describe("上限付きでの特殊キー", () => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "__proto__", data: "proto" });
-    storage.write({ vars: {}, key: "k1", data: "v1" });
+    storage.write({ vars: new Variables(), key: "__proto__", data: "proto" });
+    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
 
     // 実行
-    storage.write({ vars: {}, key: "k2", data: "v2" });
+    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
 
     // 検証
     expect(storage.exists({ key: "__proto__" })).toBe(false);

@@ -1,4 +1,5 @@
-import type { Variables, IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
+import type { IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvsStorage from "../src/_storage.js";
@@ -8,7 +9,7 @@ import {
   WritableStreamNotSupportedError,
 } from "../src/errors.js";
 
-const TEST_VARS: Variables = {};
+const TEST_VARS: Variables = new Variables();
 const TEST_SIGNAL = new AbortController().signal;
 
 /**

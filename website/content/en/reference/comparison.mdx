@@ -5,25 +5,21 @@ description: "Explains the storage comparison table and selection guide for choo
 
 ## Comparison table [#comparison]
 
-| Feature | `@unikvs/memory` | `@unikvs/fs.node` | `@unikvs/fs.bun` | `@unikvs/redis.bun` | `@unikvs/s3.node` | `@unikvs/s3.bun` | `@unikvs/opfs` | `@unikvs/indexeddb` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Environment | <Badge>All</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="warning">Browser</Badge> | <Badge variant="warning">Browser</Badge> |
-| Persistence | None. | Yes. | Yes. | Yes. | Yes. | Yes. | Yes. | Yes. |
-| Supported data | Any value. | Bytes. | Bytes. | Bytes. | Bytes. | Bytes. | Bytes. | Any value. |
-| Streams | Limited. | Supported. | Supported. | Supported. | Supported. | Supported. | Supported. | Check limitations. |
-| Primary use | Test / temporary. | Single server. | Single server. | Shared / cache. | Shared / large-scale. | Shared / large-scale. | Large-scale browser. | Structured browser. |
+| Feature        | `@unikvs/memory`   | `@unikvs/fs.node`                       | `@unikvs/fs.bun`                    | `@unikvs/redis.bun`                 | `@unikvs/s3.node`                       | `@unikvs/s3.bun`                    | `@unikvs/opfs`                           | `@unikvs/indexeddb`                      |
+| -------------- | ------------------ | --------------------------------------- | ----------------------------------- | ----------------------------------- | --------------------------------------- | ----------------------------------- | ---------------------------------------- | ---------------------------------------- |
+| Environment    | <Badge>All</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="accent">Node.js</Badge> | <Badge variant="accent">Bun</Badge> | <Badge variant="warning">Browser</Badge> | <Badge variant="warning">Browser</Badge> |
+| Persistence    | None.              | Yes.                                    | Yes.                                | Yes.                                | Yes.                                    | Yes.                                | Yes.                                     | Yes.                                     |
+| Supported data | Any value.         | Bytes.                                  | Bytes.                              | Bytes.                              | Bytes.                                  | Bytes.                              | Bytes.                                   | Any value.                               |
+| Streams        | Limited.           | Supported.                              | Supported.                          | Supported.                          | Supported.                              | Supported.                          | Supported.                               | Check limitations.                       |
+| Primary use    | Test / temporary.  | Single server.                          | Single server.                      | Shared / cache.                     | Shared / large-scale.                   | Shared / large-scale.               | Large-scale browser.                     | Structured browser.                      |
 
 See each package reference for details. `@unikvs/writeonly` is not a destination but a wrapper that makes an existing storage unreadable, so it is not included in the comparison table.
 
 ## Selection guide [#guide]
 
 <Tabs>
-  <Tab title="Test / temporary">
-    Use memory. It is the simplest and works everywhere.
-  </Tab>
-  <Tab title="Single server">
-    Use files. Minimal setup, good for small to medium data.
-  </Tab>
+  <Tab title="Test / temporary">Use memory. It is the simplest and works everywhere.</Tab>
+  <Tab title="Single server">Use files. Minimal setup, good for small to medium data.</Tab>
   <Tab title="Shared / large-scale">
     Use S3-compatible storage. It supports multipart transfers.
   </Tab>

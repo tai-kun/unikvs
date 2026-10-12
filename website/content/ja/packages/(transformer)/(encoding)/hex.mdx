@@ -41,11 +41,13 @@ import { Hex } from "@unikvs/hex";
     },
     "options.encoder": {
       type: "FastUtf8",
-      description: "hex テキストをバイト列へ変換するエンコーダーです。差し替えが必要な場合にだけ指定します。",
+      description:
+        "hex テキストをバイト列へ変換するエンコーダーです。差し替えが必要な場合にだけ指定します。",
     },
     "options.decoder": {
       type: "FastUtf8",
-      description: "バイト列を hex テキストへ変換するデコーダーです。差し替えが必要な場合にだけ指定します。",
+      description:
+        "バイト列を hex テキストへ変換するデコーダーです。差し替えが必要な場合にだけ指定します。",
     },
   }}
 />
@@ -74,10 +76,10 @@ await kvs.close();
 
 ## データ型 [#data-types]
 
-| メソッド | 入力 | 出力 |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 

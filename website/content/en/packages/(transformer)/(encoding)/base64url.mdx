@@ -41,11 +41,13 @@ The constructor arguments are as follows.
     },
     "options.encoder": {
       type: "FastUtf8",
-      description: "The encoder that converts base64url text to bytes. Specify it only when you need a replacement.",
+      description:
+        "The encoder that converts base64url text to bytes. Specify it only when you need a replacement.",
     },
     "options.decoder": {
       type: "FastUtf8",
-      description: "The decoder that converts bytes to base64url text. Specify it only when you need a replacement.",
+      description:
+        "The decoder that converts bytes to base64url text. Specify it only when you need a replacement.",
     },
     "options.padding": {
       type: "boolean",
@@ -79,10 +81,10 @@ await kvs.close();
 
 ## Data Types [#data-types]
 
-| Method | Input | Output |
-| --- | --- | --- |
-| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
-| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getEncodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 | `getDecodable` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 

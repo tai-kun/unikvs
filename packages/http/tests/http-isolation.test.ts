@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -17,21 +18,29 @@ describe("prefix による分離", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     await storageB.write({
       key: "k",
       data: new Uint8Array([2]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
     expect(
-      await storageA.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storageA.read({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([1]));
     expect(
-      await storageB.read({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storageB.read({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
     ).toStrictEqual(new Uint8Array([2]));
   });
 
@@ -44,24 +53,36 @@ describe("prefix による分離", () => {
       key: "k",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     await storageB.write({
       key: "k",
       data: new Uint8Array([2]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    await storageA.delete({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storageA.delete({
+      key: "k",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
-    expect(await storageA.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
-    expect(await storageB.exists({ key: "k", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      true,
-    );
+    expect(
+      await storageA.exists({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
+    expect(
+      await storageB.exists({
+        key: "k",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(true);
   });
 });

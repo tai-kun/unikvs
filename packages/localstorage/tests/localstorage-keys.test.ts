@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
@@ -36,7 +37,7 @@ describe("キーの扱い", () => {
 
     // 実行
     for (const [index, key] of keys.entries()) {
-      storage.write({ key, data: `v${index}`, vars: {}, signal });
+      storage.write({ key, data: `v${index}`, vars: new Variables(), signal });
     }
 
     // 検証
@@ -48,7 +49,7 @@ describe("キーの扱い", () => {
 
   test("論理キーに既定 prefix を付与して保存する", ({ expect, backend, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
 
     // 検証
     expect(backend.getItem("unikvs:k1")).toBe("v1");
@@ -59,7 +60,7 @@ describe("キーの扱い", () => {
     // 準備
     const storageA = new LocalStorage({ storage: backend, keyPrefix: "a:" });
     const storageB = new LocalStorage({ storage: backend, keyPrefix: "b:" });
-    storageA.write({ key: "k1", data: "va", vars: {}, signal });
+    storageA.write({ key: "k1", data: "va", vars: new Variables(), signal });
 
     // 実行と検証
     expect(storageB.exists({ key: "k1", signal })).toBe(false);
@@ -69,7 +70,7 @@ describe("キーの扱い", () => {
 
   test("clear は prefix 配下のみ削除する", ({ expect, backend, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: {}, signal });
+    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
     backend.setItem("other:k2", "v2");
 
     // 実行

@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import { ConnectTimeoutError } from "../src/errors.js";
@@ -16,7 +17,7 @@ describe("ライフサイクル管理", () => {
 
     // 実行
     await storage.open();
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -47,7 +48,7 @@ describe("ライフサイクル管理", () => {
     // 準備
     const key = "reopen-same-instance.bin";
     const data = new Uint8Array([9, 8, 7, 6]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     await storage.close();
@@ -68,7 +69,7 @@ describe("ライフサイクル管理", () => {
     // 準備
     const key = "shared-prefix.bin";
     const data = new Uint8Array([1, 3, 5, 7]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     const other = createStorage(url, keyPrefix);
     await other.open();
@@ -92,7 +93,7 @@ describe("ライフサイクル管理", () => {
   }) => {
     // 準備
     const key = "isolated.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
 
     const other = createStorage(url, "unikvs-other:");
     await other.open();
@@ -147,7 +148,12 @@ describe("ライフサイクル管理", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key: "after-close.bin", data: new Uint8Array([1]), signal, vars: {} }),
+      storage.write({
+        key: "after-close.bin",
+        data: new Uint8Array([1]),
+        signal,
+        vars: new Variables(),
+      }),
     ).rejects.toThrow(TypeError);
   });
 
@@ -188,9 +194,9 @@ describe("ライフサイクル管理", () => {
     await storage.close();
 
     // 実行と検証
-    expect(() => storage.getWritable({ key: "after-close.bin", signal, vars: {} })).toThrow(
-      TypeError,
-    );
+    expect(() =>
+      storage.getWritable({ key: "after-close.bin", signal, vars: new Variables() }),
+    ).toThrow(TypeError);
   });
 
   test("close 後の getReadable は同期エラーになる", async ({ expect, signal, storage }) => {
@@ -208,7 +214,7 @@ describe("ライフサイクル管理", () => {
   }) => {
     // 準備
     const key = "cleared.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
     await storage.clear({ signal });
 
     // 実行

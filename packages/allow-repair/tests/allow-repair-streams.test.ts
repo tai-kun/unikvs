@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { RepairNotAllowedError } from "@unikvs/core";
 import { collectChunks } from "@unikvs/testing";
 import { describe, test } from "vitest";
@@ -11,7 +12,7 @@ describe("getEncodable の透過と拒否", () => {
     const chunks = [new Uint8Array([1, 2, 3]), "text", 42];
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: {} }), chunks);
+    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), chunks);
 
     // 検証
     expect(output).toHaveLength(chunks.length);
@@ -27,7 +28,7 @@ describe("getEncodable の透過と拒否", () => {
 
     // 実行
     const output = await collectChunks(
-      gate.getEncodable({ vars: { "unikvs:repair": true } }),
+      gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) }),
       chunks,
     );
 
@@ -45,7 +46,7 @@ describe("getEncodable の透過と拒否", () => {
     const chunk = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: {} }), [chunk]);
+    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), [chunk]);
 
     // 検証
     expect(output).toHaveLength(1);
@@ -58,7 +59,7 @@ describe("getEncodable の透過と拒否", () => {
     gate.disable();
 
     // 実行と検証
-    expect(() => gate.getEncodable({ vars: { "unikvs:repair": true } })).toThrow(
+    expect(() => gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) })).toThrow(
       RepairNotAllowedError,
     );
   });
@@ -71,9 +72,10 @@ describe("getEncodable の透過と拒否", () => {
     const chunk = new Uint8Array([1]);
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: { "unikvs:repair": true } }), [
-      chunk,
-    ]);
+    const output = await collectChunks(
+      gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) }),
+      [chunk],
+    );
 
     // 検証
     expect(output).toHaveLength(1);
@@ -85,7 +87,7 @@ describe("getEncodable の透過と拒否", () => {
     const gate = new AllowRepair();
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: {} }), []);
+    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), []);
 
     // 検証
     expect(output).toStrictEqual([]);

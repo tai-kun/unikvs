@@ -51,10 +51,7 @@ describe("初期化と基本属性", () => {
     expect(target.isOpen).toBe(true);
   });
 
-  test("encode の結果は ArrayBuffer を裏に持つ Uint8Array である", async ({
-    expect,
-    signal,
-  }) => {
+  test("encode の結果は ArrayBuffer を裏に持つ Uint8Array である", async ({ expect, signal }) => {
     // 準備
     const target = await createOpenedTarget(signal);
 
@@ -107,20 +104,20 @@ describe("プリミティブ値のラウンドトリップ", () => {
     expect(Number.isNaN(output)).toBe(true);
   });
 
-  test.for([["Infinity"], ["-Infinity"]])("%s を往復すると同じ値に戻る", async (
-    [label],
-    { expect, signal },
-  ) => {
-    // 準備
-    const target = await createOpenedTarget(signal);
-    const input = label === "Infinity" ? Infinity : -Infinity;
+  test.for([["Infinity"], ["-Infinity"]])(
+    "%s を往復すると同じ値に戻る",
+    async ([label], { expect, signal }) => {
+      // 準備
+      const target = await createOpenedTarget(signal);
+      const input = label === "Infinity" ? Infinity : -Infinity;
 
-    // 実行
-    const output = await target.decode({ data: await target.encode({ data: input }) });
+      // 実行
+      const output = await target.decode({ data: await target.encode({ data: input }) });
 
-    // 検証
-    expect(output).toBe(input);
-  });
+      // 検証
+      expect(output).toBe(input);
+    },
+  );
 
   test("-0 を往復すると -0 のまま戻る", async ({ expect, signal }) => {
     // 準備
@@ -150,7 +147,9 @@ describe("プリミティブ値のラウンドトリップ", () => {
     const input = { a: undefined, b: 1, c: [undefined, "x"] };
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as typeof input;
+    const output = (await target.decode({
+      data: await target.encode({ data: input }),
+    })) as typeof input;
 
     // 検証
     expect(output).toStrictEqual(input);
@@ -202,7 +201,9 @@ describe("複合値のラウンドトリップ", () => {
     input[2] = 3;
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as unknown[];
+    const output = (await target.decode({
+      data: await target.encode({ data: input }),
+    })) as unknown[];
 
     // 検証
     expect(output).toHaveLength(3);
@@ -310,7 +311,10 @@ describe("複合値のラウンドトリップ", () => {
     input.set("self", input);
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Map<unknown, unknown>;
+    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Map<
+      unknown,
+      unknown
+    >;
 
     // 検証
     expect(output).toBeInstanceOf(Map);
@@ -347,19 +351,22 @@ describe("複合値のラウンドトリップ", () => {
     ["Error", () => new Error("something went wrong"), "Error"],
     ["TypeError", () => new TypeError("bad type"), "TypeError"],
     ["RangeError", () => new RangeError("out of range"), "RangeError"],
-  ])("%s を往復すると名前とメッセージが戻る", async ([_label, create, name], { expect, signal }) => {
-    // 準備
-    const target = await createOpenedTarget(signal);
-    const input = create();
+  ])(
+    "%s を往復すると名前とメッセージが戻る",
+    async ([_label, create, name], { expect, signal }) => {
+      // 準備
+      const target = await createOpenedTarget(signal);
+      const input = create();
 
-    // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Error;
+      // 実行
+      const output = (await target.decode({ data: await target.encode({ data: input }) })) as Error;
 
-    // 検証
-    expect(output).toBeInstanceOf(Error);
-    expect(output.name).toBe(name);
-    expect(output.message).toBe(input.message);
-  });
+      // 検証
+      expect(output).toBeInstanceOf(Error);
+      expect(output.name).toBe(name);
+      expect(output.message).toBe(input.message);
+    },
+  );
 
   test.for([
     ["Uint8Array", Uint8Array.of(0, 1, 2, 253, 254, 255)],
@@ -383,7 +390,9 @@ describe("複合値のラウンドトリップ", () => {
     const input = new DataView(Uint8Array.of(9, 8, 7).buffer);
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as DataView;
+    const output = (await target.decode({
+      data: await target.encode({ data: input }),
+    })) as DataView;
 
     // 検証
     expect(output).toBeInstanceOf(DataView);
@@ -397,7 +406,9 @@ describe("複合値のラウンドトリップ", () => {
     const input = Uint8Array.of(5, 6, 7).buffer as ArrayBuffer;
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as ArrayBuffer;
+    const output = (await target.decode({
+      data: await target.encode({ data: input }),
+    })) as ArrayBuffer;
 
     // 検証
     expect(output).toBeInstanceOf(ArrayBuffer);
@@ -442,7 +453,9 @@ describe("複合値のラウンドトリップ", () => {
     input.self = input;
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as typeof input;
+    const output = (await target.decode({
+      data: await target.encode({ data: input }),
+    })) as typeof input;
 
     // 検証
     expect(output.value).toBe(1);
@@ -458,7 +471,10 @@ describe("複合値のラウンドトリップ", () => {
     const input = new Foo();
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Record<string, unknown>;
+    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Record<
+      string,
+      unknown
+    >;
 
     // 検証
     expect(output.constructor.name).toBe("Object");
@@ -471,7 +487,10 @@ describe("複合値のラウンドトリップ", () => {
     const input = { [Symbol("hidden")]: 1, visible: 2 };
 
     // 実行
-    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Record<string, unknown>;
+    const output = (await target.decode({ data: await target.encode({ data: input }) })) as Record<
+      string,
+      unknown
+    >;
 
     // 検証
     expect(output).toStrictEqual({ visible: 2 });
@@ -485,10 +504,7 @@ describe("単発の trailing の扱い", () => {
     // Node.js を更新して赤くなった場合は仕様の再確認の合図とし、むやみに更新しません。
     // 準備
     const target = await createOpenedTarget(signal);
-    const input = concatBytes([
-      await target.encode({ data: 1 }),
-      await target.encode({ data: 2 }),
-    ]);
+    const input = concatBytes([await target.encode({ data: 1 }), await target.encode({ data: 2 })]);
 
     // 実行
     const output = await target.decode({ data: input });

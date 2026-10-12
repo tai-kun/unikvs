@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { collectBytes } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -35,7 +36,7 @@ describe("基本操作 (CRUD)", () => {
     // 準備
     const key = "read-test.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const result = await storage.read({ key, signal });
@@ -48,7 +49,7 @@ describe("基本操作 (CRUD)", () => {
   test("存在するキーで確認したとき、true が返される", async ({ expect, signal, storage }) => {
     // 準備
     const key = "exists.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     const result = await storage.exists({ key, signal });
@@ -71,7 +72,7 @@ describe("基本操作 (CRUD)", () => {
   test("キーを削除したとき、存在確認が false になる", async ({ expect, signal, storage }) => {
     // 準備
     const key = "delete-me.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: {} });
+    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
 
     // 実行
     await storage.delete({ key, signal });
@@ -86,8 +87,18 @@ describe("基本操作 (CRUD)", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "file1.txt", data: new Uint8Array([1]), signal, vars: {} });
-    await storage.write({ key: "file2.txt", data: new Uint8Array([2]), signal, vars: {} });
+    await storage.write({
+      key: "file1.txt",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables(),
+    });
+    await storage.write({
+      key: "file2.txt",
+      data: new Uint8Array([2]),
+      signal,
+      vars: new Variables(),
+    });
 
     // 実行
     await storage.clear({ signal });
@@ -103,7 +114,12 @@ describe("基本操作 (CRUD)", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({ key: "argless.txt", data: new Uint8Array([1]), signal, vars: {} });
+    await storage.write({
+      key: "argless.txt",
+      data: new Uint8Array([1]),
+      signal,
+      vars: new Variables(),
+    });
 
     // 実行
     await storage.clear({ signal });
@@ -122,7 +138,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
-    const writable = storage.getWritable({ key, signal, vars: {} });
+    const writable = storage.getWritable({ key, signal, vars: new Variables() });
 
     // 実行
     const writer = writable.getWriter();
@@ -141,7 +157,7 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-read.txt";
     const data = new TextEncoder().encode("Readable Stream Content");
-    await storage.write({ key, data, signal, vars: {} });
+    await storage.write({ key, data, signal, vars: new Variables() });
 
     // 実行
     const result = await collectBytes(storage.getReadable({ key, signal }));

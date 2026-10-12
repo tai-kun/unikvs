@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureRejection } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
@@ -21,7 +22,7 @@ describe("getWritable", () => {
   test("長さの異なる複数のチャンクを順番どおり結合して保存する", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2, 3]));
@@ -36,7 +37,7 @@ describe("getWritable", () => {
   test("close するまで値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
@@ -51,8 +52,8 @@ describe("getWritable", () => {
   test("上書き時も close までは旧値が見える", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    storage.write({ vars: {}, key, data: new Uint8Array([9]) });
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    storage.write({ vars: new Variables(), key, data: new Uint8Array([9]) });
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -67,7 +68,7 @@ describe("getWritable", () => {
   test("空のストリームを close したとき、長さ 0 の値が保存される", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     await writer.close();
@@ -80,7 +81,7 @@ describe("getWritable", () => {
   test("abort したとき値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -97,7 +98,7 @@ describe("getWritable", () => {
   }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: {}, key }).getWriter();
+    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
 
     // 実行
     const error = await captureRejection(
@@ -116,14 +117,14 @@ describe("getWritable", () => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1]) });
-    storage.write({ vars: {}, key: "k2", data: new Uint8Array([2]) });
-    const writer = storage.getWritable({ vars: {}, key: "k1" }).getWriter();
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
+    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([2]) });
+    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
 
     // 実行
     await writer.write(new Uint8Array([9]));
     await writer.close();
-    storage.write({ vars: {}, key: "k3", data: new Uint8Array([3]) });
+    storage.write({ vars: new Variables(), key: "k3", data: new Uint8Array([3]) });
 
     // 検証
     expect(storage.exists({ key: "k2" })).toBe(false);
@@ -141,7 +142,7 @@ describe("getReadable", () => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: {}, key, data });
+    storage.write({ vars: new Variables(), key, data });
 
     // 実行
     const reader = storage.getReadable({ key }).getReader();
@@ -159,14 +160,14 @@ describe("getReadable", () => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
     await storage.open({ signal });
-    storage.write({ vars: {}, key: "k1", data: new Uint8Array([1]) });
-    storage.write({ vars: {}, key: "k2", data: new Uint8Array([2]) });
+    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
+    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([2]) });
     const reader = storage.getReadable({ key: "k1" }).getReader();
     await reader.read();
     reader.releaseLock();
 
     // 実行
-    storage.write({ vars: {}, key: "k3", data: new Uint8Array([3]) });
+    storage.write({ vars: new Variables(), key: "k3", data: new Uint8Array([3]) });
 
     // 検証
     expect(storage.exists({ key: "k2" })).toBe(false);
@@ -179,11 +180,11 @@ describe("getReadable", () => {
   }) => {
     // 準備
     const key = "s1";
-    storage.write({ vars: {}, key, data: new Uint8Array([1, 2]) });
+    storage.write({ vars: new Variables(), key, data: new Uint8Array([1, 2]) });
     const reader = storage.getReadable({ key }).getReader();
 
     // 実行
-    storage.write({ vars: {}, key, data: new Uint8Array([3, 4]) });
+    storage.write({ vars: new Variables(), key, data: new Uint8Array([3, 4]) });
     const { value } = await reader.read();
 
     // 検証
@@ -194,7 +195,7 @@ describe("getReadable", () => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: {}, key, data });
+    storage.write({ vars: new Variables(), key, data });
     const reader = storage.getReadable({ key }).getReader();
 
     // 実行

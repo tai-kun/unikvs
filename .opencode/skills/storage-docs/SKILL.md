@@ -18,8 +18,11 @@ UniKvs のストレージプラグイン（`IStorage` 実装）のドキュメ�
 
 ```md
 ## 概要 [#overview]
+
 ## 使い方 [#usage]
+
 ## データ型 [#data-types]
+
 ## エラー [#errors]
 ```
 
@@ -79,10 +82,10 @@ import UniKvs, { type PlainValue } from "unikvs";
 - `write`・`read` に対応する値の型と、対応していればストリーム（`getWritable`・`getReadable`）のチャンクの型を表で記載します（必須）。入出力の型ではなく、対応するデータ型を書きます。データ型はパッケージに合わせて変えます（例: `@unikvs/memory` は任意の値、`@unikvs/localstorage` は文字列、バイト列専用ストレージは `Uint8Array<ArrayBuffer>`）。
 
 ```md
-| 操作 | 対応するデータ型 |
-| --- | --- |
-| `write`・`read` | 任意の値（文字列・オブジェクトなど） |
-| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+| 操作                                    | 対応するデータ型                     |
+| --------------------------------------- | ------------------------------------ |
+| `write`・`read`                         | 任意の値（文字列・オブジェクトなど） |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>`            |
 ```
 
 - どのようなデータが保存できるのかを箇条書きで説明します（必須）。段落で書かないでください。
@@ -126,13 +129,13 @@ import UniKvs, { type PlainValue } from "unikvs";
 
 型・振る舞い・エラーは `packages/<name>/src` から読み取ります。
 
-| 確認対象 | 読み取り箇所 |
-| --- | --- |
-| クラス名・コンストラクター引数 | クラス定義と `*Options` 型 |
-| `write`・`read`・`exists`・`delete`・`clear` の入出力・同期／非同期 | メソッドシグネチャー |
-| ストリームの対応有無・チャンク型 | `getWritable`・`getReadable` の有無と型 |
-| エラークラス・送出条件 | `errors.ts` と `throw` 箇所（共通エラーは `@unikvs/core`） |
-| `name`・`isOpen`・`open`・`close` の要否、ピア依存 | クラス定義と `package.json` |
+| 確認対象                                                            | 読み取り箇所                                               |
+| ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| クラス名・コンストラクター引数                                      | クラス定義と `*Options` 型                                 |
+| `write`・`read`・`exists`・`delete`・`clear` の入出力・同期／非同期 | メソッドシグネチャー                                       |
+| ストリームの対応有無・チャンク型                                    | `getWritable`・`getReadable` の有無と型                    |
+| エラークラス・送出条件                                              | `errors.ts` と `throw` 箇所（共通エラーは `@unikvs/core`） |
+| `name`・`isOpen`・`open`・`close` の要否、ピア依存                  | クラス定義と `package.json`                                |
 
 ## 検証
 

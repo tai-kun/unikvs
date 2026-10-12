@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import type { ITransformer } from "@unikvs/core";
 import { describe, test as vitest } from "vitest";
 
@@ -38,7 +39,7 @@ describe("encode の値の透過", () => {
   test("encode は vars と signal を変更しない", ({ expect, passthrough }) => {
     // 準備
     const data = { id: 1 };
-    const vars: Record<string, unknown> = { key: "value" };
+    const vars = new Variables({ key: "value" });
     const controller = new AbortController();
     const args: ITransformer.EncodeArgs<{ id: number }> = {
       vars,
@@ -53,7 +54,7 @@ describe("encode の値の透過", () => {
 
     // 検証
     expect(output).toBe(data);
-    expect(vars).toStrictEqual({ key: "value" });
+    expect(vars.toJSON()).toStrictEqual({ key: "value" });
     expect(controller.signal.aborted).toBe(false);
   });
 
@@ -90,7 +91,7 @@ describe("decode の値の透過", () => {
   test("decode は vars と signal を変更しない", ({ expect, passthrough }) => {
     // 準備
     const data = { id: 1 };
-    const vars: Record<string, unknown> = { key: "value" };
+    const vars = new Variables({ key: "value" });
     const controller = new AbortController();
     const args: ITransformer.DecodeArgs<{ id: number }> = {
       vars,
@@ -105,7 +106,7 @@ describe("decode の値の透過", () => {
 
     // 検証
     expect(output).toBe(data);
-    expect(vars).toStrictEqual({ key: "value" });
+    expect(vars.toJSON()).toStrictEqual({ key: "value" });
     expect(controller.signal.aborted).toBe(false);
   });
 

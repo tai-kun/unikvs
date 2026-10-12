@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -42,7 +43,10 @@ describe("フィルターの呼び出し", () => {
     });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "greeting" }, data: "hello" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" }),
+      data: "hello",
+    });
 
     // 検証
     expect(actionArgs).toStrictEqual(["set"]);
@@ -72,7 +76,10 @@ describe("フィルターの呼び出し", () => {
       });
 
       // 実行
-      debug.encode({ vars: { "unikvs:action": value, "unikvs:key": "k" }, data: "d" });
+      debug.encode({
+        vars: new Variables({ "unikvs:action": value, "unikvs:key": "k" }),
+        data: "d",
+      });
 
       // 検証
       expect(records).toHaveLength(0);
@@ -100,7 +107,10 @@ describe("フィルターの呼び出し", () => {
       });
 
       // 実行
-      debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": value }, data: "d" });
+      debug.encode({
+        vars: new Variables({ "unikvs:action": "set", "unikvs:key": value }),
+        data: "d",
+      });
 
       // 検証
       expect(records).toHaveLength(0);
@@ -121,7 +131,10 @@ describe("フィルターの呼び出し", () => {
     });
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "k" }, data: "d" });
+    debug.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
+      data: "d",
+    });
 
     // 検証
     expect(records).toHaveLength(0);
@@ -145,7 +158,10 @@ describe("フィルターの呼び出し", () => {
       });
 
       // 実行
-      debug.encode({ vars: { "unikvs:action": "set", "unikvs:key": "k" }, data: "d" });
+      debug.encode({
+        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
+        data: "d",
+      });
 
       // 検証
       expect(records).toHaveLength(0);
@@ -158,7 +174,7 @@ describe("フィルターの呼び出し", () => {
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: { "unikvs:action": "", "unikvs:key": "" }, data: "d" });
+    debug.encode({ vars: new Variables({ "unikvs:action": "", "unikvs:key": "" }), data: "d" });
 
     // 検証
     expect(records).toHaveLength(1);
@@ -189,10 +205,22 @@ describe("既定のフィルターとコールバック", () => {
     });
 
     // 実行
-    first.encode({ vars: { "unikvs:action": "set", "unikvs:key": "second" }, data: "a" });
-    second.encode({ vars: { "unikvs:action": "set", "unikvs:key": "first" }, data: "b" });
-    first.encode({ vars: { "unikvs:action": "set", "unikvs:key": "first" }, data: "c" });
-    second.encode({ vars: { "unikvs:action": "set", "unikvs:key": "second" }, data: "d" });
+    first.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "second" }),
+      data: "a",
+    });
+    second.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "first" }),
+      data: "b",
+    });
+    first.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "first" }),
+      data: "c",
+    });
+    second.encode({
+      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "second" }),
+      data: "d",
+    });
 
     // 検証
     expect(records).toHaveLength(2);

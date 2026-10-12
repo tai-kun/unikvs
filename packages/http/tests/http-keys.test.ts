@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { captureRejection } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
@@ -28,13 +29,17 @@ describe("キーの符号化", () => {
         key,
         data: new Uint8Array([index]),
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       });
     }
 
     // 検証
     for (const [index, key] of keys.entries()) {
-      const result = await storage.read({ key, signal: AbortSignal.timeout(5_000), vars: {} });
+      const result = await storage.read({
+        key,
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      });
       expect(result).toStrictEqual(new Uint8Array([index]));
     }
   });
@@ -49,7 +54,7 @@ describe("キーの符号化", () => {
       key: "a/b:c",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -67,7 +72,7 @@ describe("キーの符号化", () => {
       key: "a.b",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -86,14 +91,14 @@ describe("キーの符号化", () => {
       key: "",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
     expect(calls[0]?.url).toBe(`${baseUrl}/${encodeURIComponent("unikvs:")}`);
     expect(calls[0]?.url).not.toContain("?prefix=");
     expect(
-      await storage.read({ key: "", signal: AbortSignal.timeout(5_000), vars: {} }),
+      await storage.read({ key: "", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     ).toStrictEqual(new Uint8Array([1]));
   });
 
@@ -108,7 +113,7 @@ describe("キーの符号化", () => {
         key: "\uD800",
         data: new Uint8Array([1]),
         signal: AbortSignal.timeout(5_000),
-        vars: {},
+        vars: new Variables({}),
       }),
     );
 
@@ -125,7 +130,7 @@ describe("キーの符号化", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "\uD800", signal: AbortSignal.timeout(5_000), vars: {} }),
+      storage.read({ key: "\uD800", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
     );
 
     // 検証

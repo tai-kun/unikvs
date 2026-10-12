@@ -33,16 +33,36 @@ To build your own, implement `ITransformer`. See the API reference for detailed 
 
 ## Variables [#variables]
 
-You can pass runtime settings that change operation behavior. Pass them per operation with `vars`.
+You can pass runtime settings that change operation behavior. Pass them per operation with `vars`. `Variables` is a Map-like class.
 
 ```ts
-import type { Variables } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 
-const vars: Variables = {
+const vars = Variables.from({
   locale: "en",
   retryCount: 3,
-};
+});
+
+vars.set("traceId", "xxx");
+vars.get("locale");
+vars.setReadonly("tenant", "acme");
 ```
+
+Operation input accepts a `Record`, `Map`, entry array, or `Variables`. Inputs are normalized with `Variables.from`.
+
+See the table below when migrating from the old `Record<string, unknown>`.
+
+| Old                        | New                                                           |
+| -------------------------- | ------------------------------------------------------------- |
+| `vars.foo` / `vars["foo"]` | `vars.get("foo")`                                             |
+| `vars.foo = value`         | `vars.set("foo", value)`                                      |
+| `{ ...vars, a: 1 }`        | `vars.clone().set("a", 1)`                                    |
+| `Object.entries(vars)`     | `[...vars.entries()]` / `vars.toObject()`                     |
+| Literal input              | `Variables.from(input)` (`Record` is still accepted as input) |
+
+:::note
+`unikvs:*` keys are reserved. Do not set them yourself. UniKvs assigns and overwrites them per operation.
+:::
 
 ## Errors [#errors]
 
@@ -50,14 +70,15 @@ All UniKVS errors extend `ErrorBase` and support Japanese and English messages. 
 
 ### Shared errors [#errors-common]
 
-| Error class | Description |
-| --- | --- |
-| `KeyNotFoundError` | The key was not found, for example when reading a missing key. Re-exported from each storage package. |
-| `UnsupportedRuntimeError` | Used on an unsupported runtime, for example when opening a Bun-only storage on Node.js. |
-| `InvalidPartSizeError` | The part size for multipart upload is invalid. |
-| `StorageAbortedError` | A writable stream was requested with an already aborted signal. |
-| `RepairNotAllowedError` | A repair write to a storage that does not allow it. |
-| `InvalidUsageErrorBase` | Base class for errors caused by incorrect usage. |
+| Error class               | Description                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `KeyNotFoundError`        | The key was not found, for example when reading a missing key. Re-exported from each storage package. |
+| `UnsupportedRuntimeError` | Used on an unsupported runtime, for example when opening a Bun-only storage on Node.js.               |
+| `InvalidPartSizeError`    | The part size for multipart upload is invalid.                                                        |
+| `StorageAbortedError`     | A writable stream was requested with an already aborted signal.                                       |
+| `RepairNotAllowedError`   | A repair write to a storage that does not allow it.                                                   |
+| `ReadonlyVariableError`   | Tried to modify a readonly variable. `meta.key` holds the key.                                        |
+| `InvalidUsageErrorBase`   | Base class for errors caused by incorrect usage.                                                      |
 
 ```ts
 import { KeyNotFoundError } from "@unikvs/core";

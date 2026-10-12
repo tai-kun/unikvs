@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { bytesEqual, collectBytes } from "@unikvs/testing";
 import { forCasesAsync, type Random } from "@unikvs/testing";
 import { isValidFilename } from "@unikvs/utils";
@@ -63,7 +64,7 @@ describe("プロパティベース検証", () => {
       const data = random.bytes(random.int(0, 4096));
 
       // 実行
-      await storage.write({ key, data, signal, vars: {} });
+      await storage.write({ key, data, signal, vars: new Variables() });
       const result = await storage.read({ key, signal });
 
       // 検証
@@ -100,7 +101,9 @@ describe("プロパティベース検証", () => {
       }
 
       // 実行
-      const writer = (await storage.getWritable({ key, signal, vars: {} })).getWriter();
+      const writer = (
+        await storage.getWritable({ key, signal, vars: new Variables() })
+      ).getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
@@ -129,7 +132,12 @@ describe("プロパティベース検証", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            await storage.write({ key: operation.key, data: operation.data, signal, vars: {} });
+            await storage.write({
+              key: operation.key,
+              data: operation.data,
+              signal,
+              vars: new Variables(),
+            });
             model.set(operation.key, operation.data);
             break;
           }

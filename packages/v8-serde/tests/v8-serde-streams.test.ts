@@ -375,7 +375,10 @@ describe("ストリームの異常系", () => {
     // 準備
     const target = await createOpenedTarget(signal);
     const frame = await encodeFrame(target, { a: 1 });
-    const input = concatBytes([await encodeFrame(target, 1), frame.subarray(0, frame.byteLength - 1)]);
+    const input = concatBytes([
+      await encodeFrame(target, 1),
+      frame.subarray(0, frame.byteLength - 1),
+    ]);
 
     // 実行
     const decoded = await pumpThrough(await target.getDecodable(), [input]);

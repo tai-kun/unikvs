@@ -16,11 +16,11 @@ const kvs = UniKvs.config<{
   .create();
 ```
 
-| Type | `set` | `get` | `stream` |
-| --- | --- | --- | --- |
-| `PlainValue<T>` | Supported. | Supported. | Not supported. |
-| `StreamValue<T>` | Supports values or streams. | Not supported. | Supported. |
-| `Value<T>` | Supports values or streams. | Supported. | Supported. |
+| Type             | `set`                       | `get`          | `stream`       |
+| ---------------- | --------------------------- | -------------- | -------------- |
+| `PlainValue<T>`  | Supported.                  | Supported.     | Not supported. |
+| `StreamValue<T>` | Supports values or streams. | Not supported. | Supported.     |
+| `Value<T>`       | Supports values or streams. | Supported.     | Supported.     |
 
 When `schema` is specified, each chunk is validated. Bad write chunks are reported as `PluginOperationAggregateError` containing `InvalidInputError`, and bad read chunks are reported as `InvalidOutputError`.
 
@@ -35,6 +35,7 @@ You can pass either a plain value or a `ReadableStream`.
     ```ts
     await kvs.set("logs", new Uint8Array([1, 2, 3]));
     ```
+
   </Step>
   <Step title="Save with a stream">
     Pass a `ReadableStream` to write large data incrementally.
@@ -49,6 +50,7 @@ You can pass either a plain value or a `ReadableStream`.
     });
     await kvs.set("logs", src);
     ```
+
   </Step>
 </Steps>
 
@@ -70,6 +72,7 @@ You can pass either a plain value or a `ReadableStream`.
       console.log(value);
     }
     ```
+
   </Tab>
   <Tab title="for-await">
     Use for concise code.
@@ -79,6 +82,7 @@ You can pass either a plain value or a `ReadableStream`.
       console.log(chunk);
     }
     ```
+
   </Tab>
   <Tab title="await-using">
     Use for automatic release of the read lock.
@@ -90,6 +94,7 @@ You can pass either a plain value or a `ReadableStream`.
       console.log(value);
     }
     ```
+
   </Tab>
 </Tabs>
 

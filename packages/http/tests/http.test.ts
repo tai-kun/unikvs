@@ -1,3 +1,4 @@
+import { Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -34,7 +35,7 @@ describe("初期化と接続管理", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -53,12 +54,12 @@ describe("基本操作（CRUD）", () => {
       key: "k1",
       data: new Uint8Array([1, 2, 3]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     const result = await storage.read({
       key: "k1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -73,14 +74,14 @@ describe("基本操作（CRUD）", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
     const result = await storage.exists({
       key: "k1",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -96,7 +97,7 @@ describe("基本操作（CRUD）", () => {
     const result = await storage.exists({
       key: "none",
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 検証
@@ -111,16 +112,24 @@ describe("基本操作（CRUD）", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    await storage.delete({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.delete({
+      key: "k1",
+      signal: AbortSignal.timeout(5_000),
+      vars: new Variables({}),
+    });
 
     // 検証
-    expect(await storage.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
+    expect(
+      await storage.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
   });
 
   test("全データを消去したとき、すべてのキーが存在しなくなる", async ({ expect }) => {
@@ -131,24 +140,32 @@ describe("基本操作（CRUD）", () => {
       key: "k1",
       data: new Uint8Array([1]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
     await storage.write({
       key: "k2",
       data: new Uint8Array([2]),
       signal: AbortSignal.timeout(5_000),
-      vars: {},
+      vars: new Variables({}),
     });
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: {} });
+    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
 
     // 検証
-    expect(await storage.exists({ key: "k1", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
-    expect(await storage.exists({ key: "k2", signal: AbortSignal.timeout(5_000), vars: {} })).toBe(
-      false,
-    );
+    expect(
+      await storage.exists({
+        key: "k1",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
+    expect(
+      await storage.exists({
+        key: "k2",
+        signal: AbortSignal.timeout(5_000),
+        vars: new Variables({}),
+      }),
+    ).toBe(false);
   });
 });
