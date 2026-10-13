@@ -31,19 +31,21 @@ import UniKvsConfig, {
   type PlainValue,
   type StreamValue,
   type UniKvsSchema,
-  type KeyValueMapping,
   type ValueSchemaInfo,
-  type IUniKvsBranch,
   type UniKvsConfigOptions,
   type $InferPlainValueData,
   type IUniKvsConfigBuilder,
   type IValueSchemaResolver,
-  type KeyofKeyValueMapping,
   type $InferKeyValueMapping,
   type $InferPlainValueInput,
   type $InferStreamValueChunkData,
-  UniKvsBranch,
 } from "./unikvs-config.js";
+import {
+  UniKvsBranch,
+  type IUniKvsBranch,
+  type KeyValueMapping,
+  type KeyofKeyValueMapping,
+} from "./unikvs-branch.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
 
