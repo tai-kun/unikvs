@@ -45,3 +45,27 @@ export function isWritableStream(input: unknown): input is IWritableStream {
     typeof stream.close === "function"
   );
 }
+
+/**
+ * ストリームの重複を除いてキャンセルします。
+ *
+ * 個々のキャンセルに失敗しても無視し、元の例外を優先して伝えます。
+ *
+ * @param streams キャンセルするストリームです。
+ * @param reason キャンセル理由です。
+ */
+export async function cancelStreams(
+  streams: Iterable<{ cancel(reason?: unknown): Promise<void> }>,
+  reason: unknown,
+): Promise<void> {
+  // 同じ参照は 1 回だけキャンセルします。
+  await Promise.all(
+    [...new Set(streams)].map(async (stream) => {
+      try {
+        await stream.cancel(reason);
+      } catch {
+        // キャンセルに失敗しても元の例外の伝播を優先します。
+      }
+    }),
+  );
+}

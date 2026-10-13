@@ -8,6 +8,7 @@ import type {
 } from "@unikvs/core";
 import { Variables } from "@unikvs/core";
 
+import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
@@ -837,6 +838,7 @@ export class UniKvsBranch {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public persist(storage: IStorage): this {
+    // 登録時点のチェーンをスナップショットして保持するため、以降の transform はこの登録に影響しません。
     this.#destinations.push({ storage, transformers: [...this.#transformers] });
 
     return this;
@@ -852,8 +854,7 @@ export class UniKvsBranch {
 
     const subDestinations = branch._getDestinationsForFork();
 
-    // 自前の接頭辞を付加して解決済みにします。
-    // 末尾未使用トランスフォーマーは破棄します。
+    // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
     const prefix = [...this.#transformers];
     for (const dest of subDestinations) {
       this.#destinations.push({
@@ -877,38 +878,12 @@ export class UniKvsBranch {
     readonly storage: IStorage;
     readonly transformers: readonly ITransformer[];
   }[] {
+    // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。
     return this.#destinations.map((dest) => ({
       storage: dest.storage,
       transformers: [...dest.transformers],
     }));
   }
-}
-
-// 最長共通 prefix 長を算出します。
-// 比較は共有後のインスタンス同一性で行います。
-// 構造同一性は判定しません。
-function commonPrefixLength(
-  destinations: readonly { readonly transformers: readonly UniKvsTransformer[] }[],
-): number {
-  if (destinations.length === 0) {
-    return 0;
-  }
-  const first = destinations[0]!.transformers;
-  let prefixLength = first.length;
-  for (const dest of destinations.slice(1)) {
-    const transformers = dest.transformers;
-    prefixLength = Math.min(prefixLength, transformers.length);
-    for (let i = 0; i < prefixLength; i++) {
-      if (transformers[i] !== first[i]) {
-        prefixLength = i;
-        break;
-      }
-    }
-    if (prefixLength === 0) {
-      break;
-    }
-  }
-  return prefixLength;
 }
 
 /**
@@ -920,12 +895,19 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   readonly #UniKvs: typeof UniKvs;
 
-  // 登録済みストレージと各登録時点のパイプラインのスナップショットです。
-  #destinations: { readonly storage: IStorage; readonly transformers: ITransformer[] }[];
+  /**
+   * 登録済みストレージと各登録時点のパイプラインのスナップショットです。
+   */
+  readonly #destinations: {
+    readonly storage: IStorage;
+    readonly transformers: ITransformer[];
+  }[];
 
-  // 現在のメインのパイプラインです。
-  // 登録順に保持します。
-  #transformers: ITransformer[];
+  /**
+   * 現在のメインのパイプラインです。
+   * 登録順に保持します。
+   */
+  readonly #transformers: ITransformer[];
 
   // キーに対応する値のスキーマ情報を解決するリゾルバーです。
   #valueSchemaResolver: IValueSchemaResolver | null;
@@ -934,12 +916,15 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions) {
-    const [parsed = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
+    const [{ schema } = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
 
     this.#UniKvs = UniKvsConstructor;
     this.#destinations = [];
     this.#transformers = [];
-    this.#valueSchemaResolver = parsed.schema ? createValueSchemaResolver(parsed.schema) : null;
+    this.#valueSchemaResolver = null;
+    if (schema) {
+      this.#valueSchemaResolver = createValueSchemaResolver(schema);
+    }
   }
 
   /**
@@ -955,47 +940,23 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
       }
       return w;
     };
+
+    // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
+    if (this.#destinations.length === 0) {
+      throw new MissingStorageError();
+    }
+
+    // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
+    // 同じトランスフォーマーインスタンスに対するラッパーは共有します。
     const destinations = this.#destinations.map(({ storage, transformers }) => ({
       storage: new UniKvsStorage(storage),
       transformers: transformers.map(wrap),
     }));
-    const [first, ...rest] = destinations;
-
-    // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
-    if (!first) {
-      throw new MissingStorageError();
-    }
-
-    // 登録済みストレージのチェーンに含まれるトランスフォーマーのみを保持します。
-    // 末尾未使用トランスフォーマーは破棄します。
-    // 分岐側の `fork` と整合させます。
-    const allTransformers: UniKvsTransformer[] = [];
-    for (const dest of destinations) {
-      for (const tf of dest.transformers) {
-        if (!allTransformers.includes(tf)) {
-          allTransformers.push(tf);
-        }
-      }
-    }
-
-    // 書き戻しの許可を宛先単位で判定します。
-    // 全体スコープの判定は行いません。
-    const repairFlags: readonly boolean[] = this.#destinations.map(({ transformers }) =>
-      transformers.some((tf) => tf.name === "AllowRepair"),
-    );
-
-    // 全宛先の最長共通 prefix を共有実行用に算出します。
-    // 名簿は実行時に都度生成するため保持しません。
-    const prefixLength = commonPrefixLength(destinations);
-    const prefixTransformers = destinations[0]?.transformers.slice(0, prefixLength) ?? [];
 
     return new this.#UniKvs(
       new Variables(),
-      [first, ...rest],
-      allTransformers,
+      PipelineGraph.compile(destinations),
       this.#valueSchemaResolver,
-      repairFlags,
-      { prefixLength, prefixTransformers },
     );
   }
 
@@ -1012,7 +973,11 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public persist(storage: IStorage): this {
-    this.#destinations.push({ storage, transformers: [...this.#transformers] });
+    this.#destinations.push({
+      storage,
+      // 登録時点のチェーンをスナップショットして保持するため、以降の transform はこの登録に影響しません。
+      transformers: [...this.#transformers],
+    });
 
     return this;
   }
@@ -1025,8 +990,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
       throw new TypeError("fork() expects a branch created by UniKvs.branch().");
     }
 
-    // 非公開メソッドへの同一ファイルからの参照です。
-    // 型可視性を回避するために構造型へ変換します。
+    // private メソッドを構造型経由で呼び出します。型の可視性制限を回避するためです。
     const subDestinations = (
       branch as unknown as {
         _getDestinationsForFork(): readonly {
@@ -1036,8 +1000,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
       }
     )._getDestinationsForFork();
 
-    // fork 時点の親パイプラインを接頭辞として付加します。
-    // ブランチの末尾未使用トランスフォーマーは破棄します。
+    // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
     const prefix = [...this.#transformers];
     for (const dest of subDestinations) {
       this.#destinations.push({

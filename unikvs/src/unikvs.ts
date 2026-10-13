@@ -10,10 +10,14 @@ import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import { logger, repairLogger } from "./_logger.js";
-import UniKvsStorage from "./_storage.js";
-import { isReadableStream } from "./_streams.js";
+import {
+  PipelineGraph,
+  type PipelineLeaf,
+  type ResolvedLeaf,
+  type StreamEncodeTarget,
+} from "./_pipeline-graph.js";
+import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
-import UniKvsTransformer from "./_transformer.js";
 import * as v from "./_valibot.js";
 import {
   type KeyNotFoundErrorArgs,
@@ -132,49 +136,6 @@ function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
 
   return v.parseInput(info.schema, value);
 }
-
-// 指定されたストリームをすべてキャンセルします。
-async function cancelAllBranches(
-  streams: Iterable<{ cancel(reason?: unknown): Promise<void> }>,
-  reason: unknown,
-): Promise<void> {
-  await Promise.all(
-    [...new Set(streams)].map(async (stream) => {
-      try {
-        await stream.cancel(reason);
-      } catch {
-        // キャンセルに失敗しても元の例外の伝播を優先します。
-      }
-    }),
-  );
-}
-
-// 凍結したストレージ名簿を作ります。`Object.freeze` の配列複写を集約します。
-function frozenNames(names: readonly string[]): readonly string[] {
-  return Object.freeze([...names]);
-}
-
-// 宛先単位・共有実行用の vars を生成します。
-// 単一ストレージ名と複数ストレージ名の両方を受け付けます。
-// prefix 実行後の vars から分岐する場合も同じ関数を使い、prefix の mutate を引き継ぎます。
-// 呼び出し側が順序を保証します。
-// 空配列では呼び出しません。P=0 の多宛先では呼び出し側で遅延生成します。
-function withStorageNames(vars: Variables, name: string): Variables;
-function withStorageNames(vars: Variables, names: readonly string[]): Variables;
-function withStorageNames(vars: Variables, nameOrNames: string | readonly string[]): Variables {
-  const cloned = vars.clone({
-    "unikvs:storageNames": frozenNames(
-      typeof nameOrNames === "string" ? [nameOrNames] : nameOrNames,
-    ),
-  });
-  if (!cloned.isReadonly("unikvs:storageNames")) {
-    cloned.setReadonly("unikvs:storageNames", cloned.get("unikvs:storageNames"));
-  }
-  return cloned;
-}
-
-// 値変換と同じループでキーの写像を順に適用するため、単独の事前解決ヘルパーを持ちません。
-// 各呼び出し点でチェーンを 1 回走査し、値操作と同じ vars で mapKey を適用します。
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -480,9 +441,8 @@ const ioLockRegistry =
           held.lock.release();
         }
 
-        // valueStream が読み取られないまま GC されたとき、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するために破棄します。
-        // dispose は valueStream 自身を参照しないため、これを保持しても valueStream のガベージコレクションを妨げません。
-        // 失敗しても対処できないので無視します。
+        // GC で回収された ValueStream のロックを解放し、ソースのリソースも破棄します。
+        // dispose は valueStream を参照しないため、GC を妨げません。失敗したときはログに残すだけにします。
         held.dispose().catch((ex) => {
           logger.error`Failed to dispose value stream: ${ex}`;
         });
@@ -516,19 +476,29 @@ type Connection = {
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ * プラグイン操作の失敗を集約するための 1 件分の記録です。
  */
-export type UniKvsDestination = {
+type PluginErrorRecord = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   * 失敗したプラグインの名前です。
    */
-  readonly storage: UniKvsStorage;
+  readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   * 宛先またはプラグインの登録順 (0 起点) です。
    */
-  readonly transformers: readonly UniKvsTransformer[];
+  readonly index: number;
+
+  /**
+   * 失敗の理由です。
+   */
+  readonly reason: unknown;
 };
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ */
+export type UniKvsDestination = PipelineLeaf;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
@@ -561,7 +531,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public static branch(): IUniKvsBranch {
-    return new UniKvsBranch() as unknown as IUniKvsBranch;
+    return new UniKvsBranch();
   }
 
   /**
@@ -577,14 +547,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #vars: Variables;
 
   /**
-   * データの永続化先となるストレージと前段パイプラインのリストです。
+   * コンパイル済みのパイプライン・グラフです。
    */
-  readonly #destinations: readonly [UniKvsDestination, ...UniKvsDestination[]];
-
-  /**
-   * データの変換を行うトランスフォーマーのリストです。open/close の管理用に全件を保持します。
-   */
-  readonly #transformers: readonly UniKvsTransformer[];
+  readonly #pipeline: PipelineGraph;
 
   /**
    * キーに対応する値のスキーマ情報を解決するリゾルバーです。スキーマ未設定時は null となります。
@@ -592,45 +557,18 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
   /**
-   * 宛先ごとの書き戻し許可です。create 時に確定します。
-   */
-  readonly #repairFlags: readonly boolean[];
-
-  /**
-   * 共有 prefix の長さです。create 時に確定します。
-   */
-  readonly #prefixLength: number;
-
-  /**
-   * 共有 prefix のトランスフォーマーです。create 時に確定します。
-   */
-  readonly #prefixTransformers: readonly UniKvsTransformer[];
-
-  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public constructor(
     vars: VariablesInit,
-    destinations: readonly [UniKvsDestination, ...UniKvsDestination[]],
-    transformers: readonly UniKvsTransformer[],
+    pipeline: PipelineGraph,
     valueSchemaResolver: IValueSchemaResolver | null = null,
-    repairFlags: readonly boolean[] = [],
-    shared:
-      | {
-          readonly prefixLength: number;
-          readonly prefixTransformers: readonly UniKvsTransformer[];
-        }
-      | undefined,
   ) {
     this.#con = null;
     this.#acSet = new Set();
     this.#vars = new Variables(vars);
-    this.#destinations = destinations;
-    this.#transformers = transformers;
+    this.#pipeline = pipeline;
     this.#valueSchemaResolver = valueSchemaResolver;
-    this.#repairFlags = [...repairFlags];
-    this.#prefixLength = shared?.prefixLength ?? 0;
-    this.#prefixTransformers = shared?.prefixTransformers ?? [];
   }
 
   /**
@@ -644,14 +582,31 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * 指定した宛先の書き戻し許可を判定します。
+   * すべての宛先で読み取りに失敗したときのエラーを組み立てます。
    *
-   * @param dest 判定する宛先です。
-   * @returns 許可されている場合は `true` を返します。
+   * @param key 読み取ったキーです。
+   * @param errors 収集した失敗です。
+   * @returns `KeyNotFoundError` を返します。
    */
-  #canRepair(dest: UniKvsDestination): boolean {
-    const index = this.#destinations.indexOf(dest);
-    return this.#repairFlags[index] === true;
+  #notFound(key: string, errors: readonly PluginErrorRecord[]): KeyNotFoundError {
+    const args: KeyNotFoundErrorArgs = { key };
+    switch (errors.length) {
+      case 0:
+        break;
+
+      case 1:
+        args.cause = errors[0]!.reason;
+        break;
+
+      default:
+        args.cause = new PluginOperationAggregateError({
+          plugin: "storage",
+          action: "read",
+          errors,
+        });
+    }
+
+    return new KeyNotFoundError(args);
   }
 
   /**
@@ -701,33 +656,31 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         index: number,
       ][] = [];
 
-      // 各ストレージのオープン処理をリストに追加します。
-      // open/close の vars は並列プラグイン間で共有しません。ある storage の mutate が
-      // 並列中の別 plugin に非決定的に見えるのを避けるため、宛先単位に clone して渡します。
+      // open/close 用の vars はプラグインごとに複製し、並列実行中の変更が他に見えないようにします。
       // lifecycle は宛先固有ではないため unikvs:storageNames は付与しません。
-      for (const [index, { storage }] of this.#destinations.entries()) {
+      for (const [index, leaf] of this.#pipeline.leaves.entries()) {
         openFns.push([
           async () => {
             const pluginVars = vars.clone();
-            await storage.open(pluginVars, signal);
+            await leaf.storage.open(pluginVars, signal);
 
             dispose.push(async () => {
               try {
-                await storage.close(pluginVars, signal);
+                await leaf.storage.close(pluginVars, signal);
               } catch (ex) {
                 logger.error`Failed to close storage: ${ex}`;
               }
             });
           },
           "storage",
-          storage.name,
+          leaf.name,
           index,
         ]);
       }
 
       // 各トランスフォーマーのオープン処理をリストに追加します。
-      // ストレージと同様に plugin 単位に clone し、相互の mutate を分離します。
-      for (const [index, transformer] of this.#transformers.entries()) {
+      // ストレージと同様にプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
+      for (const [index, transformer] of this.#pipeline.transformers.entries()) {
         openFns.push([
           async () => {
             const pluginVars = vars.clone();
@@ -764,7 +717,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }),
       );
       if (errors.length > 0) {
-        // 中断以外の失敗が混在しない場合は、abort 理由が集約エラーに埋もれないようにそのまま投げます。
+        // 中断以外の失敗が混ざっていないときは、abort 理由が集約エラーに埋もれないようそのまま投げます。
         if (signal.aborted && errors.every((error) => error.reason === signal.reason)) {
           throw signal.reason;
         }
@@ -773,7 +726,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       // すべてのプラグインのオープンが成功した後も、待機中に中断されていないか最終確認します。
-      // 中断済みのシグナルを持つ接続を作成すると、isOpen が true でありながら以降のすべての操作が即座に失敗する壊れた状態になります。
+      // 中断済みのシグナルを持つ接続を作ると、isOpen が true なのに以降の操作がすべて即座に失敗する不整合な状態になります。
       signal.throwIfAborted();
 
       this.#con = {
@@ -815,20 +768,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         ][] = [];
 
         // ストレージのクローズ処理を登録します。
-        // open と同じ方針で plugin 単位に clone し、並列中の相互可視を分離します。
-        for (const [index, { storage }] of this.#destinations.entries()) {
+        // open と同じ方針でプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
+        for (const [index, leaf] of this.#pipeline.leaves.entries()) {
           closeFns.push([
             async () => {
-              await storage.close(vars.clone(), signal);
+              await leaf.storage.close(vars.clone(), signal);
             },
             "storage",
-            storage.name,
+            leaf.name,
             index,
           ]);
         }
 
         // トランスフォーマーのクローズ処理を登録します。
-        for (const [index, plugin] of this.#transformers.entries()) {
+        for (const [index, plugin] of this.#pipeline.transformers.entries()) {
           closeFns.push([
             async () => {
               await plugin.close(vars.clone(), signal);
@@ -904,22 +857,23 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       return this.#close(vars, signal, con).catch(async (ex) => {
-        // #close が失敗した場合、コネクションの AbortController はすでに abort 済みであり、以降の操作がすべて即座に失敗する壊れた状態になります。
-        // そこで接続を破棄して isOpen=false の一貫した状態にし、ベストエフォートでプラグインのクローズ処理を実行します。
+        // #close が失敗した場合、コネクションの AbortController はすでに abort 済みで、以降の操作がすべて即座に失敗する不整合な状態になります。
+        // そこで接続を破棄して isOpen=false の一貫した状態に戻し、プラグインのクローズ処理はできる範囲で実行します。
         if (this.#con === con) {
           this.#con = null;
 
           const disposeSignal = AbortSignal.timeout(10e3);
           await Promise.all(
-            [...this.#destinations.map((dest) => dest.storage), ...this.#transformers].map(
-              async (plugin) => {
-                try {
-                  await plugin.close(vars.clone(), disposeSignal);
-                } catch (ex) {
-                  logger.error`Failed to close plugin after close failure: ${ex}`;
-                }
-              },
-            ),
+            [
+              ...this.#pipeline.leaves.map((leaf) => leaf.storage),
+              ...this.#pipeline.transformers,
+            ].map(async (plugin) => {
+              try {
+                await plugin.close(vars.clone(), disposeSignal);
+              } catch (ex) {
+                logger.error`Failed to close plugin after close failure: ${ex}`;
+              }
+            }),
           );
         }
 
@@ -941,6 +895,153 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     await this.close({
       signal: AbortSignal.timeout(10e3),
     });
+  }
+
+  /**
+   * 書き込み失敗の集約と、成功した宛先への通知を行います。
+   *
+   * @param targets 書き込みを試みた対象です。
+   * @param failed 失敗した葉の集合です。
+   * @param errors 集約する失敗です。
+   * @param signal 中断シグナルです。
+   */
+  async #finishWrites(
+    targets: readonly {
+      readonly leaf: PipelineLeaf;
+      readonly vars: Variables;
+      readonly key: string;
+    }[],
+    failed: ReadonlySet<PipelineLeaf>,
+    errors: PluginErrorRecord[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (errors.length === 0) {
+      return;
+    }
+
+    const error = new PluginOperationAggregateError({
+      plugin: "storage",
+      action: "write",
+      errors,
+    });
+    const notifyErrors: unknown[] = [];
+    await Promise.all(
+      targets.map(async (target) => {
+        // 失敗した宛先を除いたすべての宛先へ通知します。通知に失敗しても元の集約エラーは置き換えません。
+        if (failed.has(target.leaf)) {
+          return;
+        }
+
+        try {
+          await target.leaf.storage.onOtherWriteError(target.vars, signal, target.key, error);
+        } catch (ex) {
+          notifyErrors.push(ex);
+        }
+      }),
+    );
+    if (notifyErrors.length > 0) {
+      logger.error(new AggregateError(notifyErrors, "Failed to handle error"));
+    }
+
+    throw error;
+  }
+
+  /**
+   * プレーン値の並列書き込みを行います。
+   *
+   * @param io 多重化インスタンスです。
+   * @param signal 中断シグナルです。
+   * @param key 書き込みキーです。
+   * @param rootVars 根の vars です。
+   * @param value 書き込む値です。
+   */
+  async #setPlain(
+    io: Asyncmux,
+    signal: AbortSignal,
+    key: string,
+    rootVars: Variables,
+    value: unknown,
+  ): Promise<void> {
+    const targets = await this.#pipeline.encode(rootVars, key, signal, value);
+    const lock = await io.lock({ key, signal });
+    try {
+      const errors: PluginErrorRecord[] = [];
+      const failed = new Set<PipelineLeaf>();
+      await Promise.all(
+        targets.map(async (target) => {
+          try {
+            await target.leaf.storage.write(target.vars, signal, target.key, target.data);
+          } catch (ex) {
+            errors.push({ name: target.leaf.name, index: target.leaf.index, reason: ex });
+            failed.add(target.leaf);
+          }
+        }),
+      );
+
+      await this.#finishWrites(targets, failed, errors, signal);
+    } finally {
+      lock.release();
+    }
+  }
+
+  /**
+   * ストリーム値の並列書き込みを行います。
+   *
+   * @param io 多重化インスタンスです。
+   * @param signal 中断シグナルです。
+   * @param key 書き込みキーです。
+   * @param rootVars 根の vars です。
+   * @param value 書き込むストリームです。
+   */
+  async #setStream(
+    io: Asyncmux,
+    signal: AbortSignal,
+    key: string,
+    rootVars: Variables,
+    value: IReadableStream,
+  ): Promise<void> {
+    const streams = new Set<IReadableStream>([value]);
+    let tree;
+    try {
+      tree = await this.#pipeline.buildEncodeTree(value, rootVars, key, signal, streams);
+    } catch (ex) {
+      await cancelStreams(streams, ex);
+      throw ex;
+    }
+
+    const lock = await io.lock({ key, signal }).catch(async (ex) => {
+      // キーロックの待機中に中断されたときも、構築済みのストリームをキャンセルします。
+      // ソースストリームをロックしたまま残さないためです。
+      await cancelStreams(streams, ex);
+      throw ex;
+    });
+
+    try {
+      const errors: PluginErrorRecord[] = [];
+      const failed = new Set<PipelineLeaf>();
+      await Promise.all(
+        tree.targets.map(async (target) => {
+          try {
+            const w = await target.leaf.storage.getWritable(target.vars, signal, target.key);
+            await target.stream.pipeTo(w, { signal });
+          } catch (ex) {
+            // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
+            try {
+              await target.stream.cancel(ex);
+            } catch {
+              // キャンセルに失敗してもエラー集約を優先します。
+            }
+
+            errors.push({ name: target.leaf.name, index: target.leaf.index, reason: ex });
+            failed.add(target.leaf);
+          }
+        }),
+      );
+
+      await this.#finishWrites(tree.targets, failed, errors, signal);
+    } finally {
+      lock.release();
+    }
   }
 
   /**
@@ -968,6 +1069,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { key, signal: signalOption, vars: varsOption } = options;
 
     const valueSchema = this.#resolveValueSchema(key);
+    // スキーマ検証はロック取得前に済ませ、無効な入力ではロックを取得しません。
     const value = valueSchema ? parseSetValue(valueSchema, options.value) : options.value;
 
     const { ac, io } = this.#con;
@@ -984,355 +1086,46 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const errors: { name: string; index: number; reason: unknown }[] = [];
-      const errorStorageSet = new Set<UniKvsDestination>();
-      const storageKeys: string[] = [];
-      const destNames = this.#destinations.map((dest) => dest.storage.name);
-      const isSingleDest = destNames.length === 1;
-      // 単一宛先では base に直接付与して同一参照を使い回します。
-      if (isSingleDest) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(destNames));
-      }
-      let allDestVars: Variables[] = [];
+      // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
+      const rootVars = this.#pipeline.prepareRootVars(vars);
       if (isReadableStream(value)) {
-        // 共有 prefix を先行して取得します。
-        // P = 0 の多宛先では共有 vars を生成せず、suffix 分岐で base から直接分岐します。
-        const prefixEncodables: TransformStream<any, any>[] = [];
-        let sharedKey = key;
-        const needsPrefix = this.#prefixLength > 0;
-        const streamPrefixVars: Variables | null = !needsPrefix
-          ? null
-          : isSingleDest
-            ? vars
-            : withStorageNames(vars, destNames);
-        if (streamPrefixVars !== null) {
-          const prefixVars = streamPrefixVars;
-          try {
-            for (const transformer of this.#prefixTransformers) {
-              signal.throwIfAborted();
-              const e = await transformer.getEncodable(prefixVars, signal);
-              prefixEncodables.push(e);
-              sharedKey = await transformer.mapKey(prefixVars, signal, sharedKey);
-            }
-          } catch (ex) {
-            // 取得前に分岐を作らないため、ソースを直接解放します。
-            try {
-              await value.cancel(ex);
-            } catch {}
-
-            throw ex;
-          }
-        }
-
-        // prefix のチェーンを 1 本通します。
-        // P = 0 のときは素通しになります。
-        let sharedStream: ReadableStream = value;
-        const prefixPipes: ReadableStream[] = [];
-        for (const e of prefixEncodables) {
-          sharedStream = sharedStream.pipeThrough(e);
-          prefixPipes.push(sharedStream);
-        }
-
-        // suffix 用に分岐します。
-        // 単一宛先のときは tee しません。
-        const count = this.#destinations.length;
-        let raws: ReadableStream[];
-        if (count === 1) {
-          raws = [sharedStream];
-        } else {
-          raws = [];
-          let cur: ReadableStream = sharedStream;
-          for (let i = 0; i < count - 1; i++) {
-            const [branch, rest] = cur.tee();
-            raws.push(branch);
-            cur = rest;
-          }
-          raws.push(cur);
-        }
-
-        const branches: ReadableStream[] = [...raws];
-        // tee の分岐と中間段が保持するソースのリソースを解放するため、全段を保持します。
-        const built = new Set<ReadableStream>([value, ...prefixPipes, ...raws]);
-        // 構築に失敗したときは、パイプが保持するソースのリソースを解放するため、構築済みの分岐をキャンセルします。
-        const cancelBranches = (reason: unknown): Promise<void> => cancelAllBranches(built, reason);
-        // suffix 用 vars を確定します。単一宛先では base を使い回し、複数宛先では prefix の mutate を引き継いで分岐します。
-        if (isSingleDest) {
-          allDestVars = [vars];
-        } else if (streamPrefixVars !== null) {
-          allDestVars = destNames.map((name) => withStorageNames(streamPrefixVars, name));
-        } else {
-          allDestVars = destNames.map((name) => withStorageNames(vars, name));
-        }
-        try {
-          for (let i = 0; i < count; i++) {
-            const dest = this.#destinations[i]!;
-            const destVars = allDestVars[i]!;
-            let pipe: ReadableStream = raws[i]!;
-            let storageKey = sharedKey;
-            for (const transformer of dest.transformers.slice(this.#prefixLength)) {
-              signal.throwIfAborted();
-              const e = await transformer.getEncodable(destVars, signal);
-              pipe = pipe.pipeThrough(e);
-              branches[i] = pipe;
-              built.add(pipe);
-              storageKey = await transformer.mapKey(destVars, signal, storageKey);
-            }
-            storageKeys.push(storageKey);
-          }
-        } catch (ex) {
-          await cancelBranches(ex);
-
-          throw ex;
-        }
-
-        let lock: AsyncmuxLock;
-        try {
-          lock = await io.lock({ key, signal });
-        } catch (ex) {
-          // キーロックの待機中に中断された場合も、構築済みのストリームがソースストリームをロックしたままにしないようにキャンセルします。
-          await cancelBranches(ex);
-
-          throw ex;
-        }
-
-        try {
-          await Promise.all(
-            this.#destinations.map(async (dest, i) => {
-              // tee ブランチはキャンセルされるまで健康なブランチの読み取り分のチャンクを保持し続けるため、失敗時に放棄したブランチを確実にキャンセルできるよう参照を保持します。
-              // 駆動時の prefix に起因する失敗も宛先別に集約します。
-              const branch = branches[i]!;
-              try {
-                const destVars = allDestVars[i]!;
-                const storageKey = storageKeys[i]!;
-                const w = await dest.storage.getWritable(destVars, signal, storageKey);
-                await branch.pipeTo(w, { signal });
-              } catch (ex) {
-                try {
-                  await branch.cancel(ex);
-                } catch {
-                  // キャンセルに失敗してもエラー集約を優先します。
-                }
-
-                errors.push({ name: dest.storage.name, index: i, reason: ex });
-                errorStorageSet.add(dest);
-              }
-            }),
-          );
-        } finally {
-          lock.release();
-        }
+        await this.#setStream(io, signal, key, rootVars, value);
       } else {
-        // 共有 prefix を 1 回だけ実行します。
-        // P = 0 の多宛先では共有 vars を生成せず、suffix 分岐で base から直接分岐します。
-        let shared: unknown = value;
-        let sharedKey = key;
-        const needsPlainPrefix = this.#prefixLength > 0;
-        const plainPrefixVars: Variables | null = !needsPlainPrefix
-          ? null
-          : isSingleDest
-            ? vars
-            : withStorageNames(vars, destNames);
-        if (plainPrefixVars !== null) {
-          const prefixVars = plainPrefixVars;
-          for (const transformer of this.#prefixTransformers) {
-            signal.throwIfAborted();
-            shared = await transformer.encode(prefixVars, signal, shared);
-            sharedKey = await transformer.mapKey(prefixVars, signal, sharedKey);
-          }
-        }
-
-        // 宛先固有の suffix を実行します。
-        if (isSingleDest) {
-          allDestVars = [vars];
-        } else if (plainPrefixVars !== null) {
-          allDestVars = destNames.map((name) => withStorageNames(plainPrefixVars, name));
-        } else {
-          allDestVars = destNames.map((name) => withStorageNames(vars, name));
-        }
-        const encoded: unknown[] = [];
-        for (const [destIndex, dest] of this.#destinations.entries()) {
-          const destVars = allDestVars[destIndex]!;
-          let data: unknown = shared;
-          let storageKey = sharedKey;
-          for (const transformer of dest.transformers.slice(this.#prefixLength)) {
-            signal.throwIfAborted();
-            data = await transformer.encode(destVars, signal, data);
-            storageKey = await transformer.mapKey(destVars, signal, storageKey);
-          }
-          encoded.push(data);
-          storageKeys.push(storageKey);
-        }
-
-        const lock = await io.lock({ key, signal });
-        try {
-          await Promise.all(
-            this.#destinations.map(async (dest, i) => {
-              try {
-                const destVars = allDestVars[i]!;
-                const storageKey = storageKeys[i]!;
-                await dest.storage.write(destVars, signal, storageKey, encoded[i]);
-              } catch (ex) {
-                errors.push({ name: dest.storage.name, index: i, reason: ex });
-                errorStorageSet.add(dest);
-              }
-            }),
-          );
-        } finally {
-          lock.release();
-        }
-      }
-
-      // エラーが発生した場合は集約します。
-      if (errors.length > 0) {
-        const error = new PluginOperationAggregateError({
-          plugin: "storage",
-          action: "write",
-          errors,
-        });
-        {
-          const errors: unknown[] = [];
-          await Promise.all(
-            this.#destinations.map(async (dest, i) => {
-              if (errorStorageSet.has(dest)) {
-                return;
-              }
-
-              try {
-                const destVars = allDestVars[i]!;
-                const storageKey = storageKeys[i]!;
-                await dest.storage.onOtherWriteError(destVars, signal, storageKey, error);
-              } catch (ex) {
-                errors.push(ex);
-              }
-            }),
-          );
-          if (errors.length > 0) {
-            logger.error(new AggregateError(errors, "Failed to handle error"));
-          }
-        }
-
-        throw error;
+        await this.#setPlain(io, signal, key, rootVars, value);
       }
     } finally {
       lock.release();
     }
   }
 
-  // 読み取り元を全デコードして原データに戻します。
-  // 共有 prefix と宛先固有 suffix で再エンコードして書き戻します。
-  async #decodeWithRepair(
+  /**
+   * 読み取り元のチェーン全体を逆順にデコードし、書き戻し対象向けに再エンコードして書き込みます。
+   *
+   * @param data 読み取ったデータです。
+   * @param hit 読み取り元の葉です。
+   * @param missing 読み取りに失敗または不在だった葉です。
+   * @param rootVars 根の vars です。
+   * @param key キーです。
+   * @param signal 中断シグナルです。
+   * @param throwOnRepairDenied 書き戻し拒否をエラーとして投げるかどうかです。
+   * @returns デコード済みの原データを返します。
+   */
+  async #repairPlain(
     data: unknown,
-    transformers: readonly UniKvsTransformer[],
-    sourceVars: Variables,
-    targets: readonly UniKvsDestination[],
-    baseVars: Variables,
-    key: IStorage.Key,
+    hit: ResolvedLeaf,
+    missing: readonly PipelineLeaf[],
+    rootVars: Variables,
+    key: string,
     signal: AbortSignal,
     throwOnRepairDenied: boolean,
   ): Promise<unknown> {
-    // 書き戻しによる書き込みであることが分かるように、書き込み専用の変数を用意します。
-    const repairVars: Variables = baseVars.clone();
+    // unikvs:repair は書き戻しによる書き込みだけを示す目印です。
+    const repairVars: Variables = rootVars.clone();
     repairVars.setReadonly("unikvs:repair", true);
-    const decodeVars: Variables = sourceVars;
-    let raw: unknown = data;
-    for (const transformer of transformers.toReversed()) {
-      raw = await transformer.decode(decodeVars, signal, raw);
-      signal.throwIfAborted();
-    }
 
-    // 共有 prefix を書き戻し対象の一覧で 1 回だけ実行します。
-    // P = 0 のときや対象なしのときは実行しません。
-    let repairShared: unknown = raw;
-    let sharedKey: string = key;
-    let repairPrefixVars: Variables | null = null;
-    if (targets.length > 0 && this.#prefixLength > 0) {
-      repairPrefixVars = withStorageNames(
-        repairVars,
-        targets.map((dest) => dest.storage.name),
-      );
-      try {
-        for (const transformer of this.#prefixTransformers) {
-          signal.throwIfAborted();
-          repairShared = await transformer.encode(repairPrefixVars, signal, repairShared);
-          sharedKey = await transformer.mapKey(repairPrefixVars, signal, sharedKey);
-        }
-      } catch (ex) {
-        // 意図的な中断時は中断理由で失敗します。
-        if (signal.aborted) {
-          throw ex;
-        }
-        if (ex instanceof RepairNotAllowedError) {
-          repairLogger.warn`Failed to repair a storage: ${ex}`;
+    const raw = await this.#pipeline.decode(hit.leaf, hit.vars, signal, data);
 
-          if (throwOnRepairDenied) {
-            throw new RepairNotAllowedError({
-              names: targets.map((dest) => dest.storage.name),
-              cause: ex,
-            });
-          }
-
-          return raw;
-        }
-
-        logger.error`Failed to repair a storage: ${ex}`;
-
-        return raw;
-      }
-    }
-
-    await Promise.all(
-      targets.map(async (dest) => {
-        if (!this.#canRepair(dest)) {
-          // 意図的な中断時はエラーではありません。
-          if (signal.aborted) {
-            return;
-          }
-
-          repairLogger.warn`Skipped repair for a storage without AllowRepair: ${dest.storage.name}`;
-
-          if (throwOnRepairDenied) {
-            throw new RepairNotAllowedError({ names: [dest.storage.name] });
-          }
-
-          return;
-        }
-
-        try {
-          const destRepairVars: Variables =
-            repairPrefixVars !== null
-              ? withStorageNames(repairPrefixVars, dest.storage.name)
-              : withStorageNames(repairVars, dest.storage.name);
-          let repairEncoded: unknown = repairShared;
-          let storageKey = sharedKey;
-          for (const transformer of dest.transformers.slice(this.#prefixLength)) {
-            signal.throwIfAborted();
-            repairEncoded = await transformer.encode(destRepairVars, signal, repairEncoded);
-            storageKey = await transformer.mapKey(destRepairVars, signal, storageKey);
-          }
-
-          await dest.storage.write(destRepairVars, signal, storageKey, repairEncoded);
-        } catch (ex) {
-          // 意図的な中断時はエラーではありません。
-          if (signal.aborted) {
-            return;
-          }
-          if (ex instanceof RepairNotAllowedError) {
-            repairLogger.warn`Failed to repair a storage: ${ex}`;
-
-            if (throwOnRepairDenied) {
-              throw new RepairNotAllowedError({
-                names: [dest.storage.name],
-                cause: ex,
-              });
-            }
-
-            return;
-          }
-
-          logger.error`Failed to repair a storage: ${ex}`;
-        }
-      }),
-    );
+    await this.#pipeline.repair(repairVars, key, signal, missing, throwOnRepairDenied, raw);
 
     signal.throwIfAborted();
 
@@ -1384,80 +1177,50 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const NONE = {};
-      let data: any = NONE;
-      let transformers: readonly UniKvsTransformer[] = [];
-      let sourceVars: Variables | null = null;
-      const missing: UniKvsDestination[] = [];
-      const errors: { name: string; index: number; reason: unknown }[] = [];
-      const getDestNames = this.#destinations.map((dest) => dest.storage.name);
-      const getIsSingle = getDestNames.length === 1;
-      let getDestVarsArr: Variables[];
-      if (getIsSingle) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(getDestNames));
-        getDestVarsArr = [vars];
-      } else {
-        getDestVarsArr = getDestNames.map((name) => withStorageNames(vars, name));
-      }
+      const rootVars = this.#pipeline.prepareRootVars(vars);
 
-      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するために書き込みロックを取得します。
+      let data: unknown = undefined;
+      let hit: ResolvedLeaf | null = null;
+      const missing: PipelineLeaf[] = [];
+      const errors: PluginErrorRecord[] = [];
+
+      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するため、書き込みロックを取得します。
       const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
-        // 各ストレージを巡回し、最初に見つかったデータを取得します。
-        // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const [index, dest] of this.#destinations.entries()) {
-          const destVars = getDestVarsArr[index]!;
-          let storageKey = key;
-          for (const transformer of dest.transformers) {
-            signal.throwIfAborted();
-            storageKey = await transformer.mapKey(destVars, signal, storageKey);
-          }
+        // 登録順が読み取りの優先順です。先頭で見つかればそこで終え、失敗したときは次の宛先を試します。
+        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        for (const leaf of this.#pipeline) {
+          const resolved = await resolver.resolve(leaf);
           try {
-            if (!(await dest.storage.exists(destVars, signal, storageKey))) {
-              missing.push(dest);
+            if (!(await leaf.storage.exists(resolved.vars, signal, resolved.key))) {
+              missing.push(leaf);
               continue;
             }
-            data = await dest.storage.read(destVars, signal, storageKey);
-            transformers = dest.transformers;
-            sourceVars = destVars;
+
+            data = await leaf.storage.read(resolved.vars, signal, resolved.key);
+            hit = resolved;
             break;
           } catch (ex) {
             if (signal.aborted) {
               throw ex;
             }
-            errors.push({ name: dest.storage.name, index, reason: ex });
+
+            errors.push({ name: leaf.name, index: leaf.index, reason: ex });
             logger.error`Failed to read from a storage: ${ex}`;
           }
         }
 
-        if (data === NONE) {
-          const args: KeyNotFoundErrorArgs = { key };
-          switch (errors.length) {
-            case 0:
-              break;
-            case 1:
-              args.cause = errors[0]!.reason;
-              break;
-            default:
-              args.cause = new PluginOperationAggregateError({
-                plugin: "storage",
-                action: "read",
-                errors,
-              });
-          }
-
-          throw new KeyNotFoundError(args);
+        if (hit === null) {
+          throw this.#notFound(key, errors);
         }
 
         if (repair) {
-          // 後段ヒットしたデータを全デコードして原データに戻します。
-          // 共有 prefix と宛先固有 suffix で再エンコードして書き戻します。
-          data = await this.#decodeWithRepair(
+          // 後段で見つかったデータをすべてデコードして原データに戻します。
+          data = await this.#repairPlain(
             data,
-            transformers,
-            sourceVars!,
+            hit,
             missing,
-            vars,
+            rootVars,
             key,
             signal,
             throwOnRepairDenied,
@@ -1468,13 +1231,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       if (!repair) {
-        // 見つかったストレージ専用の前段パイプラインを逆順に適用してデータをデコードします。
-        // 単一宛先では decode の mutate が base に残り、複数宛先では読取元分岐に閉じます。
-        // base は操作単位の複製のため次操作へ漏れず、非対称は意図的です。
-        const decodeVars = sourceVars!;
-        for (const transformer of transformers.toReversed()) {
-          data = await transformer.decode(decodeVars, signal, data);
-        }
+        // 見つかったストレージ専用の前段パイプラインを逆順に適用して、データをデコードします。
+        data = await this.#pipeline.decode(hit.leaf, hit.vars, signal, data);
       }
 
       // デコード後のデータを検証します。
@@ -1533,109 +1291,79 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
+      const rootVars = this.#pipeline.prepareRootVars(vars);
+
+      // NONE は getReadable の呼び出し前を表す番兵値です。
       const NONE: any = {};
       let r: IReadableStream = NONE;
-      let transformers: readonly UniKvsTransformer[] = [];
-      let sourceVars: Variables | null = null;
-      const missing: UniKvsDestination[] = [];
-      const errors: { name: string; index: number; reason: unknown }[] = [];
+      let hit: ResolvedLeaf | null = null;
+      const missing: PipelineLeaf[] = [];
+      const errors: PluginErrorRecord[] = [];
       const fillBranches: IReadableStream[] = [];
       const fillTasks: Promise<void>[] = [];
       let repairAc: AbortController | null = null;
       let cancelFills: ((reason: unknown) => Promise<void>) | null = null;
-      const streamDestNames = this.#destinations.map((dest) => dest.storage.name);
-      const streamIsSingle = streamDestNames.length === 1;
-      let streamDestVarsArr: Variables[];
-      if (streamIsSingle) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(streamDestNames));
-        streamDestVarsArr = [vars];
-      } else {
-        streamDestVarsArr = streamDestNames.map((name) => withStorageNames(vars, name));
-      }
 
-      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するために書き込みロックを取得します。
+      // 書き戻し時は、読み取りから書き込みまでを同じキーの書き込みと直列化するため、書き込みロックを取得します。
       const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
-        // 各ストレージを巡回し、最初に見つかったデータを取得します。
-        // あるストレージの読み取りに失敗しても、他のストレージからデータを取得できるようにフォールバックします。
-        for (const [index, dest] of this.#destinations.entries()) {
-          const destVars = streamDestVarsArr[index]!;
-          let storageKey = key;
-          for (const transformer of dest.transformers) {
-            signal.throwIfAborted();
-            storageKey = await transformer.mapKey(destVars, signal, storageKey);
-          }
-
+        // 登録順が読み取りの優先順です。先頭で見つかればそこで終え、失敗したときは次の宛先を試します。
+        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        for (const leaf of this.#pipeline) {
+          const resolved = await resolver.resolve(leaf);
           try {
-            if (!(await dest.storage.exists(destVars, signal, storageKey))) {
-              missing.push(dest);
+            if (!(await leaf.storage.exists(resolved.vars, signal, resolved.key))) {
+              missing.push(leaf);
               continue;
             }
 
-            r = await dest.storage.getReadable(destVars, signal, storageKey);
-            transformers = dest.transformers;
-            sourceVars = destVars;
+            r = await leaf.storage.getReadable(resolved.vars, signal, resolved.key);
+            hit = resolved;
             break;
           } catch (ex) {
             if (signal.aborted) {
               throw ex;
             }
 
-            errors.push({ name: dest.storage.name, index, reason: ex });
+            errors.push({ name: leaf.name, index: leaf.index, reason: ex });
             logger.error`Failed to read from a storage: ${ex}`;
           }
         }
 
-        if (r === NONE) {
-          const args: KeyNotFoundErrorArgs = { key };
-          switch (errors.length) {
-            case 0:
-              break;
-            case 1:
-              args.cause = errors[0]!.reason;
-              break;
-            default:
-              args.cause = new PluginOperationAggregateError({
-                plugin: "storage",
-                action: "read",
-                errors,
-              });
-          }
-
-          throw new KeyNotFoundError(args);
+        if (hit === null) {
+          throw this.#notFound(key, errors);
         }
 
-        // 書き戻しが有効な場合のみ、ストリームが途中で破棄されたときに進行中の書き戻しも中断できるようにします。
+        // 書き戻しが有効なときだけ、ストリームが途中で破棄されたら進行中の書き戻しも中断できるようにします。
         repairAc = repair ? new AbortController() : null;
         const repairSignal = repairAc ? combineSignals([signal, repairAc.signal]) : signal;
 
-        // 書き戻しによる書き込みであることが分かるように、書き込み専用の変数を用意します。
+        // 書き戻しによる書き込みだと分かるよう、書き込み専用の変数を用意します。
         const repairVars: Variables = (() => {
           if (!repair) {
-            return vars;
+            return rootVars;
           }
-          const cloned = vars.clone();
+          const cloned = rootVars.clone();
           cloned.setReadonly("unikvs:repair", true);
           return cloned;
         })();
 
-        // 書き戻し先へ分岐をパイプします。書き戻しはベストエフォートであり、失敗はログに残して続行します。
-        const fill = (
-          dest: UniKvsDestination,
-          branch: IReadableStream,
-          destRepairVars: Variables,
-          storageKey: string,
-        ): void => {
-          fillBranches.push(branch);
+        // 書き戻しはできる範囲で行います。失敗してもログに残すだけで、読み取りは続けます。
+        const fill = (target: StreamEncodeTarget): void => {
+          fillBranches.push(target.stream);
           fillTasks.push(
             (async () => {
               try {
-                const w = await dest.storage.getWritable(destRepairVars, repairSignal, storageKey);
-                await branch.pipeTo(w, { signal: repairSignal });
+                const w = await target.leaf.storage.getWritable(
+                  target.vars,
+                  repairSignal,
+                  target.key,
+                );
+                await target.stream.pipeTo(w, { signal: repairSignal });
               } catch (ex) {
-                // パイプが中断された場合は分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
+                // パイプが中断されたときは分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
                 try {
-                  await branch.cancel(ex);
+                  await target.stream.cancel(ex);
                 } catch {}
 
                 // 意図的な中断時はエラーではありません。
@@ -1654,7 +1382,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           );
         };
 
-        // セットアップの失敗時に、構築済みの分岐と進行中の書き戻しを中断します。
+        // セットアップに失敗したときは、構築済みの分岐と進行中の書き戻しを中断します。
         cancelFills = async (reason) => {
           repairAc?.abort(reason);
           await Promise.all(
@@ -1667,56 +1395,39 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           await Promise.all(fillTasks);
         };
 
-        // 読み取り元を全デコードして原データに戻します。
-        // 修復分岐は読取パスと分離します。
-        // get と同じく単一宛先では base を共有し、複数宛先では読取元分岐に閉じます。
-        const decodeVars = sourceVars!;
-        for (const transformer of transformers.toReversed()) {
-          const d = await transformer.getDecodable(decodeVars, signal);
-          r = r.pipeThrough(d);
-        }
+        // 読み取り元をすべてデコードして原データに戻します。
+        // 書き戻しの分岐は読み取りパスと分離します。
+        r = await this.#pipeline.decodeStream(hit.leaf, hit.vars, signal, r);
+
         if (repair) {
-          // 第一層で除外される宛先を除き修復対象を確定します。
-          const repairTargets: UniKvsDestination[] = [];
-          for (const dest of missing) {
-            if (!this.#canRepair(dest)) {
+          // 許可のない宛先を先に除外します。throwOnRepairDenied が真のときはここでエラーを確定します。
+          const repairSet = new Set<PipelineLeaf>();
+          for (const leaf of missing) {
+            if (!leaf.canRepair) {
               // 意図的な中断時はエラーではありません。
               if (signal.aborted) {
                 continue;
               }
 
-              repairLogger.warn`Skipped repair for a storage without AllowRepair: ${dest.storage.name}`;
+              repairLogger.warn`Skipped repair for a storage without AllowRepair: ${leaf.name}`;
 
               if (throwOnRepairDenied) {
-                throw new RepairNotAllowedError({ names: [dest.storage.name] });
+                throw new RepairNotAllowedError({ names: [leaf.name] });
               }
 
               continue;
             }
 
-            repairTargets.push(dest);
+            repairSet.add(leaf);
           }
-          if (repairTargets.length > 0) {
-            // 共有 prefix を tee の前に取得します。
-            // P = 0 のときは生成も取得もしません。
-            const prefixEncodables: TransformStream<any, any>[] = [];
-            let prefixSkipped = false;
-            let sharedKey = key;
-            let streamRepairPrefixVars: Variables | null = null;
-            if (this.#prefixLength > 0) {
-              const repairPrefixVars = withStorageNames(
-                repairVars,
-                repairTargets.map((dest) => dest.storage.name),
-              );
-              streamRepairPrefixVars = repairPrefixVars;
-              try {
-                for (const transformer of this.#prefixTransformers) {
-                  signal.throwIfAborted();
-                  const e = await transformer.getEncodable(repairPrefixVars, signal);
-                  prefixEncodables.push(e);
-                  sharedKey = await transformer.mapKey(repairPrefixVars, signal, sharedKey);
-                }
-              } catch (ex) {
+
+          if (repairSet.size > 0) {
+            // 読み取りパスを変更しないよう、書き戻し側だけを構築して分岐後の読み取り側を返します。
+            const streams = new Set<IReadableStream>([r]);
+            const tree = await this.#pipeline.buildEncodeTree(r, repairVars, key, signal, streams, {
+              isActive: (leaf) => repairSet.has(leaf),
+              splitRead: true,
+              onNodeError: (ex, activeLeaves) => {
                 // 意図的な中断時は中断理由で失敗します。
                 if (signal.aborted) {
                   signal.throwIfAborted();
@@ -1726,104 +1437,22 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
                   if (throwOnRepairDenied) {
                     throw new RepairNotAllowedError({
-                      names: repairTargets.map((dest) => dest.storage.name),
+                      names: activeLeaves.map((leaf) => leaf.name),
                       cause: ex,
                     });
                   }
 
-                  prefixSkipped = true;
-                } else {
-                  logger.error`Failed to repair a storage: ${ex}`;
-
-                  throw ex;
-                }
-              }
-            }
-            // 宛先固有の suffix を tee の前に取得します。
-            // 失敗時は分岐の後始末が不要になります。
-            const activeTargets: UniKvsDestination[] = [];
-            const activeVars: Variables[] = [];
-            const activeEncodables: TransformStream<any, any>[][] = [];
-            const activeStorageKeys: string[] = [];
-            if (!prefixSkipped) {
-              for (const dest of repairTargets) {
-                const destRepairVars: Variables =
-                  streamRepairPrefixVars !== null
-                    ? withStorageNames(streamRepairPrefixVars, dest.storage.name)
-                    : withStorageNames(repairVars, dest.storage.name);
-                const encodables: TransformStream<any, any>[] = [];
-                let storageKey = sharedKey;
-                try {
-                  for (const transformer of dest.transformers.slice(this.#prefixLength)) {
-                    signal.throwIfAborted();
-                    const e = await transformer.getEncodable(destRepairVars, signal);
-                    encodables.push(e);
-                    storageKey = await transformer.mapKey(destRepairVars, signal, storageKey);
-                  }
-                } catch (ex) {
-                  // 意図的な中断時は中断理由で失敗します。
-                  if (signal.aborted) {
-                    signal.throwIfAborted();
-                  }
-                  if (ex instanceof RepairNotAllowedError) {
-                    repairLogger.warn`Failed to repair a storage: ${ex}`;
-
-                    if (throwOnRepairDenied) {
-                      throw new RepairNotAllowedError({
-                        names: [dest.storage.name],
-                        cause: ex,
-                      });
-                    }
-
-                    continue;
-                  }
-
-                  logger.error`Failed to repair a storage: ${ex}`;
-
-                  throw ex;
+                  return true;
                 }
 
-                activeTargets.push(dest);
-                activeVars.push(destRepairVars);
-                activeEncodables.push(encodables);
-                activeStorageKeys.push(storageKey);
-              }
-            }
-            if (activeTargets.length > 0) {
-              // 読取パスを不変に保つため、修復用に 1 本分岐します。
-              const [repairBranch, readRest] = r.tee();
-              r = readRest;
-              // 分岐に prefix のチェーンを通して修復起点を得ます。
-              // P = 0 のときは分岐がそのまま起点になります。
-              let repairRoot: IReadableStream = repairBranch;
-              for (const e of prefixEncodables) {
-                repairRoot = repairRoot.pipeThrough(e);
-              }
-              // 起点を対象の数で分岐します。
-              // 単一対象のときは tee しません。
-              let repairPipes: IReadableStream[];
-              if (activeTargets.length === 1) {
-                repairPipes = [repairRoot];
-              } else {
-                repairPipes = [];
-                let cur: IReadableStream = repairRoot;
-                for (let i = 0; i < activeTargets.length - 1; i++) {
-                  const [branch, rest] = cur.tee();
-                  repairPipes.push(branch);
-                  cur = rest;
-                }
-                repairPipes.push(cur);
-              }
-              // suffix のチェーンを通して fill します。
-              // fill 時の失敗はベストエフォートで握りつぶします。
-              for (let i = 0; i < activeTargets.length; i++) {
-                let pipe: IReadableStream = repairPipes[i]!;
-                for (const e of activeEncodables[i]!) {
-                  pipe = pipe.pipeThrough(e);
-                }
+                logger.error`Failed to repair a storage: ${ex}`;
 
-                fill(activeTargets[i]!, pipe, activeVars[i]!, activeStorageKeys[i]!);
-              }
+                throw ex;
+              },
+            });
+            r = tree.readStream;
+            for (const target of tree.targets) {
+              fill(target);
             }
           }
 
@@ -1841,7 +1470,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           );
         }
 
-        // ストリームを読み切ったかどうかを監視します。読み切った場合は書き戻しの完了を待ち、途中で破棄された場合は書き戻しを中断します。
+        // ストリームを読み切ったかを監視します。読み切ったときは書き戻しの完了を待ち、途中で破棄されたときは書き戻しを中断します。
         let completed = false;
         if (repairAc) {
           r = r.pipeThrough(
@@ -1857,14 +1486,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         // 破棄時は、ソースストリームをキャンセルする前に進行中の書き戻しを中断します。
-        // tee で分岐したストリームは、分岐のキャンセルが揃うまで元ストリームのキャンセルが完了しないためです。
+        // tee で分岐したストリームはすべての分岐のキャンセルが揃うまで元のキャンセルが完了しないためです。
         const beforeDispose = (): void => {
           if (!completed) {
             repairAc?.abort(signal.reason);
           }
         };
 
-        // 書き戻しの完了または中断を待ってからキーの書き込みロックを解放します。
+        // キーロックは ValueStream の dispose まで保持します。fill の完了を待ってから解放します。
         const dispose = async (): Promise<void> => {
           try {
             await Promise.all(fillTasks);
@@ -1891,7 +1520,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           beforeDispose,
         );
 
-        // valueStream が GC されるタイミングでストリームが終了していなければロックを自動解放するとともに、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放できるように dispose を記録します。
+        // valueStream が GC される時点でストリームが終わっていなければロックを自動解放します。あわせて、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放できるよう dispose を記録します。
         ioLockRegistry.register(
           valueStream,
           {
@@ -1906,7 +1535,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         await cancelFills?.(ex);
 
         if (r !== NONE) {
-          // getReadable 成功後のセットアップ中に失敗した場合、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するためにキャンセルします。
+          // getReadable の成功後にセットアップで失敗したときは、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するためキャンセルします。
           try {
             await r.cancel(ex);
           } catch {}
@@ -1958,57 +1587,32 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const hasDestNames = this.#destinations.map((dest) => dest.storage.name);
-      let hasDestVarsArr: Variables[];
-      if (hasDestNames.length === 1) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(hasDestNames));
-        hasDestVarsArr = [vars];
-      } else {
-        hasDestVarsArr = hasDestNames.map((name) => withStorageNames(vars, name));
-      }
+      const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.rLock({ key, signal });
       try {
-        // いずれかのストレージに存在すれば true を返します。
-        // あるストレージの存在確認に失敗しても、他のストレージで存在を確認できるようにフォールバックします。
-        const errors: { name: string; index: number; reason: unknown }[] = [];
-        for (const [index, dest] of this.#destinations.entries()) {
-          const destVars = hasDestVarsArr[index]!;
-          let storageKey = key;
-          for (const transformer of dest.transformers) {
-            signal.throwIfAborted();
-            storageKey = await transformer.mapKey(destVars, signal, storageKey);
-          }
-
+        // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
+        // exists に失敗したときは次のストレージを試します。
+        const errors: PluginErrorRecord[] = [];
+        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        for (const leaf of this.#pipeline) {
+          const resolved = await resolver.resolve(leaf);
           try {
-            if (await dest.storage.exists(destVars, signal, storageKey)) {
+            if (await leaf.storage.exists(resolved.vars, signal, resolved.key)) {
               return true;
             }
           } catch (ex) {
             if (signal.aborted) {
               throw ex;
             }
-            errors.push({ name: dest.storage.name, index, reason: ex });
+            errors.push({ name: leaf.name, index: leaf.index, reason: ex });
 
             logger.error`Failed to check existence in a storage: ${ex}`;
           }
         }
 
-        // すべてのストレージで存在を確認できなかった場合は結果が不明のため、get() と同様にエラーとして報告します。
+        // すべてのストレージで存在を確認できなかったときは結果が不明なため、get() と同様にエラーとして報告します。
         if (errors.length > 0) {
-          const args: KeyNotFoundErrorArgs = { key };
-          switch (errors.length) {
-            case 1:
-              args.cause = errors[0]!.reason;
-              break;
-            default:
-              args.cause = new PluginOperationAggregateError({
-                plugin: "storage",
-                action: "read",
-                errors,
-              });
-          }
-
-          throw new KeyNotFoundError(args);
+          throw this.#notFound(key, errors);
         }
 
         return false;
@@ -2058,34 +1662,21 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const deleteDestNames = this.#destinations.map((dest) => dest.storage.name);
-      let deleteDestVarsArr: Variables[];
-      if (deleteDestNames.length === 1) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(deleteDestNames));
-        deleteDestVarsArr = [vars];
-      } else {
-        deleteDestVarsArr = deleteDestNames.map((name) => withStorageNames(vars, name));
-      }
+      const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.lock({ key, signal });
       try {
-        // すべてのストレージから対象データを削除します。
-        // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { name: string; index: number; reason: unknown }[] = [];
+        // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
+        const errors: PluginErrorRecord[] = [];
+        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
         await Promise.all(
-          this.#destinations.map(async (dest, index) => {
-            const destVars = deleteDestVarsArr[index]!;
-            let storageKey = key;
-            for (const transformer of dest.transformers) {
-              signal.throwIfAborted();
-              storageKey = await transformer.mapKey(destVars, signal, storageKey);
-            }
-
+          this.#pipeline.leaves.map(async (leaf) => {
+            const resolved = await resolver.resolve(leaf);
             try {
-              if (await dest.storage.exists(destVars, signal, storageKey)) {
-                await dest.storage.delete(destVars, signal, storageKey);
+              if (await leaf.storage.exists(resolved.vars, signal, resolved.key)) {
+                await leaf.storage.delete(resolved.vars, signal, resolved.key);
               }
             } catch (ex) {
-              errors.push({ name: dest.storage.name, index, reason: ex });
+              errors.push({ name: leaf.name, index: leaf.index, reason: ex });
             }
           }),
         );
@@ -2126,38 +1717,30 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const clearDestNames = this.#destinations.map((dest) => dest.storage.name);
-      const clearIsSingle = clearDestNames.length === 1;
-      let clearVars: Variables;
-      if (clearIsSingle) {
-        vars.setReadonly("unikvs:storageNames", frozenNames(clearDestNames));
-        clearVars = vars;
-      } else {
-        clearVars = withStorageNames(vars, clearDestNames);
-      }
+      const rootVars = this.#pipeline.prepareRootVars(vars);
+      // 全宛先の名前空間ごとに onClear を順に実行します。
+      // 葉が1件だけのときは根の vars をそのまま使います。
+      const clearVars = this.#pipeline.prepareClearVars(rootVars);
       const lock = await io.lock({ signal });
       try {
-        for (const transformer of this.#transformers) {
+        for (const transformer of this.#pipeline.transformers) {
           signal.throwIfAborted();
           await transformer.onClear(clearVars, signal);
         }
 
-        // set/repair と同じく onClear の mutate を引き継ぐため、実行後に clearVars から分岐します。
-        // 単一宛先では base を使い回します。
-        const clearDestVarsArr: Variables[] = clearIsSingle
-          ? [clearVars]
-          : clearDestNames.map((name) => withStorageNames(clearVars, name));
+        // set や repair と同じく onClear による変更を引き継ぐため、実行後の clearVars から分岐します。
+        const clearDestVars = this.#pipeline.leaves.map((leaf) =>
+          this.#pipeline.deriveLeafVars(clearVars, leaf),
+        );
 
-        // すべてのストレージで一括削除を実行します。
-        // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-        const errors: { name: string; index: number; reason: unknown }[] = [];
+        // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
+        const errors: PluginErrorRecord[] = [];
         await Promise.all(
-          this.#destinations.map(async ({ storage }, index) => {
-            const destVars = clearDestVarsArr[index]!;
+          this.#pipeline.leaves.map(async (leaf, index) => {
             try {
-              await storage.clear(destVars, signal);
+              await leaf.storage.clear(clearDestVars[index]!, signal);
             } catch (ex) {
-              errors.push({ name: storage.name, index, reason: ex });
+              errors.push({ name: leaf.name, index, reason: ex });
             }
           }),
         );
