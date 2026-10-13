@@ -9,9 +9,8 @@ export type VariablesEntry = readonly [key: string, value: unknown];
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
  */
 export type VariablesInit =
-  | Readonly<Record<string, unknown>>
-  | ReadonlyMap<string, unknown>
-  | readonly VariablesEntry[];
+  | { readonly [key: string]: unknown }
+  | { [Symbol.iterator](): Iterator<VariablesEntry> };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
@@ -19,24 +18,17 @@ export type VariablesInit =
 export default class Variables {
   #data: Map<string, unknown>;
 
-  #readonlyKeys: Set<string>;
+  #readonly: Set<string>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public constructor(init?: VariablesInit) {
-    // 一括複写コンストラクターで初期化します。要素ごとの `set` 反復より高速です。
-    if (init instanceof Map) {
-      this.#data = new Map(init);
-    } else if (Array.isArray(init)) {
-      this.#data = new Map(init);
-    } else if (init !== undefined) {
-      this.#data = new Map(Object.entries(init));
-    } else {
-      this.#data = new Map();
-    }
+  public constructor(init: VariablesInit = []) {
+    const data = Symbol.iterator in init ? init : Object.entries(init);
+    this.#data = new Map(data);
 
-    this.#readonlyKeys = new Set();
+    const readonly = init instanceof Variables ? init.#readonly : [];
+    this.#readonly = new Set(readonly);
   }
 
   /**
@@ -57,7 +49,7 @@ export default class Variables {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
   public set(key: string, value: unknown): this {
-    if (this.#readonlyKeys.has(key)) {
+    if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
 
@@ -70,12 +62,12 @@ export default class Variables {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
   public setReadonly(key: string, value: unknown): this {
-    if (this.#readonlyKeys.has(key)) {
+    if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
 
     this.#data.set(key, value);
-    this.#readonlyKeys.add(key);
+    this.#readonly.add(key);
 
     return this;
   }
@@ -91,7 +83,7 @@ export default class Variables {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
   public delete(key: string): boolean {
-    if (this.#readonlyKeys.has(key)) {
+    if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
 
@@ -102,7 +94,7 @@ export default class Variables {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
   public isReadonly(key: string): boolean {
-    return this.#readonlyKeys.has(key);
+    return this.#readonly.has(key);
   }
 
   /**
@@ -112,21 +104,17 @@ export default class Variables {
     const cloned = new Variables();
     // 一括複写コンストラクターで複写します。要素ごとの反復より高速です。
     cloned.#data = new Map(this.#data);
-    cloned.#readonlyKeys = new Set(this.#readonlyKeys);
+    cloned.#readonly = new Set(this.#readonly);
 
-    if (overrides !== undefined) {
-      if (overrides instanceof Map) {
-        for (const [key, value] of overrides) {
-          cloned.#data.set(key, value);
-        }
-      } else if (Array.isArray(overrides)) {
-        for (const [key, value] of overrides) {
-          cloned.#data.set(key, value);
-        }
-      } else {
-        for (const [key, value] of Object.entries(overrides)) {
-          cloned.#data.set(key, value);
-        }
+    if (overrides) {
+      const data = Symbol.iterator in overrides ? overrides : Object.entries(overrides);
+      for (const [key, value] of data) {
+        cloned.#data.set(key, value);
+      }
+
+      const readonly = overrides instanceof Variables ? overrides.#readonly : [];
+      for (const key of readonly) {
+        cloned.#readonly.add(key);
       }
     }
 

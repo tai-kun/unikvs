@@ -1,10 +1,15 @@
-import type { IStorage, IReadableStream } from "@unikvs/core";
-import { RepairNotAllowedError, Variables } from "@unikvs/core";
+import {
+  type IStorage,
+  type VariablesInit,
+  type VariablesEntry,
+  type IReadableStream,
+  Variables,
+  RepairNotAllowedError,
+} from "@unikvs/core";
 import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import { logger, repairLogger } from "./_logger.js";
-import mergeVariables from "./_merge-variables.js";
 import UniKvsStorage from "./_storage.js";
 import { isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
@@ -37,7 +42,6 @@ import UniKvsConfig, {
 } from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
-import type { VariablesSource } from "./variables.types.js";
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -180,15 +184,13 @@ function withStorageNames(vars: Variables, nameOrNames: string | readonly string
 
 const VariablesKeySchema = v.string();
 
-// 配列形式の vars も正当な入力であるため、record スキーマより先に判定する必要があります。
-// record スキーマは配列にもマッチして数値キーのオブジェクトに変換してしまうため、配列形式を先に処理しないと mergeVariables での配列としてのマージが行われません。
-// Variables インスタンスと Map も record より先に判定します。
-// Map 判定は instanceof のみで行うため、型も Map に狭めています。ReadonlyMap の別実装は受け付けません。
-const VariablesSourceSchema = v.union([
-  v.array(v.tuple([VariablesKeySchema, v.unknown()])),
-  v.custom<Variables>((input) => input instanceof Variables, "Expected a Variables instance"),
-  v.custom<Map<string, unknown>>((input) => input instanceof Map, "Expected a Map instance"),
-  v.record(v.string(), v.unknown()),
+const VariablesInitSchema = v.union([
+  v.custom<{ [Symbol.iterator](): Iterator<VariablesEntry> }>(
+    // TODO(tai-kun): 各アイテムも要検証です。
+    (input) => typeof input === "object" && !!input && Symbol.iterator in input,
+    "Expected a Iterable object",
+  ),
+  v.record(VariablesKeySchema, v.unknown()),
 ]);
 
 const OpenOptionsSchema = v.object({
@@ -200,7 +202,7 @@ const OpenOptionsSchema = v.object({
   /**
    * 実行時の変数です。
    */
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const OpenArgsSchema = v.tuple([v.optional(OpenOptionsSchema)]);
@@ -214,7 +216,7 @@ const CloseOptionsSchema = v.object({
   /**
    * 実行時の変数です。
    */
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const CloseArgsSchema = v.tuple([v.optional(CloseOptionsSchema)]);
@@ -223,7 +225,7 @@ const SetOptionsSchema = v.object({
   key: v.string(),
   value: v.unknown(),
   signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const SetArgsSchema = v.union([
@@ -243,7 +245,7 @@ const GetOptionsSchema = v.object({
   repair: v.optional(v.boolean()),
   throwOnRepairDenied: v.optional(v.boolean()),
   signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const GetArgsSchema = v.union([
@@ -259,7 +261,7 @@ const StreamOptionsSchema = v.object({
   repair: v.optional(v.boolean()),
   throwOnRepairDenied: v.optional(v.boolean()),
   signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const StreamArgsSchema = v.union([
@@ -273,7 +275,7 @@ const StreamArgsSchema = v.union([
 const HasOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const HasArgsSchema = v.union([
@@ -287,7 +289,7 @@ const HasArgsSchema = v.union([
 const DeleteOptionsSchema = v.object({
   key: v.string(),
   signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const DeleteArgsSchema = v.union([
@@ -307,7 +309,7 @@ const ClearOptionsSchema = v.object({
   /**
    * 実行時の変数です。
    */
-  vars: v.optional(VariablesSourceSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
@@ -353,7 +355,7 @@ export type SetOptions<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
-  readonly vars?: VariablesSource | undefined;
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -383,7 +385,7 @@ export type GetOptions<TKey = IStorage.Key> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
-  readonly vars?: VariablesSource | undefined;
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -413,7 +415,7 @@ export type StreamOptions<TKey = IStorage.Key> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
-  readonly vars?: VariablesSource | undefined;
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -433,7 +435,7 @@ export type HasOptions<TKey = IStorage.Key> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
-  readonly vars?: VariablesSource | undefined;
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -453,7 +455,7 @@ export type DeleteOptions<TKey = IStorage.Key> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
    */
-  readonly vars?: VariablesSource | undefined;
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -608,7 +610,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public constructor(
-    vars: VariablesSource,
+    vars: VariablesInit,
     destinations: readonly [UniKvsDestination, ...UniKvsDestination[]],
     transformers: readonly UniKvsTransformer[],
     valueSchemaResolver: IValueSchemaResolver | null = null,
@@ -622,7 +624,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   ) {
     this.#con = null;
     this.#acSet = new Set();
-    this.#vars = mergeVariables(new Variables(), vars);
+    this.#vars = new Variables(vars);
     this.#destinations = destinations;
     this.#transformers = transformers;
     this.#valueSchemaResolver = valueSchemaResolver;
@@ -675,7 +677,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const ac = new AbortController();
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "open");
 
     signal.throwIfAborted();
@@ -876,7 +878,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const [options = {}] = v.parseInput(CloseArgsSchema, args);
       const { signal = AbortSignal.timeout(10e3), vars: varsOption } = options;
 
-      const vars = mergeVariables(this.#vars, varsOption);
+      const vars = this.#vars.clone(varsOption);
       vars.setReadonly("unikvs:action", "close");
 
       if (this.#con === null) {
@@ -971,7 +973,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "set");
     vars.setReadonly("unikvs:key", key);
 
@@ -1371,7 +1373,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "get");
     vars.setReadonly("unikvs:key", key);
 
@@ -1520,7 +1522,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "stream");
     vars.setReadonly("unikvs:key", key);
 
@@ -1945,7 +1947,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "has");
     vars.setReadonly("unikvs:key", key);
 
@@ -2045,7 +2047,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "delete");
     vars.setReadonly("unikvs:key", key);
 
@@ -2114,7 +2116,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = mergeVariables(this.#vars, varsOption);
+    const vars = this.#vars.clone(varsOption);
     vars.setReadonly("unikvs:action", "clear");
 
     const lock = await asyncmux.readonly(this, signal);

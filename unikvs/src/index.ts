@@ -1,5 +1,3 @@
-export type * from "./variables.types.js";
-
 export type {
   DecodableStreamNotSupportedErrorArgs,
   DecodableStreamNotSupportedErrorMeta,

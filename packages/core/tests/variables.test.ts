@@ -1,7 +1,7 @@
 import { describe, test } from "vitest";
 
 import { ReadonlyVariableError } from "../src/errors.js";
-import Variables from "../src/variables.js";
+import Variables, { type VariablesEntry } from "../src/variables.js";
 
 describe("Variables - 生成", () => {
   test("空で生成できる", ({ expect }) => {
@@ -43,6 +43,56 @@ describe("Variables - 生成", () => {
       ["a", 1],
       ["b", "two"],
     ]);
+
+    // 検証
+    expect(vars.get("a")).toBe(1);
+    expect(vars.get("b")).toBe("two");
+    expect(vars.size).toBe(2);
+  });
+
+  test("Variables から生成すると内容と readonly を引き継ぐ", ({ expect }) => {
+    // 準備
+    const source = new Variables();
+    source.set("a", 1);
+    source.setReadonly("b", 2);
+
+    // 実行
+    const vars = new Variables(source);
+
+    // 検証
+    expect(vars).not.toBe(source);
+    expect(vars.get("a")).toBe(1);
+    expect(vars.get("b")).toBe(2);
+    expect(vars.size).toBe(2);
+    expect(vars.isReadonly("a")).toBe(false);
+    expect(vars.isReadonly("b")).toBe(true);
+  });
+
+  test("Variables から生成した後の変更は互いに見えない", ({ expect }) => {
+    // 準備
+    const source = new Variables();
+    source.set("a", 1);
+    const vars = new Variables(source);
+
+    // 実行
+    vars.setReadonly("b", 2);
+    source.set("c", 3);
+
+    // 検証
+    expect(vars.get("a")).toBe(1);
+    expect(source.has("b")).toBe(false);
+    expect(source.isReadonly("b")).toBe(false);
+    expect(vars.has("c")).toBe(false);
+  });
+
+  test("エントリーの Set から生成できる", ({ expect }) => {
+    // 準備と実行
+    const vars = new Variables(
+      new Set<VariablesEntry>([
+        ["a", 1],
+        ["b", "two"],
+      ]),
+    );
 
     // 検証
     expect(vars.get("a")).toBe(1);
@@ -275,5 +325,38 @@ describe("Variables - clone", () => {
     expect(cloned.get("a")).toBe(2);
     expect(cloned.isReadonly("a")).toBe(true);
     expect(vars.get("a")).toBe(1);
+  });
+
+  test("Variables で上書きすると値と readonly を引き継ぐ", ({ expect }) => {
+    // 準備
+    const vars = new Variables({ x: 1 });
+    const overrides = new Variables();
+    overrides.set("y", 2);
+    overrides.setReadonly("z", 3);
+
+    // 実行
+    const cloned = vars.clone(overrides);
+
+    // 検証
+    expect(cloned.toJSON()).toStrictEqual({ x: 1, y: 2, z: 3 });
+    expect(cloned.isReadonly("y")).toBe(false);
+    expect(cloned.isReadonly("z")).toBe(true);
+    expect(overrides.toJSON()).toStrictEqual({ y: 2, z: 3 });
+  });
+
+  test("Variables の上書きは base の readonly 値を置き換えて readonly を保つ", ({ expect }) => {
+    // 準備
+    const vars = new Variables();
+    vars.setReadonly("y", 1);
+    const overrides = new Variables();
+    overrides.setReadonly("y", 2);
+
+    // 実行
+    const cloned = vars.clone(overrides);
+
+    // 検証
+    expect(cloned.get("y")).toBe(2);
+    expect(cloned.isReadonly("y")).toBe(true);
+    expect(vars.get("y")).toBe(1);
   });
 });

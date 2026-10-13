@@ -472,7 +472,9 @@ describe("UniKvs - vars の参照安定性", () => {
     await kvs.close();
   });
 
-  test("呼び出し側の readonly 予約キーは上書きされる", async ({ expect }) => {
+  test("呼び出し側の readonly 予約キーがあると ReadonlyVariableError で拒否される", async ({
+    expect,
+  }) => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
@@ -481,13 +483,9 @@ describe("UniKvs - vars の参照安定性", () => {
     source.setReadonly("unikvs:action", "fake");
     source.set("request", "req");
 
-    // 実行
-    await kvs.set("foo", "value", { vars: source });
-
-    // 検証: 内部で強制上書きされ、正規の action が見える
-    const vars = storage.callsOf("write")[0]?.vars;
-    expect(vars?.get("unikvs:action")).toBe("set");
-    expect(vars?.get("unikvs:key")).toBe("foo");
+    // 実行と検証: 予約キーの密封は維持されるため、内部の付与が失敗する
+    await expect(kvs.set("foo", "value", { vars: source })).rejects.toThrow(ReadonlyVariableError);
+    expect(storage.callsOf("write")).toHaveLength(0);
     expect(source.get("unikvs:action")).toBe("fake");
 
     // 後片付け
