@@ -29,9 +29,9 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .transform(new Compression("gzip"))
+  .connect(new Compression("gzip"))
   .persist(new Memory()) // 圧縮のみ
-  .transform(new ChecksumSha256())
+  .connect(new ChecksumSha256())
   .persist(new NodeFs(".tmp")) // 圧縮 + チェックサム
   .create();
 ```
@@ -50,10 +50,10 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .transform(new Compression("gzip")) // A・B・C 共通
+  .connect(new Compression("gzip")) // A・B・C 共通
   .fork(UniKvs.branch().persist(new Memory())) // A: gzip のみ (高速なキャッシュ)
-  .transform(new ChecksumSha256()) // B・C 共通
-  .fork(UniKvs.branch().transform(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + チェックサム 2 重 (監査用)
+  .connect(new ChecksumSha256()) // B・C 共通
+  .fork(UniKvs.branch().connect(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + チェックサム 2 重 (監査用)
   .persist(new NodeFs(".data")) // C: gzip + チェックサム (本命)
   .create();
 ```
@@ -106,7 +106,7 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().persist(storages[0]).cre
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory()) // 圧縮前
-  .transform(new Compression("gzip"))
+  .connect(new Compression("gzip"))
   .persist(new NodeFs(".tmp")) // 圧縮後
   .create();
 

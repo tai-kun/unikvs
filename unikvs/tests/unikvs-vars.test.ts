@@ -218,7 +218,7 @@ describe("UniKvs - vars のマージ", () => {
     const storage = new FakeStorage();
     const transformer = new FakeTransformer();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(transformer)
+      .connect(transformer)
       .persist(storage)
       .create();
     await kvs.open();
@@ -350,7 +350,7 @@ describe("UniKvs - vars の参照安定性", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(transformer)
+      .connect(transformer)
       .persist(storage)
       .create();
     await kvs.open();
@@ -403,7 +403,7 @@ describe("UniKvs - vars の参照安定性", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(prefix)
+      .connect(prefix)
       .persist(a)
       .persist(b)
       .create();
@@ -435,7 +435,7 @@ describe("UniKvs - vars の参照安定性", () => {
     }
     const injector = new InjectOnClear();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(injector)
+      .connect(injector)
       .persist(a)
       .persist(b)
       .create();

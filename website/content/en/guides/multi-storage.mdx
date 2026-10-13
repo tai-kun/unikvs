@@ -28,9 +28,9 @@ Each Storage uses a snapshot of the pipeline taken at its `persist()` call as it
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .transform(new Compression("gzip"))
+  .connect(new Compression("gzip"))
   .persist(new Memory()) // compression only
-  .transform(new ChecksumSha256())
+  .connect(new ChecksumSha256())
   .persist(new NodeFs(".tmp")) // compression + checksum
   .create();
 ```
@@ -47,10 +47,10 @@ When you don't want additions in a branch to leak into the main pipeline, use `f
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .transform(new Compression("gzip")) // shared by A, B, and C
+  .connect(new Compression("gzip")) // shared by A, B, and C
   .fork(UniKvs.branch().persist(new Memory())) // A: gzip only (fast cache)
-  .transform(new ChecksumSha256()) // shared by B and C
-  .fork(UniKvs.branch().transform(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + two checksums (audit)
+  .connect(new ChecksumSha256()) // shared by B and C
+  .fork(UniKvs.branch().connect(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + two checksums (audit)
   .persist(new NodeFs(".data")) // C: gzip + checksum (primary)
   .create();
 ```
@@ -100,7 +100,7 @@ Intermediate decoded values do not match write-back targets when pipelines branc
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory()) // before compression
-  .transform(new Compression("gzip"))
+  .connect(new Compression("gzip"))
   .persist(new NodeFs(".tmp")) // after compression
   .create();
 

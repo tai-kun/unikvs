@@ -44,7 +44,7 @@ type Profile = {
 };
 
 const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
-  .transform(new Json())
+  .connect(new Json())
   .persist(new Memory())
   .create();
 

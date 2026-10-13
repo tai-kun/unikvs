@@ -313,7 +313,7 @@ export interface IUniKvsBranch<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  transform<
+  connect<
     TTransformer extends ITransformer<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
       any,
@@ -509,7 +509,7 @@ export interface IUniKvsConfigBuilder<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  transform<
+  connect<
     TTransformer extends ITransformer<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       any,
@@ -663,7 +663,7 @@ export interface IUniKvsConfigFinalizer<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  transform<
+  connect<
     TTransformer extends ITransformer<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       any,
@@ -828,7 +828,7 @@ export class UniKvsBranch {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public transform(transformer: ITransformer): this {
+  public connect(transformer: ITransformer): this {
     this.#transformers.push(transformer);
 
     return this;
@@ -838,7 +838,7 @@ export class UniKvsBranch {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public persist(storage: IStorage): this {
-    // 登録時点のチェーンをスナップショットして保持するため、以降の transform はこの登録に影響しません。
+    // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
     this.#destinations.push({ storage, transformers: [...this.#transformers] });
 
     return this;
@@ -963,7 +963,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public transform(transformer: ITransformer): this {
+  public connect(transformer: ITransformer): this {
     this.#transformers.push(transformer);
 
     return this;
@@ -975,7 +975,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public persist(storage: IStorage): this {
     this.#destinations.push({
       storage,
-      // 登録時点のチェーンをスナップショットして保持するため、以降の transform はこの登録に影響しません。
+      // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
       transformers: [...this.#transformers],
     });
 

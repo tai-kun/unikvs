@@ -48,7 +48,7 @@ const kvs = UniKvs.config({
 Valibot スキーマを使う場合は `valibot` を別途インストールします。`schema` を省略した場合は、型パラメーターでマッピングを指定します。この場合は型チェックのみで、実行時の検証は行いません。
 
 <Steps>
-  <Step title="transform(transformer)">トランスフォーマーを追加します (任意)。</Step>
+  <Step title="connect(transformer)">トランスフォーマーを追加します (任意)。</Step>
   <Step title="persist(storage)">ストレージを追加します (必須、複数可)。</Step>
   <Step title="fork(branch)">`UniKvs.branch()` で分岐先にストレージを追加します (任意)。</Step>
   <Step title="create()">KVS クライアントを作ります。</Step>

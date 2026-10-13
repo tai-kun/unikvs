@@ -282,7 +282,7 @@ describe("UniKvs - schema による入出力検証", () => {
 
     const storage = new Memory();
     const kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .transform(new JsonTransformer())
+      .connect(new JsonTransformer())
       .persist(storage)
       .create();
     await kvs.open();

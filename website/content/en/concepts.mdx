@@ -47,7 +47,7 @@ const kvs = UniKvs.config({
 Install `valibot` separately when using Valibot schemas. Omitting `schema` falls back to specifying the mapping with a type parameter. In that case only type checking applies, with no runtime validation.
 
 <Steps>
-  <Step title="transform(transformer)">Adds a Transformer (optional).</Step>
+  <Step title="connect(transformer)">Adds a Transformer (optional).</Step>
   <Step title="persist(storage)">Adds a Storage (required, multiple allowed).</Step>
   <Step title="fork(branch)">
     Adds Storages on a branched pipeline with `UniKvs.branch()` (optional).

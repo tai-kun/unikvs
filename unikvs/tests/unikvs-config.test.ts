@@ -77,7 +77,7 @@ describe("UniKvsConfig", () => {
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.transform(new MockTransformer()).persist(new MockStorage()).create();
+    const result = config.connect(new MockTransformer()).persist(new MockStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
@@ -90,7 +90,7 @@ describe("UniKvsConfig", () => {
     // 実行
     const result = config
       .persist(new MockStorage())
-      .transform(new MockTransformer())
+      .connect(new MockTransformer())
       .persist(new MockStorage())
       .create();
 
@@ -104,12 +104,12 @@ describe("UniKvsConfig", () => {
 
     // 実行
     const result = config
-      .transform(new MockTransformer())
-      .transform(new MockTransformer())
+      .connect(new MockTransformer())
+      .connect(new MockTransformer())
       .persist(new MockStorage())
-      .transform(new MockTransformer())
+      .connect(new MockTransformer())
       .persist(new MockStorage())
-      .transform(new MockTransformer())
+      .connect(new MockTransformer())
       .persist(new MockStorage())
       .create();
 
@@ -136,14 +136,14 @@ describe("UniKvsConfig", () => {
     await kvs.close();
   });
 
-  test("fork 内の transform は分岐先のストレージにのみ適用される", async ({ expect }) => {
+  test("fork 内の connect は分岐先のストレージにのみ適用される", async ({ expect }) => {
     // 準備
     const mainStorage = new FakeStorage();
     const branchStorage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
     const kvs = new UniKvsConfig(UniKvs)
       .persist(mainStorage)
-      .fork(UniKvs.branch().transform(new MockTransformer()).persist(branchStorage))
+      .fork(UniKvs.branch().connect(new MockTransformer()).persist(branchStorage))
       .create();
     await kvs.open();
 

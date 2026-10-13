@@ -84,7 +84,7 @@ describe("UniKvs - open の状態遷移", () => {
     const storage = new FakeStorage();
     const transformer = new FakeTransformer();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(transformer)
+      .connect(transformer)
       .persist(storage)
       .create();
 
@@ -116,8 +116,8 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     const ngTransformer = new FakeTransformer("ng");
     ngTransformer.errors["open"] = failure;
     const kvs = UniKvs.config()
-      .transform(okTransformer)
-      .transform(ngTransformer)
+      .connect(okTransformer)
+      .connect(ngTransformer)
       .persist(storage)
       .create();
 

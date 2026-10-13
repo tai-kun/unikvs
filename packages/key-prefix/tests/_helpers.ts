@@ -36,7 +36,7 @@ export async function collectValueBytes(
 export async function createPrefixedKvs(prefix: string, options?: KeyPrefixOptions) {
   const storage = new Memory();
   const kvs = UniKvs.config<TestMapping>()
-    .transform(new KeyPrefix(prefix, options))
+    .connect(new KeyPrefix(prefix, options))
     .persist(storage)
     .create();
   await kvs.open();

@@ -87,10 +87,10 @@ describe("宛先ごとのプレフィックス", () => {
     const storageA = new Memory();
     const storageB = new Memory();
     const kvs = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix(""))
+      .connect(new KeyPrefix(""))
       .persist(mainStorage)
-      .fork(UniKvs.branch().transform(new KeyPrefix("a:")).persist(storageA))
-      .fork(UniKvs.branch().transform(new KeyPrefix("b:")).persist(storageB))
+      .fork(UniKvs.branch().connect(new KeyPrefix("a:")).persist(storageA))
+      .fork(UniKvs.branch().connect(new KeyPrefix("b:")).persist(storageB))
       .create();
     await kvs.open();
 
@@ -116,8 +116,8 @@ describe("宛先ごとのプレフィックス", () => {
     const storageB = new Memory();
     const kvs = UniKvs.config<TestMapping>()
       .persist(mainStorage)
-      .fork(UniKvs.branch().transform(new KeyPrefix("a:")).persist(storageA))
-      .fork(UniKvs.branch().transform(new KeyPrefix("b:")).persist(storageB))
+      .fork(UniKvs.branch().connect(new KeyPrefix("a:")).persist(storageA))
+      .fork(UniKvs.branch().connect(new KeyPrefix("b:")).persist(storageB))
       .create();
     await kvs.open();
     storageA.write({ key: "b:k1", data: "contamination", vars: new Variables() });
@@ -148,8 +148,8 @@ describe("宛先ごとのプレフィックス", () => {
     const shared = new KeyPrefix("shared:");
     const kvs = UniKvs.config<TestMapping>()
       .persist(mainStorage)
-      .fork(UniKvs.branch().transform(shared).persist(storageA))
-      .fork(UniKvs.branch().transform(shared).persist(storageB))
+      .fork(UniKvs.branch().connect(shared).persist(storageA))
+      .fork(UniKvs.branch().connect(shared).persist(storageB))
       .create();
     await kvs.open();
 
@@ -170,8 +170,8 @@ describe("適用順序", () => {
     // 準備
     const orderedStorage = new Memory();
     const ordered = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("a:"))
-      .transform(new KeyPrefix("b:"))
+      .connect(new KeyPrefix("a:"))
+      .connect(new KeyPrefix("b:"))
       .persist(orderedStorage)
       .create();
     await ordered.open();
@@ -194,7 +194,7 @@ describe("論理キーの維持", () => {
     // 準備
     const storage = new VarsRecordingStorage();
     const kvs = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenant:"))
+      .connect(new KeyPrefix("tenant:"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -231,11 +231,11 @@ describe("clear の誤解防止", () => {
     // 準備
     const storage = new Memory();
     const tenantA = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenantA:"))
+      .connect(new KeyPrefix("tenantA:"))
       .persist(storage)
       .create();
     const tenantB = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenantB:"))
+      .connect(new KeyPrefix("tenantB:"))
       .persist(storage)
       .create();
     await tenantA.open();
@@ -260,11 +260,11 @@ describe("clear の誤解防止", () => {
     // 準備
     const storage = new Memory();
     const tenantA = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenantA:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("tenantA:", { clearBehavior: "deny" }))
       .persist(storage)
       .create();
     const tenantB = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenantB:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("tenantB:", { clearBehavior: "deny" }))
       .persist(storage)
       .create();
     await tenantA.open();
@@ -288,8 +288,8 @@ describe("clear の誤解防止", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("first:", { clearBehavior: "deny" }))
-      .transform(new KeyPrefix("second:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("first:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("second:", { clearBehavior: "deny" }))
       .persist(storage)
       .create();
     await kvs.open();
@@ -317,8 +317,8 @@ describe("repair との連動", () => {
     const storageA = new Memory();
     const storageB = new Memory();
     const kvs = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenant:"))
-      .transform(new AllowRepair())
+      .connect(new KeyPrefix("tenant:"))
+      .connect(new AllowRepair())
       .persist(storageA)
       .persist(storageB)
       .create();
@@ -343,8 +343,8 @@ describe("repair との連動", () => {
     const storageA = new Memory();
     const storageB = new Memory();
     const kvs = UniKvs.config<TestMapping>()
-      .transform(new KeyPrefix("tenant:"))
-      .transform(new AllowRepair())
+      .connect(new KeyPrefix("tenant:"))
+      .connect(new AllowRepair())
       .persist(storageA)
       .persist(storageB)
       .create();

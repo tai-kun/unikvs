@@ -66,7 +66,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 
   test("ストレージを登録せず create すると MissingStorageError を投げる", ({ expect }) => {
     // 準備
-    const config = new UniKvsConfig(UniKvs).transform(new FakeTransformer());
+    const config = new UniKvsConfig(UniKvs).connect(new FakeTransformer());
 
     // 実行と検証
     expect(() => config.create()).toThrow(MissingStorageError);
@@ -94,8 +94,8 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new TagTransformer("X"))
-      .transform(new TagTransformer("X"))
+      .connect(new TagTransformer("X"))
+      .connect(new TagTransformer("X"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -159,9 +159,9 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new TagTransformer("1"))
+      .connect(new TagTransformer("1"))
       .persist(storage1)
-      .transform(new TagTransformer("2"))
+      .connect(new TagTransformer("2"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -185,7 +185,7 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
-      .transform(new TagTransformer("1"))
+      .connect(new TagTransformer("1"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -206,9 +206,9 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new TagTransformer("1"))
+      .connect(new TagTransformer("1"))
       .persist(storage1)
-      .transform(new TagTransformer("2"))
+      .connect(new TagTransformer("2"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -225,13 +225,13 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     await kvs.close();
   });
 
-  test("persist なし末尾 transform は破棄され読み書きに影響しない", async ({ expect }) => {
+  test("persist なし末尾 connect は破棄され読み書きに影響しない", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     const trailing = new TagTransformer("Z");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage)
-      .transform(trailing)
+      .connect(trailing)
       .create();
     await kvs.open();
 
@@ -258,11 +258,11 @@ describe("UniKvsConfig - fork", () => {
     const storageB = new FakeStorage("storageB");
     const storageC = new FakeStorage("storageC");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new TagTransformer("1"))
-      .fork(UniKvs.branch().transform(new TagTransformer("A")).persist(storageA))
-      .transform(new TagTransformer("2"))
-      .fork(UniKvs.branch().transform(new TagTransformer("B")).persist(storageB))
-      .transform(new TagTransformer("3"))
+      .connect(new TagTransformer("1"))
+      .fork(UniKvs.branch().connect(new TagTransformer("A")).persist(storageA))
+      .connect(new TagTransformer("2"))
+      .fork(UniKvs.branch().connect(new TagTransformer("B")).persist(storageB))
+      .connect(new TagTransformer("3"))
       .persist(storageC)
       .create();
     await kvs.open();
@@ -280,22 +280,22 @@ describe("UniKvsConfig - fork", () => {
     await kvs.close();
   });
 
-  test("fork 内の追加は分岐先に閉じ、後のメインの transform は漏れない", async ({ expect }) => {
+  test("fork 内の追加は分岐先に閉じ、後のメインの connect は漏れない", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const storage3 = new FakeStorage("storage3");
     const storageMain = new FakeStorage("storageMain");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new TagTransformer("1"))
+      .connect(new TagTransformer("1"))
       .fork(
         UniKvs.branch()
-          .transform(new TagTransformer("A"))
+          .connect(new TagTransformer("A"))
           .persist(storage1)
           .persist(storage2)
-          .fork(UniKvs.branch().transform(new TagTransformer("N")).persist(storage3)),
+          .fork(UniKvs.branch().connect(new TagTransformer("N")).persist(storage3)),
       )
-      .transform(new TagTransformer("2"))
+      .connect(new TagTransformer("2"))
       .persist(storageMain)
       .create();
     await kvs.open();
@@ -314,12 +314,12 @@ describe("UniKvsConfig - fork", () => {
     await kvs.close();
   });
 
-  test("transform 後に fork 先で追加したストレージも create 対象になる", async ({ expect }) => {
+  test("connect 後に fork 先で追加したストレージも create 対象になる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
     const kvs = new UniKvsConfig(UniKvs)
-      .transform(new TagTransformer("1"))
+      .connect(new TagTransformer("1"))
       .fork(UniKvs.branch().persist(storage))
       .create();
     await kvs.open();

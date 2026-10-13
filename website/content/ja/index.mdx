@@ -31,7 +31,7 @@ import { UniKvs, type Value } from "unikvs";
 const kvs = UniKvs.config<{
   foo: Value<Uint8Array<ArrayBuffer>>;
 }>()
-  .transform(new Compression("gzip"))
+  .connect(new Compression("gzip"))
   .persist(new NodeFs(".tmp"))
   .create();
 

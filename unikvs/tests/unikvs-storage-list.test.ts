@@ -22,7 +22,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const b = new FakeStorage("b");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(probe)
+      .connect(probe)
       .persist(a)
       .persist(b)
       .create();
@@ -52,7 +52,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const server = new FakeStorage("server");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(probe)
+      .connect(probe)
       .persist(cache)
       .persist(server)
       .create();
@@ -76,8 +76,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const server = new FakeStorage("server");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new AllowRepair())
-      .transform(probe)
+      .connect(new AllowRepair())
+      .connect(probe)
       .persist(cache)
       .persist(server)
       .create();
@@ -139,7 +139,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .transform(new AllowRepair())
+      .connect(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();
@@ -183,12 +183,12 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
   });
 
   test("fork の共通 prefix は宛先ごとに単一要素を渡す (plain の set/get)", async ({ expect }) => {
-    // 準備: 親の transform が fork 先の各宛先に prefix として複製される
+    // 準備: 親の connect が fork 先の各宛先に prefix として複製される
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(probe)
+      .connect(probe)
       .fork(UniKvs.branch().persist(a).persist(b))
       .persist(new Memory())
       .create();
@@ -224,7 +224,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const b = new FakeStreamStorage("b");
     const probe = new FakeStreamTransformer<Uint8Array>("probe");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .transform(probe)
+      .connect(probe)
       .persist(a)
       .persist(b)
       .create();
@@ -253,8 +253,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const server = new FakeStreamStorage("server");
     const probe = new FakeStreamTransformer<Uint8Array>("probe");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .transform(new AllowRepair())
-      .transform(probe)
+      .connect(new AllowRepair())
+      .connect(probe)
       .persist(cache)
       .persist(server)
       .create();
@@ -291,7 +291,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(gate)
+      .connect(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -324,7 +324,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const b = new FakeStorage("b");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(probe)
+      .connect(probe)
       .persist(a)
       .persist(b)
       .create();
@@ -349,8 +349,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const server = new FakeStorage("server");
     const probe = new FakeTransformer("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .transform(new AllowRepair())
-      .transform(probe)
+      .connect(new AllowRepair())
+      .connect(probe)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)
@@ -383,8 +383,8 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const probeA = new FakeTransformer("probeA");
     const probeB = new FakeTransformer("probeB");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .fork(UniKvs.branch().transform(probeA).persist(a))
-      .fork(UniKvs.branch().transform(probeB).persist(b))
+      .fork(UniKvs.branch().connect(probeA).persist(a))
+      .fork(UniKvs.branch().connect(probeB).persist(b))
       .persist(new Memory())
       .create();
     await kvs.open();
@@ -430,7 +430,7 @@ describe("UniKvs - unikvs:storageNames の付与", () => {
     const b = new FakeStreamStorage("b");
     const prefix = new FailingPrefix();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .transform(prefix)
+      .connect(prefix)
       .persist(a)
       .persist(b)
       .create();

@@ -122,13 +122,13 @@ describe("UniKvs - 決定的ファズ: トランスフォーマー構成", () =>
 
       let config = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>();
       if (useChecksum) {
-        config = config.transform(new ChecksumSha256());
+        config = config.connect(new ChecksumSha256());
       }
       if (compression !== "none") {
-        config = config.transform(new Compression(compression));
+        config = config.connect(new Compression(compression));
       }
       if (usePassthrough) {
-        config = config.transform(new FakeStreamTransformer("pass-through"));
+        config = config.connect(new FakeStreamTransformer("pass-through"));
       }
       const kvs = config.persist(new Memory()).create();
       await kvs.open();

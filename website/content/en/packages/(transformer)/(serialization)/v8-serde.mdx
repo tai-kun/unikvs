@@ -44,7 +44,7 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .transform(new V8Serde())
+  .connect(new V8Serde())
   .persist(new Memory())
   .create();
 
