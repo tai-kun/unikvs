@@ -16,7 +16,7 @@ import {
 import { MissingStorageError } from "./errors.js";
 import type UniKvs from "./unikvs.js";
 import type { ValueOf } from "./utils.types.js";
-import { UniKvsBranch } from "./unikvs-branch.js";
+import { getDestinationsForFork } from "./unikvs-branch.js";
 import type {
   IUniKvsBranch,
   KeyValueMapping,
@@ -472,19 +472,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public fork(branch: IUniKvsBranch): this {
-    if (!(branch instanceof UniKvsBranch)) {
-      throw new TypeError("fork() expects a branch created by UniKvs.branch().");
-    }
-
-    // private メソッドを構造型経由で呼び出します。型の可視性制限を回避するためです。
-    const subDestinations = (
-      branch as unknown as {
-        _getDestinationsForFork(): readonly {
-          readonly storage: IStorage;
-          readonly transformers: readonly ITransformer[];
-        }[];
-      }
-    )._getDestinationsForFork();
+    const subDestinations = getDestinationsForFork(branch);
 
     // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
     const prefix = [...this.#transformers];

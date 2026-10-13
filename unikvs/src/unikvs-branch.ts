@@ -454,30 +454,70 @@ export interface IUniKvsBranch<
   >;
 }
 
+// `fork` で親に引き継がれる分岐先の情報です。
+type BranchDestination = {
+  readonly storage: IStorage;
+  readonly transformers: ITransformer[];
+};
+
+// `UniKvsBranch` のインスタンスごとの内部状態です。
+// ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、別モジュールの `UniKvsConfig` から内部アクセサー経由で参照できます。
+// `branchStates` 自体は外部に公開しません。
+type BranchState = {
+  // 自前の相対パイプラインです。
+  // 登録順に保持します。
+  transformers: ITransformer[];
+  // 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
+  destinations: BranchDestination[];
+};
+
+// インスタンスと内部状態の対応表です。
+// コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
+const branchStates = new WeakMap<UniKvsBranch, BranchState>();
+
+/**
+ * 分岐先のスナップショットを返します。
+ *
+ * 親の `fork` で接頭辞付加するために使用します。
+ * `UniKvs.branch()` で作成された分岐以外の値が渡されたときは例外を投げます。
+ * 外部からは使用しません。
+ *
+ * @internal
+ * @param branch スナップショットを取得する分岐です。
+ * @returns 分岐先のコピーを返します。
+ */
+export function getDestinationsForFork(branch: IUniKvsBranch): readonly {
+  readonly storage: IStorage;
+  readonly transformers: readonly ITransformer[];
+}[] {
+  const state = branchStates.get(branch as UniKvsBranch);
+  if (!state) {
+    throw new TypeError("fork() expects a branch created by UniKvs.branch().");
+  }
+
+  // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。
+  return state.destinations.map((dest) => ({
+    storage: dest.storage,
+    transformers: [...dest.transformers],
+  }));
+}
+
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export class UniKvsBranch {
-  // 自前の相対パイプラインです。
-  // 登録順に保持します。
-  #transformers: ITransformer[];
-
-  // 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
-  #destinations: { readonly storage: IStorage; readonly transformers: ITransformer[] }[];
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public constructor() {
-    this.#transformers = [];
-    this.#destinations = [];
+    branchStates.set(this, { transformers: [], destinations: [] });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public connect(transformer: ITransformer): this {
-    this.#transformers.push(transformer);
+    branchStates.get(this)!.transformers.push(transformer);
 
     return this;
   }
@@ -486,8 +526,9 @@ export class UniKvsBranch {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public persist(storage: IStorage): this {
+    const state = branchStates.get(this)!;
     // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
-    this.#destinations.push({ storage, transformers: [...this.#transformers] });
+    state.destinations.push({ storage, transformers: [...state.transformers] });
 
     return this;
   }
@@ -496,40 +537,18 @@ export class UniKvsBranch {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public fork(branch: IUniKvsBranch): this {
-    if (!(branch instanceof UniKvsBranch)) {
-      throw new TypeError("fork() expects a branch created by UniKvs.branch().");
-    }
-
-    const subDestinations = branch._getDestinationsForFork();
+    const subDestinations = getDestinationsForFork(branch);
 
     // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
-    const prefix = [...this.#transformers];
+    const state = branchStates.get(this)!;
+    const prefix = [...state.transformers];
     for (const dest of subDestinations) {
-      this.#destinations.push({
+      state.destinations.push({
         storage: dest.storage,
         transformers: [...prefix, ...dest.transformers],
       });
     }
 
     return this;
-  }
-
-  /**
-   * 分岐先のスナップショットを返します。
-   * 親の `fork` で接頭辞付加するために使用します。
-   * 外部からは使用しません。
-   *
-   * @internal
-   * @returns 分岐先のコピーを返します。
-   */
-  private _getDestinationsForFork(): readonly {
-    readonly storage: IStorage;
-    readonly transformers: readonly ITransformer[];
-  }[] {
-    // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。
-    return this.#destinations.map((dest) => ({
-      storage: dest.storage,
-      transformers: [...dest.transformers],
-    }));
   }
 }
