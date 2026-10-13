@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       skip-checks:
-        description: "ビルド・format・lint・テストを省略する（CI 済みの場合用）"
+        description: "format・lint・テストを省略する（CI 済みの場合用）"
         required: false
         type: boolean
         default: false
@@ -60,7 +60,6 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: "ビルド"
-        if: inputs.skip-checks != true
         run: |
           # NOTE: workspaces の定義順がトポロジカル順（依存される側が先）であることを前提に、
           # 上から順にビルドする。順序を変える場合は依存関係を考慮すること。
