@@ -14,9 +14,6 @@ declare const PLAIN_VALUE: unique symbol;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * @template TData 入出力されるデータの型です。
- * @template TInput `set` が受け付ける入力データの型です。
  */
 export type PlainValue<TData = any, TInput = TData> = [
   Type: typeof PLAIN_VALUE,
@@ -31,9 +28,6 @@ declare const STREAM_VALUE: unique symbol;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * @template TChunkData 入出力されるチャンクデータの型です。
- * @template TChunkInput `set` が受け付ける入力チャンクデータの型です。
  */
 export type StreamValue<TChunkData = any, TChunkInput = TChunkData> = [
   Type: typeof STREAM_VALUE,
@@ -43,9 +37,6 @@ export type StreamValue<TChunkData = any, TChunkInput = TChunkData> = [
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * @template TDataAndChunkData データまたはチャンクデータの型です。
- * @template TInput `set` が受け付ける入力データまたは入力チャンクデータの型です。
  */
 export type Value<TDataAndChunkData = any, TInput = TDataAndChunkData> =
   | PlainValue<TDataAndChunkData, TInput>
@@ -94,7 +85,7 @@ export type $InferStreamValueChunkInput<TStreamValue> =
  *
  * 同じライブラリーが複数読み込まれた環境でも認識できるようにグローバルシンボルを使用します。
  */
-const VALUE_SCHEMA_BRAND: unique symbol = Symbol.for("unikvs.valueSchema");
+const VALUE_SCHEMA_BRAND: unique symbol = /*#__PURE__*/ Symbol.for("unikvs.valueSchema");
 
 /**
  * スキーマ付きの値が扱うデータの種類です。
@@ -156,7 +147,11 @@ function createValueSchemaDescriptor(
   kind: ValueSchemaKind,
   schema: v.GenericSchema,
 ): ValueSchemaDescriptor {
-  return { [VALUE_SCHEMA_BRAND]: true, kind, schema };
+  return {
+    [VALUE_SCHEMA_BRAND]: true,
+    kind,
+    schema,
+  };
 }
 
 /**
@@ -222,7 +217,9 @@ export function Value<const TSchema extends v.GenericSchema>(
 /**
  * オブジェクト形式のスキーマ定義です。キーをそのままキーとして扱います。
  */
-export type UniKvsSchemaRecord = { readonly [key: string]: Value<any, any> };
+export type UniKvsSchemaRecord = {
+  readonly [key: string]: Value<any, any>;
+};
 
 /**
  * 配列形式のスキーマ定義です。キーのスキーマと値のスキーマの組を並べます。
@@ -249,7 +246,9 @@ export type $InferKeyValueMapping<TSchema extends UniKvsSchema> =
 /**
  * 検証済みのオブジェクト形式のスキーマ定義です。
  */
-export type UniKvsSchemaInfoRecord = { readonly [key: string]: ValueSchemaInfo };
+export type UniKvsSchemaInfoRecord = {
+  readonly [key: string]: ValueSchemaInfo;
+};
 
 /**
  * 検証済みの配列形式のスキーマ定義です。
@@ -321,8 +320,9 @@ class EntriesValueSchemaResolver implements IValueSchemaResolver {
 
   public constructor(entries: UniKvsSchemaInfoEntries) {
     this.#entries = entries;
-    this.#keySchema =
-      entries.length > 0 ? v.union(entries.map(([keySchema]) => keySchema)) : undefined;
+    if (entries.length > 0) {
+      this.#keySchema = v.union(entries.map(([keySchema]) => keySchema));
+    }
   }
 
   public resolve(key: string): ValueSchemaInfo | undefined {

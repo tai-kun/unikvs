@@ -7,6 +7,9 @@ import type {
   IEncodableStreamTransformer,
 } from "@unikvs/core";
 
+import UniKvsStorage from "./_storage.js";
+import UniKvsTransformer from "./_transformer.js";
+import { branchStates, getBranchDestinationsForFork } from "./_unikvs-branch.js";
 import type { Value } from "./_value-schemas.js";
 
 /**
@@ -253,7 +256,9 @@ export type $CheckForkDecodeChunk<TParentInput, TBranchHeadOutput> =
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
-export type KeyValueMapping<T = any> = { readonly [key: IStorage.Key]: Value<T> };
+export type KeyValueMapping<T = any> = {
+  readonly [key: IStorage.Key]: Value<T>;
+};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
@@ -278,6 +283,91 @@ export interface IUniKvsBranch<
   TLastEncodeChunkOutput = any,
   TBranchHasPersist extends boolean = false,
 > {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  fork<
+    TSubChunkInput,
+    TSubChunkOutput,
+    TSubHeadEncodeDataInput,
+    TSubHeadDecodeDataOutput,
+    TSubHeadEncodeChunkInput,
+    TSubHeadDecodeChunkOutput,
+    TSubLastDecodeDataInput,
+    TSubLastEncodeDataOutput,
+    TSubLastDecodeChunkInput,
+    TSubLastEncodeChunkOutput,
+    TSubHasPersist extends boolean,
+  >(
+    branch: IUniKvsBranch<
+      any,
+      TSubChunkInput,
+      TSubChunkOutput,
+      TSubHeadEncodeDataInput,
+      TSubHeadDecodeDataOutput,
+      TSubHeadEncodeChunkInput,
+      TSubHeadDecodeChunkOutput,
+      TSubLastDecodeDataInput,
+      TSubLastEncodeDataOutput,
+      TSubLastDecodeChunkInput,
+      TSubLastEncodeChunkOutput,
+      TSubHasPersist
+    > &
+      (TSubHasPersist extends true
+        ? $CheckForkEncodeData<TLastEncodeDataOutput, TSubHeadEncodeDataInput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkDecodeData<TLastDecodeDataInput, TSubHeadDecodeDataOutput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastEncodeChunkOutput, TSubHeadEncodeChunkInput>
+        : unknown) &
+      (TSubHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastDecodeChunkInput, TSubHeadDecodeChunkOutput>
+        : unknown),
+  ): IUniKvsBranch<
+    TKeyValueMapping,
+    TSubHasPersist extends true
+      ? [TBranchChunkInput] extends [never]
+        ? never
+        : [TSubChunkInput] extends [never]
+          ? never
+          : TBranchChunkInput
+      : TBranchChunkInput,
+    TSubHasPersist extends true
+      ? [TBranchChunkOutput] extends [never]
+        ? never
+        : [TSubChunkOutput] extends [never]
+          ? never
+          : TBranchChunkOutput
+      : TBranchChunkOutput,
+    TSubHasPersist extends true
+      ? $IsUnknown<THeadEncodeDataInput> extends true
+        ? TSubHeadEncodeDataInput
+        : THeadEncodeDataInput
+      : THeadEncodeDataInput,
+    TSubHasPersist extends true
+      ? $IsUnknown<THeadDecodeDataOutput> extends true
+        ? TSubHeadDecodeDataOutput
+        : THeadDecodeDataOutput
+      : THeadDecodeDataOutput,
+    TSubHasPersist extends true
+      ? $IsUnknown<THeadEncodeChunkInput> extends true
+        ? TSubHeadEncodeChunkInput
+        : THeadEncodeChunkInput
+      : THeadEncodeChunkInput,
+    TSubHasPersist extends true
+      ? $IsUnknown<THeadDecodeChunkOutput> extends true
+        ? TSubHeadDecodeChunkOutput
+        : THeadDecodeChunkOutput
+      : THeadDecodeChunkOutput,
+    TLastDecodeDataInput,
+    TLastEncodeDataOutput,
+    TLastDecodeChunkInput,
+    TLastEncodeChunkOutput,
+    TBranchHasPersist extends true ? true : TSubHasPersist
+  >;
+
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
@@ -367,139 +457,6 @@ export interface IUniKvsBranch<
     TLastEncodeChunkOutput,
     true
   >;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  fork<
-    TSubChunkInput,
-    TSubChunkOutput,
-    TSubHeadEncodeDataInput,
-    TSubHeadDecodeDataOutput,
-    TSubHeadEncodeChunkInput,
-    TSubHeadDecodeChunkOutput,
-    TSubLastDecodeDataInput,
-    TSubLastEncodeDataOutput,
-    TSubLastDecodeChunkInput,
-    TSubLastEncodeChunkOutput,
-    TSubHasPersist extends boolean,
-  >(
-    branch: IUniKvsBranch<
-      any,
-      TSubChunkInput,
-      TSubChunkOutput,
-      TSubHeadEncodeDataInput,
-      TSubHeadDecodeDataOutput,
-      TSubHeadEncodeChunkInput,
-      TSubHeadDecodeChunkOutput,
-      TSubLastDecodeDataInput,
-      TSubLastEncodeDataOutput,
-      TSubLastDecodeChunkInput,
-      TSubLastEncodeChunkOutput,
-      TSubHasPersist
-    > &
-      (TSubHasPersist extends true
-        ? $CheckForkEncodeData<TLastEncodeDataOutput, TSubHeadEncodeDataInput>
-        : unknown) &
-      (TSubHasPersist extends true
-        ? $CheckForkDecodeData<TLastDecodeDataInput, TSubHeadDecodeDataOutput>
-        : unknown) &
-      (TSubHasPersist extends true
-        ? $CheckForkEncodeChunk<TLastEncodeChunkOutput, TSubHeadEncodeChunkInput>
-        : unknown) &
-      (TSubHasPersist extends true
-        ? $CheckForkDecodeChunk<TLastDecodeChunkInput, TSubHeadDecodeChunkOutput>
-        : unknown),
-  ): IUniKvsBranch<
-    TKeyValueMapping,
-    TSubHasPersist extends true
-      ? [TBranchChunkInput] extends [never]
-        ? never
-        : [TSubChunkInput] extends [never]
-          ? never
-          : TBranchChunkInput
-      : TBranchChunkInput,
-    TSubHasPersist extends true
-      ? [TBranchChunkOutput] extends [never]
-        ? never
-        : [TSubChunkOutput] extends [never]
-          ? never
-          : TBranchChunkOutput
-      : TBranchChunkOutput,
-    TSubHasPersist extends true
-      ? $IsUnknown<THeadEncodeDataInput> extends true
-        ? TSubHeadEncodeDataInput
-        : THeadEncodeDataInput
-      : THeadEncodeDataInput,
-    TSubHasPersist extends true
-      ? $IsUnknown<THeadDecodeDataOutput> extends true
-        ? TSubHeadDecodeDataOutput
-        : THeadDecodeDataOutput
-      : THeadDecodeDataOutput,
-    TSubHasPersist extends true
-      ? $IsUnknown<THeadEncodeChunkInput> extends true
-        ? TSubHeadEncodeChunkInput
-        : THeadEncodeChunkInput
-      : THeadEncodeChunkInput,
-    TSubHasPersist extends true
-      ? $IsUnknown<THeadDecodeChunkOutput> extends true
-        ? TSubHeadDecodeChunkOutput
-        : THeadDecodeChunkOutput
-      : THeadDecodeChunkOutput,
-    TLastDecodeDataInput,
-    TLastEncodeDataOutput,
-    TLastDecodeChunkInput,
-    TLastEncodeChunkOutput,
-    TBranchHasPersist extends true ? true : TSubHasPersist
-  >;
-}
-
-// `fork` で親に引き継がれる分岐先の情報です。
-type BranchDestination = {
-  readonly storage: IStorage;
-  readonly transformers: ITransformer[];
-};
-
-// `UniKvsBranch` のインスタンスごとの内部状態です。
-// ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、別モジュールの `UniKvsConfig` から内部アクセサー経由で参照できます。
-// `branchStates` 自体は外部に公開しません。
-type BranchState = {
-  // 自前の相対パイプラインです。
-  // 登録順に保持します。
-  transformers: ITransformer[];
-  // 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
-  destinations: BranchDestination[];
-};
-
-// インスタンスと内部状態の対応表です。
-// コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
-const branchStates = new WeakMap<UniKvsBranch, BranchState>();
-
-/**
- * 分岐先のスナップショットを返します。
- *
- * 親の `fork` で接頭辞付加するために使用します。
- * `UniKvs.branch()` で作成された分岐以外の値が渡されたときは例外を投げます。
- * 外部からは使用しません。
- *
- * @internal
- * @param branch スナップショットを取得する分岐です。
- * @returns 分岐先のコピーを返します。
- */
-export function getDestinationsForFork(branch: IUniKvsBranch): readonly {
-  readonly storage: IStorage;
-  readonly transformers: readonly ITransformer[];
-}[] {
-  const state = branchStates.get(branch as UniKvsBranch);
-  if (!state) {
-    throw new TypeError("fork() expects a branch created by UniKvs.branch().");
-  }
-
-  // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。
-  return state.destinations.map((dest) => ({
-    storage: dest.storage,
-    transformers: [...dest.transformers],
-  }));
 }
 
 /**
@@ -510,14 +467,36 @@ export class UniKvsBranch {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public constructor() {
-    branchStates.set(this, { transformers: [], destinations: [] });
+    branchStates.set(this, {
+      transformers: [],
+      destinations: [],
+    });
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public fork(branch: IUniKvsBranch): this {
+    const state = branchStates.get(this)!;
+    const prefix = [...state.transformers];
+    const destinations = getBranchDestinationsForFork(branch);
+    for (const dest of destinations) {
+      state.destinations.push({
+        storage: dest.storage,
+        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのトランスフォーマーを結合します。
+        transformers: [...prefix, ...dest.transformers],
+      });
+    }
+
+    return this;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public connect(transformer: ITransformer): this {
-    branchStates.get(this)!.transformers.push(transformer);
+    const state = branchStates.get(this)!;
+    state.transformers.push(UniKvsTransformer.from(transformer));
 
     return this;
   }
@@ -527,27 +506,11 @@ export class UniKvsBranch {
    */
   public persist(storage: IStorage): this {
     const state = branchStates.get(this)!;
-    // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
-    state.destinations.push({ storage, transformers: [...state.transformers] });
-
-    return this;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public fork(branch: IUniKvsBranch): this {
-    const subDestinations = getDestinationsForFork(branch);
-
-    // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
-    const state = branchStates.get(this)!;
-    const prefix = [...state.transformers];
-    for (const dest of subDestinations) {
-      state.destinations.push({
-        storage: dest.storage,
-        transformers: [...prefix, ...dest.transformers],
-      });
-    }
+    state.destinations.push({
+      storage: UniKvsStorage.from(storage),
+      // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
+      transformers: [...state.transformers],
+    });
 
     return this;
   }

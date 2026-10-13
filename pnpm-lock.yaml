@@ -1463,8 +1463,8 @@ importers:
         specifier: ^0.0.6
         version: 0.0.6(@logtape/logtape@2.3.11)
       call-fn-once:
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.3.11)(typescript@7.0.2)
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5
@@ -1558,8 +1558,8 @@ importers:
         specifier: ^0.0.6
         version: 0.0.6(@logtape/logtape@2.3.11)
       call-fn-once:
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.3.11)(typescript@7.0.2)
       inspect-lite:
         specifier: ^0.0.2
         version: 0.0.2
@@ -1610,8 +1610,8 @@ importers:
         specifier: ^0.0.6
         version: 0.0.6(@logtape/logtape@2.3.11)
       call-fn-once:
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.3.11)(typescript@7.0.2)
       inspect-lite:
         specifier: ^0.0.2
         version: 0.0.2
@@ -1677,8 +1677,8 @@ importers:
         specifier: ^0.0.12
         version: 0.0.12(@logtape/logtape@2.3.11)(valibot@1.5.0(typescript@7.0.2))
       call-fn-once:
-        specifier: ^0.0.6
-        version: 0.0.6
+        specifier: ^0.0.8
+        version: 0.0.8(@logtape/logtape@2.3.11)(typescript@7.0.2)
       try-capture-stack-trace:
         specifier: ^0.0.3
         version: 0.0.3
@@ -3940,9 +3940,6 @@ packages:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
     engines: {node: '>=6.5'}
 
-  abort-signal-utils@0.0.2:
-    resolution: {integrity: sha512-dkti+X9MEn6rSbQ9mDoO9Eco9JO2eqlrvTaiJ6T/yXT8PyfT62xnX3dtmjdyEfIxonmJtav+MqmSFd71HX4S0Q==}
-
   abort-signal-utils@0.0.6:
     resolution: {integrity: sha512-E/vQ1mSHE9j3eRvMGO/y78BJM3PghYwCg8X6f53+wjuZr+S4juvGZNJtr0ob/AecxrsnrRJFYq1JX+ul2vD5HA==}
     peerDependencies:
@@ -4183,8 +4180,8 @@ packages:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
 
-  call-fn-once@0.0.6:
-    resolution: {integrity: sha512-UEHgUCzg07DyCcf/qJafSQiOktoUiO97iJ22H7zaHpT8qrTNSoU9GHJ9MhDm+5f3LdJMBUR8LJdASa3ILMG2+Q==}
+  call-fn-once@0.0.8:
+    resolution: {integrity: sha512-r4WXaQMZ//Zyj1o0HLzQA0sj4JRqMiHS5qDcPJ0gaExF62ZsaKbXDZgcmQTmzFjLM7ruYswAkYqSuAfvXJxTGA==}
 
   callsites@3.1.0:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
@@ -8934,10 +8931,6 @@ snapshots:
     dependencies:
       event-target-shim: 5.0.1
 
-  abort-signal-utils@0.0.2:
-    dependencies:
-      try-capture-stack-trace: 0.0.3
-
   abort-signal-utils@0.0.6(@logtape/logtape@2.3.11):
     dependencies:
       '@logtape/logtape': 2.3.11
@@ -9350,10 +9343,15 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
 
-  call-fn-once@0.0.6:
+  call-fn-once@0.0.8(@logtape/logtape@2.3.11)(typescript@7.0.2):
     dependencies:
-      abort-signal-utils: 0.0.2
+      abort-signal-utils: 0.0.6(@logtape/logtape@2.3.11)
+      i18n-error-base: 0.0.8(valibot@1.5.0(typescript@7.0.2))
       maypromise: 0.0.4
+      valibot: 1.5.0(typescript@7.0.2)
+    transitivePeerDependencies:
+      - '@logtape/logtape'
+      - typescript
 
   callsites@3.1.0: {}
 

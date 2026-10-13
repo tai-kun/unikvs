@@ -1,7 +1,7 @@
 import type {
-  Variables,
   IStorage,
   ErrorBase,
+  Variables,
   IReadableStream,
   IWritableStream,
 } from "@unikvs/core";
@@ -31,7 +31,22 @@ const WritableStreamSchema = v.custom<IWritableStream>(
   "Expected a WritableStream",
 );
 
+/**
+ * 同じオブジェクトに対して同じ UniKvsStorage インスタンスを返すためのメモです。
+ */
+const memoizedMap = /*#__PURE__*/ new WeakMap<IStorage, UniKvsStorage>();
+
 export default class UniKvsStorage {
+  public static from(storage: IStorage): UniKvsStorage {
+    let memoized = memoizedMap.get(storage);
+    if (!memoized) {
+      memoized = new UniKvsStorage(storage);
+      memoizedMap.set(storage, memoized);
+    }
+
+    return memoized;
+  }
+
   private readonly io: IStorage;
 
   private managed: boolean;
@@ -41,9 +56,6 @@ export default class UniKvsStorage {
     this.managed = false;
   }
 
-  /**
-   * ストレージの名前です。
-   */
   public get name(): string {
     return this.io.name;
   }
@@ -173,6 +185,7 @@ export default class UniKvsStorage {
 
     await this.io.onOtherWriteError({
       key,
+      vars,
       error: err as ErrorBase<{
         readonly plugin: "storage";
         readonly action: "write";
@@ -182,7 +195,6 @@ export default class UniKvsStorage {
         }[];
       }>,
       signal,
-      vars,
     });
   }
 }

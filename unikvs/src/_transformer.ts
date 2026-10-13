@@ -1,4 +1,4 @@
-import type { Variables, IDecodable, ITransformer, IEncodable } from "@unikvs/core";
+import type { Variables, IDecodable, IEncodable, ITransformer } from "@unikvs/core";
 
 import { isReadableStream, isWritableStream } from "./_streams.js";
 import * as v from "./_valibot.js";
@@ -42,7 +42,22 @@ const DecodableSchema = v.custom<IDecodable>(
   "Expected a transform stream compatible value",
 );
 
+/**
+ * 同じオブジェクトに対して同じ UniKvsTransformer インスタンスを返すためのメモです。
+ */
+const memoizedMap = /*#__PURE__*/ new WeakMap<ITransformer, UniKvsTransformer>();
+
 export default class UniKvsTransformer {
+  public static from(transformer: ITransformer): UniKvsTransformer {
+    let memoized = memoizedMap.get(transformer);
+    if (!memoized) {
+      memoized = new UniKvsTransformer(transformer);
+      memoizedMap.set(transformer, memoized);
+    }
+
+    return memoized;
+  }
+
   private readonly tf: ITransformer;
 
   private managed: boolean;
@@ -52,9 +67,6 @@ export default class UniKvsTransformer {
     this.managed = false;
   }
 
-  /**
-   * トランスフォーマーの名前です。
-   */
   public get name(): string {
     return this.tf.name;
   }

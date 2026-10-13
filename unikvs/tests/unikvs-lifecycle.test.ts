@@ -1,12 +1,12 @@
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
+import type { PlainValue } from "../src/_value-schemas.js";
 import {
   PluginOperationAggregateError,
   UniKvsIsNotOpenError,
   UniKvsIsOpenError,
 } from "../src/errors.js";
-import type { PlainValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStorage, FakeTransformer, Gate, isPending, withTimeout } from "./_helpers.js";
 

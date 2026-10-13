@@ -3,7 +3,7 @@ import { Memory } from "@unikvs/memory";
 import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
 
-import { PlainValue, StreamValue, type Value } from "../src/unikvs-config.js";
+import { PlainValue, StreamValue, type Value } from "../src/_value-schemas.js";
 import type { IUniKvsConfigBuilder } from "../src/unikvs-config.js";
 import type {
   KeyofKeyValueMappingHasPlainValue,

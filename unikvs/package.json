@@ -34,7 +34,7 @@
     "@unikvs/core": "workspace:*",
     "abort-signal-utils": "^0.0.6",
     "asyncmux": "^0.0.12",
-    "call-fn-once": "^0.0.6",
+    "call-fn-once": "^0.0.8",
     "try-capture-stack-trace": "^0.0.3"
   },
   "devDependencies": {

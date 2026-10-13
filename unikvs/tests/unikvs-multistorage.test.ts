@@ -1,8 +1,8 @@
 import type { IStorage } from "@unikvs/core";
 import { describe, test } from "vitest";
 
+import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import { KeyNotFoundError, PluginOperationAggregateError } from "../src/errors.js";
-import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import {
   FakeStorage,

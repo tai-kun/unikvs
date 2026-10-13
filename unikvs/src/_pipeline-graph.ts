@@ -1,9 +1,11 @@
 import {
-  RepairNotAllowedError,
+  type Variables,
   type IEncodable,
   type IReadableStream,
-  type Variables,
+  RepairNotAllowedError,
 } from "@unikvs/core";
+import { toAbortPromise } from "abort-signal-utils";
+import { callAbortableFnOnce } from "call-fn-once";
 
 import { logger, repairLogger } from "./_logger.js";
 import type UniKvsStorage from "./_storage.js";
@@ -57,19 +59,21 @@ export type PipelineLeaf = {
 /**
  * パイプラインの節となるトランスフォーマーです。
  */
-export type PipelineNode = {
+type PipelineNode = {
   /**
    * 節を構成するトランスフォーマーです。
    */
   readonly transformer: UniKvsTransformer;
 
   /**
-   * この節で終端する葉です。登録順に保持します。
+   * この節で終端する葉です。
+   * 登録順に保持します。
    */
   readonly leaves: readonly PipelineLeaf[];
 
   /**
-   * 子の節です。登録順に保持します。
+   * 子の節です。
+   * 登録順に保持します。
    */
   readonly children: readonly PipelineNode[];
 
@@ -79,12 +83,14 @@ export type PipelineNode = {
   readonly entries: readonly PipelineEntry[];
 
   /**
-   * 部分木の全葉です。登録順に保持します。
+   * 部分木の全葉です。
+   * 登録順に保持します。
    */
   readonly allLeaves: readonly PipelineLeaf[];
 
   /**
-   * 部分木の全葉名です。凍結されています。
+   * 部分木の全葉名です。
+   * 凍結されています。
    */
   readonly leafNames: readonly string[];
 };
@@ -119,7 +125,7 @@ type PipelineEntry =
 /**
  * コンパイル前の宛先定義です。
  */
-export type PipelineDestination = {
+type PipelineDestination = {
   /**
    * データの永続化先です。
    */
@@ -134,7 +140,7 @@ export type PipelineDestination = {
 /**
  * 葉へ書き込むためのエンコード結果です。
  */
-export type EncodeTarget = {
+type EncodeTarget = {
   /**
    * 対象の葉です。
    */
@@ -204,7 +210,7 @@ export type StreamEncodeTarget = {
 /**
  * 構築済みのストリームエンコード木です。
  */
-export type StreamEncodeTree = {
+type StreamEncodeTree = {
   /**
    * 登録順の書き込み対象です。
    */
@@ -217,28 +223,43 @@ export type StreamEncodeTree = {
 };
 
 /**
- * 節の `getEncodable` または `mapKey` が失敗したときの処理です。
- *
- * `true` を返すと節の部分木をスキップします。
- * 例外を投げた場合はそのまま伝播します。
- *
- * @param ex 節の取得または写像で発生した例外です。
- * @param activeLeaves 節の配下で対象となる葉です。
- * @returns 部分木をスキップする場合は `true` を返します。
+ * 書き込み対象とする葉を判定する関数です。
  */
-export type EncodeNodeErrorHandler = (
-  ex: unknown,
-  activeLeaves: readonly PipelineLeaf[],
-) => boolean;
+interface IActiveLeafChecker {
+  /**
+   * 書き込み対象とする葉を判定します。
+   *
+   * @param leaf 対象の葉です。
+   * @returns 判定結果です。
+   */
+  (leaf: PipelineLeaf): boolean;
+}
+
+/**
+ * 節の `getEncodable` または `mapKey` が失敗したときの処理を行う関数です。
+ */
+interface IEncodeNodeErrorHandler {
+  /**
+   * 節の `getEncodable` または `mapKey` が失敗したときの処理です。
+   *
+   * `true` を返すと節の部分木をスキップします。
+   * 例外を投げた場合はそのまま伝播します。
+   *
+   * @param ex 節の取得または写像で発生した例外です。
+   * @param activeLeaves 節の配下で対象となる葉です。
+   * @returns 部分木をスキップする場合は `true` を返します。
+   */
+  (ex: unknown, activeLeaves: readonly PipelineLeaf[]): boolean;
+}
 
 /**
  * ストリームエンコード木の構築オプションです。
  */
-export type BuildEncodeTreeOptions = {
+type BuildEncodeTreeOptions = {
   /**
    * 書き込み対象とする葉を判定します。省略時は全葉が対象です。
    */
-  readonly isActive?: ((leaf: PipelineLeaf) => boolean) | undefined;
+  readonly isActive?: IActiveLeafChecker | undefined;
 
   /**
    * 読み取り側と書き込み側を分岐するかどうかです。書き戻しで使用します。
@@ -248,7 +269,7 @@ export type BuildEncodeTreeOptions = {
   /**
    * 節のセットアップ失敗を分類します。省略時は生の例外として伝播します。
    */
-  readonly onNodeError?: EncodeNodeErrorHandler | undefined;
+  readonly onNodeError?: IEncodeNodeErrorHandler | undefined;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -279,7 +300,7 @@ type MutableNode = {
   /**
    * 直下の葉と節を登録順に列挙した項目列です。finalize で確定します。
    */
-  entries: PipelineEntry[];
+  entries: readonly PipelineEntry[];
 
   /**
    * 部分木の全葉です。登録順に保持します。finalize で確定します。
@@ -313,16 +334,6 @@ type ResolvedNode = {
 };
 
 /**
- * 名簿の配列を凍結した複製として作成します。
- *
- * @param names 複製元の名簿です。
- * @returns 凍結した複製を返します。
- */
-function freezeStorageNames(names: readonly string[]): readonly string[] {
-  return Object.freeze([...names]);
-}
-
-/**
  * 親の vars から葉名の名簿を反映した vars を派生します。
  *
  * 名前配列が親と同一なら複製しません。
@@ -342,10 +353,14 @@ function deriveVars(
     return parent;
   }
 
-  const cloned = parent.clone({ "unikvs:storageNames": names });
+  // 複製時の上書きは読み取り専用を迂回するため、親が読み取り専用でも差し替えられます。
+  const cloned = parent.clone({
+    "unikvs:storageNames": names,
+  });
   if (!cloned.isReadonly("unikvs:storageNames")) {
-    cloned.setReadonly("unikvs:storageNames", cloned.get("unikvs:storageNames"));
+    cloned.setReadonly("unikvs:storageNames", names);
   }
+
   return cloned;
 }
 
@@ -358,12 +373,13 @@ function deriveVars(
  * @param isActive 書き込み対象とする葉を判定します。
  * @returns 対象の葉を登録順に返します。
  */
-function activeLeavesOf(
-  node: PipelineNode,
-  isActive: (leaf: PipelineLeaf) => boolean,
-): readonly PipelineLeaf[] {
+function activeLeavesOf(node: PipelineNode, isActive: IActiveLeafChecker): readonly PipelineLeaf[] {
   const active = node.allLeaves.filter(isActive);
-  return active.length === node.allLeaves.length ? node.allLeaves : active;
+  if (active.length === node.allLeaves.length) {
+    return node.allLeaves;
+  }
+
+  return active;
 }
 
 /**
@@ -375,9 +391,11 @@ function activeLeavesOf(
  * @returns 葉の列に対応する名簿を返します。
  */
 function activeLeafNames(leaves: readonly PipelineLeaf[]): readonly string[] {
-  return leaves.length === 1
-    ? leaves[0]!.nameNames
-    : freezeStorageNames(leaves.map((leaf) => leaf.name));
+  if (leaves.length === 1) {
+    return leaves[0]!.nameNames;
+  }
+
+  return Object.freeze(leaves.map((leaf) => leaf.name));
 }
 
 /**
@@ -394,18 +412,28 @@ function createEntries(
   leaves: readonly PipelineLeaf[],
   children: readonly PipelineNode[],
 ): PipelineEntry[] {
-  const ordered: { readonly order: number; readonly entry: PipelineEntry }[] = [
-    ...leaves.map((leaf) => ({ order: leaf.index, entry: { kind: "leaf" as const, leaf } })),
+  return [
+    ...leaves.map((leaf) => ({
+      order: leaf.index,
+      entry: {
+        kind: "leaf" as const,
+        leaf,
+      },
+    })),
     ...children.map((child) => ({
       order: child.allLeaves[0]!.index,
-      entry: { kind: "node" as const, node: child },
+      entry: {
+        kind: "node" as const,
+        node: child,
+      },
     })),
-  ];
-  return ordered.toSorted((a, b) => a.order - b.order).map((item) => item.entry);
+  ]
+    .toSorted((a, b) => a.order - b.order)
+    .map((item) => item.entry);
 }
 
 /**
- * 計画フェーズで確定した葉です。
+ * 計画段階で確定した葉です。
  */
 type PlannedLeaf = {
   /**
@@ -425,7 +453,7 @@ type PlannedLeaf = {
 };
 
 /**
- * 計画フェーズで確定した節です。
+ * 計画段階で確定した節です。
  */
 type PlannedNode = {
   /**
@@ -445,19 +473,29 @@ type PlannedNode = {
 type GraphEntry =
   | {
       /**
-       * 確定済みの節です。
+       * 葉であることを示します。
        */
-      readonly planned: PlannedNode;
-    }
-  | {
+      readonly kind: "leaf";
+
       /**
        * 確定済みの葉です。
        */
       readonly leaf: PlannedLeaf;
+    }
+  | {
+      /**
+       * 節であることを示します。
+       */
+      readonly kind: "node";
+
+      /**
+       * 確定済みの節です。
+       */
+      readonly node: PlannedNode;
     };
 
 /**
- * 計画フェーズで節 1 件を確定します。
+ * 計画段階で節 1 件を確定します。
  *
  * ストリームはまだ作らず、encodable とキーだけを確保します。
  * 対象葉を含まない節は null を返し、呼び出し側がその分岐を除去します。
@@ -476,9 +514,9 @@ async function planNode(
   parentVars: Variables,
   parentNames: readonly string[] | undefined,
   parentKey: string,
-  isActive: ((leaf: PipelineLeaf) => boolean) | undefined,
+  isActive: IActiveLeafChecker | undefined,
   signal: AbortSignal,
-  onNodeError: EncodeNodeErrorHandler | undefined,
+  onNodeError: IEncodeNodeErrorHandler | undefined,
 ): Promise<PlannedNode | null> {
   signal.throwIfAborted();
 
@@ -496,7 +534,7 @@ async function planNode(
     encodable = await node.transformer.getEncodable(vars, signal);
     key = await node.transformer.mapKey(vars, signal, parentKey);
   } catch (ex) {
-    if (onNodeError?.(ex, activeLeaves) === true) {
+    if (onNodeError?.(ex, activeLeaves)) {
       return null;
     }
 
@@ -531,20 +569,40 @@ async function planNode(
 
   const entries: GraphEntry[] = [];
   for (const entry of node.entries) {
-    if (entry.kind === "leaf") {
-      const planned = leafPlans.get(entry.leaf);
-      if (planned !== undefined) {
-        entries.push({ leaf: planned });
+    switch (entry.kind) {
+      case "leaf": {
+        const planned = leafPlans.get(entry.leaf);
+        if (planned !== undefined) {
+          entries.push({
+            kind: "leaf",
+            leaf: planned,
+          });
+        }
+
+        break;
       }
-    } else {
-      const planned = childPlans.get(entry.node);
-      if (planned !== undefined) {
-        entries.push({ planned });
+
+      case "node": {
+        const planned = childPlans.get(entry.node);
+        if (planned !== undefined) {
+          entries.push({
+            kind: "node",
+            node: planned,
+          });
+        }
+
+        break;
       }
+
+      default:
+        entry satisfies never;
     }
   }
 
-  return { encodable, entries };
+  return {
+    entries,
+    encodable,
+  };
 }
 
 /**
@@ -565,8 +623,8 @@ function buildGraph(
   streams: Set<IReadableStream>,
 ): void {
   const assigned: IReadableStream[] = [];
-  let current = input;
 
+  let current = input;
   for (let i = 0; i < entries.length; i++) {
     if (i < entries.length - 1) {
       const [branch, rest] = current.tee();
@@ -582,18 +640,23 @@ function buildGraph(
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
     const stream = assigned[i]!;
+    switch (entry.kind) {
+      case "leaf":
+        targets.push({
+          ...entry.leaf,
+          stream,
+        });
+        break;
 
-    if ("leaf" in entry) {
-      targets.push({
-        leaf: entry.leaf.leaf,
-        stream,
-        vars: entry.leaf.vars,
-        key: entry.leaf.key,
-      });
-    } else {
-      const output = stream.pipeThrough(entry.planned.encodable);
-      streams.add(output);
-      buildGraph(entry.planned.entries, output, targets, streams);
+      case "node": {
+        const output = stream.pipeThrough(entry.node.encodable);
+        streams.add(output);
+        buildGraph(entry.node.entries, output, targets, streams);
+        break;
+      }
+
+      default:
+        entry satisfies never;
     }
   }
 }
@@ -609,7 +672,7 @@ function buildGraph(
  *
  * 共有節の `mapKey` は操作内で 1 回だけ実行されます。並行して解決されるときも進行中の Promise を共有するため、写像が重複しません。
  */
-export class LeafResolver {
+class LeafResolver {
   /**
    * 単一葉のグラフで根と共有する名前空間です。複数葉では undefined です。
    */
@@ -631,9 +694,9 @@ export class LeafResolver {
   readonly #signal: AbortSignal;
 
   /**
-   * 節ごとの解決 Promise のメモです。並行解決でも写像が重複しません。
+   * 節ごとの解決結果のキャッシュです。進行中の Promise を共有し、確定後は結果を使い回します。
    */
-  readonly #memo = new Map<PipelineNode, Promise<ResolvedNode>>();
+  readonly #nodeCache: callAbortableFnOnce.CacheMap;
 
   /**
    * 通常は `PipelineGraph.createResolver` から生成します。
@@ -653,6 +716,7 @@ export class LeafResolver {
     this.#rootVars = rootVars;
     this.#rootKey = rootKey;
     this.#signal = signal;
+    this.#nodeCache = new Map();
   }
 
   /**
@@ -665,32 +729,41 @@ export class LeafResolver {
     // 宛先ごとの写像の開始前に中断を確認します。
     this.#signal.throwIfAborted();
 
+    let key = this.#rootKey;
     let vars = this.#rootVars;
     let names = this.#rootParentNames;
-    let key = this.#rootKey;
 
     for (const node of leaf.path) {
-      // 共有節は未完了の Promise をメモ化し、並行解決でも写像は 1 回だけです。
-      let pending = this.#memo.get(node);
-      if (pending === undefined) {
-        const nodeVars = deriveVars(vars, node.leafNames, names);
-        pending = node.transformer
-          .mapKey(nodeVars, this.#signal, key)
-          .then((nodeKey): ResolvedNode => ({
-            vars: nodeVars,
-            names: node.leafNames,
-            key: nodeKey,
-          }));
-        this.#memo.set(node, pending);
-      }
+      // 共有節は進行中の Promise を共有し、並行解決でも写像は 1 回だけです。
+      const resolvedNode = await callAbortableFnOnce({
+        fn: async (signal) => {
+          const nodeVars = deriveVars(vars, node.leafNames, names);
+          using abortPromise = toAbortPromise(this.#signal);
+          const resolvedNode = await Promise.race([
+            node.transformer.mapKey(nodeVars, signal, key).then((nodeKey): ResolvedNode => ({
+              key: nodeKey,
+              vars: nodeVars,
+              names: node.leafNames,
+            })),
+            abortPromise,
+          ]);
 
-      const resolved = await pending;
-      vars = resolved.vars;
-      names = resolved.names;
-      key = resolved.key;
+          return resolvedNode;
+        },
+        key: node,
+        signal: this.#signal,
+        cacheMap: this.#nodeCache,
+      });
+      key = resolvedNode.key;
+      vars = resolvedNode.vars;
+      names = resolvedNode.names;
     }
 
-    return { leaf, vars: deriveVars(vars, leaf.nameNames, names), key };
+    return {
+      key,
+      leaf,
+      vars: deriveVars(vars, leaf.nameNames, names),
+    };
   }
 }
 
@@ -706,57 +779,13 @@ export class LeafResolver {
  * 宛先の変換チェーンをトランスフォーマーのインスタンス同一性で共有する根付き木として保持し、操作ごとの走査・エンコード・書き戻し・ストリーム構築を提供します。
  *
  * 不変条件:
- * - 葉 (`leaves`) と各節の項目 (`entries`) は宛先の登録順です。
- * - 名前簿 (`leafNames` / `nameNames`) は凍結された配列で、直通区間では参照を共有します。
- * - 単一葉のグラフでは全節と葉が同じ vars インスタンスを使います (`prepareRootVars`)。
- * - 共有節は 1 操作内で 1 回だけ `encode` / `getEncodable` を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
+ * - 葉（`leaves`）と各節の項目（`entries`）は宛先の登録順です。
+ * - 名簿（`leafNames` / `nameNames`）は凍結された配列で、直通区間では参照を共有します。
+ * - 単一葉のグラフでは全節と葉が同じ vars インスタンスを使います（`prepareRootVars`）。
+ * - 共有節は 1 操作内で 1 回だけ（`encode` / `getEncodable`）を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
  * - 書き戻しの拒否は、走査中と書き込み中の 2 経路で分類します。いずれも即時に確定します。
  */
 export class PipelineGraph {
-  /**
-   * 全葉です。登録順に保持します。
-   */
-  readonly #leaves: readonly PipelineLeaf[];
-
-  /**
-   * 根直下の葉と節を登録順に列挙した静的な項目列です。
-   */
-  readonly #entries: readonly PipelineEntry[];
-
-  /**
-   * 全葉名です。凍結されています。
-   */
-  readonly #leafNames: readonly string[];
-
-  /**
-   * open/close/onClear の対象となるトランスフォーマーです。初出順に保持します。
-   */
-  readonly #transformers: readonly UniKvsTransformer[];
-
-  /**
-   * 全葉数が 1 件かどうかです。
-   */
-  readonly #singleLeaf: boolean;
-
-  /**
-   * 単一葉のグラフで根と共有する名前空間です。複数葉では undefined です。
-   */
-  readonly #rootParentNames: readonly string[] | undefined;
-
-  private constructor(
-    leaves: readonly PipelineLeaf[],
-    entries: readonly PipelineEntry[],
-    leafNames: readonly string[],
-    transformers: readonly UniKvsTransformer[],
-  ) {
-    this.#leaves = leaves;
-    this.#entries = entries;
-    this.#leafNames = leafNames;
-    this.#transformers = transformers;
-    this.#singleLeaf = leaves.length === 1;
-    this.#rootParentNames = this.#singleLeaf ? leaves[0]!.nameNames : undefined;
-  }
-
   /**
    * 宛先定義の列を trie にコンパイルします。
    *
@@ -772,28 +801,29 @@ export class PipelineGraph {
     const transformers: UniKvsTransformer[] = [];
     const seenTransformers = new Set<UniKvsTransformer>();
 
-    for (const destination of destinations) {
+    for (const dest of destinations) {
       // 葉の index は登録順のもとです。名簿・書き込み順・エラー識別の基準になります。
       const index = allLeaves.length;
-      const name = destination.storage.name;
+      const name = dest.storage.name;
       const path: PipelineNode[] = [];
-      let siblings = rootChildren;
       let parent: MutableNode | null = null;
       let canRepair = false;
 
-      for (const transformer of destination.transformers) {
+      let siblings = rootChildren;
+      for (const transformer of dest.transformers) {
         // 共有はインスタンス同一性だけで判定し、同構造でも別インスタンスは共有しません。
         let node = siblings.find((candidate) => candidate.transformer === transformer);
         if (node === undefined) {
           node = {
-            transformer,
             leaves: [],
-            children: [],
             entries: [],
+            children: [],
             allLeaves: [],
             leafNames: [],
+            transformer,
           };
           siblings.push(node);
+
           // open/close/onClear の重複実行を避けるため、初出のインスタンスだけを保持します。
           if (!seenTransformers.has(transformer)) {
             seenTransformers.add(transformer);
@@ -811,12 +841,12 @@ export class PipelineGraph {
       }
 
       const leaf: PipelineLeaf = {
-        storage: destination.storage,
-        index,
         name,
-        canRepair,
-        nameNames: freezeStorageNames([name]),
         path,
+        index,
+        storage: dest.storage,
+        canRepair,
+        nameNames: Object.freeze([name]),
       };
 
       if (parent === null) {
@@ -824,6 +854,7 @@ export class PipelineGraph {
       } else {
         parent.leaves.push(leaf);
       }
+
       allLeaves.push(leaf);
     }
 
@@ -832,53 +863,113 @@ export class PipelineGraph {
       if (node.leaves.length === 0 && node.children.length === 1) {
         const child = node.children[0]!;
         finalize(child);
+        node.entries = [
+          {
+            kind: "node",
+            node: child,
+          },
+        ];
         node.allLeaves = child.allLeaves;
         node.leafNames = child.leafNames;
-        node.entries = [{ kind: "node", node: child }];
-        return;
-      }
+      } else {
+        const leaves = [...node.leaves];
+        for (const child of node.children) {
+          finalize(child);
+          leaves.push(...child.allLeaves);
+        }
 
-      const leaves = [...node.leaves];
-      for (const child of node.children) {
-        finalize(child);
-        leaves.push(...child.allLeaves);
+        leaves.sort((a, b) => a.index - b.index);
+
+        node.entries = createEntries(node.leaves, node.children);
+        node.allLeaves = leaves;
+        if (leaves.length === 1) {
+          node.leafNames = leaves[0]!.nameNames;
+        } else {
+          node.leafNames = Object.freeze(leaves.map((leaf) => leaf.name));
+        }
       }
-      const sorted = leaves.toSorted((a, b) => a.index - b.index);
-      node.allLeaves = sorted;
-      node.leafNames =
-        sorted.length === 1
-          ? sorted[0]!.nameNames
-          : freezeStorageNames(sorted.map((leaf) => leaf.name));
-      node.entries = createEntries(node.leaves, node.children);
     };
 
     for (const child of rootChildren) {
       finalize(child);
     }
 
-    let rootAll: readonly PipelineLeaf[];
+    let rootEntries: readonly PipelineEntry[];
+    let rootAllLeaves: readonly PipelineLeaf[];
     let rootLeafNames: readonly string[];
-    let rootEntries: PipelineEntry[];
-
     if (rootLeaves.length === 0 && rootChildren.length === 1) {
       const child = rootChildren[0]!;
-      rootAll = child.allLeaves;
+      rootEntries = [
+        {
+          kind: "node",
+          node: child,
+        },
+      ];
+      rootAllLeaves = child.allLeaves;
       rootLeafNames = child.leafNames;
-      rootEntries = [{ kind: "node", node: child }];
     } else {
       const collected = [...rootLeaves];
       for (const child of rootChildren) {
         collected.push(...child.allLeaves);
       }
-      rootAll = collected.toSorted((a, b) => a.index - b.index);
-      rootLeafNames =
-        rootAll.length === 1
-          ? rootAll[0]!.nameNames
-          : freezeStorageNames(rootAll.map((leaf) => leaf.name));
+
       rootEntries = createEntries(rootLeaves, rootChildren);
+      rootAllLeaves = collected.toSorted((a, b) => a.index - b.index);
+      if (rootAllLeaves.length === 1) {
+        rootLeafNames = rootAllLeaves[0]!.nameNames;
+      } else {
+        rootLeafNames = Object.freeze(rootAllLeaves.map((leaf) => leaf.name));
+      }
     }
 
-    return new PipelineGraph(rootAll, rootEntries, rootLeafNames, transformers);
+    return new PipelineGraph(rootAllLeaves, rootEntries, rootLeafNames, transformers);
+  }
+
+  /**
+   * 全葉です。
+   * 登録順に保持します。
+   */
+  readonly #leaves: readonly PipelineLeaf[];
+
+  /**
+   * 根直下の葉と節を登録順に列挙した静的な項目列です。
+   */
+  readonly #entries: readonly PipelineEntry[];
+
+  /**
+   * 全葉名です。
+   */
+  readonly #leafNames: readonly string[];
+
+  /**
+   * open/close/onClear の対象となるトランスフォーマーです。初出順に保持します。
+   */
+  readonly #transformers: readonly UniKvsTransformer[];
+
+  /**
+   * 全葉数が 1 件かどうかです。
+   */
+  readonly #isSingleLeaf: boolean;
+
+  /**
+   * 単一葉のグラフで根と共有する名前空間です。複数葉では undefined です。
+   */
+  readonly #rootParentNames: readonly string[] | undefined;
+
+  private constructor(
+    leaves: readonly PipelineLeaf[],
+    entries: readonly PipelineEntry[],
+    leafNames: readonly string[],
+    transformers: readonly UniKvsTransformer[],
+  ) {
+    this.#leaves = leaves;
+    this.#entries = entries;
+    this.#leafNames = leafNames;
+    this.#transformers = transformers;
+    this.#isSingleLeaf = leaves.length === 1;
+    if (this.#isSingleLeaf) {
+      this.#rootParentNames = leaves[0]!.nameNames;
+    }
   }
 
   /**
@@ -889,7 +980,8 @@ export class PipelineGraph {
   }
 
   /**
-   * open/close/onClear の対象となるトランスフォーマーです。初出順・重複なしです。
+   * open/close/onClear の対象となるトランスフォーマーです。
+   * 初出順・重複なしです。
    */
   public get transformers(): readonly UniKvsTransformer[] {
     return this.#transformers;
@@ -898,8 +990,8 @@ export class PipelineGraph {
   /**
    * 全葉数が 1 件かどうかです。
    */
-  public get singleLeaf(): boolean {
-    return this.#singleLeaf;
+  public get isSingleLeaf(): boolean {
+    return this.#isSingleLeaf;
   }
 
   /**
@@ -924,14 +1016,14 @@ export class PipelineGraph {
    * @yields 前順の節です。
    */
   public *nodes(): IterableIterator<PipelineNode> {
-    const visit = function* (node: PipelineNode): IterableIterator<PipelineNode> {
+    function* visit(node: PipelineNode): IterableIterator<PipelineNode> {
       yield node;
       for (const entry of node.entries) {
         if (entry.kind === "node") {
           yield* visit(entry.node);
         }
       }
-    };
+    }
 
     for (const entry of this.#entries) {
       if (entry.kind === "node") {
@@ -949,7 +1041,7 @@ export class PipelineGraph {
    * @returns 根の vars を返します。
    */
   public prepareRootVars(vars: Variables): Variables {
-    if (this.#singleLeaf) {
+    if (this.#isSingleLeaf) {
       vars.setReadonly("unikvs:storageNames", this.#leaves[0]!.nameNames);
     }
 
@@ -965,7 +1057,11 @@ export class PipelineGraph {
    * @returns clear 用の vars を返します。
    */
   public prepareClearVars(vars: Variables): Variables {
-    return this.#singleLeaf ? vars : deriveVars(vars, this.#leafNames, undefined);
+    if (this.#isSingleLeaf) {
+      return vars;
+    }
+
+    return deriveVars(vars, this.#leafNames, undefined);
   }
 
   /**
@@ -1011,10 +1107,10 @@ export class PipelineGraph {
     data: unknown,
   ): Promise<unknown> {
     let decoded = data;
-    // 長いチェーンでも早期に止められるよう、各段の後に中断を確認します。
+
+    using abortPromise = toAbortPromise(signal);
     for (const node of leaf.path.toReversed()) {
-      decoded = await node.transformer.decode(vars, signal, decoded);
-      signal.throwIfAborted();
+      decoded = await Promise.race([node.transformer.decode(vars, signal, decoded), abortPromise]);
     }
 
     return decoded;
@@ -1038,7 +1134,6 @@ export class PipelineGraph {
     let decoded = source;
     // 途中で失敗したときは構築済みのパイプを解放し、ソースストリームがロックされたまま残らないようにします。
     const pipes: IReadableStream[] = [];
-
     try {
       for (const node of leaf.path.toReversed()) {
         const d = await node.transformer.getDecodable(vars, signal);
@@ -1081,20 +1176,20 @@ export class PipelineGraph {
       parentKey: string,
     ): Promise<void> => {
       signal.throwIfAborted();
+
       const vars = deriveVars(parentVars, node.leafNames, parentNames);
       // mapKey は encode の後に、同じ vars で適用します。
       const encoded = await node.transformer.encode(vars, signal, input);
       const nodeKey = await node.transformer.mapKey(vars, signal, parentKey);
-
       for (const entry of node.entries) {
         if (entry.kind === "node") {
           await walk(entry.node, encoded, vars, node.leafNames, nodeKey);
         } else {
           targets.push({
-            leaf: entry.leaf,
-            data: encoded,
-            vars: deriveVars(vars, entry.leaf.nameNames, node.leafNames),
             key: nodeKey,
+            data: encoded,
+            leaf: entry.leaf,
+            vars: deriveVars(vars, entry.leaf.nameNames, node.leafNames),
           });
         }
       }
@@ -1105,16 +1200,18 @@ export class PipelineGraph {
         await walk(entry.node, data, rootVars, this.#rootParentNames, key);
       } else {
         targets.push({
-          leaf: entry.leaf,
-          data,
-          vars: deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
           key,
+          data,
+          leaf: entry.leaf,
+          vars: deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
         });
       }
     }
 
     // 登録順に整列し、並列書き込みの開始順を安定させます。
-    return targets.toSorted((a, b) => a.leaf.index - b.leaf.index);
+    targets.sort((a, b) => a.leaf.index - b.leaf.index);
+
+    return targets;
   }
 
   /**
@@ -1228,6 +1325,7 @@ export class PipelineGraph {
       if (shared || activeLeaves[0]!.canRepair) {
         try {
           signal.throwIfAborted();
+
           output = await node.transformer.encode(vars, signal, input);
           nodeKey = await node.transformer.mapKey(vars, signal, parentKey);
         } catch (ex) {
@@ -1318,7 +1416,7 @@ export class PipelineGraph {
   /**
    * 共有節を 1 回だけ取得しながらストリームエンコード木を構築します。
    *
-   * 計画フェーズ (`getEncodable` / `mapKey`) の失敗は何も構築せずに伝播するため、呼び出し側が `streams` のソースをキャンセルします。
+   * 計画段階 (`getEncodable` / `mapKey`) の失敗は何も構築せずに伝播するため、呼び出し側が `streams` のソースをキャンセルします。
    * tee とパイプの構築後の失敗は、`streams` に収集したストリーム (分割した読み取り側を含む) を内部でキャンセルしてから伝播します。
    * 呼び出し側はどちらの失敗でも `streams` をキャンセルできます。
    *
@@ -1338,7 +1436,7 @@ export class PipelineGraph {
     streams: Set<IReadableStream>,
     options: BuildEncodeTreeOptions = {},
   ): Promise<StreamEncodeTree> {
-    // フェーズ 1 は計画です。encodable とキーだけを確定し、ストリームはまだ作りません。
+    // 段階 1 は計画です。encodable とキーだけを確定し、ストリームはまだ作りません。
     const { isActive, onNodeError } = options;
     const childPlans = new Map<PipelineNode, PlannedNode>();
     const leafPlans = new Map<PipelineLeaf, PlannedLeaf>();
@@ -1350,9 +1448,9 @@ export class PipelineGraph {
         }
 
         leafPlans.set(entry.leaf, {
+          key,
           leaf: entry.leaf,
           vars: deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
-          key,
         });
       } else {
         const planned = await planNode(
@@ -1375,12 +1473,18 @@ export class PipelineGraph {
       if (entry.kind === "leaf") {
         const planned = leafPlans.get(entry.leaf);
         if (planned !== undefined) {
-          entries.push({ leaf: planned });
+          entries.push({
+            kind: "leaf",
+            leaf: planned,
+          });
         }
       } else {
         const planned = childPlans.get(entry.node);
         if (planned !== undefined) {
-          entries.push({ planned });
+          entries.push({
+            kind: "node",
+            node: planned,
+          });
         }
       }
     }
@@ -1388,7 +1492,7 @@ export class PipelineGraph {
     const targets: StreamEncodeTarget[] = [];
     let readStream = source;
 
-    // フェーズ 2 は tee と pipe の構築です。対象がなければ tee も作りません。
+    // 段階 2 は tee と pipe の構築です。対象がなければ tee も作りません。
     if (entries.length > 0) {
       let rootInput = source;
       try {
@@ -1409,8 +1513,10 @@ export class PipelineGraph {
       }
     }
 
+    targets.sort((a, b) => a.leaf.index - b.leaf.index);
+
     return {
-      targets: targets.toSorted((a, b) => a.leaf.index - b.leaf.index),
+      targets,
       readStream,
     };
   }

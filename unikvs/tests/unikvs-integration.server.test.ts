@@ -8,7 +8,7 @@ import { NodeFs } from "@unikvs/fs.node";
 import { Memory } from "@unikvs/memory";
 import { afterEach, describe, test } from "vitest";
 
-import type { Value } from "../src/unikvs-config.js";
+import type { Value } from "../src/_value-schemas.js";
 import UniKvs from "../src/unikvs.js";
 import { collectBytes, streamOf } from "./_helpers.js";
 

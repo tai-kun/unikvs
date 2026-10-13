@@ -1,45 +1,48 @@
 export type {
-  DecodableStreamNotSupportedErrorArgs,
-  DecodableStreamNotSupportedErrorMeta,
-  EncodableStreamNotSupportedErrorArgs,
-  EncodableStreamNotSupportedErrorMeta,
+  Issue,
+  KeyNotFoundErrorArgs,
+  KeyNotFoundErrorMeta,
   InvalidInputErrorArgs,
   InvalidInputErrorMeta,
   InvalidOutputErrorArgs,
   InvalidOutputErrorMeta,
-  Issue,
-  KeyNotFoundErrorArgs,
-  KeyNotFoundErrorMeta,
-  PluginOperationAggregateErrorArgs,
-  PluginOperationAggregateErrorMeta,
-  ReadableStreamNotSupportedErrorArgs,
-  ReadableStreamNotSupportedErrorMeta,
   StorageIsNotOpenErrorArgs,
   StorageIsNotOpenErrorMeta,
   TransformerIsNotOpenErrorArgs,
   TransformerIsNotOpenErrorMeta,
+  PluginOperationAggregateErrorArgs,
+  PluginOperationAggregateErrorMeta,
+  ReadableStreamNotSupportedErrorArgs,
+  ReadableStreamNotSupportedErrorMeta,
   WritableStreamNotSupportedErrorArgs,
   WritableStreamNotSupportedErrorMeta,
+  DecodableStreamNotSupportedErrorArgs,
+  DecodableStreamNotSupportedErrorMeta,
+  EncodableStreamNotSupportedErrorArgs,
+  EncodableStreamNotSupportedErrorMeta,
 } from "./errors.js";
 export {
-  DecodableStreamNotSupportedError,
-  EncodableStreamNotSupportedError,
-  InvalidInputError,
-  InvalidOutputError,
-  InvalidUsageErrorBase,
   KeyNotFoundError,
+  InvalidInputError,
+  UniKvsIsOpenError,
+  InvalidOutputError,
   MissingStorageError,
-  PluginOperationAggregateError,
-  ReadableStreamNotSupportedError,
+  UniKvsIsNotOpenError,
+  InvalidUsageErrorBase,
   StorageIsNotOpenError,
   TransformerIsNotOpenError,
-  UniKvsIsNotOpenError,
-  UniKvsIsOpenError,
+  PluginOperationAggregateError,
+  ReadableStreamNotSupportedError,
   WritableStreamNotSupportedError,
+  DecodableStreamNotSupportedError,
+  EncodableStreamNotSupportedError,
 } from "./errors.js";
 
+export type { ValueSchemaInfo, ValueSchemaKind } from "./_value-schemas.js";
+export { Value, PlainValue, StreamValue } from "./_value-schemas.js";
+
 export type * from "./unikvs-config.js";
-export { PlainValue, StreamValue, Value, default as UniKvsConfig } from "./unikvs-config.js";
+export { default as UniKvsConfig } from "./unikvs-config.js";
 
 export type * from "./unikvs.js";
 export { default as UniKvs } from "./unikvs.js";

@@ -2,7 +2,7 @@ import { AllowRepair } from "@unikvs/allow-repair";
 import { type IStorage, type ITransformer, RepairNotAllowedError } from "@unikvs/core";
 import { describe, test, vi } from "vitest";
 
-import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
+import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import UniKvs from "../src/unikvs.js";
 import {
   FakeStorage,

@@ -1,8 +1,8 @@
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
+import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import { MissingStorageError } from "../src/errors.js";
-import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStorage, FakeStreamStorage, FakeTransformer, collect, streamOf } from "./_helpers.js";

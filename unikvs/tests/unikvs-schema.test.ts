@@ -4,16 +4,16 @@ import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
 
 import {
-  InvalidInputError,
-  InvalidOutputError,
-  PluginOperationAggregateError,
-} from "../src/errors.js";
-import {
   type $InferKeyValueMapping,
   Value,
   PlainValue,
   StreamValue,
-} from "../src/unikvs-config.js";
+} from "../src/_value-schemas.js";
+import {
+  InvalidInputError,
+  InvalidOutputError,
+  PluginOperationAggregateError,
+} from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { ValueStream } from "../src/value-stream.types.js";
 

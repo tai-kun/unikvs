@@ -4,6 +4,7 @@ import { Variables } from "@unikvs/core";
 import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
+import { getBranchDestinationsForFork } from "./_unikvs-branch.js";
 import * as v from "./_valibot.js";
 import {
   type UniKvsSchema,
@@ -14,43 +15,23 @@ import {
   createValueSchemaResolver,
 } from "./_value-schemas.js";
 import { MissingStorageError } from "./errors.js";
-import type UniKvs from "./unikvs.js";
-import type { ValueOf } from "./utils.types.js";
-import { getDestinationsForFork } from "./unikvs-branch.js";
 import type {
   IUniKvsBranch,
   KeyValueMapping,
-  KeyofKeyValueMapping,
-  $InferDecodeDataInput,
-  $InferEncodeDataOutput,
-  $InferDecodeChunkInput,
-  $InferEncodeChunkOutput,
-  $InferWriteChunkInput,
-  $InferReadChunkOutput,
-  $CheckForkEncodeData,
   $CheckForkDecodeData,
-  $CheckForkEncodeChunk,
+  $CheckForkEncodeData,
+  KeyofKeyValueMapping,
   $CheckForkDecodeChunk,
+  $CheckForkEncodeChunk,
+  $InferDecodeDataInput,
+  $InferReadChunkOutput,
+  $InferWriteChunkInput,
+  $InferDecodeChunkInput,
+  $InferEncodeDataOutput,
+  $InferEncodeChunkOutput,
 } from "./unikvs-branch.js";
-
-export {
-  type UniKvsSchema,
-  type ValueSchemaInfo,
-  type UniKvsSchemaRecord,
-  type UniKvsSchemaEntries,
-  type $InferPlainValueData,
-  type IValueSchemaResolver,
-  type $InferKeyValueMapping,
-  type $InferPlainValueInput,
-  type $InferStreamValueChunkData,
-  type $InferStreamValueChunkInput,
-  Value,
-  PlainValue,
-  StreamValue,
-} from "./_value-schemas.js";
-
-export { UniKvsBranch } from "./unikvs-branch.js";
-export type { IUniKvsBranch, KeyValueMapping, KeyofKeyValueMapping } from "./unikvs-branch.js";
+import type UniKvs from "./unikvs.js";
+import type { ValueOf } from "./utils.types.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -72,6 +53,72 @@ export interface IUniKvsConfigBuilder<
   TLastTransformerDecodeChunkInput = TUniKvsChunkOutput,
   TLastTransformerEncodeChunkOutput = TUniKvsChunkInput,
 > {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  fork<
+    TBranchChunkInput,
+    TBranchChunkOutput,
+    TBranchHeadEncodeDataInput,
+    TBranchHeadDecodeDataOutput,
+    TBranchHeadEncodeChunkInput,
+    TBranchHeadDecodeChunkOutput,
+    TBranchLastDecodeDataInput,
+    TBranchLastEncodeDataOutput,
+    TBranchLastDecodeChunkInput,
+    TBranchLastEncodeChunkOutput,
+    TBranchHasPersist extends boolean,
+  >(
+    branch: IUniKvsBranch<
+      any,
+      TBranchChunkInput,
+      TBranchChunkOutput,
+      TBranchHeadEncodeDataInput,
+      TBranchHeadDecodeDataOutput,
+      TBranchHeadEncodeChunkInput,
+      TBranchHeadDecodeChunkOutput,
+      TBranchLastDecodeDataInput,
+      TBranchLastEncodeDataOutput,
+      TBranchLastDecodeChunkInput,
+      TBranchLastEncodeChunkOutput,
+      TBranchHasPersist
+    > &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        : unknown),
+  ): IUniKvsConfigBuilder<
+    TKeyValueMapping,
+    TUniKvsDataInput,
+    TUniKvsDataOutput,
+    TBranchHasPersist extends true
+      ? [TUniKvsChunkInput] extends [never]
+        ? never
+        : [TBranchChunkInput] extends [never]
+          ? never
+          : TUniKvsChunkInput
+      : TUniKvsChunkInput,
+    TBranchHasPersist extends true
+      ? [TUniKvsChunkOutput] extends [never]
+        ? never
+        : [TBranchChunkOutput] extends [never]
+          ? never
+          : TUniKvsChunkOutput
+      : TUniKvsChunkOutput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
+  >;
+
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
@@ -139,72 +186,6 @@ export interface IUniKvsConfigBuilder<
     TLastTransformerDecodeChunkInput,
     TLastTransformerEncodeChunkOutput
   >;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  fork<
-    TBranchChunkInput,
-    TBranchChunkOutput,
-    TBranchHeadEncodeDataInput,
-    TBranchHeadDecodeDataOutput,
-    TBranchHeadEncodeChunkInput,
-    TBranchHeadDecodeChunkOutput,
-    TBranchLastDecodeDataInput,
-    TBranchLastEncodeDataOutput,
-    TBranchLastDecodeChunkInput,
-    TBranchLastEncodeChunkOutput,
-    TBranchHasPersist extends boolean,
-  >(
-    branch: IUniKvsBranch<
-      any,
-      TBranchChunkInput,
-      TBranchChunkOutput,
-      TBranchHeadEncodeDataInput,
-      TBranchHeadDecodeDataOutput,
-      TBranchHeadEncodeChunkInput,
-      TBranchHeadDecodeChunkOutput,
-      TBranchLastDecodeDataInput,
-      TBranchLastEncodeDataOutput,
-      TBranchLastDecodeChunkInput,
-      TBranchLastEncodeChunkOutput,
-      TBranchHasPersist
-    > &
-      (TBranchHasPersist extends true
-        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
-        : unknown) &
-      (TBranchHasPersist extends true
-        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
-        : unknown) &
-      (TBranchHasPersist extends true
-        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
-        : unknown) &
-      (TBranchHasPersist extends true
-        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
-        : unknown),
-  ): IUniKvsConfigBuilder<
-    TKeyValueMapping,
-    TUniKvsDataInput,
-    TUniKvsDataOutput,
-    TBranchHasPersist extends true
-      ? [TUniKvsChunkInput] extends [never]
-        ? never
-        : [TBranchChunkInput] extends [never]
-          ? never
-          : TUniKvsChunkInput
-      : TUniKvsChunkInput,
-    TBranchHasPersist extends true
-      ? [TUniKvsChunkOutput] extends [never]
-        ? never
-        : [TBranchChunkOutput] extends [never]
-          ? never
-          : TUniKvsChunkOutput
-      : TUniKvsChunkOutput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
-  >;
 }
 
 /**
@@ -221,71 +202,6 @@ export interface IUniKvsConfigFinalizer<
   TLastTransformerDecodeChunkInput = TReadChunkOutput,
   TLastTransformerEncodeChunkOutput = TWriteChunkInput,
 > {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  create(): UniKvs<TKeyValueMapping>;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  connect<
-    TTransformer extends ITransformer<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      any,
-      any,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      any,
-      any,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
-    >,
-  >(
-    transformer: TTransformer,
-  ): IUniKvsConfigFinalizer<
-    TKeyValueMapping,
-    TWriteDataInput,
-    TReadDataOutput,
-    TWriteChunkInput,
-    TReadChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>
-  >;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  persist<
-    TStorage extends IStorage<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
-    >,
-  >(
-    storage: TStorage,
-  ): IUniKvsConfigFinalizer<
-    TKeyValueMapping,
-    TWriteDataInput,
-    TReadDataOutput,
-    [TWriteChunkInput] extends [never]
-      ? never
-      : [$InferWriteChunkInput<TStorage>] extends [never]
-        ? never
-        : TWriteChunkInput,
-    [TReadChunkOutput] extends [never]
-      ? never
-      : [$InferReadChunkOutput<TStorage>] extends [never]
-        ? never
-        : TReadChunkOutput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
-  >;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
@@ -351,6 +267,71 @@ export interface IUniKvsConfigFinalizer<
     TLastTransformerDecodeChunkInput,
     TLastTransformerEncodeChunkOutput
   >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  connect<
+    TTransformer extends ITransformer<
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      any,
+      any,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      any,
+      any,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+    >,
+  >(
+    transformer: TTransformer,
+  ): IUniKvsConfigFinalizer<
+    TKeyValueMapping,
+    TWriteDataInput,
+    TReadDataOutput,
+    TWriteChunkInput,
+    TReadChunkOutput,
+    $InferDecodeDataInput<TTransformer>,
+    $InferEncodeDataOutput<TTransformer>,
+    $InferDecodeChunkInput<TTransformer>,
+    $InferEncodeChunkOutput<TTransformer>
+  >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  persist<
+    TStorage extends IStorage<
+      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
+      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+    >,
+  >(
+    storage: TStorage,
+  ): IUniKvsConfigFinalizer<
+    TKeyValueMapping,
+    TWriteDataInput,
+    TReadDataOutput,
+    [TWriteChunkInput] extends [never]
+      ? never
+      : [$InferWriteChunkInput<TStorage>] extends [never]
+        ? never
+        : TWriteChunkInput,
+    [TReadChunkOutput] extends [never]
+      ? never
+      : [$InferReadChunkOutput<TStorage>] extends [never]
+        ? never
+        : TReadChunkOutput,
+    TLastTransformerDecodeDataInput,
+    TLastTransformerEncodeDataOutput,
+    TLastTransformerDecodeChunkInput,
+    TLastTransformerEncodeChunkOutput
+  >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  create(): UniKvs<TKeyValueMapping>;
 }
 
 /**
@@ -385,18 +366,28 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * 登録済みストレージと各登録時点のパイプラインのスナップショットです。
    */
   readonly #destinations: {
-    readonly storage: IStorage;
-    readonly transformers: ITransformer[];
+    /**
+     * データの永続化先です。
+     */
+    readonly storage: UniKvsStorage;
+
+    /**
+     * ストレージに対するパイプラインです。
+     * 登録順に保持します。
+     */
+    readonly transformers: readonly UniKvsTransformer[];
   }[];
 
   /**
    * 現在のメインのパイプラインです。
    * 登録順に保持します。
    */
-  readonly #transformers: ITransformer[];
+  readonly #transformers: UniKvsTransformer[];
 
-  // キーに対応する値のスキーマ情報を解決するリゾルバーです。
-  #valueSchemaResolver: IValueSchemaResolver | null;
+  /**
+   * キーに対応する値のスキーマ情報を解決するリゾルバーです。
+   */
+  readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -416,41 +407,25 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public create(): UniKvs {
-    const wrappers = new Map<ITransformer, UniKvsTransformer>();
-    const wrap = (tf: ITransformer): UniKvsTransformer => {
-      let w = wrappers.get(tf);
-      if (!w) {
-        w = new UniKvsTransformer(tf);
-        wrappers.set(tf, w);
-      }
-      return w;
-    };
-
-    // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
-    if (this.#destinations.length === 0) {
-      throw new MissingStorageError();
+  public fork(branch: IUniKvsBranch): this {
+    const prefix = [...this.#transformers];
+    const destinations = getBranchDestinationsForFork(branch);
+    for (const dest of destinations) {
+      this.#destinations.push({
+        storage: dest.storage,
+        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのトランスフォーマーを結合します。
+        transformers: [...prefix, ...dest.transformers],
+      });
     }
 
-    // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
-    // 同じトランスフォーマーインスタンスに対するラッパーは共有します。
-    const destinations = this.#destinations.map(({ storage, transformers }) => ({
-      storage: new UniKvsStorage(storage),
-      transformers: transformers.map(wrap),
-    }));
-
-    return new this.#UniKvs(
-      new Variables(),
-      PipelineGraph.compile(destinations),
-      this.#valueSchemaResolver,
-    );
+    return this;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public connect(transformer: ITransformer): this {
-    this.#transformers.push(transformer);
+    this.#transformers.push(UniKvsTransformer.from(transformer));
 
     return this;
   }
@@ -460,7 +435,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   public persist(storage: IStorage): this {
     this.#destinations.push({
-      storage,
+      storage: UniKvsStorage.from(storage),
       // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
       transformers: [...this.#transformers],
     });
@@ -471,18 +446,18 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public fork(branch: IUniKvsBranch): this {
-    const subDestinations = getDestinationsForFork(branch);
-
-    // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、末尾の未使用トランスフォーマーは破棄します。
-    const prefix = [...this.#transformers];
-    for (const dest of subDestinations) {
-      this.#destinations.push({
-        storage: dest.storage,
-        transformers: [...prefix, ...dest.transformers],
-      });
+  public create(): UniKvs {
+    // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
+    if (this.#destinations.length === 0) {
+      throw new MissingStorageError();
     }
 
-    return this;
+    return new this.#UniKvs(
+      new Variables(),
+      // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
+      // 同じトランスフォーマーインスタンスに対するラッパーは共有します。
+      PipelineGraph.compile([...this.#destinations]),
+      this.#valueSchemaResolver,
+    );
   }
 }

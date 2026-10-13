@@ -1,7 +1,7 @@
 import { ReadonlyVariableError, Variables } from "@unikvs/core";
 import { describe, test } from "vitest";
 
-import type { PlainValue, StreamValue } from "../src/unikvs-config.js";
+import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import UniKvs from "../src/unikvs.js";
 import {
   FakeStorage,

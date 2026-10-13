@@ -3,6 +3,7 @@ import type { Variables, IStorage, ITransformer } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { describe, expect, test, vi } from "vitest";
 
+import type { PlainValue, StreamValue, Value } from "../src/_value-schemas.js";
 import {
   InvalidInputError,
   KeyNotFoundError,
@@ -10,7 +11,6 @@ import {
   UniKvsIsNotOpenError,
   UniKvsIsOpenError,
 } from "../src/errors.js";
-import type { PlainValue, StreamValue, Value } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
 /**

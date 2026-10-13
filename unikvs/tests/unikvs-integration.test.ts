@@ -3,7 +3,7 @@ import { Compression } from "@unikvs/compression";
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
-import type { Value } from "../src/unikvs-config.js";
+import type { Value } from "../src/_value-schemas.js";
 import UniKvs from "../src/unikvs.js";
 import { collectBytes, streamOf } from "./_helpers.js";
 

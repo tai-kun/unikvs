@@ -1,8 +1,8 @@
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
+import type { PlainValue } from "../src/_value-schemas.js";
 import { KeyNotFoundError } from "../src/errors.js";
-import type { PlainValue } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 
 describe("UniKvs + Memory", () => {

@@ -11,14 +11,26 @@ import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import { logger, repairLogger } from "./_logger.js";
 import {
-  PipelineGraph,
   type PipelineLeaf,
   type ResolvedLeaf,
   type StreamEncodeTarget,
+  PipelineGraph,
 } from "./_pipeline-graph.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
 import * as v from "./_valibot.js";
+import type {
+  Value,
+  PlainValue,
+  StreamValue,
+  UniKvsSchema,
+  ValueSchemaInfo,
+  $InferPlainValueData,
+  IValueSchemaResolver,
+  $InferKeyValueMapping,
+  $InferPlainValueInput,
+  $InferStreamValueChunkData,
+} from "./_value-schemas.js";
 import {
   type KeyNotFoundErrorArgs,
   KeyNotFoundError,
@@ -26,26 +38,16 @@ import {
   UniKvsIsNotOpenError,
   PluginOperationAggregateError,
 } from "./errors.js";
-import UniKvsConfig, {
-  type Value,
-  type PlainValue,
-  type StreamValue,
-  type UniKvsSchema,
-  type ValueSchemaInfo,
-  type UniKvsConfigOptions,
-  type $InferPlainValueData,
-  type IUniKvsConfigBuilder,
-  type IValueSchemaResolver,
-  type $InferKeyValueMapping,
-  type $InferPlainValueInput,
-  type $InferStreamValueChunkData,
-} from "./unikvs-config.js";
 import {
-  UniKvsBranch,
   type IUniKvsBranch,
   type KeyValueMapping,
   type KeyofKeyValueMapping,
+  UniKvsBranch,
 } from "./unikvs-branch.js";
+import UniKvsConfig, {
+  type UniKvsConfigOptions,
+  type IUniKvsConfigBuilder,
+} from "./unikvs-config.js";
 import type { ValueOf } from "./utils.types.js";
 import type { ValueStream } from "./value-stream.types.js";
 

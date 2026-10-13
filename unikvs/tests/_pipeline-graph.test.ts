@@ -36,7 +36,7 @@ describe("PipelineGraph - 構造の不変条件", () => {
 
     // 検証
     expect(graph.size).toBe(3);
-    expect(graph.singleLeaf).toBe(false);
+    expect(graph.isSingleLeaf).toBe(false);
     expect([...graph].map((leaf) => leaf.name)).toStrictEqual(["a", "b", "c"]);
     expect(graph.leaves.map((leaf) => leaf.name)).toStrictEqual(["a", "b", "c"]);
     expect(graph.transformers.map((transformer) => transformer.name)).toStrictEqual([
@@ -95,7 +95,7 @@ describe("PipelineGraph - 構造の不変条件", () => {
     const vars = graph.prepareRootVars(new Variables());
 
     // 検証
-    expect(graph.singleLeaf).toBe(true);
+    expect(graph.isSingleLeaf).toBe(true);
     expect(graph.size).toBe(1);
     expect(vars.get("unikvs:storageNames")).toStrictEqual(["only"]);
     expect(Object.isFrozen(vars.get("unikvs:storageNames"))).toBe(true);
