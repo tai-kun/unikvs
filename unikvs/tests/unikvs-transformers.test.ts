@@ -4,6 +4,7 @@ import { describe, test } from "vitest";
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
+  PluginOperationAggregateError,
   TransformerIsNotOpenError,
 } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
@@ -411,7 +412,9 @@ describe("UniKvs - トランスフォーマーフック", () => {
     await kvs.close();
   });
 
-  test("onExists が投げると has は失敗し、storage には触れない", async ({ expect }) => {
+  test("onExists の失敗は取りまとめられて has から投げられ、storage には触れない", async ({
+    expect,
+  }) => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
@@ -426,15 +429,26 @@ describe("UniKvs - トランスフォーマーフック", () => {
       .create();
     await kvs.open();
 
-    // 実行と検証
-    await expect(kvs.has("foo")).rejects.toThrow("exists denied");
+    // 実行
+    const error = await kvs.has("foo").catch((ex) => ex);
+
+    // 検証
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    const aggregate = error as PluginOperationAggregateError;
+    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.action).toBe("read");
+    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
+      "exists denied",
+    ]);
     expect(storage.callsOf("exists")).toHaveLength(0);
 
     // 後片付け
     await kvs.close();
   });
 
-  test("onDelete が投げると delete は失敗し、storage から削除されない", async ({ expect }) => {
+  test("onDelete の失敗は取りまとめられて delete から投げられ、storage から削除されない", async ({
+    expect,
+  }) => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
@@ -449,10 +463,64 @@ describe("UniKvs - トランスフォーマーフック", () => {
       .create();
     await kvs.open();
 
-    // 実行と検証
-    await expect(kvs.delete("foo")).rejects.toThrow("delete denied");
+    // 実行
+    const error = await kvs.delete("foo").catch((ex) => ex);
+
+    // 検証
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    const aggregate = error as PluginOperationAggregateError;
+    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.action).toBe("delete");
+    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
+      "delete denied",
+    ]);
     expect(storage.callsOf("delete")).toHaveLength(0);
     expect(storage.map.has("foo")).toBe(true);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("複数の onDelete の失敗は1件の集約エラーに取りまとめられる", async ({ expect }) => {
+    // 準備
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    class BoomDelete extends FakeTransformer {
+      readonly #message: string;
+
+      public constructor(name: string, message: string) {
+        super(name);
+        this.#message = message;
+      }
+
+      public async onDelete(): Promise<void> {
+        throw new Error(this.#message);
+      }
+    }
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new BoomDelete("boom1", "first"))
+      .connect(new BoomDelete("boom2", "second"))
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行
+    const error = await kvs.delete("foo").catch((ex) => ex);
+
+    // 検証: 完了順に依存しないよう理由を整列して比較する
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    const aggregate = error as PluginOperationAggregateError;
+    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.action).toBe("delete");
+    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message).sort()).toStrictEqual([
+      "first",
+      "second",
+    ]);
+    expect(aggregate.meta.errors.map((e) => [e.name, e.index]).sort()).toStrictEqual([
+      ["boom1", 0],
+      ["boom2", 1],
+    ]);
+    expect(storage.callsOf("delete")).toHaveLength(0);
 
     // 後片付け
     await kvs.close();

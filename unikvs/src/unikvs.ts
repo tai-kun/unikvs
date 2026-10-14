@@ -18,6 +18,7 @@ import {
 } from "./_pipeline-graph.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
+import type UniKvsTransformer from "./_transformer.js";
 import type { ValueOf } from "./_types.js";
 import * as v from "./_valibot.js";
 import type {
@@ -958,6 +959,42 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * トランスフォーマーフックを並列に実行し、失敗を取りまとめて投げます。
+   *
+   * @param action 集約エラーに付与する操作名です。
+   * @param signal 中断シグナルです。
+   * @param run トランスフォーマーごとに実行するフックです。
+   */
+  async #runTransformerHooks(
+    action: "read" | "delete" | "clear",
+    signal: AbortSignal,
+    run: (transformer: UniKvsTransformer) => Promise<void>,
+  ): Promise<void> {
+    signal.throwIfAborted();
+
+    const errors: PluginErrorRecord[] = [];
+    await Promise.all(
+      this.#pipeline.transformers.map(async (transformer, index) => {
+        try {
+          await run(transformer);
+        } catch (ex) {
+          errors.push({ name: transformer.name, index, reason: ex });
+        }
+      }),
+    );
+    if (errors.length === 0) {
+      return;
+    }
+
+    // 中断以外の失敗が混ざっていないときは、abort 理由が集約エラーに埋もれないようそのまま投げます。
+    if (signal.aborted && errors.every((error) => error.reason === signal.reason)) {
+      throw signal.reason;
+    }
+
+    throw new PluginOperationAggregateError({ plugin: "transformer", action, errors });
+  }
+
+  /**
    * プレーン値の並列書き込みを行います。
    *
    * @param io 多重化インスタンスです。
@@ -1601,12 +1638,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.rLock({ key, signal });
       try {
-        // 存在確認に先立ち、各トランスフォーマーの onExists を初出順に実行します。
+        // 存在確認に先立ち、各トランスフォーマーの onExists を並列に実行します。
         // onClear と同じく、フックによる vars の変更は後続の解決・走査に引き継がれます。
-        for (const transformer of this.#pipeline.transformers) {
-          signal.throwIfAborted();
-          await transformer.onExists(rootVars, signal, key);
-        }
+        await this.#runTransformerHooks("read", signal, (transformer) =>
+          transformer.onExists(rootVars, signal, key),
+        );
 
         // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
         // exists に失敗したときは次のストレージを試します。
@@ -1683,12 +1719,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.lock({ key, signal });
       try {
-        // 削除に先立ち、各トランスフォーマーの onDelete を初出順に実行します。
+        // 削除に先立ち、各トランスフォーマーの onDelete を並列に実行します。
         // onClear と同じく、フックによる vars の変更は後続の解決・削除に引き継がれます。
-        for (const transformer of this.#pipeline.transformers) {
-          signal.throwIfAborted();
-          await transformer.onDelete(rootVars, signal, key);
-        }
+        await this.#runTransformerHooks("delete", signal, (transformer) =>
+          transformer.onDelete(rootVars, signal, key),
+        );
 
         // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
@@ -1743,15 +1778,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       const rootVars = this.#pipeline.prepareRootVars(vars);
-      // 全宛先の名前空間ごとに onClear を順に実行します。
+      // 全トランスフォーマーの onClear を並列に実行します。
       // 葉が1件だけのときは根の vars をそのまま使います。
       const clearVars = this.#pipeline.prepareClearVars(rootVars);
       const lock = await io.lock({ signal });
       try {
-        for (const transformer of this.#pipeline.transformers) {
-          signal.throwIfAborted();
-          await transformer.onClear(clearVars, signal);
-        }
+        await this.#runTransformerHooks("clear", signal, (transformer) =>
+          transformer.onClear(clearVars, signal),
+        );
 
         // set や repair と同じく onClear による変更を引き継ぐため、実行後の clearVars から分岐します。
         const clearDestVars = this.#pipeline.leaves.map((leaf) =>
