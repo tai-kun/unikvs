@@ -4,9 +4,9 @@ import { Memory } from "@unikvs/memory";
 import { type Random, forCasesAsync } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
-import type { PlainValue, StreamValue, Value } from "../src/_value-schemas.js";
 import { KeyNotFoundError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { PlainValue, StreamValue, Value } from "../src/value-schemas.js";
 import { FakeStreamTransformer, collectBytes, streamOf } from "./_helpers.js";
 
 const SEED = 20260930;

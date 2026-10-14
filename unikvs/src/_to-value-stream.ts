@@ -2,10 +2,10 @@ import type { IReadableStream } from "@unikvs/core";
 import { callAsyncableFnOnce } from "call-fn-once";
 
 import { logger } from "./_logger.js";
-import type { ValueStream } from "./value-stream.types.js";
+import type { IValueStream } from "./types.js";
 
 /**
- * 与えられた `IReadableStream` を `ValueStream` に変換します。
+ * 与えられた `IReadableStream` を `IValueStream` に変換します。
  *
  * @template T ストリームが保持する値の型です。
  * @param readableStream 変換対象となる `IReadableStream` インスタンスです。
@@ -17,7 +17,7 @@ export default function toValueStream<T>(
   readableStream: IReadableStream<T>,
   onAsyncDispose: () => Promise<void>,
   onBeforeDispose?: () => void,
-): ValueStream<T> {
+): IValueStream<T> {
   const cacheMap = new Map();
   const reader = readableStream.getReader();
 

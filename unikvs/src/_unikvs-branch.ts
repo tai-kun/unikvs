@@ -1,6 +1,6 @@
 import type UniKvsStorage from "./_storage.js";
 import type UniKvsTransformer from "./_transformer.js";
-import type { IUniKvsBranch, UniKvsBranch } from "./unikvs-branch.js";
+import type { IUniKvsBranch } from "./unikvs-branch.js";
 
 /**
  * `fork` で親に引き継がれる分岐先の情報です。
@@ -40,7 +40,7 @@ type BranchState = {
  * インスタンスと内部状態の対応表です。
  * コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
  */
-export const branchStates = new WeakMap<UniKvsBranch, BranchState>();
+export const branchStates = /*#__PURE__*/ new WeakMap<IUniKvsBranch, BranchState>();
 
 /**
  * 分岐先のスナップショットを返します。

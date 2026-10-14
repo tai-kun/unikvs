@@ -3,8 +3,8 @@ import { RepairNotAllowedError } from "@unikvs/core";
 import { describe, test, vi } from "vitest";
 
 import { logger, repairLogger } from "../src/_logger.js";
-import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import UniKvs from "../src/unikvs.js";
+import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,

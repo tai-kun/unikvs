@@ -8,7 +8,7 @@ import {
   InvalidOutputError,
 } from "./errors.js";
 
-export type { GenericSchema, InferInput, InferOutput } from "valibot";
+export type { InferInput, InferOutput, GenericSchema } from "valibot";
 export {
   any,
   omit,

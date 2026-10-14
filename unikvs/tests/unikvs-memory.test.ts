@@ -1,9 +1,9 @@
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
-import type { PlainValue } from "../src/_value-schemas.js";
 import { KeyNotFoundError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { PlainValue } from "../src/value-schemas.js";
 
 describe("UniKvs + Memory", () => {
   test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {

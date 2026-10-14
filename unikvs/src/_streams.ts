@@ -55,7 +55,7 @@ export function isWritableStream(input: unknown): input is IWritableStream {
  * @param reason キャンセル理由です。
  */
 export async function cancelStreams(
-  streams: Iterable<{ cancel(reason?: unknown): Promise<void> }>,
+  streams: Iterable<IReadableStream>,
   reason: unknown,
 ): Promise<void> {
   // 同じ参照は 1 回だけキャンセルします。

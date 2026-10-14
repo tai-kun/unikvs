@@ -1,12 +1,12 @@
 import { describe, test } from "vitest";
 
-import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
   TransformerIsNotOpenError,
 } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,

@@ -3,9 +3,9 @@ import { RepairNotAllowedError } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
-import type { PlainValue, StreamValue } from "../src/_value-schemas.js";
 import { PluginOperationAggregateError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,

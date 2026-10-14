@@ -38,8 +38,10 @@ export {
   EncodableStreamNotSupportedError,
 } from "./errors.js";
 
-export type { ValueSchemaInfo, ValueSchemaKind } from "./_value-schemas.js";
-export { Value, PlainValue, StreamValue } from "./_value-schemas.js";
+export type * from "./types.js";
+
+export type * from "./unikvs-branch.js";
+export { default as UniKvsBranch } from "./unikvs-branch.js";
 
 export type * from "./unikvs-config.js";
 export { default as UniKvsConfig } from "./unikvs-config.js";
@@ -47,6 +49,4 @@ export { default as UniKvsConfig } from "./unikvs-config.js";
 export type * from "./unikvs.js";
 export { default as UniKvs } from "./unikvs.js";
 
-export type * from "./utils.types.js";
-
-export type * from "./value-stream.types.js";
+export * from "./value-schemas.js";

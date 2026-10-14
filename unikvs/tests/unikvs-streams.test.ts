@@ -1,9 +1,9 @@
 import { Memory } from "@unikvs/memory";
 import { describe, test } from "vitest";
 
-import type { StreamValue } from "../src/_value-schemas.js";
 import { KeyNotFoundError, PluginOperationAggregateError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { StreamValue } from "../src/value-schemas.js";
 import { FakeStreamStorage, Gate, collect, isPending, streamOf, withTimeout } from "./_helpers.js";
 
 describe("UniKvs - ストリーム書き込み", () => {

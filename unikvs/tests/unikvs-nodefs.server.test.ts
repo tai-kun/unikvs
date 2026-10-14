@@ -3,9 +3,9 @@ import { readdirSync, rmSync } from "node:fs";
 import { NodeFs } from "@unikvs/fs.node";
 import { afterEach, describe, test } from "vitest";
 
-import type { Value } from "../src/_value-schemas.js";
 import { PluginOperationAggregateError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
+import type { Value } from "../src/value-schemas.js";
 
 const roots: string[] = [];
 

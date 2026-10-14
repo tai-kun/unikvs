@@ -1,46 +1,12 @@
 import * as v from "./_valibot.js";
 import { InvalidInputError } from "./errors.js";
+import type { PlainValue, StreamValue } from "./value-schemas.js";
 
 // -------------------------------------------------------------------------------------------------
 //
 // 値の型
 //
 // -------------------------------------------------------------------------------------------------
-
-/**
- * プレーンな値を識別するための固有のシンボルです。
- */
-declare const PLAIN_VALUE: unique symbol;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type PlainValue<TData = any, TInput = TData> = [
-  Type: typeof PLAIN_VALUE,
-  Data: TData,
-  Input: TInput,
-];
-
-/**
- * ストリーム形式の値を識別するための固有のシンボルです。
- */
-declare const STREAM_VALUE: unique symbol;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type StreamValue<TChunkData = any, TChunkInput = TChunkData> = [
-  Type: typeof STREAM_VALUE,
-  ChunkData: TChunkData,
-  ChunkInput: TChunkInput,
-];
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type Value<TDataAndChunkData = any, TInput = TDataAndChunkData> =
-  | PlainValue<TDataAndChunkData, TInput>
-  | StreamValue<TDataAndChunkData, TInput>;
 
 /**
  * PlainValue 型から内部のデータ型を抽出します。
@@ -74,18 +40,14 @@ export type $InferStreamValueChunkData<TStreamValue> =
 export type $InferStreamValueChunkInput<TStreamValue> =
   TStreamValue extends StreamValue<any, infer TChunkInput> ? TChunkInput : never;
 
-// -------------------------------------------------------------------------------------------------
-//
-// 値のスキーマ
-//
-// -------------------------------------------------------------------------------------------------
-
 /**
  * スキーマ付きの値であることを識別するためのブランドです。
  *
  * 同じライブラリーが複数読み込まれた環境でも認識できるようにグローバルシンボルを使用します。
  */
-const VALUE_SCHEMA_BRAND: unique symbol = /*#__PURE__*/ Symbol.for("unikvs.valueSchema");
+export const VALUE_SCHEMA_BRAND: unique symbol = /*#__PURE__*/ Symbol.for(
+  "unikvs:VALUE_SCHEMA_BRAND",
+);
 
 /**
  * スキーマ付きの値が扱うデータの種類です。
@@ -111,103 +73,6 @@ export type ValueSchemaInfo = {
   readonly schema: v.GenericSchema;
 };
 
-/**
- * スキーマ付きの値を表す内部オブジェクトです。
- */
-type ValueSchemaDescriptor = ValueSchemaInfo & {
-  readonly [VALUE_SCHEMA_BRAND]: true;
-};
-
-/**
- * 値が Valibot のスキーマであるかどうかを判定します。
- */
-function isGenericSchema(input: unknown): input is v.GenericSchema {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    typeof (input as { readonly ["~run"]?: unknown })["~run"] === "function"
-  );
-}
-
-/**
- * 値がスキーマ情報であるかどうかを判定します。
- */
-function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    (input as { readonly [VALUE_SCHEMA_BRAND]?: unknown })[VALUE_SCHEMA_BRAND] === true
-  );
-}
-
-/**
- * スキーマ情報を内部オブジェクトとして生成します。
- */
-function createValueSchemaDescriptor(
-  kind: ValueSchemaKind,
-  schema: v.GenericSchema,
-): ValueSchemaDescriptor {
-  return {
-    [VALUE_SCHEMA_BRAND]: true,
-    kind,
-    schema,
-  };
-}
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * プレーンな値のスキーマを定義します。
- *
- * @template TSchema スキーマの型です。
- * @param schema 値の検証に使用する Valibot スキーマです。
- * @returns プレーンな値であることを示す型情報を返します。
- */
-export function PlainValue<const TSchema extends v.GenericSchema>(
-  schema: TSchema,
-): PlainValue<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
-  return createValueSchemaDescriptor("plain", schema) as unknown as PlainValue<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
-  >;
-}
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * ストリーム形式の値のスキーマを定義します。
- *
- * @template TSchema スキーマの型です。
- * @param schema チャンクデータの検証に使用する Valibot スキーマです。
- * @returns ストリーム形式の値であることを示す型情報を返します。
- */
-export function StreamValue<const TSchema extends v.GenericSchema>(
-  schema: TSchema,
-): StreamValue<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
-  return createValueSchemaDescriptor("stream", schema) as unknown as StreamValue<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
-  >;
-}
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- *
- * プレーンな値とストリーム形式の値の両方で使えるスキーマを定義します。
- *
- * @template TSchema スキーマの型です。
- * @param schema データとチャンクデータの検証に使用する Valibot スキーマです。
- * @returns どちらの形式でも使える値であることを示す型情報を返します。
- */
-export function Value<const TSchema extends v.GenericSchema>(
-  schema: TSchema,
-): Value<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
-  return createValueSchemaDescriptor("any", schema) as unknown as Value<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
-  >;
-}
-
 // -------------------------------------------------------------------------------------------------
 //
 // スキーマ定義
@@ -215,63 +80,21 @@ export function Value<const TSchema extends v.GenericSchema>(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * オブジェクト形式のスキーマ定義です。キーをそのままキーとして扱います。
- */
-export type UniKvsSchemaRecord = {
-  readonly [key: string]: Value<any, any>;
-};
-
-/**
- * 配列形式のスキーマ定義です。キーのスキーマと値のスキーマの組を並べます。
- */
-export type UniKvsSchemaEntries = readonly (readonly [v.GenericSchema, Value<any, any>])[];
-
-/**
- * `UniKvs.config()` の `schema` オプションに指定できるスキーマ定義です。
- */
-export type UniKvsSchema = UniKvsSchemaRecord | UniKvsSchemaEntries;
-
-/**
- * スキーマ定義からキーと値のマッピング型を推論します。
- *
- * @template TSchema 対象となるスキーマ定義の型です。
- */
-export type $InferKeyValueMapping<TSchema extends UniKvsSchema> =
-  TSchema extends readonly (readonly [v.GenericSchema, infer TValue extends Value<any, any>])[]
-    ? { readonly [key: string]: TValue }
-    : TSchema extends { readonly [key: string]: Value<any, any> }
-      ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
-      : never;
-
-/**
  * 検証済みのオブジェクト形式のスキーマ定義です。
  */
-export type UniKvsSchemaInfoRecord = {
+type UniKvsSchemaInfoRecord = {
   readonly [key: string]: ValueSchemaInfo;
 };
 
 /**
  * 検証済みの配列形式のスキーマ定義です。
  */
-export type UniKvsSchemaInfoEntries = readonly (readonly [v.GenericSchema, ValueSchemaInfo])[];
+type UniKvsSchemaInfoEntries = readonly (readonly [v.GenericSchema, ValueSchemaInfo])[];
 
 /**
  * 検証済みのスキーマ定義です。
  */
-export type UniKvsSchemaInfo = UniKvsSchemaInfoRecord | UniKvsSchemaInfoEntries;
-
-/**
- * `schema` オプションの検証に使用するスキーマです。
- */
-export const UniKvsSchemaSchema = v.union([
-  v.array(
-    v.tuple([
-      v.custom<v.GenericSchema>(isGenericSchema),
-      v.custom<ValueSchemaInfo>(isValueSchemaInfo),
-    ]),
-  ),
-  v.record(v.string(), v.custom<ValueSchemaInfo>(isValueSchemaInfo)),
-]);
+type UniKvsSchemaInfo = UniKvsSchemaInfoRecord | UniKvsSchemaInfoEntries;
 
 // -------------------------------------------------------------------------------------------------
 //

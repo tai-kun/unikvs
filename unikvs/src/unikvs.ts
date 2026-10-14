@@ -18,16 +18,12 @@ import {
 } from "./_pipeline-graph.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
+import type { ValueOf } from "./_types.js";
 import * as v from "./_valibot.js";
 import type {
-  Value,
-  PlainValue,
-  StreamValue,
-  UniKvsSchema,
   ValueSchemaInfo,
   $InferPlainValueData,
   IValueSchemaResolver,
-  $InferKeyValueMapping,
   $InferPlainValueInput,
   $InferStreamValueChunkData,
 } from "./_value-schemas.js";
@@ -38,24 +34,39 @@ import {
   UniKvsIsNotOpenError,
   PluginOperationAggregateError,
 } from "./errors.js";
-import {
-  type IUniKvsBranch,
-  type KeyValueMapping,
-  type KeyofKeyValueMapping,
-  UniKvsBranch,
-} from "./unikvs-branch.js";
+import type { IValueStream } from "./types.js";
+import UniKvsBranch, { type IUniKvsBranch, type KeyValueMapping } from "./unikvs-branch.js";
 import UniKvsConfig, {
+  type UniKvsSchema,
   type UniKvsConfigOptions,
   type IUniKvsConfigBuilder,
 } from "./unikvs-config.js";
-import type { ValueOf } from "./utils.types.js";
-import type { ValueStream } from "./value-stream.types.js";
+import type { Value, PlainValue, StreamValue } from "./value-schemas.js";
 
 // -------------------------------------------------------------------------------------------------
 //
 // ユーティリテー
 //
 // -------------------------------------------------------------------------------------------------
+
+type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
+  keyof TKeyValueMapping,
+  IStorage.Key
+>;
+
+/**
+ * スキーマ定義からキーと値のマッピング型を推論します。
+ *
+ * @template TSchema 対象となるスキーマ定義の型です。
+ */
+type $InferKeyValueMapping<TSchema extends UniKvsSchema> = TSchema extends readonly (readonly [
+  v.GenericSchema,
+  infer TValue extends Value,
+])[]
+  ? { readonly [key: string]: TValue }
+  : TSchema extends { readonly [key: string]: Value }
+    ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
+    : never;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
@@ -68,18 +79,14 @@ export type SetValue<TValue extends Value> =
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyofKeyValueMappingHasPlainValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
-  [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: PlainValue extends TKeyValueMapping[TKey]
-    ? TKey
-    : never;
+  [TKey in KeyofKVMap<TKeyValueMapping>]: PlainValue extends TKeyValueMapping[TKey] ? TKey : never;
 }>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
-  [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: StreamValue extends TKeyValueMapping[TKey]
-    ? TKey
-    : never;
+  [TKey in KeyofKVMap<TKeyValueMapping>]: StreamValue extends TKeyValueMapping[TKey] ? TKey : never;
 }>;
 
 // -------------------------------------------------------------------------------------------------
@@ -300,7 +307,7 @@ export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
  */
 export type SetOptions<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
-  TKey extends KeyofKeyValueMapping<TKeyValueMapping> = KeyofKeyValueMapping<TKeyValueMapping>,
+  TKey extends KeyofKVMap<TKeyValueMapping> = KeyofKVMap<TKeyValueMapping>,
 > = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
@@ -1051,14 +1058,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
-  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
+  public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
     options: SetOptions<TKeyValueMapping, TKey>,
   ): Promise<void>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
-  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
+  public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
     key: TKey,
     value: SetValue<TKeyValueMapping[TKey]>,
     options?: Omit<SetOptions, "key" | "value">,
@@ -1255,7 +1262,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     options: StreamOptions<TKey>,
-  ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
+  ): Promise<IValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
@@ -1263,9 +1270,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     key: TKey,
     options?: Omit<StreamOptions, "key">,
-  ): Promise<ValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
+  ): Promise<IValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
-  public async stream(...args: any): Promise<ValueStream> {
+  public async stream(...args: any): Promise<IValueStream> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
     }
@@ -1556,13 +1563,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
-  public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
+  public has(options: HasOptions<KeyofKVMap<TKeyValueMapping>>): Promise<boolean>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public has(
-    key: KeyofKeyValueMapping<TKeyValueMapping>,
+    key: KeyofKVMap<TKeyValueMapping>,
     options?: Omit<HasOptions, "key">,
   ): Promise<boolean>;
 
@@ -1631,13 +1638,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
-  public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
+  public delete(options: DeleteOptions<KeyofKVMap<TKeyValueMapping>>): Promise<void>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
   public delete(
-    key: KeyofKeyValueMapping<TKeyValueMapping>,
+    key: KeyofKVMap<TKeyValueMapping>,
     options?: Omit<DeleteOptions, "key">,
   ): Promise<void>;
 

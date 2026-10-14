@@ -1,7 +1,7 @@
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
  */
-export interface ValueStream<T = any>
+export interface IValueStream<T = any>
   extends
     Omit<ReadableStream, keyof AsyncDisposable | keyof AsyncIterable<unknown>>,
     AsyncDisposable,

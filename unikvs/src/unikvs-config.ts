@@ -4,23 +4,10 @@ import { Variables } from "@unikvs/core";
 import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
 import UniKvsTransformer from "./_transformer.js";
-import { getBranchDestinationsForFork } from "./_unikvs-branch.js";
-import * as v from "./_valibot.js";
-import {
-  type UniKvsSchema,
-  type $InferPlainValueData,
-  type IValueSchemaResolver,
-  type $InferStreamValueChunkData,
-  UniKvsSchemaSchema,
-  createValueSchemaResolver,
-} from "./_value-schemas.js";
-import { MissingStorageError } from "./errors.js";
 import type {
-  IUniKvsBranch,
-  KeyValueMapping,
+  ValueOf,
   $CheckForkDecodeData,
   $CheckForkEncodeData,
-  KeyofKeyValueMapping,
   $CheckForkDecodeChunk,
   $CheckForkEncodeChunk,
   $InferDecodeDataInput,
@@ -29,9 +16,26 @@ import type {
   $InferDecodeChunkInput,
   $InferEncodeDataOutput,
   $InferEncodeChunkOutput,
-} from "./unikvs-branch.js";
+} from "./_types.js";
+import { getBranchDestinationsForFork } from "./_unikvs-branch.js";
+import * as v from "./_valibot.js";
+import {
+  type $InferPlainValueData,
+  type IValueSchemaResolver,
+  type $InferStreamValueChunkData,
+  ValueSchemaInfo,
+  VALUE_SCHEMA_BRAND,
+  createValueSchemaResolver,
+} from "./_value-schemas.js";
+import { MissingStorageError } from "./errors.js";
+import type { IUniKvsBranch, KeyValueMapping } from "./unikvs-branch.js";
 import type UniKvs from "./unikvs.js";
-import type { ValueOf } from "./utils.types.js";
+import type { Value } from "./value-schemas.js";
+
+type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
+  keyof TKeyValueMapping,
+  IStorage.Key
+>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -39,13 +43,11 @@ import type { ValueOf } from "./utils.types.js";
 export interface IUniKvsConfigBuilder<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
   TUniKvsDataInput = ValueOf<{
-    [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: $InferPlainValueData<TKeyValueMapping[TKey]>;
+    [TKey in KeyofKVMap<TKeyValueMapping>]: $InferPlainValueData<TKeyValueMapping[TKey]>;
   }>,
   TUniKvsDataOutput = TUniKvsDataInput,
   TUniKvsChunkInput = ValueOf<{
-    [TKey in KeyofKeyValueMapping<TKeyValueMapping>]: $InferStreamValueChunkData<
-      TKeyValueMapping[TKey]
-    >;
+    [TKey in KeyofKVMap<TKeyValueMapping>]: $InferStreamValueChunkData<TKeyValueMapping[TKey]>;
   }>,
   TUniKvsChunkOutput = TUniKvsChunkInput,
   TLastTransformerDecodeDataInput = TUniKvsDataOutput,
@@ -344,11 +346,63 @@ export type UniKvsConfigOptions = {
   readonly schema?: UniKvsSchema | undefined;
 };
 
+/**
+ * オブジェクト形式のスキーマ定義です。キーをそのままキーとして扱います。
+ */
+export type UniKvsSchemaRecord = {
+  readonly [key: string]: Value;
+};
+
+/**
+ * 配列形式のスキーマ定義です。キーのスキーマと値のスキーマの組を並べます。
+ */
+export type UniKvsSchemaEntries = readonly (readonly [v.GenericSchema, Value])[];
+
+/**
+ * `UniKvs.config()` の `schema` オプションに指定できるスキーマ定義です。
+ */
+export type UniKvsSchema = UniKvsSchemaRecord | UniKvsSchemaEntries;
+
+/**
+ * 値が Valibot のスキーマであるかどうかを判定します。
+ */
+function isGenericSchema(input: unknown): input is v.GenericSchema {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    // v.GenericSchema は関数 "~run" を持ちます。
+    "~run" in input &&
+    typeof input["~run"] === "function"
+  );
+}
+
+/**
+ * 値がスキーマ情報であるかどうかを判定します。
+ */
+function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
+  return (
+    typeof input === "object" &&
+    input !== null &&
+    VALUE_SCHEMA_BRAND in input &&
+    input[VALUE_SCHEMA_BRAND] === true
+  );
+}
+
 const UniKvsConfigOptionsSchema = v.object({
   /**
    * キーと値のスキーマ定義です。
    */
-  schema: v.optional(UniKvsSchemaSchema),
+  schema: v.optional(
+    v.union([
+      v.array(
+        v.tuple([
+          v.custom<v.GenericSchema>(isGenericSchema),
+          v.custom<ValueSchemaInfo>(isValueSchemaInfo),
+        ]),
+      ),
+      v.record(v.string(), v.custom<ValueSchemaInfo>(isValueSchemaInfo)),
+    ]),
+  ),
 });
 
 const UniKvsConfigArgsSchema = v.tuple([v.optional(UniKvsConfigOptionsSchema)]);

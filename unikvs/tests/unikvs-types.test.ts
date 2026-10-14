@@ -3,7 +3,7 @@ import { Memory } from "@unikvs/memory";
 import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
 
-import { PlainValue, StreamValue, type Value } from "../src/_value-schemas.js";
+import type { IValueStream as ValueStream } from "../src/types.js";
 import type { IUniKvsConfigBuilder } from "../src/unikvs-config.js";
 import type {
   KeyofKeyValueMappingHasPlainValue,
@@ -11,7 +11,7 @@ import type {
   SetValue,
 } from "../src/unikvs.js";
 import UniKvs from "../src/unikvs.js";
-import type { ValueStream } from "../src/value-stream.types.js";
+import { PlainValue, StreamValue, type Value } from "../src/value-schemas.js";
 
 type Bytes = Uint8Array<ArrayBuffer>;
 
