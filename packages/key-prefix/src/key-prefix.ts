@@ -1,4 +1,5 @@
 import type { ITransformer } from "@unikvs/core";
+import { PassThrough } from "@unikvs/passthrough";
 
 import { InvalidClearBehaviorError, KeyPrefixClearNotSupportedError } from "./errors.js";
 
@@ -15,11 +16,11 @@ export type KeyPrefixOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
  */
-export default class KeyPrefix implements ITransformer {
+export default class KeyPrefix extends PassThrough implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
    */
-  public readonly name: string = "KeyPrefix";
+  public override readonly name: string = "KeyPrefix";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
@@ -35,6 +36,8 @@ export default class KeyPrefix implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
    */
   public constructor(prefix: string, options?: KeyPrefixOptions) {
+    super();
+
     // undefined のみを既定値にし、null などの不正値は検証で拒否します。
     const raw = options?.clearBehavior;
     const clearBehavior = raw === undefined ? "allow" : raw;
@@ -44,45 +47,6 @@ export default class KeyPrefix implements ITransformer {
 
     this.prefix = prefix;
     this.clearBehavior = clearBehavior;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
-   */
-  public get isOpen(): boolean {
-    return true;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
-   */
-  public encode<TData>(args: Pick<ITransformer.EncodeArgs<TData>, "data">): TData {
-    const { data } = args;
-
-    return data;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
-   */
-  public decode<TData>(args: Pick<ITransformer.DecodeArgs<TData>, "data">): TData {
-    const { data } = args;
-
-    return data;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#streams)
-   */
-  public getEncodable(): TransformStream<any, any> {
-    return new TransformStream();
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#streams)
-   */
-  public getDecodable(): TransformStream<any, any> {
-    return new TransformStream();
   }
 
   /**

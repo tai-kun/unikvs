@@ -739,6 +739,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/passthrough':
+        specifier: workspace:*
+        version: link:../passthrough
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5

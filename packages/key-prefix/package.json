@@ -29,7 +29,8 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@unikvs/core": "workspace:*"
+    "@unikvs/core": "workspace:*",
+    "@unikvs/passthrough": "workspace:*"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
