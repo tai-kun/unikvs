@@ -129,11 +129,51 @@ export namespace ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */
-  export type ClearArgs = {
+  export type ClearHookArgs = {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
     vars: Variables;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    signal: AbortSignal;
+  };
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  export type ExistsHookArgs = {
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    vars: Variables;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    key: string;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    signal: AbortSignal;
+  };
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  export type DeleteHookArgs = {
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    vars: Variables;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+     */
+    key: string;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
@@ -195,11 +235,21 @@ export interface IKeyMappableTransformer {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
  */
-export interface IClearHookTransformer {
+export interface ITransformerHooks {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */
-  onClear(args: ITransformer.ClearArgs): MaybePromise<void>;
+  onExists(args: ITransformer.ExistsHookArgs): MaybePromise<void>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  onDelete(args: ITransformer.DeleteHookArgs): MaybePromise<void>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
+   */
+  onClear(args: ITransformer.ClearHookArgs): MaybePromise<void>;
 }
 
 /**
@@ -219,7 +269,7 @@ export interface ITransformer<
     Partial<IEncodableStreamTransformer<TEncodeChunkInput, TEncodeChunkOutput>>,
     Partial<IDecodableStreamTransformer<TDecodeChunkInput, TDecodeChunkOutput>>,
     Partial<IKeyMappableTransformer>,
-    Partial<IClearHookTransformer> {
+    Partial<ITransformerHooks> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
    */

@@ -1601,6 +1601,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.rLock({ key, signal });
       try {
+        // 存在確認に先立ち、各トランスフォーマーの onExists を初出順に実行します。
+        // onClear と同じく、フックによる vars の変更は後続の解決・走査に引き継がれます。
+        for (const transformer of this.#pipeline.transformers) {
+          signal.throwIfAborted();
+          await transformer.onExists(rootVars, signal, key);
+        }
+
         // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
         // exists に失敗したときは次のストレージを試します。
         const errors: PluginErrorRecord[] = [];
@@ -1676,6 +1683,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const rootVars = this.#pipeline.prepareRootVars(vars);
       const lock = await io.lock({ key, signal });
       try {
+        // 削除に先立ち、各トランスフォーマーの onDelete を初出順に実行します。
+        // onClear と同じく、フックによる vars の変更は後続の解決・削除に引き継がれます。
+        for (const transformer of this.#pipeline.transformers) {
+          signal.throwIfAborted();
+          await transformer.onDelete(rootVars, signal, key);
+        }
+
         // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
         const resolver = this.#pipeline.createResolver(rootVars, key, signal);

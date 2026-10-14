@@ -1,3 +1,4 @@
+import type { ITransformer } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
@@ -338,6 +339,120 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
 
     // 検証
     expect(await kvs.get("foo")).toBe("value");
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - トランスフォーマーフック", () => {
+  test("has は onExists をキー付きで呼び、vars 変異は storage に引き継がれる", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    const keys: string[] = [];
+    class ExistsHook extends FakeTransformer {
+      public async onExists(args: ITransformer.ExistsHookArgs): Promise<void> {
+        keys.push(args.key);
+        args.vars.set("checkedBy", "hook");
+      }
+    }
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new ExistsHook())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行
+    const result = await kvs.has("foo");
+
+    // 検証
+    expect(result).toBe(true);
+    expect(keys).toStrictEqual(["foo"]);
+    expect(storage.callsOf("exists")[0]?.vars?.get("checkedBy")).toBe("hook");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("delete は onDelete を呼び、共有トランスフォーマーでも1回だけ実行される", async ({
+    expect,
+  }) => {
+    // 準備
+    const a = new FakeStorage("a");
+    const b = new FakeStorage("b");
+    a.map.set("foo", "stored");
+    b.map.set("foo", "stored");
+    const keys: string[] = [];
+    class DeleteHook extends FakeTransformer {
+      public async onDelete(args: ITransformer.DeleteHookArgs): Promise<void> {
+        keys.push(args.key);
+        args.vars.set("deletedBy", "hook");
+      }
+    }
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new DeleteHook())
+      .persist(a)
+      .persist(b)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.delete("foo");
+
+    // 検証: 宛先が2件でもフックは1回、両宛先に vars 変異が引き継がれる
+    expect(keys).toStrictEqual(["foo"]);
+    expect(a.callsOf("delete")[0]?.vars?.get("deletedBy")).toBe("hook");
+    expect(b.callsOf("delete")[0]?.vars?.get("deletedBy")).toBe("hook");
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("onExists が投げると has は失敗し、storage には触れない", async ({ expect }) => {
+    // 準備
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    class DenyExists extends FakeTransformer {
+      public async onExists(): Promise<void> {
+        throw new Error("exists denied");
+      }
+    }
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new DenyExists())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.has("foo")).rejects.toThrow("exists denied");
+    expect(storage.callsOf("exists")).toHaveLength(0);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("onDelete が投げると delete は失敗し、storage から削除されない", async ({ expect }) => {
+    // 準備
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    class DenyDelete extends FakeTransformer {
+      public async onDelete(): Promise<void> {
+        throw new Error("delete denied");
+      }
+    }
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new DenyDelete())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    await expect(kvs.delete("foo")).rejects.toThrow("delete denied");
+    expect(storage.callsOf("delete")).toHaveLength(0);
+    expect(storage.map.has("foo")).toBe(true);
 
     // 後片付け
     await kvs.close();

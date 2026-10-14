@@ -154,6 +154,30 @@ export default class UniKvsTransformer {
     return await this.tf.mapKey({ key, vars, signal });
   }
 
+  public async onExists(vars: Variables, signal: AbortSignal, key: string): Promise<void> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.onExists !== "function") {
+      return;
+    }
+
+    await this.tf.onExists({ key, vars, signal });
+  }
+
+  public async onDelete(vars: Variables, signal: AbortSignal, key: string): Promise<void> {
+    if (!this.tf.isOpen) {
+      throw new TransformerIsNotOpenError({ name: this.tf.name });
+    }
+
+    if (typeof this.tf.onDelete !== "function") {
+      return;
+    }
+
+    await this.tf.onDelete({ key, vars, signal });
+  }
+
   public async onClear(vars: Variables, signal: AbortSignal): Promise<void> {
     if (!this.tf.isOpen) {
       throw new TransformerIsNotOpenError({ name: this.tf.name });
