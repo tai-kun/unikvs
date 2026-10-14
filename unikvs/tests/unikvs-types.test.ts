@@ -1,4 +1,5 @@
 import type { IStorage, ITransformer } from "@unikvs/core";
+import { Variables } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
@@ -318,5 +319,34 @@ describe("UniKvs - 型: fork の互換検査", () => {
     expectTypeOf(typeOf(() => builder.create())).toMatchTypeOf<
       UniKvs<{ logs: StreamValue<Bytes> }>
     >();
+  });
+});
+
+describe("UniKvs - 型: 予約変数", () => {
+  test("Variables は UniKvsVariablesTypes で unikvs 予約キーの型を解決する", () => {
+    // 準備
+    const vars = new Variables();
+
+    // 検証
+    expectTypeOf(vars.get("unikvs:action")).toEqualTypeOf<
+      "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"
+    >();
+    expectTypeOf(vars.get("unikvs:key")).toEqualTypeOf<string>();
+    expectTypeOf(vars.get("unikvs:storageNames")).toEqualTypeOf<readonly string[]>();
+    expectTypeOf(vars.get("unikvs:repair")).toEqualTypeOf<boolean>();
+  });
+
+  test("Variables に全操作の unikvs:action を設定できる", ({ expect }) => {
+    // 準備
+    const vars = new Variables();
+
+    // 実行: 8操作すべてが型エラーなく設定できる
+    const actions = ["open", "close", "set", "get", "stream", "has", "delete", "clear"] as const;
+    for (const action of actions) {
+      vars.set("unikvs:action", action);
+    }
+
+    // 検証
+    expect(vars.get("unikvs:action")).toBe("clear");
   });
 });

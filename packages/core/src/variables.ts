@@ -1,5 +1,33 @@
 import { ReadonlyVariableError } from "./errors.js";
 
+declare global {
+  /**
+   * `Variables` の既定の変数マップです。
+   *
+   * `ArrayBufferTypes` と同様に、プラグインや利用者側で宣言マージにより
+   * キーと値の型を追加すると、`Variables` の型引数 `T` が自動的に決まります。
+   *
+   * @example
+   * ```ts
+   * declare global {
+   *   interface UniKvsVariablesTypes {
+   *     readonly "my-plugin:key": string;
+   *   }
+   * }
+   *
+   * const vars = new Variables();
+   * vars.get("my-plugin:key"); // string
+   * ```
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
+   */
+  interface UniKvsVariablesTypes {}
+}
+
+type Key<T = {}> = Extract<keyof T, string> | (string & {});
+
+type Value<T, K extends string> = K extends keyof T ? T[K] : unknown;
+
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
  */
@@ -15,7 +43,7 @@ export type VariablesInit =
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
  */
-export default class Variables {
+export default class Variables<T extends object = UniKvsVariablesTypes> {
   #data: Map<string, unknown>;
 
   #readonly: Set<string>;
@@ -41,14 +69,14 @@ export default class Variables {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public get<T = unknown>(key: string): T | undefined {
-    return this.#data.get(key) as T | undefined;
+  public get<const TKey extends Key<T>>(key: TKey): Value<T, TKey> {
+    return this.#data.get(key) as Value<T, TKey>;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public set(key: string, value: unknown): this {
+  public set<const TKey extends Key<T>>(key: TKey, value: Value<T, TKey>): this {
     if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
@@ -61,7 +89,7 @@ export default class Variables {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public setReadonly(key: string, value: unknown): this {
+  public setReadonly<const TKey extends Key<T>>(key: TKey, value: Value<T, TKey>): this {
     if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
@@ -75,14 +103,14 @@ export default class Variables {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public has(key: string): boolean {
+  public has(key: Key<T>): boolean {
     return this.#data.has(key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public delete(key: string): boolean {
+  public delete(key: Key<T>): boolean {
     if (this.#readonly.has(key)) {
       throw new ReadonlyVariableError({ key });
     }
@@ -93,7 +121,7 @@ export default class Variables {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#variables)
    */
-  public isReadonly(key: string): boolean {
+  public isReadonly(key: Key<T>): boolean {
     return this.#readonly.has(key);
   }
 

@@ -129,11 +129,11 @@ describe("UniKvs - vars の自動付与", () => {
     await kvs.open();
     await kvs.set("foo", "value");
 
-    // 実行と検証
+    // 実行と検証: 不正値で密封を試すためキーを string に緩める
     expect(seen?.isReadonly("unikvs:action")).toBe(true);
     expect(seen?.isReadonly("unikvs:key")).toBe(true);
-    expect(() => seen?.set("unikvs:action", "fake")).toThrow(ReadonlyVariableError);
-    expect(() => seen?.set("unikvs:key", "fake")).toThrow(ReadonlyVariableError);
+    expect(() => seen?.set("unikvs:action" as string, "fake")).toThrow(ReadonlyVariableError);
+    expect(() => seen?.set("unikvs:key" as string, "fake")).toThrow(ReadonlyVariableError);
 
     // 後片付け
     await kvs.close();
@@ -480,7 +480,8 @@ describe("UniKvs - vars の参照安定性", () => {
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const source = new Variables();
-    source.setReadonly("unikvs:action", "fake");
+    // 不正値で予約キーを汚染するためキーを string に緩める
+    source.setReadonly("unikvs:action" as string, "fake");
     source.set("request", "req");
 
     // 実行と検証: 予約キーの密封は維持されるため、内部の付与が失敗する

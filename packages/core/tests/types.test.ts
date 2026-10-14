@@ -93,7 +93,53 @@ test("Variables の get は unknown を返す", () => {
 
   // 検証
   expectTypeOf(vars.get("unikvs:key")).toEqualTypeOf<unknown>();
-  expectTypeOf(vars.get<string>("unikvs:key")).toEqualTypeOf<string | undefined>();
+});
+
+test("型付き Variables の get はキーに対応する値の型を返す", () => {
+  // 準備
+  const vars: Variables<{ readonly count: number; readonly label: string }> = new Variables({
+    count: 1,
+    label: "a",
+  });
+
+  // 検証
+  expectTypeOf(vars.get("count")).toEqualTypeOf<number>();
+  expectTypeOf(vars.get("label")).toEqualTypeOf<string>();
+  expectTypeOf(vars.get("unknown")).toEqualTypeOf<unknown>();
+});
+
+test("型付き Variables の set と setReadonly は値の型を要求する", () => {
+  // 準備
+  const vars: Variables<{ readonly count: number }> = new Variables();
+
+  // 実行
+  vars.set("count", 1);
+  vars.set("unknown", { whatever: true });
+  vars.setReadonly("count", 2);
+
+  // 検証
+  expectTypeOf(vars.get("count")).toEqualTypeOf<number>();
+  expectTypeOf(vars.has("count")).toEqualTypeOf<boolean>();
+  expectTypeOf(vars.delete("unknown")).toEqualTypeOf<boolean>();
+  expectTypeOf(vars.isReadonly("count")).toEqualTypeOf<boolean>();
+});
+
+declare global {
+  interface UniKvsVariablesTypes {
+    readonly "test:count": number;
+  }
+}
+
+test("Variables の型引数は UniKvsVariablesTypes の宣言マージで決まる", () => {
+  // 準備
+  const vars = new Variables();
+
+  // 実行
+  vars.set("test:count", 1);
+
+  // 検証
+  expectTypeOf(vars.get("test:count")).toEqualTypeOf<number>();
+  expectTypeOf(vars.get("other")).toEqualTypeOf<unknown>();
 });
 
 test("Variables は Map ライクなクラスである", () => {
@@ -367,8 +413,21 @@ function expectTypeErrors(): void {
   // @ts-expect-error encode を省略した型は ITransformer を満たさない
   const incompleteTransformer: ITransformer = {} as Omit<ITransformer, "encode">;
 
+  // 準備
+  const typedVars: Variables<{ readonly count: number }> = new Variables();
+
+  // @ts-expect-error count は number のため文字列は渡せない
+  typedVars.set("count", "not a number");
+
+  // @ts-expect-error count は number のため文字列は渡せない
+  typedVars.setReadonly("count", "not a number");
+
+  // @ts-expect-error test:count は number のため文字列は渡せない
+  new Variables().set("test:count", "not a number");
+
   void incompleteStorage;
   void incompleteTransformer;
+  void typedVars;
 }
 
 test("不正な使用はコンパイルエラーになる", () => {
