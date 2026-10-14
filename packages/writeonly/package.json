@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/writeonly",
   "version": "0.0.13",
-  "description": "Storage plugin that wraps another storage and makes it write-only.",
+  "description": "Transformer plugin that rejects reads and optionally denies deletion.",
   "homepage": "https://github.com/tai-kun/unikvs",
   "license": "MIT",
   "author": "tai-kun",
@@ -35,6 +35,7 @@
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.19.1",
+    "@unikvs/memory": "workspace:*",
     "@unikvs/testing": "workspace:*",
     "@vitest/browser": "4.1.11",
     "@vitest/browser-playwright": "4.1.11",
@@ -42,6 +43,7 @@
     "@vitest/coverage-v8": "4.1.11",
     "npm-check-updates": "20.0.2",
     "playwright": "1.63.0",
+    "unikvs": "workspace:*",
     "valibot": "1.5.0",
     "vite": "8.3.2",
     "vitest": "4.1.11"

@@ -1,0 +1,124 @@
+---
+title: "@unikvs/writeonly"
+description: "読み出しを拒否し、削除を条件付きで拒否する @unikvs/writeonly の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/writeonly` は、読み出しを拒否し、削除を条件付きで拒否する Transformer プラグインです。<Badge>Transformer</Badge>
+
+書き込んだデータを読み取れないように保管する場合に使います。たとえば監査ログの保管で、書き込み専用の運用を強制できます。
+
+- 書き込みはデータを変えず、そのまま返します。
+- 読み取りは常に失敗します。
+- 常にオープン状態です。`open`・`close` は不要で、`isOpen` は常に `true`、`name` は常に `"WriteOnly"` を返します。
+- `allowDelete`（既定 `false`）は構築時に確定し、あとから変更できません。`false`（既定）では `delete`・`clear` が失敗します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/writeonly
+```
+
+## 使い方 [#usage]
+
+WriteOnly は ITransformer を実装しています。UniKvs には transform() で渡します。
+
+```ts
+import { WriteOnly } from "@unikvs/writeonly";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    options: {
+      type: "WriteOnlyOptions",
+      description:
+        "削除の許可を設定します。省略時は既定値で動作します。",
+    },
+    "options.allowDelete": {
+      type: "boolean",
+      default: "false",
+      description:
+        "`delete`・`clear` を許可するかどうかです。`false`（既定）ではエラーを投げ、`true` では下流の削除に進みます。",
+    },
+  }}
+/>
+
+以下は、値を書き込み専用として保存する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { WriteOnly } from "@unikvs/writeonly";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ report: PlainValue<string> }>()
+  .connect(new WriteOnly())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("report", "hello");
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力    | 出力    |
+| -------------- | ------- | ------- |
+| `encode`       | `TData` | `TData` |
+| `decode`       | `TData` | `never` |
+| `getEncodable` | `any`   | `any`   |
+| `getDecodable` | `any`   | `never` |
+
+- `encode` は任意の型のデータをそのまま返します。
+- `getEncodable` はチャンクをそのまま流す `TransformStream` を返します。
+- `decode` はデータを返さず、常に `KeyNotFoundError` を投げます。
+- `getDecodable` はストリームを返さず、常に `KeyNotFoundError` を投げます。
+- 透過側（`encode`・`getEncodable`）はデータの内容にもチャンクの分割にも影響しません。
+- チャンクは区切り文字なしで単純に透過します。
+- `KeyNotFoundError` の `meta.key` は論理キーです。[`@unikvs/key-prefix`](/packages/key-prefix) と組み合わせた場合も `meta.key` に接頭辞は付きません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### WriteOnlyDeleteNotAllowedError
+
+#### 意味
+
+`allowDelete` が `false`（既定）の場合、`delete` はキーを削除せずに失敗します。`meta` に `key` を含みます。エラーの `name` は `WriteOnlyDeleteNotAllowedError` です。UniKvs 経由では [`@unikvs/core`](/packages/core) の `PluginOperationAggregateError` で失敗します。
+
+#### 対処方法
+
+削除を許可する場合は `allowDelete` に `true` を指定してください。削除しない運用では `delete` を呼ばないでください。
+
+### WriteOnlyClearNotAllowedError
+
+#### 意味
+
+`allowDelete` が `false`（既定）の場合、`clear` は全件を削除せずに失敗します。エラーの `name` は `WriteOnlyClearNotAllowedError` です。UniKvs 経由では [`@unikvs/core`](/packages/core) の `PluginOperationAggregateError` で失敗します。
+
+#### 対処方法
+
+全件削除を許可する場合は `allowDelete` に `true` を指定してください。削除しない運用では `clear` を呼ばないでください。
+
+### KeyNotFoundError
+
+#### 意味
+
+読み取りは常に失敗します。`get` やストリーム読み取りでは [`@unikvs/core`](/packages/core) の `KeyNotFoundError` がそのまま伝播します。エラーの `name` は `UniKvsKeyNotFoundError` で、`meta` に `key` を含みます。`has` では存在の有無を返さずに、[`@unikvs/core`](/packages/core) の `PluginOperationAggregateError` で失敗します。
+
+#### 対処方法
+
+読み取りが必要な場合はこのプラグインを外してください。`has` の結果で分岐していたコードは `try`・`catch` で書き換えてください。
+
+## 注意事項 [#notes]
+
+- `has` は `false` を返しません。存在確認は常に失敗します。
+- `delete`・`clear` は既定で失敗します。旧版のように何もせずに成功することはありません。
+- 旧版の `new WriteOnly(storage)` は `new WriteOnly()` と `persist(storage)` に分けてください。`persist(new WriteOnly(...))` は `connect(new WriteOnly(...))` に付け替えてください。
+- 旧版の呼び出しは型エラーになるとは限らないため、移行時はリポジトリー全体で `new WriteOnly(` を検索し、全件目視してください。型検査の通過だけで完了としないでください。

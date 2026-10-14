@@ -1,58 +1,64 @@
-import type { IStorage } from "@unikvs/core";
-import { describe, expectTypeOf, test as vitest } from "vitest";
+import type { ITransformer } from "@unikvs/core";
+import { expectTypeOf, test } from "vitest";
 
-import { KeyNotFoundError } from "../src/errors.js";
-import WriteOnly from "../src/write-only.js";
-import { RecordingStorage } from "./_helpers.js";
+import WriteOnly, { type WriteOnlyOptions } from "../src/write-only.js";
 
-/**
- * 各テストに新しい内部ストレージと、それをラップした WriteOnly を提供するフィクスチャーです。
- */
-const test = vitest.extend<{
-  storage: WriteOnly;
-}>({
-  // oxlint-disable-next-line no-empty-pattern
-  async storage({}, use) {
-    await use(new WriteOnly(new RecordingStorage()));
-  },
+test("WriteOnly は ITransformer として扱える", () => {
+  expectTypeOf<WriteOnly>().toExtend<ITransformer>();
 });
 
-describe("WriteOnly の型契約", () => {
-  test("IStorage を実装している", ({ storage }) => {
-    expectTypeOf(storage).toExtend<IStorage>();
-  });
+test("コンストラクターはオプションなし・ありで組み立てられる", () => {
+  // 実行と検証
+  expectTypeOf(new WriteOnly()).toEqualTypeOf<WriteOnly>();
+  expectTypeOf(new WriteOnly({})).toEqualTypeOf<WriteOnly>();
+  expectTypeOf(new WriteOnly(undefined)).toEqualTypeOf<WriteOnly>();
+  expectTypeOf(new WriteOnly({ allowDelete: undefined })).toEqualTypeOf<WriteOnly>();
+  expectTypeOf(new WriteOnly({ allowDelete: false })).toEqualTypeOf<WriteOnly>();
+  expectTypeOf(new WriteOnly({ allowDelete: true })).toEqualTypeOf<WriteOnly>();
+});
 
-  test("コンストラクターは内部ストレージと省略可能なオプションを受け取る", () => {
-    expectTypeOf(WriteOnly).toBeConstructibleWith(new RecordingStorage());
-    expectTypeOf(WriteOnly).toBeConstructibleWith(new RecordingStorage(), { allowDelete: true });
-  });
+test("options の余剰プロパティーは受け付けない", () => {
+  // 実行と検証
+  expectTypeOf({} as WriteOnlyOptions).toEqualTypeOf<WriteOnlyOptions>();
+  expectTypeOf({ allowDelete: "yes" })
+    // @ts-expect-error 真偽値のみが正規であり、文字列は受け付けません。
+    .toEqualTypeOf<WriteOnlyOptions>();
+});
 
-  test("read と getReadable の戻り値は never である", ({ storage }) => {
-    expectTypeOf<typeof storage.read>().returns.toBeNever();
-    expectTypeOf<typeof storage.getReadable>().returns.toBeNever();
-  });
+test("encode はデータの型をそのまま戻り値にする", () => {
+  // 準備
+  const transformer = new WriteOnly();
 
-  test("exists の戻り値は false リテラルである", ({ storage }) => {
-    expectTypeOf<typeof storage.exists>().returns.toEqualTypeOf<false>();
-  });
+  // 実行と検証
+  expectTypeOf(transformer.encode<string>({ data: "hello" })).toEqualTypeOf<string>();
+  expectTypeOf(transformer.encode({ data: 123 })).toEqualTypeOf<number>();
+  expectTypeOf(transformer.encode({ data: { id: 1 } })).toEqualTypeOf<{ id: number }>();
+});
 
-  test("name は string、allowDelete は boolean である", ({ storage }) => {
-    expectTypeOf(storage.name).toEqualTypeOf<string>();
-    expectTypeOf(storage.allowDelete).toEqualTypeOf<boolean>();
-  });
+test("decode と getDecodable と onExists の戻り値は never である", () => {
+  // 準備
+  const transformer = new WriteOnly();
 
-  test("getWritable は内部ストレージと同じ関数型か undefined である", ({ storage }) => {
-    expectTypeOf(storage.getWritable).toEqualTypeOf<
-      NonNullable<IStorage["getWritable"]> | undefined
-    >();
-  });
+  // 実行と検証
+  expectTypeOf<typeof transformer.decode>().returns.toBeNever();
+  expectTypeOf<typeof transformer.getDecodable>().returns.toBeNever();
+  expectTypeOf<typeof transformer.onExists>().returns.toBeNever();
+});
 
-  test("KeyNotFoundError は Error を継承し key を meta に持つ", () => {
-    // 準備
-    const error = new KeyNotFoundError({ key: "k1" });
+test("getEncodable は TransformStream を返す", () => {
+  // 準備
+  const transformer = new WriteOnly();
 
-    // 実行と検証
-    expectTypeOf(error).toExtend<Error>();
-    expectTypeOf(error.meta.key).toEqualTypeOf<string>();
-  });
+  // 実行と検証
+  expectTypeOf(transformer.getEncodable()).toEqualTypeOf<TransformStream<any, any>>();
+});
+
+test("name と allowDelete と isOpen の型を保持する", () => {
+  // 準備
+  const transformer = new WriteOnly();
+
+  // 実行と検証
+  expectTypeOf(transformer.name).toEqualTypeOf<string>();
+  expectTypeOf(transformer.allowDelete).toEqualTypeOf<boolean>();
+  expectTypeOf(transformer.isOpen).toEqualTypeOf<boolean>();
 });
