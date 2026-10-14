@@ -78,12 +78,12 @@ export namespace ITransformer {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
-    data: TData;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
-    signal: AbortSignal;
+    data: TData;
   };
 
   /**
@@ -98,12 +98,12 @@ export namespace ITransformer {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
-    data: TData;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer-once)
      */
-    signal: AbortSignal;
+    data: TData;
   };
 
   /**
@@ -118,12 +118,12 @@ export namespace ITransformer {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    key: string;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    signal: AbortSignal;
+    key: string;
   };
 
   /**
@@ -153,12 +153,12 @@ export namespace ITransformer {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    key: string;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    signal: AbortSignal;
+    key: string;
   };
 
   /**
@@ -173,12 +173,12 @@ export namespace ITransformer {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    key: string;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#transformer)
      */
-    signal: AbortSignal;
+    key: string;
   };
 }
 

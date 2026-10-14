@@ -30,12 +30,12 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
      */
-    key: Key;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
      */
-    signal: AbortSignal;
+    key: Key;
   };
 
   /**
@@ -50,12 +50,12 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
      */
-    key: Key;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
      */
-    signal: AbortSignal;
+    key: Key;
   };
 
   /**
@@ -100,6 +100,11 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
      */
+    signal: AbortSignal;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
+     */
     key: Key;
 
     /**
@@ -113,11 +118,6 @@ export namespace IStorage {
         readonly reason: unknown;
       }[];
     }>;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    signal: AbortSignal;
   };
 
   /**
@@ -132,17 +132,17 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
+    signal: AbortSignal;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
+     */
     key: Key;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
     data: TData;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
   };
 
   /**
@@ -157,12 +157,12 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
-    key: Key;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
-    signal: AbortSignal;
+    key: Key;
   };
 
   /**
@@ -177,12 +177,12 @@ export namespace IStorage {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
-    key: Key;
+    signal: AbortSignal;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
-    signal: AbortSignal;
+    key: Key;
   };
 
   /**
@@ -193,11 +193,6 @@ export namespace IStorage {
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
     vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    key: Key;
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
@@ -218,6 +213,11 @@ export namespace IStorage {
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
      */
     signal: AbortSignal;
+
+    /**
+     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
+     */
+    key: Key;
   };
 }
 
@@ -276,11 +276,6 @@ export interface IStorage<
   close?(args: IStorage.CloseArgs): MaybePromise<void>;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  onOtherWriteError?(args: IStorage.OnOtherWriteErrorArgs): MaybePromise<void>;
-
-  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
    */
   write(args: IStorage.WriteArgs<TWriteDataInput>): MaybePromise<void>;
@@ -304,4 +299,9 @@ export interface IStorage<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
    */
   clear(args: IStorage.ClearArgs): MaybePromise<void>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
+   */
+  onOtherWriteError?(args: IStorage.OnOtherWriteErrorArgs): MaybePromise<void>;
 }
