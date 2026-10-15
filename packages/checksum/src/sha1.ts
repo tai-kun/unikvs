@@ -1,4 +1,5 @@
 import { sha1 } from "@noble/hashes/legacy.js";
+
 import Checksum, { type ChecksumOptions } from "./checksum.js";
 
 /**

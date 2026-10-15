@@ -23,29 +23,23 @@ export type ZstdWasmOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
  */
-export default class ZstdWasm implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
+export default class ZstdWasm implements IMiddleware {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
-  private static readonly cache: callAbortableFnOnce.CacheMap = new Map();
+  static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
-   */
   public readonly name: string = "ZstdWasm";
 
   /**
    * 実行環境です。
    */
-  private env: IEnv | null;
+  #env: IEnv | null;
 
   /**
    * 圧縮レベルです。
    */
-  private readonly level: number;
+  readonly #level: number;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
@@ -57,24 +51,18 @@ export default class ZstdWasm implements IMiddleware<
       throw new ZstdWasmInvalidLevelError({ actual: level });
     }
 
-    this.env = null;
-    this.level = level;
+    this.#env = null;
+    this.#level = level;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
-   */
   public get isOpen(): boolean {
-    return this.env !== null;
+    return this.#env !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
-   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
-      this.env = await callAbortableFnOnce(
-        ZstdWasm.cache,
+      this.#env = await callAbortableFnOnce(
+        ZstdWasm.#cache,
         "api.init",
         async (signal) => {
           using abortPromise = toAbortPromise(signal);
@@ -86,37 +74,32 @@ export default class ZstdWasm implements IMiddleware<
       );
     } catch (ex) {
       c.signal.throwIfAborted();
+
       throw new ZstdWasmInitError({ cause: ex });
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
-   */
   public async encode(
-    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const view = api.compress(env, c.source, {
-      level: this.level,
+      level: this.#level,
     });
-
     c.destination = toOwnedBytes(view);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
-   */
   public async decode(
-    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const view = api.decompress(env, c.source);
-
     c.destination = toOwnedBytes(view);
+
     await next();
   }
 }

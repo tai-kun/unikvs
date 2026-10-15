@@ -93,7 +93,9 @@ describe("対応しない実行環境", () => {
 
       try {
         // 実行
-        const error = await captureRejection(target.open(createOpenContext({ signal }) as IMiddleware.OpenContext));
+        const error = await captureRejection(
+          target.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+        );
 
         // 検証
         // 失敗は UnsupportedRuntimeError で包み、原因と識別子を保持する。
@@ -278,9 +280,7 @@ describe("壊れた圧縮データの decode", () => {
     const encoded = await encode(target, createPseudoRandomBytes(4096, 22));
 
     // 実行と検証
-    await expect(decode(target, encoded.subarray(0, encoded.length - 4))).rejects.toThrow(
-      Error,
-    );
+    await expect(decode(target, encoded.subarray(0, encoded.length - 4))).rejects.toThrow(Error);
   });
 
   test("先頭を壊したデータをエラーで拒否する", async ({ expect, signal }) => {

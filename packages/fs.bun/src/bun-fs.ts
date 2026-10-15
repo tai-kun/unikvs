@@ -32,16 +32,13 @@ export default class BunFs implements IStorage {
    *
    * ストレージがオープンされるまで null です。オープン後は `node:fs/promises`、`node:path` の各モジュールが利用可能になります。
    */
-  private con: Connection | null;
+  #con: Connection | null;
 
   /**
    * データを保存するルートディレクトリーの絶対パスです。
    */
-  private root: string;
+  #root: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public readonly name: string;
 
   /**
@@ -49,31 +46,25 @@ export default class BunFs implements IStorage {
    */
   public constructor(root: string = ".unikvs", _options: BunFsOptions = {}) {
     this.name = "BunFs";
-    this.root = root;
-    this.con = null;
+    this.#root = root;
+    this.#con = null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public get isOpen(): boolean {
-    return !!this.con;
+    return !!this.#con;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
-  public async open(): Promise<void> {
+  public async open(_c: IStorage.OpenContext): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
       throw new UnsupportedRuntimeError({ name: this.name, runtime: "Bun" });
     }
 
     const [fs, path] = await Promise.all([import("node:fs/promises"), import("node:path")]);
-    const root = path.resolve(this.root);
+    const root = path.resolve(this.#root);
     await fs.mkdir(root, { recursive: true });
-    this.root = root;
-    this.con = { fs, path };
+    this.#root = root;
+    this.#con = { fs, path };
   }
 
   /**
@@ -81,25 +72,22 @@ export default class BunFs implements IStorage {
    *
    * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
    */
-  private resolvePath(key: string): { dest: string; tmp: string } {
-    const { path } = this.con!;
-    const dest = path.join(this.root, key);
+  #resolvePath(key: string): { dest: string; tmp: string } {
+    const { path } = this.#con!;
+    const dest = path.join(this.#root, key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
     const tmp = `${dest}.${Bun.randomUUIDv7()}.tmp`;
 
     return { dest, tmp };
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { fs } = this.con!;
+    const { fs } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = this.resolvePath(c.key);
+    const file = this.#resolvePath(c.key);
     const tmp = Bun.file(file.tmp);
     try {
       await tmp.write(data);
@@ -112,67 +100,52 @@ export default class BunFs implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { path } = this.con!;
+    const { path } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     const data = await Bun.file(file).bytes();
 
     return data;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { path } = this.con!;
+    const { path } = this.#con!;
 
     assertValidFilename(c.key);
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     return await Bun.file(file).exists();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { path } = this.con!;
+    const { path } = this.#con!;
 
     assertValidFilename(c.key);
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     await Bun.file(file).delete();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
-   */
-  public async clear(): Promise<void> {
-    const { fs } = this.con!;
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
+    const { fs } = this.#con!;
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
-    await fs.rm(this.root, { recursive: true, force: true });
-    await fs.mkdir(this.root, { recursive: true });
+    await fs.rm(this.#root, { recursive: true, force: true });
+    await fs.mkdir(this.#root, { recursive: true });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#streams)
-   */
   public async getWritable(
     c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    const { fs } = this.con!;
+    const { fs } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = this.resolvePath(c.key);
+    const file = this.#resolvePath(c.key);
 
     // 一時ファイルへの書き込みシンクを作成します。
     const tmp = Bun.file(file.tmp);
@@ -240,16 +213,13 @@ export default class BunFs implements IStorage {
     return writable;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#streams)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { path } = this.con!;
+    const { path } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     const source = Bun.file(file);
     let reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | null = null;
 

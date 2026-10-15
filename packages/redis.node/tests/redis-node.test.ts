@@ -247,7 +247,6 @@ describe("Node 固有の振る舞い", () => {
     // 準備
     // V3-S1 の固定手順に従う。
     // 主手順は観測可能な振る舞い (一重 prefix) とする。
-    // 内部透過バッグの確認は `as unknown as { options: Record<string, unknown> }` の cast 断片で行う。
     // `any` 直参照はしない。
     const key = `d-prime-${crypto.randomUUID()}.bin`;
     const storage = new Redis(url, { keyPrefix: "p:" });
@@ -269,9 +268,6 @@ describe("Node 固有の振る舞い", () => {
       } finally {
         await raw.quit();
       }
-      expect(
-        (storage as unknown as { options: Record<string, unknown> }).options,
-      ).not.toHaveProperty("keyPrefix");
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
     }

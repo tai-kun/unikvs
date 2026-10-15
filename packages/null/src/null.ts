@@ -4,9 +4,6 @@ import { KeyNotFoundError, type IStorage } from "@unikvs/core";
  * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
  */
 export default class Null implements IStorage {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
   public readonly name: string;
 
   /**
@@ -16,56 +13,32 @@ export default class Null implements IStorage {
     this.name = "Null";
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
-  public write(): void {}
+  public write(_c: IStorage.WriteContext, _data: any): void {}
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
   public read(c: IStorage.ReadContext): never {
     throw new KeyNotFoundError({ key: c.key });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
-  public exists(): false {
+  public exists(_c: IStorage.ExistsContext): false {
     return false;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
   public delete(c: IStorage.DeleteContext): never {
     throw new KeyNotFoundError({ key: c.key });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
-   */
-  public clear(): void {}
+  public clear(_c: IStorage.ClearContext): void {}
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#data)
-   */
-  public getWritable(): WritableStream<any> {
+  public getWritable(_c: IStorage.GetWritableContext): WritableStream<any> {
     return new WritableStream({
       write() {},
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/null#data)
-   */
   public getReadable(c: IStorage.GetReadableContext): never {
     throw new KeyNotFoundError({ key: c.key });
   }

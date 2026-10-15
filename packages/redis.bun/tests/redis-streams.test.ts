@@ -10,6 +10,7 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
+import { RedisClient } from "bun";
 import { describe, vi } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -350,5 +351,63 @@ describe("同一キーへの並行ストリーム書き込み", () => {
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(payloads.some((payload) => bytesEqual(result, payload))).toBe(true);
     await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([`${keyPrefix}${key}`]);
+  });
+});
+
+describe("書き込みストリームの失敗処理", () => {
+  test("開始に失敗したとき、write は拒否され一時キーが残らない", async ({
+    client,
+    expect,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    // `set` の単発失敗を再現し、`start()` 内の失敗経路を通す。
+    // `start()` はストリーム構築時に即時実行されるため、中断ではなく spy で失敗させる。
+    vi.spyOn(RedisClient.prototype, "set").mockRejectedValueOnce(new Error("set failure"));
+    const key = "stream-start-failure.dat";
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    try {
+      // 実行と検証
+      await expect(writer.write(new Uint8Array([1]))).rejects.toThrow("set failure");
+      await vi.waitFor(async () => {
+        await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([]);
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("追記に失敗したとき、write は拒否され一時キーが残らない", async ({
+    client,
+    expect,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    // `append` の単発失敗を再現し、`write()` 内の失敗経路を通す。
+    const appendSpy = vi
+      .spyOn(RedisClient.prototype, "append")
+      .mockRejectedValueOnce(new Error("append failure"));
+    const key = "stream-append-failure.dat";
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    try {
+      // 実行と検証
+      await expect(writer.write(new Uint8Array([1, 2, 3]))).rejects.toThrow("append failure");
+      expect(appendSpy).toHaveBeenCalled();
+      await vi.waitFor(async () => {
+        await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([]);
+      });
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

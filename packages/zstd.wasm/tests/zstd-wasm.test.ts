@@ -71,8 +71,8 @@ describe("往復", () => {
     const input = createRepetitiveInput();
 
     // 実行
-    const encoded = await encode(target, input );
-    const decoded = await decode(target, encoded );
+    const encoded = await encode(target, input);
+    const decoded = await decode(target, encoded);
 
     // 検証
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
@@ -87,7 +87,7 @@ describe("往復", () => {
     const input = createPseudoRandomBytes(4096, 11);
 
     // 実行
-    const decoded = await decode(target, await encode(target, input ) );
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -101,8 +101,8 @@ describe("往復", () => {
     const input = new Uint8Array(0);
 
     // 実行
-    const encoded = await encode(target, input );
-    const decoded = await decode(target, encoded );
+    const encoded = await encode(target, input);
+    const decoded = await decode(target, encoded);
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -116,7 +116,7 @@ describe("往復", () => {
     for (const level of [1, 10, 22]) {
       const target = new ZstdWasm({ level });
       await openTarget(target, createSignal());
-      const decoded = await decode(target, await encode(target, input ) );
+      const decoded = await decode(target, await encode(target, input));
       expect(decoded, `level=${level}`).toStrictEqual(input);
     }
   });
@@ -128,7 +128,7 @@ describe("往復", () => {
     const input = createPseudoRandomBytes(1024 * 1024, 13);
 
     // 実行
-    const decoded = await decode(target, await encode(target, input ) );
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(bytesEqual(decoded, input)).toBe(true);
@@ -141,7 +141,7 @@ describe("往復", () => {
     const input = new TextEncoder().encode("0123456789abcdef".repeat((4 * 1024 * 1024) / 16));
 
     // 実行
-    const decoded = await decode(target, await encode(target, input ) );
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(bytesEqual(decoded, input)).toBe(true);
@@ -156,7 +156,7 @@ describe("圧縮率の健全性", () => {
     const input = createRepetitiveInput();
 
     // 実行
-    const encoded = await encode(target, input );
+    const encoded = await encode(target, input);
 
     // 検証
     expect(encoded.byteLength).toBeLessThan(input.byteLength);

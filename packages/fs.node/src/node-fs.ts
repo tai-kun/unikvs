@@ -40,16 +40,13 @@ export default class NodeFs implements IStorage {
    *
    * ストレージがオープンされるまで null です。オープン後は `node:fs`、`node:path`、`node:stream` の各モジュールが利用可能になります。
    */
-  private con: Connection | null;
+  #con: Connection | null;
 
   /**
    * データを保存するルートディレクトリーの絶対パスです。
    */
-  private root: string;
+  #root: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public readonly name: string;
 
   /**
@@ -57,31 +54,25 @@ export default class NodeFs implements IStorage {
    */
   public constructor(root: string = ".unikvs", _options: NodeFsOptions = {}) {
     this.name = "NodeFs";
-    this.root = root;
-    this.con = null;
+    this.#root = root;
+    this.#con = null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public get isOpen(): boolean {
-    return !!this.con;
+    return !!this.#con;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
-  public async open(): Promise<void> {
+  public async open(_c: IStorage.OpenContext): Promise<void> {
     const [fs, path, stream, crypto] = await Promise.all([
       import("node:fs"),
       import("node:path"),
       import("node:stream"),
       import("node:crypto"),
     ]);
-    const root = path.resolve(this.root);
+    const root = path.resolve(this.#root);
     await fs.promises.mkdir(root, { recursive: true });
-    this.root = root;
-    this.con = { fs, path, crypto, stream: stream as any };
+    this.#root = root;
+    this.#con = { fs, path, crypto, stream: stream as any };
   }
 
   /**
@@ -89,25 +80,22 @@ export default class NodeFs implements IStorage {
    *
    * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
    */
-  private resolvePath(key: string): { dest: string; tmp: string } {
-    const { path, crypto } = this.con!;
-    const dest = path.join(this.root, key);
+  #resolvePath(key: string): { dest: string; tmp: string } {
+    const { path, crypto } = this.#con!;
+    const dest = path.join(this.#root, key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
     const tmp = `${dest}.${crypto.randomUUID()}.tmp`;
 
     return { dest, tmp };
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { fs } = this.con!;
+    const { fs } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = this.resolvePath(c.key);
+    const file = this.#resolvePath(c.key);
     try {
       await fs.promises.writeFile(file.tmp, data, { signal: c.signal });
       await fs.promises.rename(file.tmp, file.dest);
@@ -118,29 +106,23 @@ export default class NodeFs implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { fs, path } = this.con!;
+    const { fs, path } = this.#con!;
 
     assertValidFilename(c.key);
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     const data = await fs.promises.readFile(file, { signal: c.signal });
 
     return data;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { fs, path } = this.con!;
+    const { fs, path } = this.#con!;
 
     assertValidFilename(c.key);
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     try {
       await fs.promises.access(file);
       return true;
@@ -149,40 +131,31 @@ export default class NodeFs implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { fs, path } = this.con!;
+    const { fs, path } = this.#con!;
 
     assertValidFilename(c.key);
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     await fs.promises.unlink(file);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
-   */
-  public async clear(): Promise<void> {
-    const { fs } = this.con!;
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
+    const { fs } = this.#con!;
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
-    await fs.promises.rm(this.root, { recursive: true, force: true });
-    await fs.promises.mkdir(this.root, { recursive: true });
+    await fs.promises.rm(this.#root, { recursive: true, force: true });
+    await fs.promises.mkdir(this.#root, { recursive: true });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
-   */
   public async getWritable(
     c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    const { fs } = this.con!;
+    const { fs } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = this.resolvePath(c.key);
+    const file = this.#resolvePath(c.key);
 
     // 一時ファイルへの書き込みストリームを作成します。
     const writeStream = fs.createWriteStream(file.tmp);
@@ -259,16 +232,13 @@ export default class NodeFs implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { fs, path, stream } = this.con!;
+    const { fs, path, stream } = this.#con!;
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = path.join(this.root, c.key);
+    const file = path.join(this.#root, c.key);
     // signal を渡すことで、中断時にはストリームが中断理由で破棄され、進行中の読み取りも失敗します。
     const readStream = fs.createReadStream(file, { signal: c.signal });
     const readableStream = stream.Readable.toWeb(readStream);

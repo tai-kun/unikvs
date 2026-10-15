@@ -12,6 +12,7 @@ import {
 import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
+import type Checksum from "../src/checksum.js";
 import {
   type ChecksumOptions,
   ChecksumMd5,
@@ -22,7 +23,6 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
-import type Checksum from "../src/checksum.js";
 
 const ALGORITHMS = [
   {

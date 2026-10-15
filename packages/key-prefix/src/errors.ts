@@ -1,9 +1,9 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
  */
-export type KeyPrefixClearNotSupportedErrorMeta = {
+export type KeyPrefixClearDeniedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
    */
@@ -12,85 +12,40 @@ export type KeyPrefixClearNotSupportedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
    */
-  readonly clearBehavior: string;
+  readonly allowClear: boolean;
 };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
  */
-export type KeyPrefixClearNotSupportedErrorArgs = ErrorOptions &
-  KeyPrefixClearNotSupportedErrorMeta;
+export type KeyPrefixClearDeniedErrorArgs = ErrorOptions & KeyPrefixClearDeniedErrorMeta;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
  */
-export class KeyPrefixClearNotSupportedError extends InvalidUsageErrorBase<KeyPrefixClearNotSupportedErrorMeta> {
+export class KeyPrefixClearDeniedError extends InvalidUsageErrorBase<KeyPrefixClearDeniedErrorMeta> {
   static {
-    this.prototype.name = "KeyPrefixClearNotSupportedError";
+    this.prototype.name = "KeyPrefixClearDeniedError";
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
    */
-  public constructor(args: KeyPrefixClearNotSupportedErrorArgs) {
-    const { prefix, clearBehavior, ...options } = args;
-    const meta: KeyPrefixClearNotSupportedErrorMeta = { prefix, clearBehavior };
+  public constructor(args: KeyPrefixClearDeniedErrorArgs) {
+    const { prefix, allowClear, ...options } = args;
+    const meta: KeyPrefixClearDeniedErrorMeta = { prefix, allowClear };
     super(
       meta,
       ({ prefix }) =>
-        `KeyPrefix.clear with prefix ${JSON.stringify(prefix)} cannot guarantee scoped deletion. Use clearBehavior "allow" when single-tenant exclusive use is guaranteed.`,
+        `KeyPrefix.clear with prefix ${JSON.stringify(prefix)} cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.`,
       options,
     );
   }
 }
 
 setErrorMessage(
-  KeyPrefixClearNotSupportedError,
+  KeyPrefixClearDeniedError,
   ({ prefix }) =>
-    `プレフィックス ${JSON.stringify(prefix)} 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください`,
-  "ja",
-);
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
- */
-export type InvalidClearBehaviorErrorMeta = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
-   */
-  readonly actual: unknown;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
- */
-export type InvalidClearBehaviorErrorArgs = ErrorOptions & InvalidClearBehaviorErrorMeta;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
- */
-export class InvalidClearBehaviorError extends ErrorBase<InvalidClearBehaviorErrorMeta> {
-  static {
-    this.prototype.name = "KeyPrefixInvalidClearBehaviorError";
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
-   */
-  public constructor(args: InvalidClearBehaviorErrorArgs) {
-    const { actual, ...options } = args;
-    const meta: InvalidClearBehaviorErrorMeta = { actual };
-    super(
-      meta,
-      ({ actual }) => `clearBehavior must be "allow" or "deny", but got ${String(actual)}.`,
-      options,
-    );
-  }
-}
-
-setErrorMessage(
-  InvalidClearBehaviorError,
-  ({ actual }) =>
-    `clearBehavior は "allow" か "deny" でなければなりません。受け取った値: ${String(actual)}`,
+    `プレフィックス ${JSON.stringify(prefix)} 付きの KeyPrefix.clear は、範囲限定削除を保証できないため拒否されました。単一テナントによる占有が保証できる場合は、allowClear: true を指定してください。`,
   "ja",
 );

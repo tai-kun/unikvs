@@ -158,9 +158,9 @@ describe("コンストラクター注入", () => {
     // 実行と検証
     expect(textDecoder.decode(await encode(target, Uint8Array.from([0x66])))).toBe("Zg");
     expect(textDecoder.decode(await encode(target, Uint8Array.from([0x66, 0x6f])))).toBe("Zm8");
-    expect(
-      textDecoder.decode(await encode(target, Uint8Array.from([0x66, 0x6f, 0x6f]))),
-    ).toBe("Zm9v");
+    expect(textDecoder.decode(await encode(target, Uint8Array.from([0x66, 0x6f, 0x6f])))).toBe(
+      "Zm9v",
+    );
   });
 
   test("padding 設定にかかわらず decode は両方を受理する", async ({ expect }) => {
@@ -169,18 +169,12 @@ describe("コンストラクター注入", () => {
     const padded = new Base64();
 
     // 実行と検証
-    expect(await decode(unpadded, textEncoder.encode("Zg"))).toStrictEqual(
-      Uint8Array.from([0x66]),
-    );
+    expect(await decode(unpadded, textEncoder.encode("Zg"))).toStrictEqual(Uint8Array.from([0x66]));
     expect(await decode(unpadded, textEncoder.encode("Zg=="))).toStrictEqual(
       Uint8Array.from([0x66]),
     );
-    expect(await decode(padded, textEncoder.encode("Zg"))).toStrictEqual(
-      Uint8Array.from([0x66]),
-    );
-    expect(await decode(padded, textEncoder.encode("Zg=="))).toStrictEqual(
-      Uint8Array.from([0x66]),
-    );
+    expect(await decode(padded, textEncoder.encode("Zg"))).toStrictEqual(Uint8Array.from([0x66]));
+    expect(await decode(padded, textEncoder.encode("Zg=="))).toStrictEqual(Uint8Array.from([0x66]));
   });
 
   test("注入した encoder で一括 encode できる", async ({ expect }) => {

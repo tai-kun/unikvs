@@ -3,7 +3,7 @@ import { createClearContext, createNext } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { InvalidClearBehaviorError, KeyPrefixClearNotSupportedError } from "../src/errors.js";
+import { KeyPrefixClearDeniedError } from "../src/errors.js";
 import KeyPrefix from "../src/key-prefix.js";
 
 /**
@@ -21,57 +21,33 @@ const test = vitest.extend<{ setLang: (lang: string) => void }>({
   },
 });
 
-describe("KeyPrefixClearNotSupportedError の国際化 (client)", () => {
+describe("KeyPrefixClearDeniedError の国際化 (client)", () => {
   test("en では英語メッセージになる", ({ expect, setLang }) => {
     // 準備
-    const error = new KeyPrefixClearNotSupportedError({
+    const error = new KeyPrefixClearDeniedError({
       prefix: "tenant:",
-      clearBehavior: "deny",
+      allowClear: true,
     });
     setLang("en");
 
     // 実行と検証
     expect(error.message).toBe(
-      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Use clearBehavior "allow" when single-tenant exclusive use is guaranteed.',
+      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.',
     );
-    expect(error.meta).toStrictEqual({ prefix: "tenant:", clearBehavior: "deny" });
-    expect(error.name).toBe("KeyPrefixClearNotSupportedError");
+    expect(error.meta).toStrictEqual({ prefix: "tenant:", allowClear: true });
+    expect(error.name).toBe("KeyPrefixClearDeniedError");
   });
 
   test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
-    const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("tenant:", { allowClear: true });
     setLang("ja");
 
     // 実行と検証
     await expect(
       prefix.use(createClearContext() as IMiddleware.UseContext, createNext()),
     ).rejects.toThrow(
-      'プレフィックス "tenant:" 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください',
-    );
-  });
-});
-
-describe("InvalidClearBehaviorError の国際化 (client)", () => {
-  test("en では英語メッセージになる", ({ expect, setLang }) => {
-    // 準備
-    const error = new InvalidClearBehaviorError({ actual: "alllow" });
-    setLang("en");
-
-    // 実行と検証
-    expect(error.message).toBe('clearBehavior must be "allow" or "deny", but got alllow.');
-    expect(error.meta).toStrictEqual({ actual: "alllow" });
-    expect(error.name).toBe("KeyPrefixInvalidClearBehaviorError");
-  });
-
-  test("ja を設定するとエラーが日本語になる", ({ expect, setLang }) => {
-    // 準備
-    const error = new InvalidClearBehaviorError({ actual: "alllow" });
-    setLang("ja");
-
-    // 実行と検証
-    expect(error.message).toBe(
-      'clearBehavior は "allow" か "deny" でなければなりません。受け取った値: alllow',
+      'プレフィックス "tenant:" 付きの KeyPrefix.clear は、範囲限定削除を保証できないため拒否されました。単一テナントによる占有が保証できる場合は、allowClear: true を指定してください。',
     );
   });
 });

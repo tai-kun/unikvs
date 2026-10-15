@@ -69,9 +69,7 @@ async function pumpEncode(
   const c = createEncodeStreamContext(sourceFrom(chunks));
   await target.encodeStream(c as ByteEncodeStream, createNext());
 
-  return concatBytes(
-    await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
-  );
+  return concatBytes(await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>));
 }
 
 /**
@@ -84,9 +82,7 @@ async function pumpDecode(
   const c = createDecodeStreamContext(sourceFrom(chunks));
   await target.decodeStream(c as ByteDecodeStream, createNext());
 
-  return concatBytes(
-    await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
-  );
+  return concatBytes(await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>));
 }
 
 /**
@@ -241,13 +237,13 @@ describe("ストリーム API の提供", () => {
 
     // 実行と検証
     const encodeContext = createEncodeStreamContext(sourceFrom(input));
-    await expect(target.encodeStream(encodeContext as ByteEncodeStream, createNext())).rejects.toThrow(
-      TypeError,
-    );
+    await expect(
+      target.encodeStream(encodeContext as ByteEncodeStream, createNext()),
+    ).rejects.toThrow(TypeError);
     const decodeContext = createDecodeStreamContext(sourceFrom(input));
-    await expect(target.decodeStream(decodeContext as ByteDecodeStream, createNext())).rejects.toThrow(
-      TypeError,
-    );
+    await expect(
+      target.decodeStream(decodeContext as ByteDecodeStream, createNext()),
+    ).rejects.toThrow(TypeError);
   });
 
   test("分割書き込みしてもストリームで往復できる", async ({ expect, signal }) => {

@@ -61,8 +61,8 @@ describe("インスタンスの状態", () => {
     const input = createPseudoRandomBytes(128, 31);
 
     // 実行
-    const encoded = await encode(target, input );
-    await decode(target, encoded );
+    const encoded = await encode(target, input);
+    await decode(target, encoded);
 
     // 検証
     expect(target.name).toBe("ZstdWasm");
@@ -76,7 +76,7 @@ describe("インスタンスの状態", () => {
     const invalidData = new Uint8Array([0, 1, 2, 3]);
 
     // 実行と検証
-    await expect(decode(target, invalidData )).rejects.toThrow(Error);
+    await expect(decode(target, invalidData)).rejects.toThrow(Error);
     expect(target.isOpen).toBe(true);
   });
 });
@@ -90,9 +90,7 @@ describe("インスタンスの独立性", () => {
 
     // 実行
     const decodedList = await Promise.all(
-      instances.map(async (target) =>
-        decode(target, await encode(target, input ) ),
-      ),
+      instances.map(async (target) => decode(target, await encode(target, input))),
     );
 
     // 検証
@@ -115,8 +113,8 @@ describe("インスタンスの独立性", () => {
     const input = createPseudoRandomBytes(512, 34);
 
     // 実行
-    const decodedLow = await decode(high, await encode(low, input ) );
-    const decodedHigh = await decode(low, await encode(high, input ) );
+    const decodedLow = await decode(high, await encode(low, input));
+    const decodedHigh = await decode(low, await encode(high, input));
 
     // 検証
     expect(decodedLow).toStrictEqual(input);
@@ -133,9 +131,9 @@ describe("入力データの非破壊性", () => {
     const inputSnapshot = input.slice();
 
     // 実行
-    const encoded = await encode(target, input );
+    const encoded = await encode(target, input);
     const encodedSnapshot = encoded.slice();
-    const decoded = await decode(target, encoded );
+    const decoded = await decode(target, encoded);
 
     // 検証
     expect(input).toStrictEqual(inputSnapshot);
@@ -152,7 +150,7 @@ describe("ストリーム API の非提供", () => {
     // 実行と検証
     expect("encodeStream" in target).toBe(false);
     expect("decodeStream" in target).toBe(false);
-    expect((target as unknown as Record<string, unknown>).encodeStream).toBeUndefined();
-    expect((target as unknown as Record<string, unknown>).decodeStream).toBeUndefined();
+    expect((target as unknown as Record<string, unknown>)["encodeStream"]).toBeUndefined();
+    expect((target as unknown as Record<string, unknown>)["decodeStream"]).toBeUndefined();
   });
 });

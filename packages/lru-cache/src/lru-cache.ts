@@ -50,26 +50,23 @@ export default class LruCache implements IStorage {
   /**
    * キーと値のペアを保持する内部マップです。
    */
-  private readonly map: Map<string, any>;
+  readonly #map: Map<string, any>;
 
   /**
    * maxBytes 設定時にキーごとのバイト数を保持するマップです。
    */
-  private readonly sizes: Map<string, number>;
+  readonly #sizes: Map<string, number>;
 
   /**
    * maxBytes 設定時に追跡する総バイト数です。
    */
-  private totalBytes: number;
+  #totalBytes: number;
 
   /**
    * オープン状態を保持するフラグです。
    */
-  private opened: boolean;
+  #opened: boolean;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public readonly name: string;
 
   /**
@@ -85,12 +82,12 @@ export default class LruCache implements IStorage {
   /**
    * データの複製に使用する関数です。
    */
-  private readonly clone: <T>(value: T) => T;
+  readonly #clone: <T>(value: T) => T;
 
   /**
    * キーごとのバイト数の計算に使用する関数です。
    */
-  private readonly sizeOf: (value: any, key: string) => number;
+  readonly #sizeOf: (value: any, key: string) => number;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
@@ -117,19 +114,19 @@ export default class LruCache implements IStorage {
     this.name = "LruCache";
     this.maxEntries = maxEntries === 0 ? 0 : maxEntries;
     this.maxBytes = maxBytes === 0 ? 0 : maxBytes;
-    this.map = new Map();
-    this.sizes = new Map();
-    this.totalBytes = 0;
-    this.opened = false;
-    this.clone = clone;
-    this.sizeOf = sizeOf;
+    this.#map = new Map();
+    this.#sizes = new Map();
+    this.#totalBytes = 0;
+    this.#opened = false;
+    this.#clone = clone;
+    this.#sizeOf = sizeOf;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
   public get size(): number {
-    return this.map.size;
+    return this.#map.size;
   }
 
   /**
@@ -140,121 +137,95 @@ export default class LruCache implements IStorage {
       return 0;
     }
 
-    return this.totalBytes;
+    return this.#totalBytes;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public get isOpen(): boolean {
-    return this.opened;
+    return this.#opened;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.opened) {
+    if (this.#opened) {
       return;
     }
 
-    this.opened = true;
+    this.#opened = true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
-    this.map.clear();
-    this.sizes.clear();
-    this.totalBytes = 0;
-    this.opened = false;
+
+    this.#map.clear();
+    this.#sizes.clear();
+    this.#totalBytes = 0;
+    this.#opened = false;
   }
 
   /**
    * 未オープン状態での操作を TypeError で拒否します。
    */
-  private assertOpen(): void {
-    if (!this.opened) {
+  #assertOpen(): void {
+    if (!this.#opened) {
       throw new TypeError("LruCache is not open. Call open() before operating.");
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public write(c: IStorage.WriteContext, data: any): void {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
-    const storedValue = this.clone(data);
+    const storedValue = this.#clone(data);
 
-    this.commit(c.key, storedValue);
+    this.#commit(c.key, storedValue);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public read(c: IStorage.ReadContext): any {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    const value = this.map.get(c.key);
-    const cloned = this.clone(value);
+    const value = this.#map.get(c.key);
+    const cloned = this.#clone(value);
 
-    this.touch(c.key);
+    this.#touch(c.key);
 
     return cloned;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public exists(c: IStorage.ExistsContext): boolean {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
-    const exists = this.map.has(c.key);
+    const exists = this.#map.has(c.key);
 
     return exists;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
   public delete(c: IStorage.DeleteContext): void {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.removeEntry(c.key);
+    this.#removeEntry(c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
-   */
-  public clear(): void {
-    this.map.clear();
-    this.sizes.clear();
-    this.totalBytes = 0;
+  public clear(_c: IStorage.ClearContext): void {
+    this.#map.clear();
+    this.#sizes.clear();
+    this.#totalBytes = 0;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#data)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
@@ -264,7 +235,7 @@ export default class LruCache implements IStorage {
           throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
 
-        chunks.push(this.clone(chunk));
+        chunks.push(this.#clone(chunk));
       },
       close: () => {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
@@ -276,35 +247,32 @@ export default class LruCache implements IStorage {
           offset += chunk.byteLength;
         }
 
-        this.commit(c.key, merged);
+        this.#commit(c.key, merged);
       },
     });
 
     return stream;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#data)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
-    this.assertOpen();
+    this.#assertOpen();
 
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.touch(c.key);
+    this.#touch(c.key);
 
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
-    const value = this.map.get(c.key);
+    const value = this.#map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {
         if (!(value instanceof Uint8Array)) {
           throw new InvalidChunkTypeError({ key: c.key, chunk: value });
         }
 
-        controller.enqueue(this.clone(value) as Uint8Array<ArrayBuffer>);
+        controller.enqueue(this.#clone(value) as Uint8Array<ArrayBuffer>);
         controller.close();
       },
     });
@@ -317,11 +285,11 @@ export default class LruCache implements IStorage {
    *
    * @param key 登録し直すキーです。
    */
-  private touch(key: string): void {
-    const value = this.map.get(key);
+  #touch(key: string): void {
+    const value = this.#map.get(key);
 
-    this.map.delete(key);
-    this.map.set(key, value);
+    this.#map.delete(key);
+    this.#map.set(key, value);
   }
 
   /**
@@ -329,14 +297,14 @@ export default class LruCache implements IStorage {
    *
    * @param key 取り除くキーです。
    */
-  private removeEntry(key: string): void {
-    const size = this.sizes.get(key);
+  #removeEntry(key: string): void {
+    const size = this.#sizes.get(key);
     if (size !== undefined) {
-      this.totalBytes -= size;
-      this.sizes.delete(key);
+      this.#totalBytes -= size;
+      this.#sizes.delete(key);
     }
 
-    this.map.delete(key);
+    this.#map.delete(key);
   }
 
   /**
@@ -345,31 +313,31 @@ export default class LruCache implements IStorage {
    * @param key 保存するキーです。
    * @param storedValue 複製済みの保存値です。
    */
-  private commit(key: string, storedValue: any): void {
-    this.assertOpen();
+  #commit(key: string, storedValue: any): void {
+    this.#assertOpen();
 
     if (this.maxBytes !== undefined) {
-      const measured = this.sizeOf(storedValue, key);
+      const measured = this.#sizeOf(storedValue, key);
       if (typeof measured !== "number" || !Number.isFinite(measured) || measured < 0) {
         throw new InvalidSizeOfResultError({ key, actual: measured });
       }
 
-      if (this.map.has(key)) {
-        this.removeEntry(key);
+      if (this.#map.has(key)) {
+        this.#removeEntry(key);
       }
 
-      this.map.set(key, storedValue);
-      this.sizes.set(key, measured);
-      this.totalBytes += measured;
+      this.#map.set(key, storedValue);
+      this.#sizes.set(key, measured);
+      this.#totalBytes += measured;
     } else {
-      if (this.map.has(key)) {
-        this.map.delete(key);
+      if (this.#map.has(key)) {
+        this.#map.delete(key);
       }
 
-      this.map.set(key, storedValue);
+      this.#map.set(key, storedValue);
     }
 
-    this.evictIfNeeded(key);
+    this.#evictIfNeeded(key);
   }
 
   /**
@@ -377,27 +345,27 @@ export default class LruCache implements IStorage {
    *
    * @param justWritten 今回書き込んだキーです。
    */
-  private evictIfNeeded(justWritten: string): void {
+  #evictIfNeeded(justWritten: string): void {
     if (this.maxEntries !== undefined) {
       if (this.maxEntries === 0) {
-        this.removeEntry(justWritten);
+        this.#removeEntry(justWritten);
       } else {
-        while (this.map.size > this.maxEntries) {
-          const oldest = this.map.keys().next().value as string;
+        while (this.#map.size > this.maxEntries) {
+          const oldest = this.#map.keys().next().value as string;
 
-          this.removeEntry(oldest);
+          this.#removeEntry(oldest);
         }
       }
     }
 
     if (this.maxBytes !== undefined) {
-      while (this.totalBytes > this.maxBytes) {
-        const oldest = this.map.keys().next().value as string;
+      while (this.#totalBytes > this.maxBytes) {
+        const oldest = this.#map.keys().next().value as string;
         if (oldest === justWritten) {
           break;
         }
 
-        this.removeEntry(oldest);
+        this.#removeEntry(oldest);
       }
     }
   }

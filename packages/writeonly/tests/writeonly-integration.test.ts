@@ -59,8 +59,12 @@ describe("書き込みと読み出し", () => {
     const error = await captureRejection(kvs.get("report"));
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect(error).toMatchObject({
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("read");
+    expect((error as PluginOperationAggregateError).meta.errors).toHaveLength(1);
+    const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
+    expect(reason).toBeInstanceOf(KeyNotFoundError);
+    expect(reason).toMatchObject({
       name: "UniKvsKeyNotFoundError",
       message: "Key not found: report",
       meta: { key: "report" },
@@ -79,8 +83,12 @@ describe("書き込みと読み出し", () => {
     const error = await captureRejection(kvs.stream("report"));
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "report" });
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("read");
+    expect((error as PluginOperationAggregateError).meta.errors).toHaveLength(1);
+    const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
+    expect(reason).toBeInstanceOf(KeyNotFoundError);
+    expect((reason as KeyNotFoundError).meta).toStrictEqual({ key: "report" });
 
     // 後片付け
     await kvs.close();

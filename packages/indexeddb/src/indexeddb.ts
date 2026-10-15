@@ -15,21 +15,18 @@ export default class Indexeddb implements IStorage {
    *
    * ストレージがオープンされるまで null です。
    */
-  private db: IDBPDatabase | null;
+  #db: IDBPDatabase | null;
 
   /**
    * 使用するデータベース名です。
    */
-  private readonly dbName: string;
+  readonly #dbName: string;
 
   /**
    * 使用するオブジェクトストア名です。
    */
-  private readonly storeName: string;
+  readonly #storeName: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public readonly name: string;
 
   /**
@@ -41,33 +38,27 @@ export default class Indexeddb implements IStorage {
     _options: IndexeddbOptions = {},
   ) {
     this.name = "Indexeddb";
-    this.db = null;
-    this.dbName = dbName;
-    this.storeName = storeName;
+    this.#db = null;
+    this.#dbName = dbName;
+    this.#storeName = storeName;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public get isOpen(): boolean {
-    return this.db !== null;
+    return this.#db !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.db) {
+    if (this.#db) {
       return;
     }
 
-    const db = await openDB(this.dbName, 1, {
+    const db = await openDB(this.#dbName, 1, {
       upgrade: (db) => {
         // オブジェクトストアが存在しない場合は作成します
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName);
+        if (!db.objectStoreNames.contains(this.#storeName)) {
+          db.createObjectStore(this.#storeName);
         }
       },
     });
@@ -78,31 +69,22 @@ export default class Indexeddb implements IStorage {
       c.signal.throwIfAborted();
     }
 
-    this.db = db;
+    this.#db = db;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    this.db!.close();
-    this.db = null;
+    this.#db!.close();
+    this.#db = null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
-   */
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     c.signal.throwIfAborted();
 
-    await this.db!.put(this.storeName, data, c.key);
+    await this.#db!.put(this.#storeName, data, c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
-   */
   public async read(c: IStorage.ReadContext): Promise<any> {
     c.signal.throwIfAborted();
 
@@ -115,41 +97,30 @@ export default class Indexeddb implements IStorage {
     }
     c.signal.throwIfAborted();
 
-    return await this.db!.get(this.storeName, c.key);
+    return await this.#db!.get(this.#storeName, c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
     // count() はキーが存在すれば 1 を、存在しなければ 0 を返します
-    const count = await this.db!.count(this.storeName, c.key);
+    const count = await this.#db!.count(this.#storeName, c.key);
+
     return count > 0;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    await this.db!.delete(this.storeName, c.key);
+    await this.#db!.delete(this.#storeName, c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
-   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    await this.db!.clear(this.storeName);
+    await this.#db!.clear(this.#storeName);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     c.signal.throwIfAborted();
 
@@ -173,7 +144,7 @@ export default class Indexeddb implements IStorage {
           offset += chunk.length;
         }
 
-        await this.db!.put(this.storeName, result, c.key);
+        await this.#db!.put(this.#storeName, result, c.key);
       },
       abort: () => {
         chunks.length = 0;
@@ -181,9 +152,6 @@ export default class Indexeddb implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     c.signal.throwIfAborted();
 

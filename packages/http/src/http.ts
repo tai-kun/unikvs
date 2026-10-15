@@ -85,9 +85,6 @@ function assertTokenValue(value: unknown): string | undefined {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
  */
 export default class Http implements IStorage {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public readonly name: string;
 
   /**
@@ -97,20 +94,20 @@ export default class Http implements IStorage {
 
   // 正規化済みのベース URL です。
   // 末尾の `/` を除去しています。
-  private readonly baseUrl: string;
+  readonly #baseUrl: string;
 
   // すべてのキーに付与する接頭辞です。
-  private readonly keyPrefix: string;
+  readonly #keyPrefix: string;
 
   // 注入された `fetch` 実装です。
   // 未指定の場合は `globalThis.fetch` を使います。
-  private readonly fetchImpl: IFetch | undefined;
+  readonly #fetchImpl: IFetch | undefined;
 
   // 既定のリクエストヘッダー群です。
-  private readonly baseHeaders: Record<string, string>;
+  readonly #baseHeaders: Record<string, string>;
 
   // 既定のベアラートークンです。
-  private readonly baseToken: string | undefined;
+  readonly #baseToken: string | undefined;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
@@ -162,22 +159,22 @@ export default class Http implements IStorage {
     }
 
     this.name = "Http";
-    this.baseUrl = normalized;
-    this.keyPrefix = keyPrefix;
+    this.#baseUrl = normalized;
+    this.#keyPrefix = keyPrefix;
     this.allowClearWithoutPrefix = allowClearWithoutPrefix;
-    this.fetchImpl = fetch;
-    this.baseHeaders = headers === undefined ? {} : assertHeadersRecord(headers);
-    this.baseToken = assertTokenValue(token);
+    this.#fetchImpl = fetch;
+    this.#baseHeaders = headers === undefined ? {} : assertHeadersRecord(headers);
+    this.#baseToken = assertTokenValue(token);
   }
 
   // 使用する `fetch` 実装を解決します。
-  private resolveFetch(): IFetch {
-    return this.fetchImpl ?? globalThis.fetch;
+  #resolveFetch(): IFetch {
+    return this.#fetchImpl ?? globalThis.fetch;
   }
 
   // 送信ヘッダーを三層優先度で解決します。
-  private resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
-    const headers: Record<string, string> = { ...this.baseHeaders };
+  #resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
+    const headers: Record<string, string> = { ...this.#baseHeaders };
     const commonHeaders = c.get("@unikvs/fetch:headers");
 
     if (commonHeaders !== undefined) {
@@ -192,7 +189,7 @@ export default class Http implements IStorage {
 
     const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
     const specificToken = assertTokenValue(c.get("@unikvs/http:token"));
-    const token = specificToken ?? commonToken ?? this.baseToken;
+    const token = specificToken ?? commonToken ?? this.#baseToken;
 
     if (token !== undefined) {
       let hasAuthorization = false;
@@ -214,68 +211,56 @@ export default class Http implements IStorage {
 
   // キーに対応する完全 URL を組み立てます。
   // 符号化に失敗した場合は `InvalidKeyError` を投げます。
-  private keyUrl(key: string): string {
+  #keyUrl(key: string): string {
     let segment: string;
 
     try {
-      segment = encodeURIComponent(`${this.keyPrefix}${key}`).replaceAll(".", "%2E");
+      segment = encodeURIComponent(`${this.#keyPrefix}${key}`).replaceAll(".", "%2E");
     } catch (ex) {
       throw new InvalidKeyError({ key, cause: ex });
     }
 
-    return `${this.baseUrl}/${segment}`;
+    return `${this.#baseUrl}/${segment}`;
   }
 
   // `clear` 用の完全 URL を組み立てます。
   // 符号化に失敗した場合は `InvalidKeyError` を投げます。
-  private clearUrl(): string {
+  #clearUrl(): string {
     let encoded: string;
 
     try {
-      encoded = encodeURIComponent(this.keyPrefix);
+      encoded = encodeURIComponent(this.#keyPrefix);
     } catch (ex) {
-      throw new InvalidKeyError({ key: this.keyPrefix, cause: ex });
+      throw new InvalidKeyError({ key: this.#keyPrefix, cause: ex });
     }
 
-    return `${this.baseUrl}/?prefix=${encoded}`;
+    return `${this.#baseUrl}/?prefix=${encoded}`;
   }
 
   // 中断済みなら中断例外を再送出します。
   // `fetch` の `catch` 直後に呼びます。
-  private static rethrowIfAborted(signal: AbortSignal): void {
+  static #rethrowIfAborted(signal: AbortSignal): void {
     signal.throwIfAborted();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     let response: Response;
 
     try {
@@ -288,7 +273,7 @@ export default class Http implements IStorage {
         }),
       );
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
     }
 
@@ -303,21 +288,18 @@ export default class Http implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     let response: Response;
 
     try {
       response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 
@@ -340,21 +322,18 @@ export default class Http implements IStorage {
     return new Uint8Array(buffer);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     let headResponse: Response;
 
     try {
       headResponse = await fetchFn(new Request(url, { method: "HEAD", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "HEAD", url, key: c.key, cause: ex });
     }
 
@@ -388,7 +367,7 @@ export default class Http implements IStorage {
         }),
       );
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 
@@ -417,21 +396,18 @@ export default class Http implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     let response: Response;
 
     try {
       response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "DELETE", url, key: c.key, cause: ex });
     }
 
@@ -451,26 +427,23 @@ export default class Http implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
-   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     // 空 prefix での無条件全削除の事故を防ぐため送信前に拒否します。
-    if (this.keyPrefix === "" && !this.allowClearWithoutPrefix) {
+    if (this.#keyPrefix === "" && !this.allowClearWithoutPrefix) {
       throw new ClearWithoutPrefixNotAllowedError();
     }
 
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.clearUrl();
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#clearUrl();
+    const fetchFn = this.#resolveFetch();
     let response: Response;
 
     try {
       response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "DELETE", url, key: undefined, cause: ex });
     }
 
@@ -480,7 +453,7 @@ export default class Http implements IStorage {
 
     // 未対応応答は恒久失敗として専用エラーにします。
     if (response.status === 404 || response.status === 405 || response.status === 501) {
-      throw new ClearNotSupportedError({ prefix: this.keyPrefix, status: response.status });
+      throw new ClearNotSupportedError({ prefix: this.#keyPrefix, status: response.status });
     }
 
     throw new HttpResponseError({
@@ -492,15 +465,12 @@ export default class Http implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#streams)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     // サーバー側にストリーミング `PUT` を要求しないよう蓄積して `close` 時に一括送信します。
     const chunks: Uint8Array[] = [];
 
@@ -536,7 +506,7 @@ export default class Http implements IStorage {
             }),
           );
         } catch (ex) {
-          Http.rethrowIfAborted(c.signal);
+          Http.#rethrowIfAborted(c.signal);
           throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
         }
 
@@ -556,23 +526,20 @@ export default class Http implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#streams)
-   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
     c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(c);
-    const url = this.keyUrl(c.key);
-    const fetchFn = this.resolveFetch();
+    const headers = this.#resolveHeaders(c);
+    const url = this.#keyUrl(c.key);
+    const fetchFn = this.#resolveFetch();
     let response: Response;
 
     try {
       response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(c.signal);
+      Http.#rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 

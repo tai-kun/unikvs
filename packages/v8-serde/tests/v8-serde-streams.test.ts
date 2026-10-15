@@ -122,9 +122,7 @@ async function encodeFrame(target: V8Serde, data: unknown): Promise<Uint8Array<A
  * デコードストリームの出力リーダーを作成します。
  * 上流のチャンク投入を手動で制御するために使用します。
  */
-async function createDecodeReader(
-  target: V8Serde,
-): Promise<{
+async function createDecodeReader(target: V8Serde): Promise<{
   controller: ReadableStreamDefaultController<Uint8Array<ArrayBuffer>>;
   reader: ReadableStreamDefaultReader<unknown>;
   cancel: (reason?: unknown) => Promise<void>;
@@ -649,10 +647,7 @@ describe("ストリームの異常系", () => {
     expect(encoded.outputChunks).toStrictEqual([await encodeFrame(target, 1)]);
   });
 
-  test("読み取り側をキャンセルすると上流のソースもキャンセルされる", async ({
-    expect,
-    signal,
-  }) => {
+  test("読み取り側をキャンセルすると上流のソースもキャンセルされる", async ({ expect, signal }) => {
     // 準備
     const target = await createOpenedTarget(signal);
     let cancelled = false;

@@ -56,7 +56,7 @@ describe("コンストラクターオプション", () => {
     const input = Uint8Array.from([0xfb, 0xff]);
 
     // 実行
-    const decoded = await decode(target, await encode(target, input ) );
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -72,8 +72,8 @@ describe("コンストラクターオプション", () => {
     await openTarget(explicitTarget, signal);
 
     // 実行
-    const omitted = await encode(omittedTarget, input );
-    const explicit = await encode(explicitTarget, input );
+    const omitted = await encode(omittedTarget, input);
+    const explicit = await encode(explicitTarget, input);
 
     // 検証
     expect(bytesEqual(omitted, explicit)).toBe(true);
@@ -88,8 +88,8 @@ describe("コンストラクターオプション", () => {
     await openTarget(undefinedTarget, signal);
 
     // 実行
-    const omitted = await encode(omittedTarget, input );
-    const undefinedLevel = await encode(undefinedTarget, input );
+    const omitted = await encode(omittedTarget, input);
+    const undefinedLevel = await encode(undefinedTarget, input);
 
     // 検証
     expect(bytesEqual(omitted, undefinedLevel)).toBe(true);
@@ -114,7 +114,7 @@ describe("コンストラクターオプション", () => {
     for (const level of [1, 22]) {
       const target = new ZstdWasm({ level });
       await openTarget(target, signal);
-      const decoded = await decode(target, await encode(target, input ) );
+      const decoded = await decode(target, await encode(target, input));
       expect(decoded, `level=${level}`).toStrictEqual(input);
     }
   });

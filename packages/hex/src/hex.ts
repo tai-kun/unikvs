@@ -67,79 +67,61 @@ export type HexOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
  */
-export default class Hex implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
-   */
+export default class Hex implements IMiddleware {
   public readonly name: string = "Hex";
 
   /**
    * エンコードに使い回す実体です。
    */
-  private readonly encoder: FastUtf8;
+  readonly #encoder: FastUtf8;
 
   /**
    * 一括デコードに使い回す実体です。
    */
-  private readonly decoder: FastUtf8;
+  readonly #decoder: FastUtf8;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
   public constructor(options: HexOptions = {}) {
     const { decoder = defaultUtf8Decoder, encoder = defaultUtf8Encoder } = options;
-    this.encoder = encoder;
-    this.decoder = decoder;
+    this.#encoder = encoder;
+    this.#decoder = decoder;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
-   */
   public async encode(
-    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = this.encoder.encode(bytesToHex(c.source));
+    c.destination = this.#encoder.encode(bytesToHex(c.source));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
-   */
   public async decode(
-    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const text = this.decoder.decode(c.source);
+    const text = this.#decoder.decode(c.source);
 
     if (text.length % 2 === 1) {
       throw new HexDecodeError();
     }
 
     c.destination = hexToBytesStrict(text);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#streams)
-   */
   public async encodeStream(
-    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const encoder = this.encoder;
+    const encoder = this.#encoder;
 
     c.destination = c.source.pipeThrough(
       new TransformStream({
@@ -152,20 +134,18 @@ export default class Hex implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#streams)
-   */
   public async decodeStream(
-    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
     // ignoreBOM:true 注入時は引き継がないため BOM単体 [EF BB BF] は一括 HexDecodeError・ストリーム空成功に分岐します。
-    const utf8 = this.decoder.clone({ ignoreBOM: false });
+    const utf8 = this.#decoder.clone({ ignoreBOM: false });
     let carry = "";
 
     c.destination = c.source.pipeThrough(
@@ -205,6 +185,7 @@ export default class Hex implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 }

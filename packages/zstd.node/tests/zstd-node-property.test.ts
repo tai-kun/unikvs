@@ -46,7 +46,6 @@ async function decode(
   return c.destination;
 }
 
-
 const SEED = 20240927;
 const CASE_COUNT = 50;
 const LEVELS = [undefined, 1, 3, 10, 22] as const;
@@ -63,8 +62,8 @@ describe("決定的ファズテスト", () => {
       const target = level === undefined ? new ZstdNode() : new ZstdNode({ level });
       await openTarget(target, signal);
 
-      const encoded = await encode(target, input );
-      const decoded = await decode(target, encoded );
+      const encoded = await encode(target, input);
+      const decoded = await decode(target, encoded);
 
       expect(bytesEqual(decoded, input)).toBe(true);
     });

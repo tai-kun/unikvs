@@ -147,9 +147,7 @@ describe("ストリームのエラー", () => {
     // 実行
     const c = createDecodeStreamContext(sourceFrom(["a"]), "stream");
     await debug.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
-    const reader = (c.destination as ReadableStream<string>)
-      .pipeThrough(failing)
-      .getReader();
+    const reader = (c.destination as ReadableStream<string>).pipeThrough(failing).getReader();
 
     // 検証
     await expect(reader.read()).rejects.toThrow("downstream failure");
@@ -159,10 +157,7 @@ describe("ストリームのエラー", () => {
 });
 
 describe("ストリームのキャンセル", () => {
-  test("読み取りをキャンセルすると上流のソースもキャンセルされる", async ({
-    expect,
-    records,
-  }) => {
+  test("読み取りをキャンセルすると上流のソースもキャンセルされる", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
     let cancelReason: unknown;

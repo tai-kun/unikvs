@@ -164,11 +164,9 @@ describe("ストリームによる検証", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const { outputChunks, closeError } = await runEncodeStream(
-      checksum,
-      [TEST_DATA],
-      { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH },
-    );
+    const { outputChunks, closeError } = await runEncodeStream(checksum, [TEST_DATA], {
+      [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH,
+    });
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -182,11 +180,9 @@ describe("ストリームによる検証", () => {
     const checksum = new ChecksumSha256();
 
     // 実行
-    const { closeError } = await runEncodeStream(
-      checksum,
-      [TEST_DATA],
-      { [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH },
-    );
+    const { closeError } = await runEncodeStream(checksum, [TEST_DATA], {
+      [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH,
+    });
 
     // 検証
     expect(closeError).toBeInstanceOf(ChecksumMismatchError);

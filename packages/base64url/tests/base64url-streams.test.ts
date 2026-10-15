@@ -297,18 +297,12 @@ describe("decodeStream", () => {
     const expected = Uint8Array.from([0x66]);
 
     // 実行
-    const first = await pumpDecode(base64url, [
-      textEncoder.encode("Zg="),
-      textEncoder.encode("="),
-    ]);
+    const first = await pumpDecode(base64url, [textEncoder.encode("Zg="), textEncoder.encode("=")]);
     const second = await pumpDecode(base64url, [
       textEncoder.encode("Z"),
       textEncoder.encode("g=="),
     ]);
-    const third = await pumpDecode(base64url, [
-      textEncoder.encode("Zg"),
-      textEncoder.encode("=="),
-    ]);
+    const third = await pumpDecode(base64url, [textEncoder.encode("Zg"), textEncoder.encode("==")]);
     const fourth = await pumpDecode(base64url, [
       textEncoder.encode("Zm8"),
       textEncoder.encode("="),

@@ -26,9 +26,6 @@ export type LocalStorageOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
  */
 export default class LocalStorage implements IStorage<string> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public readonly name: string;
 
   /**
@@ -38,10 +35,10 @@ export default class LocalStorage implements IStorage<string> {
 
   // 注入された `Storage` です。
   // 未指定の場合は `globalThis.localStorage` を使います。
-  private readonly injectedStorage: Storage | undefined;
+  readonly #injectedStorage: Storage | undefined;
 
   // すべてのキーに付与する接頭辞です。
-  private readonly keyPrefix: string;
+  readonly #keyPrefix: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
@@ -50,15 +47,15 @@ export default class LocalStorage implements IStorage<string> {
     const { keyPrefix = "unikvs:", allowClearWithoutPrefix = false, storage } = options;
     this.name = "LocalStorage";
     this.allowClearWithoutPrefix = allowClearWithoutPrefix;
-    this.injectedStorage = storage;
-    this.keyPrefix = keyPrefix;
+    this.#injectedStorage = storage;
+    this.#keyPrefix = keyPrefix;
   }
 
   // 使用する `Storage` を解決します。
-  // 実行時の意味は `injectedStorage ?? globalThis.localStorage` です。
-  private backend(): Storage {
+  // 実行時の意味は `#injectedStorage ?? globalThis.localStorage` です。
+  #backend(): Storage {
     const backend =
-      this.injectedStorage ?? (globalThis as { localStorage?: Storage | undefined }).localStorage;
+      this.#injectedStorage ?? (globalThis as { localStorage?: Storage | undefined }).localStorage;
 
     if (!backend) {
       throw new LocalStorageNotAvailableError();
@@ -68,46 +65,32 @@ export default class LocalStorage implements IStorage<string> {
   }
 
   // 論理キーに接頭辞を付与して実キーに変換します。
-  private toRealKey(key: string): string {
-    return `${this.keyPrefix}${key}`;
+  #toRealKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public open(c: IStorage.OpenContext): void {
     c.signal.throwIfAborted();
-    this.backend();
+    this.#backend();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public close(c: IStorage.CloseContext): void {
     c.signal.throwIfAborted();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public write(c: IStorage.WriteContext, data: string): void {
     c.signal.throwIfAborted();
-    this.backend().setItem(this.toRealKey(c.key), data);
+    this.#backend().setItem(this.#toRealKey(c.key), data);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public read(c: IStorage.ReadContext): string {
     c.signal.throwIfAborted();
-    const value = this.backend().getItem(this.toRealKey(c.key));
+
+    const value = this.#backend().getItem(this.#toRealKey(c.key));
 
     if (value === null) {
       throw new KeyNotFoundError({ key: c.key });
@@ -116,41 +99,34 @@ export default class LocalStorage implements IStorage<string> {
     return value;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public exists(c: IStorage.ExistsContext): boolean {
     c.signal.throwIfAborted();
 
-    return this.backend().getItem(this.toRealKey(c.key)) !== null;
+    return this.#backend().getItem(this.#toRealKey(c.key)) !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public delete(c: IStorage.DeleteContext): void {
     c.signal.throwIfAborted();
-    const backend = this.backend();
 
-    if (backend.getItem(this.toRealKey(c.key)) === null) {
+    const backend = this.#backend();
+
+    if (backend.getItem(this.#toRealKey(c.key)) === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    backend.removeItem(this.toRealKey(c.key));
+    backend.removeItem(this.#toRealKey(c.key));
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
-   */
   public clear(c: IStorage.ClearContext): void {
     // 空 prefix での無条件全削除の事故を防ぐため走査前に拒否します。
     // `http` と同形の初期中断検証である。
-    if (this.keyPrefix === "" && !this.allowClearWithoutPrefix) {
+    if (this.#keyPrefix === "" && !this.allowClearWithoutPrefix) {
       throw new ClearWithoutPrefixNotAllowedError();
     }
 
     c.signal.throwIfAborted();
-    const backend = this.backend();
+
+    const backend = this.#backend();
 
     // 走査中の削除による添字ずれを避けるため削除対象を先に収集します。
     const targets: string[] = [];
@@ -159,7 +135,7 @@ export default class LocalStorage implements IStorage<string> {
       c.signal.throwIfAborted();
       const found = backend.key(index);
 
-      if (found !== null && found.startsWith(this.keyPrefix)) {
+      if (found !== null && found.startsWith(this.#keyPrefix)) {
         targets.push(found);
       }
     }

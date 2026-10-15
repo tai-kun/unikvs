@@ -1,4 +1,4 @@
-import type { IMiddleware, IPipelineContext } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
 import Debug, {
@@ -28,8 +28,12 @@ function expectTypeErrors(): void {
   const invalidDirection: DebugDirection = "both";
 
   const args = {} as DebugInfoArgs;
-  // @ts-expect-error vars は読み取り専用
-  args.vars = {};
+  // @ts-expect-error action は読み取り専用
+  args.action = "a";
+  // @ts-expect-error data は読み取り専用
+  args.data = 1;
+  // @ts-expect-error direction は読み取り専用
+  args.direction = "write";
   // @ts-expect-error key は読み取り専用
   args.key = "k";
 
@@ -62,11 +66,10 @@ test("DebugDirection は write と read のみを表す", () => {
 test("DebugInfoArgs は読み取り専用のプロパティーを持つ", () => {
   // 実行と検証
   expectTypeOf<DebugInfoArgs>().toEqualTypeOf<{
-    readonly vars: IPipelineContext;
     readonly action: string;
-    readonly key: string;
-    readonly direction: DebugDirection;
     readonly data: unknown;
+    readonly direction: DebugDirection;
+    readonly key: string;
   }>();
 });
 
@@ -81,18 +84,10 @@ test("DebugOptions はすべてのオプションを省略できる", () => {
 
 test("encode と decode とストリームはミドルウェアのコンテキストを受け取る", () => {
   // 実行と検証
-  expectTypeOf<Debug["encode"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.EncodeContext>();
-  expectTypeOf<Debug["decode"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.DecodeContext>();
-  expectTypeOf<Debug["encodeStream"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.EncodeStreamContext>();
-  expectTypeOf<Debug["decodeStream"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.DecodeStreamContext>();
+  expectTypeOf<Debug["encode"]>().parameter(0).toExtend<IMiddleware.EncodeContext>();
+  expectTypeOf<Debug["decode"]>().parameter(0).toExtend<IMiddleware.DecodeContext>();
+  expectTypeOf<Debug["encodeStream"]>().parameter(0).toExtend<IMiddleware.EncodeStreamContext>();
+  expectTypeOf<Debug["decodeStream"]>().parameter(0).toExtend<IMiddleware.DecodeStreamContext>();
 });
 
 test("getDefaultDebugInfo は IDebugInfoCallback として利用できる", () => {

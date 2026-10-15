@@ -15,16 +15,13 @@ export default class Opfs implements IStorage {
    *
    * ストレージがオープンされるまで null です。
    */
-  private rootHandle: FileSystemDirectoryHandle | null;
+  #rootHandle: FileSystemDirectoryHandle | null;
 
   /**
    * データを保存する OPFS 内のルートディレクトリー名です。
    */
-  private root: string;
+  #root: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public readonly name: string;
 
   /**
@@ -37,68 +34,59 @@ export default class Opfs implements IStorage {
     this.name = "Opfs";
     if (typeof root === "string") {
       if (root === "" || root === "." || root === "/") {
-        this.root = "";
+        this.#root = "";
       } else {
-        this.root = root.replace(/\/+/g, "/");
-        if (this.root.startsWith("/")) {
-          this.root = this.root.slice(1);
+        this.#root = root.replace(/\/+/g, "/");
+        if (this.#root.startsWith("/")) {
+          this.#root = this.#root.slice(1);
         }
-        if (this.root.endsWith("/")) {
-          this.root = this.root.slice(0, -1);
+        if (this.#root.endsWith("/")) {
+          this.#root = this.#root.slice(0, -1);
         }
 
-        for (const dirname of this.root.split("/")) {
+        for (const dirname of this.#root.split("/")) {
           assertValidDirname(dirname);
         }
       }
 
-      this.rootHandle = null;
+      this.#rootHandle = null;
     } else {
-      this.root = root.name;
-      this.rootHandle = root;
+      this.#root = root.name;
+      this.#rootHandle = root;
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public get isOpen(): boolean {
-    return this.rootHandle !== null;
+    return this.#rootHandle !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.rootHandle) {
+    if (this.#rootHandle) {
       return;
     }
 
     let handle = await navigator.storage.getDirectory();
     c.signal.throwIfAborted();
 
-    if (this.root !== "") {
+    if (this.#root !== "") {
       // 指定された名前のディレクトリーを作成・取得します。
-      for (const dirname of this.root.split("/")) {
+      for (const dirname of this.#root.split("/")) {
         handle = await handle.getDirectoryHandle(dirname, { create: true });
         c.signal.throwIfAborted();
       }
     }
 
     // 中断時に部分的に開いた状態を残さないよう、すべて完了してからハンドルを公開します。
-    this.rootHandle = handle;
+    this.#rootHandle = handle;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.rootHandle!.getFileHandle(c.key, { create: true });
+    const fileHandle = await this.#rootHandle!.getFileHandle(c.key, { create: true });
     c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
     c.signal.throwIfAborted();
@@ -116,14 +104,11 @@ export default class Opfs implements IStorage {
     await writable.close();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.rootHandle!.getFileHandle(c.key);
+    const fileHandle = await this.#rootHandle!.getFileHandle(c.key);
     c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
     c.signal.throwIfAborted();
@@ -132,15 +117,12 @@ export default class Opfs implements IStorage {
     return new Uint8Array(buff);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
     try {
-      await this.rootHandle!.getFileHandle(c.key);
+      await this.#rootHandle!.getFileHandle(c.key);
       return true;
     } catch (ex) {
       if (ex instanceof DOMException && ex.name === "NotFoundError") {
@@ -151,33 +133,27 @@ export default class Opfs implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    await this.rootHandle!.removeEntry(c.key);
+    await this.#rootHandle!.removeEntry(c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
-   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.root === "") {
+    if (this.#root === "") {
       // ルートディレクトリー直下を使用している場合は、すべてのエントリーを個別に削除します。
 
-      for await (const name of this.rootHandle!.keys()) {
+      for await (const name of this.#rootHandle!.keys()) {
         c.signal.throwIfAborted();
-        await this.rootHandle!.removeEntry(name, { recursive: true });
+        await this.#rootHandle!.removeEntry(name, { recursive: true });
       }
     } else {
       // サブディレクトリーを使用している場合は、ディレクトリーごと削除して再作成します。
 
-      const dirnames = this.root.split("/");
+      const dirnames = this.#root.split("/");
       let parentHandle = await navigator.storage.getDirectory();
       c.signal.throwIfAborted();
       for (const dirname of dirnames.slice(0, -1)) {
@@ -188,20 +164,17 @@ export default class Opfs implements IStorage {
       const currentDirname = dirnames[dirnames.length - 1]!;
       await parentHandle.removeEntry(currentDirname, { recursive: true });
       c.signal.throwIfAborted();
-      this.rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
+      this.#rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
-   */
   public async getWritable(
     c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.rootHandle!.getFileHandle(c.key, { create: true });
+    const fileHandle = await this.#rootHandle!.getFileHandle(c.key, { create: true });
     c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
     c.signal.throwIfAborted();
@@ -253,16 +226,13 @@ export default class Opfs implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
-   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.rootHandle!.getFileHandle(c.key);
+    const fileHandle = await this.#rootHandle!.getFileHandle(c.key);
     c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
     c.signal.throwIfAborted();

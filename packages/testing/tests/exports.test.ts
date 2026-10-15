@@ -12,8 +12,6 @@ import {
   toHex,
   toText,
 } from "../src/bytes.js";
-import * as index from "../src/index.js";
-import { createRandom, forCases, forCasesAsync } from "../src/random.js";
 import {
   TestContext,
   createClearContext,
@@ -32,6 +30,8 @@ import {
   createSetContext,
   createStreamContext,
 } from "../src/context.js";
+import * as index from "../src/index.js";
+import { createRandom, forCases, forCasesAsync } from "../src/random.js";
 import {
   collectBytes,
   collectChunks,

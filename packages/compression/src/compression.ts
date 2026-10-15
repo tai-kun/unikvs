@@ -12,77 +12,58 @@ export type CompressionFormat = Extract<
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
  */
-export default class Compression implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
+export default class Compression implements IMiddleware {
   /**
    * 使用する圧縮アルゴリズムの形式です。
    */
-  private readonly format: CompressionFormat;
+  readonly #format: CompressionFormat;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
-   */
   public readonly name: string = "Compression";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
    */
   public constructor(format: CompressionFormat) {
-    this.format = format;
+    this.#format = format;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
-   */
   public async encode(
-    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = await this.#process(c.source, CompressionStream);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
-   */
   public async decode(
-    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = await this.#process(c.source, DecompressionStream);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#streams)
-   */
   public async encodeStream(
-    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = c.source.pipeThrough(new CompressionStream(this.format));
+    c.destination = c.source.pipeThrough(new CompressionStream(this.#format));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#streams)
-   */
   public async decodeStream(
-    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = c.source.pipeThrough(new DecompressionStream(this.format));
+    c.destination = c.source.pipeThrough(new DecompressionStream(this.#format));
+
     await next();
   }
 
@@ -102,7 +83,7 @@ export default class Compression implements IMiddleware<
     },
   ) {
     const stream = toReadableStream([data]);
-    const comp = new Stream(this.format);
+    const comp = new Stream(this.#format);
     const body = stream.pipeThrough(comp);
     const buff = await new Response(body).arrayBuffer();
     const view = new Uint8Array(buff);

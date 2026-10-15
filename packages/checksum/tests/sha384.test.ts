@@ -7,8 +7,10 @@ import { ChecksumMismatchError, ChecksumRequiredError } from "../src/errors.js";
 import ChecksumSha384 from "../src/sha384.js";
 
 const TEST_DATA = Uint8Array.from(new TextEncoder().encode("test"));
-const VALID_HASH = "768412320f7b0aa5812fce428dc4706b3cae50e02a64caa16a782249bfe8efc4b7ef1ccb126255d196047dfedf17a0a9";
-const EMPTY_HASH = "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b";
+const VALID_HASH =
+  "768412320f7b0aa5812fce428dc4706b3cae50e02a64caa16a782249bfe8efc4b7ef1ccb126255d196047dfedf17a0a9";
+const EMPTY_HASH =
+  "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b";
 const INVALID_HASH = "0".repeat(VALID_HASH.length);
 
 /**
@@ -48,7 +50,9 @@ test("期待値と一致するチェックサムを指定して encode すると
   const checksum = new ChecksumSha384();
 
   // 実行
-  const result = await encode(checksum, TEST_DATA, { [ChecksumSha384.CHECKSUM_VAR_NAME]: VALID_HASH });
+  const result = await encode(checksum, TEST_DATA, {
+    [ChecksumSha384.CHECKSUM_VAR_NAME]: VALID_HASH,
+  });
 
   // 検証
   expect(result).toStrictEqual(TEST_DATA);

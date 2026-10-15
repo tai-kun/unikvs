@@ -1,9 +1,5 @@
 import type { IMiddleware } from "@unikvs/core";
-import {
-  createEncodeContext,
-  createNext,
-  TestContext,
-} from "@unikvs/testing";
+import { createEncodeContext, createNext } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -17,7 +13,6 @@ const test = createRecordsTest();
  */
 function argsFor(data: unknown): DebugInfoArgs {
   return {
-    vars: new TestContext(),
     action: "set",
     key: "key",
     direction: "write",
@@ -122,7 +117,10 @@ describe("Debug.getDefaultDebugInfo", () => {
 });
 
 describe("追加のデバッグ情報", () => {
-  test("コールバックの戻り値を action/key/direction とともに記録する", async ({ expect, records }) => {
+  test("コールバックの戻り値を action/key/direction とともに記録する", async ({
+    expect,
+    records,
+  }) => {
     // 準備
     const debug = new Debug({ getDebugInfo: () => ({ custom: 1 }) });
 

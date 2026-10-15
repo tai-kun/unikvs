@@ -139,41 +139,27 @@ function drain(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
  */
-export default class V8Serde implements IMiddleware<
-  unknown,
-  Uint8Array<ArrayBuffer>,
-  unknown,
-  Uint8Array<ArrayBuffer>
-> {
+export default class V8Serde implements IMiddleware {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
-  private static readonly cache: callAbortableFnOnce.CacheMap = new Map();
+  static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
-   */
   public readonly name: string = "V8Serde";
 
   /**
    * 実行環境です。
    */
-  private env: IEnv | null = null;
+  #env: IEnv | null = null;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
-   */
   public get isOpen(): boolean {
-    return this.env !== null;
+    return this.#env !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
-   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
-      this.env = await callAbortableFnOnce(
-        V8Serde.cache,
+      this.#env = await callAbortableFnOnce(
+        V8Serde.#cache,
         "api.init",
         async (signal) => {
           using abortPromise = toAbortPromise(signal);
@@ -193,14 +179,11 @@ export default class V8Serde implements IMiddleware<
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
-   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
 
     try {
       c.destination = toOwnedBytes(api.serialize(env, c.source));
@@ -211,14 +194,11 @@ export default class V8Serde implements IMiddleware<
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
-   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
 
     try {
       c.destination = api.deserialize(env, c.source);
@@ -229,14 +209,11 @@ export default class V8Serde implements IMiddleware<
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const { serialize } = env;
 
     c.destination = c.source.pipeThrough(
@@ -246,17 +223,15 @@ export default class V8Serde implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
-   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const { deserialize } = env;
     const queue = new ByteQueue();
 
@@ -276,6 +251,7 @@ export default class V8Serde implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 

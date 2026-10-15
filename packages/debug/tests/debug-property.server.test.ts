@@ -8,7 +8,6 @@ import {
   forCasesAsync,
   readAll,
   sourceFrom,
-  TestContext,
   type Random,
 } from "@unikvs/testing";
 import { describe } from "vitest";
@@ -28,7 +27,6 @@ const test = createRecordsTest();
  */
 function argsFor(data: unknown): DebugInfoArgs {
   return {
-    vars: new TestContext(),
     action: "set",
     key: "key",
     direction: "write",

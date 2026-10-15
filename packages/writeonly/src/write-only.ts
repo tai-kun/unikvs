@@ -30,49 +30,33 @@ export default class WriteOnly implements IMiddleware {
     this.allowDelete = Boolean(options?.allowDelete);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
-   */
   public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
-   */
   public async decode(c: IMiddleware.DecodeContext): Promise<void> {
     throw new KeyNotFoundError({ key: c.key });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#streams)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#streams)
-   */
   public async decodeStream(c: IMiddleware.DecodeStreamContext): Promise<void> {
     throw new KeyNotFoundError({ key: c.key });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
-   */
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     switch (c.action) {
       case "has":

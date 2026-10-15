@@ -189,9 +189,7 @@ describe("一括のラウンドトリップ", () => {
     for (let length = 0; length <= 9; length++) {
       const input = new Uint8Array(length);
       const unpaddedLength = Math.floor(length / 3) * 4 + (length % 3 === 0 ? 0 : (length % 3) + 1);
-      expect((await encode(target, input)).byteLength, `unpadded n=${length}`).toBe(
-        unpaddedLength,
-      );
+      expect((await encode(target, input)).byteLength, `unpadded n=${length}`).toBe(unpaddedLength);
       expect((await encode(padded, input)).byteLength, `padded n=${length}`).toBe(
         Math.ceil(length / 3) * 4,
       );
@@ -263,9 +261,7 @@ describe("デコードの受理系", () => {
     expect(await decode(base64url, base64UrlBytes("Zh=="))).toStrictEqual(
       await decode(base64url, base64UrlBytes("Zg==")),
     );
-    expect(await decode(base64url, base64UrlBytes("Zh=="))).toStrictEqual(
-      Uint8Array.from([0x66]),
-    );
+    expect(await decode(base64url, base64UrlBytes("Zh=="))).toStrictEqual(Uint8Array.from([0x66]));
     expect(await decode(base64url, base64UrlBytes("Zm9="))).toStrictEqual(
       await decode(base64url, base64UrlBytes("Zm8=")),
     );
@@ -373,9 +369,7 @@ describe("デコードの異常系", () => {
 
     // 実行と検証
     await expect(decode(target, Uint8Array.from([0xff]))).rejects.toThrow(TypeError);
-    await expect(decode(target, Uint8Array.from([0xff]))).rejects.not.toThrow(
-      Base64UrlDecodeError,
-    );
+    await expect(decode(target, Uint8Array.from([0xff]))).rejects.not.toThrow(Base64UrlDecodeError);
   });
 
   test("投げたエラーは Error の派生であり name は UniKvsBase64UrlDecodeError である", async ({

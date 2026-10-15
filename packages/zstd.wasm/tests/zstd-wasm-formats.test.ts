@@ -54,7 +54,7 @@ describe("zstd フレーム", () => {
     const input = createPseudoRandomBytes(512, 7);
 
     // 実行
-    const encoded = await encode(target, input );
+    const encoded = await encode(target, input);
 
     // 検証
     // zstd マジック 0xFD2FB528 のリトルエンディアン先頭 4 バイトです。
@@ -70,8 +70,8 @@ describe("zstd フレーム", () => {
     await openTarget(high, signal);
 
     // 実行
-    const decodedLow = await decode(high, await encode(low, input ) );
-    const decodedHigh = await decode(low, await encode(high, input ) );
+    const decodedLow = await decode(high, await encode(low, input));
+    const decodedHigh = await decode(low, await encode(high, input));
 
     // 検証
     expect(decodedLow).toStrictEqual(input);
@@ -96,7 +96,7 @@ describe("他形式との非互換", () => {
 
     // 検証
     // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(decode(target, gzipData )).rejects.toThrow(Error);
+    await expect(decode(target, gzipData)).rejects.toThrow(Error);
   });
 
   test("deflate データを decode するとエラーで拒否される", async ({ expect, signal }) => {
@@ -114,7 +114,7 @@ describe("他形式との非互換", () => {
     const deflateData = new Uint8Array(await reading);
 
     // 検証
-    await expect(decode(target, deflateData )).rejects.toThrow(Error);
+    await expect(decode(target, deflateData)).rejects.toThrow(Error);
   });
 
   test("deflate-raw データを decode するとエラーで拒否される", async ({ expect, signal }) => {
@@ -132,7 +132,7 @@ describe("他形式との非互換", () => {
     const rawDeflateData = new Uint8Array(await reading);
 
     // 検証
-    await expect(decode(target, rawDeflateData )).rejects.toThrow(Error);
+    await expect(decode(target, rawDeflateData)).rejects.toThrow(Error);
   });
 
   test("zstd データを gzip として decode すると拒否される", async ({ expect, signal }) => {
@@ -140,7 +140,7 @@ describe("他形式との非互換", () => {
     const target = new ZstdWasm();
     await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 10);
-    const encoded = await encode(target, input );
+    const encoded = await encode(target, input);
     const source = new DecompressionStream("gzip");
     const writer = source.writable.getWriter();
     const reading = new Response(source.readable).arrayBuffer().then(

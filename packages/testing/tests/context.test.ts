@@ -18,6 +18,7 @@ import type {
 import { ReadonlyVariableError } from "@unikvs/core";
 import { describe, test } from "vitest";
 
+import { abortedSignal } from "../src/abort.js";
 import {
   TestContext,
   createClearContext,
@@ -37,7 +38,6 @@ import {
   createStreamContext,
   sourceFrom,
 } from "../src/index.js";
-import { abortedSignal } from "../src/abort.js";
 
 describe("TestContext の基本", () => {
   test("既定値は set アクションと空キーである", ({ expect }) => {
@@ -82,7 +82,7 @@ describe("TestContext の基本", () => {
 });
 
 describe("ストレージ用コンテキスト", () => {
-  test("各ファクトリーは対応するコンテキスト型に代入できる", () => {
+  test("各ファクトリーは対応するコンテキスト型に代入できる", ({ expect }) => {
     // 実行と検証
     const open: IOpenContext = createOpenContext() as unknown as IOpenContext;
     const close: ICloseContext = createCloseContext() as unknown as ICloseContext;
@@ -95,19 +95,25 @@ describe("ストレージ用コンテキスト", () => {
     const clear: IClearContext = createClearContext() as unknown as IClearContext;
     const mapKey: IMapKeyContext = createMapKeyContext("k") as unknown as IMapKeyContext;
 
-    void open;
-    void close;
-    void set;
-    void repair;
-    void get;
-    void stream;
-    void has;
-    void del;
-    void clear;
-    void mapKey;
+    expect(open.action).toBe("open");
+    expect(close.action).toBe("close");
+    expect(set.action).toBe("set");
+    expect(set.key).toBe("k");
+    expect(repair.action).toBe("get");
+    expect(repair.key).toBe("k");
+    expect(get.action).toBe("get");
+    expect(get.key).toBe("k");
+    expect(stream.action).toBe("stream");
+    expect(stream.key).toBe("k");
+    expect(has.action).toBe("has");
+    expect(has.key).toBe("k");
+    expect(del.action).toBe("delete");
+    expect(del.key).toBe("k");
+    expect(clear.action).toBe("clear");
+    expect(mapKey.key).toBe("k");
   });
 
-  test("IStorage の各コンテキスト別名と互換性がある", () => {
+  test("IStorage の各コンテキスト別名と互換性がある", ({ expect }) => {
     // 実行と検証
     const write: IStorage.WriteContext = createSetContext("k") as unknown as IStorage.WriteContext;
     const read: IStorage.ReadContext = createGetContext("k") as unknown as IStorage.ReadContext;
@@ -121,11 +127,16 @@ describe("ストレージ用コンテキスト", () => {
       "k",
     ) as unknown as IStorage.GetReadableContext;
 
-    void write;
-    void read;
-    void exists;
-    void gw;
-    void gr;
+    expect(write.action).toBe("set");
+    expect(write.key).toBe("k");
+    expect(read.action).toBe("get");
+    expect(read.key).toBe("k");
+    expect(exists.action).toBe("has");
+    expect(exists.key).toBe("k");
+    expect(gw.action).toBe("set");
+    expect(gw.key).toBe("k");
+    expect(gr.action).toBe("stream");
+    expect(gr.key).toBe("k");
   });
 
   test("signal と values と repair を引き継ぐ", ({ expect }) => {
@@ -185,7 +196,7 @@ describe("ミドルウェア用コンテキスト", () => {
     expect(dec.source).toBe(source);
   });
 
-  test("IMiddleware のコンテキスト別名と互換性がある", () => {
+  test("IMiddleware のコンテキスト別名と互換性がある", ({ expect }) => {
     // 実行と検証
     const enc: IMiddleware.EncodeContext = createEncodeContext(
       "a",
@@ -195,9 +206,12 @@ describe("ミドルウェア用コンテキスト", () => {
     ) as unknown as IMiddleware.DecodeContext;
     const use: IMiddleware.UseContext = createSetContext("k") as unknown as IMiddleware.UseContext;
 
-    void enc;
-    void dec;
-    void use;
+    expect(enc.action).toBe("set");
+    expect(enc.source).toBe("a");
+    expect(dec.action).toBe("get");
+    expect(dec.source).toBe("b");
+    expect(use.action).toBe("set");
+    expect(use.key).toBe("k");
   });
 
   test("encode の destination に設定した値が読める", async ({ expect }) => {

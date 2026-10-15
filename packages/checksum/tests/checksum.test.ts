@@ -353,11 +353,9 @@ describe("ストリームによる検証", () => {
     const chunk2 = new Uint8Array([3, 4]);
 
     // 実行
-    const { outputChunks, closeError } = await runEncodeStream(
-      checksum,
-      [chunk1, chunk2],
-      { [VAR_NAME]: CHECKSUM_HEX },
-    );
+    const { outputChunks, closeError } = await runEncodeStream(checksum, [chunk1, chunk2], {
+      [VAR_NAME]: CHECKSUM_HEX,
+    });
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -480,7 +478,9 @@ describe("ストリームによる検証", () => {
     const checksum = new TestChecksum("sha256", hash);
 
     // 実行と検証
-    const c = createEncodeStreamContext(sourceFrom([]), "", { values: { [VAR_NAME]: CHECKSUM_HEX } });
+    const c = createEncodeStreamContext(sourceFrom([]), "", {
+      values: { [VAR_NAME]: CHECKSUM_HEX },
+    });
     await expect(
       checksum.encodeStream(
         c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,

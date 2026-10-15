@@ -26,93 +26,69 @@ export default class S3 implements IStorage {
    *
    * ストレージがオープンされるまで null です。
    */
-  private client: S3Client | null;
+  #client: S3Client | null;
 
   /**
    * データを保存する S3 のバケット名です。
    *
    * すべての操作でこのバケットが使用されます。
    */
-  private readonly bucket: string;
+  readonly #bucket: string;
 
   /**
    * S3Client の初期化に使用する設定オブジェクトです。
    */
-  private readonly config: S3ClientConfig;
+  readonly #config: S3ClientConfig;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public readonly name: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public constructor(bucket: string, config: S3ClientConfig = {}, _options: S3StorageOptions = {}) {
     this.name = "S3";
-    this.client = null;
-    this.bucket = bucket;
-    this.config = config;
+    this.#client = null;
+    this.#bucket = bucket;
+    this.#config = config;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public get isOpen(): boolean {
-    return !!this.client;
+    return !!this.#client;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
-  public open(): void {
-    this.client = new S3Client(this.config);
+  public open(_c: IStorage.OpenContext): void {
+    this.#client = new S3Client(this.#config);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
-  public close(): void {
-    this.client!.destroy();
-    this.client = null;
+  public close(_c: IStorage.CloseContext): void {
+    this.#client!.destroy();
+    this.#client = null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const command = new PutObjectCommand({
       Key: c.key,
       Body: data,
-      Bucket: this.bucket,
+      Bucket: this.#bucket,
     });
-    await this.client!.send(command, { abortSignal: c.signal });
+    await this.#client!.send(command, { abortSignal: c.signal });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const command = new GetObjectCommand({
       Key: c.key,
-      Bucket: this.bucket,
+      Bucket: this.#bucket,
     });
-    const response = await this.client!.send(command, { abortSignal: c.signal });
+    const response = await this.#client!.send(command, { abortSignal: c.signal });
     const byteArray = await response.Body!.transformToByteArray();
 
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     try {
       const command = new HeadObjectCommand({
         Key: c.key,
-        Bucket: this.bucket,
+        Bucket: this.#bucket,
       });
-      await this.client!.send(command, { abortSignal: c.signal });
+      await this.#client!.send(command, { abortSignal: c.signal });
 
       return true;
     } catch (ex) {
@@ -125,30 +101,24 @@ export default class S3 implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const command = new DeleteObjectCommand({
       Key: c.key,
-      Bucket: this.bucket,
+      Bucket: this.#bucket,
     });
-    await this.client!.send(command, { abortSignal: c.signal });
+    await this.#client!.send(command, { abortSignal: c.signal });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
-   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     let isTruncated = true;
     let continuationToken: string | undefined = undefined;
 
     while (isTruncated) {
       const command = new ListObjectsV2Command({
-        Bucket: this.bucket,
+        Bucket: this.#bucket,
         ContinuationToken: continuationToken,
       });
-      const response: ListObjectsV2CommandOutput = await this.client!.send(command, {
+      const response: ListObjectsV2CommandOutput = await this.#client!.send(command, {
         abortSignal: c.signal,
       });
       const contents = response.Contents;
@@ -162,12 +132,12 @@ export default class S3 implements IStorage {
         .map((key) => ({ Key: key }));
       if (objectsToDelete.length > 0) {
         const command = new DeleteObjectsCommand({
-          Bucket: this.bucket,
+          Bucket: this.#bucket,
           Delete: {
             Objects: objectsToDelete,
           },
         });
-        await this.client!.send(command, { abortSignal: c.signal });
+        await this.#client!.send(command, { abortSignal: c.signal });
       }
 
       isTruncated = response.IsTruncated ?? false;
@@ -175,9 +145,6 @@ export default class S3 implements IStorage {
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     if (c.signal.aborted) {
       throw new StorageAbortedError({ key: c.key });
@@ -207,11 +174,11 @@ export default class S3 implements IStorage {
     c.signal.addEventListener("abort", onAbort, { once: true });
 
     const upload = new Upload({
-      client: this.client!,
+      client: this.#client!,
       params: {
         Key: c.key,
         Body: readable,
-        Bucket: this.bucket,
+        Bucket: this.#bucket,
       },
       abortController,
       ...(partSize !== undefined && { partSize }),
@@ -247,17 +214,14 @@ export default class S3 implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
-   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
     const command = new GetObjectCommand({
       Key: c.key,
-      Bucket: this.bucket,
+      Bucket: this.#bucket,
     });
-    const response = await this.client!.send(command, { abortSignal: c.signal });
+    const response = await this.#client!.send(command, { abortSignal: c.signal });
     const readableStream = response.Body!.transformToWebStream();
 
     return readableStream;

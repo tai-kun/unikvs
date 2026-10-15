@@ -48,7 +48,9 @@ test("期待値と一致するチェックサムを指定して encode すると
   const checksum = new ChecksumSha1();
 
   // 実行
-  const result = await encode(checksum, TEST_DATA, { [ChecksumSha1.CHECKSUM_VAR_NAME]: VALID_HASH });
+  const result = await encode(checksum, TEST_DATA, {
+    [ChecksumSha1.CHECKSUM_VAR_NAME]: VALID_HASH,
+  });
 
   // 検証
   expect(result).toStrictEqual(TEST_DATA);

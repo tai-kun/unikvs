@@ -22,9 +22,9 @@ test("第二引数の省略と明示はどちらも組み立てられる", () =>
   expectTypeOf(new KeyPrefix("tenant:")).toEqualTypeOf<KeyPrefix>();
   expectTypeOf(new KeyPrefix("tenant:", {})).toEqualTypeOf<KeyPrefix>();
   expectTypeOf(new KeyPrefix("tenant:", undefined)).toEqualTypeOf<KeyPrefix>();
-  expectTypeOf(new KeyPrefix("tenant:", { clearBehavior: undefined })).toEqualTypeOf<KeyPrefix>();
-  expectTypeOf(new KeyPrefix("tenant:", { clearBehavior: "allow" })).toEqualTypeOf<KeyPrefix>();
-  expectTypeOf(new KeyPrefix("tenant:", { clearBehavior: "deny" })).toEqualTypeOf<KeyPrefix>();
+  expectTypeOf(new KeyPrefix("tenant:", { allowClear: undefined })).toEqualTypeOf<KeyPrefix>();
+  expectTypeOf(new KeyPrefix("tenant:", { allowClear: true })).toEqualTypeOf<KeyPrefix>();
+  expectTypeOf(new KeyPrefix("tenant:", { allowClear: false })).toEqualTypeOf<KeyPrefix>();
 });
 
 test("options の余剰プロパティーは受け付けない", () => {
@@ -33,42 +33,50 @@ test("options の余剰プロパティーは受け付けない", () => {
   expectTypeOf({ prefix: "other:" })
     // @ts-expect-error prefix は第一引数のため options には書けません。
     .toEqualTypeOf<KeyPrefixOptions>();
-  expectTypeOf({ clearBehavior: "alllow" })
-    // @ts-expect-error allow と deny のみが正規であり、誤記は受け付けません。
+  expectTypeOf({ allowClear: "yes" })
+    // @ts-expect-error allowClear は真偽値のみを受け付けます。
     .toEqualTypeOf<KeyPrefixOptions>();
 });
 
 test("公開プロパティーの型を保持する", () => {
   // 準備
-  const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
+  const prefix = new KeyPrefix("tenant:", { allowClear: true });
 
   // 実行と検証
   expectTypeOf(prefix.name).toEqualTypeOf<string>();
   expectTypeOf(prefix.prefix).toEqualTypeOf<string>();
-  expectTypeOf(prefix.clearBehavior).toEqualTypeOf<"allow" | "deny">();
+  expectTypeOf(prefix.allowClear).toEqualTypeOf<boolean>();
   expectTypeOf(prefix.isOpen).toEqualTypeOf<boolean>();
 });
 
 test("encode と decode はコンテキストと next を受けて Promise<void> を返す", () => {
-  // 実行と検証
-  expectTypeOf<KeyPrefix["encode"]>().parameter(0).toEqualTypeOf<IMiddleware.EncodeContext>();
+  // 実行と検証: 透過のため任意のデータ型で呼び出せる。
+  expectTypeOf<KeyPrefix["encode"]>().toBeCallableWith(
+    {} as IMiddleware.EncodeContext<string>,
+    {} as IMiddleware.INext,
+  );
   expectTypeOf<KeyPrefix["encode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
   expectTypeOf<KeyPrefix["encode"]>().returns.toEqualTypeOf<Promise<void>>();
-  expectTypeOf<KeyPrefix["decode"]>().parameter(0).toEqualTypeOf<IMiddleware.DecodeContext>();
+  expectTypeOf<KeyPrefix["decode"]>().toBeCallableWith(
+    {} as IMiddleware.DecodeContext<string>,
+    {} as IMiddleware.INext,
+  );
   expectTypeOf<KeyPrefix["decode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
   expectTypeOf<KeyPrefix["decode"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
 test("encodeStream と decodeStream はコンテキストと next を受けて Promise<void> を返す", () => {
-  // 実行と検証
-  expectTypeOf<KeyPrefix["encodeStream"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.EncodeStreamContext>();
+  // 実行と検証: 透過のため任意のチャンク型で呼び出せる。
+  expectTypeOf<KeyPrefix["encodeStream"]>().toBeCallableWith(
+    {} as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
+    {} as IMiddleware.INext,
+  );
   expectTypeOf<KeyPrefix["encodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
   expectTypeOf<KeyPrefix["encodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
-  expectTypeOf<KeyPrefix["decodeStream"]>()
-    .parameter(0)
-    .toEqualTypeOf<IMiddleware.DecodeStreamContext>();
+  expectTypeOf<KeyPrefix["decodeStream"]>().toBeCallableWith(
+    {} as IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
+    {} as IMiddleware.INext,
+  );
   expectTypeOf<KeyPrefix["decodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
   expectTypeOf<KeyPrefix["decodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
 });

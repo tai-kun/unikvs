@@ -46,7 +46,6 @@ async function decode(
   return c.destination;
 }
 
-
 /**
  * 境界サイズと特殊パターンの入力データをまとめて生成します。
  * 1 MiB など再生成コストのあるデータをファイル内で共有するために使用します。
@@ -90,8 +89,8 @@ describe("境界サイズと特殊パターンの往復", () => {
 
     // 実行と検証
     for (const [label, input] of boundaryInputs) {
-      const encoded = await encode(target, input );
-      const decoded = await decode(target, encoded );
+      const encoded = await encode(target, input);
+      const decoded = await decode(target, encoded);
       expect(decoded, label).toStrictEqual(input);
     }
   });
@@ -103,7 +102,7 @@ describe("境界サイズと特殊パターンの往復", () => {
     const input = createPseudoRandomBytes(1024 * 1024, 4);
 
     // 実行
-    const decoded = await decode(target, await encode(target, input ) );
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(bytesEqual(decoded, input)).toBe(true);

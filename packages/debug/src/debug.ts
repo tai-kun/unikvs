@@ -1,5 +1,5 @@
 import { getLogger } from "@logtape/logtape";
-import type { IMiddleware, IPipelineContext } from "@unikvs/core";
+import type { IMiddleware, IKeyedActionContext } from "@unikvs/core";
 import getTypeName from "type-name";
 
 const logger = getLogger(["@unikvs/*", "@unikvs/debug"]);
@@ -30,17 +30,12 @@ export type DebugInfoArgs = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly vars: IPipelineContext;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
-   */
   readonly action: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly key: string;
+  readonly data: unknown;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
@@ -50,7 +45,7 @@ export type DebugInfoArgs = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly data: unknown;
+  readonly key: string;
 };
 
 /**
@@ -102,9 +97,6 @@ export default class Debug implements IMiddleware {
     return info;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
-   */
   public readonly name: string = "Debug";
 
   /**
@@ -136,50 +128,49 @@ export default class Debug implements IMiddleware {
     this.getDebugInfo = getDebugInfo;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
-   */
-  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+  public async encode<TData>(
+    c: IMiddleware.EncodeContext<TData>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     this.#log("write", c, c.source);
+
     c.destination = c.source;
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
-   */
-  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+  public async decode<TData>(
+    c: IMiddleware.DecodeContext<TData>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     this.#log("read", c, c.source);
+
     c.destination = c.source;
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#streams)
-   */
-  public async encodeStream(
-    c: IMiddleware.EncodeStreamContext,
+  public async encodeStream<TChunk>(
+    c: IMiddleware.EncodeStreamContext<TChunk>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = c.source.pipeThrough(this.#createTransformStream("write", c));
+    const transform = this.#createTransform("write", c);
+    c.destination = c.source.pipeThrough(transform);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#streams)
-   */
-  public async decodeStream(
-    c: IMiddleware.DecodeStreamContext,
+  public async decodeStream<TChunk>(
+    c: IMiddleware.DecodeStreamContext<TChunk>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = c.source.pipeThrough(this.#createTransformStream("read", c));
+    const transform = this.#createTransform("read", c);
+    c.destination = c.source.pipeThrough(transform);
+
     await next();
   }
 
@@ -190,19 +181,11 @@ export default class Debug implements IMiddleware {
    * @param c 操作のコンテキストです。
    * @returns 入力をそのまま出力する TransformStream オブジェクトです。
    */
-  #createTransformStream(
-    direction: DebugDirection,
-    c: IPipelineContext & { readonly action: string; readonly key: string },
-  ): TransformStream<any, any> {
+  #createTransform(direction: DebugDirection, c: IKeyedActionContext): TransformStream {
     return new TransformStream({
-      /**
-       * チャンクが到達するたびにログを記録し、そのまま下流へ流します。
-       *
-       * @param chunk 入力されたデータです。
-       * @param controller ストリームを制御するためのコントローラーです。
-       */
       transform: (chunk, controller) => {
         this.#log(direction, c, chunk);
+
         controller.enqueue(chunk);
       },
     });
@@ -215,18 +198,8 @@ export default class Debug implements IMiddleware {
    * @param c 操作のコンテキストです。
    * @param data 読み書きされたデータです。ストリームの場合はチャンクです。
    */
-  #log(
-    direction: DebugDirection,
-    c: IPipelineContext & { readonly action: string; readonly key: string },
-    data: unknown,
-  ): void {
-    const action = c.action;
-    if (!this.actionFilter(action)) {
-      return;
-    }
-
-    const key = c.key;
-    if (!this.keyFilter(key)) {
+  #log(direction: DebugDirection, c: IKeyedActionContext, data: unknown): void {
+    if (!this.actionFilter(c.action) || !this.keyFilter(c.key)) {
       return;
     }
 
@@ -234,10 +207,20 @@ export default class Debug implements IMiddleware {
       direction === "write"
         ? "Data was written: action={action}, key={key}"
         : "Data was read: action={action}, key={key}";
-
     logger.debug(message, () => {
-      const info = this.getDebugInfo({ vars: c, action, key, direction, data });
-      return { ...info, action, key, direction };
+      const info = this.getDebugInfo({
+        key: c.key,
+        data,
+        action: c.action,
+        direction,
+      });
+
+      return {
+        ...info,
+        key: c.key,
+        action: c.action,
+        direction,
+      };
     });
   }
 }

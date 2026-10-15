@@ -15,6 +15,7 @@ export default class PassThrough implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 
@@ -23,6 +24,7 @@ export default class PassThrough implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 
@@ -31,6 +33,7 @@ export default class PassThrough implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 
@@ -39,6 +42,7 @@ export default class PassThrough implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source;
+
     await next();
   }
 }

@@ -51,27 +51,33 @@ async function decode(debug: Debug, data: unknown): Promise<unknown> {
 }
 
 describe("データの透過", () => {
-  test.for(TRANSPARENT_VALUES)("encode は $name を同一参照で返す", async ({ value }, { expect }) => {
-    // 準備
-    const debug = new Debug();
+  test.for(TRANSPARENT_VALUES)(
+    "encode は $name を同一参照で返す",
+    async ({ value }, { expect }) => {
+      // 準備
+      const debug = new Debug();
 
-    // 実行
-    const output = await encode(debug, value);
+      // 実行
+      const output = await encode(debug, value);
 
-    // 検証
-    expect(output).toBe(value);
-  });
+      // 検証
+      expect(output).toBe(value);
+    },
+  );
 
-  test.for(TRANSPARENT_VALUES)("decode は $name を同一参照で返す", async ({ value }, { expect }) => {
-    // 準備
-    const debug = new Debug();
+  test.for(TRANSPARENT_VALUES)(
+    "decode は $name を同一参照で返す",
+    async ({ value }, { expect }) => {
+      // 準備
+      const debug = new Debug();
 
-    // 実行
-    const output = await decode(debug, value);
+      // 実行
+      const output = await decode(debug, value);
 
-    // 検証
-    expect(output).toBe(value);
-  });
+      // 検証
+      expect(output).toBe(value);
+    },
+  );
 
   test("encode と decode はコンテキストの変数を変更しない", async ({ expect }) => {
     // 準備

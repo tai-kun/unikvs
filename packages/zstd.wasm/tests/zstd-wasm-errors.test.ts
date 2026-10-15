@@ -95,7 +95,7 @@ describe("WASM 初期化の失敗", () => {
         // 失敗はキャッシュされないため、再試行では解決が再実行される。
         await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 41);
-        const decoded = await decode(target, await encode(target, input ) );
+        const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
@@ -187,19 +187,17 @@ describe("壊れた圧縮データの decode", () => {
 
     // 実行と検証
     // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(decode(target, garbage )).rejects.toThrow(Error);
+    await expect(decode(target, garbage)).rejects.toThrow(Error);
   });
 
   test("末尾を欠いたデータをエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
     await openTarget(target, signal);
-    const encoded = await encode(target, createPseudoRandomBytes(4096, 22) );
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 22));
 
     // 実行と検証
-    await expect(decode(target, encoded.subarray(0, encoded.length - 4) )).rejects.toThrow(
-      Error,
-    );
+    await expect(decode(target, encoded.subarray(0, encoded.length - 4))).rejects.toThrow(Error);
   });
 
   test("先頭を壊したデータをエラーで拒否する", async ({ expect, signal }) => {
@@ -207,12 +205,12 @@ describe("壊れた圧縮データの decode", () => {
     // 末尾破壊は検出できない場合があるため、先頭のマジックバイトを壊して検証する。
     const target = new ZstdWasm();
     await openTarget(target, signal);
-    const encoded = await encode(target, createPseudoRandomBytes(4096, 23) );
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 23));
     const corrupted = encoded.slice();
     corrupted[0] = corrupted[0]! ^ 0xff;
 
     // 実行と検証
-    await expect(decode(target, corrupted )).rejects.toThrow(Error);
+    await expect(decode(target, corrupted)).rejects.toThrow(Error);
   });
 });
 

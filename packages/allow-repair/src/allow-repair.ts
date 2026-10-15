@@ -47,6 +47,7 @@ export default class AllowRepair extends PassThrough implements IMiddleware {
    */
   public toggle(): boolean {
     this.#isEnabled = !this.#isEnabled;
+
     return this.#isEnabled;
   }
 
@@ -55,8 +56,9 @@ export default class AllowRepair extends PassThrough implements IMiddleware {
       case "get":
       case "stream":
         if (c.repair.enabled && !this.#isEnabled) {
-          throw new RepairNotAllowedError({ names: [...c.repair.targets] });
+          throw new RepairNotAllowedError({ names: c.repair.targets });
         }
+
         break;
 
       default:

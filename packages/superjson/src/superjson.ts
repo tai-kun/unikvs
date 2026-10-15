@@ -35,27 +35,13 @@ function assertSupportedValue(value: unknown): void {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
  */
-export default class Superjson implements IMiddleware<
-  unknown,
-  Uint8Array<ArrayBuffer>,
-  unknown,
-  Uint8Array<ArrayBuffer>
-> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
+export default class Superjson implements IMiddleware {
   public readonly name: string = "Superjson";
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -63,12 +49,10 @@ export default class Superjson implements IMiddleware<
     assertSupportedValue(c.source);
 
     c.destination = encoder.encode(SuperjsonCodec.stringify(c.source));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -76,12 +60,10 @@ export default class Superjson implements IMiddleware<
     const text = new TextDecoder("utf-8", { fatal: true }).decode(c.source);
 
     c.destination = SuperjsonCodec.parse(text);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -94,12 +76,10 @@ export default class Superjson implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
-   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -139,6 +119,7 @@ export default class Superjson implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 }

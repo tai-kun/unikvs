@@ -11,6 +11,7 @@ import {
 import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
+import type Checksum from "../src/checksum.js";
 import {
   type ChecksumOptions,
   ChecksumMd5,
@@ -20,7 +21,6 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
-import type Checksum from "../src/checksum.js";
 
 const SUBTLE_ALGORITHMS = [
   {
@@ -130,9 +130,9 @@ test.for(SUBTLE_ALGORITHMS)(
 
     // 実行と検証
     for (const data of FIXED_INPUTS) {
-      expect(await encode(checksum, data, { [varName]: await subtleDigest(subtleName, data) })).toBe(
-        data,
-      );
+      expect(
+        await encode(checksum, data, { [varName]: await subtleDigest(subtleName, data) }),
+      ).toBe(data);
     }
   },
 );

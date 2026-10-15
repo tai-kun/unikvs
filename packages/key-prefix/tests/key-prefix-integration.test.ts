@@ -9,10 +9,10 @@ import {
   createSetContext,
   sourceFrom,
 } from "@unikvs/testing";
-import { UniKvs } from "unikvs";
+import { UniKvs, PluginOperationAggregateError } from "unikvs";
 import { describe, test } from "vitest";
 
-import { KeyPrefixClearNotSupportedError } from "../src/errors.js";
+import { KeyPrefixClearDeniedError } from "../src/errors.js";
 import KeyPrefix from "../src/key-prefix.js";
 import { createPrefixedKvs, collectValueBytes, type TestMapping } from "./_helpers.js";
 
@@ -233,7 +233,7 @@ describe("物理キーの解決", () => {
 });
 
 describe("clear の誤解防止", () => {
-  test("allow が既定のとき、他テナントのデータも削除される", async ({ expect }) => {
+  test("allowClear が既定のとき、他テナントのデータも削除される", async ({ expect }) => {
     // 準備
     const storage = new Memory();
     const tenantA = UniKvs.config<TestMapping>()
@@ -260,17 +260,17 @@ describe("clear の誤解防止", () => {
     await tenantB.close();
   });
 
-  test("clearBehavior が deny のとき、UniKvs.clear が拒否され両テナントのデータが残る", async ({
+  test("allowClear が true のとき、UniKvs.clear が拒否され両テナントのデータが残る", async ({
     expect,
   }) => {
     // 準備
     const storage = new Memory();
     const tenantA = UniKvs.config<TestMapping>()
-      .connect(new KeyPrefix("tenantA:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("tenantA:", { allowClear: true }))
       .persist(storage)
       .create();
     const tenantB = UniKvs.config<TestMapping>()
-      .connect(new KeyPrefix("tenantB:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("tenantB:", { allowClear: true }))
       .persist(storage)
       .create();
     await tenantA.open();
@@ -278,8 +278,19 @@ describe("clear の誤解防止", () => {
     await tenantA.set("k1", "a1");
     await tenantB.set("k1", "b1");
 
-    // 実行と検証
-    await expect(tenantA.clear()).rejects.toThrow(KeyPrefixClearNotSupportedError);
+    // 実行
+    const error = await captureRejection(tenantA.clear());
+
+    // 検証
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("clear");
+    expect((error as PluginOperationAggregateError).meta.errors).toHaveLength(1);
+    const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
+    expect(reason).toBeInstanceOf(KeyPrefixClearDeniedError);
+    expect((reason as KeyPrefixClearDeniedError).meta).toStrictEqual({
+      prefix: "tenantA:",
+      allowClear: true,
+    });
     expect(await tenantA.get("k1")).toBe("a1");
     expect(await tenantB.get("k1")).toBe("b1");
 
@@ -288,14 +299,14 @@ describe("clear の誤解防止", () => {
     await tenantB.close();
   });
 
-  test("deny の設定が複数あるとき、最初に検出したプレフィックスが報告され削除は実行されない", async ({
+  test("allowClear: true の設定が複数あるとき、最初に検出したプレフィックスが報告され削除は実行されない", async ({
     expect,
   }) => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<TestMapping>()
-      .connect(new KeyPrefix("first:", { clearBehavior: "deny" }))
-      .connect(new KeyPrefix("second:", { clearBehavior: "deny" }))
+      .connect(new KeyPrefix("first:", { allowClear: true }))
+      .connect(new KeyPrefix("second:", { allowClear: true }))
       .persist(storage)
       .create();
     await kvs.open();
@@ -305,10 +316,14 @@ describe("clear の誤解防止", () => {
     const error = await captureRejection(kvs.clear());
 
     // 検証
-    expect(error).toBeInstanceOf(KeyPrefixClearNotSupportedError);
-    expect((error as KeyPrefixClearNotSupportedError).meta).toStrictEqual({
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("clear");
+    expect((error as PluginOperationAggregateError).meta.errors).toHaveLength(1);
+    const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
+    expect(reason).toBeInstanceOf(KeyPrefixClearDeniedError);
+    expect((reason as KeyPrefixClearDeniedError).meta).toStrictEqual({
       prefix: "first:",
-      clearBehavior: "deny",
+      allowClear: true,
     });
     expect(storage.exists(createHasContext("second:first:k1") as IStorage.ExistsContext)).toBe(
       true,

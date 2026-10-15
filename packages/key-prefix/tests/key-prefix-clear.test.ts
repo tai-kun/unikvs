@@ -7,18 +7,17 @@ import {
   createNext,
   createSetContext,
 } from "@unikvs/testing";
+import { PluginOperationAggregateError } from "unikvs";
 import { describe, test } from "vitest";
 
-import { KeyPrefixClearNotSupportedError } from "../src/errors.js";
+import { KeyPrefixClearDeniedError } from "../src/errors.js";
 import KeyPrefix from "../src/key-prefix.js";
 import { createPrefixedKvs } from "./_helpers.js";
 
 describe("use による clear の挙動", () => {
-  test("プレフィックスが非空で clearBehavior が allow のとき、next に委譲する", async ({
-    expect,
-  }) => {
+  test("プレフィックスが非空で allowClear が既定のとき、next に委譲する", async ({ expect }) => {
     // 準備
-    const prefix = new KeyPrefix("tenant:", { clearBehavior: "allow" });
+    const prefix = new KeyPrefix("tenant:");
     let called = false;
 
     // 実行
@@ -30,11 +29,25 @@ describe("use による clear の挙動", () => {
     expect(called).toBe(true);
   });
 
-  test("プレフィックスが非空で clearBehavior が deny のとき、KeyPrefixClearNotSupportedError を投げる", async ({
+  test("プレフィックスが非空で allowClear が false のとき、next に委譲する", async ({ expect }) => {
+    // 準備
+    const prefix = new KeyPrefix("tenant:", { allowClear: false });
+    let called = false;
+
+    // 実行
+    await prefix.use(createClearContext() as IMiddleware.UseContext, async () => {
+      called = true;
+    });
+
+    // 検証
+    expect(called).toBe(true);
+  });
+
+  test("プレフィックスが非空で allowClear が true のとき、KeyPrefixClearDeniedError を投げる", async ({
     expect,
   }) => {
     // 準備
-    const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("tenant:", { allowClear: true });
 
     // 実行
     const error = await captureRejection(
@@ -42,16 +55,16 @@ describe("use による clear の挙動", () => {
     );
 
     // 検証
-    expect(error).toBeInstanceOf(KeyPrefixClearNotSupportedError);
-    expect((error as KeyPrefixClearNotSupportedError).meta).toStrictEqual({
+    expect(error).toBeInstanceOf(KeyPrefixClearDeniedError);
+    expect((error as KeyPrefixClearDeniedError).meta).toStrictEqual({
       prefix: "tenant:",
-      clearBehavior: "deny",
+      allowClear: true,
     });
   });
 
   test("clear 以外の操作では next に委譲する", async ({ expect }) => {
     // 準備
-    const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("tenant:", { allowClear: true });
     let called = false;
 
     // 実行
@@ -63,24 +76,24 @@ describe("use による clear の挙動", () => {
     expect(called).toBe(true);
   });
 
-  test("name は KeyPrefixClearNotSupportedError である", async ({ expect }) => {
+  test("name は KeyPrefixClearDeniedError である", async ({ expect }) => {
     // 実行
     const error = await captureRejection(
-      new KeyPrefix("t:", { clearBehavior: "deny" }).use(
+      new KeyPrefix("t:", { allowClear: true }).use(
         createClearContext() as IMiddleware.UseContext,
         createNext(),
       ),
     );
 
     // 検証
-    expect((error as KeyPrefixClearNotSupportedError).name).toBe("KeyPrefixClearNotSupportedError");
+    expect((error as KeyPrefixClearDeniedError).name).toBe("KeyPrefixClearDeniedError");
   });
 
-  test("プレフィックスが空文字で clearBehavior が deny のとき、next に委譲する", async ({
+  test("プレフィックスが空文字で allowClear が true のとき、next に委譲する", async ({
     expect,
   }) => {
     // 準備
-    const prefix = new KeyPrefix("", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("", { allowClear: true });
     let called = false;
 
     // 実行
@@ -92,11 +105,11 @@ describe("use による clear の挙動", () => {
     expect(called).toBe(true);
   });
 
-  test("プレフィックスが空文字で clearBehavior が allow のとき、next に委譲する", async ({
+  test("プレフィックスが空文字で allowClear が false のとき、next に委譲する", async ({
     expect,
   }) => {
     // 準備
-    const prefix = new KeyPrefix("", { clearBehavior: "allow" });
+    const prefix = new KeyPrefix("", { allowClear: false });
     let called = false;
 
     // 実行
@@ -110,21 +123,24 @@ describe("use による clear の挙動", () => {
 });
 
 describe("UniKvs.clear との連動", () => {
-  test("clearBehavior が deny のとき、UniKvs.clear が拒否されデータが残る", async ({ expect }) => {
+  test("allowClear が true のとき、UniKvs.clear が拒否されデータが残る", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = await createPrefixedKvs("tenant:", { clearBehavior: "deny" });
+    const { kvs, storage } = await createPrefixedKvs("tenant:", { allowClear: true });
     await kvs.set("k1", "v1");
 
     // 実行
-    let error: unknown;
-    try {
-      await kvs.clear();
-    } catch (ex) {
-      error = ex;
-    }
+    const error = await captureRejection(kvs.clear());
 
     // 検証
-    expect(error).toBeInstanceOf(KeyPrefixClearNotSupportedError);
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("clear");
+    expect((error as PluginOperationAggregateError).meta.errors).toHaveLength(1);
+    const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
+    expect(reason).toBeInstanceOf(KeyPrefixClearDeniedError);
+    expect((reason as KeyPrefixClearDeniedError).meta).toStrictEqual({
+      prefix: "tenant:",
+      allowClear: true,
+    });
     expect(storage.exists(createHasContext("tenant:k1") as IStorage.ExistsContext)).toBe(true);
     expect(await kvs.get("k1")).toBe("v1");
 
@@ -132,11 +148,9 @@ describe("UniKvs.clear との連動", () => {
     await kvs.close();
   });
 
-  test("clearBehavior が allow のとき、UniKvs.clear が委譲されデータが削除される", async ({
-    expect,
-  }) => {
+  test("allowClear が既定のとき、UniKvs.clear が委譲されデータが削除される", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = await createPrefixedKvs("tenant:", { clearBehavior: "allow" });
+    const { kvs, storage } = await createPrefixedKvs("tenant:");
     await kvs.set("k1", "v1");
 
     // 実行

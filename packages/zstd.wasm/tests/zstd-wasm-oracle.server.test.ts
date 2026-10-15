@@ -1,6 +1,6 @@
-import type { IMiddleware } from "@unikvs/core";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
+import type { IMiddleware } from "@unikvs/core";
 import {
   createPseudoRandomBytes,
   createDecodeContext,
@@ -68,7 +68,7 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
     const compressed = zstdCompressSync(input);
 
     // 実行
-    const decoded = await decode(target, new Uint8Array(compressed) );
+    const decoded = await decode(target, new Uint8Array(compressed));
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -81,7 +81,7 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
     const input = createPseudoRandomBytes(1024, 16);
 
     // 実行
-    const encoded = await encode(target, input );
+    const encoded = await encode(target, input);
     const decompressed = zstdDecompressSync(encoded);
 
     // 検証

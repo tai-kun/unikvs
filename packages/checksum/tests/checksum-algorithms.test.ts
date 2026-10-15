@@ -7,6 +7,7 @@ import {
 } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
+import type Checksum from "../src/checksum.js";
 import {
   ChecksumMd5,
   ChecksumSha1,
@@ -15,7 +16,6 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
-import type Checksum from "../src/checksum.js";
 
 const ABC = Uint8Array.from(new TextEncoder().encode("abc"));
 const UNICODE = Uint8Array.from(new TextEncoder().encode("日本語テキスト🎉"));

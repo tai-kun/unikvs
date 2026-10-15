@@ -185,31 +185,23 @@ export type Base64Options = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
  */
-export default class Base64 implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
-   */
+export default class Base64 implements IMiddleware {
   public readonly name: string = "Base64";
 
   /**
    * エンコードに使い回す実体です。
    */
-  private readonly encoder: FastUtf8;
+  readonly #encoder: FastUtf8;
 
   /**
    * 一括デコードに使い回す実体です。
    */
-  private readonly decoder: FastUtf8;
+  readonly #decoder: FastUtf8;
 
   /**
    * エンコード時に `=` を付与するかどうかです。
    */
-  private readonly padding: boolean;
+  readonly #padding: boolean;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
@@ -220,37 +212,29 @@ export default class Base64 implements IMiddleware<
       throw new Base64InvalidPaddingError({ actual: padding });
     }
 
-    this.encoder = encoder;
-    this.decoder = decoder;
-    this.padding = padding;
+    this.#encoder = encoder;
+    this.#decoder = decoder;
+    this.#padding = padding;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
-   */
   public async encode(
-    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = this.encoder.encode(base64EncodeText(c.source, this.padding));
+    c.destination = this.#encoder.encode(base64EncodeText(c.source, this.#padding));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
-   */
   public async decode(
-    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const text = this.decoder.decode(c.source);
+    const text = this.#decoder.decode(c.source);
 
     if (text.length === 0) {
       c.destination = new Uint8Array(0);
@@ -261,15 +245,12 @@ export default class Base64 implements IMiddleware<
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#streams)
-   */
   public async encodeStream(
-    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const encoder = this.encoder;
-    const padding = this.padding;
+    const encoder = this.#encoder;
+    const padding = this.#padding;
     let carry = new Uint8Array(0);
 
     c.destination = c.source.pipeThrough(
@@ -310,21 +291,19 @@ export default class Base64 implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#streams)
-   */
   public async decodeStream(
-    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 設計の const strict 中間変数と同義のインラインであり、hex と同形です。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
     // ignoreBOM:true 注入時は引き継がないため BOM単体 [0xEF, 0xBB, 0xBF] は一括 Base64DecodeError・ストリーム空成功に分岐します。
-    const utf8 = this.decoder.clone({ ignoreBOM: false });
+    const utf8 = this.#decoder.clone({ ignoreBOM: false });
     let carry = "";
     let paddedTail = "";
     let seenPadding = false;
@@ -405,6 +384,7 @@ export default class Base64 implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 }

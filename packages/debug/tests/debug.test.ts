@@ -205,10 +205,7 @@ describe("ログの記録", () => {
     });
   });
 
-  test("カスタムのコールバックにはコンテキストと操作とキーと向きとデータを渡す", async ({
-    expect,
-    records,
-  }) => {
+  test("カスタムのコールバックには操作とキーと向きとデータを渡す", async ({ expect, records }) => {
     // 準備
     const received: unknown[] = [];
     const debug = new Debug({
@@ -218,16 +215,14 @@ describe("ログの記録", () => {
       },
     });
     const data = new Uint8Array([1]);
-    const c = createDecodeContext(data, "foo", { values: { extra: true } });
+    const c = createDecodeContext(data, "foo");
 
     // 実行
     await debug.decode(c as IMiddleware.DecodeContext, createNext());
 
     // 検証
     expect(records).toHaveLength(1);
-    expect(received).toStrictEqual([
-      { vars: c, action: "get", key: "foo", direction: "read", data },
-    ]);
+    expect(received).toStrictEqual([{ action: "get", key: "foo", direction: "read", data }]);
   });
 });
 
@@ -245,7 +240,6 @@ describe("既定のデバッグ情報", () => {
   ] as const)("%o の型と大きさを返す", ([data, type, size], { expect }) => {
     // 実行
     const info = Debug.getDefaultDebugInfo({
-      vars: createEncodeContext(data, "key"),
       action: "set",
       key: "key",
       direction: "write",

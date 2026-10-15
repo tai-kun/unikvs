@@ -37,31 +37,23 @@ function toOwnedBytesTransformStream(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
  */
-export default class ZstdNode implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
+export default class ZstdNode implements IMiddleware {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
-  private static readonly cache: callAbortableFnOnce.CacheMap = new Map();
+  static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public readonly name: string = "ZstdNode";
 
   /**
    * 実行環境です。
    */
-  private env: IEnv | null;
+  #env: IEnv | null;
 
   /**
    * 圧縮レベルです。
    */
-  private readonly level: number;
+  readonly #level: number;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
@@ -73,24 +65,18 @@ export default class ZstdNode implements IMiddleware<
       throw new ZstdNodeInvalidLevelError({ actual: level });
     }
 
-    this.env = null;
-    this.level = level;
+    this.#env = null;
+    this.#level = level;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public get isOpen(): boolean {
-    return this.env !== null;
+    return this.#env !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
-      this.env = await callAbortableFnOnce(
-        ZstdNode.cache,
+      this.#env = await callAbortableFnOnce(
+        ZstdNode.#cache,
         "api.init",
         async (signal) => {
           using abortPromise = toAbortPromise(signal);
@@ -110,63 +96,49 @@ export default class ZstdNode implements IMiddleware<
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const buffer = await api.compress(env, c.source, {
-      level: this.level,
-    });
-
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const buffer = await api.compress(env, c.source, { level: this.#level });
     c.destination = toOwnedBytes(buffer);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const buffer = await api.decompress(env, c.source);
-
     c.destination = toOwnedBytes(buffer);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const transform = api.createCompress(env, {
-      level: this.level,
-    });
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const compress = api.createCompress(env, { level: this.#level });
+    const transform = toOwnedBytesTransformStream(compress);
+    c.destination = c.source.pipeThrough(transform);
 
-    c.destination = c.source.pipeThrough(toOwnedBytesTransformStream(transform));
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
-   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const transform = api.createDecompress(env);
+    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const decompress = api.createDecompress(env);
+    const transform = toOwnedBytesTransformStream(decompress);
+    c.destination = c.source.pipeThrough(transform);
 
-    c.destination = c.source.pipeThrough(toOwnedBytesTransformStream(transform));
     await next();
   }
 }

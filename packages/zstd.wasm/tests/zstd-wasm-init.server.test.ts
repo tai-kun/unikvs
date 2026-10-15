@@ -58,7 +58,10 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await Promise.all([first.open(createOpenContext({ signal }) as IMiddleware.OpenContext), second.open(createOpenContext({ signal }) as IMiddleware.OpenContext)]);
+        await Promise.all([
+          first.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+          second.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+        ]);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -115,7 +118,9 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行と検証
-        await expect(target.open(createOpenContext({ signal }) as IMiddleware.OpenContext)).rejects.toThrow(freshErrors.ZstdWasmInitError);
+        await expect(
+          target.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+        ).rejects.toThrow(freshErrors.ZstdWasmInitError);
         expect(target.isOpen).toBe(false);
 
         // 実行と検証
@@ -170,7 +175,10 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await Promise.allSettled([target.open(createOpenContext({ signal }) as IMiddleware.OpenContext), target.open(createOpenContext({ signal }) as IMiddleware.OpenContext)]);
+        await Promise.allSettled([
+          target.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+          target.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+        ]);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -203,10 +211,12 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        const first = await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext).then(
-          () => undefined as unknown,
-          (error: unknown) => error,
-        );
+        const first = await target
+          .open(createOpenContext({ signal }) as IMiddleware.OpenContext)
+          .then(
+            () => undefined as unknown,
+            (error: unknown) => error,
+          );
 
         // 検証
         expect(first).toBeInstanceOf(freshErrors.ZstdWasmInitError);

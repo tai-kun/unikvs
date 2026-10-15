@@ -19,17 +19,14 @@ export default class Memory implements IStorage {
   /**
    * キーと値のペアを保持する内部マップです。
    */
-  private readonly map: Map<string, any>;
+  readonly #map: Map<string, any>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public readonly name: string;
 
   /**
    * データの複製に使用する関数です。
    */
-  private readonly clone: <T>(value: T) => T;
+  readonly #clone: <T>(value: T) => T;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
@@ -37,67 +34,46 @@ export default class Memory implements IStorage {
   public constructor(options: MemoryOptions = {}) {
     const { clone = (value) => structuredClone(value) } = options;
     this.name = "Memory";
-    this.map = new Map();
-    this.clone = clone;
+    this.#map = new Map();
+    this.#clone = clone;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public write(c: IStorage.WriteContext, data: any): void {
-    this.map.set(c.key, this.clone(data));
+    this.#map.set(c.key, this.#clone(data));
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public read(c: IStorage.ReadContext): any {
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    const value = this.map.get(c.key);
+    const value = this.#map.get(c.key);
 
-    return this.clone(value);
+    return this.#clone(value);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public exists(c: IStorage.ExistsContext): boolean {
-    const exists = this.map.has(c.key);
+    const exists = this.#map.has(c.key);
 
     return exists;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
   public delete(c: IStorage.DeleteContext): void {
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.map.delete(c.key);
+    this.#map.delete(c.key);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
-   */
-  public clear(): void {
-    this.map.clear();
+  public clear(_c: IStorage.ClearContext): void {
+    this.#map.clear();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#data)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
@@ -107,7 +83,7 @@ export default class Memory implements IStorage {
           throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
 
-        chunks.push(this.clone(chunk));
+        chunks.push(this.#clone(chunk));
       },
       close: () => {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
@@ -119,30 +95,27 @@ export default class Memory implements IStorage {
           offset += chunk.byteLength;
         }
 
-        this.map.set(c.key, merged);
+        this.#map.set(c.key, merged);
       },
     });
 
     return stream;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#data)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    if (!this.map.has(c.key)) {
+    if (!this.#map.has(c.key)) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
-    const value = this.map.get(c.key);
+    const value = this.#map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {
         if (!(value instanceof Uint8Array)) {
           throw new InvalidChunkTypeError({ key: c.key, chunk: value });
         }
 
-        controller.enqueue(this.clone(value) as Uint8Array<ArrayBuffer>);
+        controller.enqueue(this.#clone(value) as Uint8Array<ArrayBuffer>);
         controller.close();
       },
     });

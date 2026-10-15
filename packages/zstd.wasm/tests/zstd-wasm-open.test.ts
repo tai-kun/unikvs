@@ -91,8 +91,8 @@ describe("open による初期化", () => {
 
     // 実行
     await openTarget(target, signal);
-    const encoded = await encode(target, input );
-    const decoded = await decode(target, encoded );
+    const encoded = await encode(target, input);
+    const decoded = await decode(target, encoded);
 
     // 検証
     expect(target.isOpen).toBe(true);

@@ -174,7 +174,9 @@ describe("open の中断", () => {
 
       // 実行と検証
       await expect(
-        target.open(createOpenContext({ signal: abortedSignal(reason) }) as IMiddleware.OpenContext),
+        target.open(
+          createOpenContext({ signal: abortedSignal(reason) }) as IMiddleware.OpenContext,
+        ),
       ).rejects.toBe(reason);
       expect(target.isOpen).toBe(false);
     } finally {

@@ -1,6 +1,5 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  captureThrown,
   createDecodeContext,
   createDecodeStreamContext,
   createEncodeContext,
@@ -12,7 +11,6 @@ import {
 } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
-import { InvalidClearBehaviorError } from "../src/errors.js";
 import KeyPrefix from "../src/key-prefix.js";
 
 describe("初期化と基本属性", () => {
@@ -38,69 +36,30 @@ describe("初期化と基本属性", () => {
     expect(new KeyPrefix("").prefix).toBe("");
   });
 
-  test("clearBehavior の既定値は allow である", ({ expect }) => {
+  test("allowClear の既定値は false である", ({ expect }) => {
     // 実行と検証
-    expect(new KeyPrefix("tenant:").clearBehavior).toBe("allow");
-    expect(new KeyPrefix("tenant:", {}).clearBehavior).toBe("allow");
-    expect(new KeyPrefix("tenant:", undefined).clearBehavior).toBe("allow");
-    expect(new KeyPrefix("tenant:", { clearBehavior: undefined }).clearBehavior).toBe("allow");
+    expect(new KeyPrefix("tenant:").allowClear).toBe(false);
+    expect(new KeyPrefix("tenant:", {}).allowClear).toBe(false);
+    expect(new KeyPrefix("tenant:", undefined).allowClear).toBe(false);
+    expect(new KeyPrefix("tenant:", { allowClear: undefined }).allowClear).toBe(false);
   });
 
-  test("clearBehavior に allow と deny を指定できる", ({ expect }) => {
+  test("allowClear に true と false を指定できる", ({ expect }) => {
     // 実行と検証
-    expect(new KeyPrefix("tenant:", { clearBehavior: "deny" }).clearBehavior).toBe("deny");
-    expect(new KeyPrefix("tenant:", { clearBehavior: "allow" }).clearBehavior).toBe("allow");
+    expect(new KeyPrefix("tenant:", { allowClear: true }).allowClear).toBe(true);
+    expect(new KeyPrefix("tenant:", { allowClear: false }).allowClear).toBe(false);
   });
 });
 
 describe("コンストラクターの検証", () => {
-  test("clearBehavior に不正な文字列を指定したとき、InvalidClearBehaviorError を投げる", ({
-    expect,
-  }) => {
-    // 実行
-    const error = captureThrown(
-      () => new KeyPrefix("tenant:", { clearBehavior: "alllow" as never }),
-    );
-
-    // 検証
-    expect(error).toBeInstanceOf(InvalidClearBehaviorError);
-    expect((error as InvalidClearBehaviorError).meta).toStrictEqual({ actual: "alllow" });
-  });
-
-  test("clearBehavior に数値を指定したとき、InvalidClearBehaviorError を投げる", ({ expect }) => {
-    // 実行
-    const error = captureThrown(() => new KeyPrefix("", { clearBehavior: 123 as never }));
-
-    // 検証
-    expect(error).toBeInstanceOf(InvalidClearBehaviorError);
-    expect((error as InvalidClearBehaviorError).meta).toStrictEqual({ actual: 123 });
-  });
-
-  test("clearBehavior に null を指定したとき、InvalidClearBehaviorError を投げる", ({ expect }) => {
-    // 実行
-    const error = captureThrown(() => new KeyPrefix("", { clearBehavior: null as never }));
-
-    // 検証
-    expect(error).toBeInstanceOf(InvalidClearBehaviorError);
-    expect((error as InvalidClearBehaviorError).meta).toStrictEqual({ actual: null });
-  });
-
-  test("name は KeyPrefixInvalidClearBehaviorError である", ({ expect }) => {
-    // 実行
-    const error = captureThrown(() => new KeyPrefix("", { clearBehavior: "deny!" as never }));
-
-    // 検証
-    expect((error as InvalidClearBehaviorError).name).toBe("KeyPrefixInvalidClearBehaviorError");
-  });
-
-  test("正規の clearBehavior を指定したとき、エラーを投げない", ({ expect }) => {
+  test("正規の allowClear を指定したとき、エラーを投げない", ({ expect }) => {
     // 実行と検証
     expect(() => new KeyPrefix("")).not.toThrow();
     expect(() => new KeyPrefix("", {})).not.toThrow();
-    expect(() => new KeyPrefix("", { clearBehavior: undefined })).not.toThrow();
+    expect(() => new KeyPrefix("", { allowClear: undefined })).not.toThrow();
     expect(() => new KeyPrefix("", undefined)).not.toThrow();
-    expect(() => new KeyPrefix("", { clearBehavior: "allow" })).not.toThrow();
-    expect(() => new KeyPrefix("", { clearBehavior: "deny" })).not.toThrow();
+    expect(() => new KeyPrefix("", { allowClear: true })).not.toThrow();
+    expect(() => new KeyPrefix("", { allowClear: false })).not.toThrow();
   });
 });
 

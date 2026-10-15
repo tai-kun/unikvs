@@ -3,7 +3,7 @@ import { createClearContext, createNext } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
-import { InvalidClearBehaviorError, KeyPrefixClearNotSupportedError } from "../src/errors.js";
+import { KeyPrefixClearDeniedError } from "../src/errors.js";
 import KeyPrefix from "../src/key-prefix.js";
 
 /**
@@ -20,55 +20,55 @@ const test = vitest.extend<{ setLang: (lang: string) => void }>({
   },
 });
 
-describe("KeyPrefixClearNotSupportedError の国際化 (server)", () => {
+describe("KeyPrefixClearDeniedError の国際化 (server)", () => {
   test("既定では英語メッセージになる", ({ expect }) => {
     // 準備
-    const error = new KeyPrefixClearNotSupportedError({
+    const error = new KeyPrefixClearDeniedError({
       prefix: "tenant:",
-      clearBehavior: "deny",
+      allowClear: true,
     });
 
     // 実行と検証
     expect(error.message).toBe(
-      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Use clearBehavior "allow" when single-tenant exclusive use is guaranteed.',
+      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.',
     );
   });
 
   test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
-    const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("tenant:", { allowClear: true });
     setLang("ja");
 
     // 実行と検証
     await expect(
       prefix.use(createClearContext() as IMiddleware.UseContext, createNext()),
     ).rejects.toThrow(
-      'プレフィックス "tenant:" 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください',
+      'プレフィックス "tenant:" 付きの KeyPrefix.clear は、範囲限定削除を保証できないため拒否されました。単一テナントによる占有が保証できる場合は、allowClear: true を指定してください。',
     );
   });
 
   test("en に戻すと英語メッセージになる", ({ expect, setLang }) => {
     // 準備
-    const error = new KeyPrefixClearNotSupportedError({
+    const error = new KeyPrefixClearDeniedError({
       prefix: "tenant:",
-      clearBehavior: "deny",
+      allowClear: true,
     });
 
     // 実行と検証
     setLang("ja");
     expect(error.message).toBe(
-      'プレフィックス "tenant:" 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください',
+      'プレフィックス "tenant:" 付きの KeyPrefix.clear は、範囲限定削除を保証できないため拒否されました。単一テナントによる占有が保証できる場合は、allowClear: true を指定してください。',
     );
 
     setLang("en");
     expect(error.message).toBe(
-      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Use clearBehavior "allow" when single-tenant exclusive use is guaranteed.',
+      'KeyPrefix.clear with prefix "tenant:" cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.',
     );
   });
 
   test("日本語メッセージでも prefix は meta にそのまま保持される", async ({ expect, setLang }) => {
     // 準備
-    const prefix = new KeyPrefix("テナント🔑:", { clearBehavior: "deny" });
+    const prefix = new KeyPrefix("テナント🔑:", { allowClear: true });
     setLang("ja");
     let error: unknown;
 
@@ -80,43 +80,10 @@ describe("KeyPrefixClearNotSupportedError の国際化 (server)", () => {
     }
 
     // 検証
-    expect(error).toBeInstanceOf(KeyPrefixClearNotSupportedError);
-    expect(error).toMatchObject({ meta: { prefix: "テナント🔑:", clearBehavior: "deny" } });
-    expect((error as KeyPrefixClearNotSupportedError).message).toBe(
-      'プレフィックス "テナント🔑:" 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください',
+    expect(error).toBeInstanceOf(KeyPrefixClearDeniedError);
+    expect(error).toMatchObject({ meta: { prefix: "テナント🔑:", allowClear: true } });
+    expect((error as KeyPrefixClearDeniedError).message).toBe(
+      'プレフィックス "テナント🔑:" 付きの KeyPrefix.clear は、範囲限定削除を保証できないため拒否されました。単一テナントによる占有が保証できる場合は、allowClear: true を指定してください。',
     );
-  });
-});
-
-describe("InvalidClearBehaviorError の国際化 (server)", () => {
-  test("既定では英語メッセージになる", ({ expect }) => {
-    // 準備
-    const error = new InvalidClearBehaviorError({ actual: "alllow" });
-
-    // 実行と検証
-    expect(error.message).toBe('clearBehavior must be "allow" or "deny", but got alllow.');
-  });
-
-  test("ja を設定するとエラーが日本語になる", ({ expect, setLang }) => {
-    // 準備
-    const error = new InvalidClearBehaviorError({ actual: "alllow" });
-    setLang("ja");
-
-    // 実行と検証
-    expect(error.message).toBe(
-      'clearBehavior は "allow" か "deny" でなければなりません。受け取った値: alllow',
-    );
-  });
-
-  test("日本語メッセージでも actual は meta にそのまま保持される", ({ expect, setLang }) => {
-    // 準備
-    const error = new InvalidClearBehaviorError({ actual: 123 });
-    setLang("ja");
-
-    // 実行と検証
-    expect(error.message).toBe(
-      'clearBehavior は "allow" か "deny" でなければなりません。受け取った値: 123',
-    );
-    expect(error.meta).toStrictEqual({ actual: 123 });
   });
 });

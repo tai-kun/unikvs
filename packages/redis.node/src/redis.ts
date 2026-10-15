@@ -45,28 +45,22 @@ type Connection = { readonly client: Ioredis };
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
  */
 export default class Redis implements IStorage {
-  private con: Connection | null;
+  #con: Connection | null;
 
-  private readonly url: string | undefined;
+  readonly #url: string | undefined;
 
   // `closeTimeout` は本パッケージ固有の拡張です。
-  // `this.options` には含めず、別フィールドで保管します。
-  // `this.options` は `new Ioredis` にそのまま spread できる透過バッグです。
-  private readonly options: Omit<RedisStorageOptions, "keyPrefix" | "cluster" | "closeTimeout">;
+  // `this.#options` には含めず、別フィールドで保管します。
+  // `this.#options` は `new Ioredis` にそのまま spread できる透過バッグです。
+  readonly #options: Omit<RedisStorageOptions, "keyPrefix" | "cluster" | "closeTimeout">;
 
   // `ioredis` の `disconnectTimeout` (ソケット切断待機) とは別物です。
-  private readonly closeTimeout: number;
+  readonly #closeTimeout: number;
 
-  private readonly keyPrefix: string;
+  readonly #keyPrefix: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public readonly name: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public constructor(url?: string, options: RedisStorageOptions = {}) {
     const {
       keyPrefix = "unikvs:",
@@ -88,42 +82,36 @@ export default class Redis implements IStorage {
     }
 
     this.name = "Redis";
-    this.con = null;
-    this.url = url;
-    this.options = redisOptions;
-    this.closeTimeout = closeTimeout;
-    this.keyPrefix = keyPrefix;
+    this.#con = null;
+    this.#url = url;
+    this.#options = redisOptions;
+    this.#closeTimeout = closeTimeout;
+    this.#keyPrefix = keyPrefix;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public get isOpen(): boolean {
-    return !!this.con;
+    return !!this.#con;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
-  public async open(): Promise<void> {
+  public async open(_c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
     // 並行 `close` 同士は一方が `TypeError` reject する形で直列化されます。
-    if (this.con) {
-      await this.close();
+    if (this.#con) {
+      await this.close(_c as unknown as IStorage.CloseContext);
     }
 
     // 空文字の `url`・環境変数は未指定として扱います (本パッケージ仕様)。
     // `url` は `redis://` / `rediss://` 形式での指定を要求します。
     // 実行時の形式検証は行いません (bare 形式は非サポート・動作未保証)。
-    const url = this.url || process.env["REDIS_URL"] || process.env["VALKEY_URL"] || undefined;
-    const connectTimeout = this.options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
+    const url = this.#url || process.env["REDIS_URL"] || process.env["VALKEY_URL"] || undefined;
+    const connectTimeout = this.#options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     // `ioredis` v6 のコンストラクタ型は `replyMapping` に明示 `undefined` を許しません。
     // `exactOptionalPropertyTypes` 下では spread のまま渡せないため型表明を付けます。
     // 実行時の値は変わらず、`replyMapping` を含む透過は保たれます。
     type ConnectOptions = RedisOptions & { replyMapping?: "legacy" };
-    const options = { ...this.options, lazyConnect: true, connectTimeout } as ConnectOptions;
+    const options = { ...this.#options, lazyConnect: true, connectTimeout } as ConnectOptions;
     const raw = url === undefined ? new Ioredis(options) : new Ioredis(url, options);
 
     // `ioredis` は接続失敗・再試行時に `error` イベントを emit します。
@@ -150,21 +138,18 @@ export default class Redis implements IStorage {
       }
     }
 
-    this.con = { client: raw };
+    this.#con = { client: raw };
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
-  public async close(): Promise<void> {
+  public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
-    this.con = null;
+    this.#con = null;
 
-    const closeTimeout = this.closeTimeout;
+    const closeTimeout = this.#closeTimeout;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       await Promise.race([
@@ -185,11 +170,11 @@ export default class Redis implements IStorage {
     }
   }
 
-  private toKey(key: string): string {
-    return `${this.keyPrefix}${key}`;
+  #toKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 
-  private async clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
+  async #clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
     let cursor = "0";
     do {
       signal.throwIfAborted();
@@ -203,26 +188,20 @@ export default class Redis implements IStorage {
     } while (cursor !== "0");
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    await client.set(this.toKey(c.key), Buffer.from(data));
+    await client.set(this.#toKey(c.key), Buffer.from(data));
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    const data = await client.getBuffer(this.toKey(c.key));
+    const data = await client.getBuffer(this.#toKey(c.key));
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -230,50 +209,38 @@ export default class Redis implements IStorage {
     return new Uint8Array(data);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    return (await client.exists(this.toKey(c.key))) > 0;
+    return (await client.exists(this.#toKey(c.key))) > 0;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    await client.del(this.toKey(c.key));
+    await client.del(this.#toKey(c.key));
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
-   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
-    const pattern = `${this.keyPrefix}*`;
-    await this.clearPattern(client, pattern, c.signal);
+    const pattern = `${this.#keyPrefix}*`;
+    await this.#clearPattern(client, pattern, c.signal);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#streams)
-   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    const dest = this.toKey(c.key);
+    const dest = this.#toKey(c.key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時キーが衝突しません。
     const tmp = `${dest}.${randomUUID()}.tmp`;
 
@@ -340,15 +307,12 @@ export default class Redis implements IStorage {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#streams)
-   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.con!;
+    const { client } = this.#con!;
 
     c.signal.throwIfAborted();
 
-    const dest = this.toKey(c.key);
+    const dest = this.#toKey(c.key);
     let sent = false;
 
     // Redis の GET は値を一括で返すため、取得したバイト列を単一のチャンクとして送出します。

@@ -39,38 +39,22 @@ function parseLine(line: string, controller: TransformStreamDefaultController<un
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
  */
-export default class Json implements IMiddleware<
-  unknown,
-  Uint8Array<ArrayBuffer>,
-  unknown,
-  Uint8Array<ArrayBuffer>
-> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
-   */
+export default class Json implements IMiddleware {
   public readonly name: string = "Json";
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
-   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = new TextEncoder().encode(stringify(c.source));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
-   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -78,12 +62,10 @@ export default class Json implements IMiddleware<
     const decoder = new TextDecoder("utf-8", { fatal: true });
 
     c.destination = JSON.parse(decoder.decode(c.source));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#streams)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -97,12 +79,10 @@ export default class Json implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#streams)
-   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -133,6 +113,7 @@ export default class Json implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 }

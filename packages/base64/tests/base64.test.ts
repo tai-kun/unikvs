@@ -270,9 +270,7 @@ describe("デコードの受理系", () => {
     expect(await decode(base64, base64Bytes("Zm9="))).toStrictEqual(
       await decode(base64, base64Bytes("Zm8=")),
     );
-    expect(await decode(base64, base64Bytes("Zm9="))).toStrictEqual(
-      Uint8Array.from([0x66, 0x6f]),
-    );
+    expect(await decode(base64, base64Bytes("Zm9="))).toStrictEqual(Uint8Array.from([0x66, 0x6f]));
   });
 
   test("BOM 単体は既定で空にデコードされる", async ({ expect }) => {

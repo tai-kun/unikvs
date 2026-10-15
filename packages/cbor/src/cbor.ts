@@ -174,38 +174,22 @@ function drain(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
  */
-export default class Cbor implements IMiddleware<
-  unknown,
-  Uint8Array<ArrayBuffer>,
-  unknown,
-  Uint8Array<ArrayBuffer>
-> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
-   */
+export default class Cbor implements IMiddleware {
   public readonly name: string = "Cbor";
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
-   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = this.#encode(c.source);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
-   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -219,9 +203,6 @@ export default class Cbor implements IMiddleware<
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#streams)
-   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -233,12 +214,10 @@ export default class Cbor implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#streams)
-   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -264,6 +243,7 @@ export default class Cbor implements IMiddleware<
         },
       }),
     );
+
     await next();
   }
 

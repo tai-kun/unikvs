@@ -1,5 +1,5 @@
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import { UniKvs, type PlainValue, type StreamValue } from "unikvs";
 
 import KeyPrefix, { type KeyPrefixOptions } from "../src/key-prefix.js";
 
@@ -8,9 +8,9 @@ import KeyPrefix, { type KeyPrefixOptions } from "../src/key-prefix.js";
  * 論理キーと物理キーの対応の検証に使用します。
  */
 export type TestMapping = {
-  k1: Value<string>;
-  k2: Value<string>;
-  logs: Value<Uint8Array<ArrayBuffer>>;
+  k1: PlainValue<string>;
+  k2: PlainValue<string>;
+  logs: StreamValue<Uint8Array<ArrayBuffer>>;
 };
 
 /**

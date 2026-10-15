@@ -177,9 +177,9 @@ describe("ChecksumInvalidVarNameError", () => {
 
     // 実行と検証
     const c = createDecodeContext(DATA);
-    await expect(
-      checksum.decode(c as ByteDecode, createNext()),
-    ).rejects.toThrow(ChecksumInvalidVarNameError);
+    await expect(checksum.decode(c as ByteDecode, createNext())).rejects.toThrow(
+      ChecksumInvalidVarNameError,
+    );
   });
 
   test("CHECKSUM_VAR_NAME が文字列でないサブクラスは encodeStream で拒否する", async ({

@@ -214,9 +214,9 @@ describe("壊れた圧縮データの decode", () => {
       const encoded = await encode(compression, createPseudoRandomBytes(4096, 28));
 
       // 実行と検証
-      await expect(
-        decode(compression, encoded.subarray(0, encoded.length >> 1)),
-      ).rejects.toThrow(Error);
+      await expect(decode(compression, encoded.subarray(0, encoded.length >> 1))).rejects.toThrow(
+        Error,
+      );
     });
   });
 });

@@ -75,20 +75,12 @@ export type ChecksumOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
-export default abstract class Checksum implements IMiddleware<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
-> {
+export default abstract class Checksum implements IMiddleware {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
   public static readonly CHECKSUM_VAR_NAME: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
-   */
   public readonly name: string;
 
   /**
@@ -99,7 +91,7 @@ export default abstract class Checksum implements IMiddleware<
   /**
    * ハッシュ値を計算する関数です。
    */
-  private readonly hash: IHash;
+  readonly #hash: IHash;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
@@ -111,58 +103,47 @@ export default abstract class Checksum implements IMiddleware<
     }
 
     this.name = name;
-    this.hash = hash;
+    this.#hash = hash;
     this.required = required;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
-   */
   public async encode(
-    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = this.#checksum(c.source, c);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
-   */
   public async decode(
-    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = this.#checksum(c.source, c);
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
-   */
   public async encodeStream(
-    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source.pipeThrough(this.#checksumStream(c));
+
     await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
-   */
   public async decodeStream(
-    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
     c.destination = c.source.pipeThrough(this.#checksumStream(c));
+
     await next();
   }
 
@@ -173,10 +154,7 @@ export default abstract class Checksum implements IMiddleware<
    * @param c チェックサム変数を保持するコンテキストです。
    * @returns 入力されたデータをそのまま返します。
    */
-  #checksum(
-    data: Uint8Array<ArrayBuffer>,
-    c: IPipelineContext,
-  ): Uint8Array<ArrayBuffer> {
+  #checksum(data: Uint8Array<ArrayBuffer>, c: IPipelineContext): Uint8Array<ArrayBuffer> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
@@ -185,7 +163,7 @@ export default abstract class Checksum implements IMiddleware<
     const checksum = c.get(CHECKSUM_VAR_NAME);
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
-      const hash = bytesToHex(this.hash(data));
+      const hash = bytesToHex(this.#hash(data));
       if (checksum !== hash) {
         throw new ChecksumMismatchError({ actual: hash, expected: checksum });
       }
@@ -203,10 +181,9 @@ export default abstract class Checksum implements IMiddleware<
    * @param c チェックサム変数を保持するコンテキストです。
    * @returns 変換処理を定義した TransformStream オブジェクトです。
    */
-  #checksumStream(c: IPipelineContext): TransformStream<
-    Uint8Array<ArrayBuffer>,
-    Uint8Array<ArrayBuffer>
-  > {
+  #checksumStream(
+    c: IPipelineContext,
+  ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
@@ -222,7 +199,7 @@ export default abstract class Checksum implements IMiddleware<
       return new TransformStream();
     }
 
-    const hasher = this.hash.create();
+    const hasher = this.#hash.create();
 
     return new TransformStream({
       /**

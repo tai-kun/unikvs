@@ -67,8 +67,8 @@ describe("決定的ファズテスト", () => {
       const target = level === undefined ? new ZstdWasm() : new ZstdWasm({ level });
       await openTarget(target, createSignal());
 
-      const encoded = await encode(target, input );
-      const decoded = await decode(target, encoded );
+      const encoded = await encode(target, input);
+      const decoded = await decode(target, encoded);
 
       expect(bytesEqual(decoded, input)).toBe(true);
     });
