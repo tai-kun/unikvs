@@ -6,20 +6,7 @@ import { type ErrorMeta, I18nErrorBase, setErrorMessage, type ErrorOptions } fro
 //
 // -------------------------------------------------------------------------------------------------
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-message)
- */
-export { setErrorMessage };
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
- */
-export type { ErrorMeta };
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
- */
-export type { ErrorOptions };
+export { type ErrorMeta, type ErrorOptions, setErrorMessage };
 
 // -------------------------------------------------------------------------------------------------
 //

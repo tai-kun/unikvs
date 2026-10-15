@@ -4,15 +4,31 @@ import { expectTypeOf, test } from "vitest";
 import {
   ErrorBase,
   InvalidUsageErrorBase,
-  Variables,
   setErrorMessage,
   type ErrorMeta,
   type ErrorOptions,
-  type IEncodable,
-  type IDecodable,
+  type IActionContext,
+  type IClearContext,
+  type ICloseContext,
+  type IDecodeContext,
+  type IDecodeStreamContext,
+  type IDeleteContext,
+  type IEncodeContext,
+  type IEncodeStreamContext,
+  type IGetContext,
+  type IHasContext,
+  type IKeyedActionContext,
+  type ILifecycleContext,
+  type IMapKeyContext,
+  type IMiddleware,
+  type IOpenContext,
+  type IPipelineContext,
   type IReadableStream,
+  type IRepairContext,
+  type ISetContext,
   type IStorage,
-  type ITransformer,
+  type IStreamContext,
+  type ITransformStream,
   type IWritableStream,
 } from "../src/index.js";
 
@@ -20,133 +36,8 @@ type AnyStorage = IStorage;
 type BinaryStorage = IStorage<Uint8Array<ArrayBuffer>>;
 type ObjectStorage = IStorage<{ readonly id: number }>;
 
-type TestTransformer = ITransformer<
-  string,
-  Uint8Array<ArrayBuffer>,
-  ArrayBuffer,
-  Uint8Array<ArrayBuffer>
->;
-
 type FoursomeStorage = IStorage<Uint8Array<ArrayBuffer>, string, ArrayBuffer, number>;
 type ChunkDefaultStorage = IStorage<Uint8Array<ArrayBuffer>, string, ArrayBuffer>;
-
-type FullTransformer = ITransformer<
-  string,
-  number,
-  boolean,
-  Date,
-  Uint8Array<ArrayBuffer>,
-  string,
-  ArrayBuffer,
-  number
->;
-
-test("IStorage は既定の型引数で任意のデータを読み書きできる", () => {
-  expectTypeOf<AnyStorage["write"]>().parameter(0).toEqualTypeOf<IStorage.WriteArgs<any>>();
-  expectTypeOf<AnyStorage["read"]>().returns.toEqualTypeOf<MaybePromise<any>>();
-});
-
-test("IStorage<T> の read は T を返す", () => {
-  expectTypeOf<ObjectStorage["read"]>().returns.toEqualTypeOf<
-    MaybePromise<{ readonly id: number }>
-  >();
-});
-
-test("バイナリーデータを扱う IStorage はストリームチャンクにその型を使用する", () => {
-  expectTypeOf<NonNullable<BinaryStorage["getWritable"]>>().returns.toEqualTypeOf<
-    MaybePromise<IWritableStream<Uint8Array<ArrayBuffer>>>
-  >();
-  expectTypeOf<NonNullable<BinaryStorage["getReadable"]>>().returns.toEqualTypeOf<
-    MaybePromise<IReadableStream<Uint8Array<ArrayBuffer>>>
-  >();
-});
-
-test("バイナリー以外のデータを扱う IStorage のストリームチャンクは any にフォールバックする", () => {
-  expectTypeOf<NonNullable<ObjectStorage["getWritable"]>>().returns.toEqualTypeOf<
-    MaybePromise<IWritableStream<any>>
-  >();
-});
-
-test("IStorage はストリーム取得メソッドを実装しなくてもよい", () => {
-  expectTypeOf<AnyStorage["getWritable"]>().toExtend<
-    ((args: IStorage.GetWritableArgs) => MaybePromise<IWritableStream<any>>) | undefined
-  >();
-});
-
-test("ITransformer はエンコードとデコードそれぞれの入出力型を保持する", () => {
-  expectTypeOf<TestTransformer["encode"]>()
-    .parameter(0)
-    .toEqualTypeOf<ITransformer.EncodeArgs<string>>();
-  expectTypeOf<TestTransformer["encode"]>().returns.toEqualTypeOf<MaybePromise<ArrayBuffer>>();
-
-  expectTypeOf<TestTransformer["decode"]>()
-    .parameter(0)
-    .toEqualTypeOf<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>>();
-  expectTypeOf<TestTransformer["decode"]>().returns.toEqualTypeOf<
-    MaybePromise<Uint8Array<ArrayBuffer>>
-  >();
-});
-
-test("Variables の get は unknown を返す", () => {
-  // 準備
-  const vars = new Variables({ "unikvs:key": "foo" });
-
-  // 検証
-  expectTypeOf(vars.get("unikvs:key")).toEqualTypeOf<unknown>();
-});
-
-test("型付き Variables の get はキーに対応する値の型を返す", () => {
-  // 準備
-  const vars: Variables<{ readonly count: number; readonly label: string }> = new Variables({
-    count: 1,
-    label: "a",
-  });
-
-  // 検証
-  expectTypeOf(vars.get("count")).toEqualTypeOf<number>();
-  expectTypeOf(vars.get("label")).toEqualTypeOf<string>();
-  expectTypeOf(vars.get("unknown")).toEqualTypeOf<unknown>();
-});
-
-test("型付き Variables の set と setReadonly は値の型を要求する", () => {
-  // 準備
-  const vars: Variables<{ readonly count: number }> = new Variables();
-
-  // 実行
-  vars.set("count", 1);
-  vars.set("unknown", { whatever: true });
-  vars.setReadonly("count", 2);
-
-  // 検証
-  expectTypeOf(vars.get("count")).toEqualTypeOf<number>();
-  expectTypeOf(vars.has("count")).toEqualTypeOf<boolean>();
-  expectTypeOf(vars.delete("unknown")).toEqualTypeOf<boolean>();
-  expectTypeOf(vars.isReadonly("count")).toEqualTypeOf<boolean>();
-});
-
-declare global {
-  interface UniKvsVariablesTypes {
-    readonly "test:count": number;
-  }
-}
-
-test("Variables の型引数は UniKvsVariablesTypes の宣言マージで決まる", () => {
-  // 準備
-  const vars = new Variables();
-
-  // 実行
-  vars.set("test:count", 1);
-
-  // 検証
-  expectTypeOf(vars.get("test:count")).toEqualTypeOf<number>();
-  expectTypeOf(vars.get("other")).toEqualTypeOf<unknown>();
-});
-
-test("Variables は Map ライクなクラスである", () => {
-  // 実行と検証
-  expectTypeOf<Variables>().toExtend<{ get(key: string): unknown }>();
-  expectTypeOf<Variables>().toExtend<{ set(key: string, value: unknown): unknown }>();
-});
 
 test("IStorage の name と isOpen は必須のプロパティーである", () => {
   // 実行と検証
@@ -157,40 +48,70 @@ test("IStorage の name と isOpen は必須のプロパティーである", () 
 test("IStorage の CRUD メソッドは必須である", () => {
   // 実行と検証
   expectTypeOf<AnyStorage["write"]>().returns.toEqualTypeOf<MaybePromise<void>>();
+  expectTypeOf<AnyStorage["read"]>().returns.toEqualTypeOf<MaybePromise<any>>();
   expectTypeOf<AnyStorage["exists"]>().returns.toEqualTypeOf<MaybePromise<boolean>>();
   expectTypeOf<AnyStorage["delete"]>().returns.toEqualTypeOf<MaybePromise<void>>();
   expectTypeOf<AnyStorage["clear"]>().returns.toEqualTypeOf<MaybePromise<void>>();
-  expectTypeOf<Omit<AnyStorage, "read">>().not.toExtend<AnyStorage>();
 });
 
-test("IStorage のライフサイクルメソッドは省略できる", () => {
+test("IStorage の write はコンテキストとデータを受け取る", () => {
+  // 実行と検証
+  expectTypeOf<AnyStorage["write"]>()
+    .parameter(0)
+    .toEqualTypeOf<
+      IStorage["write"] extends (c: infer C, ...rest: never[]) => unknown ? C : never
+    >();
+  expectTypeOf<ObjectStorage["read"]>().returns.toEqualTypeOf<
+    MaybePromise<{ readonly id: number }>
+  >();
+});
+
+test("IStorage の read は型引数を返す", () => {
+  // 実行と検証
+  expectTypeOf<ObjectStorage["read"]>().returns.toEqualTypeOf<
+    MaybePromise<{ readonly id: number }>
+  >();
+  expectTypeOf<BinaryStorage["read"]>().returns.toEqualTypeOf<
+    MaybePromise<Uint8Array<ArrayBuffer>>
+  >();
+});
+
+test("IStorage のストリームチャンクは既定で any である", () => {
+  // 実行と検証
+  expectTypeOf<NonNullable<BinaryStorage["getWritable"]>>().returns.toEqualTypeOf<
+    MaybePromise<IWritableStream<any>>
+  >();
+  expectTypeOf<NonNullable<BinaryStorage["getReadable"]>>().returns.toEqualTypeOf<
+    MaybePromise<IReadableStream<any>>
+  >();
+});
+
+test("IStorage のライフサイクルとストリーム取得は省略できる", () => {
   // 実行と検証
   expectTypeOf<AnyStorage["open"]>().toEqualTypeOf<
-    ((args: IStorage.OpenArgs) => MaybePromise<void>) | undefined
+    ((c: IStorage.OpenContext) => MaybePromise<void>) | undefined
   >();
   expectTypeOf<AnyStorage["close"]>().toEqualTypeOf<
-    ((args: IStorage.CloseArgs) => MaybePromise<void>) | undefined
+    ((c: IStorage.CloseContext) => MaybePromise<void>) | undefined
   >();
   expectTypeOf<AnyStorage["onOtherWriteError"]>().toEqualTypeOf<
-    ((args: IStorage.OnOtherWriteErrorArgs) => MaybePromise<void>) | undefined
+    | ((
+        c: IStorage.OtherWriteErrorHandlerContext,
+        errors: readonly IStorage.IOtherWriteError[],
+      ) => MaybePromise<void>)
+    | undefined
   >();
-});
-
-test("IStorage のストリーム取得メソッドは Partial で省略可能である", () => {
-  // 実行と検証
   expectTypeOf<AnyStorage["getWritable"]>().toEqualTypeOf<
-    ((args: IStorage.GetWritableArgs) => MaybePromise<IWritableStream<any>>) | undefined
+    ((c: IStorage.GetWritableContext) => MaybePromise<IWritableStream<any>>) | undefined
   >();
   expectTypeOf<AnyStorage["getReadable"]>().toEqualTypeOf<
-    ((args: IStorage.GetReadableArgs) => MaybePromise<IReadableStream<any>>) | undefined
+    ((c: IStorage.GetReadableContext) => MaybePromise<IReadableStream<any>>) | undefined
   >();
 });
 
 test("IStorage は 4 つの型引数すべてを指定できる", () => {
   // 実行と検証
-  expectTypeOf<FoursomeStorage["write"]>()
-    .parameter(0)
-    .toEqualTypeOf<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>>();
+  expectTypeOf<FoursomeStorage["write"]>().parameter(1).toEqualTypeOf<Uint8Array<ArrayBuffer>>();
   expectTypeOf<FoursomeStorage["read"]>().returns.toEqualTypeOf<MaybePromise<string>>();
   expectTypeOf<NonNullable<FoursomeStorage["getWritable"]>>().returns.toEqualTypeOf<
     MaybePromise<IWritableStream<ArrayBuffer>>
@@ -200,154 +121,199 @@ test("IStorage は 4 つの型引数すべてを指定できる", () => {
   >();
 });
 
-test("IStorage の TReadChunkOutput の既定値は TWriteChunkInput である", () => {
+test("IStorage の TReadChunk の既定値は TWriteChunk である", () => {
   // 実行と検証
   expectTypeOf<NonNullable<ChunkDefaultStorage["getReadable"]>>().returns.toEqualTypeOf<
     MaybePromise<IReadableStream<ArrayBuffer>>
   >();
 });
 
-test("IStorage.Key は string である", () => {
+test("IStorage のコンテキスト別名は pipeline-context と一致する", () => {
   // 実行と検証
-  expectTypeOf<IStorage.Key>().toEqualTypeOf<string>();
+  expectTypeOf<IStorage.OpenContext>().toEqualTypeOf<IOpenContext>();
+  expectTypeOf<IStorage.CloseContext>().toEqualTypeOf<ICloseContext>();
+  expectTypeOf<IStorage.WriteContext>().toEqualTypeOf<ISetContext | IRepairContext>();
+  expectTypeOf<IStorage.GetWritableContext>().toEqualTypeOf<ISetContext | IRepairContext>();
+  expectTypeOf<IStorage.ReadContext>().toEqualTypeOf<IGetContext>();
+  expectTypeOf<IStorage.GetReadableContext>().toEqualTypeOf<IStreamContext>();
+  expectTypeOf<IStorage.ExistsContext>().toEqualTypeOf<IHasContext>();
+  expectTypeOf<IStorage.DeleteContext>().toEqualTypeOf<IDeleteContext>();
+  expectTypeOf<IStorage.ClearContext>().toEqualTypeOf<IClearContext>();
 });
 
-test("IStorage の CRUD 引数は vars と key と signal を持つ", () => {
+test("IStorage の OtherWriteError はプラグイン名と理由を保持する", () => {
   // 実行と検証
-  expectTypeOf<IStorage.WriteArgs<{ readonly id: number }>>().toEqualTypeOf<{
-    vars: Variables;
-    key: IStorage.Key;
-    data: { readonly id: number };
-    signal: AbortSignal;
-  }>();
-  expectTypeOf<IStorage.ReadArgs>().toEqualTypeOf<IStorage.ExistsArgs>();
-  expectTypeOf<IStorage.ReadArgs>().toEqualTypeOf<IStorage.DeleteArgs>();
-});
-
-test("IStorage の ClearArgs は key を持たない", () => {
-  // 実行と検証
-  expectTypeOf<IStorage.ClearArgs>().toEqualTypeOf<{
-    vars: Variables;
-    signal: AbortSignal;
-  }>();
-});
-
-test("IStorage のストリーム取得引数は vars と key と signal を持つ", () => {
-  // 実行と検証
-  expectTypeOf<IStorage.GetWritableArgs>().toEqualTypeOf<IStorage.GetReadableArgs>();
-  expectTypeOf<IStorage.GetWritableArgs>().toEqualTypeOf<{
-    vars: Variables;
-    key: IStorage.Key;
-    signal: AbortSignal;
-  }>();
-});
-
-test("IStorage のライフサイクル引数は vars と signal を持つ", () => {
-  // 実行と検証
-  expectTypeOf<IStorage.OpenArgs>().toEqualTypeOf<IStorage.CloseArgs>();
-  expectTypeOf<IStorage.OpenArgs>().toEqualTypeOf<{
-    vars: Variables;
-    signal: AbortSignal;
-  }>();
-});
-
-test("IStorage.onOtherWriteError の引数は集約エラーとして ErrorBase を保持する", () => {
-  // 実行と検証
-  expectTypeOf<IStorage.OnOtherWriteErrorArgs["error"]>().toEqualTypeOf<
-    ErrorBase<{
+  expectTypeOf<IStorage.IOtherWriteError["plugin"]>().toEqualTypeOf<"storage">();
+  expectTypeOf<IStorage.IOtherWriteError["errors"]>().toEqualTypeOf<
+    readonly {
       readonly plugin: "storage";
-      readonly action: "write";
-      readonly errors: readonly {
-        readonly plugin: "storage";
-        readonly reason: unknown;
-      }[];
-    }>
+      readonly reason: unknown;
+    }[]
+  >();
+});
+
+test("IMiddleware の name と isOpen は必須のプロパティーである", () => {
+  // 実行と検証
+  expectTypeOf<IMiddleware["name"]>().toEqualTypeOf<string>();
+  expectTypeOf<IMiddleware["isOpen"]>().toEqualTypeOf<boolean>();
+});
+
+test("IMiddleware のフックは省略できる", () => {
+  // 実行と検証
+  expectTypeOf<IMiddleware["mapKey"]>().toEqualTypeOf<
+    ((c: IMiddleware.MapKeyContext) => string) | undefined
+  >();
+  expectTypeOf<IMiddleware["open"]>().toEqualTypeOf<
+    ((c: IMiddleware.OpenContext) => MaybePromise<void>) | undefined
+  >();
+  expectTypeOf<IMiddleware["close"]>().toEqualTypeOf<
+    ((c: IMiddleware.CloseContext) => MaybePromise<void>) | undefined
+  >();
+  expectTypeOf<IMiddleware["use"]>().toEqualTypeOf<
+    ((c: IMiddleware.UseContext, next: IMiddleware.INext) => PromiseLike<void>) | undefined
+  >();
+});
+
+test("IMiddleware のコンテキスト別名は pipeline-context と一致する", () => {
+  // 実行と検証
+  expectTypeOf<IMiddleware.MapKeyContext>().toEqualTypeOf<IMapKeyContext>();
+  expectTypeOf<IMiddleware.OpenContext>().toEqualTypeOf<IOpenContext>();
+  expectTypeOf<IMiddleware.CloseContext>().toEqualTypeOf<ICloseContext>();
+  expectTypeOf<IMiddleware.UseContext>().toEqualTypeOf<
+    | ISetContext
+    | IRepairContext
+    | IGetContext
+    | IStreamContext
+    | IHasContext
+    | IDeleteContext
+    | IClearContext
+  >();
+  expectTypeOf<IMiddleware.EncodeContext<string>>().toEqualTypeOf<IEncodeContext<string, string>>();
+  expectTypeOf<IMiddleware.DecodeContext<string>>().toEqualTypeOf<IDecodeContext<string, string>>();
+  expectTypeOf<IMiddleware.EncodeStreamContext<ArrayBuffer>>().toEqualTypeOf<
+    IEncodeStreamContext<ArrayBuffer, ArrayBuffer>
+  >();
+  expectTypeOf<IMiddleware.DecodeStreamContext<ArrayBuffer>>().toEqualTypeOf<
+    IDecodeStreamContext<ArrayBuffer, ArrayBuffer>
+  >();
+});
+
+test("IMiddleware の next は引数なしで Promise<void> を返す", () => {
+  // 実行と検証
+  expectTypeOf<IMiddleware.INext>().toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<IMiddleware.INext>().returns.toEqualTypeOf<Promise<void>>();
+});
+
+test("IPipelineContext の get は unknown を返す", () => {
+  // 実行と検証
+  function getUnknown(ctx: IPipelineContext): unknown {
+    return ctx.get("unikvs:key");
+  }
+
+  expectTypeOf(getUnknown).returns.toEqualTypeOf<unknown>();
+});
+
+test("型付き IPipelineContext の get はキーに対応する値の型を返す", () => {
+  // 実行と検証
+  function getCount(
+    ctx: IPipelineContext<{ readonly count: number; readonly label: string }>,
+  ): [number, string, unknown] {
+    return [ctx.get("count"), ctx.get("label"), ctx.get("unknown")];
+  }
+
+  expectTypeOf(getCount).returns.toEqualTypeOf<[number, string, unknown]>();
+});
+
+test("型付き IPipelineContext の set と setReadonly は値の型を要求する", () => {
+  // 実行と検証
+  function setCount(ctx: IPipelineContext<{ readonly count: number }>): void {
+    ctx.set("count", 1);
+    ctx.set("unknown", { whatever: true });
+    ctx.setReadonly("count", 2);
+  }
+
+  expectTypeOf(setCount).returns.toBeVoid();
+});
+
+declare global {
+  interface UniKvsPipelineContextTypes {
+    readonly "test:count": number;
+  }
+}
+
+test("IPipelineContext の型引数は UniKvsPipelineContextTypes の宣言マージで決まる", () => {
+  // 実行と検証
+  function getMerged(ctx: IPipelineContext): [number, unknown] {
+    return [ctx.get("test:count"), ctx.get("other")];
+  }
+
+  expectTypeOf(getMerged).returns.toEqualTypeOf<[number, unknown]>();
+});
+
+test("IPipelineContext は get/set/setReadonly を持つ", () => {
+  // 実行と検証
+  expectTypeOf<IPipelineContext>().toHaveProperty("get");
+  expectTypeOf<IPipelineContext>().toHaveProperty("set");
+  expectTypeOf<IPipelineContext>().toHaveProperty("setReadonly");
+});
+
+test("pipeline-context の key と action と signal は絞られる", () => {
+  // 実行と検証
+  expectTypeOf<IMapKeyContext["key"]>().toEqualTypeOf<string>();
+  expectTypeOf<IKeyedActionContext["key"]>().toEqualTypeOf<string>();
+  expectTypeOf<IActionContext["signal"]>().toEqualTypeOf<AbortSignal>();
+  expectTypeOf<IActionContext["action"]>().toEqualTypeOf<
+    "open" | "close" | "set" | "get" | "repair" | "stream" | "has" | "delete" | "clear"
+  >();
+  expectTypeOf<ILifecycleContext["action"]>().toEqualTypeOf<"open" | "close">();
+  expectTypeOf<IOpenContext["action"]>().toEqualTypeOf<"open">();
+  expectTypeOf<ICloseContext["action"]>().toEqualTypeOf<"close">();
+  expectTypeOf<IKeyedActionContext["action"]>().toEqualTypeOf<
+    "set" | "repair" | "get" | "stream" | "has" | "delete" | "clear"
+  >();
+  expectTypeOf<ISetContext["action"]>().toEqualTypeOf<"set">();
+  expectTypeOf<IRepairContext["action"]>().toEqualTypeOf<"repair">();
+  expectTypeOf<IGetContext["action"]>().toEqualTypeOf<"get">();
+  expectTypeOf<IStreamContext["action"]>().toEqualTypeOf<"stream">();
+  expectTypeOf<IHasContext["action"]>().toEqualTypeOf<"has">();
+  expectTypeOf<IDeleteContext["action"]>().toEqualTypeOf<"delete">();
+  expectTypeOf<IClearContext["action"]>().toEqualTypeOf<"clear">();
+});
+
+test("IRepairContext は targets を持つ", () => {
+  // 実行と検証
+  expectTypeOf<IRepairContext["targets"]>().toEqualTypeOf<readonly string[]>();
+});
+
+test("IEncodeContext と IDecodeContext は source と destination を持つ", () => {
+  // 実行と検証
+  expectTypeOf<IEncodeContext<string, number>["source"]>().toEqualTypeOf<string>();
+  expectTypeOf<IEncodeContext<string, number>["destination"]>().toEqualTypeOf<number>();
+  expectTypeOf<IDecodeContext<string, number>["source"]>().toEqualTypeOf<string>();
+  expectTypeOf<IDecodeContext<string, number>["destination"]>().toEqualTypeOf<number>();
+  expectTypeOf<IEncodeStreamContext<ArrayBuffer, number>["source"]>().toEqualTypeOf<
+    IReadableStream<ArrayBuffer>
+  >();
+  expectTypeOf<IDecodeStreamContext<ArrayBuffer, number>["destination"]>().toEqualTypeOf<
+    IReadableStream<number>
   >();
 });
 
 test("IWritableStream と IReadableStream は標準のストリームを継承する", () => {
   // 実行と検証
-  expectTypeOf<IWritableStream<Uint8Array<ArrayBuffer>>>().toExtend<
-    WritableStream<Uint8Array<ArrayBuffer>>
-  >();
-  expectTypeOf<IReadableStream<Uint8Array<ArrayBuffer>>>().toExtend<
-    ReadableStream<Uint8Array<ArrayBuffer>>
+  expectTypeOf<IWritableStream<Uint8Array<ArrayBuffer>>>().toEqualTypeOf<
+    IWritableStream<Uint8Array<ArrayBuffer>>
   >();
 });
 
-test("ITransformer の 8 つの型引数は順番どおりに反映される", () => {
+test("ITransformStream は readable と writable を持つ", () => {
   // 実行と検証
-  expectTypeOf<FullTransformer["encode"]>()
-    .parameter(0)
-    .toEqualTypeOf<ITransformer.EncodeArgs<string>>();
-  expectTypeOf<FullTransformer["encode"]>().returns.toEqualTypeOf<MaybePromise<boolean>>();
-
-  expectTypeOf<FullTransformer["decode"]>()
-    .parameter(0)
-    .toEqualTypeOf<ITransformer.DecodeArgs<number>>();
-  expectTypeOf<FullTransformer["decode"]>().returns.toEqualTypeOf<MaybePromise<Date>>();
-
-  expectTypeOf<NonNullable<FullTransformer["getEncodable"]>>().returns.toEqualTypeOf<
-    MaybePromise<IEncodable<Uint8Array<ArrayBuffer>, ArrayBuffer>>
+  expectTypeOf<ITransformStream<ArrayBuffer, number>["readable"]>().toEqualTypeOf<
+    IReadableStream<number>
   >();
-  expectTypeOf<NonNullable<FullTransformer["getDecodable"]>>().returns.toEqualTypeOf<
-    MaybePromise<IDecodable<string, number>>
+  expectTypeOf<ITransformStream<ArrayBuffer, number>["writable"]>().toEqualTypeOf<
+    IWritableStream<ArrayBuffer>
   >();
-});
-
-test("ITransformer の encode と decode は必須である", () => {
-  // 実行と検証
-  expectTypeOf<Omit<FullTransformer, "encode">>().not.toExtend<FullTransformer>();
-  expectTypeOf<Omit<FullTransformer, "decode">>().not.toExtend<FullTransformer>();
-});
-
-test("ITransformer のストリーム変換メソッドは Partial で省略可能である", () => {
-  // 実行と検証
-  expectTypeOf<FullTransformer["getEncodable"]>().toEqualTypeOf<
-    | ((
-        args: ITransformer.GetEncodableArgs,
-      ) => MaybePromise<IEncodable<Uint8Array<ArrayBuffer>, ArrayBuffer>>)
-    | undefined
-  >();
-  expectTypeOf<FullTransformer["getDecodable"]>().toEqualTypeOf<
-    ((args: ITransformer.GetDecodableArgs) => MaybePromise<IDecodable<string, number>>) | undefined
-  >();
-});
-
-test("ITransformer の単発変換引数は vars と data と signal を持つ", () => {
-  // 実行と検証
-  expectTypeOf<ITransformer.EncodeArgs<{ readonly id: number }>>().toEqualTypeOf<{
-    vars: Variables;
-    data: { readonly id: number };
-    signal: AbortSignal;
-  }>();
-  expectTypeOf<ITransformer.DecodeArgs<{ readonly id: number }>>().toEqualTypeOf<
-    ITransformer.EncodeArgs<{ readonly id: number }>
-  >();
-});
-
-test("ITransformer のストリーム変換引数は vars と signal を持つ", () => {
-  // 実行と検証
-  expectTypeOf<ITransformer.GetEncodableArgs>().toEqualTypeOf<ITransformer.GetDecodableArgs>();
-  expectTypeOf<ITransformer.GetEncodableArgs>().toEqualTypeOf<{
-    vars: Variables;
-    signal: AbortSignal;
-  }>();
-});
-
-test("ITransformer のライフサイクル引数は vars と signal を持つ", () => {
-  // 実行と検証
-  expectTypeOf<ITransformer.OpenArgs>().toEqualTypeOf<ITransformer.CloseArgs>();
-  expectTypeOf<ITransformer.OpenArgs>().toEqualTypeOf<{
-    vars: Variables;
-    signal: AbortSignal;
-  }>();
-});
-
-test("IEncodable と IDecodable は TransformStream を継承する", () => {
-  // 実行と検証
-  expectTypeOf<IEncodable<string, number>>().toExtend<TransformStream<string, number>>();
-  expectTypeOf<IDecodable<string, number>>().toExtend<TransformStream<string, number>>();
 });
 
 test("ErrorMeta は文字列キーと unknown 値の読み取り専用オブジェクトである", () => {
@@ -394,12 +360,15 @@ test("InvalidUsageErrorBase は ErrorBase と同じコンストラクター形�
  * 型エラーの検証専用で、実行時には呼び出されない関数です。
  * 不正な使用がコンパイルエラーになることを確認するために使用します。
  */
-function expectTypeErrors(): void {
-  // @ts-expect-error TMeta が undefined でないためメッセージのみの形式は使えない
-  new ErrorBase<{ readonly code: number }>("message");
+function expectTypeErrors(typedCtx: IPipelineContext<{ readonly count: number }>): void {
+  // @ts-expect-error count は number のため文字列は渡せない
+  typedCtx.set("count", "not a number");
 
-  // @ts-expect-error meta の型が合わない
-  new ErrorBase<{ readonly code: number }>({ code: "not a number" }, "message");
+  // @ts-expect-error count は number のため文字列は渡せない
+  typedCtx.setReadonly("count", "not a number");
+
+  // @ts-expect-error test:count は number のため文字列は渡せない
+  (null as unknown as IPipelineContext).set("test:count", "not a number");
 
   // @ts-expect-error I18nErrorBase を継承していないクラスへは登録できない
   setErrorMessage(globalThis.Error, "message", "ja");
@@ -410,24 +379,8 @@ function expectTypeErrors(): void {
   // @ts-expect-error read を省略した型は IStorage を満たさない
   const incompleteStorage: IStorage = {} as Omit<IStorage, "read">;
 
-  // @ts-expect-error encode を省略した型は ITransformer を満たさない
-  const incompleteTransformer: ITransformer = {} as Omit<ITransformer, "encode">;
-
-  // 準備
-  const typedVars: Variables<{ readonly count: number }> = new Variables();
-
-  // @ts-expect-error count は number のため文字列は渡せない
-  typedVars.set("count", "not a number");
-
-  // @ts-expect-error count は number のため文字列は渡せない
-  typedVars.setReadonly("count", "not a number");
-
-  // @ts-expect-error test:count は number のため文字列は渡せない
-  new Variables().set("test:count", "not a number");
-
   void incompleteStorage;
-  void incompleteTransformer;
-  void typedVars;
+  void typedCtx;
 }
 
 test("不正な使用はコンパイルエラーになる", () => {

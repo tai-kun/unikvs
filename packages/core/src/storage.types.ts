@@ -1,307 +1,87 @@
 import type { MaybePromise } from "maypromise";
 
-import type { ErrorBase } from "./errors.js";
-import type { IReadableStream, IWritableStream } from "./interface.types.js";
-import type { default as Variables } from "./variables.js";
+import type {
+  IGetContext,
+  IHasContext,
+  ISetContext,
+  IOpenContext,
+  IClearContext,
+  ICloseContext,
+  IDeleteContext,
+  IRepairContext,
+  IStreamContext,
+} from "./pipeline-context.types.js";
+import type { IReadableStream, IWritableStream } from "./stream.types.js";
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
- */
-export type { IReadableStream, IWritableStream };
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage)
- */
 export namespace IStorage {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type Key = string;
+  export type OpenContext = IOpenContext;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-   */
-  export type GetWritableArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    vars: Variables;
+  export type CloseContext = ICloseContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    signal: AbortSignal;
+  export type WriteContext = ISetContext | IRepairContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    key: Key;
-  };
+  export type GetWritableContext = ISetContext | IRepairContext;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-   */
-  export type GetReadableArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    vars: Variables;
+  export type ReadContext = IGetContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    signal: AbortSignal;
+  export type GetReadableContext = IStreamContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-     */
-    key: Key;
-  };
+  export type ExistsContext = IHasContext;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  export type OpenArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    vars: Variables;
+  export type DeleteContext = IDeleteContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    signal: AbortSignal;
-  };
+  export type ClearContext = IClearContext;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  export type CloseArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    vars: Variables;
+  export type OtherWriteErrorHandlerContext = WriteContext | GetWritableContext;
 
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    signal: AbortSignal;
-  };
+  export interface IOtherWriteError {
+    readonly plugin: "storage";
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  export type OnOtherWriteErrorArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    signal: AbortSignal;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    key: Key;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-     */
-    error: ErrorBase<{
+    readonly errors: readonly {
       readonly plugin: "storage";
-      readonly action: "write";
-      readonly errors: readonly {
-        readonly plugin: "storage";
-        readonly reason: unknown;
-      }[];
-    }>;
-  };
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type WriteArgs<TData = any> = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    key: Key;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    data: TData;
-  };
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type ReadArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    key: Key;
-  };
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type ExistsArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    key: Key;
-  };
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type DeleteArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
-  };
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  export type ClearArgs = {
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    vars: Variables;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    signal: AbortSignal;
-
-    /**
-     * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-     */
-    key: Key;
-  };
+      readonly reason: unknown;
+    }[];
+  }
 }
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
- */
-export interface IWritableStreamStorage<TData = any> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-   */
-  getWritable(args: IStorage.GetWritableArgs): MaybePromise<IWritableStream<TData>>;
+export interface IWritableStreamStorage<TChunk = any> {
+  getWritable(c: IStorage.GetWritableContext): MaybePromise<IWritableStream<TChunk>>;
 }
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
- */
-export interface IReadableStreamStorage<TData = any> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-streams)
-   */
-  getReadable(args: IStorage.GetReadableArgs): MaybePromise<IReadableStream<TData>>;
+export interface IReadableStreamStorage<TChunk = any> {
+  getReadable(c: IStorage.GetReadableContext): MaybePromise<IReadableStream<TChunk>>;
 }
 
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage)
- */
 export interface IStorage<
-  TWriteDataInput = any,
-  TReadDataOutput = TWriteDataInput,
-  TWriteChunkInput = TWriteDataInput extends ArrayBufferLike | ArrayBufferView
-    ? TWriteDataInput
-    : any,
-  TReadChunkOutput = TWriteChunkInput,
+  TWriteData = any,
+  TReadData = TWriteData,
+  TWriteChunk = any,
+  TReadChunk = TWriteChunk,
 >
   extends
-    Partial<IWritableStreamStorage<TWriteChunkInput>>,
-    Partial<IReadableStreamStorage<TReadChunkOutput>> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage)
-   */
+    Partial<IWritableStreamStorage<TWriteChunk>>,
+    Partial<IReadableStreamStorage<TReadChunk>> {
   readonly name: string;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage)
-   */
   readonly isOpen: boolean;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  open?(args: IStorage.OpenArgs): MaybePromise<void>;
+  open?(c: IStorage.OpenContext): MaybePromise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  close?(args: IStorage.CloseArgs): MaybePromise<void>;
+  close?(c: IStorage.CloseContext): MaybePromise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  write(args: IStorage.WriteArgs<TWriteDataInput>): MaybePromise<void>;
+  write(c: IStorage.WriteContext, data: TWriteData): MaybePromise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  read(args: IStorage.ReadArgs): MaybePromise<TReadDataOutput>;
+  read(c: IStorage.ReadContext): MaybePromise<TReadData>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  exists(args: IStorage.ExistsArgs): MaybePromise<boolean>;
+  exists(c: IStorage.ExistsContext): MaybePromise<boolean>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  delete(args: IStorage.DeleteArgs): MaybePromise<void>;
+  delete(c: IStorage.DeleteContext): MaybePromise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-crud)
-   */
-  clear(args: IStorage.ClearArgs): MaybePromise<void>;
+  clear(c: IStorage.ClearContext): MaybePromise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#storage-lifecycle)
-   */
-  onOtherWriteError?(args: IStorage.OnOtherWriteErrorArgs): MaybePromise<void>;
+  onOtherWriteError?(
+    c: IStorage.OtherWriteErrorHandlerContext,
+    errors: readonly IStorage.IOtherWriteError[],
+  ): MaybePromise<void>;
 }
