@@ -1,14 +1,18 @@
 import {
+  type IMiddleware,
   type IStorage,
-  type VariablesInit,
-  type VariablesEntry,
   type IReadableStream,
-  Variables,
   RepairNotAllowedError,
 } from "@unikvs/core";
 import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
+import PipelineContext, {
+  type VarsStore,
+  type VariablesEntry,
+  type VariablesInit,
+  createVarsStore,
+} from "./_context.js";
 import { logger, repairLogger } from "./_logger.js";
 import {
   type PipelineLeaf,
@@ -18,7 +22,6 @@ import {
 } from "./_pipeline-graph.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
-import type UniKvsTransformer from "./_transformer.js";
 import type { ValueOf } from "./_types.js";
 import * as v from "./_valibot.js";
 import type {
@@ -52,7 +55,7 @@ import type { Value, PlainValue, StreamValue } from "./value-schemas.js";
 
 type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
   keyof TKeyValueMapping,
-  IStorage.Key
+  string
 >;
 
 /**
@@ -147,6 +150,26 @@ function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
   }
 
   return v.parseInput(info.schema, value);
+}
+
+/**
+ * 実行時変数の初期値を正規化し、エントリー列で返します。
+ *
+ * レコードまたは反復子の両方を受け付けます。
+ *
+ * @param init 正規化する初期値です。
+ * @returns エントリー列を返します。
+ */
+function normalizeVarsInit(init: VariablesInit | undefined): (readonly [string, unknown])[] {
+  if (init == null) {
+    return [];
+  }
+
+  if (Symbol.iterator in Object(init)) {
+    return [...(init as Iterable<readonly [string, unknown]>)];
+  }
+
+  return Object.entries(init as { readonly [key: string]: unknown });
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -334,7 +357,7 @@ export type SetOptions<
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type GetOptions<TKey = IStorage.Key> = {
+export type GetOptions<TKey = string> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
@@ -364,7 +387,7 @@ export type GetOptions<TKey = IStorage.Key> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
  */
-export type StreamOptions<TKey = IStorage.Key> = {
+export type StreamOptions<TKey = string> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
    */
@@ -394,7 +417,7 @@ export type StreamOptions<TKey = IStorage.Key> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type HasOptions<TKey = IStorage.Key> = {
+export type HasOptions<TKey = string> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
@@ -414,7 +437,7 @@ export type HasOptions<TKey = IStorage.Key> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type DeleteOptions<TKey = IStorage.Key> = {
+export type DeleteOptions<TKey = string> = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
    */
@@ -555,8 +578,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
   /**
    * 基本となる実行変数情報です。
+   *
+   * コンストラクターで受け取った初期値をエントリー列で保持します。操作ごとに複写して使用します。
    */
-  readonly #vars: Variables;
+  readonly #baseVars: readonly (readonly [string, unknown])[];
 
   /**
    * コンパイル済みのパイプライン・グラフです。
@@ -578,9 +603,38 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   ) {
     this.#con = null;
     this.#acSet = new Set();
-    this.#vars = new Variables(vars);
+    this.#baseVars = Object.freeze(normalizeVarsInit(vars));
     this.#pipeline = pipeline;
     this.#valueSchemaResolver = valueSchemaResolver;
+  }
+
+  /**
+   * 基本変数と操作固有変数を結合した実行時変数マップを作成します。
+   *
+   * @param varsOption 操作固有の変数です。
+   * @returns 結合した変数マップを返します。
+   */
+  #createOperationVars(varsOption?: VariablesInit): Map<string, unknown> {
+    const map = new Map<string, unknown>(this.#baseVars);
+    if (varsOption != null) {
+      for (const [k, v] of normalizeVarsInit(varsOption)) {
+        map.set(k, v);
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * 操作内で共有される変数ストアを作成します。
+   *
+   * 同一操作内の全コンテキスト (`use`/`encode`/`decode`/ストレージ) で共有され、下流の `set` が上流の `await next()` 後の `get` に見えます。
+   *
+   * @param varsOption 操作固有の変数です。
+   * @returns 共有ストアを返します。
+   */
+  #createOperationStore(varsOption?: VariablesInit): VarsStore {
+    return createVarsStore([...this.#baseVars, ...normalizeVarsInit(varsOption)]);
   }
 
   /**
@@ -644,8 +698,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const ac = new AbortController();
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "open");
+    const operationVars = this.#createOperationVars(varsOption);
 
     signal.throwIfAborted();
 
@@ -663,22 +716,31 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       const openFns: [
         () => Promise<void>,
-        plugin: "storage" | "transformer",
+        plugin: "storage" | "middleware",
         name: string,
         index: number,
       ][] = [];
 
       // open/close 用の vars はプラグインごとに複製し、並列実行中の変更が他に見えないようにします。
-      // lifecycle は宛先固有ではないため unikvs:storageNames は付与しません。
       for (const [index, leaf] of this.#pipeline.leaves.entries()) {
         openFns.push([
           async () => {
-            const pluginVars = vars.clone();
-            await leaf.storage.open(pluginVars, signal);
+            const pluginVars = new Map(operationVars);
+            const c = new PipelineContext({
+              signal,
+              action: "open",
+              values: pluginVars.entries(),
+            });
+            await leaf.storage.open(c as IStorage.OpenContext);
 
             dispose.push(async () => {
               try {
-                await leaf.storage.close(pluginVars, signal);
+                const cc = new PipelineContext({
+                  signal,
+                  action: "close",
+                  values: pluginVars.entries(),
+                });
+                await leaf.storage.close(cc as IStorage.CloseContext);
               } catch (ex) {
                 logger.error`Failed to close storage: ${ex}`;
               }
@@ -690,31 +752,41 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         ]);
       }
 
-      // 各トランスフォーマーのオープン処理をリストに追加します。
+      // 各ミドルウェアのオープン処理をリストに追加します。
       // ストレージと同様にプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
-      for (const [index, transformer] of this.#pipeline.transformers.entries()) {
+      for (const [index, middleware] of this.#pipeline.middlewares.entries()) {
         openFns.push([
           async () => {
-            const pluginVars = vars.clone();
-            await transformer.open(pluginVars, signal);
+            const pluginVars = new Map(operationVars);
+            const c = new PipelineContext({
+              signal,
+              action: "open",
+              values: pluginVars.entries(),
+            });
+            await middleware.open(c as IMiddleware.OpenContext);
 
             dispose.push(async () => {
               try {
-                await transformer.close(pluginVars, signal);
+                const cc = new PipelineContext({
+                  signal,
+                  action: "close",
+                  values: pluginVars.entries(),
+                });
+                await middleware.close(cc as IMiddleware.CloseContext);
               } catch (ex) {
-                logger.error`Failed to close transformer: ${ex}`;
+                logger.error`Failed to close middleware: ${ex}`;
               }
             });
           },
-          "transformer",
-          transformer.name,
+          "middleware",
+          middleware.name,
           index,
         ]);
       }
 
       // すべての処理を並列に実行し、エラーが発生した場合は集約します。
       const errors: {
-        plugin: "storage" | "transformer";
+        plugin: "storage" | "middleware";
         name: string;
         index: number;
         reason: unknown;
@@ -761,7 +833,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  async #close(vars: Variables, signal: AbortSignal, con: Connection): Promise<void> {
+  async #close(
+    operationVars: Map<string, unknown>,
+    signal: AbortSignal,
+    con: Connection,
+  ): Promise<void> {
     const lock = await asyncmux(this, signal);
     try {
       // ロック待機中に接続状態が変更されていないか再確認します。
@@ -774,7 +850,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         const closeFns: [
           () => Promise<void>,
-          plugin: "storage" | "transformer",
+          plugin: "storage" | "middleware",
           name: string,
           index: number,
         ][] = [];
@@ -784,7 +860,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const [index, leaf] of this.#pipeline.leaves.entries()) {
           closeFns.push([
             async () => {
-              await leaf.storage.close(vars.clone(), signal);
+              const c = new PipelineContext({
+                signal,
+                action: "close",
+              values: new Map(operationVars).entries(),
+              });
+              await leaf.storage.close(c as IStorage.CloseContext);
             },
             "storage",
             leaf.name,
@@ -792,13 +873,18 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           ]);
         }
 
-        // トランスフォーマーのクローズ処理を登録します。
-        for (const [index, plugin] of this.#pipeline.transformers.entries()) {
+        // ミドルウェアのクローズ処理を登録します。
+        for (const [index, plugin] of this.#pipeline.middlewares.entries()) {
           closeFns.push([
             async () => {
-              await plugin.close(vars.clone(), signal);
+              const c = new PipelineContext({
+                signal,
+                action: "close",
+              values: new Map(operationVars).entries(),
+              });
+              await plugin.close(c as IMiddleware.CloseContext);
             },
-            "transformer",
+            "middleware",
             plugin.name,
             index,
           ]);
@@ -806,7 +892,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
         const errors: {
-          plugin: "storage" | "transformer";
+          plugin: "storage" | "middleware";
           name: string;
           index: number;
           reason: unknown;
@@ -843,8 +929,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const [options = {}] = v.parseInput(CloseArgsSchema, args);
       const { signal = AbortSignal.timeout(10e3), vars: varsOption } = options;
 
-      const vars = this.#vars.clone(varsOption);
-      vars.setReadonly("unikvs:action", "close");
+      const operationVars = this.#createOperationVars(varsOption);
 
       if (this.#con === null) {
         const acArr = [...this.#acSet];
@@ -868,7 +953,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
       }
 
-      return this.#close(vars, signal, con).catch(async (ex) => {
+      return this.#close(operationVars, signal, con).catch(async (ex) => {
         // #close が失敗した場合、コネクションの AbortController はすでに abort 済みで、以降の操作がすべて即座に失敗する不整合な状態になります。
         // そこで接続を破棄して isOpen=false の一貫した状態に戻し、プラグインのクローズ処理はできる範囲で実行します。
         if (this.#con === con) {
@@ -878,10 +963,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           await Promise.all(
             [
               ...this.#pipeline.leaves.map((leaf) => leaf.storage),
-              ...this.#pipeline.transformers,
+              ...this.#pipeline.middlewares,
             ].map(async (plugin) => {
               try {
-                await plugin.close(vars.clone(), disposeSignal);
+                const c = new PipelineContext({
+                  signal: disposeSignal,
+                  action: "close",
+              values: new Map(operationVars).entries(),
+                });
+                await plugin.close(c as IStorage.CloseContext & IMiddleware.CloseContext);
               } catch (ex) {
                 logger.error`Failed to close plugin after close failure: ${ex}`;
               }
@@ -920,9 +1010,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   async #finishWrites(
     targets: readonly {
       readonly leaf: PipelineLeaf;
-      readonly vars: Variables;
       readonly key: string;
     }[],
+    store: VarsStore,
     failed: ReadonlySet<PipelineLeaf>,
     errors: PluginErrorRecord[],
     signal: AbortSignal,
@@ -945,7 +1035,16 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         try {
-          await target.leaf.storage.onOtherWriteError(target.vars, signal, target.key, error);
+          const c = new PipelineContext({
+            signal,
+            action: "set",
+            key: target.key,
+            store,
+          });
+          await target.leaf.storage.onOtherWriteError(
+            c as IStorage.OtherWriteErrorHandlerContext,
+            error,
+          );
         } catch (ex) {
           notifyErrors.push(ex);
         }
@@ -959,39 +1058,50 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
-   * トランスフォーマーフックを並列に実行し、失敗を取りまとめて投げます。
+   * ミドルウェアの `use` をオニオン実行し、失敗時は集約して投げます。
+   *
+   * 同一コンテキストオブジェクトを全ミドルウェアで共有し、`next` で下流をネスト実行するため、下流の `set` が上流の `await next()` 後の `get` に見えます。
+   * いずれかのミドルウェアが投げたときは即時に確定し、後段は実行しません (fail-fast)。
+   * 失敗は集約エラー (単一件) として投げます。
    *
    * @param action 集約エラーに付与する操作名です。
-   * @param signal 中断シグナルです。
-   * @param run トランスフォーマーごとに実行するフックです。
+   * @param useContext 共有の `use` コンテキストです。
    */
-  async #runTransformerHooks(
-    action: "read" | "delete" | "clear",
-    signal: AbortSignal,
-    run: (transformer: UniKvsTransformer) => Promise<void>,
+  async #runMiddlewareUse(
+    action: "read" | "write" | "delete" | "clear",
+    useContext: PipelineContext,
   ): Promise<void> {
-    signal.throwIfAborted();
+    useContext.signal.throwIfAborted();
 
-    const errors: PluginErrorRecord[] = [];
-    await Promise.all(
-      this.#pipeline.transformers.map(async (transformer, index) => {
-        try {
-          await run(transformer);
-        } catch (ex) {
-          errors.push({ name: transformer.name, index, reason: ex });
+    const middlewares = this.#pipeline.middlewares;
+    const dispatch = async (index: number): Promise<void> => {
+      if (index >= middlewares.length) {
+        return;
+      }
+
+      const middleware = middlewares[index]!;
+      const next: IMiddleware.INext = async () => {
+        await dispatch(index + 1);
+      };
+
+      try {
+        await middleware.use(useContext as IMiddleware.UseContext, next);
+      } catch (ex) {
+        const signal = useContext.signal;
+        // 中断による失敗はそのまま投げます。
+        if (signal.aborted && ex === signal.reason) {
+          throw ex;
         }
-      }),
-    );
-    if (errors.length === 0) {
-      return;
-    }
 
-    // 中断以外の失敗が混ざっていないときは、abort 理由が集約エラーに埋もれないようそのまま投げます。
-    if (signal.aborted && errors.every((error) => error.reason === signal.reason)) {
-      throw signal.reason;
-    }
+        throw new PluginOperationAggregateError({
+          plugin: "middleware",
+          action,
+          errors: [{ name: middleware.name, index, reason: ex }],
+        });
+      }
+    };
 
-    throw new PluginOperationAggregateError({ plugin: "transformer", action, errors });
+    await dispatch(0);
   }
 
   /**
@@ -1000,17 +1110,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param io 多重化インスタンスです。
    * @param signal 中断シグナルです。
    * @param key 書き込みキーです。
-   * @param rootVars 根の vars です。
-   * @param value 書き込む値です。
+   * @param store 操作内で共有される変数ストアです。
+   * @param value 書き込む値です.
    */
   async #setPlain(
     io: Asyncmux,
     signal: AbortSignal,
     key: string,
-    rootVars: Variables,
+    store: VarsStore,
     value: unknown,
   ): Promise<void> {
-    const targets = await this.#pipeline.encode(rootVars, key, signal, value);
+    const targets = await this.#pipeline.encode({ signal, key, store }, value);
     const lock = await io.lock({ key, signal });
     try {
       const errors: PluginErrorRecord[] = [];
@@ -1018,7 +1128,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       await Promise.all(
         targets.map(async (target) => {
           try {
-            await target.leaf.storage.write(target.vars, signal, target.key, target.data);
+            const c = new PipelineContext({
+              signal,
+              action: "set",
+              key: target.key,
+              store,
+            });
+            await target.leaf.storage.write(c as IStorage.WriteContext, target.data);
           } catch (ex) {
             errors.push({ name: target.leaf.name, index: target.leaf.index, reason: ex });
             failed.add(target.leaf);
@@ -1026,7 +1142,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }),
       );
 
-      await this.#finishWrites(targets, failed, errors, signal);
+      await this.#finishWrites(targets, store, failed, errors, signal);
     } finally {
       lock.release();
     }
@@ -1038,20 +1154,24 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param io 多重化インスタンスです。
    * @param signal 中断シグナルです。
    * @param key 書き込みキーです。
-   * @param rootVars 根の vars です。
+   * @param store 操作内で共有される変数ストアです。
    * @param value 書き込むストリームです。
    */
   async #setStream(
     io: Asyncmux,
     signal: AbortSignal,
     key: string,
-    rootVars: Variables,
+    store: VarsStore,
     value: IReadableStream,
   ): Promise<void> {
     const streams = new Set<IReadableStream>([value]);
     let tree;
     try {
-      tree = await this.#pipeline.buildEncodeTree(value, rootVars, key, signal, streams);
+      tree = await this.#pipeline.buildEncodeTree(
+        { signal, key, store },
+        value,
+        streams,
+      );
     } catch (ex) {
       await cancelStreams(streams, ex);
       throw ex;
@@ -1070,7 +1190,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       await Promise.all(
         tree.targets.map(async (target) => {
           try {
-            const w = await target.leaf.storage.getWritable(target.vars, signal, target.key);
+            const c = new PipelineContext({
+              signal,
+              action: "set",
+              key: target.key,
+              store,
+            });
+            const w = await target.leaf.storage.getWritable(c as IStorage.GetWritableContext);
             await target.stream.pipeTo(w, { signal });
           } catch (ex) {
             // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
@@ -1086,7 +1212,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }),
       );
 
-      await this.#finishWrites(tree.targets, failed, errors, signal);
+      await this.#finishWrites(tree.targets, store, failed, errors, signal);
     } finally {
       lock.release();
     }
@@ -1123,9 +1249,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "set");
-    vars.setReadonly("unikvs:key", key);
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1134,12 +1258,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
-      const rootVars = this.#pipeline.prepareRootVars(vars);
+      // 書き込み前の `use` による検証を行います。変異は後続のエンコード・書き込みに引き継がれます。
+      const useContext = new PipelineContext({
+        signal,
+        action: "set",
+        key,
+        store,
+      });
+      await this.#runMiddlewareUse("write", useContext);
+      // `use` による変異を操作変数に反映します。
+// ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
       if (isReadableStream(value)) {
-        await this.#setStream(io, signal, key, rootVars, value);
+        await this.#setStream(io, signal, key, store, value);
       } else {
-        await this.#setPlain(io, signal, key, rootVars, value);
+        await this.#setPlain(io, signal, key, store, value);
       }
     } finally {
       lock.release();
@@ -1152,7 +1284,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param data 読み取ったデータです。
    * @param hit 読み取り元の葉です。
    * @param missing 読み取りに失敗または不在だった葉です。
-   * @param rootVars 根の vars です。
+   * @param store 操作内で共有される変数ストアです。
    * @param key キーです。
    * @param signal 中断シグナルです。
    * @param throwOnRepairDenied 書き戻し拒否をエラーとして投げるかどうかです。
@@ -1162,18 +1294,28 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     data: unknown,
     hit: ResolvedLeaf,
     missing: readonly PipelineLeaf[],
-    rootVars: Variables,
+    store: VarsStore,
     key: string,
     signal: AbortSignal,
     throwOnRepairDenied: boolean,
   ): Promise<unknown> {
-    // unikvs:repair は書き戻しによる書き込みだけを示す目印です。
-    const repairVars: Variables = rootVars.clone();
-    repairVars.setReadonly("unikvs:repair", true);
+    const raw = await this.#pipeline.decode(hit.leaf, { signal, key, store }, data);
 
-    const raw = await this.#pipeline.decode(hit.leaf, hit.vars, signal, data);
-
-    await this.#pipeline.repair(repairVars, key, signal, missing, throwOnRepairDenied, raw);
+    await this.#pipeline.repair(
+      { signal, key, store },
+      missing,
+      throwOnRepairDenied,
+      raw,
+      async (leaf, writeKey, input) => {
+        const c = new PipelineContext({
+          signal,
+          action: "set",
+          key: writeKey,
+          store,
+        });
+        await leaf.storage.write(c as IStorage.WriteContext, input);
+      },
+    );
 
     signal.throwIfAborted();
 
@@ -1214,9 +1356,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "get");
-    vars.setReadonly("unikvs:key", key);
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1225,9 +1365,19 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const rootVars = this.#pipeline.prepareRootVars(vars);
-
-      let data: unknown = undefined;
+      // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
+      const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
+      const useContext = new PipelineContext({
+        signal,
+        action: "get",
+        key,
+        repair: repair
+          ? { enabled: true, targets: leafNames as [string, ...string[]] }
+          : { enabled: false, targets: [] },
+        store,
+      });
+      await this.#runMiddlewareUse("read", useContext);
+let data: unknown = undefined;
       let hit: ResolvedLeaf | null = null;
       const missing: PipelineLeaf[] = [];
       const errors: PluginErrorRecord[] = [];
@@ -1236,16 +1386,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
         // 登録順が読み取りの優先順です。先頭で見つかればそこで終え、失敗したときは次の宛先を試します。
-        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        const resolver = this.#pipeline.createResolver({ signal, key, store });
         for (const leaf of this.#pipeline) {
-          const resolved = await resolver.resolve(leaf);
+          const resolved = resolver.resolve(leaf);
+          const existsContext = new PipelineContext({
+            signal,
+            action: "has",
+            key: resolved.key,
+            store,
+          });
+          const readRepair = repair
+            ? {
+                enabled: true as const,
+                targets: leafNames as [string, ...string[]],
+              }
+            : { enabled: false as const, targets: [] as const };
+          const readContext = new PipelineContext({
+            signal,
+            action: "get",
+            key: resolved.key,
+            repair: readRepair,
+            store,
+          });
           try {
-            if (!(await leaf.storage.exists(resolved.vars, signal, resolved.key))) {
+            if (!(await leaf.storage.exists(existsContext as IStorage.ExistsContext))) {
               missing.push(leaf);
               continue;
             }
 
-            data = await leaf.storage.read(resolved.vars, signal, resolved.key);
+            data = await leaf.storage.read(readContext as IStorage.ReadContext);
             hit = resolved;
             break;
           } catch (ex) {
@@ -1268,7 +1437,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             data,
             hit,
             missing,
-            rootVars,
+            store,
             key,
             signal,
             throwOnRepairDenied,
@@ -1280,7 +1449,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       if (!repair) {
         // 見つかったストレージ専用の前段パイプラインを逆順に適用して、データをデコードします。
-        data = await this.#pipeline.decode(hit.leaf, hit.vars, signal, data);
+        data = await this.#pipeline.decode(
+          hit.leaf,
+          { signal, key, store },
+          data,
+        );
       }
 
       // デコード後のデータを検証します。
@@ -1328,9 +1501,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "stream");
-    vars.setReadonly("unikvs:key", key);
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1339,9 +1510,19 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const rootVars = this.#pipeline.prepareRootVars(vars);
-
-      // NONE は getReadable の呼び出し前を表す番兵値です。
+      // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
+      const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
+      const useContext = new PipelineContext({
+        signal,
+        action: "stream",
+        key,
+        repair: repair
+          ? { enabled: true, targets: leafNames as [string, ...string[]] }
+          : { enabled: false, targets: [] },
+        store,
+      });
+      await this.#runMiddlewareUse("read", useContext);
+// NONE は getReadable の呼び出し前を表す番兵値です。
       const NONE: any = {};
       let r: IReadableStream = NONE;
       let hit: ResolvedLeaf | null = null;
@@ -1356,16 +1537,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await (repair ? io.lock({ key, signal }) : io.rLock({ key, signal }));
       try {
         // 登録順が読み取りの優先順です。先頭で見つかればそこで終え、失敗したときは次の宛先を試します。
-        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        const resolver = this.#pipeline.createResolver({ signal, key, store });
         for (const leaf of this.#pipeline) {
-          const resolved = await resolver.resolve(leaf);
+          const resolved = resolver.resolve(leaf);
+          const existsContext = new PipelineContext({
+            signal,
+            action: "has",
+            key: resolved.key,
+            store,
+          });
+          const readableRepair = repair
+            ? {
+                enabled: true as const,
+                targets: leafNames as [string, ...string[]],
+              }
+            : { enabled: false as const, targets: [] as const };
+          const readableContext = new PipelineContext({
+            signal,
+            action: "stream",
+            key: resolved.key,
+            repair: readableRepair,
+            store,
+          });
           try {
-            if (!(await leaf.storage.exists(resolved.vars, signal, resolved.key))) {
+            if (!(await leaf.storage.exists(existsContext as IStorage.ExistsContext))) {
               missing.push(leaf);
               continue;
             }
 
-            r = await leaf.storage.getReadable(resolved.vars, signal, resolved.key);
+            r = await leaf.storage.getReadable(readableContext as IStorage.GetReadableContext);
             hit = resolved;
             break;
           } catch (ex) {
@@ -1386,26 +1586,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         repairAc = repair ? new AbortController() : null;
         const repairSignal = repairAc ? combineSignals([signal, repairAc.signal]) : signal;
 
-        // 書き戻しによる書き込みだと分かるよう、書き込み専用の変数を用意します。
-        const repairVars: Variables = (() => {
-          if (!repair) {
-            return rootVars;
-          }
-          const cloned = rootVars.clone();
-          cloned.setReadonly("unikvs:repair", true);
-          return cloned;
-        })();
-
         // 書き戻しはできる範囲で行います。失敗してもログに残すだけで、読み取りは続けます。
         const fill = (target: StreamEncodeTarget): void => {
           fillBranches.push(target.stream);
           fillTasks.push(
             (async () => {
               try {
+                const wc = new PipelineContext({
+                  signal: repairSignal,
+                  action: "set",
+                  key: target.key,
+                  store,
+                });
                 const w = await target.leaf.storage.getWritable(
-                  target.vars,
-                  repairSignal,
-                  target.key,
+                  wc as IStorage.GetWritableContext,
                 );
                 await target.stream.pipeTo(w, { signal: repairSignal });
               } catch (ex) {
@@ -1431,7 +1625,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         };
 
         // セットアップに失敗したときは、構築済みの分岐と進行中の書き戻しを中断します。
-        cancelFills = async (reason) => {
+        cancelFills = async (reason: unknown) => {
           repairAc?.abort(reason);
           await Promise.all(
             fillBranches.map(async (branch) => {
@@ -1445,7 +1639,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         // 読み取り元をすべてデコードして原データに戻します。
         // 書き戻しの分岐は読み取りパスと分離します。
-        r = await this.#pipeline.decodeStream(hit.leaf, hit.vars, signal, r);
+        r = await this.#pipeline.decodeStream(
+          hit.leaf,
+          { signal, key, store },
+          r,
+        );
 
         if (repair) {
           // 許可のない宛先を先に除外します。throwOnRepairDenied が真のときはここでエラーを確定します。
@@ -1472,10 +1670,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           if (repairSet.size > 0) {
             // 読み取りパスを変更しないよう、書き戻し側だけを構築して分岐後の読み取り側を返します。
             const streams = new Set<IReadableStream>([r]);
-            const tree = await this.#pipeline.buildEncodeTree(r, repairVars, key, signal, streams, {
-              isActive: (leaf) => repairSet.has(leaf),
-              splitRead: true,
-              onNodeError: (ex, activeLeaves) => {
+            const tree = await this.#pipeline.buildEncodeTree(
+              { signal, key, store },
+              r,
+              streams,
+              {
+                isActive: (leaf: PipelineLeaf) => repairSet.has(leaf),
+                splitRead: true,
+                onNodeError: (ex: unknown, activeLeaves: readonly PipelineLeaf[]) => {
                 // 意図的な中断時は中断理由で失敗します。
                 if (signal.aborted) {
                   signal.throwIfAborted();
@@ -1624,9 +1826,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "has");
-    vars.setReadonly("unikvs:key", key);
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1635,23 +1835,31 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const rootVars = this.#pipeline.prepareRootVars(vars);
-      const lock = await io.rLock({ key, signal });
+      // 存在確認に先立ち、各ミドルウェアの `use` を実行します。
+      // `use` による vars の変更は後続の解決・走査に引き継がれます。
+      const useContext = new PipelineContext({
+        signal,
+        action: "has",
+        key,
+        store,
+      });
+      await this.#runMiddlewareUse("read", useContext);
+const lock = await io.rLock({ key, signal });
       try {
-        // 存在確認に先立ち、各トランスフォーマーの onExists を並列に実行します。
-        // onClear と同じく、フックによる vars の変更は後続の解決・走査に引き継がれます。
-        await this.#runTransformerHooks("read", signal, (transformer) =>
-          transformer.onExists(rootVars, signal, key),
-        );
-
         // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
         // exists に失敗したときは次のストレージを試します。
         const errors: PluginErrorRecord[] = [];
-        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        const resolver = this.#pipeline.createResolver({ signal, key, store });
         for (const leaf of this.#pipeline) {
-          const resolved = await resolver.resolve(leaf);
+          const resolved = resolver.resolve(leaf);
           try {
-            if (await leaf.storage.exists(resolved.vars, signal, resolved.key)) {
+            const c = new PipelineContext({
+              signal,
+              action: "has",
+              key: resolved.key,
+              store,
+            });
+            if (await leaf.storage.exists(c as IStorage.ExistsContext)) {
               return true;
             }
           } catch (ex) {
@@ -1705,9 +1913,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "delete");
-    vars.setReadonly("unikvs:key", key);
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1716,24 +1922,38 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const rootVars = this.#pipeline.prepareRootVars(vars);
-      const lock = await io.lock({ key, signal });
+      // 削除に先立ち、各ミドルウェアの `use` を実行します。
+      // `use` による vars の変更は後続の解決・削除に引き継がれます。
+      const useContext = new PipelineContext({
+        signal,
+        action: "delete",
+        key,
+        store,
+      });
+      await this.#runMiddlewareUse("delete", useContext);
+const lock = await io.lock({ key, signal });
       try {
-        // 削除に先立ち、各トランスフォーマーの onDelete を並列に実行します。
-        // onClear と同じく、フックによる vars の変更は後続の解決・削除に引き継がれます。
-        await this.#runTransformerHooks("delete", signal, (transformer) =>
-          transformer.onDelete(rootVars, signal, key),
-        );
-
         // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
-        const resolver = this.#pipeline.createResolver(rootVars, key, signal);
+        const resolver = this.#pipeline.createResolver({ signal, key, store });
         await Promise.all(
           this.#pipeline.leaves.map(async (leaf) => {
-            const resolved = await resolver.resolve(leaf);
+            const resolved = resolver.resolve(leaf);
+            const existsContext = new PipelineContext({
+              signal,
+              action: "has",
+              key: resolved.key,
+              store,
+            });
+            const deleteContext = new PipelineContext({
+              signal,
+              action: "delete",
+              key: resolved.key,
+              store,
+            });
             try {
-              if (await leaf.storage.exists(resolved.vars, signal, resolved.key)) {
-                await leaf.storage.delete(resolved.vars, signal, resolved.key);
+              if (await leaf.storage.exists(existsContext as IStorage.ExistsContext)) {
+                await leaf.storage.delete(deleteContext as IStorage.DeleteContext);
               }
             } catch (ex) {
               errors.push({ name: leaf.name, index: leaf.index, reason: ex });
@@ -1767,8 +1987,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const { ac, io } = this.#con;
     const signal = combineSignals([ac.signal, signalOption]);
 
-    const vars = this.#vars.clone(varsOption);
-    vars.setReadonly("unikvs:action", "clear");
+    const store = this.#createOperationStore(varsOption);
 
     const lock = await asyncmux.readonly(this, signal);
     try {
@@ -1777,27 +1996,28 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         throw new UniKvsIsNotOpenError();
       }
 
-      const rootVars = this.#pipeline.prepareRootVars(vars);
-      // 全トランスフォーマーの onClear を並列に実行します。
-      // 葉が1件だけのときは根の vars をそのまま使います。
-      const clearVars = this.#pipeline.prepareClearVars(rootVars);
+      // 全ミドルウェアの `use` を実行します。
+      const useContext = new PipelineContext({
+        signal,
+        action: "clear",
+        key: "",
+        store,
+      });
       const lock = await io.lock({ signal });
       try {
-        await this.#runTransformerHooks("clear", signal, (transformer) =>
-          transformer.onClear(clearVars, signal),
-        );
-
-        // set や repair と同じく onClear による変更を引き継ぐため、実行後の clearVars から分岐します。
-        const clearDestVars = this.#pipeline.leaves.map((leaf) =>
-          this.#pipeline.deriveLeafVars(clearVars, leaf),
-        );
-
-        // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
+        await this.#runMiddlewareUse("clear", useContext);
+  // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
         await Promise.all(
           this.#pipeline.leaves.map(async (leaf, index) => {
             try {
-              await leaf.storage.clear(clearDestVars[index]!, signal);
+              const c = new PipelineContext({
+                signal,
+                action: "clear",
+                key: "",
+                store,
+              });
+              await leaf.storage.clear(c as IStorage.ClearContext);
             } catch (ex) {
               errors.push({ name: leaf.name, index, reason: ex });
             }

@@ -36,32 +36,32 @@ class GatedExistsStorage implements IStorage {
 
   async close(): Promise<void> {}
 
-  async write(args: IStorage.WriteArgs): Promise<void> {
-    this.map.set(args.key, args.data);
+  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    this.map.set(c.key, data);
   }
 
-  async read(args: IStorage.ReadArgs): Promise<unknown> {
-    return this.map.get(args.key);
+  async read(c: IStorage.ReadContext): Promise<unknown> {
+    return this.map.get(c.key);
   }
 
-  async exists(args: IStorage.ExistsArgs): Promise<boolean> {
-    this.onExistsStart?.(args.key);
-    if (args.key === this.gatedKey && this.gatePromise) {
+  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    this.onExistsStart?.(c.key);
+    if (c.key === this.gatedKey && this.gatePromise) {
       await this.gatePromise;
     }
-    return this.map.has(args.key);
+    return this.map.has(c.key);
   }
 
-  async delete(args: IStorage.DeleteArgs): Promise<void> {
-    this.map.delete(args.key);
+  async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
   }
 
-  async clear(_args: IStorage.ClearArgs): Promise<void> {
+  async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 
-  getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<unknown> {
-    const chunks = (this.map.get(args.key) as unknown[] | undefined) ?? [];
+  getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
+    const chunks = (this.map.get(c.key) as unknown[] | undefined) ?? [];
     return new ReadableStream({
       start(controller) {
         for (const chunk of chunks) {

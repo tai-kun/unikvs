@@ -1,95 +1,93 @@
 import type {
+  IMiddleware,
   IStorage,
-  ITransformer,
   IReadableStreamStorage,
   IWritableStreamStorage,
-  IDecodableStreamTransformer,
-  IEncodableStreamTransformer,
 } from "@unikvs/core";
 
 export type ValueOf<T> = T[keyof T];
 
 /**
- * トランスフォーマーから、デコード時の入力データの型を推論するユーティリティー型です。
+ * ミドルウェアから、エンコード時の入力データ (生データ) の型を推論するユーティリティー型です。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferDecodeDataInput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<any, infer TDecodeDataInput, any, any, any, any, any, any>
-    ? TDecodeDataInput
-    : never;
-
-/**
- * トランスフォーマーから、エンコード時の出力データの型を推論するユーティリティー型です。
- *
- * @template TTransformer 対象となるトランスフォーマーの型です。
- */
-export type $InferEncodeDataOutput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<any, any, infer TEncodeDataOutput, any, any, any, any, any>
-    ? TEncodeDataOutput
-    : never;
-
-/**
- * トランスフォーマーから、エンコード時の入力データの型を推論するユーティリティー型です。
- * 分岐先頭の親出力受容検査に使用します。
- *
- * @template TTransformer 対象となるトランスフォーマーの型です。
- */
-export type $InferEncodeDataInput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<infer TEncodeDataInput, any, any, any, any, any, any, any>
+export type $InferEncodeDataInput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<infer TEncodeDataInput, any, any, any>
     ? TEncodeDataInput
     : never;
 
 /**
- * トランスフォーマーから、デコード時の出力データの型を推論するユーティリティー型です。
+ * ミドルウェアから、エンコード時の出力データ (符号化済み) の型を推論するユーティリティー型です。
+ *
+ * @template TMiddleware 対象となるミドルウェアの型です。
+ */
+export type $InferEncodeDataOutput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, infer TEncodeDataOutput, any, any>
+    ? TEncodeDataOutput
+    : never;
+
+/**
+ * ミドルウェアから、デコード時の入力データ (符号化済み) の型を推論するユーティリティー型です。
+ * 分岐先頭の親出力受容検査に使用します。
+ *
+ * @template TMiddleware 対象となるミドルウェアの型です。
+ */
+export type $InferDecodeDataInput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, infer TDecodeDataInput, any, any>
+    ? TDecodeDataInput
+    : never;
+
+/**
+ * ミドルウェアから、デコード時の出力データ (生データ) の型を推論するユーティリティー型です。
  * 分岐先頭の親入力受容検査に使用します。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferDecodeDataOutput<TTransformer extends ITransformer> =
-  TTransformer extends ITransformer<any, any, any, infer TDecodeDataOutput, any, any, any, any>
+export type $InferDecodeDataOutput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<infer TDecodeDataOutput, any, any, any>
     ? TDecodeDataOutput
     : never;
 
 /**
- * トランスフォーマーから、デコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
+ * ミドルウェアから、デコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferDecodeChunkInput<TTransformer extends ITransformer> =
-  TTransformer extends IDecodableStreamTransformer<infer TDecodeChunkInput>
+export type $InferDecodeChunkInput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, any, any, infer TDecodeChunkInput>
     ? TDecodeChunkInput
     : never;
 
 /**
- * トランスフォーマーから、エンコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
+ * ミドルウェアから、エンコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferEncodeChunkOutput<TTransformer extends ITransformer> =
-  TTransformer extends IEncodableStreamTransformer<any, infer TEncodeChunkOutput>
+export type $InferEncodeChunkOutput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, any, any, infer TEncodeChunkOutput>
     ? TEncodeChunkOutput
     : never;
 
 /**
- * トランスフォーマーから、エンコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
+ * ミドルウェアから、エンコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
  * 分岐先頭のチャンク検査に使用します。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferEncodeChunkInput<TTransformer extends ITransformer> =
-  TTransformer extends IEncodableStreamTransformer<infer TEncodeChunkInput, any>
+export type $InferEncodeChunkInput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, any, infer TEncodeChunkInput, any>
     ? TEncodeChunkInput
     : never;
 
 /**
- * トランスフォーマーから、デコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
+ * ミドルウェアから、デコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
  * 分岐先頭のチャンク検査に使用します。
  *
- * @template TTransformer 対象となるトランスフォーマーの型です。
+ * @template TMiddleware 対象となるミドルウェアの型です。
  */
-export type $InferDecodeChunkOutput<TTransformer extends ITransformer> =
-  TTransformer extends IDecodableStreamTransformer<any, infer TDecodeChunkOutput>
+export type $InferDecodeChunkOutput<TMiddleware extends IMiddleware> =
+  TMiddleware extends IMiddleware<any, any, infer TDecodeChunkOutput, any>
     ? TDecodeChunkOutput
     : never;
 

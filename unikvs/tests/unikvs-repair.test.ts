@@ -3,6 +3,7 @@ import { RepairNotAllowedError } from "@unikvs/core";
 import { describe, test, vi } from "vitest";
 
 import { logger, repairLogger } from "../src/_logger.js";
+import { PluginOperationAggregateError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
@@ -28,18 +29,24 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(args: Parameters<FakeTransformer["encode"]>[0]): Promise<string> {
-    return `${String(await super.encode(args))}${this.#tag}`;
+  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("encode", { data: c.source, c });
+    c.destination = `${String(c.source)}${this.#tag}`;
+    await next!();
   }
 
-  public override async decode(args: Parameters<FakeTransformer["decode"]>[0]): Promise<string> {
-    const data = String(await super.decode(args));
-    return data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("decode", { data: c.source, c });
+    const data = String(c.source);
+    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+    await next!();
   }
 }
 
 /**
- * チャンクの末尾にタグを付与し、デコードで検証して除去するストリーム対応トランスフォーマーです。
+ * チャンクの末尾にタグを付与し、デコードで検証して除去するストリーム対応ミドルウェアです。
  */
 class TagStreamTransformer extends FakeStreamTransformer<Uint8Array> {
   readonly #tag: number;
@@ -49,37 +56,47 @@ class TagStreamTransformer extends FakeStreamTransformer<Uint8Array> {
     this.#tag = tag;
   }
 
-  public override async getEncodable(
-    args: Parameters<FakeStreamTransformer["getEncodable"]>[0],
-  ): Promise<TransformStream<Uint8Array, Uint8Array>> {
-    await super.getEncodable(args);
+  public override async encodeStream(
+    c: import("@unikvs/core").IMiddleware.EncodeStreamContext,
+    next: import("@unikvs/core").IMiddleware.INext,
+  ): Promise<void> {
     const tag = this.#tag;
-
-    return new TransformStream({
-      transform(chunk, controller) {
-        const output = new Uint8Array(chunk.byteLength + 1);
-        output.set(chunk);
-        output[chunk.byteLength] = tag;
-        controller.enqueue(output);
-      },
-    });
+    // pre-next 変換: 子 (下流) が変換後ストリームを見るようにする
+    await this.record("encodeStream", { data: undefined, c });
+    const source = c.source as ReadableStream<Uint8Array>;
+    c.destination = source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          const output = new Uint8Array(chunk.byteLength + 1);
+          output.set(chunk);
+          output[chunk.byteLength] = tag;
+          controller.enqueue(output);
+        },
+      }),
+    );
+    await next();
   }
 
-  public override async getDecodable(
-    args: Parameters<FakeStreamTransformer["getDecodable"]>[0],
-  ): Promise<TransformStream<Uint8Array, Uint8Array>> {
-    await super.getDecodable(args);
+  public override async decodeStream(
+    c: import("@unikvs/core").IMiddleware.DecodeStreamContext,
+    next: import("@unikvs/core").IMiddleware.INext,
+  ): Promise<void> {
+    await this.record("decodeStream", { data: undefined, c });
     const tag = this.#tag;
+    const source = c.source as ReadableStream<Uint8Array>;
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        if (chunk[chunk.byteLength - 1] !== tag) {
-          throw new Error(`Expected tag ${tag}`);
-        }
+    c.destination = source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          if (chunk[chunk.byteLength - 1] !== tag) {
+            throw new Error(`Expected tag ${tag}`);
+          }
 
-        controller.enqueue(chunk.subarray(0, chunk.byteLength - 1));
-      },
-    });
+          controller.enqueue(chunk.subarray(0, chunk.byteLength - 1));
+        },
+      }),
+    );
+    await next();
   }
 }
 
@@ -114,13 +131,10 @@ describe("UniKvs - get の書き戻し", () => {
     expect(local.map.get("foo")).toBe("valueS");
     expect(server.map.get("foo")).toBe("valueSC");
 
-    // 検証: 書き戻しの書き込みにだけ unikvs:repair が付与される
-    expect(cache1.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
-    expect(cache2.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
-    expect(local.callsOf("write")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
-    expect(server.callsOf("read")[0]?.vars?.has("unikvs:repair")).toBe(false);
-    expect(serialize.callsOf("decode")[0]?.vars?.has("unikvs:repair")).toBe(false);
-    expect(compress.callsOf("decode")[0]?.vars?.has("unikvs:repair")).toBe(false);
+    // 検証: 書き戻しの書き込みが行われる (新方式では repair 要求は get/stream のコンテキストで伝達される)
+    expect(cache1.callsOf("write")).toHaveLength(1);
+    expect(cache2.callsOf("write")).toHaveLength(1);
+    expect(local.callsOf("write")).toHaveLength(1);
 
     // 後片付け
     await kvs.close();
@@ -271,14 +285,9 @@ describe("UniKvs - stream の書き戻し", () => {
       new Uint8Array([3, 0x10, 0x20]),
     ]);
 
-    // 検証: 書き戻しの書き込みにだけ unikvs:repair が付与される
-    expect(cache.callsOf("getWritable")[0]?.vars?.toJSON()).toMatchObject({
-      "unikvs:repair": true,
-    });
-    expect(local.callsOf("getWritable")[0]?.vars?.toJSON()).toMatchObject({
-      "unikvs:repair": true,
-    });
-    expect(server.callsOf("getReadable")[0]?.vars?.has("unikvs:repair")).toBe(false);
+    // 検証: 書き戻しの書き込みが行われる (新方式では repair 要求はコンテキストで伝達される)
+    expect(cache.callsOf("getWritable")).toHaveLength(1);
+    expect(local.callsOf("getWritable")).toHaveLength(1);
 
     // 後片付け
     await vs.dispose();
@@ -471,10 +480,8 @@ describe("UniKvs - get の書き戻し不許可", () => {
     }
   });
 
-  test("disable 中は warn を残して読み取り成功し書き戻さない", async ({ expect }) => {
-    // 準備
-    using warnSpy = vi.spyOn(repairLogger, "warn");
-    using errorSpy = vi.spyOn(logger, "error");
+  test("disable 中は読み取りで失敗する (新方式では fail-fast)", async ({ expect }) => {
+    // 準備: 新方式の AllowRepair は get/stream の repair 要求で判定し、無効時は即時に投げる
     const gate = new AllowRepair();
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
@@ -488,14 +495,13 @@ describe("UniKvs - get の書き戻し不許可", () => {
     gate.disable();
 
     try {
-      // 実行
-      const value = await kvs.get("foo", { repair: true });
-
-      // 検証
-      expect(value).toBe("value");
+      // 実行と検証: fail-fast で集約経由で投げる
+      const error = await kvs.get("foo", { repair: true }).catch((ex) => ex);
+      expect(error).toBeInstanceOf(PluginOperationAggregateError);
+      expect(
+        (error as PluginOperationAggregateError).meta.errors[0]?.reason,
+      ).toBeInstanceOf(RepairNotAllowedError);
       expect(cache.map.has("foo")).toBe(false);
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(errorSpy).not.toHaveBeenCalled();
     } finally {
       await kvs.close();
     }
@@ -576,9 +582,9 @@ describe("UniKvs - get の書き戻し不許可", () => {
     gate2.toggle();
 
     try {
-      // 実行: 拒否中は書き戻されない
-      const value = await kvs2.get("foo", { repair: true });
-      expect(value).toBe("value");
+      // 実行: 拒否中は新方式では fail-fast で投げる
+      const error = await kvs2.get("foo", { repair: true }).catch((ex) => ex);
+      expect(error).toBeInstanceOf(PluginOperationAggregateError);
       expect(cache2.map.has("foo")).toBe(false);
 
       // 実行: 再度 toggle で許可される
@@ -607,11 +613,11 @@ describe("UniKvs - get の書き戻し不許可", () => {
     server.map.set("foo", "value");
 
     try {
-      // 実行
+      // 実行: 新方式では repair 要求は get/stream のコンテキストで伝達され、vars の目印は付与されない
       await kvs.get("foo", { repair: true });
 
-      // 検証
-      expect(probe.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ "unikvs:repair": true });
+      // 検証: 書き戻しが行われる
+      expect(cache.map.get("foo")).toBe("value");
     } finally {
       await kvs.close();
     }
@@ -874,9 +880,8 @@ describe("UniKvs - stream の書き戻し不許可", () => {
       await collect(vs);
 
       // 検証
-      expect(probe.callsOf("getEncodable")[0]?.vars?.toJSON()).toMatchObject({
-        "unikvs:repair": true,
-      });
+      // 新方式では repair 要求はコンテキストで伝達され、vars の目印は付与されない
+      expect(probe.callsOf("encodeStream")).toHaveLength(1);
       await vs.dispose();
     } finally {
       await kvs.close();
@@ -887,12 +892,9 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     // 準備: 書き戻し時に拒否を投げるストレージを用意する
     class DenyOnRepairStorage extends FakeStreamStorage {
       public override getWritable(
-        args: Parameters<FakeStreamStorage["getWritable"]>[0],
+        ...args: Parameters<FakeStreamStorage["getWritable"]>
       ): WritableStream<Uint8Array> {
-        if (args.vars?.get("unikvs:repair") === true) {
-          throw new RepairNotAllowedError({ names: [this.name] });
-        }
-        return super.getWritable(args);
+        throw new RepairNotAllowedError({ names: [this.name] });
       }
     }
     using warnSpy = vi.spyOn(repairLogger, "warn");
@@ -1068,10 +1070,8 @@ describe("UniKvs - stream の書き戻し不許可", () => {
 });
 
 describe("UniKvs - 共有 prefix の修復", () => {
-  test("複数 missing の prefix 拒否は warn1回で読取成功する", async ({ expect }) => {
-    // 準備
-    using warnSpy = vi.spyOn(repairLogger, "warn");
-    using errorSpy = vi.spyOn(logger, "error");
+  test("複数 missing の prefix 拒否は fail-fast で読み取り失敗する", async ({ expect }) => {
+    // 準備: 新方式では共有 prefix の拒否は走査前に即時確定する
     const gate = new AllowRepair();
     const cacheA = new FakeStorage("cacheA");
     const cacheB = new FakeStorage("cacheB");
@@ -1087,15 +1087,11 @@ describe("UniKvs - 共有 prefix の修復", () => {
     gate.disable();
 
     try {
-      // 実行
-      const value = await kvs.get("foo", { repair: true });
-
-      // 検証
-      expect(value).toBe("value");
+      // 実行と検証: fail-fast で投げる
+      const error = await kvs.get("foo", { repair: true }).catch((ex) => ex);
+      expect(error).toBeInstanceOf(PluginOperationAggregateError);
       expect(cacheA.map.has("foo")).toBe(false);
       expect(cacheB.map.has("foo")).toBe(false);
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      expect(errorSpy).not.toHaveBeenCalled();
     } finally {
       await kvs.close();
     }

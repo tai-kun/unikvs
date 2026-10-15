@@ -11,7 +11,7 @@ import {
   WritableStreamNotSupportedError,
   ReadableStreamNotSupportedError,
   MultipartWriteNotSupportedError,
-  TransformerIsNotOpenError,
+  MiddlewareIsNotOpenError,
   EncodableStreamNotSupportedError,
   DecodableStreamNotSupportedError,
   PluginOperationAggregateError,
@@ -131,11 +131,11 @@ describe("MultipartWriteNotSupportedError", () => {
   });
 });
 
-describe("TransformerIsNotOpenError", () => {
+describe("MiddlewareIsNotOpenError", () => {
   test("指定されたトランスフォーマー名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new TransformerIsNotOpenError({ name: "MyTransformer" });
+      throw new MiddlewareIsNotOpenError({ name: "MyTransformer" });
     }).toThrow(/MyTransformer/);
   });
 });

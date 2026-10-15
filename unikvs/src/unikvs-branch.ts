@@ -1,7 +1,7 @@
-import type { IStorage, ITransformer } from "@unikvs/core";
+import type { IMiddleware, IStorage } from "@unikvs/core";
 
 import UniKvsStorage from "./_storage.js";
-import UniKvsTransformer from "./_transformer.js";
+import UniKvsMiddleware from "./_middleware.js";
 import type {
   $IsUnknown,
   $CheckForkDecodeData,
@@ -28,7 +28,7 @@ import type { Value } from "./value-schemas.js";
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
 export type KeyValueMapping<T = any> = {
-  readonly [key: IStorage.Key]: Value<T>;
+  readonly [key: string]: Value<T>;
 };
 
 /**
@@ -137,46 +137,42 @@ export interface IUniKvsBranch<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   connect<
-    TTransformer extends ITransformer<
+    TMiddleware extends IMiddleware<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
       any,
-      any,
-      [TLastDecodeDataInput] extends [never] ? any : TLastDecodeDataInput,
       [TLastEncodeChunkOutput] extends [never] ? any : TLastEncodeChunkOutput,
-      any,
-      any,
-      [TLastDecodeChunkInput] extends [never] ? any : TLastDecodeChunkInput
+      any
     >,
   >(
-    transformer: TTransformer,
+    middleware: TMiddleware,
   ): IUniKvsBranch<
     TKeyValueMapping,
     [TBranchChunkInput] extends [never]
       ? never
-      : [$InferDecodeChunkInput<TTransformer>] extends [never]
+      : [$InferDecodeChunkInput<TMiddleware>] extends [never]
         ? never
         : TBranchChunkInput,
     [TBranchChunkOutput] extends [never]
       ? never
-      : [$InferEncodeChunkOutput<TTransformer>] extends [never]
+      : [$InferEncodeChunkOutput<TMiddleware>] extends [never]
         ? never
         : TBranchChunkOutput,
     $IsUnknown<THeadEncodeDataInput> extends true
-      ? $InferEncodeDataInput<TTransformer>
+      ? $InferEncodeDataInput<TMiddleware>
       : THeadEncodeDataInput,
     $IsUnknown<THeadDecodeDataOutput> extends true
-      ? $InferDecodeDataOutput<TTransformer>
+      ? $InferDecodeDataOutput<TMiddleware>
       : THeadDecodeDataOutput,
     $IsUnknown<THeadEncodeChunkInput> extends true
-      ? $InferEncodeChunkInput<TTransformer>
+      ? $InferEncodeChunkInput<TMiddleware>
       : THeadEncodeChunkInput,
     $IsUnknown<THeadDecodeChunkOutput> extends true
-      ? $InferDecodeChunkOutput<TTransformer>
+      ? $InferDecodeChunkOutput<TMiddleware>
       : THeadDecodeChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>,
+    $InferDecodeDataInput<TMiddleware>,
+    $InferEncodeDataOutput<TMiddleware>,
+    $InferDecodeChunkInput<TMiddleware>,
+    $InferEncodeChunkOutput<TMiddleware>,
     TBranchHasPersist
   >;
 
@@ -233,7 +229,7 @@ export default class UniKvsBranch {
    */
   public constructor() {
     branchStates.set(this, {
-      transformers: [],
+      middlewares: [],
       destinations: [],
     });
   }
@@ -243,13 +239,13 @@ export default class UniKvsBranch {
    */
   public fork(branch: IUniKvsBranch): this {
     const state = branchStates.get(this)!;
-    const prefix = [...state.transformers];
+    const prefix = [...state.middlewares];
     const destinations = getBranchDestinationsForFork(branch);
     for (const dest of destinations) {
       state.destinations.push({
         storage: dest.storage,
-        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのトランスフォーマーを結合します。
-        transformers: [...prefix, ...dest.transformers],
+        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのミドルウェアを結合します。
+        middlewares: [...prefix, ...dest.middlewares],
       });
     }
 
@@ -259,9 +255,9 @@ export default class UniKvsBranch {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public connect(transformer: ITransformer): this {
+  public connect(middleware: IMiddleware): this {
     const state = branchStates.get(this)!;
-    state.transformers.push(UniKvsTransformer.from(transformer));
+    state.middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
   }
@@ -274,7 +270,7 @@ export default class UniKvsBranch {
     state.destinations.push({
       storage: UniKvsStorage.from(storage),
       // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
-      transformers: [...state.transformers],
+      middlewares: [...state.middlewares],
     });
 
     return this;

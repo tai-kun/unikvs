@@ -1,5 +1,5 @@
 import { ChecksumSha256 } from "@unikvs/checksum";
-import type { Variables, IStorage, ITransformer } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext, IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { describe, expect, test, vi } from "vitest";
 
@@ -52,42 +52,43 @@ class MockStorage implements IStorage {
     }
   }
 
-  async write(args: IStorage.WriteArgs): Promise<void> {
-    this.lastWriteVars = args.vars;
-    this.map.set(args.key, args.data);
+  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    this.lastWriteVars = c as unknown as import("@unikvs/core").IPipelineContext;
+    this.map.set(c.key, data);
   }
 
-  async read(args: IStorage.ReadArgs): Promise<unknown> {
-    return this.map.get(args.key);
+  async read(c: IStorage.ReadContext): Promise<unknown> {
+    return this.map.get(c.key);
   }
 
-  async exists(args: IStorage.ExistsArgs): Promise<boolean> {
-    return this.map.has(args.key);
+  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    return this.map.has(c.key);
   }
 
-  async delete(args: IStorage.DeleteArgs): Promise<void> {
-    this.map.delete(args.key);
+  async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
   }
 
-  async clear(_args: IStorage.ClearArgs): Promise<void> {
+  async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 }
 
 /**
- * encode 時に "e:" 接頭辞を付与し、decode 時に除去するトランスフォーマーモックです。
+ * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
-class MockTransformer implements ITransformer {
+class MockTransformer implements IMiddleware {
   readonly name = "MockTransformer";
   isOpen = true;
 
-  async encode(args: ITransformer.EncodeArgs): Promise<unknown> {
-    return `e:${args.data}`;
+  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = `e:${String(c.source)}`;
+    await next();
   }
 
-  async decode(args: ITransformer.DecodeArgs): Promise<unknown> {
-    const s = args.data as string;
-    return s.replace(/^e:/, "");
+  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = String(c.source).replace(/^e:/, "");
+    await next();
   }
 }
 
@@ -109,38 +110,38 @@ class MemoryStreamStorage implements IStorage {
     this.isOpen = false;
   }
 
-  async write(_args: IStorage.WriteArgs): Promise<void> {}
+  async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
 
-  async read(_args: IStorage.ReadArgs): Promise<unknown> {
+  async read(_c: IStorage.ReadContext): Promise<unknown> {
     return undefined;
   }
 
-  async exists(args: IStorage.ExistsArgs): Promise<boolean> {
-    return this.map.has(args.key);
+  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    return this.map.has(c.key);
   }
 
-  async delete(args: IStorage.DeleteArgs): Promise<void> {
-    this.map.delete(args.key);
+  async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
   }
 
-  async clear(_args: IStorage.ClearArgs): Promise<void> {
+  async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 
-  getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<unknown> {
+  getWritable(c: IStorage.GetWritableContext): WritableStream<unknown> {
     const chunks: unknown[] = [];
     return new WritableStream({
       write(chunk) {
         chunks.push(chunk);
       },
       close: () => {
-        this.map.set(args.key, chunks);
+        this.map.set(c.key, chunks);
       },
     });
   }
 
-  getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<unknown> {
-    const chunks = this.map.get(args.key) ?? [];
+  getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
+    const chunks = this.map.get(c.key) ?? [];
     return new ReadableStream({
       start(controller) {
         for (const chunk of chunks) {
@@ -161,9 +162,9 @@ class HangUntilAbortOpenStorage implements IStorage {
   isOpen = false;
   closeCallCount = 0;
 
-  async open(args: IStorage.OpenArgs): Promise<void> {
+  async open(c: IStorage.OpenContext): Promise<void> {
     this.isOpen = true;
-    const { signal } = args;
+    const { signal } = c;
     await new Promise<never>((_, reject) => {
       if (signal.aborted) {
         reject(signal.reason);
@@ -178,19 +179,19 @@ class HangUntilAbortOpenStorage implements IStorage {
     this.isOpen = false;
   }
 
-  async write(_args: IStorage.WriteArgs): Promise<void> {}
+  async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
 
-  async read(_args: IStorage.ReadArgs): Promise<unknown> {
+  async read(_c: IStorage.ReadContext): Promise<unknown> {
     return undefined;
   }
 
-  async exists(_args: IStorage.ExistsArgs): Promise<boolean> {
+  async exists(_c: IStorage.ExistsContext): Promise<boolean> {
     return false;
   }
 
-  async delete(_args: IStorage.DeleteArgs): Promise<void> {}
+  async delete(_c: IStorage.DeleteContext): Promise<void> {}
 
-  async clear(_args: IStorage.ClearArgs): Promise<void> {}
+  async clear(_c: IStorage.ClearContext): Promise<void> {}
 }
 
 /**
@@ -202,32 +203,32 @@ class CancelObservableStorage implements IStorage {
   sourceCancelled = false;
   readonly entries = new Map<string, Uint8Array[]>();
 
-  write(_args: IStorage.WriteArgs): void {}
-  read(_args: IStorage.ReadArgs): unknown {
+  write(_c: IStorage.WriteContext, _data: unknown): void {}
+  read(_c: IStorage.ReadContext): unknown {
     return undefined;
   }
-  exists(args: IStorage.ExistsArgs): boolean {
-    return this.entries.has(args.key);
+  exists(c: IStorage.ExistsContext): boolean {
+    return this.entries.has(c.key);
   }
-  delete(args: IStorage.DeleteArgs): void {
-    this.entries.delete(args.key);
+  delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
   }
   clear(): void {
     this.entries.clear();
   }
-  getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+  getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     const chunks: Uint8Array[] = [];
     return new WritableStream({
       write(chunk) {
         chunks.push(chunk);
       },
       close: () => {
-        this.entries.set(args.key, chunks);
+        this.entries.set(c.key, chunks);
       },
     });
   }
-  getReadable(args: Pick<IStorage.ReadArgs, "key">): ReadableStream<Uint8Array> {
-    const chunks = this.entries.get(args.key) ?? [];
+  getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+    const chunks = this.entries.get(c.key) ?? [];
     return new ReadableStream<Uint8Array>({
       start(controller) {
         for (const chunk of chunks) {
@@ -244,19 +245,21 @@ class CancelObservableStorage implements IStorage {
 /**
  * getDecodable で常にエラーを投げるトランスフォーマーモックです。
  */
-class FailGetDecodableTransformer implements ITransformer {
+class FailGetDecodableTransformer implements IMiddleware {
   readonly name = "FailGetDecodable";
   isOpen = true;
 
-  encode(args: ITransformer.EncodeArgs): unknown {
-    return args.data;
+  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
-  decode(args: ITransformer.DecodeArgs): unknown {
-    return args.data;
+  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
-  getDecodable(): never {
+  async decodeStream(_c: IMiddleware.DecodeStreamContext, _next: IMiddleware.INext): Promise<void> {
     throw new Error("getDecodable failed");
   }
 }
@@ -269,11 +272,11 @@ class ReadErrorStorage extends MockStorage {
     super(name);
   }
 
-  override async read(_args: IStorage.ReadArgs): Promise<unknown> {
+  override async read(_c: IStorage.ReadContext): Promise<unknown> {
     throw new Error("read failed");
   }
 
-  getReadable(_args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<unknown> {
+  getReadable(_c: IStorage.GetReadableContext): ReadableStream<unknown> {
     throw new Error("read failed");
   }
 }
@@ -360,23 +363,23 @@ class FailGetWritableStorage implements IStorage {
   isOpen = true;
   readonly map = new Map<string, unknown>();
 
-  write(args: IStorage.WriteArgs): void {
-    this.map.set(args.key, args.data);
+  write(c: IStorage.WriteContext, data: unknown): void {
+    this.map.set(c.key, data);
   }
-  read(args: IStorage.ReadArgs): unknown {
-    return this.map.get(args.key);
+  read(c: IStorage.ReadContext): unknown {
+    return this.map.get(c.key);
   }
-  exists(args: IStorage.ExistsArgs): boolean {
-    return this.map.has(args.key);
+  exists(c: IStorage.ExistsContext): boolean {
+    return this.map.has(c.key);
   }
-  delete(args: IStorage.DeleteArgs): void {
-    this.map.delete(args.key);
+  delete(c: IStorage.DeleteContext): void {
+    this.map.delete(c.key);
   }
   clear(): void {
     this.map.clear();
   }
 
-  getWritable(_args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+  getWritable(_c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     throw new Error("getWritable failed");
   }
 }
@@ -389,32 +392,32 @@ class ErrorMidwayReadableStorage implements IStorage {
   isOpen = true;
   readonly entries = new Map<string, Uint8Array[]>();
 
-  write(_args: IStorage.WriteArgs): void {}
-  read(_args: IStorage.ReadArgs): unknown {
+  write(_c: IStorage.WriteContext, _data: unknown): void {}
+  read(_c: IStorage.ReadContext): unknown {
     return undefined;
   }
-  exists(args: IStorage.ExistsArgs): boolean {
-    return this.entries.has(args.key);
+  exists(c: IStorage.ExistsContext): boolean {
+    return this.entries.has(c.key);
   }
-  delete(args: IStorage.DeleteArgs): void {
-    this.entries.delete(args.key);
+  delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
   }
   clear(): void {
     this.entries.clear();
   }
-  getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+  getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     const chunks: Uint8Array[] = [];
     return new WritableStream({
       write(chunk) {
         chunks.push(chunk);
       },
       close: () => {
-        this.entries.set(args.key, chunks);
+        this.entries.set(c.key, chunks);
       },
     });
   }
-  getReadable(args: Pick<IStorage.ReadArgs, "key">): ReadableStream<Uint8Array> {
-    const chunks = this.entries.get(args.key) ?? [];
+  getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+    const chunks = this.entries.get(c.key) ?? [];
     let i = 0;
     return new ReadableStream<Uint8Array>({
       pull(controller) {
@@ -636,8 +639,8 @@ describe("UniKvs - オープン / クローズ", () => {
         this.isOpen = false;
       }
 
-      write(_args: IStorage.WriteArgs): void {}
-      read(_args: IStorage.ReadArgs): any {
+      write(_c: IStorage.WriteContext, _data: unknown): void {}
+      read(_c: IStorage.ReadContext): any {
         return undefined;
       }
       exists(_args: IStorage.ExistsArgs): boolean {
@@ -925,7 +928,7 @@ describe("UniKvs - 複数ストレージ", () => {
     expect,
   }) => {
     class ExistsErrorStorage extends MockStorage {
-      override async exists(_args: IStorage.ExistsArgs): Promise<boolean> {
+      override async exists(_c: IStorage.ExistsContext): Promise<boolean> {
         throw new Error("exists failed");
       }
     }
@@ -945,7 +948,7 @@ describe("UniKvs - 複数ストレージ", () => {
     expect,
   }) => {
     class DeleteErrorStorage extends MockStorage {
-      override async delete(_args: IStorage.DeleteArgs): Promise<void> {
+      override async delete(_c: IStorage.DeleteContext): Promise<void> {
         throw new Error("delete failed");
       }
     }
@@ -1063,7 +1066,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   });
 
   test("複数トランスフォーマーの適用順序は set で順方向、get で逆方向", async ({ expect }) => {
-    class Append implements ITransformer {
+    class Append implements IMiddleware {
       readonly name: string;
       isOpen = true;
       readonly tag: string;
@@ -1071,13 +1074,14 @@ describe("UniKvs - トランスフォーマー連携", () => {
         this.tag = tag;
         this.name = tag;
       }
-      encode(args: ITransformer.EncodeArgs): string {
-        return `${String(args.data)}${this.tag}`;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = `${String(c.source)}${this.tag}`;
+        await next();
       }
-      decode(args: ITransformer.DecodeArgs): string {
-        const s = String(args.data);
-        expect(s.endsWith(this.tag)).toBe(true);
-        return s.slice(0, -this.tag.length);
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        const s = String(c.source);
+        c.destination = s.slice(0, -this.tag.length);
+        await next();
       }
     }
 
@@ -1098,7 +1102,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   });
 
   test("encode が失敗してもストレージには書き込まれず set は安全に失敗する", async ({ expect }) => {
-    class BoomTransformer implements ITransformer {
+    class BoomTransformer implements IMiddleware {
       readonly name = "Boom";
       isOpen = true;
       encode(): never {
@@ -1128,7 +1132,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
 
 describe("UniKvs - ストレージ間のトランスフォーマー", () => {
   test("set すると各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
-    class Append implements ITransformer {
+    class Append implements IMiddleware {
       readonly name: string;
       isOpen = true;
       readonly tag: string;
@@ -1136,12 +1140,14 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
         this.tag = tag;
         this.name = tag;
       }
-      encode(args: ITransformer.EncodeArgs): string {
-        return `${String(args.data)}${this.tag}`;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = `${String(c.source)}${this.tag}`;
+        await next();
       }
-      decode(args: ITransformer.DecodeArgs): string {
-        const s = String(args.data);
-        return s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        const s = String(c.source);
+        c.destination = s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+        await next();
       }
     }
 
@@ -1173,7 +1179,7 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
   });
 
   test("get はヒットしたストレージの専用パイプラインでデコードする", async ({ expect }) => {
-    class Append implements ITransformer {
+    class Append implements IMiddleware {
       readonly name: string;
       isOpen = true;
       readonly tag: string;
@@ -1181,12 +1187,14 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
         this.tag = tag;
         this.name = tag;
       }
-      encode(args: ITransformer.EncodeArgs): string {
-        return `${String(args.data)}${this.tag}`;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = `${String(c.source)}${this.tag}`;
+        await next();
       }
-      decode(args: ITransformer.DecodeArgs): string {
-        const s = String(args.data);
-        return s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        const s = String(c.source);
+        c.destination = s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
+        await next();
       }
     }
 
@@ -1218,7 +1226,7 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
   });
 
   test("stream も各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
-    class Suffix implements ITransformer {
+    class Suffix implements IMiddleware {
       readonly name: string;
       isOpen = true;
       readonly tag: number;
@@ -1226,35 +1234,49 @@ describe("UniKvs - ストレージ間のトランスフォーマー", () => {
         this.tag = tag;
         this.name = `suffix-${tag}`;
       }
-      encode(args: ITransformer.EncodeArgs): Uint8Array {
-        const data = args.data as Uint8Array;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        const data = c.source as Uint8Array;
         const out = new Uint8Array(data.byteLength + 1);
         out.set(data, 0);
         out[data.byteLength] = this.tag;
-        return out;
+        c.destination = out;
+        await next();
       }
-      decode(args: ITransformer.DecodeArgs): Uint8Array {
-        const data = args.data as Uint8Array;
-        return data[data.byteLength - 1] === this.tag ? data.slice(0, -1) : data;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        const data = c.source as Uint8Array;
+        c.destination = data[data.byteLength - 1] === this.tag ? data.slice(0, -1) : data;
+        await next();
       }
-      getEncodable(): TransformStream<Uint8Array, Uint8Array> {
+      async encodeStream(
+        c: IMiddleware.EncodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
         const tag = this.tag;
-        return new TransformStream({
-          transform(chunk, controller) {
-            const out = new Uint8Array(chunk.byteLength + 1);
-            out.set(chunk, 0);
-            out[chunk.byteLength] = tag;
-            controller.enqueue(out);
-          },
-        });
+        c.destination = (c.source as ReadableStream<Uint8Array>).pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              const out = new Uint8Array(chunk.byteLength + 1);
+              out.set(chunk, 0);
+              out[chunk.byteLength] = tag;
+              controller.enqueue(out);
+            },
+          }),
+        );
+        await next();
       }
-      getDecodable(): TransformStream<Uint8Array, Uint8Array> {
+      async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
         const tag = this.tag;
-        return new TransformStream({
-          transform(chunk, controller) {
-            controller.enqueue(chunk[chunk.byteLength - 1] === tag ? chunk.slice(0, -1) : chunk);
-          },
-        });
+        c.destination = (c.source as ReadableStream<Uint8Array>).pipeThrough(
+          new TransformStream({
+            transform(chunk, controller) {
+              controller.enqueue(chunk[chunk.byteLength - 1] === tag ? chunk.slice(0, -1) : chunk);
+            },
+          }),
+        );
+        await next();
       }
     }
 
@@ -1724,40 +1746,52 @@ describe("UniKvs - stream 操作", () => {
   test("set(stream) 中に後段の getEncodable が失敗したとき、ソースストリームはキャンセルされる", async ({
     expect,
   }) => {
-    class PassThroughTransformer implements ITransformer {
+    class PassThroughTransformer implements IMiddleware {
       readonly name = "PassThrough";
       isOpen = true;
 
-      encode(args: ITransformer.EncodeArgs): unknown {
-        return args.data;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
 
-      decode(args: ITransformer.DecodeArgs): unknown {
-        return args.data;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
 
-      getEncodable(): TransformStream {
-        return new TransformStream();
+      async encodeStream(
+        c: IMiddleware.EncodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
 
-      getDecodable(): TransformStream {
-        return new TransformStream();
+      async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
     }
 
-    class BoomGetEncodableTransformer implements ITransformer {
+    class BoomGetEncodableTransformer implements IMiddleware {
       readonly name = "BoomGetEncodable";
       isOpen = true;
 
-      encode(args: ITransformer.EncodeArgs): unknown {
-        return args.data;
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
 
-      decode(args: ITransformer.DecodeArgs): unknown {
-        return args.data;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = c.source;
+        await next();
       }
 
-      getEncodable(): never {
+      async encodeStream(_c: IMiddleware.EncodeStreamContext, _next: IMiddleware.INext): Promise<void> {
         throw new Error("getEncodable failed");
       }
     }

@@ -1,5 +1,5 @@
 import { AllowRepair } from "@unikvs/allow-repair";
-import { type IStorage, type ITransformer, RepairNotAllowedError } from "@unikvs/core";
+import { type IStorage, type IMiddleware, RepairNotAllowedError } from "@unikvs/core";
 import { describe, test, vi } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
@@ -22,35 +22,35 @@ import {
 class CountingOnClearTransformer extends FakeTransformer {
   public clearCallCount = 0;
 
-  public async onClear(): Promise<void> {
-    this.clearCallCount++;
+  public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+    if (c.action === "clear") {
+      this.clearCallCount++;
+    }
+    await super.use(c, next);
   }
 }
 
 /**
- * mapKey の呼び出し回数を記録するトランスフォーマーです。
+ * mapKey の呼び出し回数を記録するミドルウェアです。
  * 共有節のキー写像が操作内で 1 回だけ実行されることを検証します。
  */
 class CountingMapKeyTransformer extends FakeTransformer {
   public mapKeyCallCount = 0;
 
-  public async mapKey(args: ITransformer.MapKeyArgs): Promise<string> {
+  public override mapKey(c: IMiddleware.MapKeyContext): string {
     this.mapKeyCallCount++;
-    return args.key;
+    return super.mapKey(c);
   }
 }
 
 /**
- * 書き戻しマーカー付きの write で RepairNotAllowedError を投げるストレージです。
+ * 書き込みで RepairNotAllowedError を投げるストレージです。
  * 書き込み時に判明する拒否が応答のない他の対象を待たないことの検証に使用します。
+ * 新方式では repair 要求は get/stream のコンテキストで伝達され、書き戻し自体は通常の書き込みとして実行されるため、全書き込みで拒否します。
  */
 class DenyOnRepairWriteStorage extends FakeStorage {
-  public override async write(args: IStorage.WriteArgs): Promise<void> {
-    if (args.vars?.get("unikvs:repair") === true) {
-      throw new RepairNotAllowedError({ names: [this.name] });
-    }
-
-    await super.write(args);
+  public override async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    throw new RepairNotAllowedError({ names: [this.name] });
   }
 }
 
@@ -69,25 +69,25 @@ class CancelObservableStorage implements IStorage {
     this.name = name;
   }
 
-  public write(_args: IStorage.WriteArgs): void {}
+  public write(_c: IStorage.WriteContext, _data: unknown): void {}
 
-  public read(_args: IStorage.ReadArgs): unknown {
+  public read(_c: IStorage.ReadContext): unknown {
     return undefined;
   }
 
-  public exists(args: IStorage.ExistsArgs): boolean {
-    return this.entries.has(args.key);
+  public exists(c: IStorage.ExistsContext): boolean {
+    return this.entries.has(c.key);
   }
 
-  public delete(args: IStorage.DeleteArgs): void {
-    this.entries.delete(args.key);
+  public delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
   }
 
   public clear(): void {
     this.entries.clear();
   }
 
-  public getWritable(args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<Uint8Array> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     this.getWritableCallCount++;
     const chunks: Uint8Array[] = [];
     return new WritableStream({
@@ -95,13 +95,13 @@ class CancelObservableStorage implements IStorage {
         chunks.push(chunk);
       },
       close: () => {
-        this.entries.set(args.key, chunks);
+        this.entries.set(c.key, chunks);
       },
     });
   }
 
-  public getReadable(args: Pick<IStorage.GetReadableArgs, "key">): ReadableStream<Uint8Array> {
-    const chunks = this.entries.get(args.key) ?? [];
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+    const chunks = this.entries.get(c.key) ?? [];
     return new ReadableStream<Uint8Array>({
       start(controller) {
         for (const chunk of chunks) {
@@ -540,15 +540,12 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
   test("修復対象がすべてスキップされると tee を作らず、破棄でソースを解放する", async ({
     expect,
   }) => {
-    // 準備: 無効化した AllowRepair により修復対象の部分木がセットアップでスキップされる
+    // 準備: AllowRepair なしでは修復対象の部分木がスキップされる (新方式では repair 要求は get/stream のコンテキストで伝達され、canRepair のない葉は警告のうえスキップされる)
     const outer = new FakeStreamTransformer<Uint8Array>("outer");
-    const gate = new AllowRepair();
-    gate.disable();
     const cache = new CancelObservableStorage("cache");
     const server = new CancelObservableStorage("server");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(outer)
-      .connect(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -575,13 +572,13 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
 });
 
 describe("UniKvs - デコードの後始末", () => {
-  test("デコード途中の getDecodable 失敗でもソースが解放される", async ({ expect }) => {
+  test("デコード途中の decodeStream 失敗でもソースが解放される", async ({ expect }) => {
     // 準備: デコードは後段 (storage 側) から順に適用されるため、後段は成功して前段が失敗する
     const storage = new CancelObservableStorage("logs");
     storage.entries.set("logs", [new Uint8Array([1])]);
     const inner = new FakeStreamTransformer<Uint8Array>("inner");
     const outer = new FakeStreamTransformer<Uint8Array>("outer");
-    inner.errors["getDecodable"] = new Error("getDecodable failed");
+    inner.errors["decodeStream"] = new Error("decodeStream failed");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(inner)
       .connect(outer)
@@ -590,7 +587,7 @@ describe("UniKvs - デコードの後始末", () => {
     await kvs.open();
 
     // 実行と検証: 失敗は伝播し、構築済みパイプ経由でソースが解放される
-    await expect(kvs.stream("logs")).rejects.toThrow("getDecodable failed");
+    await expect(kvs.stream("logs")).rejects.toThrow("decodeStream failed");
     expect(storage.sourceCancelled).toBe(true);
 
     // 後片付け

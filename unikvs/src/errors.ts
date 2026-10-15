@@ -316,32 +316,32 @@ setErrorMessage(
 
 // -------------------------------------------------------------------------------------------------
 //
-// トランスフォーマー
+// ミドルウェア
 //
 // -------------------------------------------------------------------------------------------------
 
-// export type TransformerIsOpenErrorMeta = {
+// export type MiddlewareIsOpenErrorMeta = {
 //   readonly name: string;
 // };
 
-// export type TransformerIsOpenErrorArgs = TransformerIsOpenErrorMeta;
+// export type MiddlewareIsOpenErrorArgs = MiddlewareIsOpenErrorMeta;
 
-// export class TransformerIsOpenError extends ErrorBase<TransformerIsOpenErrorMeta> {
+// export class MiddlewareIsOpenError extends ErrorBase<MiddlewareIsOpenErrorMeta> {
 //   static {
-//     this.prototype.name = "UniKvsTransformerIsOpenError";
+//     this.prototype.name = "UniKvsMiddlewareIsOpenError";
 //   }
 
-//   public constructor(args: TransformerIsOpenErrorArgs, options?: ErrorOptions) {
-//     super(args, ({ name }) => `Transformer "${name}" is open`, options);
+//   public constructor(args: MiddlewareIsOpenErrorArgs, options?: ErrorOptions) {
+//     super(args, ({ name }) => `Middleware "${name}" is open`, options);
 //   }
 // }
 
-// setErrorMessage(TransformerIsOpenError, ({ name }) => `トランスフォーマー "${name}" は開いています`, "ja");
+// setErrorMessage(MiddlewareIsOpenError, ({ name }) => `ミドルウェア "${name}" は開いています`, "ja");
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type TransformerIsNotOpenErrorMeta = {
+export type MiddlewareIsNotOpenErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
@@ -351,28 +351,43 @@ export type TransformerIsNotOpenErrorMeta = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type TransformerIsNotOpenErrorArgs = ErrorOptions & TransformerIsNotOpenErrorMeta;
+export type MiddlewareIsNotOpenErrorArgs = ErrorOptions & MiddlewareIsNotOpenErrorMeta;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export class TransformerIsNotOpenError extends ErrorBase<TransformerIsNotOpenErrorMeta> {
+export class MiddlewareIsNotOpenError extends ErrorBase<MiddlewareIsNotOpenErrorMeta> {
   static {
-    this.prototype.name = "UniKvsTransformerIsNotOpenError";
+    this.prototype.name = "UniKvsMiddlewareIsNotOpenError";
   }
 
-  public constructor(args: TransformerIsNotOpenErrorArgs) {
+  public constructor(args: MiddlewareIsNotOpenErrorArgs) {
     const { name, ...options } = args;
-    const meta: TransformerIsNotOpenErrorMeta = { name };
-    super(meta, ({ name }) => `Transformer "${name}" is not open`, options);
+    const meta: MiddlewareIsNotOpenErrorMeta = { name };
+    super(meta, ({ name }) => `Middleware "${name}" is not open`, options);
   }
 }
 
 setErrorMessage(
-  TransformerIsNotOpenError,
-  ({ name }) => `トランスフォーマー "${name}" は開いていません`,
+  MiddlewareIsNotOpenError,
+  ({ name }) => `ミドルウェア "${name}" は開いていません`,
   "ja",
 );
+
+/**
+ * @deprecated `MiddlewareIsNotOpenError` を使用してください。
+ */
+export type TransformerIsNotOpenErrorMeta = MiddlewareIsNotOpenErrorMeta;
+
+/**
+ * @deprecated `MiddlewareIsNotOpenError` を使用してください。
+ */
+export type TransformerIsNotOpenErrorArgs = MiddlewareIsNotOpenErrorArgs;
+
+/**
+ * @deprecated `MiddlewareIsNotOpenError` を使用してください。
+ */
+export const TransformerIsNotOpenError = MiddlewareIsNotOpenError;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -401,13 +416,13 @@ export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamN
   public constructor(args: EncodableStreamNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: EncodableStreamNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Transformer "${name}" does not support encodable stream`, options);
+    super(meta, ({ name }) => `Middleware "${name}" does not support encodable stream`, options);
   }
 }
 
 setErrorMessage(
   EncodableStreamNotSupportedError,
-  ({ name }) => `トランスフォーマー "${name}" はエンコード可能なストリームをサポートしていません`,
+  ({ name }) => `ミドルウェア "${name}" はエンコード可能なストリームをサポートしていません`,
   "ja",
 );
 
@@ -438,19 +453,19 @@ export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamN
   public constructor(args: DecodableStreamNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: DecodableStreamNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Transformer "${name}" does not support decodable stream`, options);
+    super(meta, ({ name }) => `Middleware "${name}" does not support decodable stream`, options);
   }
 }
 
 setErrorMessage(
   DecodableStreamNotSupportedError,
-  ({ name }) => `トランスフォーマー "${name}" はデコード可能なストリームをサポートしていません`,
+  ({ name }) => `ミドルウェア "${name}" はデコード可能なストリームをサポートしていません`,
   "ja",
 );
 
 // -------------------------------------------------------------------------------------------------
 //
-// ストレージ / トランスフォーマー
+// ストレージ / ミドルウェア
 //
 // -------------------------------------------------------------------------------------------------
 
@@ -461,7 +476,7 @@ export type PluginOperationAggregateErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly plugin: "plugin" | "storage" | "transformer";
+  readonly plugin: "plugin" | "storage" | "middleware";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -475,7 +490,7 @@ export type PluginOperationAggregateErrorMeta = {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
-    readonly plugin: "storage" | "transformer";
+    readonly plugin: "storage" | "middleware";
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -501,7 +516,7 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly plugin?: "storage" | "transformer";
+  readonly plugin?: "storage" | "middleware" | "transformer";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -515,7 +530,7 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
-    readonly plugin?: "storage" | "transformer";
+    readonly plugin?: "storage" | "middleware" | "transformer";
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -545,8 +560,12 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
   public constructor(args: PluginOperationAggregateErrorArgs) {
     const { plugin, action, errors, ...options } = args;
     // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
+    // 旧 `transformer` 指定は新 `middleware` に読み替えます。
+    const normalizePlugin = (p: string): "storage" | "middleware" => (
+      p === "transformer" ? "middleware" : p as "storage" | "middleware"
+    );
     const normalizedErrors = errors.map((error) => ({
-      plugin: error.plugin ?? plugin ?? ("" as never),
+      plugin: normalizePlugin((error.plugin ?? plugin ?? "") as string),
       ...(error.name !== undefined ? { name: error.name } : {}),
       ...(error.index !== undefined ? { index: error.index } : {}),
       reason: error.reason,
@@ -568,7 +587,7 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
 setErrorMessage(
   PluginOperationAggregateError,
   ({ action, errors, plugin }) =>
-    `${errors.length} 個の${{ plugin: "プラグイン", storage: "ストレージ", transformer: "トランスフォーマー" }[plugin]}が ${action} 操作に失敗`,
+    `${errors.length} 個の${{ plugin: "プラグイン", storage: "ストレージ", middleware: "ミドルウェア" }[plugin]}が ${action} 操作に失敗`,
   "ja",
 );
 

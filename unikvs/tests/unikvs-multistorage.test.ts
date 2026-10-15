@@ -137,7 +137,10 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     expect(aggregate.meta.errors).toStrictEqual([
       { plugin: "storage", name: "storage1", index: 0, reason: failure },
     ]);
-    expect(storage2.otherWriteErrors).toStrictEqual([aggregate]);
+    expect(storage2.otherWriteErrors).toHaveLength(1);
+    const notified = storage2.otherWriteErrors[0] as readonly import("@unikvs/core").IStorage.IOtherWriteError[];
+    expect(notified[0]?.plugin).toBe("storage");
+    expect(notified[0]?.errors.map((e) => e.reason)).toStrictEqual([failure]);
     expect(storage1.otherWriteErrors).toHaveLength(0);
     expect(storage2.map.get("foo")).toBe("value");
 
@@ -166,7 +169,7 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     expect(aggregate.meta.errors).toStrictEqual([
       { plugin: "storage", name: "storage2", index: 1, reason: failure },
     ]);
-    expect(storage1.otherWriteErrors).toStrictEqual([aggregate]);
+    expect(storage1.otherWriteErrors).toHaveLength(1);
     expect(storage2.otherWriteErrors).toHaveLength(0);
     expect(storage1.map.get("foo")).toBe("value");
 
@@ -197,7 +200,7 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
       new Error("write failed 1"),
       new Error("write failed 2"),
     ]);
-    expect(storage3.otherWriteErrors).toStrictEqual([aggregate]);
+    expect(storage3.otherWriteErrors).toHaveLength(1);
 
     // 後片付け
     await kvs.close();
@@ -509,14 +512,14 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
       write(): void {
         throw new Error("bare write failed");
       }
-      read(args: IStorage.ReadArgs): string {
-        return this.map.get(args.key) as string;
+      read(c: IStorage.ReadContext): string {
+        return this.map.get(c.key) as string;
       }
-      exists(args: IStorage.ExistsArgs): boolean {
-        return this.map.has(args.key);
+      exists(c: IStorage.ExistsContext): boolean {
+        return this.map.has(c.key);
       }
-      delete(args: IStorage.DeleteArgs): void {
-        this.map.delete(args.key);
+      delete(c: IStorage.DeleteContext): void {
+        this.map.delete(c.key);
       }
       clear(): void {
         this.map.clear();

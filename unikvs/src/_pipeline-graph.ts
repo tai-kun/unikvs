@@ -1,16 +1,14 @@
 import {
-  type Variables,
-  type IEncodable,
+  type IMiddleware,
   type IReadableStream,
   RepairNotAllowedError,
 } from "@unikvs/core";
-import { toAbortPromise } from "abort-signal-utils";
-import { callAbortableFnOnce } from "call-fn-once";
 
+import PipelineContext, { type VarsStore } from "./_context.js";
 import { logger, repairLogger } from "./_logger.js";
+import type UniKvsMiddleware from "./_middleware.js";
 import type UniKvsStorage from "./_storage.js";
 import { cancelStreams } from "./_streams.js";
-import type UniKvsTransformer from "./_transformer.js";
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -57,13 +55,13 @@ export type PipelineLeaf = {
 };
 
 /**
- * パイプラインの節となるトランスフォーマーです。
+ * パイプラインの節となるミドルウェアです。
  */
 type PipelineNode = {
   /**
-   * 節を構成するトランスフォーマーです。
+   * 節を構成するミドルウェアです。
    */
-  readonly transformer: UniKvsTransformer;
+  readonly middleware: UniKvsMiddleware;
 
   /**
    * この節で終端する葉です。
@@ -132,9 +130,9 @@ type PipelineDestination = {
   readonly storage: UniKvsStorage;
 
   /**
-   * 適用順のトランスフォーマー列です。末尾未使用分は含みません。
+   * 適用順のミドルウェア列です。末尾未使用分は含みません。
    */
-  readonly transformers: readonly UniKvsTransformer[];
+  readonly middlewares: readonly UniKvsMiddleware[];
 };
 
 /**
@@ -152,11 +150,6 @@ type EncodeTarget = {
   readonly data: unknown;
 
   /**
-   * 葉用に派生した vars です。
-   */
-  readonly vars: Variables;
-
-  /**
    * 写像済みのキーです。
    */
   readonly key: string;
@@ -170,11 +163,6 @@ export type ResolvedLeaf = {
    * 対象の葉です。
    */
   readonly leaf: PipelineLeaf;
-
-  /**
-   * 葉用に派生した vars です。
-   */
-  readonly vars: Variables;
 
   /**
    * 写像済みのキーです。
@@ -195,11 +183,6 @@ export type StreamEncodeTarget = {
    * 葉へ書き込むストリームです。
    */
   readonly stream: IReadableStream;
-
-  /**
-   * 葉用に派生した vars です。
-   */
-  readonly vars: Variables;
 
   /**
    * 写像済みのキーです。
@@ -236,11 +219,11 @@ interface IActiveLeafChecker {
 }
 
 /**
- * 節の `getEncodable` または `mapKey` が失敗したときの処理を行う関数です。
+ * 節の `encodeStream` または `mapKey` が失敗したときの処理を行う関数です。
  */
 interface IEncodeNodeErrorHandler {
   /**
-   * 節の `getEncodable` または `mapKey` が失敗したときの処理です。
+   * 節のセットアップ失敗時の処理です。
    *
    * `true` を返すと節の部分木をスキップします。
    * 例外を投げた場合はそのまま伝播します。
@@ -272,6 +255,37 @@ type BuildEncodeTreeOptions = {
   readonly onNodeError?: IEncodeNodeErrorHandler | undefined;
 };
 
+/**
+ * 操作共通の実行時情報です。
+ *
+ * `store` は操作内の全コンテキストで共有され、下流の `set` が上流の `get` に見えます。
+ * `base` は派生元のコンテキストであり、`derive` で共有ストアを引き継いだ派生コンテキストを作成します。
+ */
+type OperationScope = {
+  /**
+   * 中断シグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 操作対象の論理キーです。
+   */
+  readonly key: string;
+
+  /**
+   * 操作内で共有される変数ストアです。
+   */
+  readonly store: VarsStore;
+
+  /**
+   * 派生元のベースコンテキストです。
+   *
+   * `signal`/`action`/`key`/`repair` の既定値として使用し、`derive` で共有ストアを引き継ぎます。
+   * 省略時は `signal`/`key`/`store` から都度生成します。
+   */
+  readonly base?: PipelineContext | undefined;
+};
+
 // -------------------------------------------------------------------------------------------------
 //
 // ヘルパー
@@ -283,9 +297,9 @@ type BuildEncodeTreeOptions = {
  */
 type MutableNode = {
   /**
-   * 節を構成するトランスフォーマーです。
+   * 節を構成するミドルウェアです。
    */
-  readonly transformer: UniKvsTransformer;
+  readonly middleware: UniKvsMiddleware;
 
   /**
    * この節で終端する葉です。登録順に保持します。
@@ -314,57 +328,6 @@ type MutableNode = {
 };
 
 /**
- * 解決途中の節の状態です。
- */
-type ResolvedNode = {
-  /**
-   * 節の名前空間を反映した vars です。
-   */
-  readonly vars: Variables;
-
-  /**
-   * 節の配下の葉名です。
-   */
-  readonly names: readonly string[];
-
-  /**
-   * 節で写像したキーです。
-   */
-  readonly key: string;
-};
-
-/**
- * 親の vars から葉名の名簿を反映した vars を派生します。
- *
- * 名前配列が親と同一なら複製しません。
- * 名前が変わる境界でのみ複製します。名簿は凍結配列のまま読み取り専用で付与します。
- *
- * @param parent 派生元の vars です。
- * @param names 付与する名簿です。
- * @param parentNames 親に付与済みの名簿です。
- * @returns 派生した vars を返します。同一名簿の場合は親をそのまま返します。
- */
-function deriveVars(
-  parent: Variables,
-  names: readonly string[],
-  parentNames: readonly string[] | undefined,
-): Variables {
-  if (names === parentNames) {
-    return parent;
-  }
-
-  // 複製時の上書きは読み取り専用を迂回するため、親が読み取り専用でも差し替えられます。
-  const cloned = parent.clone({
-    "unikvs:storageNames": names,
-  });
-  if (!cloned.isReadonly("unikvs:storageNames")) {
-    cloned.setReadonly("unikvs:storageNames", names);
-  }
-
-  return cloned;
-}
-
-/**
  * 対象判定に通る葉だけを登録順に絞ります。
  *
  * 全葉が対象なら複製せず `node.allLeaves` を返します。
@@ -380,22 +343,6 @@ function activeLeavesOf(node: PipelineNode, isActive: IActiveLeafChecker): reado
   }
 
   return active;
-}
-
-/**
- * 葉の列に対応する名前空間を返します。
- *
- * 単一葉では凍結済み名簿をそのまま共有します。
- *
- * @param leaves 対象の葉の列です。
- * @returns 葉の列に対応する名簿を返します。
- */
-function activeLeafNames(leaves: readonly PipelineLeaf[]): readonly string[] {
-  if (leaves.length === 1) {
-    return leaves[0]!.nameNames;
-  }
-
-  return Object.freeze(leaves.map((leaf) => leaf.name));
 }
 
 /**
@@ -433,232 +380,105 @@ function createEntries(
 }
 
 /**
- * 計画段階で確定した葉です。
- */
-type PlannedLeaf = {
-  /**
-   * 対象の葉です。
-   */
-  readonly leaf: PipelineLeaf;
-
-  /**
-   * 葉用に派生した vars です。
-   */
-  readonly vars: Variables;
-
-  /**
-   * 写像済みのキーです。
-   */
-  readonly key: string;
-};
-
-/**
- * 計画段階で確定した節です。
- */
-type PlannedNode = {
-  /**
-   * 節のエンコード処理です。
-   */
-  readonly encodable: IEncodable;
-
-  /**
-   * 直下の分岐を登録順に並べた項目列です。
-   */
-  readonly entries: readonly GraphEntry[];
-};
-
-/**
- * ストリームグラフの分岐の割り当てに使用する項目です。
- */
-type GraphEntry =
-  | {
-      /**
-       * 葉であることを示します。
-       */
-      readonly kind: "leaf";
-
-      /**
-       * 確定済みの葉です。
-       */
-      readonly leaf: PlannedLeaf;
-    }
-  | {
-      /**
-       * 節であることを示します。
-       */
-      readonly kind: "node";
-
-      /**
-       * 確定済みの節です。
-       */
-      readonly node: PlannedNode;
-    };
-
-/**
- * 計画段階で節 1 件を確定します。
+ * 操作のベースコンテキストを作成します。
  *
- * ストリームはまだ作らず、encodable とキーだけを確保します。
- * 対象葉を含まない節は null を返し、呼び出し側がその分岐を除去します。
+ * 共有ストアを引き継ぎ、`signal`/`key` を操作スコープの値で上書きした派生コンテキストの雛形を返します。
+ * 各 `apply*` はここから `derive` でデータ用コンテキストを作成し、ストアを共有します。
  *
- * @param node 確定する節です。
- * @param parentVars 親から継承した vars です。
- * @param parentNames 親に付与済みの名簿です。
- * @param parentKey 親から継承したキーです。
- * @param isActive 書き込み対象とする葉を判定します。省略時は全葉が対象です。
- * @param signal 中断シグナルです。
- * @param onNodeError 節のセットアップ失敗を分類します。省略時は生の例外として伝播します。
- * @returns 確定した節を返します。対象葉を含まない場合は null を返します。
+ * @param scope 操作共通の実行時情報です。
+ * @returns ベースコンテキストを返します。
  */
-async function planNode(
-  node: PipelineNode,
-  parentVars: Variables,
-  parentNames: readonly string[] | undefined,
-  parentKey: string,
-  isActive: IActiveLeafChecker | undefined,
-  signal: AbortSignal,
-  onNodeError: IEncodeNodeErrorHandler | undefined,
-): Promise<PlannedNode | null> {
-  signal.throwIfAborted();
-
-  const activeLeaves = isActive === undefined ? node.allLeaves : activeLeavesOf(node, isActive);
-  if (activeLeaves.length === 0) {
-    return null;
+function createBaseContext(scope: OperationScope): PipelineContext {
+  if (scope.base) {
+    return scope.base;
   }
 
-  const names = activeLeaves === node.allLeaves ? node.leafNames : activeLeafNames(activeLeaves);
-  const vars = deriveVars(parentVars, names, parentNames);
-  let encodable: IEncodable;
-  let key: string;
-
-  try {
-    encodable = await node.transformer.getEncodable(vars, signal);
-    key = await node.transformer.mapKey(vars, signal, parentKey);
-  } catch (ex) {
-    if (onNodeError?.(ex, activeLeaves)) {
-      return null;
-    }
-
-    throw ex;
-  }
-
-  const childPlans = new Map<PipelineNode, PlannedNode>();
-  for (const child of node.children) {
-    const planned = await planNode(child, vars, names, key, isActive, signal, onNodeError);
-    if (planned !== null) {
-      childPlans.set(child, planned);
-    }
-  }
-
-  const leafPlans = new Map<PipelineLeaf, PlannedLeaf>();
-  for (const leaf of node.leaves) {
-    if (isActive !== undefined && !isActive(leaf)) {
-      continue;
-    }
-
-    leafPlans.set(leaf, {
-      leaf,
-      vars: deriveVars(vars, leaf.nameNames, names),
-      key,
-    });
-  }
-
-  // 部分木全体がスキップされた節は、消費されないパイプと tee を作らないよう除去します。
-  if (childPlans.size === 0 && leafPlans.size === 0) {
-    return null;
-  }
-
-  const entries: GraphEntry[] = [];
-  for (const entry of node.entries) {
-    switch (entry.kind) {
-      case "leaf": {
-        const planned = leafPlans.get(entry.leaf);
-        if (planned !== undefined) {
-          entries.push({
-            kind: "leaf",
-            leaf: planned,
-          });
-        }
-
-        break;
-      }
-
-      case "node": {
-        const planned = childPlans.get(entry.node);
-        if (planned !== undefined) {
-          entries.push({
-            kind: "node",
-            node: planned,
-          });
-        }
-
-        break;
-      }
-
-      default:
-        entry satisfies never;
-    }
-  }
-
-  return {
-    entries,
-    encodable,
-  };
+  return new PipelineContext({
+    signal: scope.signal,
+    key: scope.key,
+    store: scope.store,
+  });
 }
 
 /**
- * 確定済みの計画から tee とパイプを構築して書き込み対象を収集します。
+ * 単一ミドルウェアの `mapKey` を実行します。
  *
- * 登録順に逐次チェーン tee で入力を分けます。
- * 最後の分岐は tee せず残りをそのまま使います。
+ * 共有ストアを参照するため、カスタム変数の下流変更が写像にも見えます。
  *
- * @param entries 割り当てる分岐の列です。
- * @param input 分岐元の入力ストリームです。
- * @param targets 書き込み対象を収集する列です。
- * @param streams 構築したストリームを収集する集合です。
+ * @param middleware 対象のミドルウェアです。
+ * @param key 写像前のキーです。
+ * @param scope 操作共通の実行時情報です。
+ * @returns 写像後のキーを返します。
  */
-function buildGraph(
-  entries: readonly GraphEntry[],
-  input: IReadableStream,
-  targets: StreamEncodeTarget[],
-  streams: Set<IReadableStream>,
-): void {
-  const assigned: IReadableStream[] = [];
+function applyMapKey(
+  middleware: UniKvsMiddleware,
+  key: string,
+  scope: OperationScope,
+): string {
+  const base = createBaseContext(scope);
+  const c = base.derive({ key });
+  return middleware.mapKey(c as IMiddleware.MapKeyContext);
+}
 
-  let current = input;
-  for (let i = 0; i < entries.length; i++) {
-    if (i < entries.length - 1) {
-      const [branch, rest] = current.tee();
-      streams.add(branch);
-      streams.add(rest);
-      assigned.push(branch);
-      current = rest;
-    } else {
-      assigned.push(current);
-    }
-  }
+/**
+ * 単一ミドルウェアの `encode` を実行し、変換後のデータを返します。
+ *
+ * `next` に下流の実行を渡すことで、オニオン実行となり、下流の `set` が上流の `await next()` 後の `get` に見えます。
+ * 共有ストアのため、変数は全コンテキストで同一参照です。
+ *
+ * @param middleware 対象のミドルウェアです。
+ * @param scope 操作共通の実行時情報です。
+ * @param source 変換前のデータです。
+ * @param next 下流の実行です。省略時はダミーです。
+ * @returns 変換後のデータを返します。
+ */
+async function applyEncode(
+  middleware: UniKvsMiddleware,
+  scope: OperationScope,
+  source: unknown,
+  next: IMiddleware.INext = async () => {},
+): Promise<unknown> {
+  scope.signal.throwIfAborted();
+  const base = createBaseContext(scope);
+  const c = base.derive({
+    action: "set",
+    key: scope.key,
+    source,
+    destination: undefined,
+  });
+  await middleware.encode(c as IMiddleware.EncodeContext, next);
+  scope.signal.throwIfAborted();
 
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!;
-    const stream = assigned[i]!;
-    switch (entry.kind) {
-      case "leaf":
-        targets.push({
-          ...entry.leaf,
-          stream,
-        });
-        break;
+  return c.destination;
+}
 
-      case "node": {
-        const output = stream.pipeThrough(entry.node.encodable);
-        streams.add(output);
-        buildGraph(entry.node.entries, output, targets, streams);
-        break;
-      }
+/**
+ * 単一ミドルウェアの `encodeStream` を実行し、変換後のストリームを返します。
+ *
+ * @param middleware 対象のミドルウェアです。
+ * @param scope 操作共通の実行時情報です。
+ * @param source 変換前のストリームです。
+ * @param next 下流の実行です。省略時はダミーです。
+ * @returns 変換後のストリームを返します。
+ */
+async function applyEncodeStream(
+  middleware: UniKvsMiddleware,
+  scope: OperationScope,
+  source: IReadableStream,
+  next: IMiddleware.INext = async () => {},
+): Promise<IReadableStream> {
+  scope.signal.throwIfAborted();
+  const base = createBaseContext(scope);
+  const c = base.derive({
+    action: "set",
+    key: scope.key,
+    source,
+    destination: undefined,
+  });
+  await middleware.encodeStream(c as IMiddleware.EncodeStreamContext, next);
+  scope.signal.throwIfAborted();
 
-      default:
-        entry satisfies never;
-    }
-  }
+  return c.destination as IReadableStream;
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -668,102 +488,60 @@ function buildGraph(
 // -------------------------------------------------------------------------------------------------
 
 /**
- * 単一操作のスコープで葉の vars と写像キーを解決します。
+ * 単一操作のスコープで葉の写像キーを解決します。
  *
- * 共有節の `mapKey` は操作内で 1 回だけ実行されます。並行して解決されるときも進行中の Promise を共有するため、写像が重複しません。
+ * 新 `mapKey` は同期的であり、中断シグナルも受け付けないため、共有節の写像は操作内で 1 回だけ実行され、結果を使い回します。
+ * 並行解決でも `Map` キャッシュにより重複しません (`resolve` 自体が同期的であるため、競合しません)。
  */
 class LeafResolver {
-  /**
-   * 単一葉のグラフで根と共有する名前空間です。複数葉では undefined です。
-   */
-  readonly #rootParentNames: readonly string[] | undefined;
-
-  /**
-   * 根の vars です。
-   */
-  readonly #rootVars: Variables;
-
   /**
    * 根のキーです。
    */
   readonly #rootKey: string;
 
   /**
-   * 中断シグナルです。
+   * 操作共通の実行時情報です (共有ストアを含みます)。
    */
-  readonly #signal: AbortSignal;
+  readonly #scope: OperationScope;
 
   /**
-   * 節ごとの解決結果のキャッシュです。進行中の Promise を共有し、確定後は結果を使い回します。
+   * 節ごとの解決結果のキャッシュです。
    */
-  readonly #nodeCache: callAbortableFnOnce.CacheMap;
+  readonly #nodeCache: Map<PipelineNode, string>;
 
   /**
    * 通常は `PipelineGraph.createResolver` から生成します。
    *
-   * @param rootParentNames 単一葉のグラフで根と共有する名前空間です。
-   * @param rootVars 根の vars です。
-   * @param rootKey 根のキーです。
-   * @param signal 中断シグナルです。
+   * @param scope 操作共通の実行時情報です。
    */
-  public constructor(
-    rootParentNames: readonly string[] | undefined,
-    rootVars: Variables,
-    rootKey: string,
-    signal: AbortSignal,
-  ) {
-    this.#rootParentNames = rootParentNames;
-    this.#rootVars = rootVars;
-    this.#rootKey = rootKey;
-    this.#signal = signal;
+  public constructor(scope: OperationScope) {
+    this.#rootKey = scope.key;
+    this.#scope = scope;
     this.#nodeCache = new Map();
   }
 
   /**
-   * 葉の vars とキーを解決します。
+   * 葉の写像キーを解決します。
    *
    * @param leaf 解決する葉です。
    * @returns 解決済みの葉を返します。
    */
-  public async resolve(leaf: PipelineLeaf): Promise<ResolvedLeaf> {
-    // 宛先ごとの写像の開始前に中断を確認します。
-    this.#signal.throwIfAborted();
-
+  public resolve(leaf: PipelineLeaf): ResolvedLeaf {
     let key = this.#rootKey;
-    let vars = this.#rootVars;
-    let names = this.#rootParentNames;
 
     for (const node of leaf.path) {
-      // 共有節は進行中の Promise を共有し、並行解決でも写像は 1 回だけです。
-      const resolvedNode = await callAbortableFnOnce({
-        fn: async (signal) => {
-          const nodeVars = deriveVars(vars, node.leafNames, names);
-          using abortPromise = toAbortPromise(this.#signal);
-          const resolvedNode = await Promise.race([
-            node.transformer.mapKey(nodeVars, signal, key).then((nodeKey): ResolvedNode => ({
-              key: nodeKey,
-              vars: nodeVars,
-              names: node.leafNames,
-            })),
-            abortPromise,
-          ]);
+      const cached = this.#nodeCache.get(node);
+      if (cached !== undefined) {
+        key = cached;
+        continue;
+      }
 
-          return resolvedNode;
-        },
-        key: node,
-        signal: this.#signal,
-        cacheMap: this.#nodeCache,
-      });
-      key = resolvedNode.key;
-      vars = resolvedNode.vars;
-      names = resolvedNode.names;
+      const mapped = applyMapKey(node.middleware, key, this.#scope);
+      this.#nodeCache.set(node, mapped);
+      key = mapped;
     }
 
-    return {
-      key,
-      leaf,
-      vars: deriveVars(vars, leaf.nameNames, names),
-    };
+    return { key, leaf };
   }
 }
 
@@ -776,20 +554,19 @@ class LeafResolver {
 /**
  * コンパイル済みのパイプライン・グラフです。
  *
- * 宛先の変換チェーンをトランスフォーマーのインスタンス同一性で共有する根付き木として保持し、操作ごとの走査・エンコード・書き戻し・ストリーム構築を提供します。
+ * 宛先の変換チェーンをミドルウェアのインスタンス同一性で共有する根付き木として保持し、操作ごとの走査・エンコード・書き戻し・ストリーム構築を提供します。
  *
  * 不変条件:
  * - 葉（`leaves`）と各節の項目（`entries`）は宛先の登録順です。
  * - 名簿（`leafNames` / `nameNames`）は凍結された配列で、直通区間では参照を共有します。
- * - 単一葉のグラフでは全節と葉が同じ vars インスタンスを使います（`prepareRootVars`）。
- * - 共有節は 1 操作内で 1 回だけ（`encode` / `getEncodable`）を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
+ * - 共有節は 1 操作内で 1 回だけ `encode`/`encodeStream`/`mapKey` を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
  * - 書き戻しの拒否は、走査中と書き込み中の 2 経路で分類します。いずれも即時に確定します。
  */
 export class PipelineGraph {
   /**
    * 宛先定義の列を trie にコンパイルします。
    *
-   * トランスフォーマーはインスタンス同一性で共有します。同一インスタンスが複数の節に現れても、open/close/onClear の対象には初出の 1 件だけを保持します。
+   * ミドルウェアはインスタンス同一性で共有します。同一インスタンスが複数の節に現れても、`open`/`close`/`use` の対象には初出の 1 件だけを保持します。
    *
    * @param destinations コンパイルする宛先定義です。
    * @returns コンパイル済みのパイプライン・グラフを返します。
@@ -798,8 +575,8 @@ export class PipelineGraph {
     const rootLeaves: PipelineLeaf[] = [];
     const rootChildren: MutableNode[] = [];
     const allLeaves: PipelineLeaf[] = [];
-    const transformers: UniKvsTransformer[] = [];
-    const seenTransformers = new Set<UniKvsTransformer>();
+    const middlewares: UniKvsMiddleware[] = [];
+    const seenMiddlewares = new Set<UniKvsMiddleware>();
 
     for (const dest of destinations) {
       // 葉の index は登録順のもとです。名簿・書き込み順・エラー識別の基準になります。
@@ -810,9 +587,9 @@ export class PipelineGraph {
       let canRepair = false;
 
       let siblings = rootChildren;
-      for (const transformer of dest.transformers) {
+      for (const middleware of dest.middlewares) {
         // 共有はインスタンス同一性だけで判定し、同構造でも別インスタンスは共有しません。
-        let node = siblings.find((candidate) => candidate.transformer === transformer);
+        let node = siblings.find((candidate) => candidate.middleware === middleware);
         if (node === undefined) {
           node = {
             leaves: [],
@@ -820,18 +597,18 @@ export class PipelineGraph {
             children: [],
             allLeaves: [],
             leafNames: [],
-            transformer,
+            middleware,
           };
           siblings.push(node);
 
-          // open/close/onClear の重複実行を避けるため、初出のインスタンスだけを保持します。
-          if (!seenTransformers.has(transformer)) {
-            seenTransformers.add(transformer);
-            transformers.push(transformer);
+          // open/close/use の重複実行を避けるため、初出のインスタンスだけを保持します。
+          if (!seenMiddlewares.has(middleware)) {
+            seenMiddlewares.add(middleware);
+            middlewares.push(middleware);
           }
         }
         // canRepair は経路上の AllowRepair の有無の論理和で、葉ごとに確定します。
-        if (transformer.name === "AllowRepair") {
+        if (middleware.name === "AllowRepair") {
           canRepair = true;
         }
 
@@ -859,7 +636,7 @@ export class PipelineGraph {
     }
 
     const finalize = (node: MutableNode): void => {
-      // 直通の節は子の葉名簿と全葉を共有します。直通区間で vars の複製が起きないようにするためです。
+      // 直通の節は子の葉名簿と全葉を共有します。
       if (node.leaves.length === 0 && node.children.length === 1) {
         const child = node.children[0]!;
         finalize(child);
@@ -896,7 +673,6 @@ export class PipelineGraph {
 
     let rootEntries: readonly PipelineEntry[];
     let rootAllLeaves: readonly PipelineLeaf[];
-    let rootLeafNames: readonly string[];
     if (rootLeaves.length === 0 && rootChildren.length === 1) {
       const child = rootChildren[0]!;
       rootEntries = [
@@ -906,7 +682,6 @@ export class PipelineGraph {
         },
       ];
       rootAllLeaves = child.allLeaves;
-      rootLeafNames = child.leafNames;
     } else {
       const collected = [...rootLeaves];
       for (const child of rootChildren) {
@@ -915,14 +690,9 @@ export class PipelineGraph {
 
       rootEntries = createEntries(rootLeaves, rootChildren);
       rootAllLeaves = collected.toSorted((a, b) => a.index - b.index);
-      if (rootAllLeaves.length === 1) {
-        rootLeafNames = rootAllLeaves[0]!.nameNames;
-      } else {
-        rootLeafNames = Object.freeze(rootAllLeaves.map((leaf) => leaf.name));
-      }
     }
 
-    return new PipelineGraph(rootAllLeaves, rootEntries, rootLeafNames, transformers);
+    return new PipelineGraph(rootAllLeaves, rootEntries, middlewares);
   }
 
   /**
@@ -937,39 +707,24 @@ export class PipelineGraph {
   readonly #entries: readonly PipelineEntry[];
 
   /**
-   * 全葉名です。
+   * `open`/`close`/`use` の対象となるミドルウェアです。初出順に保持します。
    */
-  readonly #leafNames: readonly string[];
-
-  /**
-   * open/close/onClear の対象となるトランスフォーマーです。初出順に保持します。
-   */
-  readonly #transformers: readonly UniKvsTransformer[];
+  readonly #middlewares: readonly UniKvsMiddleware[];
 
   /**
    * 全葉数が 1 件かどうかです。
    */
   readonly #isSingleLeaf: boolean;
 
-  /**
-   * 単一葉のグラフで根と共有する名前空間です。複数葉では undefined です。
-   */
-  readonly #rootParentNames: readonly string[] | undefined;
-
   private constructor(
     leaves: readonly PipelineLeaf[],
     entries: readonly PipelineEntry[],
-    leafNames: readonly string[],
-    transformers: readonly UniKvsTransformer[],
+    middlewares: readonly UniKvsMiddleware[],
   ) {
     this.#leaves = leaves;
     this.#entries = entries;
-    this.#leafNames = leafNames;
-    this.#transformers = transformers;
+    this.#middlewares = middlewares;
     this.#isSingleLeaf = leaves.length === 1;
-    if (this.#isSingleLeaf) {
-      this.#rootParentNames = leaves[0]!.nameNames;
-    }
   }
 
   /**
@@ -980,11 +735,18 @@ export class PipelineGraph {
   }
 
   /**
-   * open/close/onClear の対象となるトランスフォーマーです。
+   * `open`/`close`/`use` の対象となるミドルウェアです。
    * 初出順・重複なしです。
    */
-  public get transformers(): readonly UniKvsTransformer[] {
-    return this.#transformers;
+  public get middlewares(): readonly UniKvsMiddleware[] {
+    return this.#middlewares;
+  }
+
+  /**
+   * @deprecated `middlewares` を使用してください。
+   */
+  public get transformers(): readonly UniKvsMiddleware[] {
+    return this.#middlewares;
   }
 
   /**
@@ -1033,119 +795,125 @@ export class PipelineGraph {
   }
 
   /**
-   * 根の vars を返します。
-   *
-   * 単一葉のグラフでは、渡された vars に葉名の名簿を読み取り専用で付与して使い回します。
-   *
-   * @param vars 操作の vars です。
-   * @returns 根の vars を返します。
-   */
-  public prepareRootVars(vars: Variables): Variables {
-    if (this.#isSingleLeaf) {
-      vars.setReadonly("unikvs:storageNames", this.#leaves[0]!.nameNames);
-    }
-
-    return vars;
-  }
-
-  /**
-   * `clear` 用の共有 vars を返します。
-   *
-   * `prepareRootVars` が返した vars を渡してください。単一葉のグラフでは、付与済みのストレージ名を持つ根の vars をそのまま使い回します。
-   *
-   * @param vars `prepareRootVars` が返した根の vars です。
-   * @returns clear 用の vars を返します。
-   */
-  public prepareClearVars(vars: Variables): Variables {
-    if (this.#isSingleLeaf) {
-      return vars;
-    }
-
-    return deriveVars(vars, this.#leafNames, undefined);
-  }
-
-  /**
-   * 共有 vars から葉用の vars を派生します。
-   *
-   * 単一葉のグラフでは同じインスタンスを返します。
-   *
-   * @param parent 派生元の vars です。
-   * @param leaf 対象の葉です。
-   * @returns 葉用の vars を返します。
-   */
-  public deriveLeafVars(parent: Variables, leaf: PipelineLeaf): Variables {
-    return deriveVars(parent, leaf.nameNames, this.#leafNames);
-  }
-
-  /**
    * 単一操作のスコープでキー写像をメモ化するリゾルバーを生成します。
    *
-   * @param rootVars 根の vars です。
-   * @param key 根のキーです。
-   * @param signal 中断シグナルです。
+   * 新 `mapKey` は同期的であるため、リゾルバーも同期的です。共有節の写像は操作内で 1 回だけ実行されます。
+   *
+   * @param key 根のキー (論理キー) です。
+   * @param vars 根の実行時変数です。
    * @returns 葉リゾルバーを返します。
    */
-  public createResolver(rootVars: Variables, key: string, signal: AbortSignal): LeafResolver {
-    return new LeafResolver(this.#rootParentNames, rootVars, key, signal);
+  public createResolver(scope: OperationScope): LeafResolver {
+    return new LeafResolver(scope);
   }
 
   /**
-   * 葉の経路のトランスフォーマーを逆順に適用してデータをデコードします。
+   * 葉の経路のミドルウェアを逆順に適用してデータをデコードします。
    *
-   * 各段の後に中断を確認します。旧 `get` 経路は確認頻度が低かったため、ここへの統合にあたり確認を強めています。
+   * 各段の前後で中断を確認します。
    *
    * @param leaf デコード元の葉です。
-   * @param vars デコードに使用する vars です。
-   * @param signal 中断シグナルです。
+   * @param scope 操作共通の実行時情報です。`key` は論理キー、`action` は呼び出し側で `get` として扱います。
    * @param data デコードするデータです。
    * @returns デコード済みのデータを返します。
    */
   public async decode(
     leaf: PipelineLeaf,
-    vars: Variables,
-    signal: AbortSignal,
+    scope: OperationScope,
     data: unknown,
   ): Promise<unknown> {
-    let decoded = data;
+    // 経路を逆順 (葉→根) にネスト実行し、下流 (根側) の `set` が上流 (葉側) の `await next()` 後に見えるようにします。
+    // データは外側から内側へ鎖状に渡し、最終結果を外側へ伝播させます。
+    const reversed = leaf.path.toReversed();
+    const run = async (index: number, input: unknown): Promise<unknown> => {
+      if (index >= reversed.length) {
+        return input;
+      }
 
-    using abortPromise = toAbortPromise(signal);
-    for (const node of leaf.path.toReversed()) {
-      decoded = await Promise.race([node.transformer.decode(vars, signal, decoded), abortPromise]);
-    }
+      const node = reversed[index]!;
+      const base = createBaseContext(scope);
+      const ctx = base.derive({
+        action: "get",
+        key: scope.key,
+        source: input,
+        destination: undefined,
+      });
+      let downstreamResult: unknown;
+      let hasDownstream = false;
+      const next: IMiddleware.INext = async () => {
+        downstreamResult = await run(index + 1, ctx.destination);
+        hasDownstream = true;
+      };
 
-    return decoded;
+      await node.middleware.decode(ctx as IMiddleware.DecodeContext, next);
+      scope.signal.throwIfAborted();
+
+      // 下流が実行されたときはその最終結果を返し、そうでなければ自らの出力を返す。
+      // (`next` を呼ばないミドルウェアでは自らの出力が最終となる。)
+      if (hasDownstream) {
+        return downstreamResult;
+      }
+
+      return ctx.destination;
+    };
+
+    return run(0, data);
   }
 
   /**
-   * 葉の経路のトランスフォーマーを逆順に `pipeThrough` してストリームをデコードします。
+   * 葉の経路のミドルウェアを逆順に `pipeThrough` してストリームをデコードします。
    *
    * @param leaf デコード元の葉です。
-   * @param vars デコードに使用する vars です。
-   * @param signal 中断シグナルです。
+   * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param source 入力ストリームです。
    * @returns デコード済みのストリームを返します。
    */
   public async decodeStream(
     leaf: PipelineLeaf,
-    vars: Variables,
-    signal: AbortSignal,
+    scope: OperationScope,
     source: IReadableStream,
   ): Promise<IReadableStream> {
-    let decoded = source;
     // 途中で失敗したときは構築済みのパイプを解放し、ソースストリームがロックされたまま残らないようにします。
     const pipes: IReadableStream[] = [];
     try {
-      for (const node of leaf.path.toReversed()) {
-        const d = await node.transformer.getDecodable(vars, signal);
-        decoded = decoded.pipeThrough(d);
-        pipes.push(decoded);
-      }
+      const reversed = leaf.path.toReversed();
+      const run = async (index: number, input: IReadableStream): Promise<IReadableStream> => {
+        if (index >= reversed.length) {
+          return input;
+        }
+
+        const node = reversed[index]!;
+        const base = createBaseContext(scope);
+        const ctx = base.derive({
+          action: "stream",
+          key: scope.key,
+          source: input,
+          destination: undefined,
+        });
+        let downstreamResult: IReadableStream | undefined;
+        let hasDownstream = false;
+        const next: IMiddleware.INext = async () => {
+          downstreamResult = await run(index + 1, ctx.destination as IReadableStream);
+          hasDownstream = true;
+        };
+
+        await node.middleware.decodeStream(ctx as IMiddleware.DecodeStreamContext, next);
+        scope.signal.throwIfAborted();
+        const output = ctx.destination as IReadableStream;
+        pipes.push(output);
+
+        if (hasDownstream) {
+          return downstreamResult!;
+        }
+
+        return output;
+      };
+
+      return await run(0, source);
     } catch (ex) {
       await cancelStreams(pipes, ex);
       throw ex;
     }
-
-    return decoded;
   }
 
   /**
@@ -1153,57 +921,64 @@ export class PipelineGraph {
    *
    * エンコード中の失敗は生の例外として投げます。
    *
-   * @param rootVars 根の vars です。
-   * @param key 根のキーです。
-   * @param signal 中断シグナルです。
+   * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param data エンコードするデータです。
    * @returns 登録順のエンコード結果を返します。
    */
   public async encode(
-    rootVars: Variables,
-    key: string,
-    signal: AbortSignal,
+    scope: OperationScope,
     data: unknown,
   ): Promise<EncodeTarget[]> {
     // 共有節は 1 回だけ encode し、得られた値は全分岐で参照を共有します（複製しません）。
+    // オニオン実行により、下流の `set` が上流の `await next()` 後の `get` に見えます (共有ストアのため)。
     const targets: EncodeTarget[] = [];
 
     const walk = async (
       node: PipelineNode,
       input: unknown,
-      parentVars: Variables,
-      parentNames: readonly string[] | undefined,
       parentKey: string,
     ): Promise<void> => {
-      signal.throwIfAborted();
+      scope.signal.throwIfAborted();
 
-      const vars = deriveVars(parentVars, node.leafNames, parentNames);
-      // mapKey は encode の後に、同じ vars で適用します。
-      const encoded = await node.transformer.encode(vars, signal, input);
-      const nodeKey = await node.transformer.mapKey(vars, signal, parentKey);
-      for (const entry of node.entries) {
-        if (entry.kind === "node") {
-          await walk(entry.node, encoded, vars, node.leafNames, nodeKey);
-        } else {
-          targets.push({
-            key: nodeKey,
-            data: encoded,
-            leaf: entry.leaf,
-            vars: deriveVars(vars, entry.leaf.nameNames, node.leafNames),
-          });
+      // 親コンテキストを共有ストアで作成し、`next` 内で子の入力として `destination` を参照します。
+      // ミドルウェアは `destination` を設定してから `next` を呼ぶため、`next` 実行時点では親出力が確定しています。
+      const base = createBaseContext(scope);
+      const parentCtx = base.derive({
+        action: "set",
+        key: scope.key,
+        source: input,
+        destination: undefined,
+      });
+      let nodeKey = parentKey;
+      const next: IMiddleware.INext = async () => {
+        // `mapKey` は親出力確定後に、共有ストアで適用します。
+        nodeKey = applyMapKey(node.middleware, parentKey, scope);
+        const encoded = parentCtx.destination;
+        for (const entry of node.entries) {
+          if (entry.kind === "node") {
+            await walk(entry.node, encoded, nodeKey);
+          } else {
+            targets.push({
+              key: nodeKey,
+              data: encoded,
+              leaf: entry.leaf,
+            });
+          }
         }
-      }
+      };
+
+      await node.middleware.encode(parentCtx as IMiddleware.EncodeContext, next);
+      scope.signal.throwIfAborted();
     };
 
     for (const entry of this.#entries) {
       if (entry.kind === "node") {
-        await walk(entry.node, data, rootVars, this.#rootParentNames, key);
+        await walk(entry.node, data, scope.key);
       } else {
         targets.push({
-          key,
+          key: scope.key,
           data,
           leaf: entry.leaf,
-          vars: deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
         });
       }
     }
@@ -1221,20 +996,18 @@ export class PipelineGraph {
    * 走査中に確定した拒否は即座に投げます。書き込み中に判明した拒否も、応答のない他の書き込みを待たずに確定させます。
    * 拒否がなければ全タスクの終了を待ちます。
    *
-   * @param rootVars 書き戻し用の vars です。
-   * @param key 根のキーです。
-   * @param signal 中断シグナルです。
+   * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param targets 書き戻し対象の葉です。登録順に渡します。
    * @param throwOnRepairDenied 書き戻し拒否をエラーとして投げるかどうかです。
    * @param data デコード済みの原データです。
+   * @param write 葉への書き込み処理です。
    */
   public async repair(
-    rootVars: Variables,
-    key: string,
-    signal: AbortSignal,
+    scope: OperationScope,
     targets: readonly PipelineLeaf[],
     throwOnRepairDenied: boolean,
     data: unknown,
+    write: (leaf: PipelineLeaf, key: string, data: unknown) => Promise<void>,
   ): Promise<void> {
     if (targets.length === 0) {
       return;
@@ -1254,15 +1027,14 @@ export class PipelineGraph {
       leaf: PipelineLeaf,
       input: unknown,
       writeKey: string,
-      vars: Variables,
     ): void => {
       writeTasks.push(
         (async () => {
           try {
-            await leaf.storage.write(vars, signal, writeKey, input);
+            await write(leaf, writeKey, input);
           } catch (ex) {
             // 意図的な中断時はエラーではありません。
-            if (signal.aborted) {
+            if (scope.signal.aborted) {
               return;
             }
             if (ex instanceof RepairNotAllowedError) {
@@ -1289,7 +1061,7 @@ export class PipelineGraph {
 
     const skipDenied = (leaf: PipelineLeaf): void => {
       // 意図的な中断時はエラーではありません。
-      if (signal.aborted) {
+      if (scope.signal.aborted) {
         return;
       }
 
@@ -1303,8 +1075,6 @@ export class PipelineGraph {
     const walk = async (
       node: PipelineNode,
       input: unknown,
-      parentVars: Variables,
-      parentNames: readonly string[] | undefined,
       parentKey: string,
     ): Promise<void> => {
       const activeLeaves = activeLeavesOf(node, isTarget);
@@ -1312,10 +1082,6 @@ export class PipelineGraph {
         return;
       }
 
-      // 名簿は対象葉だけの部分集合です。全葉が対象なら節の凍結名簿をそのまま使います。
-      const names =
-        activeLeaves === node.allLeaves ? node.leafNames : activeLeafNames(activeLeaves);
-      const vars = deriveVars(parentVars, names, parentNames);
       let output = input;
       let nodeKey = parentKey;
       const shared = activeLeaves.length >= 2;
@@ -1324,13 +1090,13 @@ export class PipelineGraph {
       // 許可がなければ書き込みに到達しないため、副作用のないスキップに正規化しています。
       if (shared || activeLeaves[0]!.canRepair) {
         try {
-          signal.throwIfAborted();
+          scope.signal.throwIfAborted();
 
-          output = await node.transformer.encode(vars, signal, input);
-          nodeKey = await node.transformer.mapKey(vars, signal, parentKey);
+          output = await applyEncode(node.middleware, scope, input);
+          nodeKey = applyMapKey(node.middleware, parentKey, scope);
         } catch (ex) {
           // 意図的な中断時は中断理由で失敗します。
-          if (signal.aborted) {
+          if (scope.signal.aborted) {
             if (shared) {
               throw ex;
             }
@@ -1364,7 +1130,7 @@ export class PipelineGraph {
 
       for (const entry of node.entries) {
         if (entry.kind === "node") {
-          await walk(entry.node, output, vars, names, nodeKey);
+          await walk(entry.node, output, nodeKey);
         } else {
           if (!isTarget(entry.leaf)) {
             continue;
@@ -1374,14 +1140,14 @@ export class PipelineGraph {
             continue;
           }
 
-          writeLeaf(entry.leaf, output, nodeKey, deriveVars(vars, entry.leaf.nameNames, names));
+          writeLeaf(entry.leaf, output, nodeKey);
         }
       }
     };
 
     for (const entry of this.#entries) {
       if (entry.kind === "node") {
-        await walk(entry.node, data, rootVars, this.#rootParentNames, key);
+        await walk(entry.node, data, scope.key);
       } else {
         if (!isTarget(entry.leaf)) {
           continue;
@@ -1391,12 +1157,7 @@ export class PipelineGraph {
           continue;
         }
 
-        writeLeaf(
-          entry.leaf,
-          data,
-          key,
-          deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
-        );
+        writeLeaf(entry.leaf, data, scope.key);
       }
     }
 
@@ -1414,103 +1175,181 @@ export class PipelineGraph {
   }
 
   /**
-   * 共有節を 1 回だけ取得しながらストリームエンコード木を構築します。
+   * 共有節を 1 回だけ実行しながらストリームエンコード木を構築します。
    *
-   * 計画段階 (`getEncodable` / `mapKey`) の失敗は何も構築せずに伝播するため、呼び出し側が `streams` のソースをキャンセルします。
+   * 新 Middleware の `encodeStream` は `c.source.pipeThrough(...)` で変換し `c.destination` に設定します。
+   * 共有節の実行は 1 回だけであり、分岐点では tee で入力を分けます。
+   * 計画段階の失敗は何も構築せずに伝播するため、呼び出し側が `streams` のソースをキャンセルします。
    * tee とパイプの構築後の失敗は、`streams` に収集したストリーム (分割した読み取り側を含む) を内部でキャンセルしてから伝播します。
    * 呼び出し側はどちらの失敗でも `streams` をキャンセルできます。
    *
+   * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param source 入力ストリームです。
-   * @param rootVars 根の vars です。
-   * @param key 根のキーです。
-   * @param signal 中断シグナルです。
    * @param streams 構築したストリームを収集する集合です。呼び出し側がソースを事前に追加します。
    * @param options 構築オプションです。
    * @returns 構築結果を返します。
    */
   public async buildEncodeTree(
+    scope: OperationScope,
     source: IReadableStream,
-    rootVars: Variables,
-    key: string,
-    signal: AbortSignal,
     streams: Set<IReadableStream>,
     options: BuildEncodeTreeOptions = {},
   ): Promise<StreamEncodeTree> {
-    // 段階 1 は計画です。encodable とキーだけを確定し、ストリームはまだ作りません。
     const { isActive, onNodeError } = options;
-    const childPlans = new Map<PipelineNode, PlannedNode>();
-    const leafPlans = new Map<PipelineLeaf, PlannedLeaf>();
-
-    for (const entry of this.#entries) {
-      if (entry.kind === "leaf") {
-        if (isActive !== undefined && !isActive(entry.leaf)) {
-          continue;
-        }
-
-        leafPlans.set(entry.leaf, {
-          key,
-          leaf: entry.leaf,
-          vars: deriveVars(rootVars, entry.leaf.nameNames, this.#rootParentNames),
-        });
-      } else {
-        const planned = await planNode(
-          entry.node,
-          rootVars,
-          this.#rootParentNames,
-          key,
-          isActive,
-          signal,
-          onNodeError,
-        );
-        if (planned !== null) {
-          childPlans.set(entry.node, planned);
-        }
-      }
-    }
-
-    const entries: GraphEntry[] = [];
-    for (const entry of this.#entries) {
-      if (entry.kind === "leaf") {
-        const planned = leafPlans.get(entry.leaf);
-        if (planned !== undefined) {
-          entries.push({
-            kind: "leaf",
-            leaf: planned,
-          });
-        }
-      } else {
-        const planned = childPlans.get(entry.node);
-        if (planned !== undefined) {
-          entries.push({
-            kind: "node",
-            node: planned,
-          });
-        }
-      }
-    }
-
     const targets: StreamEncodeTarget[] = [];
     let readStream = source;
 
-    // 段階 2 は tee と pipe の構築です。対象がなければ tee も作りません。
-    if (entries.length > 0) {
-      let rootInput = source;
+    // 段階 1 は共有節の単一実行と tee 分岐です。対象外の部分木は作りません。
+    // 旧 `planNode` + `buildGraph` の 2 段階を、新 `encodeStream` の直接実行に統合しています。
+    const walk = async (
+      node: PipelineNode,
+      input: IReadableStream,
+      parentKey: string,
+    ): Promise<{ readonly key: string; readonly output: IReadableStream } | null> => {
+      const activeLeaves = isActive === undefined ? node.allLeaves : activeLeavesOf(node, isActive);
+      if (activeLeaves.length === 0) {
+        return null;
+      }
+
+      scope.signal.throwIfAborted();
+
+      let output: IReadableStream;
+      let nodeKey: string;
       try {
-        // 読み取り側は不変に保ち、書き戻し側だけを木へ通します。
-        if (options.splitRead) {
-          const [repairInput, read] = source.tee();
-          streams.add(repairInput);
-          streams.add(read);
-          rootInput = repairInput;
-          readStream = read;
+        output = await applyEncodeStream(node.middleware, scope, input);
+        streams.add(output);
+        nodeKey = applyMapKey(node.middleware, parentKey, scope);
+      } catch (ex) {
+        if (onNodeError?.(ex, activeLeaves)) {
+          return null;
         }
 
-        buildGraph(entries, rootInput, targets, streams);
-      } catch (ex) {
-        // 構築途中で失敗した場合は、tee の両分岐を含む構築済みストリームを解放してから伝播します。
-        await cancelStreams(streams, ex);
         throw ex;
       }
+
+      // 直下の分岐を登録順に tee で割り当てます。最後の分岐は tee せず残りを使います。
+      const branchEntries = node.entries.filter((entry) => {
+        if (entry.kind === "leaf") {
+          return isActive === undefined || isActive(entry.leaf);
+        }
+
+        const leaves = entry.node.allLeaves;
+        return isActive === undefined || leaves.some(isActive);
+      });
+      if (branchEntries.length === 0) {
+        return null;
+      }
+
+      const assigned: IReadableStream[] = [];
+      let current = output;
+      for (let i = 0; i < branchEntries.length; i++) {
+        if (i < branchEntries.length - 1) {
+          const [branch, rest] = current.tee();
+          streams.add(branch);
+          streams.add(rest);
+          assigned.push(branch);
+          current = rest;
+        } else {
+          assigned.push(current);
+        }
+      }
+
+      for (let i = 0; i < branchEntries.length; i++) {
+        const entry = branchEntries[i]!;
+        const stream = assigned[i]!;
+        if (entry.kind === "leaf") {
+          targets.push({ leaf: entry.leaf, key: nodeKey, stream });
+        } else {
+          const child = await walk(entry.node, stream, nodeKey);
+          if (child === null) {
+            // スキップされた部分木の分岐は解放します。
+            try {
+              await stream.cancel(new Error("Skipped branch"));
+            } catch {}
+          }
+        }
+      }
+
+      return { key: nodeKey, output };
+    };
+
+    try {
+      // 読み取り側は不変に保ち、書き戻し側だけを木へ通します。
+      let rootInput = source;
+      if (options.splitRead) {
+        const [repairInput, read] = source.tee();
+        streams.add(repairInput);
+        streams.add(read);
+        rootInput = repairInput;
+        readStream = read;
+      }
+
+      // 根直下の分岐を登録順に tee で割り当てます。
+      const rootActives = this.#leaves.filter((leaf) => isActive === undefined || isActive(leaf));
+      if (rootActives.length === 0 && this.#entries.length === 0) {
+        return { targets, readStream };
+      }
+
+      const rootBranchEntries = this.#entries.filter((entry) => {
+        if (entry.kind === "leaf") {
+          return isActive === undefined || isActive(entry.leaf);
+        }
+
+        return isActive === undefined || entry.node.allLeaves.some(isActive);
+      });
+
+      if (rootBranchEntries.length > 0) {
+        const assigned: IReadableStream[] = [];
+        let current = rootInput;
+        for (let i = 0; i < rootBranchEntries.length; i++) {
+          if (i < rootBranchEntries.length - 1) {
+            const [branch, rest] = current.tee();
+            streams.add(branch);
+            streams.add(rest);
+            assigned.push(branch);
+            current = rest;
+          } else {
+            assigned.push(current);
+          }
+        }
+
+        for (let i = 0; i < rootBranchEntries.length; i++) {
+          const entry = rootBranchEntries[i]!;
+          const stream = assigned[i]!;
+          if (entry.kind === "leaf") {
+            if (isActive === undefined || isActive(entry.leaf)) {
+              targets.push({ leaf: entry.leaf, key: scope.key, stream });
+            }
+          } else {
+            try {
+              const child = await walk(entry.node, stream, scope.key);
+              if (child === null) {
+                try {
+                  await stream.cancel(new Error("Skipped branch"));
+                } catch {}
+              }
+            } catch (ex) {
+              if (onNodeError) {
+                const leaves = entry.node.allLeaves.filter(
+                  (leaf) => isActive === undefined || isActive(leaf),
+                );
+                if (onNodeError(ex, leaves)) {
+                  try {
+                    await stream.cancel(ex);
+                  } catch {}
+                  continue;
+                }
+              }
+
+              throw ex;
+            }
+          }
+        }
+      }
+    } catch (ex) {
+      // 構築途中で失敗した場合は、tee の両分岐を含む構築済みストリームを解放してから伝播します。
+      await cancelStreams(streams, ex);
+      throw ex;
     }
 
     targets.sort((a, b) => a.leaf.index - b.leaf.index);

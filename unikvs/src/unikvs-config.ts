@@ -1,9 +1,8 @@
-import type { IStorage, ITransformer } from "@unikvs/core";
-import { Variables } from "@unikvs/core";
+import type { IMiddleware, IStorage } from "@unikvs/core";
 
 import { PipelineGraph } from "./_pipeline-graph.js";
+import UniKvsMiddleware from "./_middleware.js";
 import UniKvsStorage from "./_storage.js";
-import UniKvsTransformer from "./_transformer.js";
 import type {
   ValueOf,
   $CheckForkDecodeData,
@@ -34,7 +33,7 @@ import type { Value } from "./value-schemas.js";
 
 type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
   keyof TKeyValueMapping,
-  IStorage.Key
+  string
 >;
 
 /**
@@ -125,36 +124,32 @@ export interface IUniKvsConfigBuilder<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   connect<
-    TTransformer extends ITransformer<
+    TMiddleware extends IMiddleware<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       any,
-      any,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
       [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      any,
-      any,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+      any
     >,
   >(
-    transformer: TTransformer,
+    middleware: TMiddleware,
   ): IUniKvsConfigBuilder<
     TKeyValueMapping,
     TUniKvsDataInput,
     TUniKvsDataOutput,
     [TUniKvsChunkInput] extends [never]
       ? never
-      : [$InferDecodeChunkInput<TTransformer>] extends [never]
+      : [$InferDecodeChunkInput<TMiddleware>] extends [never]
         ? never
         : TUniKvsChunkInput,
     [TUniKvsChunkOutput] extends [never]
       ? never
-      : [$InferEncodeChunkOutput<TTransformer>] extends [never]
+      : [$InferEncodeChunkOutput<TMiddleware>] extends [never]
         ? never
         : TUniKvsChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>
+    $InferDecodeDataInput<TMiddleware>,
+    $InferEncodeDataOutput<TMiddleware>,
+    $InferDecodeChunkInput<TMiddleware>,
+    $InferEncodeChunkOutput<TMiddleware>
   >;
 
   /**
@@ -274,28 +269,24 @@ export interface IUniKvsConfigFinalizer<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   connect<
-    TTransformer extends ITransformer<
+    TMiddleware extends IMiddleware<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
       any,
-      any,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
       [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      any,
-      any,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+      any
     >,
   >(
-    transformer: TTransformer,
+    middleware: TMiddleware,
   ): IUniKvsConfigFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
     TWriteChunkInput,
     TReadChunkOutput,
-    $InferDecodeDataInput<TTransformer>,
-    $InferEncodeDataOutput<TTransformer>,
-    $InferDecodeChunkInput<TTransformer>,
-    $InferEncodeChunkOutput<TTransformer>
+    $InferDecodeDataInput<TMiddleware>,
+    $InferEncodeDataOutput<TMiddleware>,
+    $InferDecodeChunkInput<TMiddleware>,
+    $InferEncodeChunkOutput<TMiddleware>
   >;
 
   /**
@@ -429,14 +420,14 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
      * ストレージに対するパイプラインです。
      * 登録順に保持します。
      */
-    readonly transformers: readonly UniKvsTransformer[];
+    readonly middlewares: readonly UniKvsMiddleware[];
   }[];
 
   /**
    * 現在のメインのパイプラインです。
    * 登録順に保持します。
    */
-  readonly #transformers: UniKvsTransformer[];
+  readonly #middlewares: UniKvsMiddleware[];
 
   /**
    * キーに対応する値のスキーマ情報を解決するリゾルバーです。
@@ -451,7 +442,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
 
     this.#UniKvs = UniKvsConstructor;
     this.#destinations = [];
-    this.#transformers = [];
+    this.#middlewares = [];
     this.#valueSchemaResolver = null;
     if (schema) {
       this.#valueSchemaResolver = createValueSchemaResolver(schema);
@@ -462,13 +453,13 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
   public fork(branch: IUniKvsBranch): this {
-    const prefix = [...this.#transformers];
+    const prefix = [...this.#middlewares];
     const destinations = getBranchDestinationsForFork(branch);
     for (const dest of destinations) {
       this.#destinations.push({
         storage: dest.storage,
-        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのトランスフォーマーを結合します。
-        transformers: [...prefix, ...dest.transformers],
+        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのミドルウェアを結合します。
+        middlewares: [...prefix, ...dest.middlewares],
       });
     }
 
@@ -478,8 +469,8 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
    */
-  public connect(transformer: ITransformer): this {
-    this.#transformers.push(UniKvsTransformer.from(transformer));
+  public connect(middleware: IMiddleware): this {
+    this.#middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
   }
@@ -491,7 +482,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     this.#destinations.push({
       storage: UniKvsStorage.from(storage),
       // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
-      transformers: [...this.#transformers],
+      middlewares: [...this.#middlewares],
     });
 
     return this;
@@ -507,9 +498,9 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     }
 
     return new this.#UniKvs(
-      new Variables(),
+      {},
       // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
-      // 同じトランスフォーマーインスタンスに対するラッパーは共有します。
+      // 同じミドルウェアインスタンスに対するラッパーは共有します。
       PipelineGraph.compile([...this.#destinations]),
       this.#valueSchemaResolver,
     );

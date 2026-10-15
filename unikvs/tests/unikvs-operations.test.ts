@@ -78,7 +78,7 @@ describe("UniKvs - 引数形式の等価性", () => {
     expect(
       storage
         .callsOf("exists")
-        .find((call) => call.vars?.get("unikvs:action") === "has")
+        .find((call) => call.vars?.get("via") === "has")
         ?.vars?.get("via"),
     ).toBe("has");
 

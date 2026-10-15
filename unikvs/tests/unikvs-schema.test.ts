@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
@@ -276,16 +276,18 @@ describe("UniKvs - schema による入出力検証", () => {
 
   test("スキーマの検証は UniKvs の入出力で行われる", async ({ expect }) => {
     // 準備
-    class JsonTransformer implements ITransformer {
+    class JsonTransformer implements IMiddleware {
       readonly name = "JsonTransformer";
       isOpen = true;
 
-      encode(args: ITransformer.EncodeArgs): unknown {
-        return JSON.stringify(args.data);
+      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = JSON.stringify(c.source);
+        await next();
       }
 
-      decode(args: ITransformer.DecodeArgs): string {
-        return JSON.parse(args.data as string) as string;
+      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+        c.destination = JSON.parse(c.source as string) as string;
+        await next();
       }
     }
 

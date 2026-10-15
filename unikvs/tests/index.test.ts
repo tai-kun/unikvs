@@ -10,7 +10,7 @@ import {
   StorageIsNotOpenError,
   WritableStreamNotSupportedError,
   ReadableStreamNotSupportedError,
-  TransformerIsNotOpenError,
+  MiddlewareIsNotOpenError,
   EncodableStreamNotSupportedError,
   DecodableStreamNotSupportedError,
   PluginOperationAggregateError,
@@ -45,7 +45,7 @@ describe("index のエクスポート", () => {
     expect(index.StorageIsNotOpenError).toBe(StorageIsNotOpenError);
     expect(index.WritableStreamNotSupportedError).toBe(WritableStreamNotSupportedError);
     expect(index.ReadableStreamNotSupportedError).toBe(ReadableStreamNotSupportedError);
-    expect(index.TransformerIsNotOpenError).toBe(TransformerIsNotOpenError);
+    expect(index.MiddlewareIsNotOpenError).toBe(MiddlewareIsNotOpenError);
     expect(index.EncodableStreamNotSupportedError).toBe(EncodableStreamNotSupportedError);
     expect(index.DecodableStreamNotSupportedError).toBe(DecodableStreamNotSupportedError);
     expect(index.PluginOperationAggregateError).toBe(PluginOperationAggregateError);

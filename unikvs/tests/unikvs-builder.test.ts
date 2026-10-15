@@ -19,14 +19,19 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(args: Parameters<FakeTransformer["encode"]>[0]): Promise<string> {
-    const data = await super.encode(args);
-    return `${String(data)}${this.#tag}`;
+  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("encode", { data: c.source, c });
+    c.destination = `${String(c.source)}${this.#tag}`;
+    await next!();
   }
 
-  public override async decode(args: Parameters<FakeTransformer["decode"]>[0]): Promise<string> {
-    const data = String(await super.decode(args));
-    return data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("decode", { data: c.source, c });
+    const data = String(c.source);
+    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+    await next!();
   }
 }
 

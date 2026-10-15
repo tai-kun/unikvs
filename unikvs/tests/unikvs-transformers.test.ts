@@ -1,11 +1,11 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
   DecodableStreamNotSupportedError,
   EncodableStreamNotSupportedError,
   PluginOperationAggregateError,
-  TransformerIsNotOpenError,
+  MiddlewareIsNotOpenError,
 } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
@@ -29,13 +29,19 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(args: Parameters<FakeTransformer["encode"]>[0]): Promise<string> {
-    return `${String(await super.encode(args))}${this.#tag}`;
+  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("encode", { data: c.source, c });
+    c.destination = `${String(c.source)}${this.#tag}`;
+    await next!();
   }
 
-  public override async decode(args: Parameters<FakeTransformer["decode"]>[0]): Promise<string> {
-    const data = String(await super.decode(args));
-    return data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("decode", { data: c.source, c });
+    const data = String(c.source);
+    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+    await next!();
   }
 }
 
@@ -77,7 +83,7 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     expect(transformer.isOpen).toBe(true);
   });
 
-  test("クローズドのトランスフォーマーでの encode/decode は TransformerIsNotOpenError を投げる", async ({
+  test("クローズドのミドルウェアでの set/get は集約経由で MiddlewareIsNotOpenError を投げる", async ({
     expect,
   }) => {
     // 準備
@@ -91,9 +97,17 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     await kvs.open();
     transformer.isOpen = false;
 
-    // 実行と検証
-    await expect(kvs.set("foo", "value")).rejects.toThrow(TransformerIsNotOpenError);
-    await expect(kvs.get("foo")).rejects.toThrow(TransformerIsNotOpenError);
+    // 実行と検証: `use` の失敗は集約されて投げられる
+    const setError = await kvs.set("foo", "value").catch((ex) => ex);
+    expect(setError).toBeInstanceOf(PluginOperationAggregateError);
+    expect((setError as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
+      MiddlewareIsNotOpenError,
+    );
+    const getError = await kvs.get("foo").catch((ex) => ex);
+    expect(getError).toBeInstanceOf(PluginOperationAggregateError);
+    expect((getError as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
+      MiddlewareIsNotOpenError,
+    );
 
     // 後片付け
     transformer.isOpen = true;
@@ -186,8 +200,8 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.set("foo", "x", { vars: { request: "r" } });
 
     // 検証
-    expect(t1.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ request: "r" });
-    expect(t2.callsOf("encode")[0]?.vars?.toJSON()).toMatchObject({ request: "r" });
+    expect(t1.callsOf("encode")[0]?.vars?.get("request")).toBe("r");
+    expect(t2.callsOf("encode")[0]?.vars?.get("request")).toBe("r");
     expect(t2.callsOf("encode")[0]?.data).toBe("x");
 
     // 後片付け
@@ -355,9 +369,12 @@ describe("UniKvs - トランスフォーマーフック", () => {
     storage.map.set("foo", "stored");
     const keys: string[] = [];
     class ExistsHook extends FakeTransformer {
-      public async onExists(args: ITransformer.ExistsHookArgs): Promise<void> {
-        keys.push(args.key);
-        args.vars.set("checkedBy", "hook");
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        if (c.action === "has") {
+          keys.push(c.key);
+          c.set("checkedBy", "hook");
+        }
+        await next();
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -388,9 +405,12 @@ describe("UniKvs - トランスフォーマーフック", () => {
     b.map.set("foo", "stored");
     const keys: string[] = [];
     class DeleteHook extends FakeTransformer {
-      public async onDelete(args: ITransformer.DeleteHookArgs): Promise<void> {
-        keys.push(args.key);
-        args.vars.set("deletedBy", "hook");
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        if (c.action === "delete") {
+          keys.push(c.key);
+          c.set("deletedBy", "hook");
+        }
+        await next();
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -419,8 +439,11 @@ describe("UniKvs - トランスフォーマーフック", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     class DenyExists extends FakeTransformer {
-      public async onExists(): Promise<void> {
-        throw new Error("exists denied");
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        if (c.action === "has") {
+          throw new Error("exists denied");
+        }
+        await next();
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -435,7 +458,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 検証
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.plugin).toBe("middleware");
     expect(aggregate.meta.action).toBe("read");
     expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
       "exists denied",
@@ -453,8 +476,11 @@ describe("UniKvs - トランスフォーマーフック", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     class DenyDelete extends FakeTransformer {
-      public async onDelete(): Promise<void> {
-        throw new Error("delete denied");
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        if (c.action === "delete") {
+          throw new Error("delete denied");
+        }
+        await next();
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -469,7 +495,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 検証
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.plugin).toBe("middleware");
     expect(aggregate.meta.action).toBe("delete");
     expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
       "delete denied",
@@ -481,7 +507,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     await kvs.close();
   });
 
-  test("複数の onDelete の失敗は1件の集約エラーに取りまとめられる", async ({ expect }) => {
+  test("複数の use の失敗は fail-fast で1件目が報告される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
@@ -493,8 +519,11 @@ describe("UniKvs - トランスフォーマーフック", () => {
         this.#message = message;
       }
 
-      public async onDelete(): Promise<void> {
-        throw new Error(this.#message);
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        if (c.action === "delete") {
+          throw new Error(this.#message);
+        }
+        await next();
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -507,18 +536,16 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 実行
     const error = await kvs.delete("foo").catch((ex) => ex);
 
-    // 検証: 完了順に依存しないよう理由を整列して比較する
+    // 検証: オニオン実行では先頭の失敗で即時確定し、後段は実行されない
     expect(error).toBeInstanceOf(PluginOperationAggregateError);
     const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("transformer");
+    expect(aggregate.meta.plugin).toBe("middleware");
     expect(aggregate.meta.action).toBe("delete");
-    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message).sort()).toStrictEqual([
+    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
       "first",
-      "second",
     ]);
-    expect(aggregate.meta.errors.map((e) => [e.name, e.index]).sort()).toStrictEqual([
+    expect(aggregate.meta.errors.map((e) => [e.name, e.index])).toStrictEqual([
       ["boom1", 0],
-      ["boom2", 1],
     ]);
     expect(storage.callsOf("delete")).toHaveLength(0);
 

@@ -1,5 +1,5 @@
 import type UniKvsStorage from "./_storage.js";
-import type UniKvsTransformer from "./_transformer.js";
+import type UniKvsMiddleware from "./_middleware.js";
 import type { IUniKvsBranch } from "./unikvs-branch.js";
 
 /**
@@ -15,7 +15,7 @@ type BranchDestination = {
    * ストレージに対するパイプラインです。
    * 登録順に保持します。
    */
-  readonly transformers: readonly UniKvsTransformer[];
+  readonly middlewares: readonly UniKvsMiddleware[];
 };
 
 /**
@@ -28,7 +28,7 @@ type BranchState = {
    * 自前の相対パイプラインです。
    * 登録順に保持します。
    */
-  readonly transformers: UniKvsTransformer[];
+  readonly middlewares: UniKvsMiddleware[];
 
   /**
    * 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
@@ -61,6 +61,6 @@ export function getBranchDestinationsForFork(branch: IUniKvsBranch): BranchDesti
   // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。
   return state.destinations.map((dest) => ({
     storage: dest.storage,
-    transformers: [...dest.transformers],
+    middlewares: [...dest.middlewares],
   }));
 }

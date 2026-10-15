@@ -1,4 +1,4 @@
-import type { IStorage, ITransformer } from "@unikvs/core";
+import type { IMiddleware, IStorage } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import { MissingStorageError } from "../src/errors.js";
@@ -14,41 +14,42 @@ class MockStorage implements IStorage {
   isOpen = true;
   private readonly map = new Map<string, any>();
 
-  async write(args: IStorage.WriteArgs): Promise<void> {
-    this.map.set(args.key, args.data);
+  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    this.map.set(c.key, data);
   }
 
-  async read(args: IStorage.ReadArgs): Promise<unknown> {
-    return this.map.get(args.key);
+  async read(c: IStorage.ReadContext): Promise<unknown> {
+    return this.map.get(c.key);
   }
 
-  async exists(args: IStorage.ExistsArgs): Promise<boolean> {
-    return this.map.has(args.key);
+  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    return this.map.has(c.key);
   }
 
-  async delete(args: IStorage.DeleteArgs): Promise<void> {
-    this.map.delete(args.key);
+  async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
   }
 
-  async clear(_args: IStorage.ClearArgs): Promise<void> {
+  async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 }
 
 /**
- * encode 時に "e:" 接頭辞を付与し、decode 時に除去するトランスフォーマーモックです。
+ * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
-class MockTransformer implements ITransformer {
+class MockTransformer implements IMiddleware {
   readonly name = "MockTransformer";
   readonly isOpen = true;
 
-  async encode(args: ITransformer.EncodeArgs): Promise<unknown> {
-    return `e:${args.data}`;
+  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = `e:${String(c.source)}`;
+    await next();
   }
 
-  async decode(args: ITransformer.DecodeArgs): Promise<unknown> {
-    const s = args.data as string;
-    return s.replace(/^e:/, "");
+  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = String(c.source).replace(/^e:/, "");
+    await next();
   }
 }
 

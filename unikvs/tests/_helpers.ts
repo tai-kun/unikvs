@@ -1,4 +1,8 @@
-import type { Variables, IStorage, ITransformer } from "@unikvs/core";
+import type {
+  IMiddleware,
+  IPipelineContext,
+  IStorage,
+} from "@unikvs/core";
 
 /**
  * 任意のタイミングでテスト側から解放できるゲートです。
@@ -50,8 +54,9 @@ export type StorageCall = {
   readonly method: StorageMethod;
   readonly key: string | undefined;
   readonly data: unknown;
-  readonly vars: Variables | undefined;
+  readonly vars: IPipelineContext | undefined;
   readonly signal: AbortSignal | undefined;
+  readonly action: string | undefined;
 };
 
 /**
@@ -87,61 +92,66 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
    */
   public readonly otherWriteErrors: unknown[] = [];
 
-  public async open(args: IStorage.OpenArgs): Promise<void> {
-    await this.record("open", args);
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    await this.record("open", c, undefined);
     this.isOpen = true;
   }
 
-  public async close(args: IStorage.CloseArgs): Promise<void> {
-    await this.record("close", args);
+  public async close(c: IStorage.CloseContext): Promise<void> {
+    await this.record("close", c, undefined);
     this.isOpen = false;
   }
 
-  public async write(args: IStorage.WriteArgs<TData>): Promise<void> {
-    await this.record("write", args);
-    this.map.set(args.key, args.data);
+  public async write(c: IStorage.WriteContext, data: TData): Promise<void> {
+    await this.record("write", c, data);
+    this.map.set(c.key, data);
   }
 
-  public async read(args: IStorage.ReadArgs): Promise<TData> {
-    await this.record("read", args);
-    return this.map.get(args.key) as TData;
+  public async read(c: IStorage.ReadContext): Promise<TData> {
+    await this.record("read", c, undefined);
+    return this.map.get(c.key) as TData;
   }
 
-  public async exists(args: IStorage.ExistsArgs): Promise<boolean> {
-    await this.record("exists", args);
-    return this.map.has(args.key);
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    await this.record("exists", c, undefined);
+    return this.map.has(c.key);
   }
 
-  public async delete(args: IStorage.DeleteArgs): Promise<void> {
-    await this.record("delete", args);
-    this.map.delete(args.key);
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    await this.record("delete", c, undefined);
+    this.map.delete(c.key);
   }
 
-  public async clear(args: IStorage.ClearArgs): Promise<void> {
-    await this.record("clear", args);
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    await this.record("clear", c, undefined);
     this.map.clear();
   }
 
-  public async onOtherWriteError(args: IStorage.OnOtherWriteErrorArgs): Promise<void> {
-    await this.record("onOtherWriteError", {
-      key: args.key,
-      data: args.error,
-      vars: args.vars,
-      signal: args.signal,
-    });
-    this.otherWriteErrors.push(args.error);
+  public async onOtherWriteError(
+    c: IStorage.OtherWriteErrorHandlerContext,
+    errors: readonly IStorage.IOtherWriteError[],
+  ): Promise<void> {
+    await this.record("onOtherWriteError", c, errors);
+    this.otherWriteErrors.push(errors);
   }
 
   protected async record(
     method: StorageMethod,
-    args: { key?: string; data?: unknown; vars?: Variables; signal?: AbortSignal },
+    c: {
+      readonly key?: string;
+      readonly signal?: AbortSignal;
+      readonly action?: string;
+      readonly get?: (name: string) => unknown;
+    } & IPipelineContext,
+    data: unknown,
   ): Promise<void> {
     const call: StorageCall = {
       method,
-      key: args.key,
-      data: args.data,
-      vars: args.vars,
-      signal: args.signal,
+      key: c.key,
+      data,
+      vars: c as IPipelineContext,
+      signal: c.signal,
+      action: (c as { readonly action?: string }).action,
     };
     this.calls.push(call);
     await this.hook?.(call);
@@ -181,18 +191,20 @@ export class FakeStreamStorage extends FakeStorage {
    */
   public onWriteStart: ((chunk: Uint8Array) => void) | undefined;
 
-  public getWritable(args: IStorage.GetWritableArgs): WritableStream<Uint8Array> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     this.calls.push({
       method: "getWritable",
-      key: args.key,
+      key: c.key,
       data: undefined,
-      vars: args.vars,
-      signal: args.signal,
+      vars: c as IPipelineContext,
+      signal: c.signal,
+      action: c.action,
     });
-    this.onGetWritable?.(args.key);
+    this.onGetWritable?.(c.key);
     const chunks: Uint8Array[] = [];
     const writeGate = this.writeGate;
-    const { signal } = args;
+    const { signal } = c;
+    const key = c.key;
 
     return new WritableStream<Uint8Array>({
       write: async (chunk) => {
@@ -206,20 +218,21 @@ export class FakeStreamStorage extends FakeStorage {
         chunks.push(chunk);
       },
       close: () => {
-        this.map.set(args.key, chunks);
+        this.map.set(key, chunks);
       },
     });
   }
 
-  public getReadable(args: IStorage.GetReadableArgs): ReadableStream<Uint8Array> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     this.calls.push({
       method: "getReadable",
-      key: args.key,
+      key: c.key,
       data: undefined,
-      vars: args.vars,
-      signal: args.signal,
+      vars: c as IPipelineContext,
+      signal: c.signal,
+      action: c.action,
     });
-    const chunks = (this.map.get(args.key) as Uint8Array[] | undefined) ?? [];
+    const chunks = (this.map.get(c.key) as Uint8Array[] | undefined) ?? [];
 
     return new ReadableStream<Uint8Array>({
       start(controller) {
@@ -233,17 +246,30 @@ export class FakeStreamStorage extends FakeStorage {
 }
 
 export type TransformerCall = {
-  readonly method: "open" | "close" | "encode" | "decode" | "getEncodable" | "getDecodable";
+  readonly method:
+    | "open"
+    | "close"
+    | "encode"
+    | "decode"
+    | "encodeStream"
+    | "decodeStream"
+    | "use"
+    | "mapKey"
+    // 旧名との互換のため残します。
+    | "getEncodable"
+    | "getDecodable";
   readonly data: unknown;
-  readonly vars: Variables | undefined;
+  readonly key: string | undefined;
+  readonly action: string | undefined;
+  readonly vars: IPipelineContext | undefined;
   readonly signal: AbortSignal | undefined;
 };
 
 /**
- * open/close で isOpen を切り替え、呼び出しと vars を記録するトランスフォーマーモックです。
- * トランスフォーマーのライフサイクルと vars 伝播の検証に使用します。
+ * open/close で isOpen を切り替え、呼び出しと vars を記録するミドルウェアモックです。
+ * ミドルウェアのライフサイクルと vars 伝播の検証に使用します。
  */
-export class FakeTransformer<TData = any> implements ITransformer<TData, TData, TData, TData> {
+export class FakeTransformer<TData = any> implements IMiddleware<TData, TData, TData, TData> {
   public readonly name: string;
   public isOpen = false;
   public readonly calls: TransformerCall[] = [];
@@ -258,35 +284,65 @@ export class FakeTransformer<TData = any> implements ITransformer<TData, TData, 
     return this.calls.filter((call) => call.method === method);
   }
 
-  public async open(args: ITransformer.OpenArgs): Promise<void> {
-    await this.record("open", args);
+  public async open(c: IMiddleware.OpenContext): Promise<void> {
+    await this.record("open", { data: undefined, c });
     this.isOpen = true;
   }
 
-  public async close(args: ITransformer.CloseArgs): Promise<void> {
-    await this.record("close", args);
+  public async close(c: IMiddleware.CloseContext): Promise<void> {
+    await this.record("close", { data: undefined, c });
     this.isOpen = false;
   }
 
-  public async encode(args: ITransformer.EncodeArgs<TData>): Promise<TData> {
-    await this.record("encode", args);
-    return args.data;
+  public mapKey(c: IMiddleware.MapKeyContext): string {
+    // 記録は同期的には行わず、呼び出し回数の検証用に残します (非同期フックは呼びません)。
+    this.calls.push({
+      method: "mapKey",
+      data: undefined,
+      key: c.key,
+      action: undefined,
+      vars: c as IPipelineContext,
+      signal: undefined,
+    });
+
+    return c.key;
   }
 
-  public async decode(args: ITransformer.DecodeArgs<TData>): Promise<TData> {
-    await this.record("decode", args);
-    return args.data;
+  public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+    await this.record("use", { data: undefined, c });
+    await next();
+  }
+
+  public async encode(c: IMiddleware.EncodeContext<TData>, next: IMiddleware.INext): Promise<void> {
+    await this.record("encode", { data: c.source, c });
+    c.destination = c.source;
+    await next();
+  }
+
+  public async decode(c: IMiddleware.DecodeContext<TData>, next: IMiddleware.INext): Promise<void> {
+    await this.record("decode", { data: c.source, c });
+    c.destination = c.source;
+    await next();
   }
 
   protected async record(
     method: TransformerCall["method"],
-    args: { data?: unknown; vars?: Variables; signal?: AbortSignal },
+    args: {
+      readonly data?: unknown;
+      readonly c: {
+        readonly key?: string;
+        readonly signal?: AbortSignal;
+        readonly action?: string;
+      } & IPipelineContext;
+    },
   ): Promise<void> {
     const call: TransformerCall = {
       method,
       data: args.data,
-      vars: args.vars,
-      signal: args.signal,
+      key: args.c.key,
+      action: (args.c as { readonly action?: string }).action,
+      vars: args.c as IPipelineContext,
+      signal: args.c.signal,
     };
     this.calls.push(call);
     await this.hook?.(call);
@@ -298,7 +354,12 @@ export class FakeTransformer<TData = any> implements ITransformer<TData, TData, 
 }
 
 /**
- * getEncodable/getDecodable をサポートし、通過するチャンクにタグを付与するトランスフォーマーです。
+ * @deprecated `FakeTransformer` を使用してください。
+ */
+export const FakeMiddleware = FakeTransformer;
+
+/**
+ * encodeStream/decodeStream をサポートし、通過するチャンクにタグを付与するミドルウェアです。
  * ストリームパイプラインの構築順序と共有プレフィックスの検証に使用します。
  */
 export class FakeStreamTransformer<TChunk = any> extends FakeTransformer {
@@ -306,20 +367,43 @@ export class FakeStreamTransformer<TChunk = any> extends FakeTransformer {
     super(name);
   }
 
-  public async getEncodable(
-    args: ITransformer.GetEncodableArgs,
-  ): Promise<TransformStream<TChunk, TChunk>> {
-    await this.record("getEncodable", args);
-
-    return new TransformStream();
+  public override async encodeStream(
+    c: IMiddleware.EncodeStreamContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    await this.record("encodeStream", { data: undefined, c });
+    // 旧 `getEncodable` との互換のため、透過ストリームで委譲したこととして記録します。
+    const compatCall: TransformerCall = {
+      method: "getEncodable",
+      data: undefined,
+      key: (c as { readonly key?: string }).key,
+      action: (c as { readonly action?: string }).action,
+      vars: c as IPipelineContext,
+      signal: (c as { readonly signal?: AbortSignal }).signal,
+    };
+    this.calls.push(compatCall);
+    await this.hook?.(compatCall);
+    c.destination = c.source;
+    await next();
   }
 
-  public async getDecodable(
-    args: ITransformer.GetDecodableArgs,
-  ): Promise<TransformStream<TChunk, TChunk>> {
-    await this.record("getDecodable", args);
-
-    return new TransformStream();
+  public override async decodeStream(
+    c: IMiddleware.DecodeStreamContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    await this.record("decodeStream", { data: undefined, c });
+    const compatCall: TransformerCall = {
+      method: "getDecodable",
+      data: undefined,
+      key: (c as { readonly key?: string }).key,
+      action: (c as { readonly action?: string }).action,
+      vars: c as IPipelineContext,
+      signal: (c as { readonly signal?: AbortSignal }).signal,
+    };
+    this.calls.push(compatCall);
+    await this.hook?.(compatCall);
+    c.destination = c.source;
+    await next();
   }
 }
 
