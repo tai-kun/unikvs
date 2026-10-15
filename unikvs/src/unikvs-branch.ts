@@ -1,7 +1,7 @@
 import type { IMiddleware, IStorage } from "@unikvs/core";
 
-import UniKvsStorage from "./_storage.js";
 import UniKvsMiddleware from "./_middleware.js";
+import UniKvsStorage from "./_storage.js";
 import type {
   $IsUnknown,
   $CheckForkDecodeData,
@@ -48,9 +48,6 @@ export interface IUniKvsBranch<
   TLastEncodeChunkOutput = any,
   TBranchHasPersist extends boolean = false,
 > {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   fork<
     TSubChunkInput,
     TSubChunkOutput,
@@ -133,9 +130,6 @@ export interface IUniKvsBranch<
     TBranchHasPersist extends true ? true : TSubHasPersist
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   connect<
     TMiddleware extends IMiddleware<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
@@ -176,9 +170,6 @@ export interface IUniKvsBranch<
     TBranchHasPersist
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   persist<
     TStorage extends IStorage<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
@@ -224,9 +215,6 @@ export interface IUniKvsBranch<
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export default class UniKvsBranch {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public constructor() {
     branchStates.set(this, {
       middlewares: [],
@@ -234,9 +222,6 @@ export default class UniKvsBranch {
     });
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public fork(branch: IUniKvsBranch): this {
     const state = branchStates.get(this)!;
     const prefix = [...state.middlewares];
@@ -252,9 +237,6 @@ export default class UniKvsBranch {
     return this;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public connect(middleware: IMiddleware): this {
     const state = branchStates.get(this)!;
     state.middlewares.push(UniKvsMiddleware.from(middleware));
@@ -262,9 +244,6 @@ export default class UniKvsBranch {
     return this;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public persist(storage: IStorage): this {
     const state = branchStates.get(this)!;
     state.destinations.push({

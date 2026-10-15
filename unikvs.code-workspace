@@ -1,13 +1,18 @@
 {
   "folders": [
+    // root
     {
       "name": ".",
       "path": ".",
     },
+
+    // main
     {
       "name": "unikvs",
       "path": "unikvs",
     },
+
+    // shared
     {
       "name": "@unikvs/core",
       "path": "packages/core",
@@ -20,6 +25,10 @@
       "name": "@unikvs/testing",
       "path": "packages/testing",
     },
+
+    // storage
+
+    // general
     {
       "name": "@unikvs/memory",
       "path": "packages/memory",
@@ -36,6 +45,8 @@
       "name": "@unikvs/lru-cache",
       "path": "packages/lru-cache",
     },
+
+    // browser
     {
       "name": "@unikvs/opfs",
       "path": "packages/opfs",
@@ -52,6 +63,8 @@
       "name": "@unikvs/session-storage",
       "path": "packages/session-storage",
     },
+
+    // nodejs
     {
       "name": "@unikvs/fs.node",
       "path": "packages/fs.node",
@@ -64,6 +77,8 @@
       "name": "@unikvs/redis.node",
       "path": "packages/redis.node",
     },
+
+    // bun
     {
       "name": "@unikvs/fs.bun",
       "path": "packages/fs.bun",
@@ -76,10 +91,10 @@
       "name": "@unikvs/redis.bun",
       "path": "packages/redis.bun",
     },
-    {
-      "name": "@unikvs/writeonly",
-      "path": "packages/writeonly",
-    },
+
+    // middleware
+
+    // serialization
     {
       "name": "@unikvs/json",
       "path": "packages/json",
@@ -96,6 +111,8 @@
       "name": "@unikvs/v8-serde",
       "path": "packages/v8-serde",
     },
+
+    // encoding
     {
       "name": "@unikvs/base64",
       "path": "packages/base64",
@@ -108,6 +125,8 @@
       "name": "@unikvs/hex",
       "path": "packages/hex",
     },
+
+    // integrity
     {
       "name": "@unikvs/compression",
       "path": "packages/compression",
@@ -124,6 +143,8 @@
       "name": "@unikvs/zstd.node",
       "path": "packages/zstd.node",
     },
+
+    // dev
     {
       "name": "@unikvs/debug",
       "path": "packages/debug",
@@ -140,6 +161,12 @@
       "name": "@unikvs/key-prefix",
       "path": "packages/key-prefix",
     },
+    {
+      "name": "@unikvs/writeonly",
+      "path": "packages/writeonly",
+    },
+
+    // docs
     {
       "name": "website",
       "path": "website",

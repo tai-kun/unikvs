@@ -49,7 +49,7 @@ class CountingMapKeyTransformer extends FakeTransformer {
  * 新方式では repair 要求は get/stream のコンテキストで伝達され、書き戻し自体は通常の書き込みとして実行されるため、全書き込みで拒否します。
  */
 class DenyOnRepairWriteStorage extends FakeStorage {
-  public override async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+  public override async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {
     throw new RepairNotAllowedError({ names: [this.name] });
   }
 }

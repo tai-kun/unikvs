@@ -561,9 +561,8 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
     const { plugin, action, errors, ...options } = args;
     // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
     // 旧 `transformer` 指定は新 `middleware` に読み替えます。
-    const normalizePlugin = (p: string): "storage" | "middleware" => (
-      p === "transformer" ? "middleware" : p as "storage" | "middleware"
-    );
+    const normalizePlugin = (p: string): "storage" | "middleware" =>
+      p === "transformer" ? "middleware" : (p as "storage" | "middleware");
     const normalizedErrors = errors.map((error) => ({
       plugin: normalizePlugin((error.plugin ?? plugin ?? "") as string),
       ...(error.name !== undefined ? { name: error.name } : {}),

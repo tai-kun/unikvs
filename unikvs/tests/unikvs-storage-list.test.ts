@@ -2,13 +2,7 @@ import { describe, test } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
-import {
-  FakeStorage,
-  FakeStreamStorage,
-  FakeTransformer,
-  collect,
-  streamOf,
-} from "./_helpers.js";
+import { FakeStorage, FakeStreamStorage, FakeTransformer, streamOf } from "./_helpers.js";
 
 /**
  * 新方式では `unikvs:storageNames` 変数は廃止され、実行時変数は操作全体で共有されます。
@@ -78,10 +72,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const b = new FakeStorage("b");
     a.map.set("foo", "value");
     b.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .persist(a)
-      .persist(b)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
     await kvs.open();
 
     // 実行と検証: has
@@ -105,9 +96,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
   test("stream の set/get はストリームで往復する", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage("s");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .persist(storage)
-      .create();
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行: 書き込み

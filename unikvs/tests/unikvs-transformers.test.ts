@@ -541,12 +541,8 @@ describe("UniKvs - トランスフォーマーフック", () => {
     const aggregate = error as PluginOperationAggregateError;
     expect(aggregate.meta.plugin).toBe("middleware");
     expect(aggregate.meta.action).toBe("delete");
-    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
-      "first",
-    ]);
-    expect(aggregate.meta.errors.map((e) => [e.name, e.index])).toStrictEqual([
-      ["boom1", 0],
-    ]);
+    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual(["first"]);
+    expect(aggregate.meta.errors.map((e) => [e.name, e.index])).toStrictEqual([["boom1", 0]]);
     expect(storage.callsOf("delete")).toHaveLength(0);
 
     // 後片付け

@@ -1,7 +1,7 @@
 import { describe, test } from "vitest";
 
-import { PipelineGraph } from "../src/_pipeline-graph.js";
 import UniKvsMiddleware from "../src/_middleware.js";
+import { PipelineGraph } from "../src/_pipeline-graph.js";
 import UniKvsStorage from "../src/_storage.js";
 import { FakeStorage, FakeTransformer } from "./_helpers.js";
 
@@ -38,11 +38,7 @@ describe("PipelineGraph - 構造の不変条件", () => {
     expect(graph.isSingleLeaf).toBe(false);
     expect([...graph].map((leaf) => leaf.name)).toStrictEqual(["a", "b", "c"]);
     expect(graph.leaves.map((leaf) => leaf.name)).toStrictEqual(["a", "b", "c"]);
-    expect(graph.middlewares.map((middleware) => middleware.name)).toStrictEqual([
-      "A",
-      "B",
-      "C",
-    ]);
+    expect(graph.middlewares.map((middleware) => middleware.name)).toStrictEqual(["A", "B", "C"]);
     expect([...graph.nodes()].map((node) => node.middleware.name)).toStrictEqual(["A", "B", "C"]);
   });
 

@@ -17,9 +17,7 @@ import {
  * ここでは、カスタム変数の伝播と、操作種別・キーがコンテキスト経由で正しく伝わることを検証します。
  */
 describe("UniKvs - vars の伝播", () => {
-  test("set/get/has/delete/stream の操作種別とキーはコンテキストで伝わる", async ({
-    expect,
-  }) => {
+  test("set/get/has/delete/stream の操作種別とキーはコンテキストで伝わる", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string>; logs: StreamValue<Uint8Array> }>()
@@ -168,10 +166,7 @@ describe("UniKvs - vars の伝播", () => {
       (c as { set: (k: string, v: unknown) => void }).set("fromA", true);
       await origOpenA(c);
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .persist(a)
-      .persist(b)
-      .create();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
 
     // 実行: open を並列開始し、b が先に進んでも a の変異が見えないことを確認する
     const openPromise = kvs.open();

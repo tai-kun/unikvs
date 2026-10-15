@@ -1,7 +1,7 @@
 import type { IMiddleware, IStorage } from "@unikvs/core";
 
-import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsMiddleware from "./_middleware.js";
+import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
 import type {
   ValueOf,
@@ -54,9 +54,6 @@ export interface IUniKvsConfigBuilder<
   TLastTransformerDecodeChunkInput = TUniKvsChunkOutput,
   TLastTransformerEncodeChunkOutput = TUniKvsChunkInput,
 > {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   fork<
     TBranchChunkInput,
     TBranchChunkOutput,
@@ -120,9 +117,6 @@ export interface IUniKvsConfigBuilder<
     TLastTransformerEncodeChunkOutput
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   connect<
     TMiddleware extends IMiddleware<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
@@ -152,9 +146,6 @@ export interface IUniKvsConfigBuilder<
     $InferEncodeChunkOutput<TMiddleware>
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   persist<
     TStorage extends IStorage<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
@@ -199,9 +190,6 @@ export interface IUniKvsConfigFinalizer<
   TLastTransformerDecodeChunkInput = TReadChunkOutput,
   TLastTransformerEncodeChunkOutput = TWriteChunkInput,
 > {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   fork<
     TBranchChunkInput,
     TBranchChunkOutput,
@@ -265,9 +253,6 @@ export interface IUniKvsConfigFinalizer<
     TLastTransformerEncodeChunkOutput
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   connect<
     TMiddleware extends IMiddleware<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
@@ -289,9 +274,6 @@ export interface IUniKvsConfigFinalizer<
     $InferEncodeChunkOutput<TMiddleware>
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   persist<
     TStorage extends IStorage<
       [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
@@ -321,9 +303,6 @@ export interface IUniKvsConfigFinalizer<
     TLastTransformerEncodeChunkOutput
   >;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   create(): UniKvs<TKeyValueMapping>;
 }
 
@@ -434,9 +413,6 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions) {
     const [{ schema } = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
 
@@ -449,9 +425,6 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public fork(branch: IUniKvsBranch): this {
     const prefix = [...this.#middlewares];
     const destinations = getBranchDestinationsForFork(branch);
@@ -466,18 +439,12 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     return this;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public connect(middleware: IMiddleware): this {
     this.#middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public persist(storage: IStorage): this {
     this.#destinations.push({
       storage: UniKvsStorage.from(storage),
@@ -488,9 +455,6 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     return this;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public create(): UniKvs {
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (this.#destinations.length === 0) {

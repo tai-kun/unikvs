@@ -539,32 +539,20 @@ export type UniKvsDestination = PipelineLeaf;
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public static config<
     TKeyValueMapping extends KeyValueMapping,
   >(): IUniKvsConfigBuilder<TKeyValueMapping>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public static config<const TSchema extends UniKvsSchema>(options: {
     readonly schema: TSchema;
   }): IUniKvsConfigBuilder<$InferKeyValueMapping<TSchema>>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder;
 
   public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder<any> {
     return new UniKvsConfig(this, options);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
   public static branch(): IUniKvsBranch {
     return new UniKvsBranch();
   }
@@ -593,9 +581,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public constructor(
     vars: VariablesInit,
     pipeline: PipelineGraph,
@@ -675,16 +660,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     return new KeyNotFoundError(args);
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public open(options?: OpenOptions): Promise<void>;
 
   public async open(...args: any): Promise<void> {
@@ -863,7 +842,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               const c = new PipelineContext({
                 signal,
                 action: "close",
-              values: new Map(operationVars).entries(),
+                values: new Map(operationVars).entries(),
               });
               await leaf.storage.close(c as IStorage.CloseContext);
             },
@@ -880,7 +859,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               const c = new PipelineContext({
                 signal,
                 action: "close",
-              values: new Map(operationVars).entries(),
+                values: new Map(operationVars).entries(),
               });
               await plugin.close(c as IMiddleware.CloseContext);
             },
@@ -919,9 +898,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public close(options?: CloseOptions): Promise<void>;
 
   public close(...args: any): Promise<void> {
@@ -934,6 +910,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       if (this.#con === null) {
         const acArr = [...this.#acSet];
         this.#acSet.clear();
+
         for (const ac of acArr) {
           if (!ac.signal.aborted) {
             ac.abort(new UniKvsIsNotOpenError());
@@ -947,6 +924,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const { ac } = con;
       const acArr = [ac, ...this.#acSet];
       this.#acSet.clear();
+
       for (const ac of acArr) {
         if (!ac.signal.aborted) {
           ac.abort(new UniKvsIsNotOpenError());
@@ -969,9 +947,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 const c = new PipelineContext({
                   signal: disposeSignal,
                   action: "close",
-              values: new Map(operationVars).entries(),
+                  values: new Map(operationVars).entries(),
                 });
-                await plugin.close(c as IStorage.CloseContext & IMiddleware.CloseContext);
+                await plugin.close(c as IMiddleware.CloseContext);
               } catch (ex) {
                 logger.error`Failed to close plugin after close failure: ${ex}`;
               }
@@ -986,9 +964,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   async [Symbol.asyncDispose](): Promise<void> {
     if (!this.isOpen) {
       return;
@@ -1167,11 +1142,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const streams = new Set<IReadableStream>([value]);
     let tree;
     try {
-      tree = await this.#pipeline.buildEncodeTree(
-        { signal, key, store },
-        value,
-        streams,
-      );
+      tree = await this.#pipeline.buildEncodeTree({ signal, key, store }, value, streams);
     } catch (ex) {
       await cancelStreams(streams, ex);
       throw ex;
@@ -1218,16 +1189,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
     options: SetOptions<TKeyValueMapping, TKey>,
   ): Promise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
     key: TKey,
     value: SetValue<TKeyValueMapping[TKey]>,
@@ -1267,7 +1232,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       });
       await this.#runMiddlewareUse("write", useContext);
       // `use` による変異を操作変数に反映します。
-// ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
+      // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
       if (isReadableStream(value)) {
         await this.#setStream(io, signal, key, store, value);
       } else {
@@ -1322,16 +1287,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     return raw;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
     options: GetOptions<TKey>,
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
     key: TKey,
     options?: Omit<GetOptions, "key">,
@@ -1377,7 +1336,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
-let data: unknown = undefined;
+      let data: unknown = undefined;
       let hit: ResolvedLeaf | null = null;
       const missing: PipelineLeaf[] = [];
       const errors: PluginErrorRecord[] = [];
@@ -1449,11 +1408,7 @@ let data: unknown = undefined;
 
       if (!repair) {
         // 見つかったストレージ専用の前段パイプラインを逆順に適用して、データをデコードします。
-        data = await this.#pipeline.decode(
-          hit.leaf,
-          { signal, key, store },
-          data,
-        );
+        data = await this.#pipeline.decode(hit.leaf, { signal, key, store }, data);
       }
 
       // デコード後のデータを検証します。
@@ -1467,16 +1422,10 @@ let data: unknown = undefined;
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
-   */
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     options: StreamOptions<TKey>,
   ): Promise<IValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
-   */
   public stream<const TKey extends KeyofKeyValueMappingHasStreamValue<TKeyValueMapping>>(
     key: TKey,
     options?: Omit<StreamOptions, "key">,
@@ -1522,7 +1471,7 @@ let data: unknown = undefined;
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
-// NONE は getReadable の呼び出し前を表す番兵値です。
+      // NONE は getReadable の呼び出し前を表す番兵値です。
       const NONE: any = {};
       let r: IReadableStream = NONE;
       let hit: ResolvedLeaf | null = null;
@@ -1598,9 +1547,7 @@ let data: unknown = undefined;
                   key: target.key,
                   store,
                 });
-                const w = await target.leaf.storage.getWritable(
-                  wc as IStorage.GetWritableContext,
-                );
+                const w = await target.leaf.storage.getWritable(wc as IStorage.GetWritableContext);
                 await target.stream.pipeTo(w, { signal: repairSignal });
               } catch (ex) {
                 // パイプが中断されたときは分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
@@ -1639,11 +1586,7 @@ let data: unknown = undefined;
 
         // 読み取り元をすべてデコードして原データに戻します。
         // 書き戻しの分岐は読み取りパスと分離します。
-        r = await this.#pipeline.decodeStream(
-          hit.leaf,
-          { signal, key, store },
-          r,
-        );
+        r = await this.#pipeline.decodeStream(hit.leaf, { signal, key, store }, r);
 
         if (repair) {
           // 許可のない宛先を先に除外します。throwOnRepairDenied が真のときはここでエラーを確定します。
@@ -1670,14 +1613,10 @@ let data: unknown = undefined;
           if (repairSet.size > 0) {
             // 読み取りパスを変更しないよう、書き戻し側だけを構築して分岐後の読み取り側を返します。
             const streams = new Set<IReadableStream>([r]);
-            const tree = await this.#pipeline.buildEncodeTree(
-              { signal, key, store },
-              r,
-              streams,
-              {
-                isActive: (leaf: PipelineLeaf) => repairSet.has(leaf),
-                splitRead: true,
-                onNodeError: (ex: unknown, activeLeaves: readonly PipelineLeaf[]) => {
+            const tree = await this.#pipeline.buildEncodeTree({ signal, key, store }, r, streams, {
+              isActive: (leaf: PipelineLeaf) => repairSet.has(leaf),
+              splitRead: true,
+              onNodeError: (ex: unknown, activeLeaves: readonly PipelineLeaf[]) => {
                 // 意図的な中断時は中断理由で失敗します。
                 if (signal.aborted) {
                   signal.throwIfAborted();
@@ -1799,14 +1738,8 @@ let data: unknown = undefined;
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public has(options: HasOptions<KeyofKVMap<TKeyValueMapping>>): Promise<boolean>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public has(
     key: KeyofKVMap<TKeyValueMapping>,
     options?: Omit<HasOptions, "key">,
@@ -1844,7 +1777,7 @@ let data: unknown = undefined;
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
-const lock = await io.rLock({ key, signal });
+      const lock = await io.rLock({ key, signal });
       try {
         // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
         // exists に失敗したときは次のストレージを試します。
@@ -1886,14 +1819,8 @@ const lock = await io.rLock({ key, signal });
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public delete(options: DeleteOptions<KeyofKVMap<TKeyValueMapping>>): Promise<void>;
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public delete(
     key: KeyofKVMap<TKeyValueMapping>,
     options?: Omit<DeleteOptions, "key">,
@@ -1931,7 +1858,7 @@ const lock = await io.rLock({ key, signal });
         store,
       });
       await this.#runMiddlewareUse("delete", useContext);
-const lock = await io.lock({ key, signal });
+      const lock = await io.lock({ key, signal });
       try {
         // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
@@ -1971,9 +1898,6 @@ const lock = await io.lock({ key, signal });
     }
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
   public async clear(options?: ClearOptions): Promise<void>;
 
   public async clear(...args: any): Promise<void> {
@@ -2006,7 +1930,7 @@ const lock = await io.lock({ key, signal });
       const lock = await io.lock({ signal });
       try {
         await this.#runMiddlewareUse("clear", useContext);
-  // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
+        // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
         await Promise.all(
           this.#pipeline.leaves.map(async (leaf, index) => {

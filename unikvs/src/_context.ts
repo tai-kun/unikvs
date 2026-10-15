@@ -158,9 +158,9 @@ export default class PipelineContext implements IPipelineContext {
    */
   public destination: any;
 
-  private readonly data: Map<string, unknown>;
+  readonly #data: Map<string, unknown>;
 
-  private readonly readonlyKeys: Set<string>;
+  readonly #readonlyKeys: Set<string>;
 
   /**
    * パイプライン実行用のコンテキストを作成します。
@@ -186,25 +186,26 @@ export default class PipelineContext implements IPipelineContext {
     this.destination = destination;
     if (store) {
       // 共有ストアを参照し、下流の変更が上流に見えるようにします。
-      this.data = store.data;
-      this.readonlyKeys = store.readonlyKeys;
+      this.#data = store.data;
+      this.#readonlyKeys = store.readonlyKeys;
       if (values != null) {
-        const entries = Symbol.iterator in Object(values)
-          ? (values as Iterable<readonly [string, unknown]>)
-          : Object.entries(values as { readonly [key: string]: unknown });
+        const entries =
+          Symbol.iterator in Object(values)
+            ? (values as Iterable<readonly [string, unknown]>)
+            : Object.entries(values as { readonly [key: string]: unknown });
         for (const [k, v] of entries) {
-          this.data.set(k, v);
+          this.#data.set(k, v);
         }
       }
     } else {
-      this.data = new Map(
+      this.#data = new Map(
         values == null
           ? []
           : Symbol.iterator in Object(values)
             ? (values as Iterable<readonly [string, unknown]>)
             : Object.entries(values as { readonly [key: string]: unknown }),
       );
-      this.readonlyKeys = new Set();
+      this.#readonlyKeys = new Set();
     }
   }
 
@@ -215,7 +216,7 @@ export default class PipelineContext implements IPipelineContext {
    * @returns 変数の値を返します。
    */
   public get<const TName extends string>(name: TName): any {
-    return this.data.get(name);
+    return this.#data.get(name);
   }
 
   /**
@@ -226,11 +227,11 @@ export default class PipelineContext implements IPipelineContext {
    * @returns 自身を返します。
    */
   public set<const TName extends string>(name: TName, value: any): this {
-    if (this.readonlyKeys.has(name)) {
+    if (this.#readonlyKeys.has(name)) {
       throw new ReadonlyVariableError({ key: name });
     }
 
-    this.data.set(name, value);
+    this.#data.set(name, value);
 
     return this;
   }
@@ -243,12 +244,12 @@ export default class PipelineContext implements IPipelineContext {
    * @returns 自身を返します。
    */
   public setReadonly<const TName extends string>(name: TName, value: any): this {
-    if (this.readonlyKeys.has(name)) {
+    if (this.#readonlyKeys.has(name)) {
       throw new ReadonlyVariableError({ key: name });
     }
 
-    this.data.set(name, value);
-    this.readonlyKeys.add(name);
+    this.#data.set(name, value);
+    this.#readonlyKeys.add(name);
 
     return this;
   }
@@ -261,7 +262,7 @@ export default class PipelineContext implements IPipelineContext {
    * @returns 変数のエントリー列を返します。
    */
   public entries(): IterableIterator<[string, unknown]> {
-    return this.data.entries();
+    return this.#data.entries();
   }
 
   /**
@@ -272,7 +273,7 @@ export default class PipelineContext implements IPipelineContext {
    * @returns 変数ストアを返します。
    */
   public getStore(): VarsStore {
-    return { data: this.data, readonlyKeys: this.readonlyKeys };
+    return { data: this.#data, readonlyKeys: this.#readonlyKeys };
   }
 
   /**
@@ -319,20 +320,21 @@ export default class PipelineContext implements IPipelineContext {
       source: this.source,
       destination: this.destination,
     });
-    cloned.data.clear();
-    for (const [k, v] of this.data) {
-      cloned.data.set(k, v);
+    cloned.#data.clear();
+    for (const [k, v] of this.#data) {
+      cloned.#data.set(k, v);
     }
-    for (const k of this.readonlyKeys) {
-      cloned.readonlyKeys.add(k);
+    for (const k of this.#readonlyKeys) {
+      cloned.#readonlyKeys.add(k);
     }
 
     if (overrides) {
-      const entries = Symbol.iterator in Object(overrides)
-        ? (overrides as Iterable<readonly [string, unknown]>)
-        : Object.entries(overrides as { readonly [key: string]: unknown });
+      const entries =
+        Symbol.iterator in Object(overrides)
+          ? (overrides as Iterable<readonly [string, unknown]>)
+          : Object.entries(overrides as { readonly [key: string]: unknown });
       for (const [k, v] of entries) {
-        cloned.data.set(k, v);
+        cloned.#data.set(k, v);
       }
     }
 

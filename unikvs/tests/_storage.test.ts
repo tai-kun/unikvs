@@ -172,9 +172,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     const storage = new UniKvsStorage(mock);
 
     // 実行と検証
-    await expect(storage.write(setContext("k1"), "v1")).rejects.toThrow(
-      StorageIsNotOpenError,
-    );
+    await expect(storage.write(setContext("k1"), "v1")).rejects.toThrow(StorageIsNotOpenError);
   });
 
   test("read 時にストレージが閉じていると StorageIsNotOpenError を投げる", async ({ expect }) => {
@@ -200,9 +198,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
       action: "stream",
       key: "k1",
     }) as IStorage.GetReadableContext;
-    await expect(storage.getReadable(c)).rejects.toThrow(
-      ReadableStreamNotSupportedError,
-    );
+    await expect(storage.getReadable(c)).rejects.toThrow(ReadableStreamNotSupportedError);
   });
 
   test("getWritable でストレージがサポートしていないとき WritableStreamNotSupportedError を投げる", async ({
@@ -218,9 +214,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
       action: "set",
       key: "k1",
     }) as IStorage.GetWritableContext;
-    await expect(storage.getWritable(c)).rejects.toThrow(
-      WritableStreamNotSupportedError,
-    );
+    await expect(storage.getWritable(c)).rejects.toThrow(WritableStreamNotSupportedError);
   });
 });
 
@@ -243,7 +237,7 @@ describe("UniKvsStorage - ストリーム", () => {
       cancel: source.cancel.bind(source),
     } as unknown as IReadableStream<Uint8Array>;
     class StreamStorage extends MockStorage {
-      override getReadable(): IReadableStream {
+      getReadable(): IReadableStream {
         return compatible;
       }
     }
@@ -279,7 +273,7 @@ describe("UniKvsStorage - ストリーム", () => {
       close: target.close.bind(target),
     } as unknown as IWritableStream<Uint8Array>;
     class StreamStorage extends MockStorage {
-      override getWritable(): IWritableStream {
+      getWritable(): IWritableStream {
         return compatible;
       }
     }

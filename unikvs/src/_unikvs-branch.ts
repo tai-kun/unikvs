@@ -1,5 +1,5 @@
-import type UniKvsStorage from "./_storage.js";
 import type UniKvsMiddleware from "./_middleware.js";
+import type UniKvsStorage from "./_storage.js";
 import type { IUniKvsBranch } from "./unikvs-branch.js";
 
 /**

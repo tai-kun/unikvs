@@ -1,8 +1,4 @@
-import {
-  type IMiddleware,
-  type IReadableStream,
-  RepairNotAllowedError,
-} from "@unikvs/core";
+import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
 
 import PipelineContext, { type VarsStore } from "./_context.js";
 import { logger, repairLogger } from "./_logger.js";
@@ -410,11 +406,7 @@ function createBaseContext(scope: OperationScope): PipelineContext {
  * @param scope 操作共通の実行時情報です。
  * @returns 写像後のキーを返します。
  */
-function applyMapKey(
-  middleware: UniKvsMiddleware,
-  key: string,
-  scope: OperationScope,
-): string {
+function applyMapKey(middleware: UniKvsMiddleware, key: string, scope: OperationScope): string {
   const base = createBaseContext(scope);
   const c = base.derive({ key });
   return middleware.mapKey(c as IMiddleware.MapKeyContext);
@@ -817,11 +809,7 @@ export class PipelineGraph {
    * @param data デコードするデータです。
    * @returns デコード済みのデータを返します。
    */
-  public async decode(
-    leaf: PipelineLeaf,
-    scope: OperationScope,
-    data: unknown,
-  ): Promise<unknown> {
+  public async decode(leaf: PipelineLeaf, scope: OperationScope, data: unknown): Promise<unknown> {
     // 経路を逆順 (葉→根) にネスト実行し、下流 (根側) の `set` が上流 (葉側) の `await next()` 後に見えるようにします。
     // データは外側から内側へ鎖状に渡し、最終結果を外側へ伝播させます。
     const reversed = leaf.path.toReversed();
@@ -925,19 +913,12 @@ export class PipelineGraph {
    * @param data エンコードするデータです。
    * @returns 登録順のエンコード結果を返します。
    */
-  public async encode(
-    scope: OperationScope,
-    data: unknown,
-  ): Promise<EncodeTarget[]> {
+  public async encode(scope: OperationScope, data: unknown): Promise<EncodeTarget[]> {
     // 共有節は 1 回だけ encode し、得られた値は全分岐で参照を共有します（複製しません）。
     // オニオン実行により、下流の `set` が上流の `await next()` 後の `get` に見えます (共有ストアのため)。
     const targets: EncodeTarget[] = [];
 
-    const walk = async (
-      node: PipelineNode,
-      input: unknown,
-      parentKey: string,
-    ): Promise<void> => {
+    const walk = async (node: PipelineNode, input: unknown, parentKey: string): Promise<void> => {
       scope.signal.throwIfAborted();
 
       // 親コンテキストを共有ストアで作成し、`next` 内で子の入力として `destination` を参照します。
@@ -1023,11 +1004,7 @@ export class PipelineGraph {
     const writeDenialSignal = Promise.withResolvers<void>();
 
     // 葉書き込みは待機せず開始し、各タスクが自身の失敗を処理して allSettled で確定します。
-    const writeLeaf = (
-      leaf: PipelineLeaf,
-      input: unknown,
-      writeKey: string,
-    ): void => {
+    const writeLeaf = (leaf: PipelineLeaf, input: unknown, writeKey: string): void => {
       writeTasks.push(
         (async () => {
           try {
@@ -1072,11 +1049,7 @@ export class PipelineGraph {
       }
     };
 
-    const walk = async (
-      node: PipelineNode,
-      input: unknown,
-      parentKey: string,
-    ): Promise<void> => {
+    const walk = async (node: PipelineNode, input: unknown, parentKey: string): Promise<void> => {
       const activeLeaves = activeLeavesOf(node, isTarget);
       if (activeLeaves.length === 0) {
         return;

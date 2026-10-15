@@ -1,8 +1,4 @@
-import type {
-  IMiddleware,
-  IPipelineContext,
-  IStorage,
-} from "@unikvs/core";
+import type { IMiddleware, IPipelineContext, IStorage } from "@unikvs/core";
 
 /**
  * 任意のタイミングでテスト側から解放できるゲートです。
@@ -362,12 +358,12 @@ export const FakeMiddleware = FakeTransformer;
  * encodeStream/decodeStream をサポートし、通過するチャンクにタグを付与するミドルウェアです。
  * ストリームパイプラインの構築順序と共有プレフィックスの検証に使用します。
  */
-export class FakeStreamTransformer<TChunk = any> extends FakeTransformer {
+export class FakeStreamTransformer<_TChunk = any> extends FakeTransformer {
   public constructor(name = "FakeStreamTransformer") {
     super(name);
   }
 
-  public override async encodeStream(
+  public async encodeStream(
     c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
@@ -387,7 +383,7 @@ export class FakeStreamTransformer<TChunk = any> extends FakeTransformer {
     await next();
   }
 
-  public override async decodeStream(
+  public async decodeStream(
     c: IMiddleware.DecodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {

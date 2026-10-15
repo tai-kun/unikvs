@@ -13,9 +13,7 @@ export type ValueOf<T> = T[keyof T];
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferEncodeDataInput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<infer TEncodeDataInput, any, any, any>
-    ? TEncodeDataInput
-    : never;
+  TMiddleware extends IMiddleware<infer TEncodeDataInput, any, any, any> ? TEncodeDataInput : never;
 
 /**
  * ミドルウェアから、エンコード時の出力データ (符号化済み) の型を推論するユーティリティー型です。
@@ -34,9 +32,7 @@ export type $InferEncodeDataOutput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferDecodeDataInput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<any, infer TDecodeDataInput, any, any>
-    ? TDecodeDataInput
-    : never;
+  TMiddleware extends IMiddleware<any, infer TDecodeDataInput, any, any> ? TDecodeDataInput : never;
 
 /**
  * ミドルウェアから、デコード時の出力データ (生データ) の型を推論するユーティリティー型です。

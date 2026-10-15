@@ -38,7 +38,7 @@ function gateMethod(storage: FakeStorage, method: string): { entered: Gate; rele
  * ストリーム読み取り中の中断を検証するために使用します。
  */
 class AbortableReadableStorage extends FakeStorage {
-  public getReadable(args: IStorage.GetReadableArgs): ReadableStream<Uint8Array> {
+  public getReadable(args: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     const chunk = this.map.get(args.key) as Uint8Array | undefined;
     return new ReadableStream<Uint8Array>({
       start(controller) {

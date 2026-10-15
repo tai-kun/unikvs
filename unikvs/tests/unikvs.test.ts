@@ -22,7 +22,7 @@ class MockStorage implements IStorage {
   isOpen = false;
   openCallCount = 0;
   closeCallCount = 0;
-  lastWriteVars: Variables | undefined;
+  lastWriteVars: IPipelineContext | undefined;
 
   readonly map = new Map<string, unknown>();
 
@@ -643,11 +643,11 @@ describe("UniKvs - オープン / クローズ", () => {
       read(_c: IStorage.ReadContext): any {
         return undefined;
       }
-      exists(_args: IStorage.ExistsArgs): boolean {
+      exists(_args: IStorage.ExistsContext): boolean {
         return false;
       }
-      delete(_args: IStorage.DeleteArgs): void {}
-      clear(_args: IStorage.ClearArgs): void {}
+      delete(_args: IStorage.DeleteContext): void {}
+      clear(_args: IStorage.ClearContext): void {}
     }
 
     // 準備
@@ -1525,7 +1525,9 @@ describe("UniKvs - stream 操作", () => {
     // 準備
     const storage1 = new ReadErrorStorage("storage1");
     const storage2 = new MemoryStreamStorage();
-    const writable = storage2.getWritable({ key: "key1" });
+    const writable = storage2.getWritable({
+      key: "key1",
+    } as unknown as IStorage.GetWritableContext);
     const writer = writable.getWriter();
     await writer.write(Uint8Array.from([1, 2]));
     await writer.close();
@@ -1791,7 +1793,10 @@ describe("UniKvs - stream 操作", () => {
         await next();
       }
 
-      async encodeStream(_c: IMiddleware.EncodeStreamContext, _next: IMiddleware.INext): Promise<void> {
+      async encodeStream(
+        _c: IMiddleware.EncodeStreamContext,
+        _next: IMiddleware.INext,
+      ): Promise<void> {
         throw new Error("getEncodable failed");
       }
     }

@@ -36,12 +36,18 @@ class StringToNumber implements IMiddleware<string, number> {
   readonly name = "StringToNumber";
   readonly isOpen = true;
 
-  async encode(c: IMiddleware.EncodeContext<string, number>, next: IMiddleware.INext): Promise<void> {
+  async encode(
+    c: IMiddleware.EncodeContext<string, number>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     c.destination = Number(c.source);
     await next();
   }
 
-  async decode(c: IMiddleware.DecodeContext<number, string>, next: IMiddleware.INext): Promise<void> {
+  async decode(
+    c: IMiddleware.DecodeContext<number, string>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     c.destination = String(c.source);
     await next();
   }

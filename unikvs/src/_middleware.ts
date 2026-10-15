@@ -29,119 +29,118 @@ export default class UniKvsMiddleware {
     return memoized;
   }
 
-  private readonly mw: IMiddleware;
+  readonly #mw: IMiddleware;
 
-  private managed: boolean;
+  #managed: boolean;
 
   public constructor(mw: IMiddleware) {
-    this.mw = mw;
-    this.managed = false;
+    this.#mw = mw;
+    this.#managed = false;
   }
 
   public get name(): string {
-    return this.mw.name;
+    return this.#mw.name;
   }
 
   public get raw(): IMiddleware {
-    return this.mw;
+    return this.#mw;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
-    if (typeof this.mw.open !== "function") {
+    if (typeof this.#mw.open !== "function") {
       return;
     }
 
-    if (!this.mw.isOpen) {
-      this.managed = true;
-      await this.mw.open(c);
+    if (!this.#mw.isOpen) {
+      this.#managed = true;
+
+      await this.#mw.open(c);
     }
   }
 
   public async close(c: IMiddleware.CloseContext): Promise<void> {
-    if (typeof this.mw.close !== "function") {
+    if (typeof this.#mw.close !== "function") {
       return;
     }
 
-    if (this.mw.isOpen && this.managed) {
-      await this.mw.close(c);
+    if (this.#mw.isOpen && this.#managed) {
+      await this.#mw.close(c);
     }
   }
 
   public mapKey(c: IMiddleware.MapKeyContext): string {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.mapKey !== "function") {
+    if (typeof this.#mw.mapKey !== "function") {
       return c.key;
     }
 
-    return this.mw.mapKey(c);
+    return this.#mw.mapKey(c);
   }
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.use !== "function") {
+    if (typeof this.#mw.use !== "function") {
       await next();
       return;
     }
 
-    await this.mw.use(c, next);
+    await this.#mw.use(c, next);
   }
 
-  public async encode(
-    c: IMiddleware.EncodeContext,
-    next: IMiddleware.INext,
-  ): Promise<void> {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.encode !== "function") {
+    if (typeof this.#mw.encode !== "function") {
       c.destination = c.source;
+
       await next();
+
       return;
     }
 
-    await this.mw.encode(c, next);
+    await this.#mw.encode(c, next);
   }
 
-  public async decode(
-    c: IMiddleware.DecodeContext,
-    next: IMiddleware.INext,
-  ): Promise<void> {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.decode !== "function") {
+    if (typeof this.#mw.decode !== "function") {
       c.destination = c.source;
+
       await next();
+
       return;
     }
 
-    await this.mw.decode(c, next);
+    await this.#mw.decode(c, next);
   }
 
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.encodeStream !== "function") {
-      throw new EncodableStreamNotSupportedError({ name: this.mw.name });
+    if (typeof this.#mw.encodeStream !== "function") {
+      throw new EncodableStreamNotSupportedError({ name: this.#mw.name });
     }
 
-    await this.mw.encodeStream(c, next);
+    await this.#mw.encodeStream(c, next);
 
     if (!isReadableStream(c.destination)) {
-      throw new EncodableStreamNotSupportedError({ name: this.mw.name });
+      throw new EncodableStreamNotSupportedError({ name: this.#mw.name });
     }
   }
 
@@ -149,18 +148,18 @@ export default class UniKvsMiddleware {
     c: IMiddleware.DecodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
-    if (!this.mw.isOpen) {
-      throw new MiddlewareIsNotOpenError({ name: this.mw.name });
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.#mw.name });
     }
 
-    if (typeof this.mw.decodeStream !== "function") {
-      throw new DecodableStreamNotSupportedError({ name: this.mw.name });
+    if (typeof this.#mw.decodeStream !== "function") {
+      throw new DecodableStreamNotSupportedError({ name: this.#mw.name });
     }
 
-    await this.mw.decodeStream(c, next);
+    await this.#mw.decodeStream(c, next);
 
     if (!isReadableStream(c.destination)) {
-      throw new DecodableStreamNotSupportedError({ name: this.mw.name });
+      throw new DecodableStreamNotSupportedError({ name: this.#mw.name });
     }
   }
 }

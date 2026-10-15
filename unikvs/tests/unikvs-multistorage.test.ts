@@ -138,7 +138,8 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
       { plugin: "storage", name: "storage1", index: 0, reason: failure },
     ]);
     expect(storage2.otherWriteErrors).toHaveLength(1);
-    const notified = storage2.otherWriteErrors[0] as readonly import("@unikvs/core").IStorage.IOtherWriteError[];
+    const notified = storage2
+      .otherWriteErrors[0] as readonly import("@unikvs/core").IStorage.IOtherWriteError[];
     expect(notified[0]?.plugin).toBe("storage");
     expect(notified[0]?.errors.map((e) => e.reason)).toStrictEqual([failure]);
     expect(storage1.otherWriteErrors).toHaveLength(0);
