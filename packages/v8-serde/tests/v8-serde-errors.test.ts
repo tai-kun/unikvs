@@ -1,4 +1,11 @@
-import { captureRejection } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
@@ -44,7 +51,9 @@ describe("対応しない実行環境", () => {
 
       try {
         // 実行
-        const error = await captureRejection(target.open({ signal }));
+        const error = await captureRejection(
+          target.open(createOpenContext({ signal }) as IMiddleware.OpenContext),
+        );
 
         // 検証
         // 失敗は UnsupportedRuntimeError で包み、原因と識別子を保持する。
@@ -59,9 +68,19 @@ describe("対応しない実行環境", () => {
 
         // 実行と検証
         // 失敗はキャッシュされないため、再試行では解決が再実行される。
-        await target.open({ signal });
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
         const input = { value: 1 };
-        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        const encodeContext = createEncodeContext(input);
+        await target.encode(
+          encodeContext as IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+          createNext(),
+        );
+        const decodeContext = createDecodeContext(encodeContext.destination);
+        await target.decode(
+          decodeContext as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+          createNext(),
+        );
+        const decoded = decodeContext.destination;
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(loadSpy).toHaveBeenCalledTimes(2);

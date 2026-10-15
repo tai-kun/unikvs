@@ -1,18 +1,41 @@
-import { Variables } from "@unikvs/core";
-import { RepairNotAllowedError } from "@unikvs/core";
-import { collectChunks } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeStreamContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+  type TestContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import AllowRepair from "../src/allow-repair.js";
 
-describe("getEncodable の透過と拒否", () => {
-  test("非修復 vars では素通しの TransformStream を返す", async ({ expect }) => {
+/**
+ * チャンク列をエンコードストリームに流し、出力されたチャンクを順に返します。
+ * 素通しされることを検証するために使用します。
+ */
+async function encodeChunks(gate: AllowRepair, c: TestContext): Promise<unknown[]> {
+  await gate.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+
+  return readAll(c.destination);
+}
+
+/**
+ * エンコードストリーム用コンテキストを作成します。
+ */
+function encodeContextFor(chunks: readonly unknown[]): TestContext {
+  return createEncodeStreamContext(sourceFrom(chunks));
+}
+
+describe("encodeStream の透過", () => {
+  test("素通しのストリームを返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     const chunks = [new Uint8Array([1, 2, 3]), "text", 42];
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), chunks);
+    const output = await encodeChunks(gate, encodeContextFor(chunks));
 
     // 検証
     expect(output).toHaveLength(chunks.length);
@@ -21,50 +44,21 @@ describe("getEncodable の透過と拒否", () => {
     }
   });
 
-  test("修復 vars でも既定状態では素通しの TransformStream を返す", async ({ expect }) => {
-    // 準備
-    const gate = new AllowRepair();
-    const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-
-    // 実行
-    const output = await collectChunks(
-      gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) }),
-      chunks,
-    );
-
-    // 検証
-    expect(output).toHaveLength(chunks.length);
-    for (const [index, chunk] of output.entries()) {
-      expect(chunk).toBe(chunks[index]);
-    }
-  });
-
-  test("disable 中でも非修復 vars では素通しの TransformStream を返す", async ({ expect }) => {
+  test("disable 中でも素通しのストリームを返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
     const chunk = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), [chunk]);
+    const output = await encodeChunks(gate, encodeContextFor([chunk]));
 
     // 検証
     expect(output).toHaveLength(1);
     expect(output[0]).toBe(chunk);
   });
 
-  test("disable 後に修復 vars で RepairNotAllowedError を投げる", ({ expect }) => {
-    // 準備
-    const gate = new AllowRepair();
-    gate.disable();
-
-    // 実行と検証
-    expect(() => gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) })).toThrow(
-      RepairNotAllowedError,
-    );
-  });
-
-  test("enable 後に修復 vars で再び素通しの TransformStream を返す", async ({ expect }) => {
+  test("enable 後に再び素通しのストリームを返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
@@ -72,10 +66,7 @@ describe("getEncodable の透過と拒否", () => {
     const chunk = new Uint8Array([1]);
 
     // 実行
-    const output = await collectChunks(
-      gate.getEncodable({ vars: new Variables({ "unikvs:repair": true }) }),
-      [chunk],
-    );
+    const output = await encodeChunks(gate, encodeContextFor([chunk]));
 
     // 検証
     expect(output).toHaveLength(1);
@@ -87,21 +78,23 @@ describe("getEncodable の透過と拒否", () => {
     const gate = new AllowRepair();
 
     // 実行
-    const output = await collectChunks(gate.getEncodable({ vars: new Variables({}) }), []);
+    const output = await encodeChunks(gate, encodeContextFor([]));
 
     // 検証
     expect(output).toStrictEqual([]);
   });
 });
 
-describe("getDecodable の透過", () => {
-  test("常に素通しの TransformStream を返す", async ({ expect }) => {
+describe("decodeStream の透過", () => {
+  test("常に素通しのストリームを返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     const chunks = [new Uint8Array([1, 2, 3]), "text", { nested: { count: 1 } }];
 
     // 実行
-    const output = await collectChunks(gate.getDecodable(), chunks);
+    const c = createDecodeStreamContext(sourceFrom(chunks));
+    await gate.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+    const output = await readAll(c.destination);
 
     // 検証
     expect(output).toHaveLength(chunks.length);
@@ -110,14 +103,16 @@ describe("getDecodable の透過", () => {
     }
   });
 
-  test("disable 中でも投げずに素通しの TransformStream を返す", async ({ expect }) => {
+  test("disable 中でも投げずに素通しのストリームを返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
     const chunk = new Uint8Array([1]);
 
     // 実行
-    const output = await collectChunks(gate.getDecodable(), [chunk]);
+    const c = createDecodeStreamContext(sourceFrom([chunk]));
+    await gate.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+    const output = await readAll(c.destination);
 
     // 検証
     expect(output).toHaveLength(1);

@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { createSetContext } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidBaseUrlError } from "../src/errors.js";
@@ -12,12 +13,10 @@ describe("baseUrl の検証", () => {
     const storage = new Http("https://kv.example.com/store///", { fetch });
 
     // 実行
-    await storage.write({
-      key: "k",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(calls.length).toBe(1);

@@ -101,18 +101,15 @@ export default class NodeFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { fs } = this.con!;
-    const { key, data, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = this.resolvePath(key);
+    const file = this.resolvePath(c.key);
     try {
-      await fs.promises.writeFile(file.tmp, data, { signal });
+      await fs.promises.writeFile(file.tmp, data, { signal: c.signal });
       await fs.promises.rename(file.tmp, file.dest);
     } catch (ex) {
       // 失敗・中断時には一時ファイルを削除し、既存のデータを保全します。
@@ -124,16 +121,13 @@ export default class NodeFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { fs, path } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
+    assertValidFilename(c.key);
 
-    const file = path.join(this.root, key);
-    const data = await fs.promises.readFile(file, { signal });
+    const file = path.join(this.root, c.key);
+    const data = await fs.promises.readFile(file, { signal: c.signal });
 
     return data;
   }
@@ -141,13 +135,12 @@ export default class NodeFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { fs, path } = this.con!;
-    const { key } = args;
 
-    assertValidFilename(key);
+    assertValidFilename(c.key);
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     try {
       await fs.promises.access(file);
       return true;
@@ -159,13 +152,12 @@ export default class NodeFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { fs, path } = this.con!;
-    const { key } = args;
 
-    assertValidFilename(key);
+    assertValidFilename(c.key);
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     await fs.promises.unlink(file);
   }
 
@@ -183,15 +175,14 @@ export default class NodeFs implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
    */
   public async getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+    c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
     const { fs } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = this.resolvePath(key);
+    const file = this.resolvePath(c.key);
 
     // 一時ファイルへの書き込みストリームを作成します。
     const writeStream = fs.createWriteStream(file.tmp);
@@ -203,21 +194,21 @@ export default class NodeFs implements IStorage {
       streamError ??= err;
     });
 
-    if (signal) {
+    if (c.signal) {
       const onAbort = () => {
         writeStream.destroy(
-          signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason)),
+          c.signal.reason instanceof Error ? c.signal.reason : new Error(String(c.signal.reason)),
         );
         void removeTmp();
       };
-      signal.addEventListener("abort", onAbort, { once: true });
+      c.signal.addEventListener("abort", onAbort, { once: true });
       // ストリームの終了後は中断を監視する必要がないため、リスナーを解除します。
-      writeStream.on("close", () => signal.removeEventListener("abort", onAbort));
+      writeStream.on("close", () => c.signal.removeEventListener("abort", onAbort));
     }
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async write(chunk) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         if (streamError) {
           throw streamError;
         }
@@ -238,14 +229,14 @@ export default class NodeFs implements IStorage {
             writeStream.once("error", onSettled);
             writeStream.once("close", onSettled);
           });
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
           if (streamError) {
             throw streamError;
           }
         }
       },
       async close() {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         if (streamError) {
           throw streamError;
         }
@@ -271,18 +262,15 @@ export default class NodeFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#streams)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { fs, path, stream } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     // signal を渡すことで、中断時にはストリームが中断理由で破棄され、進行中の読み取りも失敗します。
-    const readStream = fs.createReadStream(file, { signal });
+    const readStream = fs.createReadStream(file, { signal: c.signal });
     const readableStream = stream.Readable.toWeb(readStream);
 
     // @ts-expect-error

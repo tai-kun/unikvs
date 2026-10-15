@@ -1,5 +1,12 @@
-import { Variables } from "@unikvs/core";
-import { captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureRejection,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -28,18 +35,28 @@ describe("キーの境界値", () => {
   for (const { label, key } of boundaryKeys) {
     test(`${label} のキーでも保存・取得・削除できる`, async ({ expect, storage }) => {
       // 準備
-      await storage.open({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
       // 実行
-      await storage.write({ key, data: "value", signal, vars: new Variables() });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "value");
 
       // 検証
-      expect(await storage.read({ key, signal })).toBe("value");
-      expect(await storage.exists({ key, signal })).toBe(true);
+      expect(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(
+        "value",
+      );
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(true);
 
-      await storage.delete({ key, signal });
-      expect(await storage.exists({ key, signal })).toBe(false);
-      expect(await captureRejection(storage.read({ key, signal }))).toBeInstanceOf(DOMException);
+      await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(false);
+      expect(
+        await captureRejection(
+          storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+        ),
+      ).toBeInstanceOf(DOMException);
     });
   }
 });
@@ -47,73 +64,91 @@ describe("キーの境界値", () => {
 describe("キーの同一性", () => {
   test("大文字と小文字が異なるキーは区別される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key: "Key", data: "upper", signal, vars: new Variables() });
-    await storage.write({ key: "key", data: "lower", signal, vars: new Variables() });
+    await storage.write(createSetContext("Key", { signal }) as IStorage.WriteContext, "upper");
+    await storage.write(createSetContext("key", { signal }) as IStorage.WriteContext, "lower");
 
     // 検証
-    expect(await storage.read({ key: "Key", signal })).toBe("upper");
-    expect(await storage.read({ key: "key", signal })).toBe("lower");
-    expect(await storage.exists({ key: "KEY", signal })).toBe(false);
+    expect(await storage.read(createGetContext("Key", { signal }) as IStorage.ReadContext)).toBe(
+      "upper",
+    );
+    expect(await storage.read(createGetContext("key", { signal }) as IStorage.ReadContext)).toBe(
+      "lower",
+    );
+    expect(
+      await storage.exists(createHasContext("KEY", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
   });
 
   test("前後の空白だけが異なるキーは区別される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key: "k", data: "plain", signal, vars: new Variables() });
-    await storage.write({ key: " k ", data: "padded", signal, vars: new Variables() });
+    await storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "plain");
+    await storage.write(createSetContext(" k ", { signal }) as IStorage.WriteContext, "padded");
 
     // 検証
-    expect(await storage.read({ key: "k", signal })).toBe("plain");
-    expect(await storage.read({ key: " k ", signal })).toBe("padded");
+    expect(await storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toBe(
+      "plain",
+    );
+    expect(await storage.read(createGetContext(" k ", { signal }) as IStorage.ReadContext)).toBe(
+      "padded",
+    );
   });
 
   test("同じ内容の文字列キーへ書き込むと同じ値を上書きする", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key: "k1", data: "first", signal, vars: new Variables() });
-    await storage.write({ key: `k${1}`, data: "second", signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "first");
+    await storage.write(createSetContext(`k${1}`, { signal }) as IStorage.WriteContext, "second");
 
     // 検証
-    expect(await storage.read({ key: "k1", signal })).toBe("second");
+    expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+      "second",
+    );
   });
 });
 
 describe("プロトタイプ汚染キー", () => {
   test("__proto__ へ書き込んでも Object.prototype を汚染しない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({
-      key: "__proto__",
-      data: { polluted: true },
-      signal,
-      vars: new Variables(),
+    await storage.write(createSetContext("__proto__", { signal }) as IStorage.WriteContext, {
+      polluted: true,
     });
 
     // 検証
-    expect(await storage.read({ key: "__proto__", signal })).toStrictEqual({ polluted: true });
+    expect(
+      await storage.read(createGetContext("__proto__", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual({ polluted: true });
     expect(({} as Record<string, unknown>)["polluted"]).toBe(undefined);
     expect(Object.prototype).not.toHaveProperty("polluted");
   });
 
   test("constructor へ書き込んでも既存のキーは影響を受けない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    await storage.write({ key: "constructor", data: "shadowed", signal, vars: new Variables() });
+    await storage.write(
+      createSetContext("constructor", { signal }) as IStorage.WriteContext,
+      "shadowed",
+    );
 
     // 検証
-    expect(await storage.read({ key: "constructor", signal })).toBe("shadowed");
-    expect(await storage.read({ key: "k1", signal })).toBe("v1");
+    expect(
+      await storage.read(createGetContext("constructor", { signal }) as IStorage.ReadContext),
+    ).toBe("shadowed");
+    expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+      "v1",
+    );
   });
 });

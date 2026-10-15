@@ -1,3 +1,5 @@
+import type { IMiddleware } from "@unikvs/core";
+import { createClearContext, createNext } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -32,13 +34,15 @@ describe("KeyPrefixClearNotSupportedError の国際化 (server)", () => {
     );
   });
 
-  test("ja を設定すると onClear のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const prefix = new KeyPrefix("tenant:", { clearBehavior: "deny" });
     setLang("ja");
 
     // 実行と検証
-    expect(() => prefix.onClear()).toThrow(
+    await expect(
+      prefix.use(createClearContext() as IMiddleware.UseContext, createNext()),
+    ).rejects.toThrow(
       'プレフィックス "tenant:" 付きの KeyPrefix.clear は範囲限定削除を保証できないため実行できません。単一テナント占有が保証できる場合には clearBehavior "allow" を使ってください',
     );
   });
@@ -62,7 +66,7 @@ describe("KeyPrefixClearNotSupportedError の国際化 (server)", () => {
     );
   });
 
-  test("日本語メッセージでも prefix は meta にそのまま保持される", ({ expect, setLang }) => {
+  test("日本語メッセージでも prefix は meta にそのまま保持される", async ({ expect, setLang }) => {
     // 準備
     const prefix = new KeyPrefix("テナント🔑:", { clearBehavior: "deny" });
     setLang("ja");
@@ -70,7 +74,7 @@ describe("KeyPrefixClearNotSupportedError の国際化 (server)", () => {
 
     // 実行
     try {
-      prefix.onClear();
+      await prefix.use(createClearContext() as IMiddleware.UseContext, createNext());
     } catch (ex) {
       error = ex;
     }

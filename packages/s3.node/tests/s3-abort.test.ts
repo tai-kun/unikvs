@@ -1,4 +1,14 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { StorageAbortedError } from "../src/errors.js";
@@ -42,31 +52,41 @@ describe("AbortSignal による中断", () => {
     storage,
   }) => {
     // 準備
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
     const controller = new AbortController();
     controller.abort(new Error("独自の中断理由"));
     const { signal } = controller;
 
     // 実行と検証
     await expect(
-      storage.write({
-        key: "pre-aborted.bin",
-        data: new Uint8Array([1]),
-        signal,
-        vars: new Variables({}),
-      }),
+      storage.write(
+        createSetContext("pre-aborted.bin", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toMatchObject({ name: "AbortError" });
-    await expect(storage.read({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
+    await expect(
+      storage.read(createGetContext("pre-aborted.bin", { signal }) as IStorage.ReadContext),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
-    await expect(storage.exists({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
+    await expect(
+      storage.exists(createHasContext("pre-aborted.bin", { signal }) as IStorage.ExistsContext),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
-    await expect(storage.delete({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
+    await expect(
+      storage.delete(createDeleteContext("pre-aborted.bin", { signal }) as IStorage.DeleteContext),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
-    await expect(storage.clear({ signal })).rejects.toMatchObject({ name: "AbortError" });
-    await expect(storage.getReadable({ key: "pre-aborted.bin", signal })).rejects.toMatchObject({
+    await expect(
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    await expect(
+      storage.getReadable(
+        createStreamContext("pre-aborted.bin", { signal }) as IStorage.GetReadableContext,
+      ),
+    ).rejects.toMatchObject({
       name: "AbortError",
     });
   });
@@ -77,14 +97,16 @@ describe("AbortSignal による中断", () => {
   }) => {
     // 準備
     const key = "pre-aborted-writable.bin";
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
     const controller = new AbortController();
     controller.abort();
     let caught: unknown;
 
     // 実行
     try {
-      storage.getWritable({ key, vars: new Variables({}), signal: controller.signal });
+      storage.getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      );
     } catch (error) {
       caught = error;
     }
@@ -103,32 +125,42 @@ describe("AbortSignal による中断", () => {
   }) => {
     // 準備
     const targetKey = "in-flight-target.bin";
-    storage.open();
-    await storage.write({
-      key: targetKey,
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables({}),
-    });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(
+      createSetContext(targetKey, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     await withDelayedProxy(endpoint, async (proxyEndpoint) => {
       const proxyStorage = new S3(bucket, createClientConfig(proxyEndpoint));
-      proxyStorage.open();
+      proxyStorage.open(createOpenContext() as IStorage.OpenContext);
 
       try {
         // 実行と検証
         const cases: ((abortSignal: AbortSignal) => Promise<unknown>)[] = [
           (abortSignal) =>
-            proxyStorage.write({
-              key: "in-flight-write.bin",
-              data: new Uint8Array([2]),
-              signal: abortSignal,
-              vars: new Variables({}),
-            }),
-          (abortSignal) => proxyStorage.read({ key: targetKey, signal: abortSignal }),
-          (abortSignal) => proxyStorage.exists({ key: targetKey, signal: abortSignal }),
-          (abortSignal) => proxyStorage.delete({ key: targetKey, signal: abortSignal }),
-          (abortSignal) => proxyStorage.clear({ signal: abortSignal }),
+            proxyStorage.write(
+              createSetContext("in-flight-write.bin", {
+                signal: abortSignal,
+              }) as IStorage.WriteContext,
+              new Uint8Array([2]),
+            ),
+          (abortSignal) =>
+            proxyStorage.read(
+              createGetContext(targetKey, { signal: abortSignal }) as IStorage.ReadContext,
+            ),
+          (abortSignal) =>
+            proxyStorage.exists(
+              createHasContext(targetKey, { signal: abortSignal }) as IStorage.ExistsContext,
+            ),
+          (abortSignal) =>
+            proxyStorage.delete(
+              createDeleteContext(targetKey, { signal: abortSignal }) as IStorage.DeleteContext,
+            ),
+          (abortSignal) =>
+            proxyStorage.clear(
+              createClearContext("", { signal: abortSignal }) as IStorage.ClearContext,
+            ),
         ];
 
         for (const run of cases) {
@@ -138,7 +170,7 @@ describe("AbortSignal による中断", () => {
           });
         }
       } finally {
-        proxyStorage.close();
+        proxyStorage.close(createCloseContext() as IStorage.CloseContext);
       }
     });
   });
@@ -151,36 +183,36 @@ describe("AbortSignal による中断", () => {
     storage,
   }) => {
     // 準備
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     await withDelayedProxy(endpoint, async (proxyEndpoint) => {
       const proxyStorage = new S3(bucket, createClientConfig(proxyEndpoint));
-      proxyStorage.open();
+      proxyStorage.open(createOpenContext() as IStorage.OpenContext);
 
       try {
         const controller = abortAfter(60);
         await expect(
-          proxyStorage.write({
-            key: "first-attempt.bin",
-            data: new Uint8Array([1]),
-            signal: controller.signal,
-            vars: new Variables({}),
-          }),
+          proxyStorage.write(
+            createSetContext("first-attempt.bin", {
+              signal: controller.signal,
+            }) as IStorage.WriteContext,
+            new Uint8Array([1]),
+          ),
         ).rejects.toMatchObject({ name: "AbortError" });
 
         // 実行
-        await proxyStorage.write({
-          key: "second-attempt.bin",
-          data: new Uint8Array([2]),
-          signal,
-          vars: new Variables({}),
-        });
-        const result = await proxyStorage.read({ key: "second-attempt.bin", signal });
+        await proxyStorage.write(
+          createSetContext("second-attempt.bin", { signal }) as IStorage.WriteContext,
+          new Uint8Array([2]),
+        );
+        const result = await proxyStorage.read(
+          createGetContext("second-attempt.bin", { signal }) as IStorage.ReadContext,
+        );
 
         // 検証
         expect(result).toStrictEqual(new Uint8Array([2]));
       } finally {
-        proxyStorage.close();
+        proxyStorage.close(createCloseContext() as IStorage.CloseContext);
       }
     });
   });
@@ -194,13 +226,18 @@ describe("AbortSignal による中断", () => {
     const key = "completed.bin";
     const data = new Uint8Array([1, 2, 3]);
     const controller = new AbortController();
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal: controller.signal, vars: new Variables({}) });
+    await storage.write(
+      createSetContext(key, { signal: controller.signal }) as IStorage.WriteContext,
+      data,
+    );
     controller.abort();
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(data);
   });
 });

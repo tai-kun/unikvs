@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatChunks,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+  splitBySizes,
+  toHex,
+} from "@unikvs/testing";
 import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
@@ -12,6 +20,7 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
+import type Checksum from "../src/checksum.js";
 
 const SUBTLE_ALGORITHMS = [
   {
@@ -60,6 +69,59 @@ async function subtleDigest(algorithm: string, data: Uint8Array<ArrayBuffer>): P
   return toHex(new Uint8Array(digest));
 }
 
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を検証ストリームに流し、出力されたチャンクと終了時のエラーを返します。
+ */
+async function runEncodeStream(
+  checksum: Checksum,
+  inputChunks: readonly Uint8Array<ArrayBuffer>[],
+  values?: Record<string, unknown>,
+): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+  const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
+  await checksum.encodeStream(
+    c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  let closeError: unknown;
+
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (error) {
+    closeError = error;
+  }
+
+  return { outputChunks, closeError };
+}
+
 test.for(SUBTLE_ALGORITHMS)(
   "$label は固定入力で WebCrypto と同じダイジェストを検証する",
   async ({ create, subtleName, varName }, { expect }) => {
@@ -68,8 +130,9 @@ test.for(SUBTLE_ALGORITHMS)(
 
     // 実行と検証
     for (const data of FIXED_INPUTS) {
-      const vars = new Variables({ [varName]: await subtleDigest(subtleName, data) });
-      expect(checksum.encode({ vars, data })).toBe(data);
+      expect(await encode(checksum, data, { [varName]: await subtleDigest(subtleName, data) })).toBe(
+        data,
+      );
     }
   },
 );
@@ -79,14 +142,12 @@ test.for(SUBTLE_ALGORITHMS)(
   async ({ create, subtleName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = new Variables({ [varName]: await subtleDigest(subtleName, LARGE_DATA) });
     const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
 
     // 実行
-    const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars }),
-      chunks,
-    );
+    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+      [varName]: await subtleDigest(subtleName, LARGE_DATA),
+    });
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -103,21 +164,17 @@ test("SHA-256 はランダムなデータとチャンク分割でも WebCrypto �
     const data = random.bytes(random.int(0, 512));
     const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
     const chunks = splitBySizes(data, sizes);
-    const vars = new Variables({
+
+    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
       [ChecksumSha256.CHECKSUM_VAR_NAME]: await subtleDigest("SHA-256", data),
     });
-
-    const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars }),
-      chunks,
-    );
 
     expect(closeError).toBeUndefined();
     expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
   });
 });
 
-test("MD5 は既知のベクターを検証できる", ({ expect }) => {
+test("MD5 は既知のベクターを検証できる", async ({ expect }) => {
   // 準備
   const checksum = new ChecksumMd5();
   const vectors = [
@@ -128,8 +185,7 @@ test("MD5 は既知のベクターを検証できる", ({ expect }) => {
   // 実行と検証
   for (const [text, digest] of vectors) {
     const data = Uint8Array.from(new TextEncoder().encode(text));
-    const vars = new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: digest });
-    expect(checksum.encode({ vars, data })).toBe(data);
+    expect(await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: digest })).toBe(data);
   }
 });
 
@@ -144,15 +200,14 @@ test("MD5 はランダムなデータでも一括検証とストリーム検証�
     const data = random.bytes(random.int(0, 256));
     let actual = "";
     try {
-      checksum.encode({ vars: new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: "" }), data });
+      await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: "" });
     } catch (error) {
       actual = (error as ChecksumMismatchError).meta.actual;
     }
 
-    const { closeError } = await runTransform(
-      checksum.getEncodable({ vars: new Variables({ [ChecksumMd5.CHECKSUM_VAR_NAME]: actual }) }),
-      [data],
-    );
+    const { closeError } = await runEncodeStream(checksum, [data], {
+      [ChecksumMd5.CHECKSUM_VAR_NAME]: actual,
+    });
 
     expect(actual).not.toBe("");
     expect(closeError).toBeUndefined();

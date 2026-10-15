@@ -1,3 +1,5 @@
+import type { IStorage } from "@unikvs/core";
+import { createGetContext, createOpenContext } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -18,7 +20,7 @@ const test = vitest.extend<{ storage: LruCache; setLang: (lang: string) => void 
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const storage = new LruCache();
-    await storage.open({ signal: new AbortController().signal });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
     await use(storage);
   },
   // oxlint-disable-next-line no-empty-pattern
@@ -48,7 +50,9 @@ describe("エラーメッセージ（日本語）", () => {
     setLang("ja");
 
     // 実行と検証
-    expect(() => storage.read({ key: "foo" })).toThrow("キー foo が見つかりません");
+    expect(() => storage.read(createGetContext("foo") as IStorage.ReadContext)).toThrow(
+      "キー foo が見つかりません",
+    );
   });
 
   test("InvalidChunkTypeError は日本語メッセージを返す", ({ expect, setLang }) => {

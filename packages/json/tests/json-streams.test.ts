@@ -1,4 +1,15 @@
-import { concatBytes, pumpThrough, readAll, sourceFrom, splitIntoChunks } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+  splitIntoChunks,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { JsonUnsupportedValueError } from "../src/index.js";
@@ -14,14 +25,100 @@ function jsonLines(text: string): Uint8Array<ArrayBuffer> {
   return encoder.encode(text);
 }
 
-describe("getEncodable", () => {
+/**
+ * 値をエンコードして JSON のバイト列を返します。
+ */
+async function encodeValue(json: Json, value: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(value);
+  await json.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * バイト列をデコードして値を返します。
+ */
+async function decodeValue(json: Json, data: Uint8Array<ArrayBuffer>): Promise<unknown> {
+  const c = createDecodeContext(data);
+  await json.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 読み取り中に起きたエラーを握り潰さずに観測しつつ、読み取れたデータをすべて集めます。
+ * ストリームの書き込み・読み取り時のエラーを検証するために使用します。
+ */
+async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
+  outputChunks: T[];
+  writeError: undefined;
+  readError: unknown;
+}> {
+  const outputChunks: T[] = [];
+  let readError: unknown;
+  const reader = stream.getReader();
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (ex) {
+    readError = ex;
+  }
+
+  return { outputChunks, writeError: undefined, readError };
+}
+
+/**
+ * 値の列をエンコードストリームに流し、出力されたチャンクを返します。
+ */
+function pumpEncode(
+  json: Json,
+  values: readonly unknown[],
+): Promise<{
+  outputChunks: Uint8Array<ArrayBuffer>[];
+  writeError: undefined;
+  readError: unknown;
+}> {
+  const c = createEncodeStreamContext(sourceFrom(values));
+
+  return json
+    .encodeStream(c as IMiddleware.EncodeStreamContext, createNext())
+    .then(() => collectSettled(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>));
+}
+
+/**
+ * バイト列をデコードストリームに流し、出力された値を返します。
+ */
+function pumpDecode(
+  json: Json,
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+): Promise<{
+  outputChunks: unknown[];
+  writeError: undefined;
+  readError: unknown;
+}> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+
+  return json
+    .decodeStream(c as IMiddleware.DecodeStreamContext, createNext())
+    .then(() => collectSettled(c.destination as ReadableStream<unknown>));
+}
+
+describe("encodeStream", () => {
   test("各値を 1 行の JSON として出力し、末尾に改行を付ける", async ({ expect }) => {
     // 準備
     const json = new Json();
     const values: unknown[] = [1, "a", true, null, { b: 2 }, [3]];
 
     // 実行
-    const result = await pumpThrough(json.getEncodable(), values);
+    const result = await pumpEncode(json, values);
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -41,8 +138,8 @@ describe("getEncodable", () => {
     const values = ["a\nb", "c\rd", "\u2028\u2029", "😀"];
 
     // 実行
-    const encoded = await pumpThrough(json.getEncodable(), values);
-    const decoded = await pumpThrough(json.getDecodable(), encoded.outputChunks);
+    const encoded = await pumpEncode(json, values);
+    const decoded = await pumpDecode(json, encoded.outputChunks);
 
     // 検証
     expect(encoded.writeError).toBeUndefined();
@@ -57,7 +154,7 @@ describe("getEncodable", () => {
     const json = new Json();
 
     // 実行
-    const result = await pumpThrough(json.getEncodable(), []);
+    const result = await pumpEncode(json, []);
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -70,22 +167,20 @@ describe("getEncodable", () => {
     const json = new Json();
 
     // 実行
-    const result = await pumpThrough(json.getEncodable(), [1, Symbol("x"), 2]);
+    const result = await pumpEncode(json, [1, Symbol("x"), 2]);
 
     // 検証
     expect(result.writeError ?? result.readError).toBeInstanceOf(JsonUnsupportedValueError);
   });
 });
 
-describe("getDecodable", () => {
+describe("decodeStream", () => {
   test("複数の値をデコードする", async ({ expect }) => {
     // 準備
     const json = new Json();
 
     // 実行
-    const result = await pumpThrough(json.getDecodable(), [
-      jsonLines('1\n"a"\ntrue\nnull\n{"b":2}\n[3]\n'),
-    ]);
+    const result = await pumpDecode(json, [jsonLines('1\n"a"\ntrue\nnull\n{"b":2}\n[3]\n')]);
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -99,7 +194,7 @@ describe("getDecodable", () => {
     const bytes = jsonLines('{"message":"日本語😀","values":[1,2,3]}\n');
 
     // 実行
-    const result = await pumpThrough(json.getDecodable(), splitIntoChunks(bytes, 1));
+    const result = await pumpDecode(json, splitIntoChunks(bytes, 1));
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -115,7 +210,7 @@ describe("getDecodable", () => {
 
     // 実行と検証
     for (const size of [1, 2, 3, 5, 7, 13, 64]) {
-      const result = await pumpThrough(json.getDecodable(), splitIntoChunks(bytes, size));
+      const result = await pumpDecode(json, splitIntoChunks(bytes, size));
       expect(result.writeError, `size=${size}`).toBeUndefined();
       expect(result.readError, `size=${size}`).toBeUndefined();
       expect(result.outputChunks, `size=${size}`).toStrictEqual(values);
@@ -128,7 +223,7 @@ describe("getDecodable", () => {
 
     // 実行と検証
     for (const text of ["1\n2\n3", "1\n2\n3\n"]) {
-      const result = await pumpThrough(json.getDecodable(), [jsonLines(text)]);
+      const result = await pumpDecode(json, [jsonLines(text)]);
       expect(result.writeError, text).toBeUndefined();
       expect(result.readError, text).toBeUndefined();
       expect(result.outputChunks, text).toStrictEqual([1, 2, 3]);
@@ -140,7 +235,7 @@ describe("getDecodable", () => {
     const json = new Json();
 
     // 実行
-    const result = await pumpThrough(json.getDecodable(), [jsonLines('1\r\n2\r\n"a"\r\n')]);
+    const result = await pumpDecode(json, [jsonLines('1\r\n2\r\n"a"\r\n')]);
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -161,7 +256,7 @@ describe("getDecodable", () => {
 
     // 実行と検証
     for (const [text, expected] of cases) {
-      const result = await pumpThrough(json.getDecodable(), [jsonLines(text)]);
+      const result = await pumpDecode(json, [jsonLines(text)]);
       expect(result.writeError, JSON.stringify(text)).toBeUndefined();
       expect(result.readError, JSON.stringify(text)).toBeUndefined();
       expect(result.outputChunks, JSON.stringify(text)).toStrictEqual(expected);
@@ -173,8 +268,8 @@ describe("getDecodable", () => {
     const json = new Json();
 
     // 実行
-    const empty = await pumpThrough(json.getDecodable(), []);
-    const zeroBytes = await pumpThrough(json.getDecodable(), [new Uint8Array(0)]);
+    const empty = await pumpDecode(json, []);
+    const zeroBytes = await pumpDecode(json, [new Uint8Array(0)]);
 
     // 検証
     expect(empty.writeError).toBeUndefined();
@@ -190,7 +285,7 @@ describe("getDecodable", () => {
     const json = new Json();
 
     // 実行
-    const result = await pumpThrough(json.getDecodable(), [jsonLines("1\n{bad}\n2\n")]);
+    const result = await pumpDecode(json, [jsonLines("1\n{bad}\n2\n")]);
 
     // 検証
     expect(result.writeError ?? result.readError).toBeInstanceOf(SyntaxError);
@@ -203,8 +298,8 @@ describe("getDecodable", () => {
     const truncated = Uint8Array.from([0x31, 0x0a, 0xe3]);
 
     // 実行
-    const invalidResult = await pumpThrough(json.getDecodable(), [invalid]);
-    const truncatedResult = await pumpThrough(json.getDecodable(), [truncated]);
+    const invalidResult = await pumpDecode(json, [invalid]);
+    const truncatedResult = await pumpDecode(json, [truncated]);
 
     // 検証
     expect(invalidResult.writeError ?? invalidResult.readError).toBeInstanceOf(TypeError);
@@ -218,10 +313,10 @@ describe("getDecodable", () => {
       text: "日本語😀".repeat(20_000),
       items: Array.from({ length: 1000 }, (_, index) => index),
     };
-    const bytes = json.encode({ data: value });
+    const bytes = await encodeValue(json, value);
 
     // 実行
-    const result = await pumpThrough(json.getDecodable(), splitIntoChunks(bytes, 7));
+    const result = await pumpDecode(json, splitIntoChunks(bytes, 7));
 
     // 検証
     expect(result.writeError).toBeUndefined();
@@ -241,7 +336,9 @@ describe("getDecodable", () => {
         cancelled = true;
       },
     });
-    const stream = source.pipeThrough(json.getDecodable());
+    const c = createDecodeStreamContext(source);
+    await json.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+    const stream = c.destination as ReadableStream<Uint8Array<ArrayBuffer>>;
     const reader = stream.getReader();
 
     // 実行
@@ -259,7 +356,7 @@ describe("getDecodable", () => {
 });
 
 describe("ストリームの往復", () => {
-  test("pipeThrough で encode と decode を往復すると元の値に戻る", async ({ expect }) => {
+  test("encodeStream と decodeStream を往復すると元の値に戻る", async ({ expect }) => {
     // 準備
     const json = new Json();
     const values: unknown[] = [
@@ -269,9 +366,13 @@ describe("ストリームの往復", () => {
     ];
 
     // 実行
-    const decoded = await readAll(
-      sourceFrom(values).pipeThrough(json.getEncodable()).pipeThrough(json.getDecodable()),
+    const encodedContext = createEncodeStreamContext(sourceFrom(values));
+    await json.encodeStream(encodedContext as IMiddleware.EncodeStreamContext, createNext());
+    const decodedContext = createDecodeStreamContext(
+      encodedContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
     );
+    await json.decodeStream(decodedContext as IMiddleware.DecodeStreamContext, createNext());
+    const decoded = await readAll(decodedContext.destination);
 
     // 検証
     expect(decoded).toStrictEqual(values);
@@ -283,8 +384,8 @@ describe("ストリームの往復", () => {
     const value = { a: 1, b: [2, 3] };
 
     // 実行
-    const encoded = await pumpThrough(json.getEncodable(), [value]);
-    const decoded = json.decode({ data: concatBytes(encoded.outputChunks) });
+    const encoded = await pumpEncode(json, [value]);
+    const decoded = await decodeValue(json, concatBytes(encoded.outputChunks));
 
     // 検証
     expect(encoded.writeError).toBeUndefined();
@@ -298,8 +399,8 @@ describe("ストリームの往復", () => {
     const value = Array.from({ length: 100 }, () => "値😀");
 
     // 実行
-    const encoded = json.encode({ data: value });
-    const result = await pumpThrough(json.getDecodable(), splitIntoChunks(encoded, 3));
+    const encoded = await encodeValue(json, value);
+    const result = await pumpDecode(json, splitIntoChunks(encoded, 3));
 
     // 検証
     expect(result.writeError).toBeUndefined();

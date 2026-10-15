@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import LruCache from "../src/lru-cache.js";
@@ -12,7 +19,7 @@ const test = vitest.extend<{ storage: LruCache }>({
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const storage = new LruCache();
-    await storage.open({ signal: new AbortController().signal });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
     await use(storage);
   },
 });
@@ -29,14 +36,16 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map(async (value) => {
-        const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+        const writer = storage
+          .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+          .getWriter();
         await writer.write(value);
         await writer.close();
       }),
     );
 
     // 検証
-    const result = storage.read({ key }) as Uint8Array;
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext) as Uint8Array;
     expect(values.map((value) => [...value])).toContainEqual([...result]);
   });
 
@@ -47,13 +56,17 @@ describe("並行操作", () => {
 
     // 実行
     for (const value of values) {
-      const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+      const writer = storage
+        .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+        .getWriter();
       await writer.write(value);
       await writer.close();
     }
 
     // 検証
-    expect(storage.read({ key })).toStrictEqual(values.at(-1));
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+      values.at(-1),
+    );
   });
 
   test("異なるキーへ並行に書き込んでも互いに干渉しない", async ({ expect, storage }) => {
@@ -66,7 +79,9 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       entries.map(async ({ key, value }) => {
-        const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+        const writer = storage
+          .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+          .getWriter();
         await writer.write(value);
         await writer.close();
       }),
@@ -74,7 +89,7 @@ describe("並行操作", () => {
 
     // 検証
     for (const { key, value } of entries) {
-      expect(storage.read({ key })).toStrictEqual(value);
+      expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(value);
     }
   });
 
@@ -88,7 +103,9 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       entries.map(async ({ key, chunks }) => {
-        const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+        const writer = storage
+          .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+          .getWriter();
         for (const chunk of chunks) {
           await writer.write(chunk);
         }
@@ -98,40 +115,48 @@ describe("並行操作", () => {
 
     // 検証
     for (const { key, chunks } of entries) {
-      expect(storage.read({ key })).toStrictEqual(new Uint8Array([...chunks[0]!, ...chunks[1]!]));
+      expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+        new Uint8Array([...chunks[0]!, ...chunks[1]!]),
+      );
     }
   });
 
   test("書き込みと読み取りを交互に実行してもデータは壊れない", async ({ expect, storage }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: "initial" });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "initial");
 
     // 実行
     const tasks = Array.from({ length: 50 }, (_, i) =>
       i % 2 === 0
-        ? Promise.resolve().then(() => storage.write({ vars: new Variables(), key, data: `v${i}` }))
-        : Promise.resolve().then(() => storage.read({ key })),
+        ? Promise.resolve().then(() =>
+            storage.write(createSetContext(key) as IStorage.WriteContext, `v${i}`),
+          )
+        : Promise.resolve().then(() => storage.read(createGetContext(key) as IStorage.ReadContext)),
     );
     await Promise.all(tasks);
 
     // 検証
-    expect(storage.read({ key })).toBe("v48");
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toBe("v48");
   });
 
   test("同じキーへの並行 delete は 1 つだけ成功する", async ({ expect, storage }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: "v1" });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "v1");
 
     // 実行
     const results = await Promise.allSettled(
-      Array.from({ length: 5 }, () => Promise.resolve().then(() => storage.delete({ key }))),
+      Array.from({ length: 5 }, () =>
+        Promise.resolve().then(() =>
+          storage.delete(createDeleteContext(key) as IStorage.DeleteContext),
+        ),
+      ),
     );
 
     // 検証
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(4);
-    expect(storage.exists({ key })).toBe(false);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
   });
 });

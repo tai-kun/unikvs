@@ -1,3 +1,5 @@
+import type { IStorage } from "@unikvs/core";
+import { createCloseContext } from "@unikvs/testing";
 import { test as vitest } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
@@ -65,7 +67,7 @@ export const test = vitest.extend<{ dbName: string; storage: IndexeddbStorage }>
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
     await use(storage);
     if (storage.isOpen) {
-      await storage.close({ signal });
+      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }
   },
 });

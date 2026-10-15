@@ -1,6 +1,15 @@
-import { Variables } from "@unikvs/core";
-import { InvalidUsageErrorBase } from "@unikvs/core";
-import { collectBytes } from "@unikvs/testing";
+import { InvalidUsageErrorBase, type IStorage } from "@unikvs/core";
+import {
+  collectBytes,
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { acquireFreePort } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
@@ -63,46 +72,56 @@ describe("異常系とエラー伝播", () => {
   }) => {
     // 準備
     const missing = new S3("no-such-bucket", createClientConfig(endpoint));
-    await missing.open();
+    await missing.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 実行と検証
       await expect(
-        missing.write({
-          key: "x.bin",
-          data: new Uint8Array([1]),
-          signal,
-          vars: new Variables({}),
-        }),
+        missing.write(
+          createSetContext("x.bin", { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        ),
       ).rejects.toMatchObject({ code: "NoSuchBucket" });
-      await expect(missing.read({ key: "x.bin", signal })).rejects.toMatchObject({
-        code: "NoSuchBucket",
-      });
-      await expect(missing.delete({ key: "x.bin", signal })).rejects.toMatchObject({
-        code: "NoSuchBucket",
-      });
-      await expect(missing.clear({ signal })).rejects.toMatchObject({ code: "NoSuchBucket" });
       await expect(
-        collectBytes(missing.getReadable({ key: "x.bin", signal })),
+        missing.read(createGetContext("x.bin", { signal }) as IStorage.ReadContext),
+      ).rejects.toMatchObject({
+        code: "NoSuchBucket",
+      });
+      await expect(
+        missing.delete(createDeleteContext("x.bin", { signal }) as IStorage.DeleteContext),
+      ).rejects.toMatchObject({
+        code: "NoSuchBucket",
+      });
+      await expect(
+        missing.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+      ).rejects.toMatchObject({ code: "NoSuchBucket" });
+      await expect(
+        collectBytes(
+          missing.getReadable(
+            createStreamContext("x.bin", { signal }) as IStorage.GetReadableContext,
+          ),
+        ),
       ).rejects.toMatchObject({ code: "NoSuchBucket" });
     } finally {
-      missing.close();
+      missing.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
   test("存在しないバケットの exists は false を返す", async ({ endpoint, expect, signal }) => {
     // 準備
     const missing = new S3("no-such-bucket", createClientConfig(endpoint));
-    await missing.open();
+    await missing.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 実行
-      const result = await missing.exists({ key: "x.bin", signal });
+      const result = await missing.exists(
+        createHasContext("x.bin", { signal }) as IStorage.ExistsContext,
+      );
 
       // 検証
       expect(result).toBe(false);
     } finally {
-      missing.close();
+      missing.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -113,23 +132,23 @@ describe("異常系とエラー伝播", () => {
     // 準備
     const port = await acquireFreePort();
     const unreachable = new S3("any-bucket", createClientConfig(`http://127.0.0.1:${port}`));
-    await unreachable.open();
+    await unreachable.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 実行と検証
       await expect(
-        unreachable.write({
-          key: "x.bin",
-          data: new Uint8Array([1]),
-          signal,
-          vars: new Variables({}),
-        }),
+        unreachable.write(
+          createSetContext("x.bin", { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        ),
       ).rejects.toMatchObject({ code: "ConnectionRefused" });
-      await expect(unreachable.exists({ key: "x.bin", signal })).rejects.toMatchObject({
+      await expect(
+        unreachable.exists(createHasContext("x.bin", { signal }) as IStorage.ExistsContext),
+      ).rejects.toMatchObject({
         code: "ConnectionRefused",
       });
     } finally {
-      unreachable.close();
+      unreachable.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -140,24 +159,34 @@ describe("異常系とエラー伝播", () => {
   }) => {
     // 実行と検証
     await expect(
-      unauthorizedStorage.write({
-        key: "x.bin",
-        data: new Uint8Array([1]),
-        signal,
-        vars: new Variables({}),
-      }),
+      unauthorizedStorage.write(
+        createSetContext("x.bin", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toMatchObject({ code: "InvalidAccessKeyId" });
-    await expect(unauthorizedStorage.read({ key: "x.bin", signal })).rejects.toMatchObject({
-      code: "InvalidAccessKeyId",
-    });
-    await expect(unauthorizedStorage.delete({ key: "x.bin", signal })).rejects.toMatchObject({
-      code: "InvalidAccessKeyId",
-    });
-    await expect(unauthorizedStorage.clear({ signal })).rejects.toMatchObject({
+    await expect(
+      unauthorizedStorage.read(createGetContext("x.bin", { signal }) as IStorage.ReadContext),
+    ).rejects.toMatchObject({
       code: "InvalidAccessKeyId",
     });
     await expect(
-      collectBytes(unauthorizedStorage.getReadable({ key: "x.bin", signal })),
+      unauthorizedStorage.delete(
+        createDeleteContext("x.bin", { signal }) as IStorage.DeleteContext,
+      ),
+    ).rejects.toMatchObject({
+      code: "InvalidAccessKeyId",
+    });
+    await expect(
+      unauthorizedStorage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).rejects.toMatchObject({
+      code: "InvalidAccessKeyId",
+    });
+    await expect(
+      collectBytes(
+        unauthorizedStorage.getReadable(
+          createStreamContext("x.bin", { signal }) as IStorage.GetReadableContext,
+        ),
+      ),
     ).rejects.toMatchObject({ code: "InvalidAccessKeyId" });
   });
 
@@ -167,6 +196,8 @@ describe("異常系とエラー伝播", () => {
     unauthorizedStorage,
   }) => {
     // 実行と検証
-    await expect(unauthorizedStorage.exists({ key: "x.bin", signal })).rejects.toThrow();
+    await expect(
+      unauthorizedStorage.exists(createHasContext("x.bin", { signal }) as IStorage.ExistsContext),
+    ).rejects.toThrow();
   });
 });

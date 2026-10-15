@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { collectBytes } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  collectBytes,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Redis from "../src/redis.js";
@@ -36,10 +44,10 @@ describe("基本操作 (CRUD)", () => {
     // 準備
     const key = "read-test.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(Uint8Array);
@@ -49,10 +57,15 @@ describe("基本操作 (CRUD)", () => {
   test("存在するキーで確認したとき、true が返される", async ({ expect, signal, storage }) => {
     // 準備
     const key = "exists.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([0]),
+    );
 
     // 実行
-    const result = await storage.exists({ key, signal });
+    const result = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
 
     // 検証
     expect(result).toBe(true);
@@ -63,7 +76,9 @@ describe("基本操作 (CRUD)", () => {
     const key = "non-existent.txt";
 
     // 実行
-    const result = await storage.exists({ key, signal });
+    const result = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
 
     // 検証
     expect(result).toBe(false);
@@ -72,13 +87,18 @@ describe("基本操作 (CRUD)", () => {
   test("キーを削除したとき、存在確認が false になる", async ({ expect, signal, storage }) => {
     // 準備
     const key = "delete-me.txt";
-    await storage.write({ key, data: new Uint8Array([0]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([0]),
+    );
 
     // 実行
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
     // 検証
-    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("clear を実行したとき、プレフィックス配下の全データが削除される", async ({
@@ -87,25 +107,25 @@ describe("基本操作 (CRUD)", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({
-      key: "file1.txt",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
-    await storage.write({
-      key: "file2.txt",
-      data: new Uint8Array([2]),
-      signal,
-      vars: new Variables(),
-    });
+    await storage.write(
+      createSetContext("file1.txt", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("file2.txt", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    await expect(storage.exists({ key: "file1.txt", signal })).resolves.toBe(false);
-    await expect(storage.exists({ key: "file2.txt", signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("file1.txt", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("file2.txt", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("clear を実行したとき、プレフィックス配下の全データが削除される", async ({
@@ -114,18 +134,18 @@ describe("基本操作 (CRUD)", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({
-      key: "argless.txt",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
+    await storage.write(
+      createSetContext("argless.txt", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    await expect(storage.exists({ key: "argless.txt", signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("argless.txt", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 });
 
@@ -138,7 +158,9 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
-    const writable = storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
 
     // 実行
     const writer = writable.getWriter();
@@ -146,7 +168,9 @@ describe("ストリーム操作", () => {
     await writer.close();
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(data);
   });
 
   test("getReadable で取得したストリームを使用したとき、データの内容を正しく読み取れる", async ({
@@ -157,10 +181,12 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "stream-read.txt";
     const data = new TextEncoder().encode("Readable Stream Content");
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
-    const result = await collectBytes(storage.getReadable({ key, signal }));
+    const result = await collectBytes(
+      storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+    );
 
     // 検証
     expect(result).toStrictEqual(data);

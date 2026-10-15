@@ -1,10 +1,10 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
 import KeyPrefix, { type KeyPrefixOptions } from "../src/key-prefix.js";
 
-test("KeyPrefix は ITransformer として扱える", () => {
-  expectTypeOf<KeyPrefix>().toExtend<ITransformer>();
+test("KeyPrefix は IMiddleware として扱える", () => {
+  expectTypeOf<KeyPrefix>().toExtend<IMiddleware>();
 });
 
 test("第一引数のプレフィックスは必須である", () => {
@@ -49,29 +49,39 @@ test("公開プロパティーの型を保持する", () => {
   expectTypeOf(prefix.isOpen).toEqualTypeOf<boolean>();
 });
 
-test("encode と decode はデータの型をそのまま戻り値にする", () => {
-  // 準備
-  const prefix = new KeyPrefix("tenant:");
-
+test("encode と decode はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(prefix.encode<string>({ data: "hello" })).toEqualTypeOf<string>();
-  expectTypeOf(prefix.encode({ data: 123 })).toEqualTypeOf<number>();
-  expectTypeOf(prefix.decode({ data: { id: 1 } })).toEqualTypeOf<{ id: number }>();
+  expectTypeOf<KeyPrefix["encode"]>().parameter(0).toEqualTypeOf<IMiddleware.EncodeContext>();
+  expectTypeOf<KeyPrefix["encode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<KeyPrefix["encode"]>().returns.toEqualTypeOf<Promise<void>>();
+  expectTypeOf<KeyPrefix["decode"]>().parameter(0).toEqualTypeOf<IMiddleware.DecodeContext>();
+  expectTypeOf<KeyPrefix["decode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<KeyPrefix["decode"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("getEncodable と getDecodable は TransformStream を返す", () => {
-  // 準備
-  const prefix = new KeyPrefix("tenant:");
-
+test("encodeStream と decodeStream はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(prefix.getEncodable()).toEqualTypeOf<TransformStream<any, any>>();
-  expectTypeOf(prefix.getDecodable()).toEqualTypeOf<TransformStream<any, any>>();
+  expectTypeOf<KeyPrefix["encodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.EncodeStreamContext>();
+  expectTypeOf<KeyPrefix["encodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<KeyPrefix["encodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
+  expectTypeOf<KeyPrefix["decodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.DecodeStreamContext>();
+  expectTypeOf<KeyPrefix["decodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<KeyPrefix["decodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("mapKey は文字列を返す", () => {
-  // 準備
-  const prefix = new KeyPrefix("tenant:");
-
+test("mapKey は MapKeyContext を受けて文字列を返す", () => {
   // 実行と検証
-  expectTypeOf(prefix.mapKey({ key: "k1" })).toEqualTypeOf<string>();
+  expectTypeOf<KeyPrefix["mapKey"]>().parameter(0).toEqualTypeOf<IMiddleware.MapKeyContext>();
+  expectTypeOf<KeyPrefix["mapKey"]>().returns.toEqualTypeOf<string>();
+});
+
+test("use は UseContext と next を受けて Promise<void> を返す", () => {
+  // 実行と検証
+  expectTypeOf<KeyPrefix["use"]>().parameter(0).toEqualTypeOf<IMiddleware.UseContext>();
+  expectTypeOf<KeyPrefix["use"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<KeyPrefix["use"]>().returns.toEqualTypeOf<Promise<void>>();
 });

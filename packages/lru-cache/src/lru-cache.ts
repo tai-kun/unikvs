@@ -153,10 +153,8 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public async open(args: Pick<IStorage.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     if (this.opened) {
       return;
@@ -168,11 +166,11 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public async close(args: Pick<IStorage.CloseArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
-    this.clear();
+  public async close(c: IStorage.CloseContext): Promise<void> {
+    c.signal.throwIfAborted();
+    this.map.clear();
+    this.sizes.clear();
+    this.totalBytes = 0;
     this.opened = false;
   }
 
@@ -188,32 +186,30 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "vars">): void {
-    const { key, data } = args;
-
+  public write(c: IStorage.WriteContext, data: any): void {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
     const storedValue = this.clone(data);
 
-    this.commit(key, storedValue);
+    this.commit(c.key, storedValue);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public read(args: Pick<IStorage.ReadArgs, "key">): any {
-    const { key } = args;
-
+  public read(c: IStorage.ReadContext): any {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    const value = this.map.get(key);
+    const value = this.map.get(c.key);
     const cloned = this.clone(value);
 
-    this.touch(key);
+    this.touch(c.key);
 
     return cloned;
   }
@@ -221,12 +217,11 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
-    const { key } = args;
-
+  public exists(c: IStorage.ExistsContext): boolean {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
-    const exists = this.map.has(key);
+    const exists = this.map.has(c.key);
 
     return exists;
   }
@@ -234,16 +229,15 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
    */
-  public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
-    const { key } = args;
-
+  public delete(c: IStorage.DeleteContext): void {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.removeEntry(key);
+    this.removeEntry(c.key);
   }
 
   /**
@@ -258,11 +252,8 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#data)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "vars">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key } = args;
-
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
@@ -270,22 +261,22 @@ export default class LruCache implements IStorage {
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
       write: (chunk) => {
         if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk });
+          throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
 
         chunks.push(this.clone(chunk));
       },
       close: () => {
-        const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
 
         let offset = 0;
-        for (const c of chunks) {
-          merged.set(c, offset);
-          offset += c.byteLength;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.byteLength;
         }
 
-        this.commit(key, merged);
+        this.commit(c.key, merged);
       },
     });
 
@@ -295,25 +286,22 @@ export default class LruCache implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#data)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { key } = args;
-
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
     this.assertOpen();
 
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.touch(key);
+    this.touch(c.key);
 
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
-    const value = this.map.get(key);
+    const value = this.map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {
         if (!(value instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk: value });
+          throw new InvalidChunkTypeError({ key: c.key, chunk: value });
         }
 
         controller.enqueue(this.clone(value) as Uint8Array<ArrayBuffer>);

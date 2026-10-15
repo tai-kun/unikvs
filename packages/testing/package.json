@@ -33,6 +33,9 @@
   "scripts": {
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
+  "dependencies": {
+    "@unikvs/core": "workspace:*"
+  },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",

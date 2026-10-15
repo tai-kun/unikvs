@@ -1,5 +1,16 @@
+import type { IMiddleware } from "@unikvs/core";
 import { forCasesAsync, type Random } from "@unikvs/testing";
-import { concatBytes, pumpThrough, splitIntoChunks } from "@unikvs/testing";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+  splitIntoChunks,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Json from "../src/json.js";
@@ -58,10 +69,12 @@ describe("決定的ファズテスト", () => {
       const json = new Json();
       const value = randomValue(random);
 
-      const encoded = json.encode({ data: value });
-      const decoded = json.decode({ data: encoded });
+      const encodeContext = createEncodeContext(value);
+      await json.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+      const decodeContext = createDecodeContext(encodeContext.destination);
+      await json.decode(decodeContext as IMiddleware.DecodeContext, createNext());
 
-      expect(decoded).toStrictEqual(value);
+      expect(decodeContext.destination).toStrictEqual(value);
     });
   });
 
@@ -73,17 +86,19 @@ describe("決定的ファズテスト", () => {
       const json = new Json();
       const values = random.array(random.int(0, 6), (child) => randomValue(child));
 
-      const encoded = await pumpThrough(json.getEncodable(), values);
-      expect(encoded.writeError).toBeUndefined();
-      expect(encoded.readError).toBeUndefined();
+      const encodeContext = createEncodeStreamContext(sourceFrom(values));
+      await json.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, createNext());
+      const encoded = await readAll(
+        encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
+      );
 
-      const bytes = concatBytes(encoded.outputChunks);
+      const bytes = concatBytes(encoded);
       const size = random.int(1, 8);
-      const decoded = await pumpThrough(json.getDecodable(), splitIntoChunks(bytes, size));
+      const decodeContext = createDecodeStreamContext(sourceFrom(splitIntoChunks(bytes, size)));
+      await json.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, createNext());
+      const decoded = await readAll(decodeContext.destination);
 
-      expect(decoded.writeError).toBeUndefined();
-      expect(decoded.readError).toBeUndefined();
-      expect(decoded.outputChunks).toStrictEqual(values);
+      expect(decoded).toStrictEqual(values);
     });
   });
 });

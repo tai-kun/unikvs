@@ -2,8 +2,8 @@ import {
   InvalidPartSizeError,
   StorageAbortedError,
   UnsupportedRuntimeError,
+  type IPipelineContext,
   type IStorage,
-  type Variables,
 } from "@unikvs/core";
 import type { S3Client, S3Options } from "bun";
 
@@ -21,14 +21,14 @@ export type S3StorageOptions = Omit<S3Options, "bucket">;
 const DELETE_CONCURRENCY = 25;
 
 /**
- * 書き込みストリームのパートサイズを `vars` から解決します。
+ * 書き込みストリームのパートサイズをコンテキストから解決します。
  * パッケージ固有の変数を優先し、なければ共通の変数を参照します。
  */
-function resolvePartSize(vars: Variables): number | undefined {
+function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
   const rawPartSize =
-    vars.get("@unikvs/s3.bun:partSize") !== undefined
-      ? vars.get("@unikvs/s3.bun:partSize")
-      : vars.get("@unikvs/s3:partSize");
+    c.get("@unikvs/s3.bun:partSize") !== undefined
+      ? c.get("@unikvs/s3.bun:partSize")
+      : c.get("@unikvs/s3:partSize");
 
   if (rawPartSize === undefined) {
     return undefined;
@@ -119,27 +119,19 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
-    const { key, data, signal } = args;
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    await this.client!.write(key, data);
+    await this.client!.write(c.key, data);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
-    const { key, signal } = args;
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const buffer = await this.client!.file(key).arrayBuffer();
+    const buffer = await this.client!.file(c.key).arrayBuffer();
 
     return new Uint8Array(buffer);
   }
@@ -147,38 +139,33 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
-    const { key, signal } = args;
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    return await this.client!.exists(key);
+    return await this.client!.exists(c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
-    const { key, signal } = args;
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    await this.client!.delete(key);
+    await this.client!.delete(c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
-    const { signal } = args;
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     const client = this.client!;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     let continuationToken: string | undefined = undefined;
 
     do {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
 
       const response = await client.list(
         continuationToken === undefined ? null : { continuationToken },
@@ -186,7 +173,7 @@ export default class S3 implements IStorage {
       const contents = response.contents ?? [];
 
       for (let start = 0; start < contents.length; start += DELETE_CONCURRENCY) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
 
         await Promise.all(
           contents.slice(start, start + DELETE_CONCURRENCY).map((item) => client.delete(item.key)),
@@ -200,25 +187,21 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#streams)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key, vars, signal } = args;
-
-    if (signal.aborted) {
-      throw new StorageAbortedError({ key });
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    if (c.signal.aborted) {
+      throw new StorageAbortedError({ key: c.key });
     }
 
-    const partSize = resolvePartSize(vars);
-    const writer = this.client!.file(key).writer(partSize === undefined ? {} : { partSize });
+    const partSize = resolvePartSize(c);
+    const writer = this.client!.file(c.key).writer(partSize === undefined ? {} : { partSize });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async write(chunk) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         await writer.write(chunk);
       },
       async close() {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         await writer.end();
       },
       async abort() {
@@ -231,18 +214,14 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#streams)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { key, signal } = args;
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const reader = this.client!.file(key).stream().getReader();
+    const reader = this.client!.file(c.key).stream().getReader();
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async pull(controller) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
 
         const { done, value } = await reader.read();
         if (done) {

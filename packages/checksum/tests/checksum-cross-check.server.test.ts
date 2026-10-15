@@ -1,8 +1,16 @@
 import { createHash } from "node:crypto";
 
-import { Variables } from "@unikvs/core";
-import { concatChunks, runTransform, splitBySizes, toHex } from "@unikvs/testing";
-import { forCases, forCasesAsync } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatChunks,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+  splitBySizes,
+  toHex,
+} from "@unikvs/testing";
+import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
 import {
@@ -15,6 +23,7 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
+import type Checksum from "../src/checksum.js";
 
 const ALGORITHMS = [
   {
@@ -74,29 +83,82 @@ function nodeDigest(algorithm: string, data: Uint8Array): string {
   return createHash(algorithm).update(data).digest("hex");
 }
 
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を検証ストリームに流し、出力されたチャンクと終了時のエラーを返します。
+ */
+async function runEncodeStream(
+  checksum: Checksum,
+  inputChunks: readonly Uint8Array<ArrayBuffer>[],
+  values?: Record<string, unknown>,
+): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+  const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
+  await checksum.encodeStream(
+    c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  let closeError: unknown;
+
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (error) {
+    closeError = error;
+  }
+
+  return { outputChunks, closeError };
+}
+
 test.for(ALGORITHMS)(
   "$label は固定入力で node:crypto と同じダイジェストを検証する",
-  ({ create, nodeName, varName }, { expect }) => {
+  async ({ create, nodeName, varName }, { expect }) => {
     // 準備
     const checksum = create();
 
     // 実行と検証
     for (const data of FIXED_INPUTS) {
-      const vars = new Variables({ [varName]: nodeDigest(nodeName, data) });
-      expect(checksum.encode({ vars, data })).toBe(data);
+      expect(await encode(checksum, data, { [varName]: nodeDigest(nodeName, data) })).toBe(data);
     }
   },
 );
 
 test.for(ALGORITHMS)(
   "$label は 1 MiB のデータでも node:crypto と同じダイジェストを検証する",
-  ({ create, nodeName, varName }, { expect }) => {
+  async ({ create, nodeName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = new Variables({ [varName]: nodeDigest(nodeName, LARGE_DATA) });
 
     // 実行
-    const result = checksum.encode({ vars, data: LARGE_DATA });
+    const result = await encode(checksum, LARGE_DATA, {
+      [varName]: nodeDigest(nodeName, LARGE_DATA),
+    });
 
     // 検証
     expect(result).toBe(LARGE_DATA);
@@ -108,14 +170,12 @@ test.for(ALGORITHMS)(
   async ({ create, nodeName, varName }, { expect }) => {
     // 準備
     const checksum = create();
-    const vars = new Variables({ [varName]: nodeDigest(nodeName, LARGE_DATA) });
     const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
 
     // 実行
-    const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars }),
-      chunks,
-    );
+    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+      [varName]: nodeDigest(nodeName, LARGE_DATA),
+    });
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -132,21 +192,19 @@ test("ランダムなデータとチャンク分割でもストリーム検証�
     const data = random.bytes(random.int(0, 512));
     const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
     const chunks = splitBySizes(data, sizes);
-    const vars = new Variables({ [algorithm.varName]: nodeDigest(algorithm.nodeName, data) });
 
-    const { outputChunks, closeError } = await runTransform(
-      algorithm.create().getEncodable({ vars }),
-      chunks,
-    );
+    const { outputChunks, closeError } = await runEncodeStream(algorithm.create(), chunks, {
+      [algorithm.varName]: nodeDigest(algorithm.nodeName, data),
+    });
 
     expect(closeError).toBeUndefined();
     expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
   });
 });
 
-test("不一致時の meta.actual が node:crypto のダイジェストと一致する", ({ expect }) => {
+test("不一致時の meta.actual が node:crypto のダイジェストと一致する", async ({ expect }) => {
   // 実行と検証
-  forCases(20240202, 50, (random) => {
+  await forCasesAsync(20240202, 50, async (random) => {
     const algorithm = random.pick(ALGORITHMS);
     const data = random.bytes(random.int(0, 256));
     const actual = nodeDigest(algorithm.nodeName, data);
@@ -154,7 +212,7 @@ test("不一致時の meta.actual が node:crypto のダイジェストと一致
 
     let thrown: unknown;
     try {
-      algorithm.create().encode({ vars: new Variables({ [algorithm.varName]: expected }), data });
+      await encode(algorithm.create(), data, { [algorithm.varName]: expected });
     } catch (error) {
       thrown = error;
     }

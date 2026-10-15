@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -21,38 +28,46 @@ const test = vitest.extend<{ storage: SessionStorage }>({
 describe("CRUD の不変条件", () => {
   test("削除したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.delete({ key: "k1", signal });
+    storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
 
     // 検証
-    expect(() => storage.read({ key: "k1", signal })).toThrow(KeyNotFoundError);
+    expect(() => storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toThrow(
+      KeyNotFoundError,
+    );
   });
 
   test("clear したキーの read は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(() => storage.read({ key: "k1", signal })).toThrow(KeyNotFoundError);
+    expect(() => storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toThrow(
+      KeyNotFoundError,
+    );
   });
 
   test("空のストレージに clear を呼んでもエラーにならない", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.clear({ signal })).not.toThrow();
-    expect(storage.exists({ key: "k1", signal })).toBe(false);
+    expect(() =>
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).not.toThrow();
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
   test("空文字を保存したキーの exists は true を返す", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "");
 
     // 実行
-    const exists = storage.exists({ key: "k1", signal });
+    const exists = storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext);
 
     // 検証
     expect(exists).toBe(true);
@@ -60,10 +75,10 @@ describe("CRUD の不変条件", () => {
 
   test("空文字を保存したキーの read は空文字を返す", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "");
 
     // 実行
-    const result = storage.read({ key: "k1", signal });
+    const result = storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe("");
@@ -71,30 +86,32 @@ describe("CRUD の不変条件", () => {
 
   test("削除したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
-    storage.delete({ key: "k1", signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
 
     // 実行
-    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v2");
 
     // 検証
-    expect(storage.read({ key: "k1", signal })).toBe("v2");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
   });
 
   test("clear したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
-    storage.clear({ signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 実行
-    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v2");
 
     // 検証
-    expect(storage.read({ key: "k1", signal })).toBe("v2");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
   });
 
   test("欠番の delete は KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.delete({ key: "unknown", signal })).toThrow(KeyNotFoundError);
+    expect(() =>
+      storage.delete(createDeleteContext("unknown", { signal }) as IStorage.DeleteContext),
+    ).toThrow(KeyNotFoundError);
   });
 });

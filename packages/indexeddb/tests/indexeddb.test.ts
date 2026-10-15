@@ -1,4 +1,14 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe, test, beforeEach, afterEach } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
@@ -24,7 +34,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   if (storage.isOpen) {
-    await storage.close({ signal });
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
   }
 });
 
@@ -39,7 +49,7 @@ describe("ライフサイクル管理", () => {
 
   test("open を実行したとき、接続が確立されオープン状態になる", async ({ expect }) => {
     // 実行
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -49,19 +59,21 @@ describe("ライフサイクル管理", () => {
     expect,
   }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行と検証
-    await expect(storage.open({ signal })).resolves.not.toThrow();
+    await expect(
+      storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
+    ).resolves.not.toThrow();
     expect(storage.isOpen).toBe(true);
   });
 
   test("close を実行したとき、接続が解除されクローズ状態になる", async ({ expect }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.close({ signal });
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 検証
     expect(storage.isOpen).toBe(false);
@@ -70,7 +82,7 @@ describe("ライフサイクル管理", () => {
 
 describe("基本データ操作 (CRUD)", () => {
   beforeEach(async () => {
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
   });
 
   test("データを書き込んだとき、正しく保存される", async ({ expect }) => {
@@ -79,10 +91,12 @@ describe("基本データ操作 (CRUD)", () => {
     const data = { message: "hello" };
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 検証
-    const exists = await storage.exists({ key, signal });
+    const exists = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
     expect(exists).toBe(true);
   });
 
@@ -90,10 +104,10 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "k1";
     const data = "v1";
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe("v1");
@@ -102,27 +116,33 @@ describe("基本データ操作 (CRUD)", () => {
   test("データを削除したとき、そのデータが存在しなくなる", async ({ expect }) => {
     // 準備
     const key = "k1";
-    await storage.write({ key, data: "v1", signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
     // 検証
-    const exists = await storage.exists({ key, signal });
+    const exists = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
     expect(exists).toBe(false);
   });
 
   test("clear を実行したとき、すべてのデータが削除される", async ({ expect }) => {
     // 準備
-    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
-    await storage.write({ key: "k2", data: "v2", signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    await storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    const exists1 = await storage.exists({ key: "k1", signal });
-    const exists2 = await storage.exists({ key: "k2", signal });
+    const exists1 = await storage.exists(
+      createHasContext("k1", { signal }) as IStorage.ExistsContext,
+    );
+    const exists2 = await storage.exists(
+      createHasContext("k2", { signal }) as IStorage.ExistsContext,
+    );
     expect(exists1).toBe(false);
     expect(exists2).toBe(false);
   });
@@ -130,7 +150,7 @@ describe("基本データ操作 (CRUD)", () => {
 
 describe("ストリーム操作", () => {
   beforeEach(async () => {
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
   });
 
   test("WritableStream を使用してチャンクを書き込んだとき、結合されたデータが保存される", async ({
@@ -140,7 +160,9 @@ describe("ストリーム操作", () => {
     const key = "stream-key";
     const chunk1 = new Uint8Array([1, 2]);
     const chunk2 = new Uint8Array([3, 4]);
-    const writable = storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
 
     // 実行
@@ -149,7 +171,7 @@ describe("ストリーム操作", () => {
     await writer.close();
 
     // 検証
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(result).toStrictEqual(new Uint8Array([1, 2, 3, 4]));
   });
 
@@ -159,10 +181,12 @@ describe("ストリーム操作", () => {
     // 準備
     const key = "read-stream-key";
     const data = new Uint8Array([10, 20, 30]);
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
-    const readable = storage.getReadable({ key, signal });
+    const readable = storage.getReadable(
+      createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+    );
     const reader = readable.getReader();
     const chunks: number[] = [];
 
@@ -181,7 +205,9 @@ describe("ストリーム操作", () => {
   }) => {
     // 準備
     const key = "empty-stream";
-    const writable = storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
 
     // 実行
@@ -189,7 +215,7 @@ describe("ストリーム操作", () => {
     await writer.close();
 
     // 検証
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(result).toStrictEqual(new Uint8Array([]));
   });
 });
@@ -199,12 +225,12 @@ describe("境界値・異常系", () => {
     expect,
   }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "non_existent";
 
     // 実行と検証
     try {
-      await storage.read({ key, signal });
+      await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
       // 到達してはならない。
       expect(true).toBe(false);
     } catch (error: any) {
@@ -215,13 +241,13 @@ describe("境界値・異常系", () => {
 
   test("特殊文字を含むキーを使用した場合、正しくデータを操作できる", async ({ expect }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "!@#$%^&*()_+";
     const data = "special-key-value";
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe(data);
@@ -229,13 +255,13 @@ describe("境界値・異常系", () => {
 
   test("空文字列のキーを使用した場合、IndexedDB の仕様に従い処理される", async ({ expect }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "";
     const data = "empty-key-data";
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe(data);
@@ -243,14 +269,14 @@ describe("境界値・異常系", () => {
 
   test("大容量のデータを書き込んだとき、正常に永続化される", async ({ expect }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "large-data";
     const size = 2 * 1024 * 1024; // 2 MB
     const data = new Uint8Array(size).fill(1);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result.length).toBe(size);

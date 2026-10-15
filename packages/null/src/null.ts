@@ -26,27 +26,27 @@ export default class Null implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
    */
-  public write(_args: Pick<IStorage.WriteArgs<any>, "key">): void {}
+  public write(): void {}
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
    */
-  public read(args: Pick<IStorage.ReadArgs, "key">): never {
-    throw new KeyNotFoundError({ key: args.key });
+  public read(c: IStorage.ReadContext): never {
+    throw new KeyNotFoundError({ key: c.key });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
    */
-  public exists(_args: Pick<IStorage.ExistsArgs, "key">): false {
+  public exists(): false {
     return false;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
    */
-  public delete(args: Pick<IStorage.DeleteArgs, "key">): never {
-    throw new KeyNotFoundError({ key: args.key });
+  public delete(c: IStorage.DeleteContext): never {
+    throw new KeyNotFoundError({ key: c.key });
   }
 
   /**
@@ -57,7 +57,7 @@ export default class Null implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#data)
    */
-  public getWritable(_args: Pick<IStorage.GetWritableArgs, "key">): WritableStream<any> {
+  public getWritable(): WritableStream<any> {
     return new WritableStream({
       write() {},
     });
@@ -66,7 +66,7 @@ export default class Null implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/null#data)
    */
-  public getReadable(args: Pick<IStorage.GetReadableArgs, "key">): never {
-    throw new KeyNotFoundError({ key: args.key });
+  public getReadable(c: IStorage.GetReadableContext): never {
+    throw new KeyNotFoundError({ key: c.key });
   }
 }

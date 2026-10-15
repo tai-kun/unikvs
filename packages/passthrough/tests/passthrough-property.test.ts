@@ -1,5 +1,14 @@
-import { collectChunks } from "@unikvs/testing";
-import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import { forCasesAsync, type Random } from "@unikvs/testing";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { test } from "vitest";
 
 import PassThrough from "../src/passthrough.js";
@@ -42,38 +51,84 @@ function generateValue(random: Random): unknown {
   }
 }
 
-test("ランダムな値でも encode は同一参照を返す", ({ expect }) => {
+/**
+ * 値をエンコードして出力された値を返します。
+ */
+async function encode(passthrough: PassThrough, value: unknown): Promise<unknown> {
+  const c = createEncodeContext(value);
+  await passthrough.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 値をデコードして出力された値を返します。
+ */
+async function decode(passthrough: PassThrough, value: unknown): Promise<unknown> {
+  const c = createDecodeContext(value);
+  await passthrough.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * チャンク列をエンコードストリームに流して出力されたチャンクを順に返します。
+ */
+async function encodeChunks(
+  passthrough: PassThrough,
+  chunks: readonly unknown[],
+): Promise<unknown[]> {
+  const c = createEncodeStreamContext(sourceFrom(chunks));
+  await passthrough.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+
+  return readAll(c.destination);
+}
+
+/**
+ * チャンク列をデコードストリームに流して出力されたチャンクを順に返します。
+ */
+async function decodeChunks(
+  passthrough: PassThrough,
+  chunks: readonly unknown[],
+): Promise<unknown[]> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await passthrough.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+
+  return readAll(c.destination);
+}
+
+test("ランダムな値でも encode は同一参照を返す", async ({ expect }) => {
   // 準備
   const passthrough = new PassThrough();
 
   // 実行と検証
-  forCases(SEED, 100, (random) => {
+  await forCasesAsync(SEED, 100, async (random) => {
     const value = generateValue(random);
 
-    expect(passthrough.encode({ data: value })).toBe(value);
+    expect(await encode(passthrough, value)).toBe(value);
   });
 });
 
-test("ランダムな値でも decode は同一参照を返す", ({ expect }) => {
+test("ランダムな値でも decode は同一参照を返す", async ({ expect }) => {
   // 準備
   const passthrough = new PassThrough();
 
   // 実行と検証
-  forCases(SEED, 100, (random) => {
+  await forCasesAsync(SEED, 100, async (random) => {
     const value = generateValue(random);
 
-    expect(passthrough.decode({ data: value })).toBe(value);
+    expect(await decode(passthrough, value)).toBe(value);
   });
 });
 
-test("ランダムなチャンク列でも getEncodable は順序と参照を保つ", async ({ expect }) => {
+test("ランダムなチャンク列でも encodeStream は順序と参照を保つ", async ({ expect }) => {
   // 準備
   const passthrough = new PassThrough();
 
   // 実行と検証
   await forCasesAsync(SEED, 50, async (random) => {
     const chunks = random.array(random.uint(50), () => generateValue(random));
-    const output = await collectChunks(passthrough.getEncodable(), chunks);
+    const output = await encodeChunks(passthrough, chunks);
 
     expect(output).toHaveLength(chunks.length);
 
@@ -83,14 +138,14 @@ test("ランダムなチャンク列でも getEncodable は順序と参照を保
   });
 });
 
-test("ランダムなチャンク列でも getDecodable は順序と参照を保つ", async ({ expect }) => {
+test("ランダムなチャンク列でも decodeStream は順序と参照を保つ", async ({ expect }) => {
   // 準備
   const passthrough = new PassThrough();
 
   // 実行と検証
   await forCasesAsync(SEED, 50, async (random) => {
     const chunks = random.array(random.uint(50), () => generateValue(random));
-    const output = await collectChunks(passthrough.getDecodable(), chunks);
+    const output = await decodeChunks(passthrough, chunks);
 
     expect(output).toHaveLength(chunks.length);
 

@@ -1,11 +1,10 @@
-import { Variables } from "@unikvs/core";
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
 import AllowRepair from "../src/allow-repair.js";
 
-test("AllowRepair は ITransformer として扱える", () => {
-  expectTypeOf<AllowRepair>().toExtend<ITransformer>();
+test("AllowRepair は IMiddleware として扱える", () => {
+  expectTypeOf<AllowRepair>().toExtend<IMiddleware>();
 });
 
 test("コンストラクターは引数なしで組み立てられる", () => {
@@ -18,42 +17,35 @@ test("コンストラクターは引数なしで組み立てられる", () => {
   expectTypeOf(new AllowRepair({})).toEqualTypeOf<AllowRepair>();
 });
 
-test("encode はデータの型をそのまま戻り値にする", () => {
-  // 準備
-  const gate = new AllowRepair();
-
+test("use はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(
-    gate.encode<string>({ vars: new Variables({}), data: "hello" }),
-  ).toEqualTypeOf<string>();
-  expectTypeOf(gate.encode({ vars: new Variables({}), data: 123 })).toEqualTypeOf<number>();
-  expectTypeOf(gate.encode({ vars: new Variables({}), data: { id: 1 } })).toEqualTypeOf<{
-    id: number;
-  }>();
-  expectTypeOf(
-    // @ts-expect-error signal の混入は Pick の絞り込みで拒否されます。
-    gate.encode({ vars: new Variables({}), data: "hello", signal: AbortSignal.timeout(1000) }),
-  ).toEqualTypeOf<string>();
+  expectTypeOf<AllowRepair["use"]>().parameter(0).toEqualTypeOf<IMiddleware.UseContext>();
+  expectTypeOf<AllowRepair["use"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<AllowRepair["use"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("decode はデータの型をそのまま戻り値にする", () => {
-  // 準備
-  const gate = new AllowRepair();
-
+test("encode と decode はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(gate.decode<string>({ data: "hello" })).toEqualTypeOf<string>();
-  expectTypeOf(gate.decode({ data: 123 })).toEqualTypeOf<number>();
+  expectTypeOf<AllowRepair["encode"]>().parameter(0).toEqualTypeOf<IMiddleware.EncodeContext>();
+  expectTypeOf<AllowRepair["encode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<AllowRepair["encode"]>().returns.toEqualTypeOf<Promise<void>>();
+  expectTypeOf<AllowRepair["decode"]>().parameter(0).toEqualTypeOf<IMiddleware.DecodeContext>();
+  expectTypeOf<AllowRepair["decode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<AllowRepair["decode"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("getEncodable と getDecodable は TransformStream を返す", () => {
-  // 準備
-  const gate = new AllowRepair();
-
+test("encodeStream と decodeStream はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(gate.getEncodable({ vars: new Variables({}) })).toEqualTypeOf<
-    TransformStream<any, any>
-  >();
-  expectTypeOf(gate.getDecodable()).toEqualTypeOf<TransformStream<any, any>>();
+  expectTypeOf<AllowRepair["encodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.EncodeStreamContext>();
+  expectTypeOf<AllowRepair["encodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<AllowRepair["encodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
+  expectTypeOf<AllowRepair["decodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.DecodeStreamContext>();
+  expectTypeOf<AllowRepair["decodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<AllowRepair["decodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
 test("name と enabled と isOpen の型を保持する", () => {

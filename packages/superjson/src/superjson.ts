@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import SuperjsonCodec from "superjson";
 
 import { SuperjsonUnsupportedValueError } from "./errors.js";
@@ -35,7 +35,12 @@ function assertSupportedValue(value: unknown): void {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
  */
-export default class Superjson implements ITransformer {
+export default class Superjson implements IMiddleware<
+  unknown,
+  Uint8Array<ArrayBuffer>,
+  unknown,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
@@ -51,39 +56,54 @@ export default class Superjson implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
-  public encode(args: Pick<ITransformer.EncodeArgs<unknown>, "data">): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-    assertSupportedValue(data);
+  public async encode(
+    c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    assertSupportedValue(c.source);
 
-    return encoder.encode(SuperjsonCodec.stringify(data));
+    c.destination = encoder.encode(SuperjsonCodec.stringify(c.source));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
-  public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
-    const { data } = args;
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(data);
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    const text = new TextDecoder("utf-8", { fatal: true }).decode(c.source);
 
-    return SuperjsonCodec.parse(text);
+    c.destination = SuperjsonCodec.parse(text);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
-  public getEncodable(): TransformStream<unknown, Uint8Array<ArrayBuffer>> {
-    return new TransformStream({
-      transform(chunk, controller) {
-        assertSupportedValue(chunk);
-        controller.enqueue(encoder.encode(`${SuperjsonCodec.stringify(chunk)}${LF}`));
-      },
-    });
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          assertSupportedValue(chunk);
+          controller.enqueue(encoder.encode(`${SuperjsonCodec.stringify(chunk)}${LF}`));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, unknown> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let buffer = "";
 
@@ -98,24 +118,27 @@ export default class Superjson implements ITransformer {
       controller.enqueue(SuperjsonCodec.parse(normalized));
     };
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        // マルチバイト文字がチャンク境界で分断されてもよいように、ストリームモードでデコードします。
-        buffer += decoder.decode(chunk, { stream: true });
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          // マルチバイト文字がチャンク境界で分断されてもよいように、ストリームモードでデコードします。
+          buffer += decoder.decode(chunk, { stream: true });
 
-        let newlineIndex = buffer.indexOf(LF);
-        while (newlineIndex !== -1) {
-          enqueueLine(buffer.slice(0, newlineIndex), controller);
-          buffer = buffer.slice(newlineIndex + 1);
-          newlineIndex = buffer.indexOf(LF);
-        }
-      },
+          let newlineIndex = buffer.indexOf(LF);
+          while (newlineIndex !== -1) {
+            enqueueLine(buffer.slice(0, newlineIndex), controller);
+            buffer = buffer.slice(newlineIndex + 1);
+            newlineIndex = buffer.indexOf(LF);
+          }
+        },
 
-      flush(controller) {
-        // 末尾に改行がない場合は、残ったバッファーを最後の 1 行として処理します。
-        buffer += decoder.decode();
-        enqueueLine(buffer, controller);
-      },
-    });
+        flush(controller) {
+          // 末尾に改行がない場合は、残ったバッファーを最後の 1 行として処理します。
+          buffer += decoder.decode();
+          enqueueLine(buffer, controller);
+        },
+      }),
+    );
+    await next();
   }
 }

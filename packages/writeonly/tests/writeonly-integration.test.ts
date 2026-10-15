@@ -1,5 +1,6 @@
+import type { IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
-import { captureRejection } from "@unikvs/testing";
+import { captureRejection, createGetContext, createHasContext } from "@unikvs/testing";
 import { PluginOperationAggregateError, UniKvs, type Value } from "unikvs";
 import { describe, test } from "vitest";
 
@@ -42,8 +43,8 @@ describe("書き込みと読み出し", () => {
     await kvs.set("report", "hello");
 
     // 検証
-    expect(storage.exists({ key: "report" })).toBe(true);
-    expect(storage.read({ key: "report" })).toBe("hello");
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(true);
+    expect(storage.read(createGetContext("report") as IStorage.ReadContext)).toBe("hello");
 
     // 後片付け
     await kvs.close();
@@ -124,7 +125,7 @@ describe("削除の拒否", () => {
     const reason = (error as PluginOperationAggregateError).meta.errors[0]?.reason;
     expect(reason).toBeInstanceOf(WriteOnlyDeleteNotAllowedError);
     expect((reason as WriteOnlyDeleteNotAllowedError).meta).toStrictEqual({ key: "report" });
-    expect(storage.exists({ key: "report" })).toBe(true);
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(true);
 
     // 後片付け
     await kvs.close();
@@ -145,7 +146,7 @@ describe("削除の拒否", () => {
     expect((error as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
       WriteOnlyClearNotAllowedError,
     );
-    expect(storage.exists({ key: "report" })).toBe(true);
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(true);
 
     // 後片付け
     await kvs.close();
@@ -160,7 +161,7 @@ describe("削除の拒否", () => {
     await kvs.delete("report");
 
     // 検証
-    expect(storage.exists({ key: "report" })).toBe(false);
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(false);
 
     // 後片付け
     await kvs.close();
@@ -175,7 +176,7 @@ describe("削除の拒否", () => {
     await kvs.clear();
 
     // 検証
-    expect(storage.exists({ key: "report" })).toBe(false);
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(false);
 
     // 後片付け
     await kvs.close();

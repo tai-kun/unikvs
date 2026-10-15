@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureThrown,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { SessionStorageNotAvailableError } from "../src/errors.js";
@@ -28,14 +36,24 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new SessionStorage();
-      expect(() => storage.write({ key: "k", data: "v", vars: new Variables(), signal })).toThrow(
+      expect(() =>
+        storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v"),
+      ).toThrow(SessionStorageNotAvailableError);
+      expect(() => storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toThrow(
         SessionStorageNotAvailableError,
       );
-      expect(() => storage.read({ key: "k", signal })).toThrow(SessionStorageNotAvailableError);
-      expect(() => storage.exists({ key: "k", signal })).toThrow(SessionStorageNotAvailableError);
-      expect(() => storage.delete({ key: "k", signal })).toThrow(SessionStorageNotAvailableError);
-      expect(() => storage.clear({ signal })).toThrow(SessionStorageNotAvailableError);
-      expect(() => storage.open({ signal })).toThrow(SessionStorageNotAvailableError);
+      expect(() =>
+        storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
+      ).toThrow(SessionStorageNotAvailableError);
+      expect(() =>
+        storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
+      ).toThrow(SessionStorageNotAvailableError);
+      expect(() =>
+        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+      ).toThrow(SessionStorageNotAvailableError);
+      expect(() => storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).toThrow(
+        SessionStorageNotAvailableError,
+      );
     });
   });
 
@@ -43,8 +61,8 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new SessionStorage({ storage: createFakeStorage() });
-      storage.write({ key: "k", data: "v", vars: new Variables(), signal });
-      expect(storage.read({ key: "k", signal })).toBe("v");
+      storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v");
+      expect(storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toBe("v");
     });
   });
 
@@ -62,7 +80,9 @@ describe("SSR・非ブラウザー環境", () => {
 
     try {
       // 実行
-      const error = captureThrown(() => new SessionStorage().read({ key: "k", signal }));
+      const error = captureThrown(() =>
+        new SessionStorage().read(createGetContext("k", { signal }) as IStorage.ReadContext),
+      );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);

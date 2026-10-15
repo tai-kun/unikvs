@@ -1,7 +1,52 @@
-import { abortedSignal, captureRejection, createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+  createPseudoRandomBytes,
+} from "@unikvs/testing";
 import { describe, test, vi } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdNode, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 describe("open による初期化", () => {
   test("初期状態では isOpen が false である", ({ expect }) => {
@@ -15,8 +60,8 @@ describe("open による初期化", () => {
     const input = createPseudoRandomBytes(128, 31);
 
     // 実行
-    await target.open({ signal });
-    const decoded = await target.decode({ data: await target.encode({ data: input }) });
+    await openTarget(target, signal);
+    const decoded = await decode(target, await encode(target, input));
 
     // 検証
     expect(target.isOpen).toBe(true);
@@ -35,8 +80,8 @@ describe("open による初期化", () => {
 
       try {
         // 実行
-        await target.open({ signal });
-        await target.open({ signal });
+        await openTarget(target, signal);
+        await openTarget(target, signal);
 
         // 検証
         expect(target.isOpen).toBe(true);
@@ -62,8 +107,8 @@ describe("open による初期化", () => {
       const input = createPseudoRandomBytes(128, 32);
 
       // 実行
-      await Promise.all([first.open({ signal }), second.open({ signal })]);
-      const decoded = await second.decode({ data: await first.encode({ data: input }) });
+      await Promise.all([openTarget(first, signal), openTarget(second, signal)]);
+      const decoded = await decode(second, await encode(first, input));
 
       // 検証
       expect(first.isOpen).toBe(true);
@@ -92,7 +137,9 @@ describe("open の中断", () => {
 
       try {
         // 実行
-        const error = await captureRejection(target.open({ signal: abortedSignal() }));
+        const error = await captureRejection(
+          target.open(createOpenContext({ signal: abortedSignal() }) as IMiddleware.OpenContext),
+        );
 
         // 検証
         // 事前中断では初期化自体を開始しない。
@@ -102,9 +149,9 @@ describe("open の中断", () => {
 
         // 実行と検証
         // 中断はキャッシュを汚さないため、有効な signal では再試行できる。
-        await target.open({ signal });
+        await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 33);
-        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -126,7 +173,9 @@ describe("open の中断", () => {
       const reason = new Error("custom-abort");
 
       // 実行と検証
-      await expect(target.open({ signal: abortedSignal(reason) })).rejects.toBe(reason);
+      await expect(
+        target.open(createOpenContext({ signal: abortedSignal(reason) }) as IMiddleware.OpenContext),
+      ).rejects.toBe(reason);
       expect(target.isOpen).toBe(false);
     } finally {
       vi.restoreAllMocks();
@@ -149,7 +198,9 @@ describe("open の中断", () => {
 
       try {
         // 実行
-        const opening = target.open({ signal: controller.signal });
+        const opening = target.open(
+          createOpenContext({ signal: controller.signal }) as IMiddleware.OpenContext,
+        );
         controller.abort(reason);
 
         // 検証
@@ -158,9 +209,9 @@ describe("open の中断", () => {
 
         // 実行と検証
         // 実行中の破棄はキャッシュを残さないため、有効な signal では再試行できる。
-        await target.open({ signal });
+        await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 34);
-        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
@@ -178,16 +229,18 @@ describe("open の中断", () => {
   }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(64, 35);
 
     // 実行と検証
-    await expect(target.open({ signal: abortedSignal() })).rejects.toBeInstanceOf(DOMException);
+    await expect(
+      target.open(createOpenContext({ signal: abortedSignal() }) as IMiddleware.OpenContext),
+    ).rejects.toBeInstanceOf(DOMException);
     expect(target.isOpen).toBe(true);
 
     // 実行と検証
     // 既存の実行環境は破棄されないため、引き続き往復できる。
-    const decoded = await target.decode({ data: await target.encode({ data: input }) });
+    const decoded = await decode(target, await encode(target, input));
     expect(decoded).toStrictEqual(input);
   });
 });

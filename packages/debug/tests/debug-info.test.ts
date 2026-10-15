@@ -1,4 +1,9 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createEncodeContext,
+  createNext,
+  TestContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -11,7 +16,23 @@ const test = createRecordsTest();
  * 型名と大きさの検証ではデータだけを差し替えるために使用します。
  */
 function argsFor(data: unknown): DebugInfoArgs {
-  return { vars: new Variables({}), action: undefined, key: undefined, direction: "write", data };
+  return {
+    vars: new TestContext(),
+    action: "set",
+    key: "key",
+    direction: "write",
+    data,
+  };
+}
+
+/**
+ * データを書き込みとして記録し、そのまま返します。
+ */
+async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
+  const c = createEncodeContext(data, key);
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
 }
 
 class Example {}
@@ -101,15 +122,12 @@ describe("Debug.getDefaultDebugInfo", () => {
 });
 
 describe("追加のデバッグ情報", () => {
-  test("コールバックの戻り値を action/key/direction とともに記録する", ({ expect, records }) => {
+  test("コールバックの戻り値を action/key/direction とともに記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({ getDebugInfo: () => ({ custom: 1 }) });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
-      data: "d",
-    });
+    await encode(debug, "d", "k");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -121,7 +139,7 @@ describe("追加のデバッグ情報", () => {
     });
   });
 
-  test("コールバックが action/key/direction を返しても実際の値が優先される", ({
+  test("コールバックが action/key/direction を返しても実際の値が優先される", async ({
     expect,
     records,
   }) => {
@@ -131,10 +149,7 @@ describe("追加のデバッグ情報", () => {
     });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "real" }),
-      data: "d",
-    });
+    await encode(debug, "d", "real");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -146,15 +161,12 @@ describe("追加のデバッグ情報", () => {
     });
   });
 
-  test("コールバックの戻り値は既定の情報を置き換える", ({ expect, records }) => {
+  test("コールバックの戻り値は既定の情報を置き換える", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({ getDebugInfo: () => ({ custom: 1 }) });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
-      data: "hello",
-    });
+    await encode(debug, "hello", "k");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -162,17 +174,14 @@ describe("追加のデバッグ情報", () => {
     expect(records[0]!.properties).not.toHaveProperty("length");
   });
 
-  test("既定の情報に独自の情報を追加できる", ({ expect, records }) => {
+  test("既定の情報に独自の情報を追加できる", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({
       getDebugInfo: (args) => ({ ...Debug.getDefaultDebugInfo(args), preview: "he" }),
     });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
-      data: "hello",
-    });
+    await encode(debug, "hello", "k");
 
     // 検証
     expect(records).toHaveLength(1);

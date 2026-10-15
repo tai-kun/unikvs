@@ -1,6 +1,14 @@
-import { InvalidUsageErrorBase, Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { InvalidUsageErrorBase } from "@unikvs/core";
 import * as core from "@unikvs/core";
-import { captureThrown } from "@unikvs/testing";
+import {
+  captureThrown,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {
@@ -33,7 +41,9 @@ describe("エラークラスの name", () => {
     const storage = new LocalStorage({ storage: createFakeStorage() });
 
     // 実行
-    const error = captureThrown(() => storage.read({ key: "unknown", signal }));
+    const error = captureThrown(() =>
+      storage.read(createGetContext("unknown", { signal }) as IStorage.ReadContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(core.KeyNotFoundError);
@@ -75,11 +85,11 @@ describe("背後例外の素通し", () => {
 
     // 実行と検証
     for (const fn of [
-      () => storage.write({ key: "k", data: "v", vars: new Variables(), signal }),
-      () => storage.read({ key: "k", signal }),
-      () => storage.exists({ key: "k", signal }),
-      () => storage.delete({ key: "k", signal }),
-      () => storage.clear({ signal }),
+      () => storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v"),
+      () => storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
+      () => storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
+      () => storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
+      () => storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
     ]) {
       const error = captureThrown(fn);
       expect(error).toBeInstanceOf(DOMException);

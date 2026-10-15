@@ -1,5 +1,26 @@
 export { abortedSignal, captureRejection, captureThrown } from "./abort.js";
 export {
+  TestContext,
+  createClearContext,
+  createCloseContext,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createDeleteContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createGetContext,
+  createHasContext,
+  createMapKeyContext,
+  createNext,
+  createOpenContext,
+  createRepairContext,
+  createSetContext,
+  createStreamContext,
+  type TestContextInit,
+  type TestContextRepair,
+  type TestContextValues,
+} from "./context.js";
+export {
   bytesEqual,
   concatBytes,
   concatChunks,

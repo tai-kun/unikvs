@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -29,15 +35,17 @@ describe("キーの境界値", () => {
       const storage = new Memory();
 
       // 実行
-      storage.write({ vars: new Variables(), key, data: "value" });
+      storage.write(createSetContext(key) as IStorage.WriteContext, "value");
 
       // 検証
-      expect(storage.read({ key })).toBe("value");
-      expect(storage.exists({ key })).toBe(true);
+      expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toBe("value");
+      expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
 
-      storage.delete({ key });
-      expect(storage.exists({ key })).toBe(false);
-      expect(() => storage.read({ key })).toThrow(KeyNotFoundError);
+      storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
+      expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+      expect(() => storage.read(createGetContext(key) as IStorage.ReadContext)).toThrow(
+        KeyNotFoundError,
+      );
     });
   }
 });
@@ -48,13 +56,13 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ vars: new Variables(), key: "Key", data: "upper" });
-    storage.write({ vars: new Variables(), key: "key", data: "lower" });
+    storage.write(createSetContext("Key") as IStorage.WriteContext, "upper");
+    storage.write(createSetContext("key") as IStorage.WriteContext, "lower");
 
     // 検証
-    expect(storage.read({ key: "Key" })).toBe("upper");
-    expect(storage.read({ key: "key" })).toBe("lower");
-    expect(storage.exists({ key: "KEY" })).toBe(false);
+    expect(storage.read(createGetContext("Key") as IStorage.ReadContext)).toBe("upper");
+    expect(storage.read(createGetContext("key") as IStorage.ReadContext)).toBe("lower");
+    expect(storage.exists(createHasContext("KEY") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("空白だけが異なるキーは区別される", ({ expect }) => {
@@ -62,12 +70,12 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k", data: "plain" });
-    storage.write({ vars: new Variables(), key: " k ", data: "padded" });
+    storage.write(createSetContext("k") as IStorage.WriteContext, "plain");
+    storage.write(createSetContext(" k ") as IStorage.WriteContext, "padded");
 
     // 検証
-    expect(storage.read({ key: "k" })).toBe("plain");
-    expect(storage.read({ key: " k " })).toBe("padded");
+    expect(storage.read(createGetContext("k") as IStorage.ReadContext)).toBe("plain");
+    expect(storage.read(createGetContext(" k ") as IStorage.ReadContext)).toBe("padded");
   });
 
   test("同じ文字列のキーへ書き込むと同じ値を上書きする", ({ expect }) => {
@@ -75,11 +83,11 @@ describe("キーの同一性", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k1", data: "first" });
-    storage.write({ vars: new Variables(), key: `k${1}`, data: "second" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "first");
+    storage.write(createSetContext(`k${1}`) as IStorage.WriteContext, "second");
 
     // 検証
-    expect(storage.read({ key: "k1" })).toBe("second");
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("second");
   });
 });
 
@@ -89,10 +97,12 @@ describe("プロトタイプ汚染キー", () => {
     const storage = new Memory();
 
     // 実行
-    storage.write({ vars: new Variables(), key: "__proto__", data: { polluted: true } });
+    storage.write(createSetContext("__proto__") as IStorage.WriteContext, { polluted: true });
 
     // 検証
-    expect(storage.read({ key: "__proto__" })).toStrictEqual({ polluted: true });
+    expect(storage.read(createGetContext("__proto__") as IStorage.ReadContext)).toStrictEqual({
+      polluted: true,
+    });
     expect(({} as Record<string, unknown>)["polluted"]).toBe(undefined);
     expect(Object.prototype).not.toHaveProperty("polluted");
   });
@@ -100,13 +110,13 @@ describe("プロトタイプ汚染キー", () => {
   test("constructor へ書き込んでも既存のキーは影響を受けない", ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.write({ vars: new Variables(), key: "constructor", data: "shadowed" });
+    storage.write(createSetContext("constructor") as IStorage.WriteContext, "shadowed");
 
     // 検証
-    expect(storage.read({ key: "constructor" })).toBe("shadowed");
-    expect(storage.read({ key: "k1" })).toBe("v1");
+    expect(storage.read(createGetContext("constructor") as IStorage.ReadContext)).toBe("shadowed");
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
   });
 });

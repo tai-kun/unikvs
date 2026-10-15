@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import { createEncodeContext, createNext } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -6,28 +7,16 @@ import { createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
 
-const NON_STRING_ACTIONS: readonly { readonly name: string; readonly value: unknown }[] = [
-  { name: "数値", value: 42 },
-  { name: "真偽値", value: true },
-  { name: "null", value: null },
-  { name: "undefined", value: undefined },
-  { name: "シンボル", value: Symbol("set") },
-  { name: "配列", value: ["set"] },
-  { name: "String オブジェクト", value: new String("set") },
-  { name: "toString を持つオブジェクト", value: { toString: () => "set" } },
-];
-
-const NON_STRING_KEYS: readonly { readonly name: string; readonly value: unknown }[] = [
-  { name: "数値", value: 42 },
-  { name: "真偽値", value: true },
-  { name: "null", value: null },
-  { name: "undefined", value: undefined },
-  { name: "配列", value: ["k"] },
-  { name: "String オブジェクト", value: new String("k") },
-];
+/**
+ * データを書き込みとして記録します。
+ */
+async function encode(debug: Debug, data: unknown, key: string): Promise<void> {
+  const c = createEncodeContext(data, key);
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+}
 
 describe("フィルターの呼び出し", () => {
-  test("keyFilter と actionFilter は解決済みの文字列で呼ばれる", ({ expect }) => {
+  test("keyFilter と actionFilter は解決済みの文字列で呼ばれる", async ({ expect }) => {
     // 準備
     const actionArgs: string[] = [];
     const keyArgs: string[] = [];
@@ -43,83 +32,14 @@ describe("フィルターの呼び出し", () => {
     });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" }),
-      data: "hello",
-    });
+    await encode(debug, "hello", "greeting");
 
     // 検証
     expect(actionArgs).toStrictEqual(["set"]);
     expect(keyArgs).toStrictEqual(["greeting"]);
   });
 
-  test.for(NON_STRING_ACTIONS)(
-    "操作が$nameの場合は記録せずフィルターも呼ばない",
-    ({ value }, { expect, records }) => {
-      // 準備
-      const actionArgs: unknown[] = [];
-      const keyArgs: unknown[] = [];
-      const infoArgs: DebugInfoArgs[] = [];
-      const debug = new Debug({
-        actionFilter: (action) => {
-          actionArgs.push(action);
-          return true;
-        },
-        keyFilter: (key) => {
-          keyArgs.push(key);
-          return true;
-        },
-        getDebugInfo: (args) => {
-          infoArgs.push(args);
-          return {};
-        },
-      });
-
-      // 実行
-      debug.encode({
-        vars: new Variables({ "unikvs:action": value, "unikvs:key": "k" }),
-        data: "d",
-      });
-
-      // 検証
-      expect(records).toHaveLength(0);
-      expect(actionArgs).toStrictEqual([]);
-      expect(keyArgs).toStrictEqual([]);
-      expect(infoArgs).toStrictEqual([]);
-    },
-  );
-
-  test.for(NON_STRING_KEYS)(
-    "キーが$nameの場合は記録せず keyFilter も呼ばない",
-    ({ value }, { expect, records }) => {
-      // 準備
-      const actionArgs: unknown[] = [];
-      const keyArgs: unknown[] = [];
-      const debug = new Debug({
-        actionFilter: (action) => {
-          actionArgs.push(action);
-          return true;
-        },
-        keyFilter: (key) => {
-          keyArgs.push(key);
-          return true;
-        },
-      });
-
-      // 実行
-      debug.encode({
-        vars: new Variables({ "unikvs:action": "set", "unikvs:key": value }),
-        data: "d",
-      });
-
-      // 検証
-      expect(records).toHaveLength(0);
-      expect(actionArgs).toStrictEqual(["set"]);
-      expect(keyArgs).toStrictEqual([]);
-    },
-  );
-
-  test("actionFilter が拒否した場合は keyFilter を呼ばない", ({ expect, records }) => {
+  test("actionFilter が拒否した場合は keyFilter を呼ばない", async ({ expect, records }) => {
     // 準備
     const keyArgs: unknown[] = [];
     const debug = new Debug({
@@ -131,10 +51,7 @@ describe("フィルターの呼び出し", () => {
     });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
-      data: "d",
-    });
+    await encode(debug, "d", "k");
 
     // 検証
     expect(records).toHaveLength(0);
@@ -146,7 +63,7 @@ describe("フィルターの呼び出し", () => {
     { name: "keyFilter", options: { keyFilter: () => false } },
   ] as const)(
     "$name が拒否した場合は getDebugInfo を呼ばない",
-    ({ options }, { expect, records }) => {
+    async ({ options }, { expect, records }) => {
       // 準備
       const infoArgs: DebugInfoArgs[] = [];
       const debug = new Debug({
@@ -158,10 +75,7 @@ describe("フィルターの呼び出し", () => {
       });
 
       // 実行
-      debug.encode({
-        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "k" }),
-        data: "d",
-      });
+      await encode(debug, "d", "k");
 
       // 検証
       expect(records).toHaveLength(0);
@@ -169,16 +83,16 @@ describe("フィルターの呼び出し", () => {
     },
   );
 
-  test("空文字の操作とキーも文字列として記録する", ({ expect, records }) => {
+  test("空文字のキーも文字列として記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: new Variables({ "unikvs:action": "", "unikvs:key": "" }), data: "d" });
+    await encode(debug, "d", "");
 
     // 検証
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties).toMatchObject({ action: "", key: "", direction: "write" });
+    expect(records[0]!.properties).toMatchObject({ action: "set", key: "", direction: "write" });
   });
 });
 
@@ -193,7 +107,7 @@ describe("既定のフィルターとコールバック", () => {
     expect(debug.getDebugInfo).toBe(Debug.getDefaultDebugInfo);
   });
 
-  test("複数のインスタンスは互いに独立している", ({ expect, records }) => {
+  test("複数のインスタンスは互いに独立している", async ({ expect, records }) => {
     // 準備
     const first = new Debug({
       keyFilter: (key) => key === "first",
@@ -205,22 +119,10 @@ describe("既定のフィルターとコールバック", () => {
     });
 
     // 実行
-    first.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "second" }),
-      data: "a",
-    });
-    second.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "first" }),
-      data: "b",
-    });
-    first.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "first" }),
-      data: "c",
-    });
-    second.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "second" }),
-      data: "d",
-    });
+    await encode(first, "a", "second");
+    await encode(second, "b", "first");
+    await encode(first, "c", "first");
+    await encode(second, "d", "second");
 
     // 検証
     expect(records).toHaveLength(2);

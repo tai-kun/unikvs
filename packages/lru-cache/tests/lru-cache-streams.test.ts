@@ -1,5 +1,12 @@
-import { Variables } from "@unikvs/core";
-import { captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureRejection,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { InvalidChunkTypeError, KeyNotFoundError } from "../src/errors.js";
@@ -13,7 +20,7 @@ const test = vitest.extend<{ storage: LruCache }>({
   // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const storage = new LruCache();
-    await storage.open({ signal: new AbortController().signal });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
     await use(storage);
   },
 });
@@ -22,7 +29,9 @@ describe("getWritable", () => {
   test("長さの異なる複数のチャンクを順番どおり結合して保存する", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2, 3]));
@@ -31,64 +40,78 @@ describe("getWritable", () => {
     await writer.close();
 
     // 検証
-    expect(storage.read({ key })).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1, 2, 3, 4, 5, 6]),
+    );
   });
 
   test("close するまで値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
-    const existsBeforeClose = storage.exists({ key });
+    const existsBeforeClose = storage.exists(createHasContext(key) as IStorage.ExistsContext);
     await writer.close();
 
     // 検証
     expect(existsBeforeClose).toBe(false);
-    expect(storage.exists({ key })).toBe(true);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
   });
 
   test("上書き時も close までは旧値が見える", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    storage.write({ vars: new Variables(), key, data: new Uint8Array([9]) });
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    storage.write(createSetContext(key) as IStorage.WriteContext, new Uint8Array([9]));
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
-    const visibleBeforeClose = storage.read({ key });
+    const visibleBeforeClose = storage.read(createGetContext(key) as IStorage.ReadContext);
     await writer.close();
 
     // 検証
     expect(visibleBeforeClose).toStrictEqual(new Uint8Array([9]));
-    expect(storage.read({ key })).toStrictEqual(new Uint8Array([1, 2]));
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1, 2]),
+    );
   });
 
   test("空のストリームを close したとき、長さ 0 の値が保存される", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.close();
 
     // 検証
-    expect(storage.exists({ key })).toBe(true);
-    expect(storage.read({ key })).toStrictEqual(new Uint8Array(0));
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array(0),
+    );
   });
 
   test("abort したとき値は保存されない", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
     await writer.abort();
 
     // 検証
-    expect(storage.exists({ key })).toBe(false);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
     await expect(writer.closed).rejects.toBeUndefined();
   });
 
@@ -98,7 +121,9 @@ describe("getWritable", () => {
   }) => {
     // 準備
     const key = "s1";
-    const writer = storage.getWritable({ vars: new Variables(), key }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     const error = await captureRejection(
@@ -107,7 +132,7 @@ describe("getWritable", () => {
 
     // 検証
     expect(error).toBeInstanceOf(InvalidChunkTypeError);
-    expect(storage.exists({ key })).toBe(false);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
   });
 
   test("ストリームの close で保存したとき、最も新しいものとして扱われる", async ({
@@ -116,36 +141,44 @@ describe("getWritable", () => {
   }) => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
-    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([2]) });
-    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, new Uint8Array([1]));
+    storage.write(createSetContext("k2") as IStorage.WriteContext, new Uint8Array([2]));
+    const writer = storage
+      .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([9]));
     await writer.close();
-    storage.write({ vars: new Variables(), key: "k3", data: new Uint8Array([3]) });
+    storage.write(createSetContext("k3") as IStorage.WriteContext, new Uint8Array([3]));
 
     // 検証
-    expect(storage.exists({ key: "k2" })).toBe(false);
-    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([9]));
+    expect(storage.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(false);
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([9]),
+    );
   });
 });
 
 describe("getReadable", () => {
   test("存在しないキーでは KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.getReadable({ key: "unknown" })).toThrow(KeyNotFoundError);
+    expect(() =>
+      storage.getReadable(createStreamContext("unknown") as IStorage.GetReadableContext),
+    ).toThrow(KeyNotFoundError);
   });
 
   test("保存値を単一チャンクとして送出する", async ({ expect, storage }) => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: new Variables(), key, data });
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
 
     // 実行
-    const reader = storage.getReadable({ key }).getReader();
+    const reader = storage
+      .getReadable(createStreamContext(key) as IStorage.GetReadableContext)
+      .getReader();
     const first = await reader.read();
     const second = await reader.read();
 
@@ -159,19 +192,23 @@ describe("getReadable", () => {
   test("取得時に直近使用順を更新する", async ({ expect, signal }) => {
     // 準備
     const storage = new LruCache({ maxEntries: 2 });
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
-    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([2]) });
-    const reader = storage.getReadable({ key: "k1" }).getReader();
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, new Uint8Array([1]));
+    storage.write(createSetContext("k2") as IStorage.WriteContext, new Uint8Array([2]));
+    const reader = storage
+      .getReadable(createStreamContext("k1") as IStorage.GetReadableContext)
+      .getReader();
     await reader.read();
     reader.releaseLock();
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k3", data: new Uint8Array([3]) });
+    storage.write(createSetContext("k3") as IStorage.WriteContext, new Uint8Array([3]));
 
     // 検証
-    expect(storage.exists({ key: "k2" })).toBe(false);
-    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1]));
+    expect(storage.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(false);
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1]),
+    );
   });
 
   test("読み取り中に同じキーを書き換えても進行中のストリームは元の値を送出する", async ({
@@ -180,11 +217,13 @@ describe("getReadable", () => {
   }) => {
     // 準備
     const key = "s1";
-    storage.write({ vars: new Variables(), key, data: new Uint8Array([1, 2]) });
-    const reader = storage.getReadable({ key }).getReader();
+    storage.write(createSetContext(key) as IStorage.WriteContext, new Uint8Array([1, 2]));
+    const reader = storage
+      .getReadable(createStreamContext(key) as IStorage.GetReadableContext)
+      .getReader();
 
     // 実行
-    storage.write({ vars: new Variables(), key, data: new Uint8Array([3, 4]) });
+    storage.write(createSetContext(key) as IStorage.WriteContext, new Uint8Array([3, 4]));
     const { value } = await reader.read();
 
     // 検証
@@ -195,13 +234,15 @@ describe("getReadable", () => {
     // 準備
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: new Variables(), key, data });
-    const reader = storage.getReadable({ key }).getReader();
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
+    const reader = storage
+      .getReadable(createStreamContext(key) as IStorage.GetReadableContext)
+      .getReader();
 
     // 実行
     await reader.cancel();
 
     // 検証
-    expect(storage.read({ key })).toStrictEqual(data);
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(data);
   });
 });

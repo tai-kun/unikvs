@@ -1,5 +1,11 @@
-import { Variables } from "@unikvs/core";
-import { captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureRejection,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -20,85 +26,98 @@ describe("プリミティブ値", () => {
   for (const { label, value } of primitiveValues) {
     test(`${label} を保存したとき、同じ値として取得できる`, async ({ expect, storage }) => {
       // 準備
-      await storage.open({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
       // 実行
-      await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
+      await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
 
       // 検証
-      expect(await storage.read({ key: "k1", signal })).toBe(value);
+      expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+        value,
+      );
     });
   }
 
   test("NaN を保存したとき、exists は true を返す", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key: "k1", data: Number.NaN, signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, Number.NaN);
 
     // 検証
-    expect(await storage.exists({ key: "k1", signal })).toBe(true);
+    expect(await storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      true,
+    );
   });
 
   test("Infinity と -Infinity を保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({
-      key: "positive",
-      data: Number.POSITIVE_INFINITY,
-      signal,
-      vars: new Variables(),
-    });
-    await storage.write({
-      key: "negative",
-      data: Number.NEGATIVE_INFINITY,
-      signal,
-      vars: new Variables(),
-    });
+    await storage.write(
+      createSetContext("positive", { signal }) as IStorage.WriteContext,
+      Number.POSITIVE_INFINITY,
+    );
+    await storage.write(
+      createSetContext("negative", { signal }) as IStorage.WriteContext,
+      Number.NEGATIVE_INFINITY,
+    );
 
     // 検証
-    expect(await storage.read({ key: "positive", signal })).toBe(Number.POSITIVE_INFINITY);
-    expect(await storage.read({ key: "negative", signal })).toBe(Number.NEGATIVE_INFINITY);
+    expect(
+      await storage.read(createGetContext("positive", { signal }) as IStorage.ReadContext),
+    ).toBe(Number.POSITIVE_INFINITY);
+    expect(
+      await storage.read(createGetContext("negative", { signal }) as IStorage.ReadContext),
+    ).toBe(Number.NEGATIVE_INFINITY);
   });
 
   test("0 と -0 は区別して保存される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key: "zero", data: 0, signal, vars: new Variables() });
-    await storage.write({ key: "negative-zero", data: -0, signal, vars: new Variables() });
+    await storage.write(createSetContext("zero", { signal }) as IStorage.WriteContext, 0);
+    await storage.write(createSetContext("negative-zero", { signal }) as IStorage.WriteContext, -0);
 
     // 検証
-    expect(await storage.read({ key: "zero", signal })).toBe(0);
-    expect(Object.is(await storage.read({ key: "negative-zero", signal }), -0)).toBe(true);
+    expect(await storage.read(createGetContext("zero", { signal }) as IStorage.ReadContext)).toBe(
+      0,
+    );
+    expect(
+      Object.is(
+        await storage.read(createGetContext("negative-zero", { signal }) as IStorage.ReadContext),
+        -0,
+      ),
+    ).toBe(true);
   });
 });
 
 describe("複合値", () => {
   test("ネストしたオブジェクトと配列を保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = { list: [1, "two", { three: true }], nested: { deep: null } };
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
 
     // 検証
-    expect(await storage.read({ key: "k1", signal })).toStrictEqual(value);
+    expect(
+      await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(value);
   });
 
   test("Date を保存したとき、複製された同じ日時を取得できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Date("2024-01-02T03:04:05.678Z");
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toStrictEqual(value);
@@ -107,15 +126,15 @@ describe("複合値", () => {
 
   test("Map を保存したとき、複製された同じ内容を取得できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Map<string, number>([
       ["a", 1],
       ["b", 2],
     ]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(Map);
@@ -125,12 +144,12 @@ describe("複合値", () => {
 
   test("Set を保存したとき、複製された同じ内容を取得できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Set([1, 2, 3]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(Set);
@@ -140,12 +159,12 @@ describe("複合値", () => {
 
   test("RegExp を保存したとき、複製された同じパターンを取得できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = /abc/giu;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(RegExp);
@@ -156,12 +175,12 @@ describe("複合値", () => {
 
   test("Blob を保存したとき、複製された同じ内容を取得できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Blob(["hello", "world"], { type: "text/plain" });
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(Blob);
@@ -172,14 +191,14 @@ describe("複合値", () => {
 
   test("循環参照を持つオブジェクトを保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     type Node = { name: string; self?: Node };
     const value: Node = { name: "root" };
     value.self = value;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result.name).toBe("root");
@@ -191,12 +210,12 @@ describe("複合値", () => {
 describe("バイナリーデータ", () => {
   test("ArrayBuffer を byte-for-byte で保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Uint8Array([1, 2, 3, 255]).buffer;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(ArrayBuffer);
@@ -206,12 +225,12 @@ describe("バイナリーデータ", () => {
 
   test("Uint8Array を byte-for-byte で保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = new Uint8Array([0, 1, 2, 255]);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toStrictEqual(value);
@@ -223,25 +242,27 @@ describe("バイナリーデータ", () => {
     storage,
   }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const buffer = new Uint8Array([0, 1, 2, 3]).buffer;
     const view = new Uint8Array(buffer, 1, 2);
 
     // 実行
-    await storage.write({ key: "k1", data: view, signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, view);
 
     // 検証
-    expect(await storage.read({ key: "k1", signal })).toStrictEqual(new Uint8Array([1, 2]));
+    expect(
+      await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([1, 2]));
   });
 
   test("複数 MiB の文字列を保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const value = "a".repeat(3 * 1024 * 1024);
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result.length).toBe(value.length);
@@ -250,15 +271,15 @@ describe("バイナリーデータ", () => {
 
   test("複数 MiB の Uint8Array を byte-for-byte で保存できる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const size = 3 * 1024 * 1024;
     const value = new Uint8Array(size);
     value[0] = 1;
     value[size - 1] = 2;
 
     // 実行
-    await storage.write({ key: "k1", data: value, signal, vars: new Variables() });
-    const result = await storage.read({ key: "k1", signal });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+    const result = await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result.length).toBe(size);
@@ -271,17 +292,19 @@ describe("バイナリーデータ", () => {
 describe("複製できない値", () => {
   test("関数を書き込むと DataCloneError で拒否され、保存されない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
     const error = await captureRejection(
-      storage.write({ key: "fn", data: () => {}, signal, vars: new Variables() }),
+      storage.write(createSetContext("fn", { signal }) as IStorage.WriteContext, () => {}),
     );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
     expect((error as DOMException).name).toBe("DataCloneError");
-    expect(await storage.exists({ key: "fn", signal })).toBe(false);
+    expect(await storage.exists(createHasContext("fn", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
   test("シンボルを書き込むと DataCloneError で拒否され、保存されない", async ({
@@ -289,18 +312,20 @@ describe("複製できない値", () => {
     storage,
   }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const symbol = Symbol("value");
 
     // 実行
     const error = await captureRejection(
-      storage.write({ key: "sym", data: symbol, signal, vars: new Variables() }),
+      storage.write(createSetContext("sym", { signal }) as IStorage.WriteContext, symbol),
     );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
     expect((error as DOMException).name).toBe("DataCloneError");
-    expect(await storage.exists({ key: "sym", signal })).toBe(false);
+    expect(
+      await storage.exists(createHasContext("sym", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
   });
 
   test("関数を含むオブジェクトを書き込むと DataCloneError で拒否される", async ({
@@ -308,31 +333,37 @@ describe("複製できない値", () => {
     storage,
   }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
     const error = await captureRejection(
-      storage.write({ key: "nested", data: { callback: () => {} }, signal, vars: new Variables() }),
+      storage.write(createSetContext("nested", { signal }) as IStorage.WriteContext, {
+        callback: () => {},
+      }),
     );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
     expect((error as DOMException).name).toBe("DataCloneError");
-    expect(await storage.exists({ key: "nested", signal })).toBe(false);
+    expect(
+      await storage.exists(createHasContext("nested", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
   });
 
   test("複製に失敗しても既存の値は上書きされない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.write({ key: "k1", data: "old", signal, vars: new Variables() });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "old");
 
     // 実行
     const error = await captureRejection(
-      storage.write({ key: "k1", data: () => {}, signal, vars: new Variables() }),
+      storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, () => {}),
     );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
-    expect(await storage.read({ key: "k1", signal })).toBe("old");
+    expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+      "old",
+    );
   });
 });

@@ -1,9 +1,53 @@
-import { captureRejection, createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createPseudoRandomBytes,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
 import { ZstdWasmInitError, ZstdWasmInvalidLevelError } from "../src/errors.js";
 import ZstdWasm, { type ZstdWasmOptions } from "../src/zstd-wasm.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdWasm, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
@@ -39,7 +83,7 @@ describe("WASM 初期化の失敗", () => {
 
       try {
         // 実行
-        const error = await captureRejection(target.open({ signal }));
+        const error = await captureRejection(openTarget(target, signal));
 
         // 検証
         // 失敗は ZstdWasmInitError で包み、原因を保持する。
@@ -49,9 +93,9 @@ describe("WASM 初期化の失敗", () => {
 
         // 実行と検証
         // 失敗はキャッシュされないため、再試行では解決が再実行される。
-        await target.open({ signal });
+        await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 41);
-        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        const decoded = await decode(target, await encode(target, input ) );
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
@@ -138,22 +182,22 @@ describe("壊れた圧縮データの decode", () => {
   test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const garbage = createPseudoRandomBytes(64, 21);
 
     // 実行と検証
     // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(target.decode({ data: garbage })).rejects.toThrow(Error);
+    await expect(decode(target, garbage )).rejects.toThrow(Error);
   });
 
   test("末尾を欠いたデータをエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
-    const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 22) });
+    await openTarget(target, signal);
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 22) );
 
     // 実行と検証
-    await expect(target.decode({ data: encoded.subarray(0, encoded.length - 4) })).rejects.toThrow(
+    await expect(decode(target, encoded.subarray(0, encoded.length - 4) )).rejects.toThrow(
       Error,
     );
   });
@@ -162,13 +206,13 @@ describe("壊れた圧縮データの decode", () => {
     // 準備
     // 末尾破壊は検出できない場合があるため、先頭のマジックバイトを壊して検証する。
     const target = new ZstdWasm();
-    await target.open({ signal });
-    const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 23) });
+    await openTarget(target, signal);
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 23) );
     const corrupted = encoded.slice();
     corrupted[0] = corrupted[0]! ^ 0xff;
 
     // 実行と検証
-    await expect(target.decode({ data: corrupted })).rejects.toThrow(Error);
+    await expect(decode(target, corrupted )).rejects.toThrow(Error);
   });
 });
 

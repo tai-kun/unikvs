@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -28,13 +29,15 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: new Variables(), signal });
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
     // 検証
     for (const [key, data] of cases) {
-      expect(storage.read({ key, signal })).toBe(data);
-      expect(storage.exists({ key, signal })).toBe(true);
+      expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
+      expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+        true,
+      );
     }
   });
 
@@ -50,12 +53,12 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: new Variables(), signal });
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
     // 検証
     for (const [key, data] of cases) {
-      expect(storage.read({ key, signal })).toBe(data);
+      expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
     }
   });
 
@@ -64,10 +67,12 @@ describe("文字列値の往復", () => {
     const data = "1 行目\n2 行目\r\n3 行目\ttab 付き";
 
     // 実行
-    storage.write({ key: "multiline", data, vars: new Variables(), signal });
+    storage.write(createSetContext("multiline", { signal }) as IStorage.WriteContext, data);
 
     // 検証
-    expect(storage.read({ key: "multiline", signal })).toBe(data);
+    expect(storage.read(createGetContext("multiline", { signal }) as IStorage.ReadContext)).toBe(
+      data,
+    );
   });
 
   test("長大な文字列を保存したとき、そのまま取得できる", ({ expect, storage }) => {
@@ -75,10 +80,10 @@ describe("文字列値の往復", () => {
     const data = "あ".repeat(1024 * 1024);
 
     // 実行
-    storage.write({ key: "large", data, vars: new Variables(), signal });
+    storage.write(createSetContext("large", { signal }) as IStorage.WriteContext, data);
 
     // 検証
-    expect(storage.read({ key: "large", signal })).toBe(data);
+    expect(storage.read(createGetContext("large", { signal }) as IStorage.ReadContext)).toBe(data);
   });
 
   test("s:・b:・j: で始まる文字列を保存したとき、接頭辞を剥がさず取得できる", ({
@@ -94,12 +99,12 @@ describe("文字列値の往復", () => {
 
     // 実行
     for (const [key, data] of cases) {
-      storage.write({ key, data, vars: new Variables(), signal });
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
     // 検証
     for (const [key, data] of cases) {
-      expect(storage.read({ key, signal })).toBe(data);
+      expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
     }
   });
 
@@ -109,8 +114,10 @@ describe("文字列値の往復", () => {
     const data = JSON.stringify(profile);
 
     // 実行
-    storage.write({ key: "profile", data, vars: new Variables(), signal });
-    const restored = JSON.parse(storage.read({ key: "profile", signal }) as string);
+    storage.write(createSetContext("profile", { signal }) as IStorage.WriteContext, data);
+    const restored = JSON.parse(
+      storage.read(createGetContext("profile", { signal }) as IStorage.ReadContext) as string,
+    );
 
     // 検証
     expect(restored).toStrictEqual(profile);

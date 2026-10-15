@@ -1,5 +1,14 @@
 import { configureSync, resetSync, type LogRecord } from "@logtape/logtape";
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { afterAll, describe, test as vitest } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -39,30 +48,53 @@ const test = vitest.extend<{ records: LogRecord[] }>({
 });
 
 /**
- * TransformStream にチャンクを順に流し込み、出力されたチャンクを返します。
+ * データを書き込みとして記録し、そのまま返します。
+ */
+async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
+  const c = createEncodeContext(data, key);
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * データを読み込みとして記録し、そのまま返します。
+ */
+async function decode(debug: Debug, data: unknown, key: string): Promise<unknown> {
+  const c = createDecodeContext(data, key);
+  await debug.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を書き込みストリームに流し、出力されたチャンクを返します。
  * ストリーム経由でもログが記録されることを検証するために使用します。
  */
-async function pipeChunks<T>(stream: TransformStream<T, T>, chunks: readonly T[]): Promise<T[]> {
-  const readable = new ReadableStream<T>({
-    start: (controller) => {
-      for (const chunk of chunks) {
-        controller.enqueue(chunk);
-      }
-      controller.close();
-    },
-  });
-  const reader = readable.pipeThrough(stream).getReader();
-  const output: T[] = [];
+async function pumpEncode(
+  debug: Debug,
+  chunks: readonly unknown[],
+  key: string,
+): Promise<unknown[]> {
+  const c = createEncodeStreamContext(sourceFrom(chunks), key);
+  await debug.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    output.push(value);
-  }
+  return readAll(c.destination as ReadableStream<unknown>);
+}
 
-  return output;
+/**
+ * チャンク列を読み込みストリームに流し、出力されたチャンクを返します。
+ * ストリーム経由でもログが記録されることを検証するために使用します。
+ */
+async function pumpDecode(
+  debug: Debug,
+  chunks: readonly unknown[],
+  key: string,
+): Promise<unknown[]> {
+  const c = createDecodeStreamContext(sourceFrom(chunks), key);
+  await debug.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+
+  return readAll(c.destination as ReadableStream<unknown>);
 }
 
 describe("初期化と基本属性", () => {
@@ -82,25 +114,25 @@ describe("初期化と基本属性", () => {
     expect(debug.isOpen).toBe(true);
   });
 
-  test("encode はデータを変換せずにそのまま返す", ({ expect }) => {
+  test("encode はデータを変換せずにそのまま返す", async ({ expect }) => {
     // 準備
     const debug = new Debug();
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = debug.encode({ vars: new Variables({}), data });
+    const output = await encode(debug, data, "key");
 
     // 検証
     expect(output).toBe(data);
   });
 
-  test("decode はデータを変換せずにそのまま返す", ({ expect }) => {
+  test("decode はデータを変換せずにそのまま返す", async ({ expect }) => {
     // 準備
     const debug = new Debug();
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = debug.decode({ vars: new Variables({}), data });
+    const output = await decode(debug, data, "key");
 
     // 検証
     expect(output).toBe(data);
@@ -108,13 +140,12 @@ describe("初期化と基本属性", () => {
 });
 
 describe("ログの記録", () => {
-  test("encode は操作とキーと文字列長を書き込みとして記録する", ({ expect, records }) => {
+  test("encode は操作とキーと文字列長を書き込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" });
 
     // 実行
-    debug.encode({ vars, data: "hello" });
+    await encode(debug, "hello", "greeting");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -127,13 +158,12 @@ describe("ログの記録", () => {
     });
   });
 
-  test("decode は操作とキーとバイト数を読み込みとして記録する", ({ expect, records }) => {
+  test("decode は操作とキーとバイト数を読み込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({ "unikvs:action": "get", "unikvs:key": "blob" });
 
     // 実行
-    debug.decode({ vars, data: new Uint16Array(3) });
+    await decode(debug, new Uint16Array(3), "blob");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -146,30 +176,26 @@ describe("ログの記録", () => {
     });
   });
 
-  test("操作とキーが変数にない場合は記録しない", ({ expect, records }) => {
+  test("空文字のキーでも記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: new Variables({}), data: 42 });
-    debug.encode({ vars: new Variables({ "unikvs:action": "set" }), data: 42 });
-    debug.encode({ vars: new Variables({ "unikvs:key": "foo" }), data: 42 });
+    await encode(debug, 42, "");
 
     // 検証
-    expect(records).toHaveLength(0);
+    expect(records).toHaveLength(1);
+    expect(records[0]!.properties).toMatchObject({ action: "set", key: "" });
   });
 
-  test("カスタムのコールバックが返した情報を記録する", ({ expect, records }) => {
+  test("カスタムのコールバックが返した情報を記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({
       getDebugInfo: ({ data }) => ({ custom: data === "hello" ? "matched" : "unmatched" }),
     });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "foo" }),
-      data: "hello",
-    });
+    await encode(debug, "hello", "foo");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -179,7 +205,10 @@ describe("ログの記録", () => {
     });
   });
 
-  test("カスタムのコールバックには変数と操作とキーと向きとデータを渡す", ({ expect, records }) => {
+  test("カスタムのコールバックにはコンテキストと操作とキーと向きとデータを渡す", async ({
+    expect,
+    records,
+  }) => {
     // 準備
     const received: unknown[] = [];
     const debug = new Debug({
@@ -188,15 +217,17 @@ describe("ログの記録", () => {
         return {};
       },
     });
-    const vars = new Variables({ "unikvs:action": "get", "unikvs:key": "foo", extra: true });
     const data = new Uint8Array([1]);
+    const c = createDecodeContext(data, "foo", { values: { extra: true } });
 
     // 実行
-    debug.decode({ vars, data });
+    await debug.decode(c as IMiddleware.DecodeContext, createNext());
 
     // 検証
     expect(records).toHaveLength(1);
-    expect(received).toStrictEqual([{ vars, action: "get", key: "foo", direction: "read", data }]);
+    expect(received).toStrictEqual([
+      { vars: c, action: "get", key: "foo", direction: "read", data },
+    ]);
   });
 });
 
@@ -214,9 +245,9 @@ describe("既定のデバッグ情報", () => {
   ] as const)("%o の型と大きさを返す", ([data, type, size], { expect }) => {
     // 実行
     const info = Debug.getDefaultDebugInfo({
-      vars: new Variables({}),
-      action: undefined,
-      key: undefined,
+      vars: createEncodeContext(data, "key"),
+      action: "set",
+      key: "key",
       direction: "write",
       data,
     });
@@ -227,80 +258,55 @@ describe("既定のデバッグ情報", () => {
 });
 
 describe("フィルター", () => {
-  test("keyFilter に一致するキーだけを記録する", ({ expect, records }) => {
+  test("keyFilter に一致するキーだけを記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({ keyFilter: (key) => key === "target" });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "target" }),
-      data: "a",
-    });
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "other" }),
-      data: "b",
-    });
+    await encode(debug, "a", "target");
+    await encode(debug, "b", "other");
 
     // 検証
     expect(records).toHaveLength(1);
     expect(records[0]!.properties["key"]).toBe("target");
   });
 
-  test("actionFilter に一致する操作だけを記録する", ({ expect, records }) => {
+  test("actionFilter に一致する操作だけを記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({ actionFilter: (action) => action === "get" });
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "foo" }),
-      data: "a",
-    });
-    debug.decode({
-      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "foo" }),
-      data: "b",
-    });
+    await encode(debug, "a", "foo");
+    await decode(debug, "b", "foo");
 
     // 検証
     expect(records).toHaveLength(1);
     expect(records[0]!.properties["direction"]).toBe("read");
   });
 
-  test("フィルターが指定されているとき、対応する変数がないログは記録しない", ({
-    expect,
-    records,
-  }) => {
+  test("フィルターが拒否した場合は記録しない", async ({ expect, records }) => {
     // 準備
     const debug = new Debug({
-      keyFilter: () => true,
-      actionFilter: () => true,
+      keyFilter: () => false,
+      actionFilter: () => false,
     });
 
     // 実行
-    debug.encode({ vars: new Variables({}), data: "a" });
-    debug.encode({ vars: new Variables({ "unikvs:action": "set" }), data: "b" });
-    debug.encode({ vars: new Variables({ "unikvs:key": "foo" }), data: "c" });
+    await encode(debug, "a", "foo");
+    await decode(debug, "b", "foo");
 
     // 検証
     expect(records).toHaveLength(0);
   });
 
-  test("フィルターを指定しない場合はすべて記録する", ({ expect, records }) => {
+  test("フィルターを指定しない場合はすべて記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "a" }),
-      data: "1",
-    });
-    debug.decode({
-      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "b" }),
-      data: "2",
-    });
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "c" }),
-      data: "3",
-    });
+    await encode(debug, "1", "a");
+    await decode(debug, "2", "b");
+    await encode(debug, "3", "c");
 
     // 検証
     expect(records).toHaveLength(3);
@@ -308,14 +314,13 @@ describe("フィルター", () => {
 });
 
 describe("ストリーム", () => {
-  test("getEncodable はチャンクごとに書き込みとして記録する", async ({ expect, records }) => {
+  test("encodeStream はチャンクごとに書き込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({ "unikvs:action": "set", "unikvs:key": "stream" });
     const input = [new Uint8Array([1]), new Uint8Array([2, 3])];
 
     // 実行
-    const output = await pipeChunks(debug.getEncodable({ vars }), input);
+    const output = await pumpEncode(debug, input, "stream");
 
     // 検証
     expect(output).toStrictEqual(input);
@@ -334,14 +339,13 @@ describe("ストリーム", () => {
     });
   });
 
-  test("getDecodable はチャンクごとに読み込みとして記録する", async ({ expect, records }) => {
+  test("decodeStream はチャンクごとに読み込みとして記録する", async ({ expect, records }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({ "unikvs:action": "stream", "unikvs:key": "stream" });
     const input = ["a", "bc"];
 
     // 実行
-    const output = await pipeChunks(debug.getDecodable({ vars }), input);
+    const output = await pumpDecode(debug, input, "stream");
 
     // 検証
     expect(output).toStrictEqual(input);
@@ -367,18 +371,8 @@ describe("ストリーム", () => {
     const debug = new Debug({ keyFilter: (key) => key === "target" });
 
     // 実行
-    await pipeChunks(
-      debug.getEncodable({
-        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "other" }),
-      }),
-      [new Uint8Array([1])],
-    );
-    await pipeChunks(
-      debug.getEncodable({
-        vars: new Variables({ "unikvs:action": "set", "unikvs:key": "target" }),
-      }),
-      [new Uint8Array([2])],
-    );
+    await pumpEncode(debug, [new Uint8Array([1])], "other");
+    await pumpEncode(debug, [new Uint8Array([2])], "target");
 
     // 検証
     expect(records).toHaveLength(1);

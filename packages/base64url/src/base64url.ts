@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
 import type { FastUtf8 } from "fast-utf8";
 
@@ -185,7 +185,12 @@ export type Base64UrlOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
  */
-export default class Base64Url implements ITransformer {
+export default class Base64Url implements IMiddleware<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
    */
@@ -230,80 +235,91 @@ export default class Base64Url implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
    */
-  public encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-
-    return this.encoder.encode(base64UrlEncodeText(data, this.padding));
+  public async encode(
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = this.encoder.encode(base64UrlEncodeText(c.source, this.padding));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
    */
-  public decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-    const text = this.decoder.decode(data);
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    const text = this.decoder.decode(c.source);
 
     if (text.length === 0) {
-      return new Uint8Array(0);
+      c.destination = new Uint8Array(0);
+    } else {
+      c.destination = decodeChecked(text);
     }
 
-    return decodeChecked(text);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#streams)
    */
-  public getEncodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const encoder = this.encoder;
     const padding = this.padding;
     let carry = new Uint8Array(0);
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        if (chunk.byteLength === 0) {
-          return;
-        }
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          if (chunk.byteLength === 0) {
+            return;
+          }
 
-        // 前回の余りと今回の入力を結合し、3 バイト単位の完全分のみ変換します。
-        const combined = new Uint8Array(carry.byteLength + chunk.byteLength);
-        combined.set(carry, 0);
-        combined.set(chunk, carry.byteLength);
-        carry = new Uint8Array(0);
+          // 前回の余りと今回の入力を結合し、3 バイト単位の完全分のみ変換します。
+          const combined = new Uint8Array(carry.byteLength + chunk.byteLength);
+          combined.set(carry, 0);
+          combined.set(chunk, carry.byteLength);
+          carry = new Uint8Array(0);
 
-        const completeLength = combined.byteLength - (combined.byteLength % 3);
+          const completeLength = combined.byteLength - (combined.byteLength % 3);
 
-        if (completeLength > 0) {
-          controller.enqueue(
-            encoder.encode(base64UrlEncodeText(combined.subarray(0, completeLength), padding)),
-          );
-        }
+          if (completeLength > 0) {
+            controller.enqueue(
+              encoder.encode(base64UrlEncodeText(combined.subarray(0, completeLength), padding)),
+            );
+          }
 
-        if (combined.byteLength % 3 !== 0) {
-          carry = combined.slice(combined.byteLength - (combined.byteLength % 3));
-        }
-      },
+          if (combined.byteLength % 3 !== 0) {
+            carry = combined.slice(combined.byteLength - (combined.byteLength % 3));
+          }
+        },
 
-      flush(controller) {
-        // 余りが残っていれば 2 文字から 3 文字に変換して確定します。
-        if (carry.byteLength === 0) {
-          return;
-        }
+        flush(controller) {
+          // 余りが残っていれば 2 文字から 3 文字に変換して確定します。
+          if (carry.byteLength === 0) {
+            return;
+          }
 
-        const text = base64UrlEncodeText(carry, padding);
-        carry = new Uint8Array(0);
-        controller.enqueue(encoder.encode(text));
-      },
-    });
+          const text = base64UrlEncodeText(carry, padding);
+          carry = new Uint8Array(0);
+          controller.enqueue(encoder.encode(text));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#streams)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 設計の const strict 中間変数と同義のインラインであり、hex と同形です。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
@@ -313,79 +329,82 @@ export default class Base64Url implements ITransformer {
     let paddedTail = "";
     let seenPadding = false;
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        if (chunk.byteLength === 0) {
-          return;
-        }
-
-        // チャンク境界で分割されたマルチバイト前半のみの場合は何もせず待機します。
-        const text = utf8.decode(chunk, { stream: true });
-
-        if (text.length === 0) {
-          return;
-        }
-
-        // `=` 検出後はラン内分割の継続か後続追加かを区別します。
-        if (seenPadding === true) {
-          const candidate = paddedTail + text;
-
-          if (PADDED_PATTERN.test(candidate)) {
-            paddedTail = candidate;
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          if (chunk.byteLength === 0) {
             return;
           }
 
-          throw new Base64UrlDecodeError();
-        }
+          // チャンク境界で分割されたマルチバイト前半のみの場合は何もせず待機します。
+          const text = utf8.decode(chunk, { stream: true });
 
-        const combined = carry + text;
-        carry = "";
+          if (text.length === 0) {
+            return;
+          }
 
-        if (!combined.includes("=")) {
-          if (!UNPADDED_PATTERN.test(combined)) {
+          // `=` 検出後はラン内分割の継続か後続追加かを区別します。
+          if (seenPadding === true) {
+            const candidate = paddedTail + text;
+
+            if (PADDED_PATTERN.test(candidate)) {
+              paddedTail = candidate;
+              return;
+            }
+
             throw new Base64UrlDecodeError();
           }
 
-          // 先頭の 4 文字境界までを復元し、余りは次回に持ち越します。
-          const alignedLength = combined.length - (combined.length % 4);
+          const combined = carry + text;
+          carry = "";
 
-          if (alignedLength > 0) {
-            controller.enqueue(decodeAligned(combined.slice(0, alignedLength)));
+          if (!combined.includes("=")) {
+            if (!UNPADDED_PATTERN.test(combined)) {
+              throw new Base64UrlDecodeError();
+            }
+
+            // 先頭の 4 文字境界までを復元し、余りは次回に持ち越します。
+            const alignedLength = combined.length - (combined.length % 4);
+
+            if (alignedLength > 0) {
+              controller.enqueue(decodeAligned(combined.slice(0, alignedLength)));
+            }
+
+            carry = combined.slice(alignedLength);
+          } else {
+            if (!PADDED_PATTERN.test(combined)) {
+              throw new Base64UrlDecodeError();
+            }
+
+            // `=` を含む末尾量子の復元は flush に委ね、前段の完全分のみ復元します。
+            const head = combined.slice(0, combined.indexOf("="));
+            const alignedLength = head.length - (head.length % 4);
+
+            if (alignedLength > 0) {
+              controller.enqueue(decodeAligned(combined.slice(0, alignedLength)));
+            }
+
+            paddedTail = combined.slice(alignedLength);
+            seenPadding = true;
+          }
+        },
+
+        flush(controller) {
+          // 終端の decode は切り詰めたマルチバイトがあれば TypeError を投げ、そうでなければ空文字を返します。
+          const rest = utf8.decode(new Uint8Array(0));
+          const tail = (seenPadding === true ? paddedTail : carry) + rest;
+          carry = "";
+          paddedTail = "";
+
+          // 正常な入力では carry/paddedTail も rest も空のため tail は空であり、残りがある場合は終端検査で復元します。
+          if (tail.length === 0) {
+            return;
           }
 
-          carry = combined.slice(alignedLength);
-        } else {
-          if (!PADDED_PATTERN.test(combined)) {
-            throw new Base64UrlDecodeError();
-          }
-
-          // `=` を含む末尾量子の復元は flush に委ね、前段の完全分のみ復元します。
-          const head = combined.slice(0, combined.indexOf("="));
-          const alignedLength = head.length - (head.length % 4);
-
-          if (alignedLength > 0) {
-            controller.enqueue(decodeAligned(combined.slice(0, alignedLength)));
-          }
-
-          paddedTail = combined.slice(alignedLength);
-          seenPadding = true;
-        }
-      },
-
-      flush(controller) {
-        // 終端の decode は切り詰めたマルチバイトがあれば TypeError を投げ、そうでなければ空文字を返します。
-        const rest = utf8.decode(new Uint8Array(0));
-        const tail = (seenPadding === true ? paddedTail : carry) + rest;
-        carry = "";
-        paddedTail = "";
-
-        // 正常な入力では carry/paddedTail も rest も空のため tail は空であり、残りがある場合は終端検査で復元します。
-        if (tail.length === 0) {
-          return;
-        }
-
-        controller.enqueue(decodeChecked(tail));
-      },
-    });
+          controller.enqueue(decodeChecked(tail));
+        },
+      }),
+    );
+    await next();
   }
 }

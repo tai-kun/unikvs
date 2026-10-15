@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IStorage, type Variables } from "@unikvs/core";
+import { KeyNotFoundError, type IPipelineContext, type IStorage } from "@unikvs/core";
 
 import {
   ClearNotSupportedError,
@@ -176,22 +176,22 @@ export default class Http implements IStorage {
   }
 
   // 送信ヘッダーを三層優先度で解決します。
-  private resolveHeaders(vars: Variables): Record<string, string> {
+  private resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
     const headers: Record<string, string> = { ...this.baseHeaders };
-    const commonHeaders = vars.get("@unikvs/fetch:headers");
+    const commonHeaders = c.get("@unikvs/fetch:headers");
 
     if (commonHeaders !== undefined) {
       Object.assign(headers, assertHeadersRecord(commonHeaders));
     }
 
-    const specificHeaders = vars.get("@unikvs/http:headers");
+    const specificHeaders = c.get("@unikvs/http:headers");
 
     if (specificHeaders !== undefined) {
       Object.assign(headers, assertHeadersRecord(specificHeaders));
     }
 
-    const commonToken = assertTokenValue(vars.get("@unikvs/fetch:token"));
-    const specificToken = assertTokenValue(vars.get("@unikvs/http:token"));
+    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
+    const specificToken = assertTokenValue(c.get("@unikvs/http:token"));
     const token = specificToken ?? commonToken ?? this.baseToken;
 
     if (token !== undefined) {
@@ -256,33 +256,25 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async open(args: Pick<IStorage.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    c.signal.throwIfAborted();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async close(args: Pick<IStorage.CloseArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async close(c: IStorage.CloseContext): Promise<void> {
+    c.signal.throwIfAborted();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
-    const { key, data, signal, vars } = args;
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     let response: Response;
 
@@ -292,19 +284,19 @@ export default class Http implements IStorage {
           method: "PUT",
           headers: { ...headers, "Content-Type": "application/octet-stream" },
           body: data,
-          signal,
+          signal: c.signal,
         }),
       );
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "PUT", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
     }
 
     if (!response.ok) {
       throw new HttpResponseError({
         method: "PUT",
         url,
-        key,
+        key: c.key,
         status: response.status,
         statusText: response.statusText,
       });
@@ -314,34 +306,30 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal" | "vars">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
-    const { key, signal, vars } = args;
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "GET", headers, signal }));
+      response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "GET", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 
     if (response.status === 404 || response.status === 410) {
-      throw new KeyNotFoundError({ key });
+      throw new KeyNotFoundError({ key: c.key });
     }
 
     if (!response.ok) {
       throw new HttpResponseError({
         method: "GET",
         url,
-        key,
+        key: c.key,
         status: response.status,
         statusText: response.statusText,
       });
@@ -355,23 +343,19 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async exists(
-    args: Pick<IStorage.ExistsArgs, "key" | "signal" | "vars">,
-  ): Promise<boolean> {
-    const { key, signal, vars } = args;
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     let headResponse: Response;
 
     try {
-      headResponse = await fetchFn(new Request(url, { method: "HEAD", headers, signal }));
+      headResponse = await fetchFn(new Request(url, { method: "HEAD", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "HEAD", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "HEAD", url, key: c.key, cause: ex });
     }
 
     if (headResponse.status === 404 || headResponse.status === 410) {
@@ -387,7 +371,7 @@ export default class Http implements IStorage {
       throw new HttpResponseError({
         method: "HEAD",
         url,
-        key,
+        key: c.key,
         status: headResponse.status,
         statusText: headResponse.statusText,
       });
@@ -400,12 +384,12 @@ export default class Http implements IStorage {
         new Request(url, {
           method: "GET",
           headers: { ...headers, Range: "bytes=0-0" },
-          signal,
+          signal: c.signal,
         }),
       );
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "GET", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 
     // ボディを消費せず破棄します。
@@ -427,7 +411,7 @@ export default class Http implements IStorage {
     throw new HttpResponseError({
       method: "GET",
       url,
-      key,
+      key: c.key,
       status: getResponse.status,
       statusText: getResponse.statusText,
     });
@@ -436,21 +420,19 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal" | "vars">): Promise<void> {
-    const { key, signal, vars } = args;
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal }));
+      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "DELETE", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "DELETE", url, key: c.key, cause: ex });
     }
 
     // 削除は冪等とし存在しないキーも成功扱いにします。
@@ -462,7 +444,7 @@ export default class Http implements IStorage {
       throw new HttpResponseError({
         method: "DELETE",
         url,
-        key,
+        key: c.key,
         status: response.status,
         statusText: response.statusText,
       });
@@ -472,25 +454,23 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal" | "vars">): Promise<void> {
-    const { signal, vars } = args;
-
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     // 空 prefix での無条件全削除の事故を防ぐため送信前に拒否します。
     if (this.keyPrefix === "" && !this.allowClearWithoutPrefix) {
       throw new ClearWithoutPrefixNotAllowedError();
     }
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    const headers = this.resolveHeaders(vars);
+    const headers = this.resolveHeaders(c);
     const url = this.clearUrl();
     const fetchFn = this.resolveFetch();
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal }));
+      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
+      Http.rethrowIfAborted(c.signal);
       throw new HttpNetworkError({ method: "DELETE", url, key: undefined, cause: ex });
     }
 
@@ -515,15 +495,11 @@ export default class Http implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#streams)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key, signal, vars } = args;
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     // サーバー側にストリーミング `PUT` を要求しないよう蓄積して `close` 時に一括送信します。
     const chunks: Uint8Array[] = [];
@@ -531,21 +507,21 @@ export default class Http implements IStorage {
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       write(chunk) {
         if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk });
+          throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
 
         chunks.push(chunk.slice());
       },
       close: async () => {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
 
-        const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
         let offset = 0;
 
-        for (const c of chunks) {
-          merged.set(c, offset);
-          offset += c.byteLength;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.byteLength;
         }
 
         let response: Response;
@@ -556,19 +532,19 @@ export default class Http implements IStorage {
               method: "PUT",
               headers: { ...headers, "Content-Type": "application/octet-stream" },
               body: merged,
-              signal,
+              signal: c.signal,
             }),
           );
         } catch (ex) {
-          Http.rethrowIfAborted(signal);
-          throw new HttpNetworkError({ method: "PUT", url, key, cause: ex });
+          Http.rethrowIfAborted(c.signal);
+          throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
         }
 
         if (!response.ok) {
           throw new HttpResponseError({
             method: "PUT",
             url,
-            key,
+            key: c.key,
             status: response.status,
             statusText: response.statusText,
           });
@@ -584,33 +560,31 @@ export default class Http implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#streams)
    */
   public async getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal" | "vars">,
+    c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    const { key, signal, vars } = args;
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    const headers = this.resolveHeaders(vars);
-    const url = this.keyUrl(key);
+    const headers = this.resolveHeaders(c);
+    const url = this.keyUrl(c.key);
     const fetchFn = this.resolveFetch();
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "GET", headers, signal }));
+      response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
     } catch (ex) {
-      Http.rethrowIfAborted(signal);
-      throw new HttpNetworkError({ method: "GET", url, key, cause: ex });
+      Http.rethrowIfAborted(c.signal);
+      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
     }
 
     if (response.status === 404 || response.status === 410) {
-      throw new KeyNotFoundError({ key });
+      throw new KeyNotFoundError({ key: c.key });
     }
 
     if (!response.ok) {
       throw new HttpResponseError({
         method: "GET",
         url,
-        key,
+        key: c.key,
         status: response.status,
         statusText: response.statusText,
       });

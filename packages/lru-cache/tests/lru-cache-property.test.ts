@@ -1,5 +1,14 @@
-import { Variables } from "@unikvs/core";
-import { forCasesAsync, type Random } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  forCasesAsync,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  type Random,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -157,7 +166,7 @@ describe("LruCache のプロパティー", () => {
     await forCasesAsync(seed, 100, async (random) => {
       // 準備
       const storage = new LruCache({ maxEntries });
-      await storage.open({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
       const model = new ReferenceLru(maxEntries);
       const operations = random.array(random.int(0, 30), () => nextOperation(random));
 
@@ -165,29 +174,38 @@ describe("LruCache のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            storage.write({ vars: new Variables(), key: operation.key, data: operation.value });
+            storage.write(
+              createSetContext(operation.key) as IStorage.WriteContext,
+              operation.value,
+            );
             model.write(operation.key, operation.value);
             break;
           }
           case "read": {
             if (model.has(operation.key)) {
-              expect(storage.read({ key: operation.key })).toStrictEqual(model.read(operation.key));
+              expect(
+                storage.read(createGetContext(operation.key) as IStorage.ReadContext),
+              ).toStrictEqual(model.read(operation.key));
             } else {
-              expect(() => storage.read({ key: operation.key })).toThrow(KeyNotFoundError);
+              expect(() =>
+                storage.read(createGetContext(operation.key) as IStorage.ReadContext),
+              ).toThrow(KeyNotFoundError);
             }
             break;
           }
           case "delete": {
             if (model.has(operation.key)) {
-              storage.delete({ key: operation.key });
+              storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext);
               model.delete(operation.key);
             } else {
-              expect(() => storage.delete({ key: operation.key })).toThrow(KeyNotFoundError);
+              expect(() =>
+                storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext),
+              ).toThrow(KeyNotFoundError);
             }
             break;
           }
           case "clear": {
-            storage.clear();
+            storage.clear(createClearContext() as IStorage.ClearContext);
             model.clear();
             break;
           }
@@ -203,11 +221,15 @@ describe("LruCache のプロパティー", () => {
       }
       for (const key of touchedKeys) {
         if (model.has(key)) {
-          expect(storage.exists({ key })).toBe(true);
-          expect(storage.read({ key })).toStrictEqual(model.get(key));
+          expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+          expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+            model.get(key),
+          );
         } else {
-          expect(storage.exists({ key })).toBe(false);
-          expect(() => storage.read({ key })).toThrow(KeyNotFoundError);
+          expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+          expect(() => storage.read(createGetContext(key) as IStorage.ReadContext)).toThrow(
+            KeyNotFoundError,
+          );
         }
       }
       expect(storage.size).toBe([...touchedKeys].filter((key) => model.has(key)).length);
@@ -218,12 +240,12 @@ describe("LruCache のプロパティー", () => {
     await forCasesAsync(seed + 1, 100, async (random) => {
       // 準備
       const storage = new LruCache();
-      await storage.open({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
       const bytes = random.bytes(random.int(0, 512));
 
       // 実行
-      storage.write({ vars: new Variables(), key: "k1", data: bytes });
-      const result = storage.read({ key: "k1" }) as Uint8Array;
+      storage.write(createSetContext("k1") as IStorage.WriteContext, bytes);
+      const result = storage.read(createGetContext("k1") as IStorage.ReadContext) as Uint8Array;
 
       // 検証
       expect(result).toStrictEqual(bytes);
@@ -238,9 +260,11 @@ describe("LruCache のプロパティー", () => {
     await forCasesAsync(seed + 2, 50, async (random) => {
       // 準備
       const storage = new LruCache();
-      await storage.open({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
       const chunks = random.array(random.int(0, 8), () => random.bytes(random.int(0, 64)));
-      const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
+      const writer = storage
+        .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
+        .getWriter();
 
       // 実行
       for (const chunk of chunks) {
@@ -255,7 +279,7 @@ describe("LruCache のプロパティー", () => {
         expected.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      expect(storage.read({ key: "k1" })).toStrictEqual(expected);
+      expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(expected);
     });
   });
 });

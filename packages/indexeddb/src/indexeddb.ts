@@ -56,10 +56,8 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async open(args: Pick<IStorage.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     if (this.db) {
       return;
@@ -75,9 +73,9 @@ export default class Indexeddb implements IStorage {
     });
 
     // 中断時は接続を開いたままにせず、未オープン状態へ戻します。
-    if (signal.aborted) {
+    if (c.signal.aborted) {
       db.close();
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
     }
 
     this.db = db;
@@ -86,10 +84,8 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async close(args: Pick<IStorage.CloseArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async close(c: IStorage.CloseContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     this.db!.close();
     this.db = null;
@@ -98,67 +94,55 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
-    const { key, data, signal } = args;
+  public async write(c: IStorage.WriteContext, data: any): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    await this.db!.put(this.storeName, data, key);
+    await this.db!.put(this.storeName, data, c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public async read(args: Pick<IStorage.ReadArgs, "key" | "signal">): Promise<any> {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
+  public async read(c: IStorage.ReadContext): Promise<any> {
+    c.signal.throwIfAborted();
 
     // Opfs の挙動に合わせて、存在しない場合は DOMException (NotFoundError) を投げます
-    if (!(await this.exists({ key, signal }))) {
+    if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
       throw new DOMException(
         `A requested file or directory could not be found at the time an operation was processed.`,
         "NotFoundError",
       );
     }
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    return await this.db!.get(this.storeName, key);
+    return await this.db!.get(this.storeName, c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    c.signal.throwIfAborted();
 
     // count() はキーが存在すれば 1 を、存在しなければ 0 を返します
-    const count = await this.db!.count(this.storeName, key);
+    const count = await this.db!.count(this.storeName, c.key);
     return count > 0;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
-    const { key, signal } = args;
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    await this.db!.delete(this.storeName, key);
+    await this.db!.delete(this.storeName, c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     await this.db!.clear(this.storeName);
   }
@@ -166,23 +150,19 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
-  ): WritableStream<Uint8Array> {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
+    c.signal.throwIfAborted();
 
     const chunks: Uint8Array[] = [];
 
     return new WritableStream({
       write: (chunk) => {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         chunks.push(chunk);
       },
       close: async () => {
         // 保存は close のときだけ行うため、中断時はここまでのチャンクを破棄できます。
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
 
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
         const result = new Uint8Array(totalLength);
@@ -193,7 +173,7 @@ export default class Indexeddb implements IStorage {
           offset += chunk.length;
         }
 
-        await this.db!.put(this.storeName, result, key);
+        await this.db!.put(this.storeName, result, c.key);
       },
       abort: () => {
         chunks.length = 0;
@@ -204,19 +184,15 @@ export default class Indexeddb implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#data)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
-  ): ReadableStream<Uint8Array> {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+    c.signal.throwIfAborted();
 
     return new ReadableStream({
       pull: async (controller) => {
         try {
-          signal.throwIfAborted();
-          const data = await this.read({ key, signal });
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
+          const data = await this.read(c as unknown as IStorage.ReadContext);
+          c.signal.throwIfAborted();
           controller.enqueue(data);
           controller.close();
         } catch (ex) {

@@ -1,4 +1,6 @@
+import type { IMiddleware } from "@unikvs/core";
 import { forCasesAsync, type Random } from "@unikvs/testing";
+import { createEncodeContext, createNext } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import WriteOnly from "../src/write-only.js";
@@ -42,10 +44,11 @@ describe("WriteOnly のプロパティー", () => {
       const value = generateValue(random);
 
       // 実行
-      const output = transformer.encode({ data: value });
+      const c = createEncodeContext(value);
+      await transformer.encode(c as IMiddleware.EncodeContext, createNext());
 
       // 検証
-      expect(output).toBe(value);
+      expect(c.destination).toBe(value);
     });
   });
 });

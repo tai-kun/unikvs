@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import {
@@ -103,7 +110,9 @@ describe("存在しないキー", () => {
     const key = "missing.bin";
 
     // 実行と検証
-    await expect(storage.read({ key, signal })).rejects.toThrow(KeyNotFoundError);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).rejects.toThrow(KeyNotFoundError);
   });
 });
 
@@ -115,24 +124,27 @@ describe("中断された signal", () => {
 
     // 実行と検証
     await expect(
-      storage.write({
-        key: "aborted.bin",
-        data: new Uint8Array([1]),
-        signal: controller.signal,
-        vars: new Variables(),
-      }),
+      storage.write(
+        createSetContext("aborted.bin", { signal: controller.signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toThrow();
   });
 
   test("read は拒否される", async ({ expect, signal, storage }) => {
     // 準備
     const key = "aborted-read.bin";
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
     const controller = new AbortController();
     controller.abort();
 
     // 実行と検証
-    await expect(storage.read({ key, signal: controller.signal })).rejects.toThrow();
+    await expect(
+      storage.read(createGetContext(key, { signal: controller.signal }) as IStorage.ReadContext),
+    ).rejects.toThrow();
   });
 
   test("exists は拒否される", async ({ expect, storage }) => {
@@ -142,7 +154,9 @@ describe("中断された signal", () => {
 
     // 実行と検証
     await expect(
-      storage.exists({ key: "aborted.bin", signal: controller.signal }),
+      storage.exists(
+        createHasContext("aborted.bin", { signal: controller.signal }) as IStorage.ExistsContext,
+      ),
     ).rejects.toThrow();
   });
 
@@ -153,7 +167,9 @@ describe("中断された signal", () => {
 
     // 実行と検証
     await expect(
-      storage.delete({ key: "aborted.bin", signal: controller.signal }),
+      storage.delete(
+        createDeleteContext("aborted.bin", { signal: controller.signal }) as IStorage.DeleteContext,
+      ),
     ).rejects.toThrow();
   });
 
@@ -163,6 +179,8 @@ describe("中断された signal", () => {
     controller.abort();
 
     // 実行と検証
-    await expect(storage.clear({ signal: controller.signal })).rejects.toThrow();
+    await expect(
+      storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
+    ).rejects.toThrow();
   });
 });

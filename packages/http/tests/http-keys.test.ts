@@ -1,5 +1,5 @@
-import { Variables } from "@unikvs/core";
-import { captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import { captureRejection, createGetContext, createSetContext } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidKeyError } from "../src/errors.js";
@@ -25,21 +25,17 @@ describe("キーの符号化", () => {
 
     // 実行
     for (const [index, key] of keys.entries()) {
-      await storage.write({
-        key,
-        data: new Uint8Array([index]),
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      });
+      await storage.write(
+        createSetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        new Uint8Array([index]),
+      );
     }
 
     // 検証
     for (const [index, key] of keys.entries()) {
-      const result = await storage.read({
-        key,
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      });
+      const result = await storage.read(
+        createGetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      );
       expect(result).toStrictEqual(new Uint8Array([index]));
     }
   });
@@ -50,12 +46,10 @@ describe("キーの符号化", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.write({
-      key: "a/b:c",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("a/b:c", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(calls[0]?.url).toBe(`${baseUrl}/${encodeURIComponent("unikvs:a/b:c")}`);
@@ -68,12 +62,10 @@ describe("キーの符号化", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.write({
-      key: "a.b",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("a.b", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(calls[0]?.url).toContain("%2E");
@@ -87,18 +79,18 @@ describe("キーの符号化", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.write({
-      key: "",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(calls[0]?.url).toBe(`${baseUrl}/${encodeURIComponent("unikvs:")}`);
     expect(calls[0]?.url).not.toContain("?prefix=");
     expect(
-      await storage.read({ key: "", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      await storage.read(
+        createGetContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1]));
   });
 
@@ -109,12 +101,10 @@ describe("キーの符号化", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.write({
-        key: "\uD800",
-        data: new Uint8Array([1]),
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      storage.write(
+        createSetContext("\uD800", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     );
 
     // 検証
@@ -130,7 +120,9 @@ describe("キーの符号化", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.read({ key: "\uD800", signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      storage.read(
+        createGetContext("\uD800", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     );
 
     // 検証

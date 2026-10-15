@@ -1,3 +1,5 @@
+import type { IMiddleware } from "@unikvs/core";
+import { createDecodeContext, createEncodeContext, createNext } from "@unikvs/testing";
 import { FastUtf8 } from "fast-utf8";
 import { describe, test } from "vitest";
 
@@ -9,10 +11,42 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 /**
+ * バイト列を base64url 化して返します。
+ */
+async function encode(
+  target: Base64Url,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * base64url 化されたバイト列をデコードして返します。
+ */
+async function decode(
+  target: Base64Url,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
  * バイト列を base64url 化して一括で往復させます。
  */
-function roundTrip(data: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
-  return base64url.decode({ data: base64url.encode({ data }) });
+async function roundTrip(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  return decode(base64url, await encode(base64url, data));
 }
 
 /**
@@ -39,13 +73,13 @@ describe("初期化と基本属性", () => {
     expect(target.isOpen).toBe(true);
   });
 
-  test("encode と decode の後も name と isOpen は変化しない", ({ expect }) => {
+  test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
-    const encoded = target.encode({ data: Uint8Array.from([0xfb, 0xff]) });
+    const encoded = await encode(target, Uint8Array.from([0xfb, 0xff]));
 
     // 実行
-    target.decode({ data: encoded });
+    await decode(target, encoded);
 
     // 検証
     expect(target.name).toBe("Base64Url");
@@ -54,27 +88,27 @@ describe("初期化と基本属性", () => {
 });
 
 describe("一括のラウンドトリップ", () => {
-  test("空のバイト列を往復すると空のバイト列に戻る", ({ expect }) => {
+  test("空のバイト列を往復すると空のバイト列に戻る", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(0);
 
     // 実行
-    const output = roundTrip(input);
+    const output = await roundTrip(input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("単一バイトを往復すると元の値に戻る", ({ expect }) => {
+  test("単一バイトを往復すると元の値に戻る", async ({ expect }) => {
     // 実行と検証
     for (const byte of [0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff]) {
-      expect(roundTrip(Uint8Array.from([byte])), `byte=${byte}`).toStrictEqual(
+      expect(await roundTrip(Uint8Array.from([byte])), `byte=${byte}`).toStrictEqual(
         Uint8Array.from([byte]),
       );
     }
   });
 
-  test("代表ベクトルを往復すると元の値に戻る", ({ expect }) => {
+  test("代表ベクトルを往復すると元の値に戻る", async ({ expect }) => {
     // 準備
     const vectors: Uint8Array<ArrayBuffer>[] = [
       Uint8Array.from([0x66]),
@@ -87,11 +121,11 @@ describe("一括のラウンドトリップ", () => {
 
     // 実行と検証
     for (const input of vectors) {
-      expect(roundTrip(input)).toStrictEqual(input);
+      expect(await roundTrip(input)).toStrictEqual(input);
     }
   });
 
-  test("1 MiB のバイト列を往復すると同じバイト列に戻る", ({ expect }) => {
+  test("1 MiB のバイト列を往復すると同じバイト列に戻る", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(1024 * 1024);
     for (let index = 0; index < input.length; index++) {
@@ -99,14 +133,14 @@ describe("一括のラウンドトリップ", () => {
     }
 
     // 実行
-    const encoded = base64url.encode({ data: input });
-    const output = base64url.decode({ data: encoded });
+    const encoded = await encode(base64url, input);
+    const output = await decode(base64url, encoded);
 
     // 検証
     expect(output).toStrictEqual(input);
   });
 
-  test("encode 出力は既知ベクトルと一致する", ({ expect }) => {
+  test("encode 出力は既知ベクトルと一致する", async ({ expect }) => {
     // 準備
     const cases: [Uint8Array<ArrayBuffer>, string, string][] = [
       [new Uint8Array(0), "", ""],
@@ -122,15 +156,15 @@ describe("一括のラウンドトリップ", () => {
 
     // 実行と検証
     for (const [input, unpadded, padded] of cases) {
-      expect(textDecoder.decode(base64url.encode({ data: input })), unpadded).toBe(unpadded);
+      expect(textDecoder.decode(await encode(base64url, input)), unpadded).toBe(unpadded);
       expect(
-        textDecoder.decode(new Base64Url({ padding: true }).encode({ data: input })),
+        textDecoder.decode(await encode(new Base64Url({ padding: true }), input)),
         padded,
       ).toBe(padded);
     }
   });
 
-  test("encode 出力は base64url の alphabet のみを含む", ({ expect }) => {
+  test("encode 出力は base64url の alphabet のみを含む", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(256);
     for (let index = 0; index < input.length; index++) {
@@ -138,7 +172,7 @@ describe("一括のラウンドトリップ", () => {
     }
 
     // 実行
-    const text = textDecoder.decode(base64url.encode({ data: input }));
+    const text = textDecoder.decode(await encode(base64url, input));
 
     // 検証
     expect(text).toMatch(/^[A-Za-z0-9\-_]*$/);
@@ -146,7 +180,7 @@ describe("一括のラウンドトリップ", () => {
     expect(text).not.toContain("/");
   });
 
-  test("encode 出力の長さは剰余に応じた式に従う", ({ expect }) => {
+  test("encode 出力の長さは剰余に応じた式に従う", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
     const padded = new Base64Url({ padding: true });
@@ -155,21 +189,21 @@ describe("一括のラウンドトリップ", () => {
     for (let length = 0; length <= 9; length++) {
       const input = new Uint8Array(length);
       const unpaddedLength = Math.floor(length / 3) * 4 + (length % 3 === 0 ? 0 : (length % 3) + 1);
-      expect(target.encode({ data: input }).byteLength, `unpadded n=${length}`).toBe(
+      expect((await encode(target, input)).byteLength, `unpadded n=${length}`).toBe(
         unpaddedLength,
       );
-      expect(padded.encode({ data: input }).byteLength, `padded n=${length}`).toBe(
+      expect((await encode(padded, input)).byteLength, `padded n=${length}`).toBe(
         Math.ceil(length / 3) * 4,
       );
     }
   });
 
-  test("出力チャンクの型は Uint8Array であり string ではない", ({ expect }) => {
+  test("出力チャンクの型は Uint8Array であり string ではない", async ({ expect }) => {
     // 準備
     const input = Uint8Array.from([0xfb, 0xff]);
 
     // 実行
-    const encoded = base64url.encode({ data: input });
+    const encoded = await encode(base64url, input);
 
     // 検証
     expect(typeof encoded).not.toBe("string");
@@ -179,7 +213,7 @@ describe("一括のラウンドトリップ", () => {
 });
 
 describe("デコードの受理系", () => {
-  test("付与形と省略形の両方をデコードできる", ({ expect }) => {
+  test("付与形と省略形の両方をデコードできる", async ({ expect }) => {
     // 準備
     const cases: [string, Uint8Array<ArrayBuffer>][] = [
       ["Zg", Uint8Array.from([0x66])],
@@ -200,118 +234,122 @@ describe("デコードの受理系", () => {
 
     // 実行と検証
     for (const [text, expected] of cases) {
-      expect(base64url.decode({ data: base64UrlBytes(text) }), text).toStrictEqual(expected);
+      expect(await decode(base64url, base64UrlBytes(text)), text).toStrictEqual(expected);
     }
   });
 
-  test("大文字と小文字は別の値として区別される", ({ expect }) => {
+  test("大文字と小文字は別の値として区別される", async ({ expect }) => {
     // 準備
-    const upper = base64url.decode({ data: base64UrlBytes("AB") });
-    const lower = base64url.decode({ data: base64UrlBytes("ab") });
+    const upper = await decode(base64url, base64UrlBytes("AB"));
+    const lower = await decode(base64url, base64UrlBytes("ab"));
 
     // 実行と検証
     expect(upper).not.toStrictEqual(lower);
   });
 
-  test("空のバイト列は空にデコードされる", ({ expect }) => {
+  test("空のバイト列は空にデコードされる", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(0);
 
     // 実行
-    const output = base64url.decode({ data: input });
+    const output = await decode(base64url, input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("未使用下位ビットが非正準でも受理される", ({ expect }) => {
+  test("未使用下位ビットが非正準でも受理される", async ({ expect }) => {
     // 実行と検証
-    expect(base64url.decode({ data: base64UrlBytes("Zh==") })).toStrictEqual(
-      base64url.decode({ data: base64UrlBytes("Zg==") }),
+    expect(await decode(base64url, base64UrlBytes("Zh=="))).toStrictEqual(
+      await decode(base64url, base64UrlBytes("Zg==")),
     );
-    expect(base64url.decode({ data: base64UrlBytes("Zh==") })).toStrictEqual(
+    expect(await decode(base64url, base64UrlBytes("Zh=="))).toStrictEqual(
       Uint8Array.from([0x66]),
     );
-    expect(base64url.decode({ data: base64UrlBytes("Zm9=") })).toStrictEqual(
-      base64url.decode({ data: base64UrlBytes("Zm8=") }),
+    expect(await decode(base64url, base64UrlBytes("Zm9="))).toStrictEqual(
+      await decode(base64url, base64UrlBytes("Zm8=")),
     );
-    expect(base64url.decode({ data: base64UrlBytes("Zm9=") })).toStrictEqual(
+    expect(await decode(base64url, base64UrlBytes("Zm9="))).toStrictEqual(
       Uint8Array.from([0x66, 0x6f]),
     );
   });
 
-  test("BOM 単体は既定で空にデコードされる", ({ expect }) => {
+  test("BOM 単体は既定で空にデコードされる", async ({ expect }) => {
     // 準備
     const input = Uint8Array.from([0xef, 0xbb, 0xbf]);
 
     // 実行
-    const output = base64url.decode({ data: input });
+    const output = await decode(base64url, input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("ignoreBOM 注入時の BOM 単体は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("ignoreBOM 注入時の BOM 単体は Base64UrlDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Base64Url({ decoder: new FastUtf8({ strict: true, ignoreBOM: true }) });
 
     // 実行と検証
-    expect(() => target.decode({ data: Uint8Array.from([0xef, 0xbb, 0xbf]) })).toThrow(
+    await expect(decode(target, Uint8Array.from([0xef, 0xbb, 0xbf]))).rejects.toThrow(
       Base64UrlDecodeError,
     );
   });
 });
 
 describe("デコードの異常系", () => {
-  test("length が 4 で割って 1 余る入力は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("length が 4 で割って 1 余る入力は Base64UrlDecodeError で拒否される", async ({
+    expect,
+  }) => {
     // 準備
     const target = new Base64Url();
 
     // 実行と検証
     for (const text of ["a", "abcde", "Zm9vYmFyZ"]) {
-      expect(() => target.decode({ data: base64UrlBytes(text) }), text).toThrow(
+      await expect(decode(target, base64UrlBytes(text)), text).rejects.toThrow(
         Base64UrlDecodeError,
       );
     }
   });
 
-  test("誤配置の = は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("誤配置の = は Base64UrlDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
 
     // 実行と検証
     for (const text of ["=", "==", "===", "=abc", "ab=c", "Zg==a", "Zg===", "Zm8=="]) {
-      expect(() => target.decode({ data: base64UrlBytes(text) }), JSON.stringify(text)).toThrow(
+      await expect(decode(target, base64UrlBytes(text)), JSON.stringify(text)).rejects.toThrow(
         Base64UrlDecodeError,
       );
     }
   });
 
-  test("標準 alphabet の + と / は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("標準 alphabet の + と / は Base64UrlDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
 
     // 実行と検証
     for (const text of ["ab+c", "ab/c", "++", "//", "+/8="]) {
-      expect(() => target.decode({ data: base64UrlBytes(text) }), JSON.stringify(text)).toThrow(
+      await expect(decode(target, base64UrlBytes(text)), JSON.stringify(text)).rejects.toThrow(
         Base64UrlDecodeError,
       );
     }
   });
 
-  test("不正文字を含む入力は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("不正文字を含む入力は Base64UrlDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
 
     // 実行と検証
     for (const text of [" ", "\n", "ab cd", "ａｂｃｄ"]) {
-      expect(() => target.decode({ data: base64UrlBytes(text) }), JSON.stringify(text)).toThrow(
+      await expect(decode(target, base64UrlBytes(text)), JSON.stringify(text)).rejects.toThrow(
         Base64UrlDecodeError,
       );
     }
   });
 
-  test("有効な UTF-8 の非 alphabet 文字は Base64UrlDecodeError で拒否される", ({ expect }) => {
+  test("有効な UTF-8 の非 alphabet 文字は Base64UrlDecodeError で拒否される", async ({
+    expect,
+  }) => {
     // 準備
     const target = new Base64Url();
     const input = textEncoder.encode("é");
@@ -319,7 +357,7 @@ describe("デコードの異常系", () => {
     // 実行
     let thrown: unknown;
     try {
-      target.decode({ data: input });
+      await decode(target, input);
     } catch (error) {
       thrown = error;
     }
@@ -329,18 +367,18 @@ describe("デコードの異常系", () => {
     expect(thrown).not.toBeInstanceOf(TypeError);
   });
 
-  test("不正な UTF-8 は TypeError で拒否される", ({ expect }) => {
+  test("不正な UTF-8 は TypeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Base64Url();
 
     // 実行と検証
-    expect(() => target.decode({ data: Uint8Array.from([0xff]) })).toThrow(TypeError);
-    expect(() => target.decode({ data: Uint8Array.from([0xff]) })).not.toThrow(
+    await expect(decode(target, Uint8Array.from([0xff]))).rejects.toThrow(TypeError);
+    await expect(decode(target, Uint8Array.from([0xff]))).rejects.not.toThrow(
       Base64UrlDecodeError,
     );
   });
 
-  test("投げたエラーは Error の派生であり name は UniKvsBase64UrlDecodeError である", ({
+  test("投げたエラーは Error の派生であり name は UniKvsBase64UrlDecodeError である", async ({
     expect,
   }) => {
     // 準備
@@ -349,7 +387,7 @@ describe("デコードの異常系", () => {
     // 実行
     let thrown: unknown;
     try {
-      target.decode({ data: base64UrlBytes("ab+c") });
+      await decode(target, base64UrlBytes("ab+c"));
     } catch (error) {
       thrown = error;
     }

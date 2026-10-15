@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { forCases, type Random } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  forCases,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  type Random,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -76,28 +84,30 @@ describe("LocalStorage のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            storage.write({
-              key: operation.key,
-              data: operation.value,
-              vars: new Variables(),
-              signal,
-            });
+            storage.write(
+              createSetContext(operation.key, { signal }) as IStorage.WriteContext,
+              operation.value,
+            );
             model.set(operation.key, operation.value);
             break;
           }
           case "delete": {
             if (model.has(operation.key)) {
-              storage.delete({ key: operation.key, signal });
+              storage.delete(
+                createDeleteContext(operation.key, { signal }) as IStorage.DeleteContext,
+              );
               model.delete(operation.key);
             } else {
-              expect(() => storage.delete({ key: operation.key, signal })).toThrow(
-                KeyNotFoundError,
-              );
+              expect(() =>
+                storage.delete(
+                  createDeleteContext(operation.key, { signal }) as IStorage.DeleteContext,
+                ),
+              ).toThrow(KeyNotFoundError);
             }
             break;
           }
           case "clear": {
-            storage.clear({ signal });
+            storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
             model.clear();
             break;
           }
@@ -113,11 +123,19 @@ describe("LocalStorage のプロパティー", () => {
       }
       for (const key of touchedKeys) {
         if (model.has(key)) {
-          expect(storage.exists({ key, signal })).toBe(true);
-          expect(storage.read({ key, signal })).toBe(model.get(key));
+          expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+            true,
+          );
+          expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(
+            model.get(key),
+          );
         } else {
-          expect(storage.exists({ key, signal })).toBe(false);
-          expect(() => storage.read({ key, signal })).toThrow(KeyNotFoundError);
+          expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+            false,
+          );
+          expect(() =>
+            storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+          ).toThrow(KeyNotFoundError);
         }
       }
     });
@@ -130,8 +148,8 @@ describe("LocalStorage のプロパティー", () => {
       const value = nextValue(random) + random.string(random.int(0, 512));
 
       // 実行
-      storage.write({ key: "k1", data: value, vars: new Variables(), signal });
-      const result = storage.read({ key: "k1", signal });
+      storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+      const result = storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext);
 
       // 検証
       expect(result).toBe(value);
@@ -147,14 +165,19 @@ describe("LocalStorage のプロパティー", () => {
 
       // 実行
       for (const key of keys) {
-        storage.write({ key, data: nextValue(random), vars: new Variables(), signal });
+        storage.write(
+          createSetContext(key, { signal }) as IStorage.WriteContext,
+          nextValue(random),
+        );
       }
-      storage.clear({ signal });
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       // 検証
       expect(backend.length).toBe(0);
       for (const key of keys) {
-        expect(storage.exists({ key, signal })).toBe(false);
+        expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+          false,
+        );
       }
     });
   });

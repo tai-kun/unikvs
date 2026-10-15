@@ -1,5 +1,15 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureThrown,
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { LocalStorageNotAvailableError } from "../src/errors.js";
@@ -27,7 +37,7 @@ describe("ライフサイクル", () => {
 
   test("open は signal 検証と backend 存在確認のみ行う", ({ expect, storage }) => {
     // 実行
-    storage.open({ signal });
+    storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -35,7 +45,7 @@ describe("ライフサイクル", () => {
 
   test("close は signal 検証のみ行う", ({ expect, storage }) => {
     // 実行
-    storage.close({ signal });
+    storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -43,18 +53,24 @@ describe("ライフサイクル", () => {
 
   test("中断済みシグナルの open は中断例外を投げる", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.open({ signal: abortedSignal() })).toThrow(DOMException);
+    expect(() =>
+      storage.open(createOpenContext({ signal: abortedSignal() }) as IStorage.OpenContext),
+    ).toThrow(DOMException);
   });
 
   test("中断済みシグナルの close は中断例外を投げる", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.close({ signal: abortedSignal() })).toThrow(DOMException);
+    expect(() =>
+      storage.close(createCloseContext({ signal: abortedSignal() }) as IStorage.CloseContext),
+    ).toThrow(DOMException);
   });
 
   test("backend 不在の open は LocalStorageNotAvailableError を投げる", ({ expect }) => {
     // 実行
     const error = runWithGlobalLocalStorage(undefined, () =>
-      captureThrown(() => new LocalStorage().open({ signal })),
+      captureThrown(() =>
+        new LocalStorage().open(createOpenContext({ signal }) as IStorage.OpenContext),
+      ),
     );
 
     // 検証
@@ -63,7 +79,9 @@ describe("ライフサイクル", () => {
 
   test("backend 不在でも close は成功する", ({ expect }) => {
     // 実行と検証
-    runWithGlobalLocalStorage(undefined, () => new LocalStorage().close({ signal }));
+    runWithGlobalLocalStorage(undefined, () =>
+      new LocalStorage().close(createCloseContext({ signal }) as IStorage.CloseContext),
+    );
     expect(true).toBe(true);
   });
 
@@ -76,36 +94,44 @@ describe("ライフサイクル", () => {
 
   test("close しても backend に触れないため操作を継続できる", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.close({ signal });
+    storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 検証
-    expect(storage.read({ key: "k1", signal })).toBe("v1");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v1");
   });
 
   test("open せずに直接操作できる", ({ expect, storage }) => {
     // 実行
-    storage.write({ key: "k", data: "v", vars: new Variables(), signal });
+    storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v");
 
     // 検証
-    expect(storage.read({ key: "k", signal })).toBe("v");
+    expect(storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toBe("v");
   });
 
   test("中断済みシグナルでは全 CRUD が中断例外を投げる", ({ expect, storage }) => {
     // 準備
     const aborted = abortedSignal();
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行と検証
     expect(() =>
-      storage.write({ key: "k", data: "v", vars: new Variables(), signal: aborted }),
+      storage.write(createSetContext("k", { signal: aborted }) as IStorage.WriteContext, "v"),
     ).toThrow(DOMException);
-    expect(() => storage.read({ key: "k1", signal: aborted })).toThrow(DOMException);
-    expect(() => storage.exists({ key: "k1", signal: aborted })).toThrow(DOMException);
-    expect(() => storage.delete({ key: "k1", signal: aborted })).toThrow(DOMException);
-    expect(() => storage.clear({ signal: aborted })).toThrow(DOMException);
+    expect(() =>
+      storage.read(createGetContext("k1", { signal: aborted }) as IStorage.ReadContext),
+    ).toThrow(DOMException);
+    expect(() =>
+      storage.exists(createHasContext("k1", { signal: aborted }) as IStorage.ExistsContext),
+    ).toThrow(DOMException);
+    expect(() =>
+      storage.delete(createDeleteContext("k1", { signal: aborted }) as IStorage.DeleteContext),
+    ).toThrow(DOMException);
+    expect(() =>
+      storage.clear(createClearContext("", { signal: aborted }) as IStorage.ClearContext),
+    ).toThrow(DOMException);
   });
 
   test("カスタム reason の中断は reason のまま伝播する", ({ expect, storage }) => {
@@ -114,7 +140,10 @@ describe("ライフサイクル", () => {
 
     // 実行
     const error = captureThrown(() =>
-      storage.write({ key: "k", data: "v", vars: new Variables(), signal: abortedSignal(reason) }),
+      storage.write(
+        createSetContext("k", { signal: abortedSignal(reason) }) as IStorage.WriteContext,
+        "v",
+      ),
     );
 
     // 検証

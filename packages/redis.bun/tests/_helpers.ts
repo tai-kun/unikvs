@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 
+import type { IStorage } from "@unikvs/core";
+import { createCloseContext, createOpenContext } from "@unikvs/testing";
 import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { RedisClient } from "bun";
 import { afterAll, beforeAll, test as vitest } from "vitest";
@@ -65,12 +67,12 @@ export const test = vitest.extend<{
   },
   async storage({ keyPrefix, url }, use) {
     const storage = new Redis(url, { keyPrefix });
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     await use(storage);
 
     if (storage.isOpen) {
-      storage.close();
+      storage.close(createCloseContext() as IStorage.CloseContext);
     }
   },
 });

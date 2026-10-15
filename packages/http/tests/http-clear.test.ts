@@ -1,5 +1,11 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  createClearContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {
@@ -18,25 +24,23 @@ describe("clear の振る舞い", () => {
     // 準備
     const { fetch, calls } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
+    await storage.clear(
+      createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+    );
 
     // 検証
     expect(calls.at(-1)?.method).toBe("DELETE");
     expect(calls.at(-1)?.url).toBe(`${baseUrl}/?prefix=${encodeURIComponent("unikvs:")}`);
     expect(
-      await storage.exists({
-        key: "k1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
   });
 
@@ -45,36 +49,30 @@ describe("clear の振る舞い", () => {
     const server = createMockServer();
     const storageA = new Http(baseUrl, { fetch: server.fetch, keyPrefix: "a:" });
     const storageB = new Http(baseUrl, { fetch: server.fetch, keyPrefix: "b:" });
-    await storageA.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    await storageB.write({
-      key: "k1",
-      data: new Uint8Array([2]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storageA.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storageB.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storageA.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
+    await storageA.clear(
+      createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+    );
 
     // 検証
     expect(
-      await storageA.exists({
-        key: "k1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageA.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
     expect(
-      await storageB.exists({
-        key: "k1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageB.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(true);
   });
 
@@ -85,7 +83,9 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      storage.clear(
+        createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+      ),
     );
 
     // 検証
@@ -100,7 +100,7 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: abortedSignal(), vars: new Variables({}) }),
+      storage.clear(createClearContext("", { signal: abortedSignal() }) as IStorage.ClearContext),
     );
 
     // 検証
@@ -113,7 +113,9 @@ describe("clear の振る舞い", () => {
     const storage = new Http(baseUrl, { fetch, keyPrefix: "", allowClearWithoutPrefix: true });
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
+    await storage.clear(
+      createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+    );
 
     // 検証
     expect(calls.length).toBe(1);
@@ -127,7 +129,9 @@ describe("clear の振る舞い", () => {
         new Response(null, { status, statusText: "Unsupported" });
       const storage = new Http(baseUrl, { fetch: failingFetch });
       const error = await captureRejection(
-        storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+        storage.clear(
+          createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+        ),
       );
 
       expect(error).toBeInstanceOf(ClearNotSupportedError);
@@ -145,7 +149,9 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      storage.clear(
+        createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+      ),
     );
 
     // 検証
@@ -160,7 +166,9 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      storage.clear(
+        createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+      ),
     );
 
     // 検証
@@ -175,7 +183,9 @@ describe("clear の振る舞い", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+      storage.clear(
+        createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+      ),
     );
 
     // 検証

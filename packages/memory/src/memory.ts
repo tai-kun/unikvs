@@ -51,21 +51,19 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
-  public write(args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "vars">): void {
-    const { key, data } = args;
-    this.map.set(key, this.clone(data));
+  public write(c: IStorage.WriteContext, data: any): void {
+    this.map.set(c.key, this.clone(data));
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
-  public read(args: Pick<IStorage.ReadArgs, "key">): any {
-    const { key } = args;
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+  public read(c: IStorage.ReadContext): any {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    const value = this.map.get(key);
+    const value = this.map.get(c.key);
 
     return this.clone(value);
   }
@@ -73,9 +71,8 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
-  public exists(args: Pick<IStorage.ExistsArgs, "key">): boolean {
-    const { key } = args;
-    const exists = this.map.has(key);
+  public exists(c: IStorage.ExistsContext): boolean {
+    const exists = this.map.has(c.key);
 
     return exists;
   }
@@ -83,13 +80,12 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
-  public delete(args: Pick<IStorage.DeleteArgs, "key">): void {
-    const { key } = args;
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+  public delete(c: IStorage.DeleteContext): void {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    this.map.delete(key);
+    this.map.delete(c.key);
   }
 
   /**
@@ -102,31 +98,28 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#data)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "vars">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key } = args;
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
       write: (chunk) => {
         if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk });
+          throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
 
         chunks.push(this.clone(chunk));
       },
       close: () => {
-        const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
 
         let offset = 0;
-        for (const c of chunks) {
-          merged.set(c, offset);
-          offset += c.byteLength;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.byteLength;
         }
 
-        this.map.set(key, merged);
+        this.map.set(c.key, merged);
       },
     });
 
@@ -136,20 +129,17 @@ export default class Memory implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#data)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { key } = args;
-    if (!this.map.has(key)) {
-      throw new KeyNotFoundError({ key });
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
-    const value = this.map.get(key);
+    const value = this.map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {
         if (!(value instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk: value });
+          throw new InvalidChunkTypeError({ key: c.key, chunk: value });
         }
 
         controller.enqueue(this.clone(value) as Uint8Array<ArrayBuffer>);

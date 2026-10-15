@@ -1,4 +1,12 @@
-import { captureRejection, createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+  createPseudoRandomBytes,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
@@ -28,6 +36,45 @@ const test = vitest.extend<{
 // 上流モジュールの解決は open() 時に共有キャッシュで1回だけ実行されるため、
 // 解決失敗や中断の検証はモジュールを再読み込みした新鮮な実体で行う。
 // 静的 import の実体とはキャッシュを共有しないため、後続の往復群に影響しない。
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdNode, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
 describe("対応しない実行環境", () => {
   test("node:zlib の解決に失敗すると open を UnsupportedRuntimeError で拒否する", async ({
     expect,
@@ -46,7 +93,7 @@ describe("対応しない実行環境", () => {
 
       try {
         // 実行
-        const error = await captureRejection(target.open({ signal }));
+        const error = await captureRejection(target.open(createOpenContext({ signal }) as IMiddleware.OpenContext));
 
         // 検証
         // 失敗は UnsupportedRuntimeError で包み、原因と識別子を保持する。
@@ -61,9 +108,9 @@ describe("対応しない実行環境", () => {
 
         // 実行と検証
         // 失敗はキャッシュされないため、再試行では解決が再実行される。
-        await target.open({ signal });
+        await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 41);
-        const decoded = await target.decode({ data: await target.encode({ data: input }) });
+        const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(loadSpy).toHaveBeenCalledTimes(2);
@@ -96,9 +143,9 @@ describe("対応しない実行環境", () => {
       try {
         // 実行と検証
         // 実装は open() で関数の有無を検証しないため、欠落は使用時に表面化する。
-        await target.open({ signal });
+        await openTarget(target, signal);
         expect(target.isOpen).toBe(true);
-        await expect(target.encode({ data: new Uint8Array([1]) })).rejects.toThrow(TypeError);
+        await expect(encode(target, new Uint8Array([1]))).rejects.toThrow(TypeError);
         expect(loadSpy).toHaveBeenCalledTimes(1);
       } finally {
         loadSpy.mockRestore();
@@ -129,9 +176,9 @@ describe("対応しない実行環境", () => {
       try {
         // 実行と検証
         // 実装は open() で関数の有無を検証しないため、欠落は使用時に表面化する。
-        await target.open({ signal });
+        await openTarget(target, signal);
         expect(target.isOpen).toBe(true);
-        await expect(target.decode({ data: new Uint8Array([1]) })).rejects.toThrow(TypeError);
+        await expect(decode(target, new Uint8Array([1]))).rejects.toThrow(TypeError);
         expect(loadSpy).toHaveBeenCalledTimes(1);
       } finally {
         loadSpy.mockRestore();
@@ -216,22 +263,22 @@ describe("壊れた圧縮データの decode", () => {
   test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const garbage = createPseudoRandomBytes(64, 21);
 
     // 実行と検証
     // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(target.decode({ data: garbage })).rejects.toThrow(Error);
+    await expect(decode(target, garbage)).rejects.toThrow(Error);
   });
 
   test("末尾を欠いたデータをエラーで拒否する", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
-    const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 22) });
+    await openTarget(target, signal);
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 22));
 
     // 実行と検証
-    await expect(target.decode({ data: encoded.subarray(0, encoded.length - 4) })).rejects.toThrow(
+    await expect(decode(target, encoded.subarray(0, encoded.length - 4))).rejects.toThrow(
       Error,
     );
   });
@@ -240,13 +287,13 @@ describe("壊れた圧縮データの decode", () => {
     // 準備
     // 末尾破壊は検出できない場合があるため、先頭のマジックバイトを壊して検証する。
     const target = new ZstdNode();
-    await target.open({ signal });
-    const encoded = await target.encode({ data: createPseudoRandomBytes(4096, 23) });
+    await openTarget(target, signal);
+    const encoded = await encode(target, createPseudoRandomBytes(4096, 23));
     const corrupted = encoded.slice();
     corrupted[0] = corrupted[0]! ^ 0xff;
 
     // 実行と検証
-    await expect(target.decode({ data: corrupted })).rejects.toThrow(Error);
+    await expect(decode(target, corrupted)).rejects.toThrow(Error);
   });
 });
 

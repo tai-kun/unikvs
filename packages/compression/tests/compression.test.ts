@@ -1,8 +1,31 @@
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
 
 const FORMATS = ["gzip", "deflate", "deflate-raw"] as const;
+
+type ByteContext = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecodeContext = IMiddleware.DecodeContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteEncodeStreamContext = IMiddleware.EncodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteDecodeStreamContext = IMiddleware.DecodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
 
 /**
  * 疑似乱数ジェネレーター (線形合同法) で、実行ごとに同じバイト列を生成します。
@@ -20,11 +43,39 @@ function createPseudoRandomBytes(size: number): Uint8Array<ArrayBuffer> {
 }
 
 /**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await compression.encode(c as ByteContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await compression.decode(c as ByteDecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
  * ストリームからすべてのチャンクを読み取ります。
  */
-async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Uint8Array[]> {
+async function readAll(
+  stream: ReadableStream<Uint8Array<ArrayBuffer>>,
+): Promise<Uint8Array<ArrayBuffer>[]> {
   const reader = stream.getReader();
-  const outputChunks: Uint8Array[] = [];
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
 
   while (true) {
     const { done, value } = await reader.read();
@@ -49,6 +100,32 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
   }
 
   return result;
+}
+
+/**
+ * チャンク列を圧縮ストリームに流し、出力ストリームを返します。
+ */
+async function encodeStream(
+  compression: Compression,
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
+  const c = createEncodeStreamContext(sourceFrom(chunks));
+  await compression.encodeStream(c as ByteEncodeStreamContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を展開ストリームに流し、出力ストリームを返します。
+ */
+async function decodeStream(
+  compression: Compression,
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await compression.decodeStream(c as ByteDecodeStreamContext, createNext());
+
+  return c.destination;
 }
 
 describe("初期化と基本属性", () => {
@@ -79,8 +156,8 @@ describe("圧縮と展開のラウンドトリップ", () => {
     // 実行と検証
     for (const format of FORMATS) {
       const compression = new Compression(format);
-      const encoded = await compression.encode({ data: input });
-      const decoded = await compression.decode({ data: encoded });
+      const encoded = await encode(compression, input);
+      const decoded = await decode(compression, encoded);
       expect(decoded, `format=${format}`).toStrictEqual(input);
     }
   });
@@ -92,8 +169,8 @@ describe("圧縮と展開のラウンドトリップ", () => {
     // 実行と検証
     for (const format of FORMATS) {
       const compression = new Compression(format);
-      const encoded = await compression.encode({ data: input });
-      const decoded = await compression.decode({ data: encoded });
+      const encoded = await encode(compression, input);
+      const decoded = await decode(compression, encoded);
       expect(decoded, `format=${format}`).toStrictEqual(input);
     }
   });
@@ -106,8 +183,8 @@ describe("圧縮と展開のラウンドトリップ", () => {
     const input = createPseudoRandomBytes(64 * 1024);
 
     // 実行
-    const encoded = await compression.encode({ data: input });
-    const decoded = await compression.decode({ data: encoded });
+    const encoded = await encode(compression, input);
+    const decoded = await decode(compression, encoded);
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -119,8 +196,8 @@ describe("圧縮と展開のラウンドトリップ", () => {
     const input = createPseudoRandomBytes(1024 * 1024);
 
     // 実行
-    const encoded = await compression.encode({ data: input });
-    const decoded = await compression.decode({ data: encoded });
+    const encoded = await encode(compression, input);
+    const decoded = await decode(compression, encoded);
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -136,7 +213,7 @@ describe("圧縮の効果", () => {
     );
 
     // 実行
-    const encoded = await compression.encode({ data: input });
+    const encoded = await encode(compression, input);
 
     // 検証
     expect(encoded.length).toBeLessThan(input.length);
@@ -144,20 +221,34 @@ describe("圧縮の効果", () => {
 });
 
 describe("ストリームによる変換", () => {
-  test("getEncodable は指定した形式の CompressionStream を返す", ({ expect }) => {
+  test("encodeStream の出力は CompressionStream を経由した ReadableStream である", async ({
+    expect,
+  }) => {
     // 準備
     const compression = new Compression("gzip");
 
-    // 実行と検証
-    expect(compression.getEncodable()).toBeInstanceOf(CompressionStream);
+    // 実行
+    const destination = await encodeStream(compression, [new Uint8Array([1, 2, 3])]);
+
+    // 検証
+    expect(destination).toBeInstanceOf(ReadableStream);
+    expect(await readAll(destination)).not.toStrictEqual([]);
   });
 
-  test("getDecodable は指定した形式の DecompressionStream を返す", ({ expect }) => {
+  test("decodeStream の出力は DecompressionStream を経由した ReadableStream である", async ({
+    expect,
+  }) => {
     // 準備
     const compression = new Compression("gzip");
+    const input = new TextEncoder().encode("hello ".repeat(100));
+    const encoded = await encode(compression, input);
 
-    // 実行と検証
-    expect(compression.getDecodable()).toBeInstanceOf(DecompressionStream);
+    // 実行
+    const destination = await decodeStream(compression, [encoded]);
+
+    // 検証
+    expect(destination).toBeInstanceOf(ReadableStream);
+    expect(concatBytes(await readAll(destination))).toStrictEqual(input);
   });
 
   test("大きさが不揃いな複数チャンクをストリームで圧縮して展開すると元のデータに戻る", async ({
@@ -167,20 +258,11 @@ describe("ストリームによる変換", () => {
     const compression = new Compression("gzip");
     const input = createPseudoRandomBytes(8192);
     const inputChunks = [input.subarray(0, 13), input.subarray(13, 4097), input.subarray(4097)];
-    const source = new ReadableStream<Uint8Array<ArrayBuffer>>({
-      start(controller) {
-        for (const chunk of inputChunks) {
-          controller.enqueue(chunk);
-        }
-        controller.close();
-      },
-    });
 
     // 実行
-    const transformed = source
-      .pipeThrough(compression.getEncodable())
-      .pipeThrough(compression.getDecodable());
-    const decodedChunks = await readAll(transformed);
+    const encodedStream = await encodeStream(compression, inputChunks);
+    const decodedStream = await decodeStream(compression, await readAll(encodedStream));
+    const decodedChunks = await readAll(decodedStream);
 
     // 検証
     expect(concatBytes(decodedChunks)).toStrictEqual(input);
@@ -194,15 +276,19 @@ describe("異常系", () => {
     const invalidData = new Uint8Array([0, 1, 2, 3, 4, 5]);
 
     // 実行と検証
-    await expect(compression.decode({ data: invalidData })).rejects.toThrow(Error);
+    await expect(decode(compression, invalidData)).rejects.toThrow(Error);
   });
 
-  test("サポートされていない形式は getEncodable の時点で TypeError を投げる", ({ expect }) => {
+  test("サポートされていない形式は encodeStream の時点で TypeError を投げる", async ({
+    expect,
+  }) => {
     // 準備
     // TypeScript の型定義を無視して無効な値を渡す。
     const invalidFormat = "unknown-format" as never;
 
     // 実行と検証
-    expect(() => new Compression(invalidFormat).getEncodable()).toThrow(TypeError);
+    await expect(
+      encodeStream(new Compression(invalidFormat), [new Uint8Array([1])]),
+    ).rejects.toThrow(TypeError);
   });
 });

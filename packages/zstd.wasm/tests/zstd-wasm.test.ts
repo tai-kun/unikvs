@@ -1,7 +1,51 @@
-import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  bytesEqual,
+  createPseudoRandomBytes,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdWasm from "../src/zstd-wasm.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdWasm, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 /**
  * 中断されていないシグナルを作成します。
@@ -23,12 +67,12 @@ describe("往復", () => {
   test("反復テキストを既定レベルで往復すると元のデータに戻る", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createRepetitiveInput();
 
     // 実行
-    const encoded = await target.encode({ data: input });
-    const decoded = await target.decode({ data: encoded });
+    const encoded = await encode(target, input );
+    const decoded = await decode(target, encoded );
 
     // 検証
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
@@ -39,11 +83,11 @@ describe("往復", () => {
   test("疑似乱数を既定レベルで往復すると元のデータに戻る", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createPseudoRandomBytes(4096, 11);
 
     // 実行
-    const decoded = await target.decode({ data: await target.encode({ data: input }) });
+    const decoded = await decode(target, await encode(target, input ) );
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -53,12 +97,12 @@ describe("往復", () => {
     // 準備
     // 上流の実測では空入力の圧縮は空フレームを返し、展開で空出力に戻る。
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = new Uint8Array(0);
 
     // 実行
-    const encoded = await target.encode({ data: input });
-    const decoded = await target.decode({ data: encoded });
+    const encoded = await encode(target, input );
+    const decoded = await decode(target, encoded );
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -71,8 +115,8 @@ describe("往復", () => {
     // 実行と検証
     for (const level of [1, 10, 22]) {
       const target = new ZstdWasm({ level });
-      await target.open({ signal: createSignal() });
-      const decoded = await target.decode({ data: await target.encode({ data: input }) });
+      await openTarget(target, createSignal());
+      const decoded = await decode(target, await encode(target, input ) );
       expect(decoded, `level=${level}`).toStrictEqual(input);
     }
   });
@@ -80,11 +124,11 @@ describe("往復", () => {
   test("1 MiB のランダムデータを往復しても元のデータに戻る", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createPseudoRandomBytes(1024 * 1024, 13);
 
     // 実行
-    const decoded = await target.decode({ data: await target.encode({ data: input }) });
+    const decoded = await decode(target, await encode(target, input ) );
 
     // 検証
     expect(bytesEqual(decoded, input)).toBe(true);
@@ -93,11 +137,11 @@ describe("往復", () => {
   test("4 MiB の反復データを往復しても元のデータに戻る", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = new TextEncoder().encode("0123456789abcdef".repeat((4 * 1024 * 1024) / 16));
 
     // 実行
-    const decoded = await target.decode({ data: await target.encode({ data: input }) });
+    const decoded = await decode(target, await encode(target, input ) );
 
     // 検証
     expect(bytesEqual(decoded, input)).toBe(true);
@@ -108,11 +152,11 @@ describe("圧縮率の健全性", () => {
   test("反復テキストは入力より小さくなる", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createRepetitiveInput();
 
     // 実行
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input );
 
     // 検証
     expect(encoded.byteLength).toBeLessThan(input.byteLength);
@@ -120,15 +164,16 @@ describe("圧縮率の健全性", () => {
 });
 
 describe("余剰キー", () => {
-  test("vars と signal を付けても無視して往復できる", async ({ expect }) => {
+  test("コンテキストの余剰変数を付けても無視して往復できる", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createPseudoRandomBytes(128, 14);
-    const args = { data: input, vars: {}, signal: new AbortController().signal };
 
     // 実行
-    const decoded = await target.decode({ data: await target.encode(args) });
+    const encodeContext = createEncodeContext(input, "", { values: { extra: true } });
+    await target.encode(encodeContext as ByteEncode, createNext());
+    const decoded = await decode(target, encodeContext.destination);
 
     // 検証
     expect(decoded).toStrictEqual(input);

@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { beforeEach, describe, test } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
@@ -39,8 +46,8 @@ describe("基本操作（CRUD）", () => {
     const data = "v1";
 
     // 実行
-    storage.write({ key, data, vars: new Variables(), signal });
-    const result = storage.read({ key, signal });
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe(data);
@@ -49,10 +56,10 @@ describe("基本操作（CRUD）", () => {
   test("データが存在するとき、exists が true を返す", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    const result = storage.exists({ key, signal });
+    const result = storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext);
 
     // 検証
     expect(result).toBe(true);
@@ -60,7 +67,7 @@ describe("基本操作（CRUD）", () => {
 
   test("データが存在しないとき、exists が false を返す", ({ expect }) => {
     // 実行
-    const result = storage.exists({ key: "none", signal });
+    const result = storage.exists(createHasContext("none", { signal }) as IStorage.ExistsContext);
 
     // 検証
     expect(result).toBe(false);
@@ -69,36 +76,40 @@ describe("基本操作（CRUD）", () => {
   test("データを削除したとき、そのデータが存在しなくなる", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.delete({ key, signal });
+    storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
     // 検証
-    expect(storage.exists({ key, signal })).toBe(false);
+    expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(false);
   });
 
   test("全データを消去したとき、すべてのキーが存在しなくなる", ({ expect }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
-    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(storage.exists({ key: "k1", signal })).toBe(false);
-    expect(storage.exists({ key: "k2", signal })).toBe(false);
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+    expect(storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
   test("既存のキーに対してデータを書き込んだとき、値が更新される", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ key, data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.write({ key, data: "v2", vars: new Variables(), signal });
-    const result = storage.read({ key, signal });
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v2");
+    const result = storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe("v2");

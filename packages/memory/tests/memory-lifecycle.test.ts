@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createSetContext,
+  createStreamContext,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import Memory from "../src/memory.js";
@@ -28,10 +35,10 @@ describe("ライフサイクル", () => {
 
   test("CRUD 操作の後も isOpen は true のままである", ({ expect, storage }) => {
     // 準備と実行
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    storage.read({ key: "k1" });
-    storage.delete({ key: "k1" });
-    storage.clear();
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    storage.read(createGetContext("k1") as IStorage.ReadContext);
+    storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+    storage.clear(createClearContext() as IStorage.ClearContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -39,12 +46,16 @@ describe("ライフサイクル", () => {
 
   test("ストリーム操作の後も isOpen は true のままである", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ vars: new Variables(), key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
     await writer.close();
-    const reader = storage.getReadable({ key: "s1" }).getReader();
+    const reader = storage
+      .getReadable(createStreamContext("s1") as IStorage.GetReadableContext)
+      .getReader();
     await reader.read();
     reader.releaseLock();
 

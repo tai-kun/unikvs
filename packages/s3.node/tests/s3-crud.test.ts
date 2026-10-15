@@ -1,5 +1,14 @@
-import { Variables } from "@unikvs/core";
-import { bytesEqual, createAllByteValues } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  bytesEqual,
+  createAllByteValues,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import S3 from "../src/s3.js";
@@ -20,7 +29,9 @@ async function writeInBatches(
     await Promise.all(
       entries
         .slice(start, start + concurrency)
-        .map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
+        .map(({ key, data }) =>
+          storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+        ),
     );
   }
 }
@@ -34,11 +45,11 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "all-byte-values.bin";
     const data = createAllByteValues(1024);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(bytesEqual(result, data)).toBe(true);
@@ -48,11 +59,11 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "zeros.bin";
     const data = new Uint8Array(4096);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toStrictEqual(data);
@@ -62,11 +73,11 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "ones.bin";
     const data = new Uint8Array(4096).fill(0xff);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toStrictEqual(data);
@@ -76,24 +87,26 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "one-byte.bin";
     const data = new Uint8Array([0x42]);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(data);
   });
 
   test("5 MiB の単発 write が往復する", async ({ expect, signal, storage }) => {
     // 準備
     const key = "five-mib.bin";
     const data = createAllByteValues(5 * 1024 * 1024);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(bytesEqual(result, data)).toBe(true);
@@ -106,12 +119,17 @@ describe("基本データ操作 (CRUD)", () => {
   }) => {
     // 準備
     const key = "existence.bin";
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    const before = await storage.exists({ key, signal });
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
-    const after = await storage.exists({ key, signal });
+    const before = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    const after = await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext);
 
     // 検証
     expect(before).toBe(false);
@@ -126,11 +144,11 @@ describe("基本データ操作 (CRUD)", () => {
     // 準備
     const key = "unicode-data.txt";
     const data = new TextEncoder().encode("こんにちは、世界! 🚀 Ω");
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(new TextDecoder().decode(result)).toBe("こんにちは、世界! 🚀 Ω");
@@ -139,25 +157,37 @@ describe("基本データ操作 (CRUD)", () => {
   test("0 バイトのオブジェクトは exists が true になる", async ({ expect, signal, storage }) => {
     // 準備
     const key = "zero-length.bin";
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
-    await storage.write({ key, data: new Uint8Array(0), signal, vars: new Variables({}) });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array(0),
+    );
 
     // 検証
-    await expect(storage.exists({ key, signal })).resolves.toBe(true);
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(true);
   });
 
   test("削除を 2 回行っても 2 回目はエラーにならない", async ({ expect, signal, storage }) => {
     // 準備
     const key = "delete-twice.bin";
-    storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
-    await storage.delete({ key, signal });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
     // 実行と検証
-    await expect(storage.delete({ key, signal })).resolves.toBeUndefined();
-    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+    await expect(
+      storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
+    ).resolves.toBeUndefined();
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("上書きで長さが短くなっても古いデータが残らない", async ({ expect, signal, storage }) => {
@@ -165,14 +195,16 @@ describe("基本データ操作 (CRUD)", () => {
     const key = "shrink.bin";
     const longData = createAllByteValues(1024);
     const shortData = new Uint8Array([1, 2, 3]);
-    storage.open();
-    await storage.write({ key, data: longData, signal, vars: new Variables({}) });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, longData);
 
     // 実行
-    await storage.write({ key, data: shortData, signal, vars: new Variables({}) });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, shortData);
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(shortData);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(shortData);
   });
 
   test("上書きで長さが長くなっても全体が置き換わる", async ({ expect, signal, storage }) => {
@@ -180,12 +212,12 @@ describe("基本データ操作 (CRUD)", () => {
     const key = "grow.bin";
     const shortData = new Uint8Array([1, 2, 3]);
     const longData = createAllByteValues(1024);
-    storage.open();
-    await storage.write({ key, data: shortData, signal, vars: new Variables({}) });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, shortData);
 
     // 実行
-    await storage.write({ key, data: longData, signal, vars: new Variables({}) });
-    const result = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, longData);
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(bytesEqual(result, longData)).toBe(true);
@@ -193,33 +225,33 @@ describe("基本データ操作 (CRUD)", () => {
 
   test("1 つのキーを削除しても他のキーは残る", async ({ expect, signal, storage }) => {
     // 準備
-    storage.open();
-    await storage.write({
-      key: "keep-a.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables({}),
-    });
-    await storage.write({
-      key: "remove.bin",
-      data: new Uint8Array([2]),
-      signal,
-      vars: new Variables({}),
-    });
-    await storage.write({
-      key: "keep-b.bin",
-      data: new Uint8Array([3]),
-      signal,
-      vars: new Variables({}),
-    });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(
+      createSetContext("keep-a.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("remove.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
+    await storage.write(
+      createSetContext("keep-b.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([3]),
+    );
 
     // 実行
-    await storage.delete({ key: "remove.bin", signal });
+    await storage.delete(createDeleteContext("remove.bin", { signal }) as IStorage.DeleteContext);
 
     // 検証
-    await expect(storage.exists({ key: "keep-a.bin", signal })).resolves.toBe(true);
-    await expect(storage.exists({ key: "remove.bin", signal })).resolves.toBe(false);
-    await expect(storage.exists({ key: "keep-b.bin", signal })).resolves.toBe(true);
+    await expect(
+      storage.exists(createHasContext("keep-a.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(true);
+    await expect(
+      storage.exists(createHasContext("remove.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("keep-b.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(true);
   });
 
   test("前方一致する別のキーは互いに干渉しない", async ({ expect, signal, storage }) => {
@@ -229,53 +261,55 @@ describe("基本データ操作 (CRUD)", () => {
       { key: "data.bak", data: new Uint8Array([2]) },
       { key: "data/child.bin", data: new Uint8Array([3]) },
     ];
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: new Variables({}) });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
-    await storage.delete({ key: "data.bak", signal });
+    await storage.delete(createDeleteContext("data.bak", { signal }) as IStorage.DeleteContext);
 
     // 検証
-    await expect(storage.read({ key: "data", signal })).resolves.toStrictEqual(new Uint8Array([1]));
-    await expect(storage.exists({ key: "data.bak", signal })).resolves.toBe(false);
-    await expect(storage.read({ key: "data/child.bin", signal })).resolves.toStrictEqual(
-      new Uint8Array([3]),
-    );
+    await expect(
+      storage.read(createGetContext("data", { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([1]));
+    await expect(
+      storage.exists(createHasContext("data.bak", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.read(createGetContext("data/child.bin", { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([3]));
   });
 
   test("clear の後に同じバケットを引き続き使用できる", async ({ expect, signal, storage }) => {
     // 準備
-    storage.open();
-    await storage.write({
-      key: "before-clear-1.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables({}),
-    });
-    await storage.write({
-      key: "before-clear-2.bin",
-      data: new Uint8Array([2]),
-      signal,
-      vars: new Variables({}),
-    });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(
+      createSetContext("before-clear-1.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("before-clear-2.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storage.clear({ signal });
-    await storage.write({
-      key: "after-clear.bin",
-      data: new Uint8Array([3]),
-      signal,
-      vars: new Variables({}),
-    });
-
-    // 検証
-    await expect(storage.exists({ key: "before-clear-1.bin", signal })).resolves.toBe(false);
-    await expect(storage.exists({ key: "before-clear-2.bin", signal })).resolves.toBe(false);
-    await expect(storage.read({ key: "after-clear.bin", signal })).resolves.toStrictEqual(
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+    await storage.write(
+      createSetContext("after-clear.bin", { signal }) as IStorage.WriteContext,
       new Uint8Array([3]),
     );
+
+    // 検証
+    await expect(
+      storage.exists(createHasContext("before-clear-1.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("before-clear-2.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.read(createGetContext("after-clear.bin", { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([3]));
   });
 
   test("1000 件を超えるオブジェクトでも clear は全ページを削除する", async ({
@@ -290,16 +324,18 @@ describe("基本データ操作 (CRUD)", () => {
       key: `bulk/${index}.bin`,
       data: new Uint8Array([index % 256]),
     }));
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
     await writeInBatches(storage, entries, signal);
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
     const probes = [0, 1, 999, 1000, count - 2, count - 1];
     for (const index of probes) {
-      await expect(storage.exists({ key: `bulk/${index}.bin`, signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext(`bulk/${index}.bin`, { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     }
   });
 });

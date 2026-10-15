@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { IStorage } from "@unikvs/core";
+import { createCloseContext, createOpenContext } from "@unikvs/testing";
 import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { afterAll, beforeAll, test as vitest } from "vitest";
 
@@ -77,12 +79,12 @@ export const test = vitest.extend<{
   },
   async storage({ bucket, endpoint }, use) {
     const storage = new S3(bucket, createClientConfig(endpoint));
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     await use(storage);
 
     if (storage.isOpen) {
-      storage.close();
+      storage.close(createCloseContext() as IStorage.CloseContext);
     }
   },
   async unauthorizedStorage({ endpoint }, use) {
@@ -94,12 +96,12 @@ export const test = vitest.extend<{
       accessKeyId: "unauthorized",
       secretAccessKey: "unauthorized",
     });
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     await use(storage);
 
     if (storage.isOpen) {
-      storage.close();
+      storage.close(createCloseContext() as IStorage.CloseContext);
     }
   },
 });

@@ -1,10 +1,14 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
   concatBytes,
   createAllByteValues,
   createPseudoRandomBytes,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
 } from "@unikvs/testing";
 import { describe, vi } from "vitest";
 
@@ -25,7 +29,9 @@ describe("書き込みストリーム", () => {
       new Uint8Array([200, 201]),
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     for (const chunk of chunks) {
@@ -34,7 +40,9 @@ describe("書き込みストリーム", () => {
     await writer.close();
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(expected);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(expected);
   });
 
   test("全バイト値を含む複数の大きなチャンクを流し込んだとき、全データが正しく保存される", async ({
@@ -48,7 +56,9 @@ describe("書き込みストリーム", () => {
       createAllByteValues(1024 * 1024 + index),
     );
     const expected = concatBytes(chunks);
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     for (const chunk of chunks) {
@@ -57,7 +67,7 @@ describe("書き込みストリーム", () => {
     await writer.close();
 
     // 検証
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(bytesEqual(result, expected)).toBe(true);
   });
 
@@ -68,14 +78,20 @@ describe("書き込みストリーム", () => {
   }) => {
     // 準備
     const key = "stream-empty.dat";
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.close();
 
     // 検証
-    await expect(storage.exists({ key, signal })).resolves.toBe(true);
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(new Uint8Array(0));
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(true);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array(0));
   });
 
   test("close するまで既存のデータは置き換わらない", async ({ expect, signal, storage }) => {
@@ -83,20 +99,24 @@ describe("書き込みストリーム", () => {
     const key = "stream-swap.dat";
     const original = new Uint8Array([1, 2, 3]);
     const replacement = createPseudoRandomBytes(4096, 1);
-    await storage.write({ key, data: original, signal, vars: new Variables() });
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(replacement);
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(original);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
 
     // 実行
     await writer.close();
 
     // 検証
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(bytesEqual(result, replacement)).toBe(true);
   });
 
@@ -110,8 +130,10 @@ describe("書き込みストリーム", () => {
     // 準備
     const key = "stream-rename-failure.dat";
     const original = new Uint8Array([4, 5, 6]);
-    await storage.write({ key, data: original, signal, vars: new Variables() });
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
     const temporaryKeys = (await listKeys(client, `${keyPrefix}*`)).filter((entry) =>
       entry.endsWith(".tmp"),
@@ -121,7 +143,9 @@ describe("書き込みストリーム", () => {
 
     // 実行と検証
     await expect(writer.close()).rejects.toThrow();
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(original);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
     await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([`${keyPrefix}${key}`]);
   });
 });
@@ -137,10 +161,12 @@ describe("書き込みストリームの中断", () => {
     // 準備
     const key = "stream-abort.dat";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
     const controller = new AbortController();
     const writer = storage
-      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
       .getWriter();
     await writer.write(new Uint8Array(1024).fill(0x41));
 
@@ -149,7 +175,9 @@ describe("書き込みストリームの中断", () => {
 
     // 検証
     await expect(writer.close()).rejects.toThrow();
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(original);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
     await vi.waitFor(async () => {
       await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([
         `${keyPrefix}${key}`,
@@ -162,7 +190,9 @@ describe("書き込みストリームの中断", () => {
     const key = "stream-abort-write.dat";
     const controller = new AbortController();
     const writer = storage
-      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
@@ -184,7 +214,9 @@ describe("書き込みストリームの中断", () => {
     const key = "stream-abort-new.dat";
     const controller = new AbortController();
     const writer = storage
-      .getWritable({ key, signal: controller.signal, vars: new Variables() })
+      .getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
       .getWriter();
     await writer.write(new Uint8Array(1024).fill(0x42));
 
@@ -193,7 +225,9 @@ describe("書き込みストリームの中断", () => {
 
     // 検証
     await expect(writer.close()).rejects.toThrow();
-    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
     await vi.waitFor(async () => {
       await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([]);
     });
@@ -208,14 +242,18 @@ describe("書き込みストリームの中断", () => {
   }) => {
     // 準備
     const key = "stream-writer-abort.dat";
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行
     await writer.abort(new Error("中断"));
 
     // 検証
-    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
     await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([]);
   });
 
@@ -226,7 +264,11 @@ describe("書き込みストリームの中断", () => {
 
     // 実行と検証
     expect(() =>
-      storage.getWritable({ key: "aborted.dat", signal: controller.signal, vars: new Variables() }),
+      storage.getWritable(
+        createSetContext("aborted.dat", {
+          signal: controller.signal,
+        }) as IStorage.GetWritableContext,
+      ),
     ).toThrow();
   });
 });
@@ -240,10 +282,12 @@ describe("読み取りストリーム", () => {
     // 準備
     const key = "stream-read.dat";
     const expected = createPseudoRandomBytes(1536 * 1024, 2);
-    await storage.write({ key, data: expected, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, expected);
 
     // 実行
-    const result = await collectBytes(storage.getReadable({ key, signal }));
+    const result = await collectBytes(
+      storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+    );
 
     // 検証
     expect(bytesEqual(result, expected)).toBe(true);
@@ -258,9 +302,11 @@ describe("読み取りストリーム", () => {
     const key = "stream-missing.dat";
 
     // 実行と検証
-    await expect(collectBytes(storage.getReadable({ key, signal }))).rejects.toThrow(
-      KeyNotFoundError,
-    );
+    await expect(
+      collectBytes(
+        storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+      ),
+    ).rejects.toThrow(KeyNotFoundError);
   });
 
   test("中断済みの signal を渡したとき、getReadable は同期エラーになる", ({ expect, storage }) => {
@@ -269,7 +315,13 @@ describe("読み取りストリーム", () => {
     controller.abort();
 
     // 実行と検証
-    expect(() => storage.getReadable({ key: "aborted.dat", signal: controller.signal })).toThrow();
+    expect(() =>
+      storage.getReadable(
+        createStreamContext("aborted.dat", {
+          signal: controller.signal,
+        }) as IStorage.GetReadableContext,
+      ),
+    ).toThrow();
   });
 });
 
@@ -285,7 +337,9 @@ describe("同一キーへの並行ストリーム書き込み", () => {
     const key = "stream-race.dat";
     const payloads = [createAllByteValues(2048), createPseudoRandomBytes(2048, 3)];
     const writers = payloads.map(() =>
-      storage.getWritable({ key, signal, vars: new Variables() }).getWriter(),
+      storage
+        .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+        .getWriter(),
     );
 
     // 実行
@@ -293,7 +347,7 @@ describe("同一キーへの並行ストリーム書き込み", () => {
     await Promise.all(writers.map((writer) => writer.close()));
 
     // 検証
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(payloads.some((payload) => bytesEqual(result, payload))).toBe(true);
     await expect(listKeys(client, `${keyPrefix}*`)).resolves.toStrictEqual([`${keyPrefix}${key}`]);
   });

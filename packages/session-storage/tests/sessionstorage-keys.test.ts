@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -37,19 +43,23 @@ describe("キーの扱い", () => {
 
     // 実行
     for (const [index, key] of keys.entries()) {
-      storage.write({ key, data: `v${index}`, vars: new Variables(), signal });
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, `v${index}`);
     }
 
     // 検証
     for (const [index, key] of keys.entries()) {
-      expect(storage.read({ key, signal })).toBe(`v${index}`);
-      expect(storage.exists({ key, signal })).toBe(true);
+      expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(
+        `v${index}`,
+      );
+      expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+        true,
+      );
     }
   });
 
   test("論理キーに既定 prefix を付与して保存する", ({ expect, backend, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 検証
     expect(backend.getItem("unikvs:k1")).toBe("v1");
@@ -60,24 +70,28 @@ describe("キーの扱い", () => {
     // 準備
     const storageA = new SessionStorage({ storage: backend, keyPrefix: "a:" });
     const storageB = new SessionStorage({ storage: backend, keyPrefix: "b:" });
-    storageA.write({ key: "k1", data: "va", vars: new Variables(), signal });
+    storageA.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "va");
 
     // 実行と検証
-    expect(storageB.exists({ key: "k1", signal })).toBe(false);
+    expect(storageB.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
     expect(backend.getItem("a:k1")).toBe("va");
     expect(backend.getItem("b:k1")).toBe(null);
   });
 
   test("clear は prefix 配下のみ削除する", ({ expect, backend, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
     backend.setItem("other:k2", "v2");
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(storage.exists({ key: "k1", signal })).toBe(false);
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
     expect(backend.getItem("other:k2")).toBe("v2");
   });
 });

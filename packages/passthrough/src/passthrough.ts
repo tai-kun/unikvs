@@ -1,50 +1,44 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
  */
-export default class PassThrough implements ITransformer {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
-   */
+export default class PassThrough implements IMiddleware {
   public readonly name: string = "PassThrough";
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
-   */
   public get isOpen(): boolean {
     return true;
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
-   */
-  public encode<TData>(args: Pick<ITransformer.EncodeArgs<TData>, "data">): TData {
-    const { data } = args;
-
-    return data;
+  public async encode<TData>(
+    c: IMiddleware.EncodeContext<TData>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#usage)
-   */
-  public decode<TData>(args: Pick<ITransformer.DecodeArgs<TData>, "data">): TData {
-    const { data } = args;
-
-    return data;
+  public async decode<TData>(
+    c: IMiddleware.DecodeContext<TData>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#streams)
-   */
-  public getEncodable(): TransformStream<any, any> {
-    return new TransformStream();
+  public async encodeStream<TChunk>(
+    c: IMiddleware.EncodeStreamContext<TChunk>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/passthrough#streams)
-   */
-  public getDecodable(): TransformStream<any, any> {
-    return new TransformStream();
+  public async decodeStream<TChunk>(
+    c: IMiddleware.DecodeStreamContext<TChunk>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 }

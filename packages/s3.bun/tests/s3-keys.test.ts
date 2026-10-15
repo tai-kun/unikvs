@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -14,18 +20,20 @@ describe("キーの扱い", () => {
 
     // 実行
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: new Variables({}) });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
-    await storage.delete({ key: "dir/sub.txt", signal });
+    await storage.delete(createDeleteContext("dir/sub.txt", { signal }) as IStorage.DeleteContext);
 
     // 検証
-    await expect(storage.read({ key: "dir/sub/file.txt", signal })).resolves.toStrictEqual(
-      new Uint8Array([1]),
-    );
-    await expect(storage.exists({ key: "dir/sub.txt", signal })).resolves.toBe(false);
-    await expect(storage.read({ key: "dir.txt", signal })).resolves.toStrictEqual(
-      new Uint8Array([3]),
-    );
+    await expect(
+      storage.read(createGetContext("dir/sub/file.txt", { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([1]));
+    await expect(
+      storage.exists(createHasContext("dir/sub.txt", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.read(createGetContext("dir.txt", { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([3]));
   });
 
   test("先頭と末尾にスラッシュがあるキーも保存できる", async ({ expect, signal, storage }) => {
@@ -37,8 +45,10 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: new Variables({}) });
-      await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
     }
   });
 
@@ -53,23 +63,27 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: new Variables({}) });
-      await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
     }
   });
 
   test("大文字と小文字を区別する", async ({ expect, signal, storage }) => {
     // 準備
-    await storage.write({
-      key: "Case.txt",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("Case.txt", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    const lowerExists = await storage.exists({ key: "case.txt", signal });
-    const upperData = await storage.read({ key: "Case.txt", signal });
+    const lowerExists = await storage.exists(
+      createHasContext("case.txt", { signal }) as IStorage.ExistsContext,
+    );
+    const upperData = await storage.read(
+      createGetContext("Case.txt", { signal }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(lowerExists).toBe(false);
@@ -82,11 +96,13 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 検証
     expect(key).toHaveLength(255);
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(data);
   });
 
   test("1025 文字のキーはクライアント側で拒否される", async ({ expect, signal, storage }) => {
@@ -95,7 +111,10 @@ describe("キーの扱い", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) }),
+      storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toMatchObject({
       code: "ERR_S3_INVALID_PATH",
     });
@@ -108,9 +127,11 @@ describe("キーの扱い", () => {
   }) => {
     // 実行と検証
     await expect(
-      storage.write({ key: "", data: new Uint8Array([1]), signal, vars: new Variables({}) }),
+      storage.write(createSetContext("", { signal }) as IStorage.WriteContext, new Uint8Array([1])),
     ).rejects.toMatchObject({ code: "ERR_S3_INVALID_PATH" });
-    await expect(storage.read({ key: "", signal })).rejects.toMatchObject({
+    await expect(
+      storage.read(createGetContext("", { signal }) as IStorage.ReadContext),
+    ).rejects.toMatchObject({
       code: "ERR_S3_INVALID_PATH",
     });
   });
@@ -122,25 +143,23 @@ describe("キーの扱い", () => {
   }) => {
     // 実行と検証
     await expect(
-      storage.write({
-        key: "dir/../escape.txt",
-        data: new Uint8Array([1]),
-        signal,
-        vars: new Variables({}),
-      }),
+      storage.write(
+        createSetContext("dir/../escape.txt", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toThrow();
-    await expect(storage.exists({ key: "escape.txt", signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("escape.txt", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("連続するスラッシュを含むキーは拒否される", async ({ expect, signal, storage }) => {
     // 実行と検証
     await expect(
-      storage.write({
-        key: "dir//file.txt",
-        data: new Uint8Array([1]),
-        signal,
-        vars: new Variables({}),
-      }),
+      storage.write(
+        createSetContext("dir//file.txt", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).rejects.toThrow();
   });
 
@@ -150,9 +169,11 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables({}) });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 検証
-    await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(data);
   });
 });

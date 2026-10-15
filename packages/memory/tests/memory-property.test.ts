@@ -1,5 +1,14 @@
-import { Variables } from "@unikvs/core";
-import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  forCases,
+  forCasesAsync,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  type Random,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -88,21 +97,26 @@ describe("Memory のプロパティー", () => {
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            storage.write({ vars: new Variables(), key: operation.key, data: operation.value });
+            storage.write(
+              createSetContext(operation.key) as IStorage.WriteContext,
+              operation.value,
+            );
             model.set(operation.key, operation.value);
             break;
           }
           case "delete": {
             if (model.has(operation.key)) {
-              storage.delete({ key: operation.key });
+              storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext);
               model.delete(operation.key);
             } else {
-              expect(() => storage.delete({ key: operation.key })).toThrow(KeyNotFoundError);
+              expect(() =>
+                storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext),
+              ).toThrow(KeyNotFoundError);
             }
             break;
           }
           case "clear": {
-            storage.clear();
+            storage.clear(createClearContext() as IStorage.ClearContext);
             model.clear();
             break;
           }
@@ -118,11 +132,15 @@ describe("Memory のプロパティー", () => {
       }
       for (const key of touchedKeys) {
         if (model.has(key)) {
-          expect(storage.exists({ key })).toBe(true);
-          expect(storage.read({ key })).toStrictEqual(model.get(key));
+          expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+          expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
+            model.get(key),
+          );
         } else {
-          expect(storage.exists({ key })).toBe(false);
-          expect(() => storage.read({ key })).toThrow(KeyNotFoundError);
+          expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+          expect(() => storage.read(createGetContext(key) as IStorage.ReadContext)).toThrow(
+            KeyNotFoundError,
+          );
         }
       }
     });
@@ -135,8 +153,8 @@ describe("Memory のプロパティー", () => {
       const bytes = random.bytes(random.int(0, 512));
 
       // 実行
-      storage.write({ vars: new Variables(), key: "k1", data: bytes });
-      const result = storage.read({ key: "k1" }) as Uint8Array;
+      storage.write(createSetContext("k1") as IStorage.WriteContext, bytes);
+      const result = storage.read(createGetContext("k1") as IStorage.ReadContext) as Uint8Array;
 
       // 検証
       expect(result).toStrictEqual(bytes);
@@ -151,7 +169,9 @@ describe("Memory のプロパティー", () => {
       // 準備
       const storage = new Memory();
       const chunks = random.array(random.int(0, 8), () => random.bytes(random.int(0, 64)));
-      const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
+      const writer = storage
+        .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
+        .getWriter();
 
       // 実行
       for (const chunk of chunks) {
@@ -166,7 +186,7 @@ describe("Memory のプロパティー", () => {
         expected.set(chunk, offset);
         offset += chunk.byteLength;
       }
-      expect(storage.read({ key: "k1" })).toStrictEqual(expected);
+      expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(expected);
     });
   });
 });

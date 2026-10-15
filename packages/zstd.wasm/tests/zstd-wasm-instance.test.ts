@@ -1,7 +1,50 @@
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createPseudoRandomBytes,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdWasm from "../src/zstd-wasm.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdWasm, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 /**
  * 中断されていないシグナルを作成します。
@@ -14,12 +57,12 @@ describe("インスタンスの状態", () => {
   test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createPseudoRandomBytes(128, 31);
 
     // 実行
-    const encoded = await target.encode({ data: input });
-    await target.decode({ data: encoded });
+    const encoded = await encode(target, input );
+    await decode(target, encoded );
 
     // 検証
     expect(target.name).toBe("ZstdWasm");
@@ -29,11 +72,11 @@ describe("インスタンスの状態", () => {
   test("decode が失敗しても isOpen は true のままである", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const invalidData = new Uint8Array([0, 1, 2, 3]);
 
     // 実行と検証
-    await expect(target.decode({ data: invalidData })).rejects.toThrow(Error);
+    await expect(decode(target, invalidData )).rejects.toThrow(Error);
     expect(target.isOpen).toBe(true);
   });
 });
@@ -42,13 +85,13 @@ describe("インスタンスの独立性", () => {
   test("異なるレベルの複数インスタンスを同時に使っても互いに影響しない", async ({ expect }) => {
     // 準備
     const instances = [1, 3, 10, 22].map((level) => new ZstdWasm({ level }));
-    await Promise.all(instances.map((target) => target.open({ signal: createSignal() })));
+    await Promise.all(instances.map((target) => openTarget(target, createSignal())));
     const input = createPseudoRandomBytes(2048, 32);
 
     // 実行
     const decodedList = await Promise.all(
       instances.map(async (target) =>
-        target.decode({ data: await target.encode({ data: input }) }),
+        decode(target, await encode(target, input ) ),
       ),
     );
 
@@ -67,13 +110,13 @@ describe("インスタンスの独立性", () => {
     // 準備
     const low = new ZstdWasm({ level: 1 });
     const high = new ZstdWasm({ level: 22 });
-    await low.open({ signal: createSignal() });
-    await high.open({ signal: createSignal() });
+    await openTarget(low, createSignal());
+    await openTarget(high, createSignal());
     const input = createPseudoRandomBytes(512, 34);
 
     // 実行
-    const decodedLow = await high.decode({ data: await low.encode({ data: input }) });
-    const decodedHigh = await low.decode({ data: await high.encode({ data: input }) });
+    const decodedLow = await decode(high, await encode(low, input ) );
+    const decodedHigh = await decode(low, await encode(high, input ) );
 
     // 検証
     expect(decodedLow).toStrictEqual(input);
@@ -85,14 +128,14 @@ describe("入力データの非破壊性", () => {
   test("encode と decode は引数の data を変更しない", async ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal: createSignal() });
+    await openTarget(target, createSignal());
     const input = createPseudoRandomBytes(1024, 33);
     const inputSnapshot = input.slice();
 
     // 実行
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input );
     const encodedSnapshot = encoded.slice();
-    const decoded = await target.decode({ data: encoded });
+    const decoded = await decode(target, encoded );
 
     // 検証
     expect(input).toStrictEqual(inputSnapshot);
@@ -102,16 +145,14 @@ describe("入力データの非破壊性", () => {
 });
 
 describe("ストリーム API の非提供", () => {
-  test("getEncodable と getDecodable を持たない", ({ expect }) => {
+  test("encodeStream と decodeStream を持たない", ({ expect }) => {
     // 準備
     const target = new ZstdWasm();
 
     // 実行と検証
-    expect("getEncodable" in target).toBe(false);
-    expect("getDecodable" in target).toBe(false);
-    // @ts-expect-error getEncodable は提供しない。
-    expect(target.getEncodable).toBeUndefined();
-    // @ts-expect-error getDecodable は提供しない。
-    expect(target.getDecodable).toBeUndefined();
+    expect("encodeStream" in target).toBe(false);
+    expect("decodeStream" in target).toBe(false);
+    expect((target as unknown as Record<string, unknown>).encodeStream).toBeUndefined();
+    expect((target as unknown as Record<string, unknown>).decodeStream).toBeUndefined();
   });
 });

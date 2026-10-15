@@ -1,4 +1,13 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { InvalidFilenameError } from "@unikvs/utils";
 import { describe } from "vitest";
 
@@ -37,35 +46,59 @@ const INVALID_KEY = "dir/file.bin";
 
 const INVALID_KEY_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] =
   [
-    ["read", (storage) => storage.read({ key: INVALID_KEY, signal })],
+    [
+      "read",
+      (storage) => storage.read(createGetContext(INVALID_KEY, { signal }) as IStorage.ReadContext),
+    ],
     [
       "write",
       (storage) =>
-        storage.write({
-          key: INVALID_KEY,
-          data: new Uint8Array([1]),
-          signal,
-          vars: new Variables(),
-        }),
+        storage.write(
+          createSetContext(INVALID_KEY, { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        ),
     ],
-    ["exists", (storage) => storage.exists({ key: INVALID_KEY, signal })],
-    ["delete", (storage) => storage.delete({ key: INVALID_KEY, signal })],
+    [
+      "exists",
+      (storage) =>
+        storage.exists(createHasContext(INVALID_KEY, { signal }) as IStorage.ExistsContext),
+    ],
+    [
+      "delete",
+      (storage) =>
+        storage.delete(createDeleteContext(INVALID_KEY, { signal }) as IStorage.DeleteContext),
+    ],
     [
       "getWritable",
-      (storage) => storage.getWritable({ key: INVALID_KEY, signal, vars: new Variables() }),
+      (storage) =>
+        storage.getWritable(
+          createSetContext(INVALID_KEY, { signal }) as IStorage.GetWritableContext,
+        ),
     ],
-    ["getReadable", (storage) => storage.getReadable({ key: INVALID_KEY, signal })],
+    [
+      "getReadable",
+      (storage) =>
+        storage.getReadable(
+          createStreamContext(INVALID_KEY, { signal }) as IStorage.GetReadableContext,
+        ),
+    ],
   ];
 
 describe("CRUD の振る舞い", () => {
   test("同じキーへ上書きしたとき、最新の内容だけが読み取れる", async ({ expect, storage }) => {
     // 準備
     const key = "overwrite.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 2, 3]),
+    );
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]), signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([9]),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([9]));
@@ -84,36 +117,41 @@ describe("CRUD の振る舞い", () => {
 
     // 実行
     for (const [key, bytes] of entries) {
-      await storage.write({ key, data: new Uint8Array(bytes), signal, vars: new Variables() });
+      await storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array(bytes),
+      );
     }
 
     // 検証
     for (const [key, bytes] of entries) {
-      expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array(bytes));
+      expect(
+        await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).toStrictEqual(new Uint8Array(bytes));
     }
   });
 
   test("キーを削除したとき、他のキーは影響を受けない", async ({ expect, storage }) => {
     // 準備
-    await storage.write({
-      key: "keep.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
-    await storage.write({
-      key: "remove.bin",
-      data: new Uint8Array([2]),
-      signal,
-      vars: new Variables(),
-    });
+    await storage.write(
+      createSetContext("keep.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("remove.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storage.delete({ key: "remove.bin", signal });
+    await storage.delete(createDeleteContext("remove.bin", { signal }) as IStorage.DeleteContext);
 
     // 検証
-    expect(await storage.exists({ key: "remove.bin", signal })).toBe(false);
-    expect(await storage.read({ key: "keep.bin", signal })).toStrictEqual(new Uint8Array([1]));
+    expect(
+      await storage.exists(createHasContext("remove.bin", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
+    expect(
+      await storage.read(createGetContext("keep.bin", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([1]));
   });
 
   test("存在しないキーを削除しようとしたとき、NotFoundError を投げる", async ({
@@ -121,7 +159,9 @@ describe("CRUD の振る舞い", () => {
     storage,
   }) => {
     // 実行
-    const error = await storage.delete({ key: "missing.bin", signal }).catch((ex: unknown) => ex);
+    const error = await storage
+      .delete(createDeleteContext("missing.bin", { signal }) as IStorage.DeleteContext)
+      .catch((ex: unknown) => ex);
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -134,12 +174,14 @@ describe("CRUD の振る舞い", () => {
     const data = new Uint8Array([10, 20, 30]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(data);
-    expect(await storage.exists({ key, signal })).toBe(true);
+    expect(await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+      true,
+    );
   });
 });
 
@@ -150,20 +192,35 @@ describe("一括削除 (Clear) の振る舞い", () => {
     // 準備
     const root = crypto.randomUUID();
     const storage = new Opfs(root);
-    await storage.open({ signal });
-    await storage.write({ key: "a.bin", data: new Uint8Array([1]), signal, vars: new Variables() });
-    await storage.write({ key: "b.bin", data: new Uint8Array([2]), signal, vars: new Variables() });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(
+      createSetContext("a.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("b.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(await storage.exists({ key: "a.bin", signal })).toBe(false);
-    expect(await storage.exists({ key: "b.bin", signal })).toBe(false);
+    expect(
+      await storage.exists(createHasContext("a.bin", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
+    expect(
+      await storage.exists(createHasContext("b.bin", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
     expect(storage.isOpen).toBe(true);
 
-    await storage.write({ key: "c.bin", data: new Uint8Array([3]), signal, vars: new Variables() });
-    expect(await storage.read({ key: "c.bin", signal })).toStrictEqual(new Uint8Array([3]));
+    await storage.write(
+      createSetContext("c.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([3]),
+    );
+    expect(
+      await storage.read(createGetContext("c.bin", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([3]));
 
     await removeRoot(root);
   });
@@ -175,28 +232,30 @@ describe("一括削除 (Clear) の振る舞い", () => {
     const base = uniqueRoot();
     const target = new Opfs(`${base}/target`);
     const sibling = new Opfs(`${base}/sibling`);
-    await target.open({ signal });
-    await sibling.open({ signal });
-    await target.write({
-      key: "target.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
-    await sibling.write({
-      key: "sibling.bin",
-      data: new Uint8Array([2]),
-      signal,
-      vars: new Variables(),
-    });
+    await target.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await sibling.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await target.write(
+      createSetContext("target.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await sibling.write(
+      createSetContext("sibling.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await target.clear({ signal });
+    await target.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(await target.exists({ key: "target.bin", signal })).toBe(false);
-    expect(await sibling.exists({ key: "sibling.bin", signal })).toBe(true);
-    expect(await sibling.read({ key: "sibling.bin", signal })).toStrictEqual(new Uint8Array([2]));
+    expect(
+      await target.exists(createHasContext("target.bin", { signal }) as IStorage.ExistsContext),
+    ).toBe(false);
+    expect(
+      await sibling.exists(createHasContext("sibling.bin", { signal }) as IStorage.ExistsContext),
+    ).toBe(true);
+    expect(
+      await sibling.read(createGetContext("sibling.bin", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([2]));
 
     await removeRoot(base);
   });
@@ -206,28 +265,38 @@ describe("一括削除 (Clear) の振る舞い", () => {
   }) => {
     // 準備
     const storage = new Opfs("");
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const keys = Array.from(
       { length: 5 },
       (_, index) => `clear-${index}-${crypto.randomUUID()}.bin`,
     );
     for (const key of keys) {
-      await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
+      await storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
     }
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
     for (const key of keys) {
-      expect(await storage.exists({ key, signal })).toBe(false);
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(false);
     }
 
     const key = `after-clear-${crypto.randomUUID()}.bin`;
-    await storage.write({ key, data: new Uint8Array([2]), signal, vars: new Variables() });
-    expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array([2]));
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
+    expect(
+      await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([2]));
 
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
   });
 });
 
@@ -238,8 +307,8 @@ describe("データ完全性の振る舞い", () => {
       storage,
     }) => {
       // 実行
-      await storage.write({ key, data, signal, vars: new Variables() });
-      const loaded = await storage.read({ key, signal });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
       // 検証
       expect(loaded).toStrictEqual(data);
@@ -267,7 +336,9 @@ describe("キー検証の振る舞い", () => {
       storage,
     }) => {
       // 実行
-      const error = await storage.exists({ key, signal }).catch((ex: unknown) => ex);
+      const error = await storage
+        .exists(createHasContext(key, { signal }) as IStorage.ExistsContext)
+        .catch((ex: unknown) => ex);
 
       // 検証
       expect(error).toBeInstanceOf(InvalidFilenameError);
@@ -280,7 +351,7 @@ describe("キー検証の振る舞い", () => {
 
     // 実行
     const error = await storage
-      .write({ key: INVALID_KEY, data: new Uint8Array(), signal, vars: new Variables() })
+      .write(createSetContext(INVALID_KEY, { signal }) as IStorage.WriteContext, new Uint8Array())
       .catch((ex: unknown) => ex);
 
     // 検証

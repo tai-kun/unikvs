@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
 import { toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
@@ -17,13 +17,16 @@ export type ZstdWasmOptions = {
 };
 
 // 理由: 上流の @bokuweb/zstd-wasm には一括変換 (compress/decompress) のみがあり、
-// ストリーミング API が存在しないため、getEncodable/getDecodable は提供しません。
+// ストリーミング API が存在しないため、encodeStream/decodeStream は提供しません。
 // テストでも非提供が契約として検証されています。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
  */
-export default class ZstdWasm implements ITransformer {
+export default class ZstdWasm implements IMiddleware<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
@@ -68,8 +71,7 @@ export default class ZstdWasm implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
    */
-  public async open(args: Pick<ITransformer.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
+  public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.env = await callAbortableFnOnce(
         ZstdWasm.cache,
@@ -80,10 +82,10 @@ export default class ZstdWasm implements ITransformer {
 
           return env;
         },
-        signal,
+        c.signal,
       );
     } catch (ex) {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       throw new ZstdWasmInitError({ cause: ex });
     }
   }
@@ -92,27 +94,29 @@ export default class ZstdWasm implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
    */
   public async encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
-    const view = api.compress(env, data, {
+    const view = api.compress(env, c.source, {
       level: this.level,
     });
 
-    return toOwnedBytes(view);
+    c.destination = toOwnedBytes(view);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
    */
   public async decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
-    const view = api.decompress(env, data);
+    const view = api.decompress(env, c.source);
 
-    return toOwnedBytes(view);
+    c.destination = toOwnedBytes(view);
+    await next();
   }
 }

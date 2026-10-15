@@ -1,17 +1,60 @@
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createPseudoRandomBytes,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdWasm from "../src/zstd-wasm.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdWasm, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 describe("zstd フレーム", () => {
   test("encode したデータは zstd のマジックバイトで始まる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 7);
 
     // 実行
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input );
 
     // 検証
     // zstd マジック 0xFD2FB528 のリトルエンディアン先頭 4 バイトです。
@@ -23,12 +66,12 @@ describe("zstd フレーム", () => {
     const input = createPseudoRandomBytes(1024, 8);
     const low = new ZstdWasm({ level: 1 });
     const high = new ZstdWasm({ level: 22 });
-    await low.open({ signal });
-    await high.open({ signal });
+    await openTarget(low, signal);
+    await openTarget(high, signal);
 
     // 実行
-    const decodedLow = await high.decode({ data: await low.encode({ data: input }) });
-    const decodedHigh = await low.decode({ data: await high.encode({ data: input }) });
+    const decodedLow = await decode(high, await encode(low, input ) );
+    const decodedHigh = await decode(low, await encode(high, input ) );
 
     // 検証
     expect(decodedLow).toStrictEqual(input);
@@ -40,7 +83,7 @@ describe("他形式との非互換", () => {
   test("gzip データを decode するとエラーで拒否される", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 9);
     const source = new CompressionStream("gzip");
     const reading = new Response(source.readable).arrayBuffer();
@@ -53,13 +96,13 @@ describe("他形式との非互換", () => {
 
     // 検証
     // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(target.decode({ data: gzipData })).rejects.toThrow(Error);
+    await expect(decode(target, gzipData )).rejects.toThrow(Error);
   });
 
   test("deflate データを decode するとエラーで拒否される", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 17);
     const source = new CompressionStream("deflate");
     const reading = new Response(source.readable).arrayBuffer();
@@ -71,13 +114,13 @@ describe("他形式との非互換", () => {
     const deflateData = new Uint8Array(await reading);
 
     // 検証
-    await expect(target.decode({ data: deflateData })).rejects.toThrow(Error);
+    await expect(decode(target, deflateData )).rejects.toThrow(Error);
   });
 
   test("deflate-raw データを decode するとエラーで拒否される", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 18);
     const source = new CompressionStream("deflate-raw");
     const reading = new Response(source.readable).arrayBuffer();
@@ -89,15 +132,15 @@ describe("他形式との非互換", () => {
     const rawDeflateData = new Uint8Array(await reading);
 
     // 検証
-    await expect(target.decode({ data: rawDeflateData })).rejects.toThrow(Error);
+    await expect(decode(target, rawDeflateData )).rejects.toThrow(Error);
   });
 
   test("zstd データを gzip として decode すると拒否される", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdWasm();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(512, 10);
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input );
     const source = new DecompressionStream("gzip");
     const writer = source.writable.getWriter();
     const reading = new Response(source.readable).arrayBuffer().then(

@@ -1,5 +1,17 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureRejection, captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  captureThrown,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -28,16 +40,25 @@ const unopenedOperations: readonly {
 }[] = [
   {
     label: "write",
-    run: (storage) => storage.write({ vars: new Variables(), key: "k", data: "v" }),
+    run: (storage) => storage.write(createSetContext("k") as IStorage.WriteContext, "v"),
   },
-  { label: "read", run: (storage) => storage.read({ key: "k" }) },
-  { label: "exists", run: (storage) => storage.exists({ key: "k" }) },
-  { label: "delete", run: (storage) => storage.delete({ key: "k" }) },
+  { label: "read", run: (storage) => storage.read(createGetContext("k") as IStorage.ReadContext) },
+  {
+    label: "exists",
+    run: (storage) => storage.exists(createHasContext("k") as IStorage.ExistsContext),
+  },
+  {
+    label: "delete",
+    run: (storage) => storage.delete(createDeleteContext("k") as IStorage.DeleteContext),
+  },
   {
     label: "getWritable",
-    run: (storage) => storage.getWritable({ vars: new Variables(), key: "k" }),
+    run: (storage) => storage.getWritable(createSetContext("k") as IStorage.GetWritableContext),
   },
-  { label: "getReadable", run: (storage) => storage.getReadable({ key: "k" }) },
+  {
+    label: "getReadable",
+    run: (storage) => storage.getReadable(createStreamContext("k") as IStorage.GetReadableContext),
+  },
 ];
 
 /**
@@ -63,7 +84,7 @@ async function openViaUnikvs(
 
   if (!storage.isOpen) {
     state.managed = true;
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
   }
 }
 
@@ -81,7 +102,7 @@ async function closeViaUnikvs(
   }
 
   if (storage.isOpen && state.managed) {
-    await storage.close({ signal });
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
   }
 }
 
@@ -104,7 +125,7 @@ describe("ライフサイクル", () => {
 
   test("open すると isOpen が true になる", async ({ expect, storage, signal }) => {
     // 実行
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -112,21 +133,23 @@ describe("ライフサイクル", () => {
 
   test("open はデータを消さずにオープン状態へ移す", async ({ expect, storage, signal }) => {
     // 準備
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 実行
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 検証
-    expect(storage.read({ key: "k1" })).toBe("v1");
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
     expect(storage.isOpen).toBe(true);
   });
 
   test("open を 2 回呼んでも冪等に成功する", async ({ expect, storage, signal }) => {
     // 実行
-    await storage.open({ signal });
-    await expect(storage.open({ signal })).resolves.toBe(undefined);
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await expect(storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).resolves.toBe(
+      undefined,
+    );
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -134,7 +157,10 @@ describe("ライフサイクル", () => {
 
   test("open を並行に複数回呼び出してもオープン状態になる", async ({ expect, storage, signal }) => {
     // 実行
-    await Promise.all([storage.open({ signal }), storage.open({ signal })]);
+    await Promise.all([
+      storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
+      storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
+    ]);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -145,7 +171,9 @@ describe("ライフサイクル", () => {
     storage,
   }) => {
     // 実行
-    const error = await captureRejection(storage.open({ signal: abortedSignal() }));
+    const error = await captureRejection(
+      storage.open(createOpenContext({ signal: abortedSignal() }) as IStorage.OpenContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -155,29 +183,29 @@ describe("ライフサイクル", () => {
   test("close でキャッシュが消えて isOpen が false になる", async ({ expect, signal }) => {
     // 準備
     const sized = new LruCache({ maxBytes: 10, sizeOf: () => 3 });
-    await sized.open({ signal });
-    sized.write({ vars: new Variables(), key: "k1", data: "v1" });
+    await sized.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    sized.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 実行
-    await sized.close({ signal });
+    await sized.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 検証
     expect(sized.size).toBe(0);
     expect(sized.bytes).toBe(0);
-    expect(() => sized.exists({ key: "k1" })).toThrow(TypeError);
-    expect(() => sized.read({ key: "k1" })).toThrow(TypeError);
+    expect(() => sized.exists(createHasContext("k1") as IStorage.ExistsContext)).toThrow(TypeError);
+    expect(() => sized.read(createGetContext("k1") as IStorage.ReadContext)).toThrow(TypeError);
     expect(sized.isOpen).toBe(false);
   });
 
   test("close 後の read は TypeError で拒否される", async ({ expect, signal }) => {
     // 準備
     const storage = new LruCache();
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    await storage.close({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 実行
-    const error = captureThrown(() => storage.read({ key: "k1" }));
+    const error = captureThrown(() => storage.read(createGetContext("k1") as IStorage.ReadContext));
 
     // 検証
     expect(error).toBeInstanceOf(TypeError);
@@ -187,24 +215,28 @@ describe("ライフサイクル", () => {
   test("close 後の exists は TypeError で拒否される", async ({ expect, signal }) => {
     // 準備
     const storage = new LruCache();
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    await storage.close({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 実行と検証
-    expect(() => storage.exists({ key: "k1" })).toThrow(TypeError);
+    expect(() => storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toThrow(
+      TypeError,
+    );
   });
 
   test("二重 close も冪等に成功する", async ({ expect, storage, signal }) => {
     // 準備
     // 二重 close のクラッシュ前例 (`indexeddb` の `db!.close()`、`redis` の `con!`) には合わせない。
     // close の実体は冪等な clear とフラグの解除だけであり、外部ハンドルを持たないため、冪等な成功を仕様とする。
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    await storage.close({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 実行
-    await expect(storage.close({ signal })).resolves.toBe(undefined);
+    await expect(
+      storage.close(createCloseContext({ signal }) as IStorage.CloseContext),
+    ).resolves.toBe(undefined);
 
     // 検証
     expect(storage.size).toBe(0);
@@ -213,7 +245,9 @@ describe("ライフサイクル", () => {
 
   test("open 前の close も冪等に成功する", async ({ expect, storage, signal }) => {
     // 実行
-    await expect(storage.close({ signal })).resolves.toBe(undefined);
+    await expect(
+      storage.close(createCloseContext({ signal }) as IStorage.CloseContext),
+    ).resolves.toBe(undefined);
 
     // 検証
     expect(storage.size).toBe(0);
@@ -223,43 +257,47 @@ describe("ライフサイクル", () => {
   test("中断済みシグナルの close は消去せず中断例外を投げる", async ({ expect, signal }) => {
     // 準備
     const storage = new LruCache();
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 実行
-    const error = await captureRejection(storage.close({ signal: abortedSignal() }));
+    const error = await captureRejection(
+      storage.close(createCloseContext({ signal: abortedSignal() }) as IStorage.CloseContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
-    expect(storage.read({ key: "k1" })).toBe("v1");
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
     expect(storage.isOpen).toBe(true);
   });
 
   test("close 後に再 open すると再利用できる", async ({ expect, storage, signal }) => {
     // 準備
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    await storage.close({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 実行
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
     // 検証
     expect(storage.isOpen).toBe(true);
-    expect(() => storage.read({ key: "k1" })).toThrow(KeyNotFoundError);
-    expect(storage.read({ key: "k2" })).toBe("v2");
+    expect(() => storage.read(createGetContext("k1") as IStorage.ReadContext)).toThrow(
+      KeyNotFoundError,
+    );
+    expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 
   test("CRUD 操作の後も isOpen は true のままである", async ({ expect, storage, signal }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    storage.read({ key: "k1" });
-    storage.delete({ key: "k1" });
-    storage.clear();
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    storage.read(createGetContext("k1") as IStorage.ReadContext);
+    storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+    storage.clear(createClearContext() as IStorage.ClearContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -267,14 +305,18 @@ describe("ライフサイクル", () => {
 
   test("ストリーム操作の後も isOpen は true のままである", async ({ expect, storage, signal }) => {
     // 準備
-    await storage.open({ signal });
-    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1]) });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    storage.write(createSetContext("k1") as IStorage.WriteContext, new Uint8Array([1]));
 
     // 実行
-    const writer = storage.getWritable({ vars: new Variables(), key: "k2" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("k2") as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([2]));
     await writer.close();
-    const reader = storage.getReadable({ key: "k2" }).getReader();
+    const reader = storage
+      .getReadable(createStreamContext("k2") as IStorage.GetReadableContext)
+      .getReader();
     await reader.read();
 
     // 検証
@@ -287,10 +329,12 @@ describe("ライフサイクル", () => {
     signal,
   }) => {
     // 準備
-    await storage.open({ signal });
-    const writer = storage.getWritable({ vars: new Variables(), key: "k1" }).getWriter();
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const writer = storage
+      .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([1]));
-    await storage.close({ signal });
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 実行
     const error = await captureRejection(writer.close());
@@ -302,7 +346,7 @@ describe("ライフサイクル", () => {
 
   test("clear は open 不要で何度でも成功する", ({ expect, storage }) => {
     // 実行と検証
-    expect(() => storage.clear()).not.toThrow();
+    expect(() => storage.clear(createClearContext() as IStorage.ClearContext)).not.toThrow();
     expect(storage.size).toBe(0);
     expect(storage.isOpen).toBe(false);
   });
@@ -327,14 +371,14 @@ describe("ライフサイクル", () => {
     await openViaUnikvs(storage, signal, state);
     expect(state.managed).toBe(true);
     expect(storage.isOpen).toBe(true);
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     // managed が true のため UniKvs 経由では close が実際に呼ばれる。
     await closeViaUnikvs(storage, signal, state);
 
     // 検証
     expect(storage.isOpen).toBe(false);
     expect(storage.size).toBe(0);
-    expect(() => storage.read({ key: "k1" })).toThrow(TypeError);
+    expect(() => storage.read(createGetContext("k1") as IStorage.ReadContext)).toThrow(TypeError);
   });
 
   test("UniKvs の close 後に再 open すると再利用できる", async ({ expect, signal }) => {
@@ -342,16 +386,16 @@ describe("ライフサイクル", () => {
     const storage = new LruCache();
     const state: ManagedState = { managed: false };
     await openViaUnikvs(storage, signal, state);
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await closeViaUnikvs(storage, signal, state);
 
     // 実行
     await openViaUnikvs(storage, signal, state);
-    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
     // 検証
     expect(storage.isOpen).toBe(true);
-    expect(storage.read({ key: "k2" })).toBe("v2");
+    expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 });
 

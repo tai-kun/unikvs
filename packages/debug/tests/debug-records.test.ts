@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import { createDecodeContext, createEncodeContext, createNext } from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -6,16 +7,36 @@ import { createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
 
+/**
+ * データを書き込みとして記録し、そのまま返します。
+ */
+async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
+  const c = createEncodeContext(data, key);
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * データを読み込みとして記録し、そのまま返します。
+ */
+async function decode(debug: Debug, data: unknown, key: string): Promise<unknown> {
+  const c = createDecodeContext(data, key);
+  await debug.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
 describe("ログのメタデータ", () => {
-  test("encode は書き込みとしてロガーとレベルとメッセージを記録する", ({ expect, records }) => {
+  test("encode は書き込みとしてロガーとレベルとメッセージを記録する", async ({
+    expect,
+    records,
+  }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.encode({
-      vars: new Variables({ "unikvs:action": "set", "unikvs:key": "greeting" }),
-      data: "hello",
-    });
+    await encode(debug, "hello", "greeting");
 
     // 検証
     expect(records).toHaveLength(1);
@@ -31,15 +52,15 @@ describe("ログのメタデータ", () => {
     ]);
   });
 
-  test("decode は読み込みとしてロガーとレベルとメッセージを記録する", ({ expect, records }) => {
+  test("decode は読み込みとしてロガーとレベルとメッセージを記録する", async ({
+    expect,
+    records,
+  }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.decode({
-      vars: new Variables({ "unikvs:action": "get", "unikvs:key": "greeting" }),
-      data: "hello",
-    });
+    await decode(debug, "hello", "greeting");
 
     // 検証
     expect(records).toHaveLength(1);

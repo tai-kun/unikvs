@@ -1,3 +1,5 @@
+import type { IStorage } from "@unikvs/core";
+import { createGetContext } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -40,7 +42,9 @@ describe("エラーメッセージ（日本語）", () => {
     setLang("ja");
 
     // 実行と検証
-    expect(() => storage.read({ key: "foo" })).toThrow("キー foo が見つかりません");
+    expect(() => storage.read(createGetContext("foo") as IStorage.ReadContext)).toThrow(
+      "キー foo が見つかりません",
+    );
   });
 
   test("InvalidChunkTypeError は日本語メッセージを返す", ({ expect, setLang }) => {

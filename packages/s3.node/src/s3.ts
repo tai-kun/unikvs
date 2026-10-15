@@ -80,32 +80,24 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
-    const { key, data, signal: abortSignal } = args;
-
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const command = new PutObjectCommand({
-      Key: key,
+      Key: c.key,
       Body: data,
       Bucket: this.bucket,
     });
-    await this.client!.send(command, { abortSignal });
+    await this.client!.send(command, { abortSignal: c.signal });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
-    const { key, signal: abortSignal } = args;
-
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const command = new GetObjectCommand({
-      Key: key,
+      Key: c.key,
       Bucket: this.bucket,
     });
-    const response = await this.client!.send(command, { abortSignal });
+    const response = await this.client!.send(command, { abortSignal: c.signal });
     const byteArray = await response.Body!.transformToByteArray();
 
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
@@ -114,15 +106,13 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
-    const { key, signal: abortSignal } = args;
-
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     try {
       const command = new HeadObjectCommand({
-        Key: key,
+        Key: c.key,
         Bucket: this.bucket,
       });
-      await this.client!.send(command, { abortSignal });
+      await this.client!.send(command, { abortSignal: c.signal });
 
       return true;
     } catch (ex) {
@@ -138,22 +128,18 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
-    const { key, signal: abortSignal } = args;
-
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     const command = new DeleteObjectCommand({
-      Key: key,
+      Key: c.key,
       Bucket: this.bucket,
     });
-    await this.client!.send(command, { abortSignal });
+    await this.client!.send(command, { abortSignal: c.signal });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
-    const { signal: abortSignal } = args;
-
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     let isTruncated = true;
     let continuationToken: string | undefined = undefined;
 
@@ -163,7 +149,7 @@ export default class S3 implements IStorage {
         ContinuationToken: continuationToken,
       });
       const response: ListObjectsV2CommandOutput = await this.client!.send(command, {
-        abortSignal,
+        abortSignal: c.signal,
       });
       const contents = response.Contents;
       if (!contents || contents.length === 0) {
@@ -181,7 +167,7 @@ export default class S3 implements IStorage {
             Objects: objectsToDelete,
           },
         });
-        await this.client!.send(command, { abortSignal });
+        await this.client!.send(command, { abortSignal: c.signal });
       }
 
       isTruncated = response.IsTruncated ?? false;
@@ -192,20 +178,16 @@ export default class S3 implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "vars" | "key" | "signal">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { key, vars, signal } = args;
-
-    if (signal.aborted) {
-      throw new StorageAbortedError({ key });
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    if (c.signal.aborted) {
+      throw new StorageAbortedError({ key: c.key });
     }
 
     let partSize: number | undefined = undefined;
     const rawPartSize =
-      vars.get("@unikvs/s3.node:partSize") !== undefined
-        ? vars.get("@unikvs/s3.node:partSize")
-        : vars.get("@unikvs/s3:partSize");
+      c.get("@unikvs/s3.node:partSize") !== undefined
+        ? c.get("@unikvs/s3.node:partSize")
+        : c.get("@unikvs/s3:partSize");
     if (rawPartSize !== undefined) {
       if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
         throw new InvalidPartSizeError({ actual: rawPartSize });
@@ -220,14 +202,14 @@ export default class S3 implements IStorage {
     >();
     const abortController = new AbortController();
     const onAbort = (): void => {
-      abortController.abort(signal.reason);
+      abortController.abort(c.signal.reason);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     const upload = new Upload({
       client: this.client!,
       params: {
-        Key: key,
+        Key: c.key,
         Body: readable,
         Bucket: this.bucket,
       },
@@ -238,7 +220,7 @@ export default class S3 implements IStorage {
     const writer = writable.getWriter();
     const uploadPromise = upload.done();
     const removeAbortListener = (): void => {
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
     };
     void uploadPromise
       .catch(async (reason: unknown) => {
@@ -269,15 +251,13 @@ export default class S3 implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#multipart)
    */
   public async getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+    c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    const { key, signal: abortSignal } = args;
-
     const command = new GetObjectCommand({
-      Key: key,
+      Key: c.key,
       Bucket: this.bucket,
     });
-    const response = await this.client!.send(command, { abortSignal });
+    const response = await this.client!.send(command, { abortSignal: c.signal });
     const readableStream = response.Body!.transformToWebStream();
 
     return readableStream;

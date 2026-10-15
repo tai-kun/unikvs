@@ -206,31 +206,25 @@ export default class Redis implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.con!;
-    const { key, data, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    await client.set(this.toKey(key), Buffer.from(data));
+    await client.set(this.toKey(c.key), Buffer.from(data));
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.con!;
-    const { key, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    const data = await client.getBuffer(this.toKey(key));
+    const data = await client.getBuffer(this.toKey(c.key));
     if (data === null) {
-      throw new KeyNotFoundError({ key });
+      throw new KeyNotFoundError({ key: c.key });
     }
 
     return new Uint8Array(data);
@@ -239,60 +233,54 @@ export default class Redis implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.con!;
-    const { key, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    return (await client.exists(this.toKey(key))) > 0;
+    return (await client.exists(this.toKey(c.key))) > 0;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.con!;
-    const { key, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    await client.del(this.toKey(key));
+    await client.del(this.toKey(c.key));
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.con!;
-    const { signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
     const pattern = `${this.keyPrefix}*`;
-    await this.clearPattern(client, pattern, signal);
+    await this.clearPattern(client, pattern, c.signal);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#streams)
    */
-  public getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
-  ): WritableStream<Uint8Array<ArrayBuffer>> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.con!;
-    const { key, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    const dest = this.toKey(key);
+    const dest = this.toKey(c.key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時キーが衝突しません。
     const tmp = `${dest}.${randomUUID()}.tmp`;
 
     // 中断と失敗のどちらからでも後始末が走るため、完了処理は一度だけ行います。
     let finished = false;
     const removeAbortListener = (): void => {
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
     };
     const discardTemporary = async (): Promise<void> => {
       try {
@@ -311,12 +299,12 @@ export default class Redis implements IStorage {
       void finish();
     };
 
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async start() {
         try {
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
           // 0 バイトの書き込みでも close 時の RENAME が成功するよう、空の文字列で一時キーを作ります。
           await client.set(tmp, "");
         } catch (ex) {
@@ -325,7 +313,7 @@ export default class Redis implements IStorage {
         }
       },
       async write(chunk) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           await client.append(tmp, Buffer.from(chunk));
         } catch (ex) {
@@ -334,7 +322,7 @@ export default class Redis implements IStorage {
         }
       },
       async close() {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
           await client.rename(tmp, dest);
@@ -355,15 +343,12 @@ export default class Redis implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#streams)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.con!;
-    const { key, signal } = args;
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
-    const dest = this.toKey(key);
+    const dest = this.toKey(c.key);
     let sent = false;
 
     // Redis の GET は値を一括で返すため、取得したバイト列を単一のチャンクとして送出します。
@@ -375,11 +360,11 @@ export default class Redis implements IStorage {
         }
 
         sent = true;
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
 
         const data = await client.getBuffer(dest);
         if (data === null) {
-          throw new KeyNotFoundError({ key });
+          throw new KeyNotFoundError({ key: c.key });
         }
 
         controller.enqueue(new Uint8Array(data));

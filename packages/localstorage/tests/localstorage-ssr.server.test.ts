@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureThrown,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { LocalStorageNotAvailableError } from "../src/errors.js";
@@ -28,14 +36,24 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new LocalStorage();
-      expect(() => storage.write({ key: "k", data: "v", vars: new Variables(), signal })).toThrow(
+      expect(() =>
+        storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v"),
+      ).toThrow(LocalStorageNotAvailableError);
+      expect(() => storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toThrow(
         LocalStorageNotAvailableError,
       );
-      expect(() => storage.read({ key: "k", signal })).toThrow(LocalStorageNotAvailableError);
-      expect(() => storage.exists({ key: "k", signal })).toThrow(LocalStorageNotAvailableError);
-      expect(() => storage.delete({ key: "k", signal })).toThrow(LocalStorageNotAvailableError);
-      expect(() => storage.clear({ signal })).toThrow(LocalStorageNotAvailableError);
-      expect(() => storage.open({ signal })).toThrow(LocalStorageNotAvailableError);
+      expect(() =>
+        storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
+      ).toThrow(LocalStorageNotAvailableError);
+      expect(() =>
+        storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
+      ).toThrow(LocalStorageNotAvailableError);
+      expect(() =>
+        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+      ).toThrow(LocalStorageNotAvailableError);
+      expect(() => storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).toThrow(
+        LocalStorageNotAvailableError,
+      );
     });
   });
 
@@ -43,8 +61,8 @@ describe("SSR・非ブラウザー環境", () => {
     // 実行と検証
     withoutBackend(() => {
       const storage = new LocalStorage({ storage: createFakeStorage() });
-      storage.write({ key: "k", data: "v", vars: new Variables(), signal });
-      expect(storage.read({ key: "k", signal })).toBe("v");
+      storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v");
+      expect(storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toBe("v");
     });
   });
 
@@ -62,7 +80,9 @@ describe("SSR・非ブラウザー環境", () => {
 
     try {
       // 実行
-      const error = captureThrown(() => new LocalStorage().read({ key: "k", signal }));
+      const error = captureThrown(() =>
+        new LocalStorage().read(createGetContext("k", { signal }) as IStorage.ReadContext),
+      );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);

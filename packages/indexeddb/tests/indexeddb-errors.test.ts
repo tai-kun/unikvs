@@ -1,5 +1,15 @@
-import { Variables } from "@unikvs/core";
-import { captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureRejection,
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import IndexeddbStorage from "../src/indexeddb.js";
@@ -13,21 +23,37 @@ const openedOperations: readonly {
 }[] = [
   {
     label: "write",
-    run: (storage) => storage.write({ key: "k", data: "v", signal, vars: new Variables() }),
+    run: (storage) =>
+      storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v"),
   },
-  { label: "read", run: (storage) => storage.read({ key: "k", signal }) },
-  { label: "exists", run: (storage) => storage.exists({ key: "k", signal }) },
-  { label: "delete", run: (storage) => storage.delete({ key: "k", signal }) },
-  { label: "clear", run: (storage) => storage.clear({ signal }) },
+  {
+    label: "read",
+    run: (storage) => storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
+  },
+  {
+    label: "exists",
+    run: (storage) => storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
+  },
+  {
+    label: "delete",
+    run: (storage) =>
+      storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
+  },
+  {
+    label: "clear",
+    run: (storage) => storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+  },
 ];
 
 describe("存在しないキー", () => {
   test("read は NotFoundError の DOMException で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "missing", signal }));
+    const error = await captureRejection(
+      storage.read(createGetContext("missing", { signal }) as IStorage.ReadContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -39,18 +65,22 @@ describe("存在しないキー", () => {
 
   test("delete を呼んでもエラーにならない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行と検証
-    await expect(storage.delete({ key: "missing", signal })).resolves.toBeUndefined();
+    await expect(
+      storage.delete(createDeleteContext("missing", { signal }) as IStorage.DeleteContext),
+    ).resolves.toBeUndefined();
   });
 
   test("exists は false を返す", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    const exists = await storage.exists({ key: "missing", signal });
+    const exists = await storage.exists(
+      createHasContext("missing", { signal }) as IStorage.ExistsContext,
+    );
 
     // 検証
     expect(exists).toBe(false);
@@ -61,8 +91,10 @@ describe("存在しないキー", () => {
     storage,
   }) => {
     // 準備
-    await storage.open({ signal });
-    const reader = storage.getReadable({ key: "missing", signal }).getReader();
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const reader = storage
+      .getReadable(createStreamContext("missing", { signal }) as IStorage.GetReadableContext)
+      .getReader();
 
     // 実行
     const error = await captureRejection(reader.read());
@@ -76,12 +108,14 @@ describe("存在しないキー", () => {
 describe("削除・消去後", () => {
   test("delete したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
-    await storage.delete({ key: "k1", signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    await storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "k1", signal }));
+    const error = await captureRejection(
+      storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -90,12 +124,14 @@ describe("削除・消去後", () => {
 
   test("clear したキーの read は NotFoundError で拒否される", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
-    await storage.clear({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 実行
-    const error = await captureRejection(storage.read({ key: "k1", signal }));
+    const error = await captureRejection(
+      storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -104,31 +140,35 @@ describe("削除・消去後", () => {
 
   test("空の状態で clear を呼んでもエラーにならない", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行と検証
-    await expect(storage.clear({ signal })).resolves.toBeUndefined();
+    await expect(
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).resolves.toBeUndefined();
   });
 
   test("削除したキーへ再度書き込みできる", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.write({ key: "k1", data: "v1", signal, vars: new Variables() });
-    await storage.delete({ key: "k1", signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    await storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
 
     // 実行
-    await storage.write({ key: "k1", data: "v2", signal, vars: new Variables() });
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v2");
 
     // 検証
-    expect(await storage.read({ key: "k1", signal })).toBe("v2");
+    expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+      "v2",
+    );
   });
 });
 
 describe("close した後", () => {
   test("isOpen は false である", async ({ expect, storage }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.close({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
     // 検証
     expect(storage.isOpen).toBe(false);
@@ -137,8 +177,8 @@ describe("close した後", () => {
   for (const { label, run } of openedOperations) {
     test(`close 後の ${label} は TypeError で拒否される`, async ({ expect, storage }) => {
       // 準備
-      await storage.open({ signal });
-      await storage.close({ signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
       // 実行
       const error = await captureRejection(run(storage));
@@ -153,9 +193,11 @@ describe("close した後", () => {
     storage,
   }) => {
     // 準備
-    await storage.open({ signal });
-    await storage.close({ signal });
-    const writer = storage.getWritable({ key: "k1", signal, vars: new Variables() }).getWriter();
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
+    const writer = storage
+      .getWritable(createSetContext("k1", { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     const error = await captureRejection(writer.close());
@@ -170,19 +212,19 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     try {
       // 実行
       const error = await captureRejection(
-        storage.write({ key: "k1", data: "v1", signal, vars: new Variables() }),
+        storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1"),
       );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close({ signal });
+      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }
   });
 
@@ -190,17 +232,19 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     try {
       // 実行
-      const error = await captureRejection(storage.exists({ key: "k1", signal }));
+      const error = await captureRejection(
+        storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext),
+      );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close({ signal });
+      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }
   });
 
@@ -208,17 +252,19 @@ describe("ストアが存在しないとき", () => {
     // 準備
     await createEmptyDatabase(dbName, 1);
     const storage = new IndexeddbStorage(dbName, "missing-store");
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     try {
       // 実行
-      const error = await captureRejection(storage.clear({ signal }));
+      const error = await captureRejection(
+        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+      );
 
       // 検証
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("NotFoundError");
     } finally {
-      await storage.close({ signal });
+      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }
   });
 });
@@ -233,7 +279,9 @@ describe("open に失敗するとき", () => {
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
 
     // 実行
-    const error = await captureRejection(storage.open({ signal }));
+    const error = await captureRejection(
+      storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -247,8 +295,10 @@ describe("open に失敗するとき", () => {
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
 
     // 実行
-    await captureRejection(storage.open({ signal }));
-    const error = await captureRejection(storage.open({ signal }));
+    await captureRejection(storage.open(createOpenContext({ signal }) as IStorage.OpenContext));
+    const error = await captureRejection(
+      storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);

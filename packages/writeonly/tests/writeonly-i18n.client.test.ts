@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createClearContext,
+  createDecodeContext,
+  createDeleteContext,
+  createNext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -32,13 +38,15 @@ describe("WriteOnlyDeleteNotAllowedError の国際化 (client)", () => {
     expect(error.name).toBe("WriteOnlyDeleteNotAllowedError");
   });
 
-  test("ja を設定すると onDelete のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.onDelete({ key: "k1" })).toThrow(
+    await expect(
+      transformer.use(createDeleteContext("k1") as IMiddleware.UseContext, createNext()),
+    ).rejects.toThrow(
       'WriteOnly.delete は allowDelete が false のためキー "k1" を削除できません。',
     );
   });
@@ -55,26 +63,27 @@ describe("WriteOnlyClearNotAllowedError の国際化 (client)", () => {
     expect(error.name).toBe("WriteOnlyClearNotAllowedError");
   });
 
-  test("ja を設定すると onClear のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.onClear()).toThrow(
-      "WriteOnly.clear は allowDelete が false のため全件を削除できません。",
-    );
+    await expect(
+      transformer.use(createClearContext() as IMiddleware.UseContext, createNext()),
+    ).rejects.toThrow("WriteOnly.clear は allowDelete が false のため全件を削除できません。");
   });
 });
 
 describe("KeyNotFoundError の国際化 (client)", () => {
-  test("ja を設定すると decode のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると decode のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "k1" });
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.decode({ vars, data: "v1" })).toThrow("キー k1 が見つかりません");
+    await expect(
+      transformer.decode(createDecodeContext("v1", "k1") as IMiddleware.DecodeContext),
+    ).rejects.toThrow("キー k1 が見つかりません");
   });
 });

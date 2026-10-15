@@ -1,4 +1,15 @@
-import { captureThrown, pipeChunks } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureThrown,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createMapKeyContext,
+  createNext,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidClearBehaviorError } from "../src/errors.js";
@@ -94,49 +105,55 @@ describe("コンストラクターの検証", () => {
 });
 
 describe("データの透過", () => {
-  test("encode は受け取ったオブジェクトを同じ参照で返す", ({ expect }) => {
+  test("encode は受け取ったオブジェクトを同じ参照で返す", async ({ expect }) => {
     // 準備
     const prefix = new KeyPrefix("tenant:");
     const data = { foo: "bar" };
 
     // 実行
-    const output = prefix.encode({ data });
+    const c = createEncodeContext(data);
+    await prefix.encode(c as IMiddleware.EncodeContext, createNext());
 
     // 検証
-    expect(output).toBe(data);
+    expect(c.destination).toBe(data);
   });
 
-  test("decode は受け取ったバイト列を同じ参照で返す", ({ expect }) => {
+  test("decode は受け取ったバイト列を同じ参照で返す", async ({ expect }) => {
     // 準備
     const prefix = new KeyPrefix("tenant:");
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const output = prefix.decode({ data });
+    const c = createDecodeContext(data);
+    await prefix.decode(c as IMiddleware.DecodeContext, createNext());
 
     // 検証
-    expect(output).toBe(data);
+    expect(c.destination).toBe(data);
   });
 
-  test("getEncodable はチャンクをそのまま出力する", async ({ expect }) => {
+  test("encodeStream はチャンクをそのまま出力する", async ({ expect }) => {
     // 準備
     const prefix = new KeyPrefix("tenant:");
     const chunks = ["a", "bc", ""];
 
     // 実行
-    const output = await pipeChunks(prefix.getEncodable(), chunks);
+    const c = createEncodeStreamContext(sourceFrom(chunks));
+    await prefix.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+    const output = await readAll(c.destination);
 
     // 検証
     expect(output).toStrictEqual(chunks);
   });
 
-  test("getDecodable はチャンクをそのまま出力する", async ({ expect }) => {
+  test("decodeStream はチャンクをそのまま出力する", async ({ expect }) => {
     // 準備
     const prefix = new KeyPrefix("tenant:");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
 
     // 実行
-    const output = await pipeChunks(prefix.getDecodable(), chunks);
+    const c = createDecodeStreamContext(sourceFrom(chunks));
+    await prefix.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+    const output = await readAll(c.destination);
 
     // 検証
     expect(output).toHaveLength(chunks.length);
@@ -153,7 +170,7 @@ describe("キーの写像", () => {
     const prefix = new KeyPrefix("tenant:");
 
     // 実行と検証
-    expect(prefix.mapKey({ key: "k1" })).toBe("tenant:k1");
+    expect(prefix.mapKey(createMapKeyContext("k1"))).toBe("tenant:k1");
   });
 
   test("プレフィックスが空文字のとき、キーをそのまま返す", ({ expect }) => {
@@ -161,7 +178,7 @@ describe("キーの写像", () => {
     const prefix = new KeyPrefix("");
 
     // 実行と検証
-    expect(prefix.mapKey({ key: "k1" })).toBe("k1");
+    expect(prefix.mapKey(createMapKeyContext("k1"))).toBe("k1");
   });
 
   test("二重に適用したとき、登録順にプレフィックスが付与される", ({ expect }) => {
@@ -170,7 +187,7 @@ describe("キーの写像", () => {
     const inner = new KeyPrefix("b:");
 
     // 実行
-    const mapped = inner.mapKey({ key: outer.mapKey({ key: "k1" }) });
+    const mapped = inner.mapKey(createMapKeyContext(outer.mapKey(createMapKeyContext("k1"))));
 
     // 検証
     expect(mapped).toBe("b:a:k1");

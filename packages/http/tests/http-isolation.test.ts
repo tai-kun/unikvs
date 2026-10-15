@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -14,33 +20,25 @@ describe("prefix による分離", () => {
     const storageB = new Http(baseUrl, { fetch: server.fetch, keyPrefix: "b:" });
 
     // 実行
-    await storageA.write({
-      key: "k",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    await storageB.write({
-      key: "k",
-      data: new Uint8Array([2]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storageA.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storageB.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 検証
     expect(
-      await storageA.read({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageA.read(
+        createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1]));
     expect(
-      await storageB.read({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageB.read(
+        createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([2]));
   });
 
@@ -49,40 +47,30 @@ describe("prefix による分離", () => {
     const server = createMockServer();
     const storageA = new Http(baseUrl, { fetch: server.fetch, keyPrefix: "a:" });
     const storageB = new Http(baseUrl, { fetch: server.fetch, keyPrefix: "b:" });
-    await storageA.write({
-      key: "k",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    await storageB.write({
-      key: "k",
-      data: new Uint8Array([2]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storageA.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storageB.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storageA.delete({
-      key: "k",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storageA.delete(
+      createDeleteContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
+    );
 
     // 検証
     expect(
-      await storageA.exists({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageA.exists(
+        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
     expect(
-      await storageB.exists({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storageB.exists(
+        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(true);
   });
 });

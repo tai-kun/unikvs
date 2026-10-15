@@ -2,6 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { IStorage } from "@unikvs/core";
+import { createOpenContext } from "@unikvs/testing";
 import { test as vitest } from "vitest";
 
 import NodeFs from "../src/node-fs.js";
@@ -22,7 +24,7 @@ export const test = vitest.extend<{ root: string; storage: NodeFs }>({
   },
   async storage({ root }, use) {
     const storage = new NodeFs(root);
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
     await use(storage);
   },
 });

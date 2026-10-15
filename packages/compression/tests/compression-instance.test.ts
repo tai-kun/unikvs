@@ -1,8 +1,46 @@
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createPseudoRandomBytes,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Compression from "../src/compression.js";
 import { FORMATS } from "./helpers.js";
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await compression.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await compression.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
 
 describe("インスタンスの状態", () => {
   test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {
@@ -11,8 +49,8 @@ describe("インスタンスの状態", () => {
     const input = createPseudoRandomBytes(128, 31);
 
     // 実行
-    const encoded = await compression.encode({ data: input });
-    await compression.decode({ data: encoded });
+    const encoded = await encode(compression, input);
+    await decode(compression, encoded);
 
     // 検証
     expect(compression.name).toBe("Compression");
@@ -25,7 +63,7 @@ describe("インスタンスの状態", () => {
     const invalidData = new Uint8Array([0, 1, 2, 3]);
 
     // 実行と検証
-    await expect(compression.decode({ data: invalidData })).rejects.toThrow(Error);
+    await expect(decode(compression, invalidData)).rejects.toThrow(Error);
     expect(compression.isOpen).toBe(true);
   });
 });
@@ -38,9 +76,7 @@ describe("インスタンスの独立性", () => {
 
     // 実行
     const decodedList = await Promise.all(
-      instances.map(async (compression) =>
-        compression.decode({ data: await compression.encode({ data: input }) }),
-      ),
+      instances.map(async (compression) => decode(compression, await encode(compression, input))),
     );
 
     // 検証
@@ -63,9 +99,9 @@ describe("入力データの非破壊性", () => {
     const inputSnapshot = input.slice();
 
     // 実行
-    const encoded = await compression.encode({ data: input });
+    const encoded = await encode(compression, input);
     const encodedSnapshot = encoded.slice();
-    const decoded = await compression.decode({ data: encoded });
+    const decoded = await decode(compression, encoded);
 
     // 検証
     expect(input).toStrictEqual(inputSnapshot);

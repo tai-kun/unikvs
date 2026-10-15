@@ -1,6 +1,13 @@
 import { spawn } from "node:child_process";
 
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createCloseContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { waitForPort } from "@unikvs/testing/node";
 import { Redis as Ioredis } from "ioredis";
 import { afterEach, describe, expectTypeOf, vi } from "vitest";
@@ -22,15 +29,20 @@ describe("Node 固有の振る舞い", () => {
     const storage = new Redis(url, { keyPrefix: `env-priority-${crypto.randomUUID()}:` });
 
     // 実行
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 検証
       expect(storage.isOpen).toBe(true);
-      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: new Variables() });
-      await expect(storage.read({ key: "a", signal })).resolves.toStrictEqual(new Uint8Array([1]));
+      await storage.write(
+        createSetContext("a", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+      await expect(
+        storage.read(createGetContext("a", { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(new Uint8Array([1]));
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -40,14 +52,16 @@ describe("Node 固有の振る舞い", () => {
     const storage = new Redis(undefined, { keyPrefix: `env-redis-url-${crypto.randomUUID()}:` });
 
     // 実行
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 検証
       expect(storage.isOpen).toBe(true);
-      await expect(storage.exists({ key: "a", signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext("a", { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -58,14 +72,16 @@ describe("Node 固有の振る舞い", () => {
     const storage = new Redis(undefined, { keyPrefix: `env-valkey-url-${crypto.randomUUID()}:` });
 
     // 実行
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 検証
       expect(storage.isOpen).toBe(true);
-      await expect(storage.exists({ key: "a", signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext("a", { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -76,14 +92,16 @@ describe("Node 固有の振る舞い", () => {
     const storage = new Redis("", { keyPrefix: `env-empty-${crypto.randomUUID()}:` });
 
     // 実行
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 検証
       expect(storage.isOpen).toBe(true);
-      await expect(storage.exists({ key: "a", signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext("a", { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -102,15 +120,20 @@ describe("Node 固有の振る舞い", () => {
 
     try {
       // 実行
-      await storage.open();
+      await storage.open(createOpenContext() as IStorage.OpenContext);
 
       // 検証
       expect(storage.isOpen).toBe(true);
-      await storage.write({ key: "a", data: new Uint8Array([1]), signal, vars: new Variables() });
-      await expect(storage.read({ key: "a", signal })).resolves.toStrictEqual(new Uint8Array([1]));
+      await storage.write(
+        createSetContext("a", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+      await expect(
+        storage.read(createGetContext("a", { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(new Uint8Array([1]));
     } finally {
       if (storage.isOpen) {
-        await storage.close();
+        await storage.close(createCloseContext() as IStorage.CloseContext);
       }
       if (!fixed.killed) {
         fixed.kill();
@@ -127,7 +150,7 @@ describe("Node 固有の振る舞い", () => {
 
     // 実行と検証
     const start = Date.now();
-    await expect(unreachable.open()).rejects.toThrow();
+    await expect(unreachable.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
     expect(Date.now() - start).toBeLessThan(10e3);
     expect(unreachable.isOpen).toBe(false);
   });
@@ -146,12 +169,12 @@ describe("Node 固有の振る舞い", () => {
       .mockImplementation(() => new Promise<never>(() => {}));
     const disconnectSpy = vi.spyOn(Ioredis.prototype, "disconnect");
     const storage = new Redis(url, { keyPrefix, closeTimeout: 100 });
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 実行と検証
       const start = Date.now();
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
       expect(Date.now() - start).toBeLessThan(10e3);
       expect(quitSpy).toHaveBeenCalled();
       expect(disconnectSpy).toHaveBeenCalled();
@@ -159,7 +182,7 @@ describe("Node 固有の振る舞い", () => {
     } finally {
       vi.restoreAllMocks();
       if (storage.isOpen) {
-        await storage.close();
+        await storage.close(createCloseContext() as IStorage.CloseContext);
       }
     }
   });
@@ -228,11 +251,14 @@ describe("Node 固有の振る舞い", () => {
     // `any` 直参照はしない。
     const key = `d-prime-${crypto.randomUUID()}.bin`;
     const storage = new Redis(url, { keyPrefix: "p:" });
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       // 実行
-      await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() });
+      await storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
 
       // 検証
       const raw = new Ioredis(url);
@@ -247,7 +273,7 @@ describe("Node 固有の振る舞い", () => {
         (storage as unknown as { options: Record<string, unknown> }).options,
       ).not.toHaveProperty("keyPrefix");
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 
@@ -261,21 +287,19 @@ describe("Node 固有の振る舞い", () => {
 
     // 検証
     expect(storage.isOpen).toBe(false);
-    await storage.open();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
       expect(storage.isOpen).toBe(true);
-      await storage.write({
-        key: "omitted-options.bin",
-        data: new Uint8Array([1]),
-        signal,
-        vars: new Variables(),
-      });
-      await expect(storage.read({ key: "omitted-options.bin", signal })).resolves.toStrictEqual(
+      await storage.write(
+        createSetContext("omitted-options.bin", { signal }) as IStorage.WriteContext,
         new Uint8Array([1]),
       );
+      await expect(
+        storage.read(createGetContext("omitted-options.bin", { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(new Uint8Array([1]));
     } finally {
-      await storage.close();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 });

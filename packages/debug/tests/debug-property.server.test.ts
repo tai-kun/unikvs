@@ -1,6 +1,16 @@
-import { Variables } from "@unikvs/core";
-import { pipeChunks } from "@unikvs/testing";
-import { forCases, forCasesAsync, type Random } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createNext,
+  forCases,
+  forCasesAsync,
+  readAll,
+  sourceFrom,
+  TestContext,
+  type Random,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
@@ -17,7 +27,33 @@ const test = createRecordsTest();
  * ケースごとにデータだけを差し替えて検証するために使用します。
  */
 function argsFor(data: unknown): DebugInfoArgs {
-  return { vars: new Variables({}), action: undefined, key: undefined, direction: "write", data };
+  return {
+    vars: new TestContext(),
+    action: "set",
+    key: "key",
+    direction: "write",
+    data,
+  };
+}
+
+/**
+ * データを書き込みとして記録し、そのまま返します。
+ */
+async function encode(debug: Debug, data: unknown): Promise<unknown> {
+  const c = createEncodeContext(data, "key");
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * データを読み込みとして記録し、そのまま返します。
+ */
+async function decode(debug: Debug, data: unknown): Promise<unknown> {
+  const c = createDecodeContext(data, "key");
+  await debug.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
 }
 
 const VIEW_FACTORIES = [
@@ -147,27 +183,27 @@ function randomPlainValue(random: Random, depth = 0): unknown {
 }
 
 describe("Debug (決定的ファズ)", () => {
-  test("encode は任意のデータを同一参照で返す", ({ expect }) => {
+  test("encode は任意のデータを同一参照で返す", async ({ expect }) => {
     // 準備
     const debug = new Debug();
 
     // 実行と検証
-    forCases(SEED, CASE_COUNT, (random) => {
+    await forCasesAsync(SEED, CASE_COUNT, async (random) => {
       const data = randomValue(random);
 
-      expect(debug.encode({ vars: new Variables({}), data })).toBe(data);
+      expect(await encode(debug, data)).toBe(data);
     });
   });
 
-  test("decode は任意のデータを同一参照で返す", ({ expect }) => {
+  test("decode は任意のデータを同一参照で返す", async ({ expect }) => {
     // 準備
     const debug = new Debug();
 
     // 実行と検証
-    forCases(SEED + 1, CASE_COUNT, (random) => {
+    await forCasesAsync(SEED + 1, CASE_COUNT, async (random) => {
       const data = randomValue(random);
 
-      expect(debug.decode({ vars: new Variables({}), data })).toBe(data);
+      expect(await decode(debug, data)).toBe(data);
     });
   });
 
@@ -227,14 +263,15 @@ describe("Debug (決定的ファズ)", () => {
   }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({ "unikvs:action": "stream", "unikvs:key": "stream" });
 
     // 実行と検証
     await forCasesAsync(SEED + 6, STREAM_CASE_COUNT, async (random) => {
       records.length = 0;
       const chunks = random.array(random.uint(8), (child) => randomValue(child));
 
-      const output = await pipeChunks<unknown>(debug.getDecodable({ vars }), chunks);
+      const c = createDecodeStreamContext(sourceFrom(chunks), "stream");
+      await debug.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+      const output = await readAll(c.destination as ReadableStream<unknown>);
 
       expect(output).toHaveLength(chunks.length);
       for (const [index, chunk] of chunks.entries()) {

@@ -1,5 +1,11 @@
-import { Variables } from "@unikvs/core";
-import { createRandom, forCasesAsync } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  createRandom,
+  forCasesAsync,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -20,20 +26,18 @@ describe("任意値の往復", () => {
     await forCasesAsync(seed, 50, async (random) => {
       const key = random.bool() ? random.pick(keyAlphabet) : random.string(random.int(0, 12));
       const data = random.bytes(random.int(0, 1024));
-      await storage.write({
-        key,
+      await storage.write(
+        createSetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
         data,
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      });
-      const result = await storage.read({
-        key,
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      });
+      );
+      const result = await storage.read(
+        createGetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      );
       expect(result).toStrictEqual(data);
       expect(
-        await storage.exists({ key, signal: AbortSignal.timeout(5_000), vars: new Variables({}) }),
+        await storage.exists(
+          createHasContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        ),
       ).toBe(true);
     });
   });

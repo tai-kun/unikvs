@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  type TestContextValues,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {
@@ -9,6 +15,7 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
+import type Checksum from "../src/checksum.js";
 
 const ABC = Uint8Array.from(new TextEncoder().encode("abc"));
 const UNICODE = Uint8Array.from(new TextEncoder().encode("日本語テキスト🎉"));
@@ -62,6 +69,40 @@ const ALGORITHMS = [
   },
 ] as const;
 
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * データを検証してそのまま返します。
+ */
+async function decode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data, "", { values });
+  await checksum.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
 describe("アルゴリズムのメタデータ", () => {
   test.for(ALGORITHMS)("$label の isOpen は常に true を返す", ({ create }, { expect }) => {
     // 準備
@@ -75,13 +116,12 @@ describe("アルゴリズムのメタデータ", () => {
 describe("既知ベクターによる一括検証", () => {
   test.for(ALGORITHMS)(
     "$label は abc の既知のダイジェストで encode できる",
-    ({ create, varName, abcDigest }, { expect }) => {
+    async ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
-      const result = checksum.encode({ vars, data: ABC });
+      const result = await encode(checksum, ABC, { [varName]: abcDigest });
 
       // 検証
       expect(result).toBe(ABC);
@@ -90,13 +130,12 @@ describe("既知ベクターによる一括検証", () => {
 
   test.for(ALGORITHMS)(
     "$label は Unicode 文字列のバイト列の既知のダイジェストで encode できる",
-    ({ create, varName, unicodeDigest }, { expect }) => {
+    async ({ create, varName, unicodeDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = new Variables({ [varName]: unicodeDigest });
 
       // 実行
-      const result = checksum.encode({ vars, data: UNICODE });
+      const result = await encode(checksum, UNICODE, { [varName]: unicodeDigest });
 
       // 検証
       expect(result).toBe(UNICODE);
@@ -105,13 +144,12 @@ describe("既知ベクターによる一括検証", () => {
 
   test.for(ALGORITHMS)(
     "$label は abc の既知のダイジェストで decode できる",
-    ({ create, varName, abcDigest }, { expect }) => {
+    async ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create();
-      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
-      const result = checksum.decode({ vars, data: ABC });
+      const result = await decode(checksum, ABC, { [varName]: abcDigest });
 
       // 検証
       expect(result).toBe(ABC);

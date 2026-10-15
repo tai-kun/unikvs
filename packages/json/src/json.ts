@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 
 import { JsonUnsupportedValueError } from "./errors.js";
 
@@ -39,7 +39,12 @@ function parseLine(line: string, controller: TransformStreamDefaultController<un
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
  */
-export default class Json implements ITransformer {
+export default class Json implements IMiddleware<
+  unknown,
+  Uint8Array<ArrayBuffer>,
+  unknown,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
@@ -55,62 +60,79 @@ export default class Json implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
-  public encode(args: Pick<ITransformer.EncodeArgs<unknown>, "data">): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-
-    return new TextEncoder().encode(stringify(data));
+  public async encode(
+    c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = new TextEncoder().encode(stringify(c.source));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
    */
-  public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
-    const { data } = args;
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
 
-    return JSON.parse(decoder.decode(data));
+    c.destination = JSON.parse(decoder.decode(c.source));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#streams)
    */
-  public getEncodable(): TransformStream<unknown, Uint8Array<ArrayBuffer>> {
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const encoder = new TextEncoder();
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        controller.enqueue(encoder.encode(`${stringify(chunk)}\n`));
-      },
-    });
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          controller.enqueue(encoder.encode(`${stringify(chunk)}\n`));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/json#streams)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, unknown> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let buffer = "";
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        buffer += decoder.decode(chunk, { stream: true });
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          buffer += decoder.decode(chunk, { stream: true });
 
-        let newlineIndex = buffer.indexOf("\n");
-        while (newlineIndex !== -1) {
-          const line = buffer.slice(0, newlineIndex);
-          buffer = buffer.slice(newlineIndex + 1);
-          parseLine(line, controller);
-          newlineIndex = buffer.indexOf("\n");
-        }
-      },
+          let newlineIndex = buffer.indexOf("\n");
+          while (newlineIndex !== -1) {
+            const line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            parseLine(line, controller);
+            newlineIndex = buffer.indexOf("\n");
+          }
+        },
 
-      flush(controller) {
-        buffer += decoder.decode();
+        flush(controller) {
+          buffer += decoder.decode();
 
-        if (buffer.length > 0) {
-          parseLine(buffer, controller);
-        }
-      },
-    });
+          if (buffer.length > 0) {
+            parseLine(buffer, controller);
+          }
+        },
+      }),
+    );
+    await next();
   }
 }

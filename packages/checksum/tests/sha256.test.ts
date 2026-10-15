@@ -1,6 +1,15 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+  type TestContextValues,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
+import type Checksum from "../src/checksum.js";
 import { ChecksumMismatchError, ChecksumRequiredError } from "../src/errors.js";
 import ChecksumSha256 from "../src/sha256.js";
 
@@ -10,42 +19,54 @@ const EMPTY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852
 const INVALID_HASH = "0".repeat(VALID_HASH.length);
 
 /**
- * 変換ストリームにチャンクを順に書き込み、読み取れるデータをすべて読み取る補助関数です。
- * バックプレッシャーによるデッドロックを避けるため、書き込みと読み取りを並行して行います。
+ * チェックサム付きでデータを検証して返します。
  */
-async function runTransform(
-  stream: TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
-  inputChunks: Uint8Array<ArrayBuffer>[],
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を検証ストリームに流し、出力されたチャンクを返します。
+ */
+async function runEncodeStream(
+  checksum: Checksum,
+  inputChunks: readonly Uint8Array<ArrayBuffer>[],
+  values?: TestContextValues,
 ): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+  const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
+  await checksum.encodeStream(
+    c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
   const outputChunks: Uint8Array<ArrayBuffer>[] = [];
   let closeError: unknown;
-  const reader = stream.readable.getReader();
-  const writer = stream.writable.getWriter();
 
-  const pumping = (async () => {
-    for (const chunk of inputChunks) {
-      await writer.write(chunk);
-    }
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
 
-    try {
-      await writer.close();
-    } catch (error) {
-      closeError = error;
-    }
-  })();
-
-  while (true) {
-    try {
+    for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
-      outputChunks.push(value);
-    } catch (error) {
-      closeError ??= error;
-      break;
-    }
-  }
 
-  await pumping;
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (error) {
+    closeError = error;
+  }
 
   return { outputChunks, closeError };
 }
@@ -63,43 +84,42 @@ test("指定した名前が name プロパティに設定される", ({ expect }
   expect(checksum.name).toBe("ChecksumSha256");
 });
 
-test("期待値と一致するチェックサムを指定して encode すると、SHA-256 のハッシュで検証してデータをそのまま返す", ({
+test("期待値と一致するチェックサムを指定して encode すると、SHA-256 のハッシュで検証してデータをそのまま返す", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 実行
-  const result = checksum.encode({ vars, data: TEST_DATA });
+  const result = await encode(checksum, TEST_DATA, {
+    [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH,
+  });
 
   // 検証
   expect(result).toStrictEqual(TEST_DATA);
 });
 
-test("空のデータを SHA-256 のハッシュ値で検証できる", ({ expect }) => {
+test("空のデータを SHA-256 のハッシュ値で検証できる", async ({ expect }) => {
   // 準備
   const checksum = new ChecksumSha256();
   const data = new Uint8Array(0);
-  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
   // 実行
-  const result = checksum.encode({ vars, data });
+  const result = await encode(checksum, data, { [ChecksumSha256.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
   // 検証
   expect(result).toStrictEqual(data);
 });
 
-test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", ({
+test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH });
 
   // 実行と検証
   try {
-    checksum.encode({ vars, data: TEST_DATA });
+    await encode(checksum, TEST_DATA, { [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH });
     expect.unreachable();
   } catch (error) {
     expect(error).toBeInstanceOf(ChecksumMismatchError);
@@ -107,28 +127,33 @@ test("期待値と一致しないチェックサムを指定すると、実際�
   }
 });
 
-test("期待値と一致するチェックサムを指定して decode すると、データをそのまま返す", ({ expect }) => {
+test("期待値と一致するチェックサムを指定して decode すると、データをそのまま返す", async ({
+  expect,
+}) => {
   // 準備
   const checksum = new ChecksumSha256();
-  const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 実行
-  const result = checksum.decode({ vars, data: TEST_DATA });
+  const c = createDecodeContext(TEST_DATA, "", {
+    values: { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH },
+  });
+  await checksum.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
 
   // 検証
-  expect(result).toStrictEqual(TEST_DATA);
+  expect(c.destination).toStrictEqual(TEST_DATA);
 });
 
-test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", ({
+test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha256({ required: true });
 
   // 実行と検証
-  expect(() => checksum.encode({ vars: new Variables({}), data: TEST_DATA })).toThrow(
-    ChecksumRequiredError,
-  );
+  await expect(encode(checksum, TEST_DATA)).rejects.toThrow(ChecksumRequiredError);
 });
 
 describe("ストリームによる検証", () => {
@@ -137,12 +162,13 @@ describe("ストリームによる検証", () => {
   }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const transformStream = checksum.getEncodable({
-      vars: new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH }),
-    });
 
     // 実行
-    const { outputChunks, closeError } = await runTransform(transformStream, [TEST_DATA]);
+    const { outputChunks, closeError } = await runEncodeStream(
+      checksum,
+      [TEST_DATA],
+      { [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH },
+    );
 
     // 検証
     expect(closeError).toBeUndefined();
@@ -154,12 +180,13 @@ describe("ストリームによる検証", () => {
   }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const transformStream = checksum.getEncodable({
-      vars: new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH }),
-    });
 
     // 実行
-    const { closeError } = await runTransform(transformStream, [TEST_DATA]);
+    const { closeError } = await runEncodeStream(
+      checksum,
+      [TEST_DATA],
+      { [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH },
+    );
 
     // 検証
     expect(closeError).toBeInstanceOf(ChecksumMismatchError);

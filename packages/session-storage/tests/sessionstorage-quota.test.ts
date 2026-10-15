@@ -1,5 +1,10 @@
-import { Variables } from "@unikvs/core";
-import { captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  captureThrown,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -24,11 +29,11 @@ const test = vitest.extend<{ backend: Storage; storage: SessionStorage }>({
 describe("クォータ超過", () => {
   test("write の QuotaExceededError はそのまま伝播する", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
     const error = captureThrown(() =>
-      storage.write({ key: "k2", data: "v2", vars: new Variables(), signal }),
+      storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2"),
     );
 
     // 検証
@@ -38,23 +43,29 @@ describe("クォータ超過", () => {
 
   test("クォータ超過で失敗した write の後も既存値は残る", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    captureThrown(() => storage.write({ key: "k1", data: "v2", vars: new Variables(), signal }));
+    captureThrown(() =>
+      storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v2"),
+    );
 
     // 検証
-    expect(storage.read({ key: "k1", signal })).toBe("v1");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v1");
   });
 
   test("クォータ超過で失敗した新規キーは存在しない", ({ expect, storage }) => {
     // 準備
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    captureThrown(() => storage.write({ key: "k2", data: "v2", vars: new Variables(), signal }));
+    captureThrown(() =>
+      storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2"),
+    );
 
     // 検証
-    expect(storage.exists({ key: "k2", signal })).toBe(false);
+    expect(storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 });

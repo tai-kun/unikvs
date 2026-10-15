@@ -1,5 +1,14 @@
-import { Variables } from "@unikvs/core";
-import { bytesEqual, collectBytes } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  bytesEqual,
+  collectBytes,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { forCasesAsync, type Random } from "@unikvs/testing";
 import { isValidFilename } from "@unikvs/utils";
 import { describe } from "vitest";
@@ -64,16 +73,16 @@ describe("プロパティベース検証", () => {
       const data = random.bytes(random.int(0, 4096));
 
       // 実行
-      await storage.write({ key, data, signal, vars: new Variables() });
-      const result = await storage.read({ key, signal });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
       // 検証
       expect(bytesEqual(new Uint8Array(result), data)).toBe(true);
-      expect(await storage.exists({ key })).toBe(true);
+      expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
 
       // 後始末
-      await storage.delete({ key });
-      expect(await storage.exists({ key })).toBe(false);
+      await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
+      expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
     });
   });
 
@@ -102,14 +111,16 @@ describe("プロパティベース検証", () => {
 
       // 実行
       const writer = (
-        await storage.getWritable({ key, signal, vars: new Variables() })
+        await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
       ).getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
       await writer.close();
-      const direct = await storage.read({ key, signal });
-      const streamed = await collectBytes(storage.getReadable({ key, signal }));
+      const direct = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
+      const streamed = await collectBytes(
+        storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+      );
 
       // 検証
       expect(bytesEqual(new Uint8Array(direct), expected)).toBe(true);
@@ -126,32 +137,32 @@ describe("プロパティベース検証", () => {
       // 準備
       const model = new Map<string, Uint8Array<ArrayBuffer>>();
       const operations = random.array(random.int(0, 20), () => generateOperation(random));
-      await storage.clear();
+      await storage.clear(createClearContext() as IStorage.ClearContext);
 
       // 実行
       for (const operation of operations) {
         switch (operation.type) {
           case "write": {
-            await storage.write({
-              key: operation.key,
-              data: operation.data,
-              signal,
-              vars: new Variables(),
-            });
+            await storage.write(
+              createSetContext(operation.key, { signal }) as IStorage.WriteContext,
+              operation.data,
+            );
             model.set(operation.key, operation.data);
             break;
           }
           case "delete": {
             if (model.has(operation.key)) {
-              await storage.delete({ key: operation.key });
+              await storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext);
               model.delete(operation.key);
             } else {
-              await expect(storage.delete({ key: operation.key })).rejects.toThrow(/ENOENT/);
+              await expect(
+                storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext),
+              ).rejects.toThrow(/ENOENT/);
             }
             break;
           }
           case "clear": {
-            await storage.clear();
+            await storage.clear(createClearContext() as IStorage.ClearContext);
             model.clear();
             break;
           }
@@ -162,11 +173,20 @@ describe("プロパティベース検証", () => {
       for (const key of KEY_POOL) {
         const data = model.get(key);
         if (data) {
-          expect(await storage.exists({ key })).toBe(true);
-          expect(bytesEqual(new Uint8Array(await storage.read({ key, signal })), data)).toBe(true);
+          expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+          expect(
+            bytesEqual(
+              new Uint8Array(
+                await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+              ),
+              data,
+            ),
+          ).toBe(true);
         } else {
-          expect(await storage.exists({ key })).toBe(false);
-          await expect(storage.read({ key, signal })).rejects.toThrow(/ENOENT/);
+          expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+          await expect(
+            storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+          ).rejects.toThrow(/ENOENT/);
         }
       }
     });

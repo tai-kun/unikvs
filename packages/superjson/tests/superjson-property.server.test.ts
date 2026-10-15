@@ -1,5 +1,15 @@
+import type { IMiddleware } from "@unikvs/core";
 import { forCasesAsync, type Random } from "@unikvs/testing";
-import { concatBytes, pumpThrough } from "@unikvs/testing";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { test } from "vitest";
 
 import Superjson from "../src/superjson.js";
@@ -115,10 +125,13 @@ test("ランダムな値を一括で往復すると元に戻る", async ({ expec
     const value = generateValue(random, 4);
 
     // 実行
-    const decoded = codec.decode({ data: codec.encode({ data: value }) });
+    const encodeContext = createEncodeContext(value);
+    await codec.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+    const decodeContext = createDecodeContext(encodeContext.destination);
+    await codec.decode(decodeContext as IMiddleware.DecodeContext, createNext());
 
     // 検証
-    expect(decoded, `ケース ${index}`).toStrictEqual(value);
+    expect(decodeContext.destination, `ケース ${index}`).toStrictEqual(value);
   });
 });
 
@@ -130,11 +143,13 @@ test("ランダムな値の列をランダムな境界で分割してもスト�
     const values = random.array(random.int(0, 6), (generator) => generateValue(generator, 3));
 
     // 実行
-    const encoded = await pumpThrough(codec.getEncodable(), values);
-    expect(encoded.writeError, `ケース ${index}`).toBeUndefined();
-    expect(encoded.readError, `ケース ${index}`).toBeUndefined();
+    const encodeContext = createEncodeStreamContext(sourceFrom(values));
+    await codec.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, createNext());
+    const encoded = await readAll(
+      encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
+    );
 
-    const bytes = concatBytes(encoded.outputChunks);
+    const bytes = concatBytes(encoded);
     const chunks: Uint8Array<ArrayBuffer>[] = [];
     let offset = 0;
     while (offset < bytes.length) {
@@ -143,16 +158,16 @@ test("ランダムな値の列をランダムな境界で分割してもスト�
       offset += size;
     }
 
-    const decoded = await pumpThrough(codec.getDecodable(), chunks);
+    const decodeContext = createDecodeStreamContext(sourceFrom(chunks));
+    await codec.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, createNext());
+    const decoded = await readAll(decodeContext.destination);
 
     // 検証
-    expect(decoded.writeError, `ケース ${index}`).toBeUndefined();
-    expect(decoded.readError, `ケース ${index}`).toBeUndefined();
-    expect(decoded.outputChunks, `ケース ${index}`).toStrictEqual(values);
+    expect(decoded, `ケース ${index}`).toStrictEqual(values);
   });
 });
 
-test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を往復できる", ({ expect }) => {
+test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を往復できる", async ({ expect }) => {
   // 準備: 上流 superjson@2.2.6 が 2 つ目の NaN キーを欠落させる既知の不具合の再現です。
   // 修正されると「予期せぬ成功」として失敗するため、そのときは generateMapKey の限定を外します。
   const codec = new Superjson();
@@ -162,8 +177,11 @@ test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を�
   };
 
   // 実行
-  const decoded = codec.decode({ data: codec.encode({ data: value }) });
+  const encodeContext = createEncodeContext(value);
+  await codec.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+  const decodeContext = createDecodeContext(encodeContext.destination);
+  await codec.decode(decodeContext as IMiddleware.DecodeContext, createNext());
 
   // 検証
-  expect(decoded).toStrictEqual(value);
+  expect(decodeContext.destination).toStrictEqual(value);
 });

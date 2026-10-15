@@ -1,4 +1,40 @@
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { describe, test, vi } from "vitest";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: InstanceType<typeof import("../src/zstd-wasm.js").default>,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: InstanceType<typeof import("../src/zstd-wasm.js").default>,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 // 上流モジュールの実測では同一プロセス内の init 呼び出しは共有キャッシュで1回だけ実行される。
 // 共有の検証はモジュールを再読み込みした新鮮な実体で行い、呼び出し回数のみを検証する。
@@ -22,7 +58,7 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await Promise.all([first.open({ signal }), second.open({ signal })]);
+        await Promise.all([first.open(createOpenContext({ signal }) as IMiddleware.OpenContext), second.open(createOpenContext({ signal }) as IMiddleware.OpenContext)]);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -47,8 +83,8 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await target.open({ signal });
-        await target.open({ signal });
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -79,11 +115,11 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行と検証
-        await expect(target.open({ signal })).rejects.toThrow(freshErrors.ZstdWasmInitError);
+        await expect(target.open(createOpenContext({ signal }) as IMiddleware.OpenContext)).rejects.toThrow(freshErrors.ZstdWasmInitError);
         expect(target.isOpen).toBe(false);
 
         // 実行と検証
-        await target.open({ signal });
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
       } finally {
@@ -107,8 +143,8 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await target.open({ signal });
-        await target.open({ signal });
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -134,7 +170,7 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        await Promise.allSettled([target.open({ signal }), target.open({ signal })]);
+        await Promise.allSettled([target.open(createOpenContext({ signal }) as IMiddleware.OpenContext), target.open(createOpenContext({ signal }) as IMiddleware.OpenContext)]);
 
         // 検証
         expect(initSpy).toHaveBeenCalledTimes(1);
@@ -167,7 +203,7 @@ describe("WASM 初期化の共有", () => {
 
       try {
         // 実行
-        const first = await target.open({ signal }).then(
+        const first = await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext).then(
           () => undefined as unknown,
           (error: unknown) => error,
         );
@@ -180,9 +216,9 @@ describe("WASM 初期化の共有", () => {
         expect(target.isOpen).toBe(false);
 
         // 実行
-        await target.open({ signal });
-        const encoded = await target.encode({ data: input });
-        const decoded = await target.decode({ data: encoded });
+        await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+        const encoded = await encode(target, input);
+        const decoded = await decode(target, encoded);
 
         // 検証
         expect(decoded).toStrictEqual(input);

@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { PassThrough } from "@unikvs/passthrough";
 
 import { InvalidClearBehaviorError, KeyPrefixClearNotSupportedError } from "./errors.js";
@@ -16,7 +16,7 @@ export type KeyPrefixOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
  */
-export default class KeyPrefix extends PassThrough implements ITransformer {
+export default class KeyPrefix extends PassThrough implements IMiddleware {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
    */
@@ -52,20 +52,22 @@ export default class KeyPrefix extends PassThrough implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
    */
-  public mapKey(args: Pick<ITransformer.MapKeyArgs, "key">): string {
-    return `${this.prefix}${args.key}`;
+  public mapKey(c: IMiddleware.MapKeyContext): string {
+    return `${this.prefix}${c.key}`;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
    */
-  public onClear(): void {
+  public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     // 範囲限定削除を保証できない構成では clear を拒否します。
-    if (this.prefix !== "" && this.clearBehavior === "deny") {
+    if (c.action === "clear" && this.prefix !== "" && this.clearBehavior === "deny") {
       throw new KeyPrefixClearNotSupportedError({
         prefix: this.prefix,
         clearBehavior: this.clearBehavior,
       });
     }
+
+    await next();
   }
 }

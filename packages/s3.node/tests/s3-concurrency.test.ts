@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { bytesEqual, createAllByteValues } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  bytesEqual,
+  createAllByteValues,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { test } from "./_helpers.js";
@@ -17,13 +25,15 @@ describe("並行実行", () => {
       createAllByteValues(200).fill(7),
       createAllByteValues(300).fill(200),
     ];
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
     await Promise.all(
-      candidates.map((data) => storage.write({ key, data, signal, vars: new Variables({}) })),
+      candidates.map((data) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+      ),
     );
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(candidates.some((candidate) => bytesEqual(result, candidate))).toBe(true);
@@ -37,15 +47,15 @@ describe("並行実行", () => {
     // 準備
     const key = "same-key-30.bin";
     const data = createAllByteValues(64 * 1024);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
     await Promise.all(
       Array.from({ length: 30 }, () =>
-        storage.write({ key, data, signal, vars: new Variables({}) }),
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
-    const result = await storage.read({ key, signal });
+    const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(bytesEqual(result, data)).toBe(true);
@@ -57,13 +67,19 @@ describe("並行実行", () => {
       key: `parallel/${index}.bin`,
       data: createAllByteValues(index * 37 + 1),
     }));
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
+      entries.map(({ key, data }) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+      ),
     );
-    const results = await Promise.all(entries.map(({ key }) => storage.read({ key, signal })));
+    const results = await Promise.all(
+      entries.map(({ key }) =>
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ),
+    );
 
     // 検証
     for (const [index, result] of results.entries()) {
@@ -81,17 +97,23 @@ describe("並行実行", () => {
     const keys = Array.from({ length: 10 }, (_, index) => `mixed/${index}.bin`);
     const oldData = createAllByteValues(256).fill(1);
     const newData = createAllByteValues(512).fill(2);
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
     await Promise.all(
-      keys.map((key) => storage.write({ key, data: oldData, signal, vars: new Variables({}) })),
+      keys.map((key) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, oldData),
+      ),
     );
 
     // 実行
     const observations: boolean[] = [];
     await Promise.all([
-      ...keys.map((key) => storage.write({ key, data: newData, signal, vars: new Variables({}) })),
+      ...keys.map((key) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, newData),
+      ),
       ...keys.map(async (key) => {
-        const result = await storage.read({ key, signal });
+        const result = await storage.read(
+          createGetContext(key, { signal }) as IStorage.ReadContext,
+        );
         observations.push(bytesEqual(result, oldData) || bytesEqual(result, newData));
       }),
     ]);
@@ -101,7 +123,7 @@ describe("並行実行", () => {
       expect(observation).toBe(true);
     }
     for (const key of keys) {
-      const result = await storage.read({ key, signal });
+      const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
       expect(bytesEqual(result, newData)).toBe(true);
     }
   });
@@ -109,14 +131,23 @@ describe("並行実行", () => {
   test("同じキーへの並列 delete が全て成功する", async ({ expect, signal, storage }) => {
     // 準備
     const key = "parallel-delete.bin";
-    storage.open();
-    await storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables({}) });
+    storage.open(createOpenContext() as IStorage.OpenContext);
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    await Promise.all(Array.from({ length: 5 }, () => storage.delete({ key, signal })));
+    await Promise.all(
+      Array.from({ length: 5 }, () =>
+        storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
+      ),
+    );
 
     // 検証
-    await expect(storage.exists({ key, signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("並列書き込みの一部を削除しても残りのキーは影響を受けない", async ({
@@ -129,22 +160,32 @@ describe("並行実行", () => {
       key: `bulk-delete/${index}.bin`,
       data: new Uint8Array([index]),
     }));
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables({}) })),
+      entries.map(({ key, data }) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+      ),
     );
 
     // 実行
     const removed = entries.filter((_, index) => index % 2 === 0);
     const kept = entries.filter((_, index) => index % 2 === 1);
-    await Promise.all(removed.map(({ key }) => storage.delete({ key, signal })));
+    await Promise.all(
+      removed.map(({ key }) =>
+        storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
+      ),
+    );
 
     // 検証
     for (const { key } of removed) {
-      await expect(storage.exists({ key, signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     }
     for (const { key, data } of kept) {
-      await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
     }
   });
 });

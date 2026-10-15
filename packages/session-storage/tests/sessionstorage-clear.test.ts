@@ -1,5 +1,11 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureThrown } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureThrown,
+  createClearContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { ClearWithoutPrefixNotAllowedError } from "../src/errors.js";
@@ -23,43 +29,53 @@ describe("clear の振る舞い", () => {
   test("prefix 配下のみ消去する", ({ expect, backend }) => {
     // 準備
     const storage = new SessionStorage({ storage: backend });
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
-    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(storage.exists({ key: "k1", signal })).toBe(false);
-    expect(storage.exists({ key: "k2", signal })).toBe(false);
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+    expect(storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
   test("異なる prefix の値は消去されない", ({ expect, backend }) => {
     // 準備
     const storageA = new SessionStorage({ storage: backend, keyPrefix: "a:" });
     const storageB = new SessionStorage({ storage: backend, keyPrefix: "b:" });
-    storageA.write({ key: "k1", data: "va", vars: new Variables(), signal });
-    storageB.write({ key: "k1", data: "vb", vars: new Variables(), signal });
+    storageA.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "va");
+    storageB.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "vb");
 
     // 実行
-    storageA.clear({ signal });
+    storageA.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    expect(storageA.exists({ key: "k1", signal })).toBe(false);
-    expect(storageB.exists({ key: "k1", signal })).toBe(true);
+    expect(storageA.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+    expect(storageB.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      true,
+    );
   });
 
   test("空 prefix の既定では走査前に拒否する", ({ expect, backend }) => {
     // 準備
     const storage = new SessionStorage({ storage: backend, keyPrefix: "" });
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 実行
-    const error = captureThrown(() => storage.clear({ signal }));
+    const error = captureThrown(() =>
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(ClearWithoutPrefixNotAllowedError);
-    expect(storage.exists({ key: "k1", signal })).toBe(true);
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(true);
   });
 
   test("空 prefix でも中断済みならガードが signal より先に評価される", ({ expect, backend }) => {
@@ -67,7 +83,9 @@ describe("clear の振る舞い", () => {
     const storage = new SessionStorage({ storage: backend, keyPrefix: "" });
 
     // 実行
-    const error = captureThrown(() => storage.clear({ signal: abortedSignal() }));
+    const error = captureThrown(() =>
+      storage.clear(createClearContext("", { signal: abortedSignal() }) as IStorage.ClearContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(ClearWithoutPrefixNotAllowedError);
@@ -81,14 +99,16 @@ describe("clear の振る舞い", () => {
       allowClearWithoutPrefix: true,
     });
     backend.setItem("other:k1", "v1");
-    storage.write({ key: "k2", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
     expect(backend.getItem("other:k1")).toBe(null);
-    expect(storage.exists({ key: "k2", signal })).toBe(false);
+    expect(storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
   test("空の状態で clear を呼んでもエラーにならない", ({ expect, backend }) => {
@@ -96,7 +116,9 @@ describe("clear の振る舞い", () => {
     const storage = new SessionStorage({ storage: backend });
 
     // 実行と検証
-    expect(() => storage.clear({ signal })).not.toThrow();
+    expect(() =>
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).not.toThrow();
   });
 
   test("key の列挙で null が返っても添字ずれなく完了する", ({ expect }) => {
@@ -106,7 +128,7 @@ describe("clear の振る舞い", () => {
     const storage = new SessionStorage({ storage: nullKeyBackend });
 
     // 実行
-    storage.clear({ signal });
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
     expect(nullKeyBackend.getItem("unikvs:k1")).toBe("v1");

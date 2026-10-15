@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { createGetContext, createSetContext } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import LocalStorage from "../src/localstorage.js";
@@ -26,7 +27,7 @@ describe("他アプリとの相互運用", () => {
     backend.setItem("unikvs:direct", "hello");
 
     // 実行
-    const result = storage.read({ key: "direct", signal });
+    const result = storage.read(createGetContext("direct", { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe("hello");
@@ -34,7 +35,7 @@ describe("他アプリとの相互運用", () => {
 
   test("本ストレージが書いた値を他アプリが素通しで読める", ({ expect, backend, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 検証
     expect(backend.getItem("unikvs:k1")).toBe("v1");
@@ -51,10 +52,10 @@ describe("他アプリとの相互運用", () => {
     const storage = new LocalStorage({ storage: backend });
 
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
     // 検証
     expect(calls).toStrictEqual([["unikvs:k1", "v1"]]);
-    expect(storage.read({ key: "k1", signal })).toBe("v1");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v1");
   });
 });

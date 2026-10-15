@@ -1,5 +1,12 @@
-import { Variables } from "@unikvs/core";
-import { concatBytes, collectBytes } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  concatBytes,
+  collectBytes,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import type Opfs from "../src/opfs.js";
@@ -16,7 +23,9 @@ async function writeChunks(
   key: string,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<void> {
-  const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+  const writable = await storage.getWritable(
+    createSetContext(key, { signal }) as IStorage.GetWritableContext,
+  );
   const writer = writable.getWriter();
   for (const chunk of chunks) {
     await writer.write(chunk);
@@ -29,14 +38,18 @@ describe("書き込みストリームの振る舞い", () => {
   test("何も書き込まずに閉じたとき、空のデータが保存される", async ({ expect, storage }) => {
     // 準備
     const key = "empty-stream.bin";
-    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = await storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
 
     // 実行
     await writable.close();
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
-    expect(await storage.exists({ key, signal })).toBe(true);
+    expect(await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+      true,
+    );
     expect(loaded).toStrictEqual(new Uint8Array());
   });
 
@@ -47,7 +60,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, [data]);
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -60,7 +73,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -73,7 +86,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -90,7 +103,7 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(concatBytes(chunks));
@@ -110,8 +123,12 @@ describe("書き込みストリームの振る舞い", () => {
 
     // 実行
     await writeChunks(storage, key, chunks);
-    const streamed = await collectBytes(await storage.getReadable({ key, signal }));
-    const loaded = await storage.read({ key, signal });
+    const streamed = await collectBytes(
+      await storage.getReadable(
+        createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+      ),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(streamed).toStrictEqual(data);
@@ -125,15 +142,21 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "visibility.bin";
     const original = new Uint8Array([1, 2, 3]);
-    await storage.write({ key, data: original, signal, vars: new Variables() });
-    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const writable = await storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9]));
 
     // 実行
-    const beforeClose = await storage.read({ key, signal });
+    const beforeClose = await storage.read(
+      createGetContext(key, { signal }) as IStorage.ReadContext,
+    );
     await writer.close();
-    const afterClose = await storage.read({ key, signal });
+    const afterClose = await storage.read(
+      createGetContext(key, { signal }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(beforeClose).toStrictEqual(original);
@@ -146,15 +169,23 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "new-file-visibility.bin";
-    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = await storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
     // 実行
-    const existsBeforeClose = await storage.exists({ key, signal });
-    const beforeClose = await storage.read({ key, signal });
+    const existsBeforeClose = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
+    const beforeClose = await storage.read(
+      createGetContext(key, { signal }) as IStorage.ReadContext,
+    );
     await writer.close();
-    const afterClose = await storage.read({ key, signal });
+    const afterClose = await storage.read(
+      createGetContext(key, { signal }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(existsBeforeClose).toBe(true);
@@ -166,14 +197,16 @@ describe("書き込みストリームの振る舞い", () => {
     // 準備
     const key = "aborted.bin";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
-    await storage.write({ key, data: original, signal, vars: new Variables() });
-    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const writable = await storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
     // 実行
     await writer.abort(new Error("テスト用の中断"));
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(original);
@@ -185,16 +218,20 @@ describe("書き込みストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "aborted-new.bin";
-    const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+    const writable = await storage.getWritable(
+      createSetContext(key, { signal }) as IStorage.GetWritableContext,
+    );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([9, 9, 9]));
 
     // 実行
     await writer.abort(new Error("テスト用の中断"));
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
-    expect(await storage.exists({ key, signal })).toBe(true);
+    expect(await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+      true,
+    );
     expect(loaded).toStrictEqual(new Uint8Array());
   });
 });
@@ -207,8 +244,10 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "cancelled.bin";
     const data = new Uint8Array(200_000).fill(7);
-    await storage.write({ key, data, signal, vars: new Variables() });
-    const readable = await storage.getReadable({ key, signal });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+    const readable = await storage.getReadable(
+      createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+    );
     const reader = readable.getReader();
     await reader.read();
 
@@ -219,7 +258,11 @@ describe("読み取りストリームの振る舞い", () => {
     // 検証
     expect(afterCancel.done).toBe(true);
 
-    const again = await collectBytes(await storage.getReadable({ key, signal }));
+    const again = await collectBytes(
+      await storage.getReadable(
+        createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+      ),
+    );
     expect(again).toStrictEqual(data);
   });
 
@@ -229,7 +272,7 @@ describe("読み取りストリームの振る舞い", () => {
   }) => {
     // 実行
     const error = await storage
-      .getReadable({ key: "missing.bin", signal })
+      .getReadable(createStreamContext("missing.bin", { signal }) as IStorage.GetReadableContext)
       .catch((ex: unknown) => ex);
 
     // 検証
@@ -247,7 +290,7 @@ describe("読み取りストリームの振る舞い", () => {
     await writeChunks(storage, key, [data]);
 
     // 実行
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -260,10 +303,14 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "write-then-stream.bin";
     const data = new Uint8Array([5, 6, 7, 8]);
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
-    const loaded = await collectBytes(await storage.getReadable({ key, signal }));
+    const loaded = await collectBytes(
+      await storage.getReadable(
+        createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+      ),
+    );
 
     // 検証
     expect(loaded).toStrictEqual(data);
@@ -275,10 +322,15 @@ describe("読み取りストリームの振る舞い", () => {
   }) => {
     // 準備
     const key = "empty-file.bin";
-    await storage.write({ key, data: new Uint8Array(), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array(),
+    );
 
     // 実行
-    const readable = await storage.getReadable({ key, signal });
+    const readable = await storage.getReadable(
+      createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+    );
     const first = await readable.getReader().read();
 
     // 検証
@@ -292,12 +344,12 @@ describe("読み取りストリームの振る舞い", () => {
     // 準備
     const key = "multi-reader.bin";
     const data = new Uint8Array(150_000).fill(3);
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 実行
     const [first, second] = await Promise.all([
-      storage.getReadable({ key, signal }),
-      storage.getReadable({ key, signal }),
+      storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+      storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
     ]);
     const [firstData, secondData] = await Promise.all([collectBytes(first), collectBytes(second)]);
 

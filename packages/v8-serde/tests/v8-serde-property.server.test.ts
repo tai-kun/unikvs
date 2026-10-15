@@ -1,5 +1,16 @@
-import { forCasesAsync, type Random } from "@unikvs/testing";
-import { concatBytes, pumpThrough } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatBytes,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createDecodeContext,
+  createEncodeStreamContext,
+  createNext,
+  createOpenContext,
+  forCasesAsync,
+  sourceFrom,
+  type Random,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import V8Serde from "../src/v8-serde.js";
@@ -13,9 +24,35 @@ const STREAM_CASE_COUNT = 30;
  */
 async function createOpenedTarget(signal: AbortSignal): Promise<V8Serde> {
   const target = new V8Serde();
-  await target.open({ signal });
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
 
   return target;
+}
+
+/**
+ * 値をシリアライズしてバイト列で返します。
+ */
+async function encode(target: V8Serde, data: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(
+    c as IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * バイト列をデシリアライズして値を返します。
+ */
+async function decode(target: V8Serde, data: Uint8Array<ArrayBuffer>): Promise<unknown> {
+  const c = createDecodeContext(data);
+  await target.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+    createNext(),
+  );
+
+  return c.destination;
 }
 
 /**
@@ -125,9 +162,65 @@ function splitRandomly(random: Random, bytes: Uint8Array<ArrayBuffer>): Uint8Arr
  * 値を 4 バイトの長さヘッダー付きフレームへ変換します。
  */
 async function encodeFrame(target: V8Serde, data: unknown): Promise<Uint8Array<ArrayBuffer>> {
-  const { outputChunks } = await pumpThrough(target.getEncodable(), [data]);
+  const c = createEncodeStreamContext(sourceFrom([data]));
+  await target.encodeStream(
+    c as IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+  for (;;) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    outputChunks.push(value);
+  }
 
   return concatBytes(outputChunks);
+}
+
+/**
+ * チャンク列をデコードストリームに流し、出力された値を返します。
+ */
+async function pumpDecode(
+  target: V8Serde,
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+): Promise<{
+  outputChunks: unknown[];
+  writeError: undefined;
+  readError: unknown;
+}> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await target.decodeStream(
+    c as IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
+    createNext(),
+  );
+
+  const outputChunks: unknown[] = [];
+  let readError: unknown;
+
+  try {
+    const reader = (c.destination as ReadableStream<unknown>).getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (ex) {
+    readError = ex;
+  }
+
+  return { outputChunks, writeError: undefined, readError };
 }
 
 describe("決定的ファズテスト", () => {
@@ -139,8 +232,8 @@ describe("決定的ファズテスト", () => {
     await forCasesAsync(SEED, CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
 
-      const encoded = await target.encode({ data: value });
-      const decoded = await target.decode({ data: encoded });
+      const encoded = await encode(target, value);
+      const decoded = await decode(target, encoded);
 
       expect(decoded, `case ${index}`).toStrictEqual(value);
     });
@@ -159,7 +252,7 @@ describe("決定的ファズテスト", () => {
       const frame = await encodeFrame(target, value);
       const chunks = splitRandomly(random, frame);
 
-      const decoded = await pumpThrough(target.getDecodable(), chunks);
+      const decoded = await pumpDecode(target, chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();
@@ -180,7 +273,7 @@ describe("決定的ファズテスト", () => {
       const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
       const chunks = splitRandomly(random, concatBytes(frames));
 
-      const decoded = await pumpThrough(target.getDecodable(), chunks);
+      const decoded = await pumpDecode(target, chunks);
 
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();

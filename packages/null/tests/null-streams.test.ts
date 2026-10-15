@@ -1,3 +1,10 @@
+import type { IStorage } from "@unikvs/core";
+import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -22,7 +29,7 @@ describe("getWritable", () => {
 
   test("返却値が getWriter・abort・close を備える", ({ expect, storage }) => {
     // 準備
-    const writable = storage.getWritable({ key: "s1" });
+    const writable = storage.getWritable(createSetContext("s1") as IStorage.GetWritableContext);
 
     // 実行と検証
     expect(typeof writable.getWriter).toBe("function");
@@ -32,7 +39,9 @@ describe("getWritable", () => {
 
   test("書き込んで close しても例外を投げない", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -40,32 +49,40 @@ describe("getWritable", () => {
     await writer.close();
 
     // 検証
-    expect(storage.exists({ key: "s1" })).toBe(false);
+    expect(storage.exists(createHasContext("s1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("書き込んだ後に read しても KeyNotFoundError を投げる", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([1, 2]));
     await writer.close();
 
     // 実行と検証
-    expect(() => storage.read({ key: "s1" })).toThrow(KeyNotFoundError);
+    expect(() => storage.read(createGetContext("s1") as IStorage.ReadContext)).toThrow(
+      KeyNotFoundError,
+    );
   });
 
   test("書き込んだ後に exists しても false を返す", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([1, 2]));
     await writer.close();
 
     // 実行と検証
-    expect(storage.exists({ key: "s1" })).toBe(false);
+    expect(storage.exists(createHasContext("s1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("任意のチャンクを書き込んでも例外を投げない", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write("text");
@@ -73,21 +90,18 @@ describe("getWritable", () => {
     await writer.close();
 
     // 検証
-    expect(storage.exists({ key: "s1" })).toBe(false);
+    expect(storage.exists(createHasContext("s1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("中断済みの信号を渡しても、getWritable は成功する", ({ expect, storage }) => {
     // 準備
     const controller = new AbortController();
     controller.abort();
-    const args = {
-      key: "s1",
-      vars: {},
-      signal: controller.signal,
-    };
+    const c = createSetContext("s1", { signal: controller.signal }) as IStorage.GetWritableContext;
+    c.set("extra", "value");
 
     // 実行と検証
-    expect(() => storage.getWritable(args)).not.toThrow();
+    expect(() => storage.getWritable(c)).not.toThrow();
   });
 });
 
@@ -97,11 +111,15 @@ describe("getReadable", () => {
     storage,
   }) => {
     // 準備
-    storage.write({ key: "k1" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, undefined);
 
     // 実行と検証
-    expect(() => storage.getReadable({ key: "k1" })).toThrow(KeyNotFoundError);
-    expect(() => storage.getReadable({ key: "unknown" })).toThrow(KeyNotFoundError);
+    expect(() =>
+      storage.getReadable(createStreamContext("k1") as IStorage.GetReadableContext),
+    ).toThrow(KeyNotFoundError);
+    expect(() =>
+      storage.getReadable(createStreamContext("unknown") as IStorage.GetReadableContext),
+    ).toThrow(KeyNotFoundError);
   });
 
   test("getReadable が投げる KeyNotFoundError はキーを保持する", ({ expect, storage }) => {
@@ -111,7 +129,7 @@ describe("getReadable", () => {
 
     // 実行
     try {
-      storage.getReadable({ key });
+      storage.getReadable(createStreamContext(key) as IStorage.GetReadableContext);
     } catch (ex) {
       error = ex;
     }
@@ -128,13 +146,12 @@ describe("getReadable", () => {
     // 準備
     const controller = new AbortController();
     controller.abort();
-    const args = {
-      key: "k1",
-      vars: {},
-      signal: controller.signal,
-    };
 
     // 実行と検証
-    expect(() => storage.getReadable(args)).toThrow(KeyNotFoundError);
+    expect(() =>
+      storage.getReadable(
+        createStreamContext("k1", { signal: controller.signal }) as IStorage.GetReadableContext,
+      ),
+    ).toThrow(KeyNotFoundError);
   });
 });

@@ -1,4 +1,12 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {
@@ -55,15 +63,55 @@ const ALGORITHMS = [
   },
 ] as const;
 
+type ChecksumInstance = ReturnType<(typeof ALGORITHMS)[number]["create"]>;
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteEncodeStream = IMiddleware.EncodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteDecodeStream = IMiddleware.DecodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: ChecksumInstance,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * データを検証してそのまま返します。
+ */
+async function decode(
+  checksum: ChecksumInstance,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data, "", { values });
+  await checksum.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
+
 describe("required を省略した場合", () => {
   test.for(ALGORITHMS)(
     "$label はチェックサム未指定でも encode がデータをそのまま返す",
-    ({ create }, { expect }) => {
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create();
 
       // 実行
-      const result = checksum.encode({ vars: new Variables({}), data: ABC });
+      const result = await encode(checksum, ABC);
 
       // 検証
       expect(result).toBe(ABC);
@@ -72,12 +120,12 @@ describe("required を省略した場合", () => {
 
   test.for(ALGORITHMS)(
     "$label はチェックサム未指定でも decode がデータをそのまま返す",
-    ({ create }, { expect }) => {
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create();
 
       // 実行
-      const result = checksum.decode({ vars: new Variables({}), data: ABC });
+      const result = await decode(checksum, ABC);
 
       // 検証
       expect(result).toBe(ABC);
@@ -88,51 +136,47 @@ describe("required を省略した場合", () => {
 describe("required を有効にした場合", () => {
   test.for(ALGORITHMS)(
     "$label はチェックサム未指定で encode すると ChecksumRequiredError を投げる",
-    ({ create }, { expect }) => {
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.encode({ vars: new Variables({}), data: ABC })).toThrow(
-        ChecksumRequiredError,
-      );
+      await expect(encode(checksum, ABC)).rejects.toThrow(ChecksumRequiredError);
     },
   );
 
   test.for(ALGORITHMS)(
     "$label はチェックサム未指定で decode すると ChecksumRequiredError を投げる",
-    ({ create }, { expect }) => {
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.decode({ vars: new Variables({}), data: ABC })).toThrow(
+      await expect(decode(checksum, ABC)).rejects.toThrow(ChecksumRequiredError);
+    },
+  );
+
+  test.for(ALGORITHMS)(
+    "$label はチェックサムの値が文字列以外でも ChecksumRequiredError を投げる",
+    async ({ create, varName }, { expect }) => {
+      // 準備
+      const checksum = create({ required: true });
+
+      // 実行と検証
+      await expect(encode(checksum, ABC, { [varName]: 12345 })).rejects.toThrow(
         ChecksumRequiredError,
       );
     },
   );
 
   test.for(ALGORITHMS)(
-    "$label はチェックサムの値が文字列以外でも ChecksumRequiredError を投げる",
-    ({ create, varName }, { expect }) => {
-      // 準備
-      const checksum = create({ required: true });
-      const vars = new Variables({ [varName]: 12345 });
-
-      // 実行と検証
-      expect(() => checksum.encode({ vars, data: ABC })).toThrow(ChecksumRequiredError);
-    },
-  );
-
-  test.for(ALGORITHMS)(
     "$label は正しいチェックサムが指定されていれば検証に成功する",
-    ({ create, varName, abcDigest }, { expect }) => {
+    async ({ create, varName, abcDigest }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
-      const vars = new Variables({ [varName]: abcDigest });
 
       // 実行
-      const result = checksum.encode({ vars, data: ABC });
+      const result = await encode(checksum, ABC, { [varName]: abcDigest });
 
       // 検証
       expect(result).toBe(ABC);
@@ -140,26 +184,28 @@ describe("required を有効にした場合", () => {
   );
 
   test.for(ALGORITHMS)(
-    "$label は getEncodable で ChecksumRequiredError を投げる",
-    ({ create }, { expect }) => {
+    "$label は encodeStream で ChecksumRequiredError を投げる",
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.getEncodable({ vars: new Variables({}) })).toThrow(
+      const c = createEncodeStreamContext(sourceFrom([]));
+      await expect(checksum.encodeStream(c as ByteEncodeStream, createNext())).rejects.toThrow(
         ChecksumRequiredError,
       );
     },
   );
 
   test.for(ALGORITHMS)(
-    "$label は getDecodable で ChecksumRequiredError を投げる",
-    ({ create }, { expect }) => {
+    "$label は decodeStream で ChecksumRequiredError を投げる",
+    async ({ create }, { expect }) => {
       // 準備
       const checksum = create({ required: true });
 
       // 実行と検証
-      expect(() => checksum.getDecodable({ vars: new Variables({}) })).toThrow(
+      const c = createDecodeStreamContext(sourceFrom([]));
+      await expect(checksum.decodeStream(c as ByteDecodeStream, createNext())).rejects.toThrow(
         ChecksumRequiredError,
       );
     },

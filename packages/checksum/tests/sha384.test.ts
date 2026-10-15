@@ -1,15 +1,32 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import { createEncodeContext, createNext, type TestContextValues } from "@unikvs/testing";
 import { test } from "vitest";
 
+import type Checksum from "../src/checksum.js";
 import { ChecksumMismatchError, ChecksumRequiredError } from "../src/errors.js";
 import ChecksumSha384 from "../src/sha384.js";
 
 const TEST_DATA = Uint8Array.from(new TextEncoder().encode("test"));
-const VALID_HASH =
-  "768412320f7b0aa5812fce428dc4706b3cae50e02a64caa16a782249bfe8efc4b7ef1ccb126255d196047dfedf17a0a9";
-const EMPTY_HASH =
-  "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b";
+const VALID_HASH = "768412320f7b0aa5812fce428dc4706b3cae50e02a64caa16a782249bfe8efc4b7ef1ccb126255d196047dfedf17a0a9";
+const EMPTY_HASH = "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b";
 const INVALID_HASH = "0".repeat(VALID_HASH.length);
+
+/**
+ * チェックサム付きでデータを検証して返します。
+ */
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
 
 test("CHECKSUM_VAR_NAME が定義されている", ({ expect }) => {
   // 検証
@@ -24,43 +41,40 @@ test("指定した名前が name プロパティに設定される", ({ expect }
   expect(checksum.name).toBe("ChecksumSha384");
 });
 
-test("期待値と一致するチェックサムを指定して encode すると、SHA-384 のハッシュで検証してデータをそのまま返す", ({
+test("期待値と一致するチェックサムを指定して encode すると、SHA-384 のハッシュで検証してデータをそのまま返す", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha384();
-  const vars = new Variables({ [ChecksumSha384.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 実行
-  const result = checksum.encode({ vars, data: TEST_DATA });
+  const result = await encode(checksum, TEST_DATA, { [ChecksumSha384.CHECKSUM_VAR_NAME]: VALID_HASH });
 
   // 検証
   expect(result).toStrictEqual(TEST_DATA);
 });
 
-test("空のデータを SHA-384 のハッシュ値で検証できる", ({ expect }) => {
+test("空のデータを SHA-384 のハッシュ値で検証できる", async ({ expect }) => {
   // 準備
   const checksum = new ChecksumSha384();
   const data = new Uint8Array(0);
-  const vars = new Variables({ [ChecksumSha384.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
   // 実行
-  const result = checksum.encode({ vars, data });
+  const result = await encode(checksum, data, { [ChecksumSha384.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
   // 検証
   expect(result).toStrictEqual(data);
 });
 
-test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", ({
+test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha384();
-  const vars = new Variables({ [ChecksumSha384.CHECKSUM_VAR_NAME]: INVALID_HASH });
 
   // 実行と検証
   try {
-    checksum.encode({ vars, data: TEST_DATA });
+    await encode(checksum, TEST_DATA, { [ChecksumSha384.CHECKSUM_VAR_NAME]: INVALID_HASH });
     expect.unreachable();
   } catch (error) {
     expect(error).toBeInstanceOf(ChecksumMismatchError);
@@ -68,14 +82,12 @@ test("期待値と一致しないチェックサムを指定すると、実際�
   }
 });
 
-test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", ({
+test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", async ({
   expect,
 }) => {
   // 準備
   const checksum = new ChecksumSha384({ required: true });
 
   // 実行と検証
-  expect(() => checksum.encode({ vars: new Variables({}), data: TEST_DATA })).toThrow(
-    ChecksumRequiredError,
-  );
+  await expect(encode(checksum, TEST_DATA)).rejects.toThrow(ChecksumRequiredError);
 });

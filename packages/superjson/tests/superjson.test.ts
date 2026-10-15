@@ -1,22 +1,49 @@
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { SuperjsonUnsupportedValueError } from "../src/errors.js";
 import Superjson from "../src/superjson.js";
 
 /**
+ * 値をエンコードして SuperJSON ペイロードのバイト列を返します。
+ */
+async function encode(codec: Superjson, value: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(value);
+  await codec.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * バイト列をデコードして値を返します。
+ */
+async function decode(codec: Superjson, data: Uint8Array<ArrayBuffer>): Promise<unknown> {
+  const c = createDecodeContext(data);
+  await codec.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
  * 一括エンコードと一括デコードで値を往復させます。
  */
-function roundTrip(value: unknown): unknown {
+async function roundTrip(value: unknown): Promise<unknown> {
   const codec = new Superjson();
 
-  return codec.decode({ data: codec.encode({ data: value }) });
+  return decode(codec, await encode(codec, value));
 }
 
 /**
  * 値をエンコードして UTF-8 文字列として返します。
  */
-function encodeText(value: unknown): string {
-  return new TextDecoder().decode(new Superjson().encode({ data: value }));
+async function encodeText(value: unknown): Promise<string> {
+  return new TextDecoder().decode(await encode(new Superjson(), value));
 }
 
 /**
@@ -42,12 +69,12 @@ describe("Superjson", () => {
     expect(codec.isOpen).toBe(true);
   });
 
-  test("encode は SuperJSON ペイロードの UTF-8 バイト列を返す", ({ expect }) => {
+  test("encode は SuperJSON ペイロードの UTF-8 バイト列を返す", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
 
     // 実行
-    const encoded = codec.encode({ data: { list: [1, true, null] } });
+    const encoded = await encode(codec, { list: [1, true, null] });
 
     // 検証
     expect(encoded).toBeInstanceOf(Uint8Array);
@@ -56,19 +83,19 @@ describe("Superjson", () => {
     });
   });
 
-  test("Date を往復すると同じ時刻の Date に戻る", ({ expect }) => {
+  test("Date を往復すると同じ時刻の Date に戻る", async ({ expect }) => {
     // 準備
     const date = new Date("2024-01-02T03:04:05.678Z");
 
     // 実行
-    const decoded = roundTrip(date);
+    const decoded = await roundTrip(date);
 
     // 検証
     expect(decoded).toBeInstanceOf(Date);
     expect(decoded).toStrictEqual(date);
   });
 
-  test("Map を往復すると入れ子の値も含めて元に戻る", ({ expect }) => {
+  test("Map を往復すると入れ子の値も含めて元に戻る", async ({ expect }) => {
     // 準備
     const map = new Map<unknown, unknown>([
       ["number", 1],
@@ -78,55 +105,55 @@ describe("Superjson", () => {
     ]);
 
     // 実行
-    const decoded = roundTrip(map);
+    const decoded = await roundTrip(map);
 
     // 検証
     expect(decoded).toBeInstanceOf(Map);
     expect(decoded).toStrictEqual(map);
   });
 
-  test("Set を往復すると元に戻る", ({ expect }) => {
+  test("Set を往復すると元に戻る", async ({ expect }) => {
     // 準備
     const set = new Set<unknown>([1, "two", 3n, null]);
 
     // 実行
-    const decoded = roundTrip(set);
+    const decoded = await roundTrip(set);
 
     // 検証
     expect(decoded).toBeInstanceOf(Set);
     expect(decoded).toStrictEqual(set);
   });
 
-  test("BigInt を往復すると元に戻る", ({ expect }) => {
+  test("BigInt を往復すると元に戻る", async ({ expect }) => {
     // 実行
-    const decoded = roundTrip(123456789012345678901234567890n);
+    const decoded = await roundTrip(123456789012345678901234567890n);
 
     // 検証
     expect(decoded).toBe(123456789012345678901234567890n);
   });
 
-  test("ルートの undefined を往復すると undefined に戻る", ({ expect }) => {
+  test("ルートの undefined を往復すると undefined に戻る", async ({ expect }) => {
     // 実行
-    const encoded = encodeText(undefined);
-    const decoded = roundTrip(undefined);
+    const encoded = await encodeText(undefined);
+    const decoded = await roundTrip(undefined);
 
     // 検証
     expect(encoded).toContain("undefined");
     expect(decoded).toBeUndefined();
   });
 
-  test("入れ子の undefined を往復すると元に戻る", ({ expect }) => {
+  test("入れ子の undefined を往復すると元に戻る", async ({ expect }) => {
     // 準備
     const value = { present: 1, missing: undefined, list: [undefined, 2] };
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toStrictEqual(value);
   });
 
-  test("プリミティブと入れ子の配列・オブジェクトを往復する", ({ expect }) => {
+  test("プリミティブと入れ子の配列・オブジェクトを往復する", async ({ expect }) => {
     // 準備
     const value = {
       string: "text",
@@ -138,44 +165,44 @@ describe("Superjson", () => {
     };
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toStrictEqual(value);
   });
 
-  test("Unicode 文字列を往復する", ({ expect }) => {
+  test("Unicode 文字列を往復する", async ({ expect }) => {
     // 準備
     const value = "日本語のテキストと絵文字 🎌 と制御文字 \u0000 と改行 \n";
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toBe(value);
   });
 
-  test("自己参照する循環参照を往復する", ({ expect }) => {
+  test("自己参照する循環参照を往復する", async ({ expect }) => {
     // 準備
     const value: { name: string; self?: unknown } = { name: "root" };
     value.self = value;
 
     // 実行
-    const decoded = roundTrip(value) as typeof value;
+    const decoded = (await roundTrip(value)) as typeof value;
 
     // 検証
     expect(decoded.name).toBe("root");
     expect(decoded.self).toBe(decoded);
   });
 
-  test("相互参照する循環参照を往復する", ({ expect }) => {
+  test("相互参照する循環参照を往復する", async ({ expect }) => {
     // 準備
     const left: { name: string; right?: unknown } = { name: "left" };
     const right: { name: string; left?: unknown } = { name: "right", left };
     left.right = right;
 
     // 実行
-    const decoded = roundTrip(left) as typeof left;
+    const decoded = (await roundTrip(left)) as typeof left;
     const decodedRight = decoded.right as typeof right;
 
     // 検証
@@ -183,12 +210,12 @@ describe("Superjson", () => {
     expect(decodedRight.left).toBe(decoded);
   });
 
-  test("NaN・Infinity・-Infinity・-0 を往復する", ({ expect }) => {
+  test("NaN・Infinity・-Infinity・-0 を往復する", async ({ expect }) => {
     // 準備
     const value = [NaN, Infinity, -Infinity, -0];
 
     // 実行
-    const decoded = roundTrip(value) as number[];
+    const decoded = (await roundTrip(value)) as number[];
 
     // 検証
     expect(Number.isNaN(decoded[0]!)).toBe(true);
@@ -197,24 +224,24 @@ describe("Superjson", () => {
     expect(Object.is(decoded[3], -0)).toBe(true);
   });
 
-  test("Uint8Array を往復する", ({ expect }) => {
+  test("Uint8Array を往復する", async ({ expect }) => {
     // 準備
     const value = Uint8Array.from([0, 1, 127, 255]);
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(decoded).toStrictEqual(value);
   });
 
-  test("RegExp を往復する", ({ expect }) => {
+  test("RegExp を往復する", async ({ expect }) => {
     // 準備
     const value = /ab+c/giu;
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toBeInstanceOf(RegExp);
@@ -222,37 +249,32 @@ describe("Superjson", () => {
     expect((decoded as RegExp).flags).toBe(value.flags);
   });
 
-  test("登録していないクラスのインスタンスはプレーンオブジェクトになる", ({ expect }) => {
+  test("登録していないクラスのインスタンスはプレーンオブジェクトになる", async ({ expect }) => {
     // 実行
-    const decoded = roundTrip(new Point(1, 2));
+    const decoded = await roundTrip(new Point(1, 2));
 
     // 検証
     expect(decoded).not.toBeInstanceOf(Point);
     expect(decoded).toStrictEqual({ x: 1, y: 2 });
   });
 
-  test("入れ子の関数とシンボルのプロパティーは取り除かれる", ({ expect }) => {
+  test("入れ子の関数とシンボルのプロパティーは取り除かれる", async ({ expect }) => {
     // 準備
     const value = { keep: 1, fn: () => 2, sym: Symbol("nested") };
 
     // 実行
-    const decoded = roundTrip(value);
+    const decoded = await roundTrip(value);
 
     // 検証
     expect(decoded).toStrictEqual({ keep: 1 });
   });
 
-  test("ルートの関数は SuperjsonUnsupportedValueError を投げる", ({ expect }) => {
+  test("ルートの関数は SuperjsonUnsupportedValueError を投げる", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
 
     // 実行
-    let thrown: unknown;
-    try {
-      codec.encode({ data: () => 1 });
-    } catch (error) {
-      thrown = error;
-    }
+    const thrown = await captureRejection(encode(codec, () => 1));
 
     // 検証
     expect(thrown).toBeInstanceOf(SuperjsonUnsupportedValueError);
@@ -261,46 +283,41 @@ describe("Superjson", () => {
     expect((thrown as Error).message).toBe("Unsupported value type: function");
   });
 
-  test("ルートのシンボルは SuperjsonUnsupportedValueError を投げる", ({ expect }) => {
+  test("ルートのシンボルは SuperjsonUnsupportedValueError を投げる", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
 
     // 実行
-    let thrown: unknown;
-    try {
-      codec.encode({ data: Symbol("root") });
-    } catch (error) {
-      thrown = error;
-    }
+    const thrown = await captureRejection(encode(codec, Symbol("root")));
 
     // 検証
     expect(thrown).toBeInstanceOf(SuperjsonUnsupportedValueError);
     expect((thrown as SuperjsonUnsupportedValueError).meta).toStrictEqual({ type: "symbol" });
   });
 
-  test("空のバイト列の decode は SyntaxError を投げる", ({ expect }) => {
+  test("空のバイト列の decode は SyntaxError を投げる", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
 
     // 実行と検証
-    expect(() => codec.decode({ data: new Uint8Array(0) })).toThrow(SyntaxError);
+    await expect(decode(codec, new Uint8Array(0))).rejects.toThrow(SyntaxError);
   });
 
-  test("不正な JSON の decode は SyntaxError を投げる", ({ expect }) => {
+  test("不正な JSON の decode は SyntaxError を投げる", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
     const data = new TextEncoder().encode("{ invalid");
 
     // 実行と検証
-    expect(() => codec.decode({ data })).toThrow(SyntaxError);
+    await expect(decode(codec, data)).rejects.toThrow(SyntaxError);
   });
 
-  test("不正な UTF-8 の decode は TypeError を投げる", ({ expect }) => {
+  test("不正な UTF-8 の decode は TypeError を投げる", async ({ expect }) => {
     // 準備
     const codec = new Superjson();
     const data = Uint8Array.from([0xff, 0xfe]);
 
     // 実行と検証
-    expect(() => codec.decode({ data })).toThrow(TypeError);
+    await expect(decode(codec, data)).rejects.toThrow(TypeError);
   });
 });

@@ -82,43 +82,35 @@ export default class LocalStorage implements IStorage<string> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public open(args: Pick<IStorage.OpenArgs, "signal">): void {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public open(c: IStorage.OpenContext): void {
+    c.signal.throwIfAborted();
     this.backend();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public close(args: Pick<IStorage.CloseArgs, "signal">): void {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public close(c: IStorage.CloseContext): void {
+    c.signal.throwIfAborted();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public write(args: Pick<IStorage.WriteArgs<string>, "key" | "data" | "vars" | "signal">): void {
-    const { key, data, signal } = args;
-
-    signal.throwIfAborted();
-    this.backend().setItem(this.toRealKey(key), data);
+  public write(c: IStorage.WriteContext, data: string): void {
+    c.signal.throwIfAborted();
+    this.backend().setItem(this.toRealKey(c.key), data);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public read(args: Pick<IStorage.ReadArgs, "key" | "signal">): string {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
-    const value = this.backend().getItem(this.toRealKey(key));
+  public read(c: IStorage.ReadContext): string {
+    c.signal.throwIfAborted();
+    const value = this.backend().getItem(this.toRealKey(c.key));
 
     if (value === null) {
-      throw new KeyNotFoundError({ key });
+      throw new KeyNotFoundError({ key: c.key });
     }
 
     return value;
@@ -127,50 +119,44 @@ export default class LocalStorage implements IStorage<string> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): boolean {
-    const { key, signal } = args;
+  public exists(c: IStorage.ExistsContext): boolean {
+    c.signal.throwIfAborted();
 
-    signal.throwIfAborted();
-
-    return this.backend().getItem(this.toRealKey(key)) !== null;
+    return this.backend().getItem(this.toRealKey(c.key)) !== null;
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): void {
-    const { key, signal } = args;
-
-    signal.throwIfAborted();
+  public delete(c: IStorage.DeleteContext): void {
+    c.signal.throwIfAborted();
     const backend = this.backend();
 
-    if (backend.getItem(this.toRealKey(key)) === null) {
-      throw new KeyNotFoundError({ key });
+    if (backend.getItem(this.toRealKey(c.key)) === null) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    backend.removeItem(this.toRealKey(key));
+    backend.removeItem(this.toRealKey(c.key));
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
    */
-  public clear(args: Pick<IStorage.ClearArgs, "signal">): void {
-    const { signal } = args;
-
+  public clear(c: IStorage.ClearContext): void {
     // 空 prefix での無条件全削除の事故を防ぐため走査前に拒否します。
     // `http` と同形の初期中断検証である。
     if (this.keyPrefix === "" && !this.allowClearWithoutPrefix) {
       throw new ClearWithoutPrefixNotAllowedError();
     }
 
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
     const backend = this.backend();
 
     // 走査中の削除による添字ずれを避けるため削除対象を先に収集します。
     const targets: string[] = [];
 
     for (let index = 0; index < backend.length; index += 1) {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       const found = backend.key(index);
 
       if (found !== null && found.startsWith(this.keyPrefix)) {
@@ -179,7 +165,7 @@ export default class LocalStorage implements IStorage<string> {
     }
 
     for (const target of targets) {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       backend.removeItem(target);
     }
   }

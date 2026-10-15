@@ -69,23 +69,21 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async open(args: Pick<IStorage.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     if (this.rootHandle) {
       return;
     }
 
     let handle = await navigator.storage.getDirectory();
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     if (this.root !== "") {
       // 指定された名前のディレクトリーを作成・取得します。
       for (const dirname of this.root.split("/")) {
         handle = await handle.getDirectoryHandle(dirname, { create: true });
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
       }
     }
 
@@ -96,23 +94,19 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
-    const { key, data, signal } = args;
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
-
-    const fileHandle = await this.rootHandle!.getFileHandle(key, { create: true });
-    signal.throwIfAborted();
+    const fileHandle = await this.rootHandle!.getFileHandle(c.key, { create: true });
+    c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     try {
       await writable.write(data);
       // close でコミットされる前に中断を検知し、部分的な書き込みを破棄します。
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
     } catch (ex) {
       // 失敗時に close すると、書き込めた分の内容が既存データを上書きしてコミットされるため abort して変更を破棄します。
       await writable.abort(ex).catch(() => {});
@@ -125,18 +119,14 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
-    const { key, signal } = args;
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
-
-    const fileHandle = await this.rootHandle!.getFileHandle(key);
-    signal.throwIfAborted();
+    const fileHandle = await this.rootHandle!.getFileHandle(c.key);
+    c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
     const buff = await file.arrayBuffer();
 
     return new Uint8Array(buff);
@@ -145,14 +135,12 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key" | "signal">): Promise<boolean> {
-    const { key, signal } = args;
-
-    assertValidFilename(key);
-    signal.throwIfAborted();
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
     try {
-      await this.rootHandle!.getFileHandle(key);
+      await this.rootHandle!.getFileHandle(c.key);
       return true;
     } catch (ex) {
       if (ex instanceof DOMException && ex.name === "NotFoundError") {
@@ -166,28 +154,24 @@ export default class Opfs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key" | "signal">): Promise<void> {
-    const { key, signal } = args;
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
-
-    await this.rootHandle!.removeEntry(key);
+    await this.rootHandle!.removeEntry(c.key);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
    */
-  public async clear(args: Pick<IStorage.ClearArgs, "signal">): Promise<void> {
-    const { signal } = args;
-
-    signal.throwIfAborted();
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    c.signal.throwIfAborted();
 
     if (this.root === "") {
       // ルートディレクトリー直下を使用している場合は、すべてのエントリーを個別に削除します。
 
       for await (const name of this.rootHandle!.keys()) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         await this.rootHandle!.removeEntry(name, { recursive: true });
       }
     } else {
@@ -195,15 +179,15 @@ export default class Opfs implements IStorage {
 
       const dirnames = this.root.split("/");
       let parentHandle = await navigator.storage.getDirectory();
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       for (const dirname of dirnames.slice(0, -1)) {
         parentHandle = await parentHandle.getDirectoryHandle(dirname, { create: true });
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
       }
 
       const currentDirname = dirnames[dirnames.length - 1]!;
       await parentHandle.removeEntry(currentDirname, { recursive: true });
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       this.rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
     }
   }
@@ -212,24 +196,22 @@ export default class Opfs implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
    */
   public async getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+    c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    const { key, signal } = args;
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
-
-    const fileHandle = await this.rootHandle!.getFileHandle(key, { create: true });
-    signal.throwIfAborted();
+    const fileHandle = await this.rootHandle!.getFileHandle(c.key, { create: true });
+    c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     const writer = writable.getWriter();
 
     // 中断と失敗のどちらからでも後始末が走るため、完了処理は一度だけ行います。
     let finished = false;
     const removeAbortListener = (): void => {
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
     };
     const finish = async (reason?: unknown): Promise<void> => {
       if (finished) return;
@@ -239,13 +221,13 @@ export default class Opfs implements IStorage {
       await writer.abort(reason).catch(() => {});
     };
     const onAbort = (): void => {
-      void finish(signal.reason);
+      void finish(c.signal.reason);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async write(chunk) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           await writer.write(chunk);
         } catch (ex) {
@@ -254,7 +236,7 @@ export default class Opfs implements IStorage {
         }
       },
       async close() {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           await writer.close();
         } catch (ex) {
@@ -275,36 +257,34 @@ export default class Opfs implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#streams)
    */
   public async getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
+    c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    const { key, signal } = args;
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
-
-    const fileHandle = await this.rootHandle!.getFileHandle(key);
-    signal.throwIfAborted();
+    const fileHandle = await this.rootHandle!.getFileHandle(c.key);
+    c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
-    signal.throwIfAborted();
+    c.signal.throwIfAborted();
 
     const reader = file.stream().getReader();
 
     // 中断時は待機中の読み取りを終わらせ、以降の pull で中断理由を通知できるようにします。
     const onAbort = (): void => {
-      void reader.cancel(signal!.reason).catch(() => {});
+      void reader.cancel(c.signal.reason).catch(() => {});
     };
     const removeAbortListener = (): void => {
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
     void reader.closed.then(removeAbortListener, removeAbortListener);
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async pull(controller) {
         try {
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
           const { done, value } = await reader.read();
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
 
           if (done) {
             removeAbortListener();

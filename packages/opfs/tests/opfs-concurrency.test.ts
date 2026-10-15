@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import Opfs from "../src/opfs.js";
@@ -19,12 +25,16 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     await Promise.all(
-      entries.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
+      entries.map(({ key, data }) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+      ),
     );
 
     // 検証
     for (const { key, data } of entries) {
-      expect(await storage.read({ key, signal })).toStrictEqual(data);
+      expect(
+        await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).toStrictEqual(data);
     }
   });
 
@@ -44,9 +54,11 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     await Promise.all(
-      payloads.map((data) => storage.write({ key, data, signal, vars: new Variables() })),
+      payloads.map((data) =>
+        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+      ),
     );
-    const loaded = await storage.read({ key, signal });
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(payloads).toContainEqual(loaded);
@@ -62,7 +74,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index]),
     }));
     for (const { key, data } of existing) {
-      await storage.write({ key, data, signal, vars: new Variables() });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
     const fresh = Array.from({ length: 16 }, (_, index) => ({
@@ -72,9 +84,15 @@ describe("並行実行の振る舞い", () => {
 
     // 実行
     const [readResults] = await Promise.all([
-      Promise.all(existing.map(({ key }) => storage.read({ key, signal }))),
       Promise.all(
-        fresh.map(({ key, data }) => storage.write({ key, data, signal, vars: new Variables() })),
+        existing.map(({ key }) =>
+          storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+        ),
+      ),
+      Promise.all(
+        fresh.map(({ key, data }) =>
+          storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
+        ),
       ),
     ]);
 
@@ -84,7 +102,9 @@ describe("並行実行の振る舞い", () => {
     }
 
     for (const { key, data } of fresh) {
-      expect(await storage.read({ key, signal })).toStrictEqual(data);
+      expect(
+        await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).toStrictEqual(data);
     }
   });
 
@@ -95,8 +115,8 @@ describe("並行実行の振る舞い", () => {
     // 準備
     const first = new Opfs(root);
     const second = new Opfs(root);
-    await first.open({ signal });
-    await second.open({ signal });
+    await first.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await second.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const firstEntries = Array.from({ length: 16 }, (_, index) => ({
       key: `first-${index}.bin`,
       data: new Uint8Array([index]),
@@ -109,20 +129,24 @@ describe("並行実行の振る舞い", () => {
     // 実行
     await Promise.all([
       ...firstEntries.map(({ key, data }) =>
-        first.write({ key, data, signal, vars: new Variables() }),
+        first.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
       ...secondEntries.map(({ key, data }) =>
-        second.write({ key, data, signal, vars: new Variables() }),
+        second.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     ]);
 
     // 検証
     for (const { key, data } of firstEntries) {
-      expect(await second.read({ key, signal })).toStrictEqual(data);
+      expect(
+        await second.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).toStrictEqual(data);
     }
 
     for (const { key, data } of secondEntries) {
-      expect(await first.read({ key, signal })).toStrictEqual(data);
+      expect(
+        await first.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).toStrictEqual(data);
     }
   });
 
@@ -136,18 +160,18 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index, index + 1]),
     }));
     for (const { key, data } of entries) {
-      await storage.write({ key, data, signal, vars: new Variables() });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
     // 実行
     const results = await Promise.all([
       ...entries.map(async ({ key }) => ({
         kind: "exists" as const,
-        value: await storage.exists({ key, signal }),
+        value: await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
       })),
       ...entries.map(async ({ key, data }) => ({
         kind: "read" as const,
-        value: await storage.read({ key, signal }),
+        value: await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
         expected: data,
       })),
     ]);

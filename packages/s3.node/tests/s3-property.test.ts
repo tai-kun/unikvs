@@ -1,5 +1,14 @@
-import { Variables } from "@unikvs/core";
-import { bytesEqual, collectBytes } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  bytesEqual,
+  collectBytes,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -15,21 +24,25 @@ const KEY_CHARS = Array.from(
 describe("決定的ファズ検証", () => {
   test("任意のキーとバイト列で write→read が往復する", async ({ expect, signal, storage }) => {
     // 準備
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行と検証
     await forCasesAsync(seed, caseCount, async (random) => {
       const key = `prop/${random.string(random.int(1, 32), KEY_CHARS)}`;
       const data = random.bytes(random.uint(64 * 1024 + 1));
 
-      await storage.write({ key, data, signal, vars: new Variables({}) });
-      const result = await storage.read({ key, signal });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
       expect(bytesEqual(result, data)).toBe(true);
-      expect(await storage.exists({ key, signal })).toBe(true);
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(true);
 
-      await storage.delete({ key, signal });
-      expect(await storage.exists({ key, signal })).toBe(false);
+      await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(false);
     });
   });
 
@@ -39,7 +52,7 @@ describe("決定的ファズ検証", () => {
     storage,
   }) => {
     // 準備
-    storage.open();
+    storage.open(createOpenContext() as IStorage.OpenContext);
 
     // 実行と検証
     await forCasesAsync(seed + 1, caseCount, async (random) => {
@@ -58,14 +71,20 @@ describe("決定的ファズ検証", () => {
         chunks.push(expected.subarray(offset));
       }
 
-      const writer = storage.getWritable({ key, vars: new Variables({}), signal }).getWriter();
+      const writer = storage
+        .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+        .getWriter();
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
       await writer.close();
 
-      const direct = await storage.read({ key, signal });
-      const streamed = await collectBytes(await storage.getReadable({ key, signal }));
+      const direct = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
+      const streamed = await collectBytes(
+        await storage.getReadable(
+          createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+        ),
+      );
 
       expect(bytesEqual(direct, expected)).toBe(true);
       expect(bytesEqual(streamed, expected)).toBe(true);

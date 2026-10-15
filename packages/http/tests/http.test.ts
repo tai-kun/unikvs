@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -31,12 +38,10 @@ describe("初期化と接続管理", () => {
     const storage = new Http("https://kv.example.com/store", { fetch });
 
     // 実行
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -50,17 +55,13 @@ describe("基本操作（CRUD）", () => {
     const storage = new Http("https://kv.example.com/store", { fetch });
 
     // 実行
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1, 2, 3]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    const result = await storage.read({
-      key: "k1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1, 2, 3]),
+    );
+    const result = await storage.read(
+      createGetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(result).toStrictEqual(new Uint8Array([1, 2, 3]));
@@ -70,19 +71,15 @@ describe("基本操作（CRUD）", () => {
     // 準備
     const { fetch } = createMockServer();
     const storage = new Http("https://kv.example.com/store", { fetch });
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    const result = await storage.exists({
-      key: "k1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const result = await storage.exists(
+      createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+    );
 
     // 検証
     expect(result).toBe(true);
@@ -94,11 +91,9 @@ describe("基本操作（CRUD）", () => {
     const storage = new Http("https://kv.example.com/store", { fetch });
 
     // 実行
-    const result = await storage.exists({
-      key: "none",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const result = await storage.exists(
+      createHasContext("none", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+    );
 
     // 検証
     expect(result).toBe(false);
@@ -108,27 +103,21 @@ describe("基本操作（CRUD）", () => {
     // 準備
     const { fetch } = createMockServer();
     const storage = new Http("https://kv.example.com/store", { fetch });
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 実行
-    await storage.delete({
-      key: "k1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.delete(
+      createDeleteContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
+    );
 
     // 検証
     expect(
-      await storage.exists({
-        key: "k1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
   });
 
@@ -136,36 +125,30 @@ describe("基本操作（CRUD）", () => {
     // 準備
     const { fetch } = createMockServer();
     const storage = new Http("https://kv.example.com/store", { fetch });
-    await storage.write({
-      key: "k1",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    await storage.write({
-      key: "k2",
-      data: new Uint8Array([2]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("k2", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 実行
-    await storage.clear({ signal: AbortSignal.timeout(5_000), vars: new Variables({}) });
+    await storage.clear(
+      createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+    );
 
     // 検証
     expect(
-      await storage.exists({
-        key: "k1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
     expect(
-      await storage.exists({
-        key: "k2",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("k2", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
   });
 });

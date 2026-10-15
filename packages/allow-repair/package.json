@@ -29,7 +29,8 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@unikvs/core": "workspace:*"
+    "@unikvs/core": "workspace:*",
+    "@unikvs/passthrough": "workspace:*"
   },
   "devDependencies": {
     "@logtape/logtape": "2.3.11",

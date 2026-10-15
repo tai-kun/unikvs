@@ -1,5 +1,12 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { InvalidChunkTypeError, KeyNotFoundError } from "../src/errors.js";
@@ -46,11 +53,11 @@ describe("getWritable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -61,11 +68,9 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
   });
 
@@ -75,11 +80,11 @@ describe("getWritable", () => {
     const storage = new Http(baseUrl, { fetch });
     const chunk = new Uint8Array([1, 2, 3]);
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -89,11 +94,9 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
@@ -102,30 +105,26 @@ describe("getWritable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
-    const existsBeforeClose = await storage.exists({
-      key: "s1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const existsBeforeClose = await storage.exists(
+      createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+    );
     await writer.close();
 
     // 検証
     expect(existsBeforeClose).toBe(false);
     expect(
-      await storage.exists({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(true);
   });
 
@@ -134,11 +133,11 @@ describe("getWritable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -146,18 +145,14 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.exists({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(true);
     expect(
-      await storage.read({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array(0));
   });
 
@@ -166,11 +161,11 @@ describe("getWritable", () => {
     const { fetch, calls } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -180,11 +175,9 @@ describe("getWritable", () => {
     // 検証
     expect(calls.length).toBe(0);
     expect(
-      await storage.exists({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(false);
   });
 
@@ -193,11 +186,11 @@ describe("getWritable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -218,18 +211,16 @@ describe("getWritable", () => {
     // 準備
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
-    await storage.write({
-      key: "s1",
-      data: new Uint8Array([9]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([9]),
+    );
     const writer = storage
-      .getWritable({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      })
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
       .getWriter();
 
     // 実行
@@ -238,11 +229,9 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.read({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1, 2]));
   });
 
@@ -253,7 +242,9 @@ describe("getWritable", () => {
 
     // 実行と検証
     expect(() =>
-      storage.getWritable({ key: "s1", signal: abortedSignal(), vars: new Variables({}) }),
+      storage.getWritable(
+        createSetContext("s1", { signal: abortedSignal() }) as IStorage.GetWritableContext,
+      ),
     ).toThrow(DOMException);
   });
 
@@ -263,7 +254,9 @@ describe("getWritable", () => {
     const storage = new Http(baseUrl, { fetch });
     const controller = new AbortController();
     const writer = storage
-      .getWritable({ key: "s1", signal: controller.signal, vars: new Variables({}) })
+      .getWritable(
+        createSetContext("s1", { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
@@ -284,11 +277,11 @@ describe("getReadable", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({
-        key: "unknown",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      storage.getReadable(
+        createStreamContext("unknown", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetReadableContext,
+      ),
     );
 
     // 検証
@@ -303,11 +296,11 @@ describe("getReadable", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable({
-        key: "gone",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      storage.getReadable(
+        createStreamContext("gone", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetReadableContext,
+      ),
     );
 
     // 検証
@@ -319,19 +312,17 @@ describe("getReadable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const data = new Uint8Array([0, 1, 2, 255]);
-    await storage.write({
-      key: "s1",
+    await storage.write(
+      createSetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
       data,
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    );
 
     // 実行
-    const stream = await storage.getReadable({
-      key: "s1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const stream = await storage.getReadable(
+      createStreamContext("s1", {
+        signal: AbortSignal.timeout(5_000),
+      }) as IStorage.GetReadableContext,
+    );
 
     // 検証
     expect(await readAll(stream)).toStrictEqual(data);
@@ -344,11 +335,11 @@ describe("getReadable", () => {
     const storage = new Http(baseUrl, { fetch: nullBodyFetch });
 
     // 実行
-    const stream = await storage.getReadable({
-      key: "s1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const stream = await storage.getReadable(
+      createStreamContext("s1", {
+        signal: AbortSignal.timeout(5_000),
+      }) as IStorage.GetReadableContext,
+    );
 
     // 検証
     expect(await readAll(stream)).toStrictEqual(new Uint8Array(0));
@@ -358,18 +349,14 @@ describe("getReadable", () => {
     // 準備
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
-    await storage.write({
-      key: "s1",
-      data: new Uint8Array([1, 2, 3]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1, 2, 3]),
+    );
     const controller = new AbortController();
-    const stream = await storage.getReadable({
-      key: "s1",
-      signal: controller.signal,
-      vars: new Variables({}),
-    });
+    const stream = await storage.getReadable(
+      createStreamContext("s1", { signal: controller.signal }) as IStorage.GetReadableContext,
+    );
 
     // 実行
     controller.abort();
@@ -384,28 +371,24 @@ describe("getReadable", () => {
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const data = new Uint8Array([1, 2, 3]);
-    await storage.write({
-      key: "s1",
+    await storage.write(
+      createSetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
       data,
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
-    const stream = await storage.getReadable({
-      key: "s1",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    );
+    const stream = await storage.getReadable(
+      createStreamContext("s1", {
+        signal: AbortSignal.timeout(5_000),
+      }) as IStorage.GetReadableContext,
+    );
 
     // 実行
     await stream.getReader().cancel();
 
     // 検証
     expect(
-      await storage.read({
-        key: "s1",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(data);
   });
 });

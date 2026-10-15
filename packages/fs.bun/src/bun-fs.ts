@@ -93,20 +93,17 @@ export default class BunFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
    */
-  public async write(
-    args: Pick<IStorage.WriteArgs<Uint8Array<ArrayBuffer>>, "key" | "data" | "signal" | "vars">,
-  ): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { fs } = this.con!;
-    const { key, data, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = this.resolvePath(key);
+    const file = this.resolvePath(c.key);
     const tmp = Bun.file(file.tmp);
     try {
       await tmp.write(data);
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       await fs.rename(file.tmp, file.dest);
     } catch (ex) {
       // 失敗・中断時には一時ファイルを削除し、既存のデータを保全します。
@@ -118,16 +115,13 @@ export default class BunFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
    */
-  public async read(
-    args: Pick<IStorage.ReadArgs, "key" | "signal">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { path } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     const data = await Bun.file(file).bytes();
 
     return data;
@@ -136,26 +130,24 @@ export default class BunFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
    */
-  public async exists(args: Pick<IStorage.ExistsArgs, "key">): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { path } = this.con!;
-    const { key } = args;
 
-    assertValidFilename(key);
+    assertValidFilename(c.key);
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     return await Bun.file(file).exists();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
    */
-  public async delete(args: Pick<IStorage.DeleteArgs, "key">): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { path } = this.con!;
-    const { key } = args;
 
-    assertValidFilename(key);
+    assertValidFilename(c.key);
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     await Bun.file(file).delete();
   }
 
@@ -173,15 +165,14 @@ export default class BunFs implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#streams)
    */
   public async getWritable(
-    args: Pick<IStorage.GetWritableArgs, "key" | "signal" | "vars">,
+    c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
     const { fs } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = this.resolvePath(key);
+    const file = this.resolvePath(c.key);
 
     // 一時ファイルへの書き込みシンクを作成します。
     const tmp = Bun.file(file.tmp);
@@ -193,7 +184,7 @@ export default class BunFs implements IStorage {
     const finish = async (reason?: unknown): Promise<void> => {
       if (finished) return;
       finished = true;
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
       // 先に一時ファイルを削除し、書き込み途中の内容を最終パスへ残しません。
       await removeTmp();
       try {
@@ -203,12 +194,12 @@ export default class BunFs implements IStorage {
       }
     };
     const onAbort = () => {
-      void finish(signal.reason);
+      void finish(c.signal.reason);
     };
 
     const writable = new WritableStream<Uint8Array<ArrayBuffer>>({
       async write(chunk) {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           await sink.write(chunk);
           // バッファーに溜め込まず、チャンクごとにディスクへ書き出してバックプレッシャーとします。
@@ -219,7 +210,7 @@ export default class BunFs implements IStorage {
         }
       },
       async close() {
-        signal.throwIfAborted();
+        c.signal.throwIfAborted();
         try {
           await sink.end();
         } catch (ex) {
@@ -229,7 +220,7 @@ export default class BunFs implements IStorage {
         // flush が完了した時点で初めて最終パスへ置き換えます (swap-on-close)。
         // 以降の中断で一時ファイルを消さないよう、完了済みとして扱います。
         finished = true;
-        signal.removeEventListener("abort", onAbort);
+        c.signal.removeEventListener("abort", onAbort);
         try {
           await fs.rename(file.tmp, file.dest);
         } catch (ex) {
@@ -244,7 +235,7 @@ export default class BunFs implements IStorage {
     });
 
     // 中断時はストリームを閉じられなくても、一時ファイルの削除だけは必ず行います。
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     return writable;
   }
@@ -252,37 +243,34 @@ export default class BunFs implements IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#streams)
    */
-  public getReadable(
-    args: Pick<IStorage.GetReadableArgs, "key" | "signal">,
-  ): ReadableStream<Uint8Array<ArrayBuffer>> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { path } = this.con!;
-    const { key, signal } = args;
 
-    assertValidFilename(key);
-    signal.throwIfAborted();
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
-    const file = path.join(this.root, key);
+    const file = path.join(this.root, c.key);
     const source = Bun.file(file);
     let reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | null = null;
 
     // 中断時は取得済みのリーダーをキャンセルし、待機中の読み取りを終わらせます。
     // 中断理由は次の pull の throwIfAborted でストリームのエラーとして通知します。
     const onAbort = (): void => {
-      void reader?.cancel(signal!.reason).catch(() => {});
+      void reader?.cancel(c.signal.reason).catch(() => {});
     };
     const removeAbortListener = (): void => {
-      signal.removeEventListener("abort", onAbort);
+      c.signal.removeEventListener("abort", onAbort);
     };
-    signal.addEventListener("abort", onAbort, { once: true });
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     // Bun.file().stream() はリーダー取得時にファイルを開くため、その同期的な例外をストリームのエラーとして遅延させます。
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async pull(controller) {
         try {
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
           reader ??= source.stream().getReader();
           const { done, value } = await reader.read();
-          signal.throwIfAborted();
+          c.signal.throwIfAborted();
 
           if (done) {
             removeAbortListener();

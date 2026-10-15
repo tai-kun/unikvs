@@ -1,47 +1,92 @@
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  createOpenContext,
+  createPseudoRandomBytes,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
 
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteEncodeStream = IMiddleware.EncodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteDecodeStream = IMiddleware.DecodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+
 /**
- * チャンク列をストリームに流し、出力チャンクを結合して返します。
+ * ターゲットを開きます。
  */
-async function pumpThrough(
-  stream: TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+async function openTarget(target: ZstdNode, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を圧縮ストリームに流し、出力チャンクを結合して返します。
+ */
+async function pumpEncode(
+  target: ZstdNode,
   chunks: ReadonlyArray<Uint8Array<ArrayBuffer>>,
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const writer = stream.writable.getWriter();
-  const reader = stream.readable.getReader();
-  const outputs: Array<Uint8Array<ArrayBuffer>> = [];
-  const reading = (async () => {
-    for (;;) {
-      const { done, value } = await reader.read();
+  const c = createEncodeStreamContext(sourceFrom(chunks));
+  await target.encodeStream(c as ByteEncodeStream, createNext());
 
-      if (done) {
-        return;
-      }
+  return concatBytes(
+    await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+  );
+}
 
-      outputs.push(value);
-    }
-  })();
+/**
+ * チャンク列を展開ストリームに流し、出力チャンクを結合して返します。
+ */
+async function pumpDecode(
+  target: ZstdNode,
+  chunks: ReadonlyArray<Uint8Array<ArrayBuffer>>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await target.decodeStream(c as ByteDecodeStream, createNext());
 
-  for (const chunk of chunks) {
-    await writer.write(chunk);
-  }
-
-  await writer.close();
-  await reading;
-
-  const total = outputs.reduce((sum, output) => sum + output.byteLength, 0);
-  const joined = new Uint8Array(total);
-  let offset = 0;
-
-  for (const output of outputs) {
-    joined.set(output, offset);
-    offset += output.byteLength;
-  }
-
-  return joined;
+  return concatBytes(
+    await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+  );
 }
 
 /**
@@ -68,9 +113,9 @@ describe("インスタンスの状態", () => {
 
     // 実行
     expect(target.isOpen).toBe(false);
-    await target.open({ signal });
-    const encoded = await target.encode({ data: input });
-    await target.decode({ data: encoded });
+    await openTarget(target, signal);
+    const encoded = await encode(target, input);
+    await decode(target, encoded);
 
     // 検証
     expect(target.name).toBe("ZstdNode");
@@ -80,11 +125,11 @@ describe("インスタンスの状態", () => {
   test("decode が失敗しても isOpen は true のままである", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const invalidData = new Uint8Array([0, 1, 2, 3]);
 
     // 実行と検証
-    await expect(target.decode({ data: invalidData })).rejects.toThrow(Error);
+    await expect(decode(target, invalidData)).rejects.toThrow(Error);
     expect(target.isOpen).toBe(true);
   });
 
@@ -96,8 +141,8 @@ describe("インスタンスの状態", () => {
 
     // 実行と検証
     expect(target.isOpen).toBe(false);
-    await expect(target.encode({ data: input })).rejects.toThrow(TypeError);
-    await expect(target.decode({ data: input })).rejects.toThrow(TypeError);
+    await expect(encode(target, input)).rejects.toThrow(TypeError);
+    await expect(decode(target, input)).rejects.toThrow(TypeError);
   });
 
   test("open を持ち close を持たない", async ({ expect, signal }) => {
@@ -109,7 +154,7 @@ describe("インスタンスの状態", () => {
     expect(typeof target.open).toBe("function");
     expect("close" in target).toBe(false);
 
-    await target.open({ signal });
+    await openTarget(target, signal);
     expect(target.isOpen).toBe(true);
   });
 });
@@ -121,14 +166,12 @@ describe("インスタンスの独立性", () => {
   }) => {
     // 準備
     const instances = [1, 3, 10, 22].map((level) => new ZstdNode({ level }));
-    await Promise.all(instances.map(async (target) => await target.open({ signal })));
+    await Promise.all(instances.map(async (target) => await openTarget(target, signal)));
     const input = createPseudoRandomBytes(2048, 32);
 
     // 実行
     const decodedList = await Promise.all(
-      instances.map(async (target) =>
-        target.decode({ data: await target.encode({ data: input }) }),
-      ),
+      instances.map(async (target) => decode(target, await encode(target, input))),
     );
 
     // 検証
@@ -146,13 +189,13 @@ describe("インスタンスの独立性", () => {
     // 準備
     const low = new ZstdNode({ level: 1 });
     const high = new ZstdNode({ level: 22 });
-    await low.open({ signal });
-    await high.open({ signal });
+    await openTarget(low, signal);
+    await openTarget(high, signal);
     const input = createPseudoRandomBytes(512, 34);
 
     // 実行
-    const decodedLow = await high.decode({ data: await low.encode({ data: input }) });
-    const decodedHigh = await low.decode({ data: await high.encode({ data: input }) });
+    const decodedLow = await decode(high, await encode(low, input));
+    const decodedHigh = await decode(low, await encode(high, input));
 
     // 検証
     expect(decodedLow).toStrictEqual(input);
@@ -164,14 +207,14 @@ describe("入力データの非破壊性", () => {
   test("encode と decode は引数の data を変更しない", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(1024, 33);
     const inputSnapshot = input.slice();
 
     // 実行
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input);
     const encodedSnapshot = encoded.slice();
-    const decoded = await target.decode({ data: encoded });
+    const decoded = await decode(target, encoded);
 
     // 検証
     expect(input).toStrictEqual(inputSnapshot);
@@ -181,34 +224,41 @@ describe("入力データの非破壊性", () => {
 });
 
 describe("ストリーム API の提供", () => {
-  test("getEncodable と getDecodable を持つ", ({ expect }) => {
+  test("encodeStream と decodeStream を持つ", ({ expect }) => {
     // 準備
     const target = new ZstdNode();
 
     // 実行と検証
-    expect(typeof target.getEncodable).toBe("function");
-    expect(typeof target.getDecodable).toBe("function");
+    expect(typeof target.encodeStream).toBe("function");
+    expect(typeof target.decodeStream).toBe("function");
   });
 
-  test("open 前に呼ぶと TypeError で拒否される", ({ expect }) => {
+  test("open 前に呼ぶと TypeError で拒否される", async ({ expect }) => {
     // 準備
     // 実装は open() で解決した実行環境を必須とするため、未 open の使用は TypeError になる。
     const target = new ZstdNode();
+    const input = [new Uint8Array([1])];
 
     // 実行と検証
-    expect(() => target.getEncodable()).toThrow(TypeError);
-    expect(() => target.getDecodable()).toThrow(TypeError);
+    const encodeContext = createEncodeStreamContext(sourceFrom(input));
+    await expect(target.encodeStream(encodeContext as ByteEncodeStream, createNext())).rejects.toThrow(
+      TypeError,
+    );
+    const decodeContext = createDecodeStreamContext(sourceFrom(input));
+    await expect(target.decodeStream(decodeContext as ByteDecodeStream, createNext())).rejects.toThrow(
+      TypeError,
+    );
   });
 
   test("分割書き込みしてもストリームで往復できる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(4096, 35);
 
     // 実行
-    const encoded = await pumpThrough(target.getEncodable(), splitIntoChunks(input, 7));
-    const decoded = await pumpThrough(target.getDecodable(), splitIntoChunks(encoded, 5));
+    const encoded = await pumpEncode(target, splitIntoChunks(input, 7));
+    const decoded = await pumpDecode(target, splitIntoChunks(encoded, 5));
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -218,7 +268,7 @@ describe("ストリーム API の提供", () => {
     // 準備
     // Node の Buffer 入力は複写せずそのまま渡す分岐を通る。
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(1024, 38);
     const bufferChunks = splitIntoChunks(input, 13).map(
       (chunk) =>
@@ -230,7 +280,7 @@ describe("ストリーム API の提供", () => {
     );
 
     // 実行
-    const encoded = await pumpThrough(target.getEncodable(), bufferChunks);
+    const encoded = await pumpEncode(target, bufferChunks);
     const encodedBufferChunks = splitIntoChunks(encoded, 7).map(
       (chunk) =>
         Buffer.from(
@@ -239,7 +289,7 @@ describe("ストリーム API の提供", () => {
           chunk.byteLength,
         ) as unknown as Uint8Array<ArrayBuffer>,
     );
-    const decoded = await pumpThrough(target.getDecodable(), encodedBufferChunks);
+    const decoded = await pumpDecode(target, encodedBufferChunks);
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -248,26 +298,13 @@ describe("ストリーム API の提供", () => {
   test("ストリームの出力チャンクは所有化されている", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(256, 36);
-    const stream = target.getEncodable();
-    const writer = stream.writable.getWriter();
-    const reader = stream.readable.getReader();
+    const c = createEncodeStreamContext(sourceFrom([input]));
+    await target.encodeStream(c as ByteEncodeStream, createNext());
 
     // 実行
-    await writer.write(input);
-    await writer.close();
-    const outputs: Array<Uint8Array<ArrayBuffer>> = [];
-
-    for (;;) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      outputs.push(value);
-    }
+    const outputs = await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>);
 
     // 検証
     expect(outputs.length).toBeGreaterThan(0);

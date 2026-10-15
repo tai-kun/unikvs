@@ -1,18 +1,6 @@
-import { KeyNotFoundError, type ITransformer, type Variables } from "@unikvs/core";
+import { KeyNotFoundError, type IMiddleware } from "@unikvs/core";
 
 import { WriteOnlyClearNotAllowedError, WriteOnlyDeleteNotAllowedError } from "./errors.js";
-
-/**
- * vars から論理キーを解決します。
- *
- * @param vars 解決元となる実行時変数です。
- * @param fallback キーがない場合や値が文字列でない場合に返す代替名です。
- */
-function resolveKey(vars: Variables, fallback: string): string {
-  const key = vars.get("unikvs:key");
-
-  return typeof key === "string" ? key : fallback;
-}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
@@ -24,7 +12,7 @@ export type WriteOnlyOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
  */
-export default class WriteOnly implements ITransformer {
+export default class WriteOnly implements IMiddleware {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
    */
@@ -52,55 +40,70 @@ export default class WriteOnly implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
    */
-  public encode<TData>(args: Pick<ITransformer.EncodeArgs<TData>, "data">): TData {
-    return args.data;
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
    */
-  public decode<TData>(args: Pick<ITransformer.DecodeArgs<TData>, "vars" | "data">): never {
-    throw new KeyNotFoundError({ key: resolveKey(args.vars, "(unknown)") });
+  public async decode(c: IMiddleware.DecodeContext): Promise<void> {
+    throw new KeyNotFoundError({ key: c.key });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#streams)
    */
-  public getEncodable(): TransformStream<any, any> {
-    return new TransformStream();
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source;
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#streams)
    */
-  public getDecodable(args: Pick<ITransformer.GetDecodableArgs, "vars">): never {
-    throw new KeyNotFoundError({ key: resolveKey(args.vars, "(unknown)") });
+  public async decodeStream(c: IMiddleware.DecodeStreamContext): Promise<void> {
+    throw new KeyNotFoundError({ key: c.key });
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
    */
-  public onExists(args: Pick<ITransformer.ExistsHookArgs, "key">): never {
-    throw new KeyNotFoundError({ key: args.key });
-  }
+  public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+    switch (c.action) {
+      case "has":
+      case "get":
+      case "stream": {
+        throw new KeyNotFoundError({ key: c.key });
+      }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
-   */
-  public onDelete(args: Pick<ITransformer.DeleteHookArgs, "key">): void {
-    // 削除が許可されていない場合は delete を拒否します。
-    if (!this.allowDelete) {
-      throw new WriteOnlyDeleteNotAllowedError({ key: args.key });
+      case "delete": {
+        // 削除が許可されていない場合は delete を拒否します。
+        if (!this.allowDelete) {
+          throw new WriteOnlyDeleteNotAllowedError({ key: c.key });
+        }
+
+        break;
+      }
+
+      case "clear": {
+        // 削除が許可されていない場合は clear を拒否します。
+        if (!this.allowDelete) {
+          throw new WriteOnlyClearNotAllowedError();
+        }
+
+        break;
+      }
+
+      default: {
+        break;
+      }
     }
-  }
 
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#errors)
-   */
-  public onClear(): void {
-    // 削除が許可されていない場合は clear を拒否します。
-    if (!this.allowDelete) {
-      throw new WriteOnlyClearNotAllowedError();
-    }
+    await next();
   }
 }

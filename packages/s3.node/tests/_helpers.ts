@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
+import type { IStorage } from "@unikvs/core";
+import { createCloseContext } from "@unikvs/testing";
 import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
 import { afterAll, beforeAll, test as vitest } from "vitest";
 
@@ -95,7 +97,7 @@ export const test = vitest.extend<{
     await use(storage);
 
     if (storage.isOpen) {
-      storage.close();
+      storage.close(createCloseContext() as IStorage.CloseContext);
     }
   },
   async unauthorizedStorage({ endpoint }, use) {
@@ -114,7 +116,7 @@ export const test = vitest.extend<{
     await use(storage);
 
     if (storage.isOpen) {
-      storage.close();
+      storage.close(createCloseContext() as IStorage.CloseContext);
     }
   },
 });

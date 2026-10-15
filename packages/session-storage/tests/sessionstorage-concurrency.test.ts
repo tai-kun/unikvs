@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { createGetContext, createSetContext } from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import SessionStorage from "../src/sessionstorage.js";
@@ -24,21 +25,23 @@ describe("並列操作", () => {
 
     // 実行
     for (const key of keys) {
-      storage.write({ key, data: `v-${key}`, vars: new Variables(), signal });
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, `v-${key}`);
     }
 
     // 検証
     for (const key of keys) {
-      expect(storage.read({ key, signal })).toBe(`v-${key}`);
+      expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(
+        `v-${key}`,
+      );
     }
   });
 
   test("同一キーへの並列書き込みは最終書き勝ちで確定する", ({ expect, storage }) => {
     // 実行
-    storage.write({ key: "k1", data: "v1", vars: new Variables(), signal });
-    storage.write({ key: "k1", data: "v2", vars: new Variables(), signal });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v2");
 
     // 検証
-    expect(storage.read({ key: "k1", signal })).toBe("v2");
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
   });
 });

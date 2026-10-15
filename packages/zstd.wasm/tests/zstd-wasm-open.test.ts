@@ -1,8 +1,52 @@
-import { abortedSignal, captureRejection } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+} from "@unikvs/testing";
 import { describe, test, vi } from "vitest";
 
 import { api } from "../src/_core.js";
 import ZstdWasm from "../src/zstd-wasm.js";
+
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdWasm, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdWasm,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
 
 describe("open による初期化", () => {
   test("初期状態では isOpen が false である", ({ expect }) => {
@@ -15,7 +59,7 @@ describe("open による初期化", () => {
     const target = new ZstdWasm();
 
     // 実行
-    await target.open({ signal });
+    await openTarget(target, signal);
 
     // 検証
     expect(target.isOpen).toBe(true);
@@ -28,7 +72,7 @@ describe("open による初期化", () => {
 
     try {
       // 実行
-      const error = await captureRejection(target.open({ signal: abortedSignal() }));
+      const error = await captureRejection(openTarget(target, abortedSignal()));
 
       // 検証
       // 事前中断では初期化自体を開始しない。
@@ -46,9 +90,9 @@ describe("open による初期化", () => {
     const input = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await target.open({ signal });
-    const encoded = await target.encode({ data: input });
-    const decoded = await target.decode({ data: encoded });
+    await openTarget(target, signal);
+    const encoded = await encode(target, input );
+    const decoded = await decode(target, encoded );
 
     // 検証
     expect(target.isOpen).toBe(true);

@@ -1,8 +1,47 @@
-import { bytesEqual, createPseudoRandomBytes } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  bytesEqual,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createPseudoRandomBytes,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import Compression from "../src/compression.js";
 import { FORMATS } from "./helpers.js";
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await compression.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  compression: Compression,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await compression.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
 
 /**
  * 境界サイズと特殊パターンの入力データをまとめて生成します。
@@ -43,8 +82,8 @@ describe("境界サイズと特殊パターンの往復", () => {
 
       // 実行と検証
       for (const [label, input] of boundaryInputs) {
-        const encoded = await compression.encode({ data: input });
-        const decoded = await compression.decode({ data: encoded });
+        const encoded = await encode(compression, input);
+        const decoded = await decode(compression, encoded);
         expect(decoded, `${format}: ${label}`).toStrictEqual(input);
       }
     });
@@ -59,8 +98,8 @@ describe("境界サイズと特殊パターンの往復", () => {
     // 実行と検証
     for (const format of ["deflate", "deflate-raw"] as const) {
       const compression = new Compression(format);
-      const encoded = await compression.encode({ data: input });
-      const decoded = await compression.decode({ data: encoded });
+      const encoded = await encode(compression, input);
+      const decoded = await decode(compression, encoded);
       expect(bytesEqual(decoded, input), format).toBe(true);
     }
   }, 30_000);
@@ -72,8 +111,8 @@ describe("境界サイズと特殊パターンの往復", () => {
     // 実行と検証
     for (const format of FORMATS) {
       const compression = new Compression(format);
-      const encoded = await compression.encode({ data: input });
-      const decoded = await compression.decode({ data: encoded });
+      const encoded = await encode(compression, input);
+      const decoded = await decode(compression, encoded);
       expect(bytesEqual(decoded, input), format).toBe(true);
     }
   }, 30_000);
@@ -91,7 +130,7 @@ describe("圧縮率の健全性", () => {
     // 実行と検証
     for (const format of ["deflate", "deflate-raw"] as const) {
       const compression = new Compression(format);
-      const encoded = await compression.encode({ data: input });
+      const encoded = await encode(compression, input);
       expect(encoded.length, format).toBeLessThan(input.length);
     }
   });

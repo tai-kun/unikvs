@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
 import { toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
@@ -139,7 +139,12 @@ function drain(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
  */
-export default class V8Serde implements ITransformer {
+export default class V8Serde implements IMiddleware<
+  unknown,
+  Uint8Array<ArrayBuffer>,
+  unknown,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
@@ -165,8 +170,7 @@ export default class V8Serde implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
    */
-  public async open(args: Pick<ITransformer.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
+  public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.env = await callAbortableFnOnce(
         V8Serde.cache,
@@ -177,10 +181,10 @@ export default class V8Serde implements ITransformer {
 
           return env;
         },
-        signal,
+        c.signal,
       );
     } catch (ex) {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       throw new UnsupportedRuntimeError({
         name: "V8Serde",
         cause: ex,
@@ -193,74 +197,86 @@ export default class V8Serde implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
    */
   public async encode(
-    args: Pick<ITransformer.EncodeArgs<unknown>, "data">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+    c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
 
     try {
-      return toOwnedBytes(api.serialize(env, data));
+      c.destination = toOwnedBytes(api.serialize(env, c.source));
     } catch (ex) {
       throw new V8SerdeEncodeError({ cause: ex });
     }
+
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
    */
   public async decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Promise<unknown> {
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
 
     try {
-      return api.deserialize(env, data);
+      c.destination = api.deserialize(env, c.source);
     } catch (ex) {
       throw new V8SerdeDecodeError({ cause: ex });
     }
+
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
    */
-  public getEncodable(): TransformStream<unknown, Uint8Array<ArrayBuffer>> {
-    // 理由: ITransformer.getEncodable は MaybePromise を返すため同期返却でも型互換があり、既存テストの `await target.getEncodable()` も非 Promise 値をそのまま受け取れる。
-    // zstd.node と同様に open() 済み前提で同期化する。
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const { serialize } = env;
 
-    return new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
-      transform: (chunk, controller) => {
-        controller.enqueue(this.#encodeFrame(serialize, chunk));
-      },
-    });
+    c.destination = c.source.pipeThrough(
+      new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
+        transform: (chunk, controller) => {
+          controller.enqueue(this.#encodeFrame(serialize, chunk));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#streams)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, unknown> {
-    // 理由: ITransformer.getDecodable は MaybePromise を返すため同期返却でも型互換があり、既存テストの `await target.getDecodable()` も非 Promise 値をそのまま受け取れる。
-    // zstd.node と同様に open() 済み前提で同期化する。
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const { deserialize } = env;
     const queue = new ByteQueue();
 
-    return new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
-      transform: (chunk, controller) => {
-        if (chunk.byteLength === 0) {
-          // 空のチャンクはデコードに影響しません。
-          return;
-        }
+    c.destination = c.source.pipeThrough(
+      new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
+        transform: (chunk, controller) => {
+          if (chunk.byteLength === 0) {
+            // 空のチャンクはデコードに影響しません。
+            return;
+          }
 
-        queue.append(chunk);
-        drain(queue, controller, deserialize, false);
-      },
-      flush: (controller) => {
-        drain(queue, controller, deserialize, true);
-      },
-    });
+          queue.append(chunk);
+          drain(queue, controller, deserialize, false);
+        },
+        flush: (controller) => {
+          drain(queue, controller, deserialize, true);
+        },
+      }),
+    );
+    await next();
   }
 
   /**

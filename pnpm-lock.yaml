@@ -38,6 +38,9 @@ importers:
       '@unikvs/core':
         specifier: workspace:*
         version: link:../core
+      '@unikvs/passthrough':
+        specifier: workspace:*
+        version: link:../passthrough
     devDependencies:
       '@logtape/logtape':
         specifier: 2.3.11
@@ -378,9 +381,6 @@ importers:
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
-      '@unikvs/testing':
-        specifier: workspace:*
-        version: link:../testing
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -969,6 +969,9 @@ importers:
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
+      '@unikvs/testing':
+        specifier: workspace:*
+        version: link:../testing
       '@vitest/browser':
         specifier: 4.1.11
         version: 4.1.11(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))(vitest@4.1.11)
@@ -1352,6 +1355,9 @@ importers:
       '@logtape/logtape':
         specifier: ^2.0.0
         version: 2.3.11
+      '@unikvs/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@tsconfig/node24':
         specifier: 24.0.5

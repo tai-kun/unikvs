@@ -1,5 +1,14 @@
-import { forCasesAsync, type Random } from "@unikvs/testing";
-import { concatBytes, pumpThrough } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createNext,
+  forCasesAsync,
+  sourceFrom,
+  type Random,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Base64Url from "../src/base64url.js";
@@ -31,6 +40,77 @@ function splitRandomly(random: Random, bytes: Uint8Array<ArrayBuffer>): Uint8Arr
   return chunks;
 }
 
+/**
+ * バイト列をエンコードして返します。
+ */
+async function encode(
+  target: Base64Url,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * base64url 化されたバイト列をデコードして返します。
+ */
+async function decode(
+  target: Base64Url,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列をデコードストリームに流し、出力されたチャンクを返します。
+ */
+async function pumpDecode(
+  target: Base64Url,
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+): Promise<{
+  outputChunks: Uint8Array<ArrayBuffer>[];
+  writeError: undefined;
+  readError: unknown;
+}> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await target.decodeStream(
+    c as IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  let readError: unknown;
+
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (ex) {
+    readError = ex;
+  }
+
+  return { outputChunks, writeError: undefined, readError };
+}
+
 describe("決定的ファズテスト", () => {
   test("ランダムなバイト列を一括で往復すると元の値に戻る", async ({ expect }) => {
     // 実行と検証
@@ -38,8 +118,8 @@ describe("決定的ファズテスト", () => {
       const base64url = new Base64Url();
       const input = randomBytes(random);
 
-      const encoded = base64url.encode({ data: input });
-      const decoded = base64url.decode({ data: encoded });
+      const encoded = await encode(base64url, input);
+      const decoded = await decode(base64url, encoded);
 
       expect(decoded).toStrictEqual(input);
     });
@@ -53,9 +133,9 @@ describe("決定的ファズテスト", () => {
       const base64url = new Base64Url();
       const input = randomBytes(random);
 
-      const encoded = base64url.encode({ data: input });
+      const encoded = await encode(base64url, input);
       const chunks = splitRandomly(random, encoded);
-      const decoded = await pumpThrough(base64url.getDecodable(), chunks);
+      const decoded = await pumpDecode(base64url, chunks);
 
       expect(decoded.writeError).toBeUndefined();
       expect(decoded.readError).toBeUndefined();

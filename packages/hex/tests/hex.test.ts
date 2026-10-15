@@ -1,3 +1,5 @@
+import type { IMiddleware } from "@unikvs/core";
+import { createDecodeContext, createEncodeContext, createNext } from "@unikvs/testing";
 import { FastUtf8 } from "fast-utf8";
 import { describe, test } from "vitest";
 
@@ -9,10 +11,42 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 /**
+ * バイト列を hex 化して返します。
+ */
+async function encode(
+  target: Hex,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * hex 化されたバイト列をデコードして返します。
+ */
+async function decode(
+  target: Hex,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
  * バイト列を hex 化して一括で往復させます。
  */
-function roundTrip(data: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
-  return hex.decode({ data: hex.encode({ data }) });
+async function roundTrip(data: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  return decode(hex, await encode(hex, data));
 }
 
 /**
@@ -39,13 +73,13 @@ describe("初期化と基本属性", () => {
     expect(target.isOpen).toBe(true);
   });
 
-  test("encode と decode の後も name と isOpen は変化しない", ({ expect }) => {
+  test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {
     // 準備
     const target = new Hex();
-    const encoded = target.encode({ data: Uint8Array.from([0xde, 0xad]) });
+    const encoded = await encode(target, Uint8Array.from([0xde, 0xad]));
 
     // 実行
-    target.decode({ data: encoded });
+    await decode(target, encoded);
 
     // 検証
     expect(target.name).toBe("Hex");
@@ -54,27 +88,27 @@ describe("初期化と基本属性", () => {
 });
 
 describe("一括のラウンドトリップ", () => {
-  test("空のバイト列を往復すると空のバイト列に戻る", ({ expect }) => {
+  test("空のバイト列を往復すると空のバイト列に戻る", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(0);
 
     // 実行
-    const output = roundTrip(input);
+    const output = await roundTrip(input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("単一バイトを往復すると元の値に戻る", ({ expect }) => {
+  test("単一バイトを往復すると元の値に戻る", async ({ expect }) => {
     // 実行と検証
     for (const byte of [0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff]) {
-      expect(roundTrip(Uint8Array.from([byte])), `byte=${byte}`).toStrictEqual(
+      expect(await roundTrip(Uint8Array.from([byte])), `byte=${byte}`).toStrictEqual(
         Uint8Array.from([byte]),
       );
     }
   });
 
-  test("代表ベクトルを往復すると元の値に戻る", ({ expect }) => {
+  test("代表ベクトルを往復すると元の値に戻る", async ({ expect }) => {
     // 準備
     const vectors: Uint8Array<ArrayBuffer>[] = [
       Uint8Array.from([0xde, 0xad, 0xbe, 0xef]),
@@ -84,11 +118,11 @@ describe("一括のラウンドトリップ", () => {
 
     // 実行と検証
     for (const input of vectors) {
-      expect(roundTrip(input)).toStrictEqual(input);
+      expect(await roundTrip(input)).toStrictEqual(input);
     }
   });
 
-  test("1 MiB のバイト列を往復すると同じバイト列に戻る", ({ expect }) => {
+  test("1 MiB のバイト列を往復すると同じバイト列に戻る", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(1024 * 1024);
     for (let index = 0; index < input.length; index++) {
@@ -96,14 +130,14 @@ describe("一括のラウンドトリップ", () => {
     }
 
     // 実行
-    const encoded = hex.encode({ data: input });
-    const output = hex.decode({ data: encoded });
+    const encoded = await encode(hex, input);
+    const output = await decode(hex, encoded);
 
     // 検証
     expect(output).toStrictEqual(input);
   });
 
-  test("encode 出力は小文字の hex である", ({ expect }) => {
+  test("encode 出力は小文字の hex である", async ({ expect }) => {
     // 準備
     const cases: [Uint8Array<ArrayBuffer>, string][] = [
       [new Uint8Array(0), ""],
@@ -116,27 +150,27 @@ describe("一括のラウンドトリップ", () => {
 
     // 実行と検証
     for (const [input, expected] of cases) {
-      expect(textDecoder.decode(hex.encode({ data: input })), expected).toBe(expected);
+      expect(textDecoder.decode(await encode(hex, input)), expected).toBe(expected);
     }
   });
 
-  test("encode 出力の長さは入力の 2 倍である", ({ expect }) => {
+  test("encode 出力の長さは入力の 2 倍である", async ({ expect }) => {
     // 準備
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
     // 実行
-    const encoded = hex.encode({ data: input });
+    const encoded = await encode(hex, input);
 
     // 検証
     expect(encoded.byteLength).toBe(input.byteLength * 2);
   });
 
-  test("出力チャンクの型は Uint8Array であり string ではない", ({ expect }) => {
+  test("出力チャンクの型は Uint8Array であり string ではない", async ({ expect }) => {
     // 準備
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
     // 実行
-    const encoded = hex.encode({ data: input });
+    const encoded = await encode(hex, input);
 
     // 検証
     expect(typeof encoded).not.toBe("string");
@@ -146,96 +180,96 @@ describe("一括のラウンドトリップ", () => {
 });
 
 describe("デコードの受理系", () => {
-  test("小文字の hex をデコードできる", ({ expect }) => {
+  test("小文字の hex をデコードできる", async ({ expect }) => {
     // 準備
     const input = hexBytes("deadbeef");
 
     // 実行
-    const output = hex.decode({ data: input });
+    const output = await decode(hex, input);
 
     // 検証
     expect(output).toStrictEqual(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
   });
 
-  test("大文字の hex をデコードできる", ({ expect }) => {
+  test("大文字の hex をデコードできる", async ({ expect }) => {
     // 準備
     const input = hexBytes("DEADBEEF");
 
     // 実行
-    const output = hex.decode({ data: input });
+    const output = await decode(hex, input);
 
     // 検証
     expect(output).toStrictEqual(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
   });
 
-  test("大文字小文字が混在した hex をデコードできる", ({ expect }) => {
+  test("大文字小文字が混在した hex をデコードできる", async ({ expect }) => {
     // 準備
     const input = hexBytes("DeAdBeEf");
 
     // 実行
-    const output = hex.decode({ data: input });
+    const output = await decode(hex, input);
 
     // 検証
     expect(output).toStrictEqual(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
   });
 
-  test("空のバイト列は空にデコードされる", ({ expect }) => {
+  test("空のバイト列は空にデコードされる", async ({ expect }) => {
     // 準備
     const input = new Uint8Array(0);
 
     // 実行
-    const output = hex.decode({ data: input });
+    const output = await decode(hex, input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("BOM 単体は既定で空にデコードされる", ({ expect }) => {
+  test("BOM 単体は既定で空にデコードされる", async ({ expect }) => {
     // 準備
     const input = Uint8Array.from([0xef, 0xbb, 0xbf]);
 
     // 実行
-    const output = hex.decode({ data: input });
+    const output = await decode(hex, input);
 
     // 検証
     expect(output).toStrictEqual(new Uint8Array(0));
   });
 
-  test("ignoreBOM 注入時の BOM 単体は HexDecodeError で拒否される", ({ expect }) => {
+  test("ignoreBOM 注入時の BOM 単体は HexDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Hex({ decoder: new FastUtf8({ strict: true, ignoreBOM: true }) });
 
     // 実行と検証
-    expect(() => target.decode({ data: Uint8Array.from([0xef, 0xbb, 0xbf]) })).toThrow(
+    await expect(decode(target, Uint8Array.from([0xef, 0xbb, 0xbf]))).rejects.toThrow(
       HexDecodeError,
     );
   });
 });
 
 describe("デコードの異常系", () => {
-  test("奇数長の hex は HexDecodeError で拒否される", ({ expect }) => {
+  test("奇数長の hex は HexDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Hex();
 
     // 実行と検証
     for (const text of ["0", "abc", "0123456789a"]) {
-      expect(() => target.decode({ data: hexBytes(text) }), text).toThrow(HexDecodeError);
+      await expect(decode(target, hexBytes(text)), text).rejects.toThrow(HexDecodeError);
     }
   });
 
-  test("不正文字を含む hex は HexDecodeError で拒否される", ({ expect }) => {
+  test("不正文字を含む hex は HexDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Hex();
 
     // 実行と検証
     for (const text of ["zz", "0x", "0xdeadbeef", " ", "\n", "de-ad", "ｄｅａｄ"]) {
-      expect(() => target.decode({ data: hexBytes(text) }), JSON.stringify(text)).toThrow(
+      await expect(decode(target, hexBytes(text)), JSON.stringify(text)).rejects.toThrow(
         HexDecodeError,
       );
     }
   });
 
-  test("有効な UTF-8 の非 hex 文字は HexDecodeError で拒否される", ({ expect }) => {
+  test("有効な UTF-8 の非 hex 文字は HexDecodeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Hex();
     const input = textEncoder.encode("é");
@@ -243,7 +277,7 @@ describe("デコードの異常系", () => {
     // 実行
     let thrown: unknown;
     try {
-      target.decode({ data: input });
+      await decode(target, input);
     } catch (error) {
       thrown = error;
     }
@@ -253,23 +287,25 @@ describe("デコードの異常系", () => {
     expect(thrown).not.toBeInstanceOf(TypeError);
   });
 
-  test("不正な UTF-8 は TypeError で拒否される", ({ expect }) => {
+  test("不正な UTF-8 は TypeError で拒否される", async ({ expect }) => {
     // 準備
     const target = new Hex();
 
     // 実行と検証
-    expect(() => target.decode({ data: Uint8Array.from([0xff]) })).toThrow(TypeError);
-    expect(() => target.decode({ data: Uint8Array.from([0xff]) })).not.toThrow(HexDecodeError);
+    await expect(decode(target, Uint8Array.from([0xff]))).rejects.toThrow(TypeError);
+    await expect(decode(target, Uint8Array.from([0xff]))).rejects.not.toThrow(HexDecodeError);
   });
 
-  test("投げたエラーは Error の派生であり name は UniKvsHexDecodeError である", ({ expect }) => {
+  test("投げたエラーは Error の派生であり name は UniKvsHexDecodeError である", async ({
+    expect,
+  }) => {
     // 準備
     const target = new Hex();
 
     // 実行
     let thrown: unknown;
     try {
-      target.decode({ data: hexBytes("zz") });
+      await decode(target, hexBytes("zz"));
     } catch (error) {
       thrown = error;
     }

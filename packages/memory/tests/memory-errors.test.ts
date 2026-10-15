@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import { InvalidChunkTypeError, KeyNotFoundError } from "../src/errors.js";
@@ -70,7 +77,9 @@ describe("KeyNotFoundError", () => {
 
   test("read で投げられたエラーはキーを保持する", ({ expect, storage }) => {
     // 実行
-    const error = captureThrown(() => storage.read({ key: "unknown" }));
+    const error = captureThrown(() =>
+      storage.read(createGetContext("unknown") as IStorage.ReadContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -80,7 +89,9 @@ describe("KeyNotFoundError", () => {
 
   test("delete で投げられたエラーはキーを保持する", ({ expect, storage }) => {
     // 実行
-    const error = captureThrown(() => storage.delete({ key: "unknown" }));
+    const error = captureThrown(() =>
+      storage.delete(createDeleteContext("unknown") as IStorage.DeleteContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -89,7 +100,9 @@ describe("KeyNotFoundError", () => {
 
   test("getReadable は同期的にエラーを投げる", ({ expect, storage }) => {
     // 実行
-    const error = captureThrown(() => storage.getReadable({ key: "unknown" }));
+    const error = captureThrown(() =>
+      storage.getReadable(createStreamContext("unknown") as IStorage.GetReadableContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -136,7 +149,9 @@ describe("InvalidChunkTypeError", () => {
 
   test("書き込み時に投げられたエラーはキーとチャンクを保持する", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ vars: new Variables(), key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     const error = await captureRejection(
@@ -154,8 +169,10 @@ describe("InvalidChunkTypeError", () => {
 
   test("読み取り時に投げられたエラーは保存値の型名を保持する", async ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: { a: 1 } });
-    const reader = storage.getReadable({ key: "k1" }).getReader();
+    storage.write(createSetContext("k1") as IStorage.WriteContext, { a: 1 });
+    const reader = storage
+      .getReadable(createStreamContext("k1") as IStorage.GetReadableContext)
+      .getReader();
 
     // 実行
     const error = await captureRejection(reader.read());
@@ -171,11 +188,13 @@ describe("InvalidChunkTypeError", () => {
 describe("エラーの伝播", () => {
   test("ストリームの書き込みエラーは writer.closed へも伝播する", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ vars: new Variables(), key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
     await captureRejection(writer.write("invalid" as unknown as Uint8Array<ArrayBuffer>));
 
     // 実行と検証
     await expect(writer.closed).rejects.toThrow(InvalidChunkTypeError);
-    expect(storage.exists({ key: "s1" })).toBe(false);
+    expect(storage.exists(createHasContext("s1") as IStorage.ExistsContext)).toBe(false);
   });
 });

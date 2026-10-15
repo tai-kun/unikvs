@@ -1,4 +1,5 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -16,28 +17,22 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       values.map((data) =>
-        storage.write({
-          key: "k",
+        storage.write(
+          createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
           data,
-          signal: AbortSignal.timeout(5_000),
-          vars: new Variables({}),
-        }),
+        ),
       ),
     );
-    const result = await storage.read({
-      key: "k",
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    const result = await storage.read(
+      createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(values.some((v) => v[0] === result[0] && v.length === result.length)).toBe(true);
     expect(
-      await storage.exists({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.exists(
+        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
     ).toBe(true);
   });
 
@@ -49,23 +44,21 @@ describe("並行操作", () => {
     // 実行
     await Promise.all(
       [0, 1, 2, 3, 4].map((i) =>
-        storage.write({
-          key: `k${i}`,
-          data: new Uint8Array([i]),
-          signal: AbortSignal.timeout(5_000),
-          vars: new Variables({}),
-        }),
+        storage.write(
+          createSetContext(`k${i}`, {
+            signal: AbortSignal.timeout(5_000),
+          }) as IStorage.WriteContext,
+          new Uint8Array([i]),
+        ),
       ),
     );
 
     // 検証
     for (let i = 0; i < 5; i += 1) {
       expect(
-        await storage.read({
-          key: `k${i}`,
-          signal: AbortSignal.timeout(5_000),
-          vars: new Variables({}),
-        }),
+        await storage.read(
+          createGetContext(`k${i}`, { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        ),
       ).toStrictEqual(new Uint8Array([i]));
     }
   });

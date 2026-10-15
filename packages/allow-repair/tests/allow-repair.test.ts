@@ -1,5 +1,18 @@
-import { Variables } from "@unikvs/core";
-import { RepairNotAllowedError } from "@unikvs/core";
+import { RepairNotAllowedError, type IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createClearContext,
+  createDecodeContext,
+  createDeleteContext,
+  createEncodeContext,
+  createGetContext,
+  createHasContext,
+  createNext,
+  createRepairContext,
+  createSetContext,
+  createStreamContext,
+  type TestContext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -21,6 +34,16 @@ const test = vitest.extend<{
     deleteGlobalConfig();
   },
 });
+
+/**
+ * 値をエンコードして出力された値を返します。
+ * 透過されることを検証するために使用します。
+ */
+async function encode(gate: AllowRepair, c: TestContext): Promise<unknown> {
+  await gate.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
 
 describe("初期化と基本属性", () => {
   test("name は AllowRepair を返す", ({ expect }) => {
@@ -96,63 +119,39 @@ describe("許可状態の切替え", () => {
   });
 });
 
-describe("encode の透過と拒否", () => {
-  test("非修復 vars では同一参照を返す", ({ expect }) => {
+describe("encode の透過", () => {
+  test("非修復コンテキストでは同一参照を返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     const data = "hello";
 
     // 実行と検証
-    expect(gate.encode({ vars: new Variables({}), data })).toBe(data);
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": false }), data })).toBe(data);
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": 1 }), data })).toBe(data);
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": "true" }), data })).toBe(data);
+    expect(await encode(gate, createSetContext("k1", { source: data }))).toBe(data);
+    expect(await encode(gate, createEncodeContext(data, "k1"))).toBe(data);
   });
 
-  test("disable 中でも非修復 vars では同一参照を返す", ({ expect }) => {
+  test("disable 中でも同一参照を返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
     const data = { foo: "bar" };
 
     // 実行と検証
-    expect(gate.encode({ vars: new Variables({}), data })).toBe(data);
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": false }), data })).toBe(data);
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": 1 }), data })).toBe(data);
+    expect(await encode(gate, createSetContext("k1", { source: data }))).toBe(data);
+    expect(await encode(gate, createEncodeContext(data, "k1"))).toBe(data);
   });
 
-  test("修復 vars でも既定状態では同一参照を返す", ({ expect }) => {
-    // 準備
-    const gate = new AllowRepair();
-    const data = new Uint8Array([1, 2, 3]);
-
-    // 実行と検証
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": true }), data })).toBe(data);
-  });
-
-  test("disable 後に修復 vars で RepairNotAllowedError を投げる", ({ expect }) => {
+  test("書き戻し要求があっても encode は透過する", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
+    const data = "x";
 
     // 実行と検証
-    expect(() =>
-      gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" }),
-    ).toThrow(RepairNotAllowedError);
+    expect(await encode(gate, createRepairContext("k1", ["n1"], { source: data }))).toBe(data);
   });
 
-  test("enable 後に修復 vars で再び同一参照を返す", ({ expect }) => {
-    // 準備
-    const gate = new AllowRepair();
-    gate.disable();
-    gate.enable();
-    const data = "hello";
-
-    // 実行と検証
-    expect(gate.encode({ vars: new Variables({ "unikvs:repair": true }), data })).toBe(data);
-  });
-
-  test("文字列とバイト列とオブジェクトを同一参照で返す", ({ expect }) => {
+  test("文字列とバイト列とオブジェクトを同一参照で返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     const text = "hello";
@@ -160,127 +159,230 @@ describe("encode の透過と拒否", () => {
     const object = { foo: "bar" };
 
     // 実行と検証
-    expect(gate.encode({ vars: new Variables({}), data: text })).toBe(text);
-    expect(gate.encode({ vars: new Variables({}), data: bytes })).toBe(bytes);
-    expect(gate.encode({ vars: new Variables({}), data: object })).toBe(object);
+    expect(await encode(gate, createEncodeContext(text, "k1"))).toBe(text);
+    expect(await encode(gate, createEncodeContext(bytes, "k1"))).toBe(bytes);
+    expect(await encode(gate, createEncodeContext(object, "k1"))).toBe(object);
+  });
+});
+
+describe("use による修復の許可と拒否", () => {
+  test("既定状態で書き戻し付き get を next に委譲する", async ({ expect }) => {
+    // 準備
+    const gate = new AllowRepair();
+    let called = false;
+
+    // 実行
+    await gate.use(
+      createGetContext("k1", {
+        repair: { enabled: true, targets: ["n1"] },
+      }) as IMiddleware.UseContext,
+      async () => {
+        called = true;
+      },
+    );
+
+    // 検証
+    expect(called).toBe(true);
+  });
+
+  test("disable 後に書き戻し付き get で RepairNotAllowedError を投げる", async ({ expect }) => {
+    // 準備
+    const gate = new AllowRepair();
+    gate.disable();
+
+    // 実行と検証
+    await expect(
+      gate.use(
+        createGetContext("k1", {
+          repair: { enabled: true, targets: ["n1"] },
+        }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    ).rejects.toThrow(RepairNotAllowedError);
+  });
+
+  test("disable 後に書き戻し付き stream で RepairNotAllowedError を投げる", async ({ expect }) => {
+    // 準備
+    const gate = new AllowRepair();
+    gate.disable();
+
+    // 実行と検証
+    await expect(
+      gate.use(
+        createStreamContext("k1", {
+          repair: { enabled: true, targets: ["n1"] },
+        }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    ).rejects.toThrow(RepairNotAllowedError);
+  });
+
+  test("disable 中でも書き戻しなしの操作は next に委譲する", async ({ expect }) => {
+    // 準備
+    const gate = new AllowRepair();
+    gate.disable();
+    const called: Record<string, boolean> = {};
+
+    // 実行
+    for (const c of [
+      createSetContext("k1"),
+      createGetContext("k1"),
+      createStreamContext("k1"),
+      createHasContext("k1"),
+      createDeleteContext("k1"),
+      createClearContext("k1"),
+    ]) {
+      await gate.use(c as IMiddleware.UseContext, async () => {
+        called[c.action] = true;
+      });
+    }
+
+    // 検証
+    expect(called).toStrictEqual({
+      set: true,
+      get: true,
+      stream: true,
+      has: true,
+      delete: true,
+      clear: true,
+    });
+  });
+
+  test("enable 後に書き戻し付き get で再び next に委譲する", async ({ expect }) => {
+    // 準備
+    const gate = new AllowRepair();
+    gate.disable();
+    gate.enable();
+    let called = false;
+
+    // 実行
+    await gate.use(
+      createGetContext("k1", {
+        repair: { enabled: true, targets: ["n1"] },
+      }) as IMiddleware.UseContext,
+      async () => {
+        called = true;
+      },
+    );
+
+    // 検証
+    expect(called).toBe(true);
   });
 });
 
 describe("decode の透過", () => {
-  test("通常の vars では同一参照を返す", ({ expect }) => {
+  test("通常のコンテキストでは同一参照を返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     const data = "hello";
 
-    // 実行と検証
-    expect(gate.decode({ data })).toBe(data);
+    // 実行
+    const c = createDecodeContext(data, "k1");
+    await gate.decode(c as IMiddleware.DecodeContext, createNext());
+
+    // 検証
+    expect(c.destination).toBe(data);
   });
 
-  test("disable 中でも修復 vars 付きで投げずに同一参照を返す", ({ expect }) => {
+  test("disable 中でも投げずに同一参照を返す", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行と検証
-    expect(gate.decode({ data })).toBe(data);
+    // 実行
+    const c = createDecodeContext(data, "k1");
+    await gate.decode(c as IMiddleware.DecodeContext, createNext());
+
+    // 検証
+    expect(c.destination).toBe(data);
   });
 });
 
 describe("エラーの同一性", () => {
-  test("拒否時は core の RepairNotAllowedError を投げる", ({ expect }) => {
+  test("拒否時は core の RepairNotAllowedError を投げる", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
 
     // 実行
-    const error = (() => {
-      try {
-        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
-      } catch (ex) {
-        return ex;
-      }
-      return null;
-    })();
+    const error = await captureRejection(
+      gate.use(
+        createRepairContext("k1", [], { source: "x" }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(RepairNotAllowedError);
   });
 
-  test("meta.names は AllowRepair である", ({ expect }) => {
+  test("meta.names は targets をそのまま保持する", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
 
     // 実行
-    const error = (() => {
-      try {
-        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
-      } catch (ex) {
-        return ex as RepairNotAllowedError;
-      }
-      throw new Error("unreachable");
-    })();
+    const error = (await captureRejection(
+      gate.use(
+        createRepairContext("k1", [], { source: "x" }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    )) as RepairNotAllowedError;
 
     // 検証
-    expect(error.meta).toStrictEqual({ names: ["AllowRepair"] });
+    expect(error.meta).toStrictEqual({ names: [] });
   });
 
-  test("name は UniKvsRepairNotAllowedError である", ({ expect }) => {
+  test("name は UniKvsRepairNotAllowedError である", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
 
     // 実行
-    const error = (() => {
-      try {
-        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
-      } catch (ex) {
-        return ex as RepairNotAllowedError;
-      }
-      throw new Error("unreachable");
-    })();
+    const error = (await captureRejection(
+      gate.use(
+        createRepairContext("k1", [], { source: "x" }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    )) as RepairNotAllowedError;
 
     // 検証
     expect(error.name).toBe("UniKvsRepairNotAllowedError");
   });
 
-  test("既定のメッセージは中立文言である", ({ expect }) => {
+  test("既定のメッセージは不明名を含む", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
     gate.disable();
 
     // 実行
-    const error = (() => {
-      try {
-        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
-      } catch (ex) {
-        return ex as RepairNotAllowedError;
-      }
-      throw new Error("unreachable");
-    })();
+    const error = (await captureRejection(
+      gate.use(
+        createRepairContext("k1", [], { source: "x" }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    )) as RepairNotAllowedError;
 
     // 検証
-    expect(error.message).toBe('Repair writes via "AllowRepair" are not allowed');
+    expect(error.message).toBe('Repair writes via "(unknown)" are not allowed');
   });
 
-  test("日本語では中立文言のメッセージを返す", ({ expect, setLang }) => {
+  test("日本語では不明名のメッセージを返す", async ({ expect, setLang }) => {
     // 準備
     setLang("ja");
     const gate = new AllowRepair();
     gate.disable();
 
     // 実行
-    const error = (() => {
-      try {
-        gate.encode({ vars: new Variables({ "unikvs:repair": true }), data: "x" });
-      } catch (ex) {
-        return ex as RepairNotAllowedError;
-      }
-      throw new Error("unreachable");
-    })();
+    const error = (await captureRejection(
+      gate.use(
+        createRepairContext("k1", [], { source: "x" }) as IMiddleware.UseContext,
+        createNext(),
+      ),
+    )) as RepairNotAllowedError;
 
     // 検証
-    expect(error.message).toBe('"AllowRepair" への書き戻しは許可されていません');
+    expect(error.message).toBe('"(unknown)" への書き戻しは許可されていません');
   });
 });

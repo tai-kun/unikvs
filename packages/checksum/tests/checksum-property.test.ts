@@ -1,8 +1,15 @@
 import { md5, sha1 } from "@noble/hashes/legacy.js";
 import { sha224, sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
-import { Variables } from "@unikvs/core";
-import { concatChunks, runTransform, toHex } from "@unikvs/testing";
-import { forCases, forCasesAsync } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  concatChunks,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+  toHex,
+} from "@unikvs/testing";
+import { forCasesAsync } from "@unikvs/testing";
 import { test } from "vitest";
 
 import {
@@ -15,6 +22,7 @@ import {
   ChecksumSha384,
   ChecksumSha512,
 } from "../src/index.js";
+import type Checksum from "../src/checksum.js";
 
 const ALGORITHMS = [
   {
@@ -55,6 +63,59 @@ const ALGORITHMS = [
   },
 ] as const;
 
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: Checksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を検証ストリームに流し、出力されたチャンクと終了時のエラーを返します。
+ */
+async function runEncodeStream(
+  checksum: Checksum,
+  inputChunks: readonly Uint8Array<ArrayBuffer>[],
+  values?: Record<string, unknown>,
+): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+  const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
+  await checksum.encodeStream(
+    c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
+  let closeError: unknown;
+
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+    for (;;) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+
+      outputChunks.push(value);
+    }
+  } catch (error) {
+    closeError = error;
+  }
+
+  return { outputChunks, closeError };
+}
+
 test("ランダムなチャンク分割でもストリーム検証が一括検証と同じ結果になる", async ({ expect }) => {
   // 準備
   const checksum = new ChecksumSha256();
@@ -65,32 +126,31 @@ test("ランダムなチャンク分割でもストリーム検証が一括検�
       generator.bytes(generator.int(0, 32)),
     );
     const data = concatChunks(chunks);
-    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: toHex(sha256(data)) });
 
-    const { outputChunks, closeError } = await runTransform(
-      checksum.getEncodable({ vars }),
-      chunks,
-    );
+    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+      [ChecksumSha256.CHECKSUM_VAR_NAME]: toHex(sha256(data)),
+    });
 
     expect(closeError).toBeUndefined();
     expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
   });
 });
 
-test("期待値が実際のダイジェストと異なれば必ず ChecksumMismatchError になる", ({ expect }) => {
+test("期待値が実際のダイジェストと異なれば必ず ChecksumMismatchError になる", async ({
+  expect,
+}) => {
   // 準備
   const checksum = new ChecksumSha256();
 
   // 実行と検証
-  forCases(12345, 50, (random) => {
+  await forCasesAsync(12345, 50, async (random) => {
     const data = random.bytes(random.int(0, 256));
     const actual = toHex(sha256(data));
     const expected = `${actual}0`;
-    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
 
     let thrown: unknown;
     try {
-      checksum.encode({ vars, data });
+      await encode(checksum, data, { [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
     } catch (error) {
       thrown = error;
     }
@@ -100,14 +160,15 @@ test("期待値が実際のダイジェストと異なれば必ず ChecksumMisma
   });
 });
 
-test("全 6 アルゴリズムでランダムデータのダイジェスト検証に成功する", ({ expect }) => {
+test("全 6 アルゴリズムでランダムデータのダイジェスト検証に成功する", async ({ expect }) => {
   // 実行と検証
-  forCases(67890, 50, (random) => {
+  await forCasesAsync(67890, 50, async (random) => {
     const algorithm = random.pick(ALGORITHMS);
     const data = random.bytes(random.int(0, 128));
-    const vars = new Variables({ [algorithm.varName]: algorithm.digestOf(data) });
 
-    const result = algorithm.create().encode({ vars, data });
+    const result = await encode(algorithm.create(), data, {
+      [algorithm.varName]: algorithm.digestOf(data),
+    });
 
     expect(result).toBe(data);
   });

@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { bytesToHex, defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
 import type { FastUtf8 } from "fast-utf8";
 
@@ -67,7 +67,12 @@ export type HexOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
  */
-export default class Hex implements ITransformer {
+export default class Hex implements IMiddleware<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
@@ -102,91 +107,104 @@ export default class Hex implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
-  public encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-
-    return this.encoder.encode(bytesToHex(data));
+  public async encode(
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = this.encoder.encode(bytesToHex(c.source));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
    */
-  public decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-    const text = this.decoder.decode(data);
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    const text = this.decoder.decode(c.source);
 
     if (text.length % 2 === 1) {
       throw new HexDecodeError();
     }
 
-    return hexToBytesStrict(text);
+    c.destination = hexToBytesStrict(text);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#streams)
    */
-  public getEncodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const encoder = this.encoder;
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        if (chunk.byteLength === 0) {
-          return;
-        }
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          if (chunk.byteLength === 0) {
+            return;
+          }
 
-        controller.enqueue(encoder.encode(bytesToHex(chunk)));
-      },
-    });
+          controller.enqueue(encoder.encode(bytesToHex(chunk)));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#streams)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
     // ignoreBOM:true 注入時は引き継がないため BOM単体 [EF BB BF] は一括 HexDecodeError・ストリーム空成功に分岐します。
     const utf8 = this.decoder.clone({ ignoreBOM: false });
     let carry = "";
 
-    return new TransformStream({
-      transform(chunk, controller) {
-        const text = utf8.decode(chunk, { stream: true });
-        let combined = carry + text;
-        carry = "";
+    c.destination = c.source.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          const text = utf8.decode(chunk, { stream: true });
+          let combined = carry + text;
+          carry = "";
 
-        if (combined.length === 0) {
-          return;
-        }
+          if (combined.length === 0) {
+            return;
+          }
 
-        if (combined.length % 2 === 1) {
-          carry = combined.slice(-1);
-          combined = combined.slice(0, -1);
-        }
+          if (combined.length % 2 === 1) {
+            carry = combined.slice(-1);
+            combined = combined.slice(0, -1);
+          }
 
-        if (combined.length === 0) {
-          return;
-        }
+          if (combined.length === 0) {
+            return;
+          }
 
-        const bytes = hexToBytesStrict(combined);
-        controller.enqueue(bytes);
-      },
+          const bytes = hexToBytesStrict(combined);
+          controller.enqueue(bytes);
+        },
 
-      flush() {
-        // 終端の decode は切り詰めたマルチバイトがあれば TypeError を投げ、そうでなければ空文字を返します。
-        const combined = carry + utf8.decode(new Uint8Array(0));
-        carry = "";
+        flush() {
+          // 終端の decode は切り詰めたマルチバイトがあれば TypeError を投げ、そうでなければ空文字を返します。
+          const combined = carry + utf8.decode(new Uint8Array(0));
+          carry = "";
 
-        // carry は最大で 1 文字かつ終端 decode は成功時つねに空文字のため偶数確定分の enqueue は到達不能である。
-        // 正常な入力では carry も末尾も空であり、残りがある場合は半端なニブルとして拒否します。
-        if (combined.length !== 0) {
-          throw new HexDecodeError();
-        }
-      },
-    });
+          // carry は最大で 1 文字かつ終端 decode は成功時つねに空文字のため偶数確定分の enqueue は到達不能である。
+          // 正常な入力では carry も末尾も空であり、残りがある場合は半端なニブルとして拒否します。
+          if (combined.length !== 0) {
+            throw new HexDecodeError();
+          }
+        },
+      }),
+    );
+    await next();
   }
 }

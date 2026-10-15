@@ -1,9 +1,52 @@
+import type { IMiddleware } from "@unikvs/core";
 import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
-import { createPseudoRandomBytes } from "@unikvs/testing";
+import {
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+  createOpenContext,
+  createPseudoRandomBytes,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import ZstdNode from "../src/zstd-node.js";
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
+/**
+ * ターゲットを開きます。
+ */
+async function openTarget(target: ZstdNode, signal: AbortSignal): Promise<void> {
+  await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+}
+
+/**
+ * バイト列を圧縮して返します。
+ */
+async function encode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await target.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
+/**
+ * 圧縮されたバイト列を展開して返します。
+ */
+async function decode(
+  target: ZstdNode,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createDecodeContext(data);
+  await target.decode(c as ByteDecode, createNext());
+
+  return c.destination;
+}
+
 
 // node:zlib の zstd 系 API が利用できない Node 版では当該 2 件をスキップする。
 const hasZstd = typeof zstdCompressSync === "function" && typeof zstdDecompressSync === "function";
@@ -12,12 +55,12 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
   test("node:zlib で圧縮したフレームを decode で展開できる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(1024, 15);
     const compressed = zstdCompressSync(input);
 
     // 実行
-    const decoded = await target.decode({ data: new Uint8Array(compressed) });
+    const decoded = await decode(target, new Uint8Array(compressed) );
 
     // 検証
     expect(decoded).toStrictEqual(input);
@@ -26,11 +69,11 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
   test("encode の出力を node:zlib で展開できる", async ({ expect, signal }) => {
     // 準備
     const target = new ZstdNode();
-    await target.open({ signal });
+    await openTarget(target, signal);
     const input = createPseudoRandomBytes(1024, 16);
 
     // 実行
-    const encoded = await target.encode({ data: input });
+    const encoded = await encode(target, input );
     const decompressed = zstdDecompressSync(encoded);
 
     // 検証

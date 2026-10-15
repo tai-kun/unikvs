@@ -1,4 +1,12 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test, beforeEach } from "vitest";
 
 import { KeyNotFoundError, InvalidChunkTypeError } from "../src/errors.js";
@@ -30,8 +38,8 @@ describe("基本操作（CRUD）", () => {
     const data = "v1";
 
     // 実行
-    storage.write({ vars: new Variables(), key, data });
-    const result = storage.read({ key });
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe(data);
@@ -40,10 +48,10 @@ describe("基本操作（CRUD）", () => {
   test("データが存在するとき、exists が true を返す", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: "v1" });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "v1");
 
     // 実行
-    const result = storage.exists({ key });
+    const result = storage.exists(createHasContext(key) as IStorage.ExistsContext);
 
     // 検証
     expect(result).toBe(true);
@@ -51,7 +59,7 @@ describe("基本操作（CRUD）", () => {
 
   test("データが存在しないとき、exists が false を返す", ({ expect }) => {
     // 実行
-    const result = storage.exists({ key: "none" });
+    const result = storage.exists(createHasContext("none") as IStorage.ExistsContext);
 
     // 検証
     expect(result).toBe(false);
@@ -60,36 +68,36 @@ describe("基本操作（CRUD）", () => {
   test("データを削除したとき、そのデータが存在しなくなる", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: "v1" });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.delete({ key });
+    storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
     // 検証
-    expect(storage.exists({ key })).toBe(false);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
   });
 
   test("全データを消去したとき、すべてのキーが存在しなくなる", ({ expect }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.clear();
+    storage.clear(createClearContext() as IStorage.ClearContext);
 
     // 検証
-    expect(storage.exists({ key: "k1" })).toBe(false);
-    expect(storage.exists({ key: "k2" })).toBe(false);
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storage.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("既存のキーに対してデータを書き込んだとき、値が更新される", ({ expect }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: "v1" });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "v1");
 
     // 実行
-    storage.write({ vars: new Variables(), key, data: "v2" });
-    const result = storage.read({ key });
+    storage.write(createSetContext(key) as IStorage.WriteContext, "v2");
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBe("v2");
@@ -109,7 +117,7 @@ describe("ストリーム操作", () => {
     // 準備
 
     const key = "s1";
-    const writable = storage.getWritable({ vars: new Variables(), key });
+    const writable = storage.getWritable(createSetContext(key) as IStorage.GetWritableContext);
     const writer = writable.getWriter();
 
     // 実行
@@ -118,7 +126,7 @@ describe("ストリーム操作", () => {
     await writer.close();
 
     // 検証
-    const result = storage.read({ key });
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext);
     expect(result).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
@@ -129,10 +137,10 @@ describe("ストリーム操作", () => {
 
     const key = "s1";
     const data = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: new Variables(), key, data });
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
 
     // 実行
-    const readable = storage.getReadable({ key });
+    const readable = storage.getReadable(createStreamContext(key) as IStorage.GetReadableContext);
     const reader = readable.getReader();
     const chunks: number[] = [];
 
@@ -152,13 +160,13 @@ describe("ストリーム操作", () => {
     // 準備
 
     const key = "s2";
-    const writable = storage.getWritable({ vars: new Variables(), key });
+    const writable = storage.getWritable(createSetContext(key) as IStorage.GetWritableContext);
 
     // 実行
     await writable.getWriter().close();
 
     // 検証
-    const result = storage.read({ key });
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext);
     expect(result).toBeInstanceOf(Uint8Array);
     expect(result?.length).toBe(0);
   });
@@ -173,19 +181,23 @@ describe("異常系・エラーハンドリング", () => {
 
   test("未登録のキーを読み取ろうとしたとき、KeyNotFoundError が発生する", ({ expect }) => {
     // 実行と検証
-    expect(() => storage.read({ key: "unknown" })).toThrow(KeyNotFoundError);
+    expect(() => storage.read(createGetContext("unknown") as IStorage.ReadContext)).toThrow(
+      KeyNotFoundError,
+    );
   });
 
   test("未登録のキーを削除しようとしたとき、KeyNotFoundError が発生する", ({ expect }) => {
     // 実行と検証
-    expect(() => storage.delete({ key: "unknown" })).toThrow(KeyNotFoundError);
+    expect(() => storage.delete(createDeleteContext("unknown") as IStorage.DeleteContext)).toThrow(
+      KeyNotFoundError,
+    );
   });
 
   test("WritableStream に Uint8Array 以外の型を書き込んだとき、InvalidChunkTypeError が発生する", async ({
     expect,
   }) => {
     // 準備
-    const writable = storage.getWritable({ vars: new Variables(), key: "s1" });
+    const writable = storage.getWritable(createSetContext("s1") as IStorage.GetWritableContext);
     const writer = writable.getWriter();
 
     // 実行と検証
@@ -198,10 +210,10 @@ describe("異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const key = "k1";
-    storage.write({ vars: new Variables(), key, data: { a: 1 } }); // オブジェクトを保存
+    storage.write(createSetContext(key) as IStorage.WriteContext, { a: 1 }); // オブジェクトを保存
 
     // 実行
-    const readable = storage.getReadable({ key });
+    const readable = storage.getReadable(createStreamContext(key) as IStorage.GetReadableContext);
     const reader = readable.getReader();
 
     // 検証
@@ -222,11 +234,11 @@ describe("境界値・特殊ケース", () => {
     const data = "empty key data";
 
     // 実行
-    storage.write({ vars: new Variables(), key, data });
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
 
     // 検証
-    expect(storage.read({ key })).toBe(data);
-    expect(storage.exists({ key })).toBe(true);
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toBe(data);
+    expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
   });
 
   test("特殊文字を含むキーを使用しても、正常に保存と取得ができる", ({ expect }) => {
@@ -235,20 +247,20 @@ describe("境界値・特殊ケース", () => {
     const data = "special key data";
 
     // 実行
-    storage.write({ vars: new Variables(), key, data });
+    storage.write(createSetContext(key) as IStorage.WriteContext, data);
 
     // 検証
-    expect(storage.read({ key })).toBe(data);
+    expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toBe(data);
   });
 
   test("null または undefined を保存したとき、そのままの値が取得できる", ({ expect }) => {
     // 実行
-    storage.write({ vars: new Variables(), key: "null-key", data: null });
-    storage.write({ vars: new Variables(), key: "undefined-key", data: undefined });
+    storage.write(createSetContext("null-key") as IStorage.WriteContext, null);
+    storage.write(createSetContext("undefined-key") as IStorage.WriteContext, undefined);
 
     // 検証
-    expect(storage.read({ key: "null-key" })).toBe(null);
-    expect(storage.read({ key: "undefined-key" })).toBe(undefined);
+    expect(storage.read(createGetContext("null-key") as IStorage.ReadContext)).toBe(null);
+    expect(storage.read(createGetContext("undefined-key") as IStorage.ReadContext)).toBe(undefined);
   });
 
   test("巨大なバイナリデータを保存したとき、整合性を保ったまま取得できる", ({ expect }) => {
@@ -258,8 +270,8 @@ describe("境界値・特殊ケース", () => {
     const key = "large-data";
 
     // 実行
-    storage.write({ vars: new Variables(), key, data: bigData });
-    const result = storage.read({ key });
+    storage.write(createSetContext(key) as IStorage.WriteContext, bigData);
+    const result = storage.read(createGetContext(key) as IStorage.ReadContext);
 
     // 検証
     expect(result).toBeInstanceOf(Uint8Array);
@@ -274,32 +286,38 @@ describe("データの隔離", () => {
     // 準備
     const storage = new Memory();
     const source = new Uint8Array([1, 2, 3]);
-    storage.write({ vars: new Variables(), key: "k1", data: source });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, source);
 
     // 実行
     source[0] = 99;
 
     // 検証
-    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1, 2, 3]),
+    );
   });
 
   test("読み取った値を変更したとき、保存値は変わらない", ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ vars: new Variables(), key: "k1", data: new Uint8Array([1, 2, 3]) });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, new Uint8Array([1, 2, 3]));
 
     // 実行
-    storage.read({ key: "k1" })[0] = 99;
+    storage.read(createGetContext("k1") as IStorage.ReadContext)[0] = 99;
 
     // 検証
-    expect(storage.read({ key: "k1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1, 2, 3]),
+    );
   });
 
   test("ストリームで読み取ったチャンクを変更したとき、保存値は変わらない", async ({ expect }) => {
     // 準備
     const storage = new Memory();
-    storage.write({ vars: new Variables(), key: "s1", data: new Uint8Array([1, 2, 3]) });
-    const reader = storage.getReadable({ key: "s1" }).getReader();
+    storage.write(createSetContext("s1") as IStorage.WriteContext, new Uint8Array([1, 2, 3]));
+    const reader = storage
+      .getReadable(createStreamContext("s1") as IStorage.GetReadableContext)
+      .getReader();
 
     // 実行
     const { value } = await reader.read();
@@ -307,20 +325,24 @@ describe("データの隔離", () => {
     reader.releaseLock();
 
     // 検証
-    expect(storage.read({ key: "s1" })).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(storage.read(createGetContext("s1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1, 2, 3]),
+    );
   });
 
   test("入れ子の値を変更したとき、保存値は変わらない", ({ expect }) => {
     // 準備
     const storage = new Memory();
     const source = { nested: { list: [1, 2, 3] } };
-    storage.write({ vars: new Variables(), key: "k1", data: source });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, source);
 
     // 実行
     source.nested.list[0] = 99;
 
     // 検証
-    expect(storage.read({ key: "k1" })).toStrictEqual({ nested: { list: [1, 2, 3] } });
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual({
+      nested: { list: [1, 2, 3] },
+    });
   });
 
   test("clone に関数を指定したとき、その関数で複製する", ({ expect }) => {
@@ -329,9 +351,9 @@ describe("データの隔離", () => {
     const source = new Uint8Array([1, 2, 3]);
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k1", data: source });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, source);
 
     // 検証
-    expect(storage.read({ key: "k1" })).toBe(source);
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe(source);
   });
 });

@@ -1,7 +1,14 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { InvalidFilenameError } from "@unikvs/utils";
 import { describe } from "vitest";
 
@@ -31,17 +38,21 @@ describe("キー検証", () => {
       const data = new Uint8Array([index, index + 1]);
 
       // 実行
-      await storage.write({ key, data, signal, vars: new Variables() });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
       // 検証
-      expect(await storage.exists({ key })).toBe(true);
-      expect(new Uint8Array(await storage.read({ key, signal }))).toStrictEqual(data);
+      expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+      expect(
+        new Uint8Array(
+          await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+        ),
+      ).toStrictEqual(data);
 
       // 実行
-      await storage.delete({ key });
+      await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
       // 検証
-      expect(await storage.exists({ key })).toBe(false);
+      expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
     }
   });
 
@@ -84,15 +95,26 @@ describe("キー検証", () => {
 
     for (const key of invalidKeys) {
       await expect(
-        storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() }),
+        storage.write(
+          createSetContext(key, { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        ),
       ).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.read({ key, signal })).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.exists({ key })).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.delete({ key })).rejects.toThrow(InvalidFilenameError);
-      await expect(storage.getWritable({ key, signal, vars: new Variables() })).rejects.toThrow(
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).rejects.toThrow(InvalidFilenameError);
+      await expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).rejects.toThrow(
         InvalidFilenameError,
       );
-      expect(() => storage.getReadable({ key, signal })).toThrow(InvalidFilenameError);
+      await expect(
+        storage.delete(createDeleteContext(key) as IStorage.DeleteContext),
+      ).rejects.toThrow(InvalidFilenameError);
+      await expect(
+        storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext),
+      ).rejects.toThrow(InvalidFilenameError);
+      expect(() =>
+        storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
+      ).toThrow(InvalidFilenameError);
     }
   });
 
@@ -108,14 +130,16 @@ describe("キー検証", () => {
     await writeFile(join(root, key), data);
 
     // 実行と検証
-    expect(await storage.exists({ key })).toBe(true);
-    expect(new Uint8Array(await storage.read({ key, signal }))).toStrictEqual(data);
+    expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(data);
 
     // 実行
-    await storage.delete({ key });
+    await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
     // 検証
-    expect(await storage.exists({ key })).toBe(false);
+    expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
   });
 
   test.fails("255 バイトの有効なキーでも write できる", async ({ expect, signal, storage }) => {
@@ -124,7 +148,10 @@ describe("キー検証", () => {
 
     // 実行と検証
     await expect(
-      storage.write({ key, data: new Uint8Array([1]), signal, vars: new Variables() }),
+      storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     ).resolves.toBeUndefined();
   });
 });

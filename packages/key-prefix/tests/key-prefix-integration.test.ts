@@ -1,8 +1,14 @@
 import { AllowRepair } from "@unikvs/allow-repair";
-import { Variables } from "@unikvs/core";
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
-import { abortedSignal, captureRejection, sourceFrom } from "@unikvs/testing";
+import {
+  abortedSignal,
+  captureRejection,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { UniKvs } from "unikvs";
 import { describe, test } from "vitest";
 
@@ -12,16 +18,16 @@ import { createPrefixedKvs, collectValueBytes, type TestMapping } from "./_helpe
 
 /**
  * 受信した書き込み引数を記録するストレージです。
- * vars の論理キーの維持の検証に使用します。
+ * 物理キーの解決の検証に使用します。
  */
 class VarsRecordingStorage extends Memory {
   public override readonly name: string = "VarsRecordingStorage";
 
-  public lastWriteArgs: Pick<IStorage.WriteArgs<any>, "key" | "data" | "vars"> | undefined;
+  public lastWrite: { context: IStorage.WriteContext; data: unknown } | undefined;
 
-  public override write(args: Pick<IStorage.WriteArgs<any>, "key" | "data" | "vars">): void {
-    this.lastWriteArgs = args;
-    super.write(args);
+  public override write(c: IStorage.WriteContext, data: unknown): void {
+    this.lastWrite = { context: c, data };
+    super.write(c, data);
   }
 }
 
@@ -33,9 +39,9 @@ describe("物理キーへの写像", () => {
     await kvs.set("k1", "v1");
 
     // 検証
-    expect(storage.exists({ key: "tenant:k1" })).toBe(true);
-    expect(storage.exists({ key: "k1" })).toBe(false);
-    expect(storage.read({ key: "tenant:k1" })).toBe("v1");
+    expect(storage.exists(createHasContext("tenant:k1") as IStorage.ExistsContext)).toBe(true);
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storage.read(createGetContext("tenant:k1") as IStorage.ReadContext)).toBe("v1");
     expect(await kvs.get("k1")).toBe("v1");
     expect(await kvs.has("k1")).toBe(true);
     expect(await kvs.has("k2")).toBe(false);
@@ -53,7 +59,7 @@ describe("物理キーへの写像", () => {
     await kvs.delete("k1");
 
     // 検証
-    expect(storage.exists({ key: "tenant:k1" })).toBe(false);
+    expect(storage.exists(createHasContext("tenant:k1") as IStorage.ExistsContext)).toBe(false);
     expect(await kvs.has("k1")).toBe(false);
 
     // 後片付け
@@ -69,8 +75,8 @@ describe("物理キーへの写像", () => {
     await kvs.set("logs", sourceFrom([data]));
 
     // 検証
-    expect(storage.exists({ key: "tenant:logs" })).toBe(true);
-    expect(storage.exists({ key: "logs" })).toBe(false);
+    expect(storage.exists(createHasContext("tenant:logs") as IStorage.ExistsContext)).toBe(true);
+    expect(storage.exists(createHasContext("logs") as IStorage.ExistsContext)).toBe(false);
     const vs = await kvs.stream("logs");
     expect((await collectValueBytes(vs)).flatMap((chunk) => [...chunk])).toStrictEqual([...data]);
 
@@ -98,11 +104,11 @@ describe("宛先ごとのプレフィックス", () => {
     await kvs.set("k1", "v1");
 
     // 検証
-    expect(storageA.exists({ key: "a:k1" })).toBe(true);
-    expect(storageA.exists({ key: "b:k1" })).toBe(false);
-    expect(storageB.exists({ key: "b:k1" })).toBe(true);
-    expect(storageB.exists({ key: "a:k1" })).toBe(false);
-    expect(mainStorage.exists({ key: "k1" })).toBe(true);
+    expect(storageA.exists(createHasContext("a:k1") as IStorage.ExistsContext)).toBe(true);
+    expect(storageA.exists(createHasContext("b:k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storageB.exists(createHasContext("b:k1") as IStorage.ExistsContext)).toBe(true);
+    expect(storageB.exists(createHasContext("a:k1") as IStorage.ExistsContext)).toBe(false);
+    expect(mainStorage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
     expect(await kvs.get("k1")).toBe("v1");
 
     // 後片付け
@@ -120,21 +126,21 @@ describe("宛先ごとのプレフィックス", () => {
       .fork(UniKvs.branch().connect(new KeyPrefix("b:")).persist(storageB))
       .create();
     await kvs.open();
-    storageA.write({ key: "b:k1", data: "contamination", vars: new Variables() });
+    storageA.write(createSetContext("b:k1") as IStorage.WriteContext, "contamination");
 
     // 実行と検証: 別宛先の物理キーが混入しても論理キーでは見えない。
     expect(await kvs.has("k1")).toBe(false);
 
     // 実行と検証: 自宛先の解決キーで書くと見える。
-    storageB.write({ key: "b:k1", data: "v1", vars: new Variables() });
+    storageB.write(createSetContext("b:k1") as IStorage.WriteContext, "v1");
     expect(await kvs.has("k1")).toBe(true);
 
     // 実行
     await kvs.delete("k1");
 
     // 検証: 自宛先の解決キーのみが削除され、混入キーは残る。
-    expect(storageB.exists({ key: "b:k1" })).toBe(false);
-    expect(storageA.exists({ key: "b:k1" })).toBe(true);
+    expect(storageB.exists(createHasContext("b:k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storageA.exists(createHasContext("b:k1") as IStorage.ExistsContext)).toBe(true);
 
     // 後片付け
     await kvs.close();
@@ -157,8 +163,8 @@ describe("宛先ごとのプレフィックス", () => {
     await kvs.set("k1", "v1");
 
     // 検証
-    expect(storageA.read({ key: "shared:k1" })).toBe("v1");
-    expect(storageB.read({ key: "shared:k1" })).toBe("v1");
+    expect(storageA.read(createGetContext("shared:k1") as IStorage.ReadContext)).toBe("v1");
+    expect(storageB.read(createGetContext("shared:k1") as IStorage.ReadContext)).toBe("v1");
 
     // 後片付け
     await kvs.close();
@@ -180,8 +186,8 @@ describe("適用順序", () => {
     await ordered.set("k1", "v1");
 
     // 検証
-    expect(orderedStorage.exists({ key: "b:a:k1" })).toBe(true);
-    expect(orderedStorage.exists({ key: "a:b:k1" })).toBe(false);
+    expect(orderedStorage.exists(createHasContext("b:a:k1") as IStorage.ExistsContext)).toBe(true);
+    expect(orderedStorage.exists(createHasContext("a:b:k1") as IStorage.ExistsContext)).toBe(false);
     expect(await ordered.get("k1")).toBe("v1");
 
     // 後片付け
@@ -189,8 +195,8 @@ describe("適用順序", () => {
   });
 });
 
-describe("論理キーの維持", () => {
-  test("storage が受信する vars のキーは論理キーである", async ({ expect }) => {
+describe("物理キーの解決", () => {
+  test("storage が受信するキーはプレフィックス付きの物理キーである", async ({ expect }) => {
     // 準備
     const storage = new VarsRecordingStorage();
     const kvs = UniKvs.config<TestMapping>()
@@ -203,8 +209,8 @@ describe("論理キーの維持", () => {
     await kvs.set("k1", "v1");
 
     // 検証
-    expect(storage.lastWriteArgs?.vars?.get("unikvs:key")).toBe("k1");
-    expect(storage.lastWriteArgs?.key).toBe("tenant:k1");
+    expect(storage.lastWrite?.context.key).toBe("tenant:k1");
+    expect(storage.lastWrite?.data).toBe("v1");
 
     // 後片付け
     await kvs.close();
@@ -304,7 +310,9 @@ describe("clear の誤解防止", () => {
       prefix: "first:",
       clearBehavior: "deny",
     });
-    expect(storage.exists({ key: "second:first:k1" })).toBe(true);
+    expect(storage.exists(createHasContext("second:first:k1") as IStorage.ExistsContext)).toBe(
+      true,
+    );
 
     // 後片付け
     await kvs.close();
@@ -323,16 +331,16 @@ describe("repair との連動", () => {
       .persist(storageB)
       .create();
     await kvs.open();
-    storageB.write({ key: "tenant:k1", data: "v1", vars: new Variables() });
+    storageB.write(createSetContext("tenant:k1") as IStorage.WriteContext, "v1");
 
     // 実行
     const value = await kvs.get("k1", { repair: true });
 
     // 検証
     expect(value).toBe("v1");
-    expect(storageA.exists({ key: "tenant:k1" })).toBe(true);
-    expect(storageA.exists({ key: "k1" })).toBe(false);
-    expect(storageA.read({ key: "tenant:k1" })).toBe("v1");
+    expect(storageA.exists(createHasContext("tenant:k1") as IStorage.ExistsContext)).toBe(true);
+    expect(storageA.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storageA.read(createGetContext("tenant:k1") as IStorage.ReadContext)).toBe("v1");
 
     // 後片付け
     await kvs.close();
@@ -350,7 +358,7 @@ describe("repair との連動", () => {
       .create();
     await kvs.open();
     const data = new Uint8Array([4, 5, 6]);
-    storageB.write({ key: "tenant:logs", data, vars: new Variables() });
+    storageB.write(createSetContext("tenant:logs") as IStorage.WriteContext, data);
 
     // 実行
     const vs = await kvs.stream("logs", { repair: true });
@@ -358,8 +366,8 @@ describe("repair との連動", () => {
 
     // 検証
     expect(output).toStrictEqual([...data]);
-    expect(storageA.exists({ key: "tenant:logs" })).toBe(true);
-    expect(storageA.exists({ key: "logs" })).toBe(false);
+    expect(storageA.exists(createHasContext("tenant:logs") as IStorage.ExistsContext)).toBe(true);
+    expect(storageA.exists(createHasContext("logs") as IStorage.ExistsContext)).toBe(false);
 
     // 後片付け
     await vs.dispose();

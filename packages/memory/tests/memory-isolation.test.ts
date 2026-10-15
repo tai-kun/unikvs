@@ -1,4 +1,11 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createClearContext,
+} from "@unikvs/testing";
 import { describe, test as vitest } from "vitest";
 
 import Memory from "../src/memory.js";
@@ -21,78 +28,84 @@ const test = vitest.extend<{ storage: Memory; otherStorage: Memory }>({
 describe("インスタンスの隔離", () => {
   test("書き込みは他のインスタンスへ影響しない", ({ expect, storage, otherStorage }) => {
     // 実行
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 検証
-    expect(storage.exists({ key: "k1" })).toBe(true);
-    expect(otherStorage.exists({ key: "k1" })).toBe(false);
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
+    expect(otherStorage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("削除は他のインスタンスへ影響しない", ({ expect, storage, otherStorage }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    otherStorage.write({ vars: new Variables(), key: "k1", data: "v2" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    otherStorage.write(createSetContext("k1") as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.delete({ key: "k1" });
+    storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
 
     // 検証
-    expect(storage.exists({ key: "k1" })).toBe(false);
-    expect(otherStorage.read({ key: "k1" })).toBe("v2");
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(otherStorage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v2");
   });
 
   test("clear は他のインスタンスへ影響しない", ({ expect, storage, otherStorage }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    otherStorage.write({ vars: new Variables(), key: "k1", data: "v2" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    otherStorage.write(createSetContext("k1") as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.clear();
+    storage.clear(createClearContext() as IStorage.ClearContext);
 
     // 検証
-    expect(storage.exists({ key: "k1" })).toBe(false);
-    expect(otherStorage.read({ key: "k1" })).toBe("v2");
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(otherStorage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v2");
   });
 });
 
 describe("キーの隔離", () => {
   test("1 つのキーの上書きは他のキーへ影響しない", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.write({ vars: new Variables(), key: "k1", data: "updated" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "updated");
 
     // 検証
-    expect(storage.read({ key: "k1" })).toBe("updated");
-    expect(storage.read({ key: "k2" })).toBe("v2");
+    expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("updated");
+    expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 
   test("1 つのキーの削除は他のキーへ影響しない", ({ expect, storage }) => {
     // 準備
-    storage.write({ vars: new Variables(), key: "k1", data: "v1" });
-    storage.write({ vars: new Variables(), key: "k2", data: "v2" });
+    storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
     // 実行
-    storage.delete({ key: "k1" });
+    storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
 
     // 検証
-    expect(storage.exists({ key: "k1" })).toBe(false);
-    expect(storage.read({ key: "k2" })).toBe("v2");
+    expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 
   test("ストリームの書き込み中でも他のキーの操作に影響しない", async ({ expect, storage }) => {
     // 準備
-    const writer = storage.getWritable({ vars: new Variables(), key: "s1" }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1]));
-    storage.write({ vars: new Variables(), key: "k2", data: new Uint8Array([2]) });
+    storage.write(createSetContext("k2") as IStorage.WriteContext, new Uint8Array([2]));
     await writer.close();
 
     // 検証
-    expect(storage.read({ key: "s1" })).toStrictEqual(new Uint8Array([1]));
-    expect(storage.read({ key: "k2" })).toStrictEqual(new Uint8Array([2]));
+    expect(storage.read(createGetContext("s1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([1]),
+    );
+    expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([2]),
+    );
   });
 });

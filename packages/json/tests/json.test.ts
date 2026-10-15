@@ -1,3 +1,10 @@
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createDecodeContext,
+  createEncodeContext,
+  createNext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -23,12 +30,32 @@ const test = vitest.extend<{
 });
 
 /**
+ * 値をエンコードして JSON のバイト列を返します。
+ */
+async function encode(json: Json, value: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(value);
+  await json.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * バイト列をデコードして値を返します。
+ */
+async function decode(json: Json, data: Uint8Array<ArrayBuffer>): Promise<unknown> {
+  const c = createDecodeContext(data);
+  await json.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
  * 一括の encode と decode で値を往復させます。
  */
-function roundTrip(value: unknown): unknown {
+async function roundTrip(value: unknown): Promise<unknown> {
   const json = new Json();
 
-  return json.decode({ data: json.encode({ data: value }) });
+  return decode(json, await encode(json, value));
 }
 
 describe("初期化と基本属性", () => {
@@ -71,12 +98,15 @@ describe("一括のラウンドトリップ", () => {
     { label: "改行を含む文字列", value: "line\nbreak" },
   ];
 
-  test.for(PRIMITIVES)("プリミティブ $label を往復すると元の値に戻る", ({ value }, { expect }) => {
-    // 実行と検証
-    expect(roundTrip(value)).toStrictEqual(value);
-  });
+  test.for(PRIMITIVES)(
+    "プリミティブ $label を往復すると元の値に戻る",
+    async ({ value }, { expect }) => {
+      // 実行と検証
+      expect(await roundTrip(value)).toStrictEqual(value);
+    },
+  );
 
-  test("ネストしたオブジェクトと配列を往復すると元の値に戻る", ({ expect }) => {
+  test("ネストしたオブジェクトと配列を往復すると元の値に戻る", async ({ expect }) => {
     // 準備
     const value = {
       name: "unikvs",
@@ -92,57 +122,58 @@ describe("一括のラウンドトリップ", () => {
     };
 
     // 実行と検証
-    expect(roundTrip(value)).toStrictEqual(value);
+    expect(await roundTrip(value)).toStrictEqual(value);
   });
 
-  test("空文字列と 0 と false を往復すると元の値に戻る", ({ expect }) => {
+  test("空文字列と 0 と false を往復すると元の値に戻る", async ({ expect }) => {
     // 実行と検証
-    expect(roundTrip("")).toBe("");
-    expect(roundTrip(0)).toBe(0);
-    expect(roundTrip(false)).toBe(false);
+    expect(await roundTrip("")).toBe("");
+    expect(await roundTrip(0)).toBe(0);
+    expect(await roundTrip(false)).toBe(false);
   });
 
-  test("負のゼロは 0 として往復する", ({ expect }) => {
+  test("負のゼロは 0 として往復する", async ({ expect }) => {
     // 実行
-    const decoded = roundTrip(-0);
+    const decoded = await roundTrip(-0);
 
     // 検証
     expect(Object.is(decoded, -0)).toBe(false);
     expect(Object.is(decoded, 0)).toBe(true);
   });
 
-  test("1 MiB の値を往復すると元の値に戻る", ({ expect }) => {
+  test("1 MiB の値を往復すると元の値に戻る", async ({ expect }) => {
     // 準備
+    const json = new Json();
     const value = {
       text: "a".repeat(1024 * 1024),
       unicode: "😀".repeat(1024),
     };
 
     // 実行
-    const encoded = new Json().encode({ data: value });
-    const decoded = new Json().decode({ data: encoded });
+    const encoded = await encode(json, value);
+    const decoded = await decode(json, encoded);
 
     // 検証
     expect(encoded.length).toBeGreaterThanOrEqual(1024 * 1024);
     expect(decoded).toStrictEqual(value);
   });
 
-  test("NaN と Infinity は null として往復する", ({ expect }) => {
+  test("NaN と Infinity は null として往復する", async ({ expect }) => {
     // 実行と検証
-    expect(roundTrip(Number.NaN)).toBeNull();
-    expect(roundTrip(Number.POSITIVE_INFINITY)).toBeNull();
-    expect(roundTrip(Number.NEGATIVE_INFINITY)).toBeNull();
+    expect(await roundTrip(Number.NaN)).toBeNull();
+    expect(await roundTrip(Number.POSITIVE_INFINITY)).toBeNull();
+    expect(await roundTrip(Number.NEGATIVE_INFINITY)).toBeNull();
   });
 
-  test("Date は ISO 8601 文字列として往復する", ({ expect }) => {
+  test("Date は ISO 8601 文字列として往復する", async ({ expect }) => {
     // 準備
     const value = new Date("2024-01-02T03:04:05.000Z");
 
     // 実行と検証
-    expect(roundTrip(value)).toBe("2024-01-02T03:04:05.000Z");
+    expect(await roundTrip(value)).toBe("2024-01-02T03:04:05.000Z");
   });
 
-  test("toJSON を実装したオブジェクトはその結果を往復する", ({ expect }) => {
+  test("toJSON を実装したオブジェクトはその結果を往復する", async ({ expect }) => {
     // 準備
     const value = {
       toJSON() {
@@ -151,48 +182,48 @@ describe("一括のラウンドトリップ", () => {
     };
 
     // 実行と検証
-    expect(roundTrip(value)).toStrictEqual({ replaced: true });
+    expect(await roundTrip(value)).toStrictEqual({ replaced: true });
   });
 });
 
 describe("decode の異常系", () => {
-  test("空のバイト列は SyntaxError で拒否される", ({ expect }) => {
+  test("空のバイト列は SyntaxError で拒否される", async ({ expect }) => {
     // 準備
     const json = new Json();
 
     // 実行と検証
-    expect(() => json.decode({ data: new Uint8Array(0) })).toThrow(SyntaxError);
+    await expect(decode(json, new Uint8Array(0))).rejects.toThrow(SyntaxError);
   });
 
-  test("不正な JSON は SyntaxError で拒否される", ({ expect }) => {
+  test("不正な JSON は SyntaxError で拒否される", async ({ expect }) => {
     // 準備
     const json = new Json();
     const decoder = new TextEncoder();
 
     // 実行と検証
     for (const text of ["{", "[1,", "not json", "undefined", "'single'"]) {
-      expect(() => json.decode({ data: decoder.encode(text) }), text).toThrow(SyntaxError);
+      await expect(decode(json, decoder.encode(text)), text).rejects.toThrow(SyntaxError);
     }
   });
 
-  test("JSON 値の後に続く内容は SyntaxError で拒否される", ({ expect }) => {
+  test("JSON 値の後に続く内容は SyntaxError で拒否される", async ({ expect }) => {
     // 準備
     const json = new Json();
     const decoder = new TextEncoder();
 
     // 実行と検証
     for (const text of ["1 2", "null null", "{}[]", "1\n2"]) {
-      expect(() => json.decode({ data: decoder.encode(text) }), text).toThrow(SyntaxError);
+      await expect(decode(json, decoder.encode(text)), text).rejects.toThrow(SyntaxError);
     }
   });
 
-  test("不正な UTF-8 は TypeError で拒否される", ({ expect }) => {
+  test("不正な UTF-8 は TypeError で拒否される", async ({ expect }) => {
     // 準備
     const json = new Json();
 
     // 実行と検証
-    expect(() => json.decode({ data: Uint8Array.from([0xff]) })).toThrow(TypeError);
-    expect(() => json.decode({ data: Uint8Array.from([0x22, 0xe3]) })).toThrow(TypeError);
+    await expect(decode(json, Uint8Array.from([0xff]))).rejects.toThrow(TypeError);
+    await expect(decode(json, Uint8Array.from([0x22, 0xe3]))).rejects.toThrow(TypeError);
   });
 });
 
@@ -205,17 +236,12 @@ describe("encode の異常系", () => {
 
   test.for(UNSUPPORTED)(
     "$type は JsonUnsupportedValueError で拒否される",
-    ({ value, type }, { expect }) => {
+    async ({ value, type }, { expect }) => {
       // 準備
       const json = new Json();
 
       // 実行
-      let thrown: unknown;
-      try {
-        json.encode({ data: value });
-      } catch (error) {
-        thrown = error;
-      }
+      const thrown = await captureRejection(encode(json, value));
 
       // 検証
       expect(thrown).toBeInstanceOf(JsonUnsupportedValueError);
@@ -228,13 +254,13 @@ describe("encode の異常系", () => {
     },
   );
 
-  test("BigInt はネイティブの TypeError で拒否される", ({ expect }) => {
+  test("BigInt はネイティブの TypeError で拒否される", async ({ expect }) => {
     // 準備
     const json = new Json();
 
     // 実行と検証
-    expect(() => json.encode({ data: 1n })).toThrow(TypeError);
-    expect(() => json.encode({ data: 1n })).not.toThrow(JsonUnsupportedValueError);
+    await expect(encode(json, 1n)).rejects.toThrow(TypeError);
+    await expect(encode(json, 1n)).rejects.not.toThrow(JsonUnsupportedValueError);
   });
 });
 

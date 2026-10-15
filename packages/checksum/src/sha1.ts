@@ -1,6 +1,4 @@
 import { sha1 } from "@noble/hashes/legacy.js";
-import type { ITransformer } from "@unikvs/core";
-
 import Checksum, { type ChecksumOptions } from "./checksum.js";
 
 /**
@@ -11,7 +9,7 @@ export type ChecksumSha1Options = ChecksumOptions;
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
-export default class ChecksumSha1 extends Checksum implements ITransformer {
+export default class ChecksumSha1 extends Checksum {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */

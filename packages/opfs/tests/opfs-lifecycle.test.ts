@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
 import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { InvalidDirnameError } from "@unikvs/utils";
 import { describe, expectTypeOf } from "vitest";
 
@@ -28,19 +36,40 @@ const ROOT_DIRECT_CASES: readonly (readonly [string, string])[] = [
 ];
 
 const UNOPENED_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Promise<unknown>])[] = [
-  ["read", (storage) => storage.read({ key: "valid.bin", signal })],
+  [
+    "read",
+    (storage) => storage.read(createGetContext("valid.bin", { signal }) as IStorage.ReadContext),
+  ],
   [
     "write",
     (storage) =>
-      storage.write({ key: "valid.bin", data: new Uint8Array([1]), signal, vars: new Variables() }),
+      storage.write(
+        createSetContext("valid.bin", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
   ],
-  ["exists", (storage) => storage.exists({ key: "valid.bin", signal })],
-  ["delete", (storage) => storage.delete({ key: "valid.bin", signal })],
+  [
+    "exists",
+    (storage) =>
+      storage.exists(createHasContext("valid.bin", { signal }) as IStorage.ExistsContext),
+  ],
+  [
+    "delete",
+    (storage) =>
+      storage.delete(createDeleteContext("valid.bin", { signal }) as IStorage.DeleteContext),
+  ],
   [
     "getWritable",
-    (storage) => storage.getWritable({ key: "valid.bin", signal, vars: new Variables() }),
+    (storage) =>
+      storage.getWritable(createSetContext("valid.bin", { signal }) as IStorage.GetWritableContext),
   ],
-  ["getReadable", (storage) => storage.getReadable({ key: "valid.bin", signal })],
+  [
+    "getReadable",
+    (storage) =>
+      storage.getReadable(
+        createStreamContext("valid.bin", { signal }) as IStorage.GetReadableContext,
+      ),
+  ],
 ];
 
 describe("コンストラクターの振る舞い", () => {
@@ -58,34 +87,40 @@ describe("コンストラクターの振る舞い", () => {
     const key = `default-${crypto.randomUUID()}.bin`;
 
     // 実行
-    await storage.open({ signal });
-    await storage.write({ key, data: new Uint8Array([1, 2]), signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 2]),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array([1, 2]));
 
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
   });
 
   for (const [label, root] of ROOT_DIRECT_CASES) {
     test(`${label} のルートを指定したとき、OPFS ルート直下が作業対象になる`, async ({ expect }) => {
       // 準備
       const writer = new Opfs("");
-      await writer.open({ signal });
+      await writer.open(createOpenContext({ signal }) as IStorage.OpenContext);
       const key = `direct-${crypto.randomUUID()}.bin`;
-      await writer.write({ key, data: new Uint8Array([7]), signal, vars: new Variables() });
+      await writer.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([7]),
+      );
 
       // 実行
       const storage = new Opfs(root);
-      await storage.open({ signal });
-      const loaded = await storage.read({ key, signal });
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+      const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
       // 検証
       expect(loaded).toStrictEqual(new Uint8Array([7]));
 
-      await storage.delete({ key, signal });
+      await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
     });
   }
 
@@ -94,19 +129,22 @@ describe("コンストラクターの振る舞い", () => {
   }) => {
     // 準備
     const writer = new Opfs("//");
-    await writer.open({ signal });
+    await writer.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = `slashes-${crypto.randomUUID()}.bin`;
-    await writer.write({ key, data: new Uint8Array([8]), signal, vars: new Variables() });
+    await writer.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([8]),
+    );
 
     // 実行
     const storage = new Opfs("/");
-    await storage.open({ signal });
-    const loaded = await storage.read({ key, signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([8]));
 
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
   });
 
   test("連続・先頭・末尾のスラッシュを含むルートを指定したとき、正規化されて同じ作業対象になる", async ({
@@ -115,14 +153,17 @@ describe("コンストラクターの振る舞い", () => {
     // 準備
     const root = uniqueRoot();
     const writer = new Opfs(`//${root}//`);
-    await writer.open({ signal });
+    await writer.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "normalized.bin";
-    await writer.write({ key, data: new Uint8Array([1, 2]), signal, vars: new Variables() });
+    await writer.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 2]),
+    );
 
     // 実行
     const storage = new Opfs(root);
-    await storage.open({ signal });
-    const loaded = await storage.read({ key, signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([1, 2]));
@@ -137,9 +178,12 @@ describe("コンストラクターの振る舞い", () => {
     const key = "データ.bin";
 
     // 実行
-    await storage.open({ signal });
-    await storage.write({ key, data: new Uint8Array([3]), signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([3]),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([3]));
@@ -165,8 +209,11 @@ describe("コンストラクターの振る舞い", () => {
     const key = "handle.bin";
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([4]), signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([4]),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
@@ -184,13 +231,21 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await opfsRoot.getDirectoryHandle(dirname, { create: true });
     const storage = new Opfs(handle);
     const key = "handle.bin";
-    await storage.write({ key, data: new Uint8Array([4]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([4]),
+    );
 
     // 実行
-    await storage.clear({ signal });
-    const existsAfterClear = await storage.exists({ key, signal });
-    await storage.write({ key, data: new Uint8Array([5]), signal, vars: new Variables() });
-    const reloaded = await storage.read({ key, signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+    const existsAfterClear = await storage.exists(
+      createHasContext(key, { signal }) as IStorage.ExistsContext,
+    );
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([5]),
+    );
+    const reloaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(existsAfterClear).toBe(false);
@@ -209,14 +264,19 @@ describe("コンストラクターの振る舞い", () => {
     const handle = await parent.getDirectoryHandle("inner", { create: true });
     const storage = new Opfs(handle);
     const key = "nested.bin";
-    await storage.write({ key, data: new Uint8Array([6]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([6]),
+    );
 
     try {
       // 実行
-      await storage.clear({ signal });
+      await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       // 検証
-      expect(await storage.exists({ key, signal })).toBe(false);
+      expect(
+        await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).toBe(false);
     } finally {
       await opfsRoot.removeEntry(parentName, { recursive: true });
     }
@@ -231,14 +291,17 @@ describe("コンストラクターの振る舞い", () => {
     const key = `root-handle-${crypto.randomUUID()}.bin`;
 
     // 実行
-    await storage.write({ key, data: new Uint8Array([9]), signal, vars: new Variables() });
-    const loaded = await storage.read({ key, signal });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([9]),
+    );
+    const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
     expect(loaded).toStrictEqual(new Uint8Array([9]));
 
-    await storage.delete({ key, signal });
+    await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
   });
 });
 
@@ -246,15 +309,20 @@ describe("ライフサイクルの振る舞い", () => {
   test("open を二重に呼び出したとき、状態とデータが維持される", async ({ expect, storage }) => {
     // 準備
     const key = "twice.bin";
-    await storage.write({ key, data: new Uint8Array([1, 2, 3]), signal, vars: new Variables() });
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 2, 3]),
+    );
 
     // 実行
-    await storage.open({ signal });
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 検証
     expect(storage.isOpen).toBe(true);
-    expect(await storage.read({ key, signal })).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(
+      await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
   for (const [label, operation] of UNOPENED_OPERATIONS) {
@@ -274,7 +342,9 @@ describe("ライフサイクルの振る舞い", () => {
     const storage = new Opfs(uniqueRoot());
 
     // 実行
-    const error = await storage.clear({ signal }).catch((ex: unknown) => ex);
+    const error = await storage
+      .clear(createClearContext("", { signal }) as IStorage.ClearContext)
+      .catch((ex: unknown) => ex);
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -288,11 +358,13 @@ describe("ライフサイクルの振る舞い", () => {
   }) => {
     // 準備
     const opened = new Opfs(root);
-    await opened.open({ signal });
+    await opened.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const unopened = new Opfs(root);
 
     // 実行と検証
-    await expect(unopened.clear({ signal })).rejects.toThrow();
+    await expect(
+      unopened.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).rejects.toThrow();
   });
 
   test("同じルートを別のインスタンスで開いたとき、保存済みデータを読み取れる", async ({
@@ -301,18 +373,18 @@ describe("ライフサイクルの振る舞い", () => {
   }) => {
     // 準備
     const first = new Opfs(root);
-    await first.open({ signal });
-    await first.write({
-      key: "shared.bin",
-      data: new Uint8Array([5, 6]),
-      signal,
-      vars: new Variables(),
-    });
+    await first.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await first.write(
+      createSetContext("shared.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([5, 6]),
+    );
 
     // 実行
     const second = new Opfs(root);
-    await second.open({ signal });
-    const loaded = await second.read({ key: "shared.bin", signal });
+    await second.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const loaded = await second.read(
+      createGetContext("shared.bin", { signal }) as IStorage.ReadContext,
+    );
 
     // 検証
     expect(loaded).toStrictEqual(new Uint8Array([5, 6]));
@@ -326,16 +398,26 @@ describe("ライフサイクルの振る舞い", () => {
     // 準備
     const first = new Opfs(root);
     const second = new Opfs(root);
-    await first.open({ signal });
-    await second.open({ signal });
+    await first.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await second.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
     // 実行
-    await first.write({ key: "a.bin", data: new Uint8Array([1]), signal, vars: new Variables() });
-    await second.write({ key: "b.bin", data: new Uint8Array([2]), signal, vars: new Variables() });
+    await first.write(
+      createSetContext("a.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await second.write(
+      createSetContext("b.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
 
     // 検証
-    expect(await second.read({ key: "a.bin", signal })).toStrictEqual(new Uint8Array([1]));
-    expect(await first.read({ key: "b.bin", signal })).toStrictEqual(new Uint8Array([2]));
+    expect(
+      await second.read(createGetContext("a.bin", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([1]));
+    expect(
+      await first.read(createGetContext("b.bin", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([2]));
   });
 
   test("IStorage 実装として扱える", ({ expect }) => {

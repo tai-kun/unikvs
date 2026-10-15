@@ -1,4 +1,13 @@
-import { Variables } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
+import {
+  createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe } from "vitest";
 
 import { createStorage, listKeys, test } from "./_helpers.js";
@@ -31,17 +40,23 @@ describe("キーの扱い", () => {
       const data = new Uint8Array([index, index + 1]);
 
       // 実行
-      await storage.write({ key, data, signal, vars: new Variables() });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
       // 検証
-      await expect(storage.exists({ key, signal })).resolves.toBe(true);
-      await expect(storage.read({ key, signal })).resolves.toStrictEqual(data);
+      await expect(
+        storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(true);
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
 
       // 実行
-      await storage.delete({ key, signal });
+      await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
       // 検証
-      await expect(storage.exists({ key, signal })).resolves.toBe(false);
+      await expect(
+        storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     }
   });
 
@@ -57,7 +72,7 @@ describe("キーの扱い", () => {
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await storage.write({ key, data, signal, vars: new Variables() });
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
     // 検証
     await expect(client.exists(`${keyPrefix}${key}`)).resolves.toBe(true);
@@ -73,19 +88,19 @@ describe("キーの扱い", () => {
     storage,
   }) => {
     // 準備
-    await storage.write({
-      key: "mine.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
+    await storage.write(
+      createSetContext("mine.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
     await client.set("unikvs-other:key", "keep");
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    await expect(storage.exists({ key: "mine.bin", signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("mine.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
     await expect(client.get("unikvs-other:key")).resolves.toBe("keep");
   });
 
@@ -98,7 +113,9 @@ describe("キーの扱い", () => {
   }) => {
     // 準備
     const key = "stream.bin";
-    const writer = storage.getWritable({ key, signal, vars: new Variables() }).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
     // 実行
     await writer.write(new Uint8Array([1, 2]));
@@ -114,21 +131,25 @@ describe("キーの扱い", () => {
 
   test("clear は書き込み途中で残った一時キーも削除する", async ({ expect, signal, storage }) => {
     // 準備
-    await storage.write({
-      key: "normal.bin",
-      data: new Uint8Array([1]),
-      signal,
-      vars: new Variables(),
-    });
-    const writable = storage.getWritable({ key: "abandoned.bin", signal, vars: new Variables() });
+    await storage.write(
+      createSetContext("normal.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    const writable = storage.getWritable(
+      createSetContext("abandoned.bin", { signal }) as IStorage.GetWritableContext,
+    );
     await writable.getWriter().write(new Uint8Array([2]));
 
     // 実行
-    await storage.clear({ signal });
+    await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
     // 検証
-    await expect(storage.exists({ key: "normal.bin", signal })).resolves.toBe(false);
-    await expect(storage.exists({ key: "abandoned.bin", signal })).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("normal.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
+    await expect(
+      storage.exists(createHasContext("abandoned.bin", { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
   });
 
   test("プレフィックスが空のとき、キーはそのまま保存され clear は全キーを削除する", async ({
@@ -139,24 +160,27 @@ describe("キーの扱い", () => {
   }) => {
     // 準備
     const raw = createStorage(url, "");
-    await raw.open();
+    await raw.open(createOpenContext() as IStorage.OpenContext);
     await client.set("unrelated-key", "value");
 
     try {
       // 実行
-      await raw.write({ key: "raw-key", data: new Uint8Array([1]), signal, vars: new Variables() });
+      await raw.write(
+        createSetContext("raw-key", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
 
       // 検証
       await expect(client.exists("raw-key")).resolves.toBe(true);
 
       // 実行
-      await raw.clear({ signal });
+      await raw.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       // 検証
       await expect(client.exists("raw-key")).resolves.toBe(false);
       await expect(client.exists("unrelated-key")).resolves.toBe(false);
     } finally {
-      raw.close();
+      raw.close(createCloseContext() as IStorage.CloseContext);
     }
   });
 });

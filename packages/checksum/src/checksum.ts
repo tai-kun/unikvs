@@ -1,4 +1,4 @@
-import type { Variables, ITransformer } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
@@ -75,7 +75,12 @@ export type ChecksumOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
  */
-export default abstract class Checksum implements ITransformer {
+export default abstract class Checksum implements IMiddleware<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
    */
@@ -120,53 +125,64 @@ export default abstract class Checksum implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
-  public encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
-  ): Uint8Array<ArrayBuffer> {
-    return this.#checksum(args);
+  public async encode(
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = this.#checksum(c.source, c);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
-  public decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "vars" | "data">,
-  ): Uint8Array<ArrayBuffer> {
-    return this.#checksum(args);
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = this.#checksum(c.source, c);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
-  public getEncodable(
-    args: Pick<ITransformer.GetEncodableArgs, "vars">,
-  ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    return this.#checksumStream(args);
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(this.#checksumStream(c));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#verification)
    */
-  public getDecodable(
-    args: Pick<ITransformer.GetDecodableArgs, "vars">,
-  ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    return this.#checksumStream(args);
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(this.#checksumStream(c));
+    await next();
   }
 
   /**
    * 一括データに対するハッシュ計算と検証を実行する内部メソッドです。
    *
-   * @param args データと変数を含むオブジェクトです。
+   * @param data 検証するデータです。
+   * @param c チェックサム変数を保持するコンテキストです。
    * @returns 入力されたデータをそのまま返します。
    */
-  #checksum(args: { data: Uint8Array<ArrayBuffer>; vars: Variables }): Uint8Array<ArrayBuffer> {
-    const { data, vars } = args;
+  #checksum(
+    data: Uint8Array<ArrayBuffer>,
+    c: IPipelineContext,
+  ): Uint8Array<ArrayBuffer> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = vars.get(CHECKSUM_VAR_NAME);
+    const checksum = c.get(CHECKSUM_VAR_NAME);
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
       const hash = bytesToHex(this.hash(data));
@@ -184,19 +200,19 @@ export default abstract class Checksum implements ITransformer {
   /**
    * ストリーム形式で逐次的にハッシュ計算と検証を行う TransformStream を作成する内部メソッドです。
    *
-   * @param args 変数を含むオブジェクトです。
+   * @param c チェックサム変数を保持するコンテキストです。
    * @returns 変換処理を定義した TransformStream オブジェクトです。
    */
-  #checksumStream(args: {
-    vars: Variables;
-  }): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    const { vars } = args;
+  #checksumStream(c: IPipelineContext): TransformStream<
+    Uint8Array<ArrayBuffer>,
+    Uint8Array<ArrayBuffer>
+  > {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = vars.get(CHECKSUM_VAR_NAME);
+    const checksum = c.get(CHECKSUM_VAR_NAME);
     if (typeof checksum !== "string") {
       if (this.required) {
         throw new ChecksumRequiredError();

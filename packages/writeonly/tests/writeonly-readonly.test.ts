@@ -1,18 +1,30 @@
-import { Variables } from "@unikvs/core";
-import { captureThrown } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  captureRejection,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createNext,
+  createSetContext,
+  createStreamContext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import WriteOnly from "../src/write-only.js";
 
 describe("読み出しの拒否", () => {
-  test("decode を呼び出したとき、KeyNotFoundError を投げる", ({ expect }) => {
+  test("decode を呼び出したとき、KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "k1" });
 
     // 実行
-    const error = captureThrown(() => transformer.decode({ vars, data: "v1" }));
+    const error = await captureRejection(
+      transformer.decode(createDecodeContext("v1", "k1") as IMiddleware.DecodeContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -23,13 +35,16 @@ describe("読み出しの拒否", () => {
     });
   });
 
-  test("getDecodable を呼び出したとき、KeyNotFoundError を投げる", ({ expect }) => {
+  test("decodeStream を呼び出したとき、KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "k1" });
 
     // 実行
-    const error = captureThrown(() => transformer.getDecodable({ vars }));
+    const error = await captureRejection(
+      transformer.decodeStream(
+        createDecodeStreamContext(sourceFrom(["v1"]), "k1") as IMiddleware.DecodeStreamContext,
+      ),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -40,12 +55,14 @@ describe("読み出しの拒否", () => {
     });
   });
 
-  test("onExists を呼び出したとき、KeyNotFoundError を投げる", ({ expect }) => {
+  test("use に has を渡したとき、KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備
     const transformer = new WriteOnly();
 
     // 実行
-    const error = captureThrown(() => transformer.onExists({ key: "k1" }));
+    const error = await captureRejection(
+      transformer.use(createHasContext("k1") as IMiddleware.UseContext, createNext()),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -56,88 +73,83 @@ describe("読み出しの拒否", () => {
     });
   });
 
-  test("decode はデータの内容によらず KeyNotFoundError を投げる", ({ expect }) => {
+  test("use に get を渡したとき、KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "k1" });
+
+    // 実行
+    const error = await captureRejection(
+      transformer.use(createGetContext("k1") as IMiddleware.UseContext, createNext()),
+    );
+
+    // 検証
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect(error).toMatchObject({
+      name: "UniKvsKeyNotFoundError",
+      message: "Key not found: k1",
+      meta: { key: "k1" },
+    });
+  });
+
+  test("use に stream を渡したとき、KeyNotFoundError を投げる", async ({ expect }) => {
+    // 準備
+    const transformer = new WriteOnly();
+
+    // 実行
+    const error = await captureRejection(
+      transformer.use(createStreamContext("k1") as IMiddleware.UseContext, createNext()),
+    );
+
+    // 検証
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect(error).toMatchObject({
+      name: "UniKvsKeyNotFoundError",
+      message: "Key not found: k1",
+      meta: { key: "k1" },
+    });
+  });
+
+  test("decode はデータの内容によらず KeyNotFoundError を投げる", async ({ expect }) => {
+    // 準備
+    const transformer = new WriteOnly();
 
     // 実行と検証
-    expect(() => transformer.decode({ vars, data: "v1" })).toThrow(KeyNotFoundError);
-    expect(() => transformer.decode({ vars, data: new Uint8Array([1]) })).toThrow(KeyNotFoundError);
-    expect(() => transformer.decode({ vars, data: null })).toThrow(KeyNotFoundError);
+    for (const data of ["v1", new Uint8Array([1]), null]) {
+      const error = await captureRejection(
+        transformer.decode(createDecodeContext(data, "k1") as IMiddleware.DecodeContext),
+      );
+
+      expect(error).toBeInstanceOf(KeyNotFoundError);
+    }
   });
 });
 
-describe("代替名への切り替え", () => {
-  test("decode は vars にキーがないとき (unknown) の KeyNotFoundError を投げる", ({ expect }) => {
+describe("書き込みの透過", () => {
+  test("use に set を渡したとき、next に委譲する", async ({ expect }) => {
     // 準備
     const transformer = new WriteOnly();
+    let called = false;
 
     // 実行
-    const error = captureThrown(() => transformer.decode({ vars: new Variables(), data: "v1" }));
+    await transformer.use(createSetContext("k1") as IMiddleware.UseContext, async () => {
+      called = true;
+    });
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect(error).toMatchObject({
-      name: "UniKvsKeyNotFoundError",
-      message: "Key not found: (unknown)",
-      meta: { key: "(unknown)" },
-    });
+    expect(called).toBe(true);
   });
 
-  test("decode は vars のキーが非文字列のとき (unknown) の KeyNotFoundError を投げる", ({
-    expect,
-  }) => {
+  test("allowDelete が true のとき、use に delete を渡すと next に委譲する", async ({ expect }) => {
     // 準備
-    const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": 123 });
+    const transformer = new WriteOnly({ allowDelete: true });
+    let called = false;
 
     // 実行
-    const error = captureThrown(() => transformer.decode({ vars, data: "v1" }));
+    await transformer.use(createDeleteContext("k1") as IMiddleware.UseContext, async () => {
+      called = true;
+    });
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect(error).toMatchObject({
-      name: "UniKvsKeyNotFoundError",
-      message: "Key not found: (unknown)",
-      meta: { key: "(unknown)" },
-    });
-  });
-
-  test("getDecodable は vars にキーがないとき (unknown) の KeyNotFoundError を投げる", ({
-    expect,
-  }) => {
-    // 準備
-    const transformer = new WriteOnly();
-
-    // 実行
-    const error = captureThrown(() => transformer.getDecodable({ vars: new Variables() }));
-
-    // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect(error).toMatchObject({
-      name: "UniKvsKeyNotFoundError",
-      message: "Key not found: (unknown)",
-      meta: { key: "(unknown)" },
-    });
-  });
-
-  test("getDecodable は vars のキーが非文字列のとき (unknown) の KeyNotFoundError を投げる", ({
-    expect,
-  }) => {
-    // 準備
-    const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": null });
-
-    // 実行
-    const error = captureThrown(() => transformer.getDecodable({ vars }));
-
-    // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect(error).toMatchObject({
-      name: "UniKvsKeyNotFoundError",
-      message: "Key not found: (unknown)",
-      meta: { key: "(unknown)" },
-    });
+    expect(called).toBe(true);
   });
 });

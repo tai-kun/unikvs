@@ -1,5 +1,12 @@
-import { Variables } from "@unikvs/core";
-import { abortedSignal, captureRejection } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  abortedSignal,
+  captureRejection,
+  createCloseContext,
+  createGetContext,
+  createOpenContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Http from "../src/http.js";
@@ -14,7 +21,9 @@ describe("ライフサイクル", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.open({ signal: AbortSignal.timeout(5_000) });
+    await storage.open(
+      createOpenContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.OpenContext,
+    );
 
     // 検証
     expect(calls.length).toBe(0);
@@ -27,7 +36,9 @@ describe("ライフサイクル", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.close({ signal: AbortSignal.timeout(5_000) });
+    await storage.close(
+      createCloseContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.CloseContext,
+    );
 
     // 検証
     expect(calls.length).toBe(0);
@@ -40,7 +51,9 @@ describe("ライフサイクル", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const error = await captureRejection(storage.open({ signal: abortedSignal() }));
+    const error = await captureRejection(
+      storage.open(createOpenContext({ signal: abortedSignal() }) as IStorage.OpenContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -52,7 +65,9 @@ describe("ライフサイクル", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    const error = await captureRejection(storage.close({ signal: abortedSignal() }));
+    const error = await captureRejection(
+      storage.close(createCloseContext({ signal: abortedSignal() }) as IStorage.CloseContext),
+    );
 
     // 検証
     expect(error).toBeInstanceOf(DOMException);
@@ -64,20 +79,16 @@ describe("ライフサイクル", () => {
     const storage = new Http(baseUrl, { fetch });
 
     // 実行
-    await storage.write({
-      key: "k",
-      data: new Uint8Array([1]),
-      signal: AbortSignal.timeout(5_000),
-      vars: new Variables({}),
-    });
+    await storage.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
 
     // 検証
     expect(
-      await storage.read({
-        key: "k",
-        signal: AbortSignal.timeout(5_000),
-        vars: new Variables({}),
-      }),
+      await storage.read(
+        createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
     ).toStrictEqual(new Uint8Array([1]));
   });
 
@@ -88,10 +99,18 @@ describe("ライフサイクル", () => {
 
     // 実行
     await Promise.all([
-      storage.open({ signal: AbortSignal.timeout(5_000) }),
-      storage.open({ signal: AbortSignal.timeout(5_000) }),
-      storage.close({ signal: AbortSignal.timeout(5_000) }),
-      storage.close({ signal: AbortSignal.timeout(5_000) }),
+      storage.open(
+        createOpenContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.OpenContext,
+      ),
+      storage.open(
+        createOpenContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.OpenContext,
+      ),
+      storage.close(
+        createCloseContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.CloseContext,
+      ),
+      storage.close(
+        createCloseContext({ signal: AbortSignal.timeout(5_000) }) as IStorage.CloseContext,
+      ),
     ]);
 
     // 検証
@@ -106,12 +125,10 @@ describe("ライフサイクル", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.write({
-        key: "k",
-        data: new Uint8Array([1]),
-        signal: abortedSignal(reason),
-        vars: new Variables({}),
-      }),
+      storage.write(
+        createSetContext("k", { signal: abortedSignal(reason) }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      ),
     );
 
     // 検証

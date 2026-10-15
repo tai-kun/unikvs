@@ -1,6 +1,15 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { Variables } from "@unikvs/core";
-import { runTransform, toHex } from "@unikvs/testing";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+  toHex,
+  type TestContextValues,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { ChecksumMismatchError, ChecksumRequiredError, ChecksumSha256 } from "../src/index.js";
@@ -10,46 +19,118 @@ const DIGEST = toHex(sha256(DATA));
 const WRONG_DIGEST = "0".repeat(DIGEST.length);
 const VAR_NAME = ChecksumSha256.CHECKSUM_VAR_NAME;
 
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+  required = false,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const checksum = new ChecksumSha256(required ? { required: true } : undefined);
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(
+    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * データを検証してそのまま返します。
+ */
+async function decode(
+  data: Uint8Array<ArrayBuffer>,
+  values?: TestContextValues,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const checksum = new ChecksumSha256();
+  const c = createDecodeContext(data, "", { values });
+  await checksum.decode(
+    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  return c.destination;
+}
+
+/**
+ * チャンク列を検証ストリームに流し、終了時のエラーを返します。
+ */
+async function runStream(
+  chunks: readonly Uint8Array<ArrayBuffer>[],
+  values: TestContextValues | undefined,
+  isDecode: boolean,
+): Promise<unknown> {
+  const checksum = new ChecksumSha256();
+  const c = isDecode
+    ? createDecodeStreamContext(sourceFrom(chunks), "", { values })
+    : createEncodeStreamContext(sourceFrom(chunks), "", { values });
+  await checksum[isDecode ? "decodeStream" : "encodeStream"](
+    c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> &
+      IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    createNext(),
+  );
+
+  try {
+    const reader = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).getReader();
+
+    for (;;) {
+      const { done } = await reader.read();
+
+      if (done) {
+        break;
+      }
+    }
+
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
+
 describe("データの透過", () => {
-  test("encode は検証に成功すると入力データと同じ参照を返す", ({ expect }) => {
+  test("encode は検証に成功すると入力データと同じ参照を返す", async ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
 
     // 実行
-    const result = checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
+    const c = createEncodeContext(DATA, "", { values: { [VAR_NAME]: DIGEST } });
+    await checksum.encode(
+      c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+      createNext(),
+    );
+
+    // 検証
+    expect(c.destination).toBe(DATA);
+  });
+
+  test("decode は検証に成功すると入力データと同じ参照を返す", async ({ expect }) => {
+    // 準備
+    const checksum = new ChecksumSha256();
+
+    // 実行
+    const c = createDecodeContext(DATA, "", { values: { [VAR_NAME]: DIGEST } });
+    await checksum.decode(
+      c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+      createNext(),
+    );
+
+    // 検証
+    expect(c.destination).toBe(DATA);
+  });
+
+  test("チェックサム未指定の encode は入力データと同じ参照を返す", async ({ expect }) => {
+    // 実行
+    const result = await encode(DATA);
 
     // 検証
     expect(result).toBe(DATA);
   });
 
-  test("decode は検証に成功すると入力データと同じ参照を返す", ({ expect }) => {
-    // 準備
-    const checksum = new ChecksumSha256();
-
+  test("チェックサム未指定の decode は入力データと同じ参照を返す", async ({ expect }) => {
     // 実行
-    const result = checksum.decode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
-
-    // 検証
-    expect(result).toBe(DATA);
-  });
-
-  test("チェックサム未指定の encode は入力データと同じ参照を返す", ({ expect }) => {
-    // 準備
-    const checksum = new ChecksumSha256();
-
-    // 実行
-    const result = checksum.encode({ vars: new Variables({}), data: DATA });
-
-    // 検証
-    expect(result).toBe(DATA);
-  });
-
-  test("チェックサム未指定の decode は入力データと同じ参照を返す", ({ expect }) => {
-    // 準備
-    const checksum = new ChecksumSha256();
-
-    // 実行
-    const result = checksum.decode({ vars: new Variables({}), data: DATA });
+    const result = await decode(DATA);
 
     // 検証
     expect(result).toBe(DATA);
@@ -57,27 +138,28 @@ describe("データの透過", () => {
 });
 
 describe("副作用のなさ", () => {
-  test("encode は vars を変更しない", ({ expect }) => {
+  test("encode はコンテキストの変数を変更しない", async ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const vars = new Variables({ [VAR_NAME]: DIGEST });
+    const c = createEncodeContext(DATA, "", { values: { [VAR_NAME]: DIGEST } });
 
     // 実行
-    checksum.encode({ vars, data: DATA });
+    await checksum.encode(
+      c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+      createNext(),
+    );
 
     // 検証
-    expect(Object.keys(Object.fromEntries(vars.entries()))).toStrictEqual([VAR_NAME]);
-    expect(vars.get(VAR_NAME)).toBe(DIGEST);
+    expect(c.get(VAR_NAME)).toBe(DIGEST);
   });
 
-  test("encode は入力データの内容を変更しない", ({ expect }) => {
+  test("encode は入力データの内容を変更しない", async ({ expect }) => {
     // 準備
-    const checksum = new ChecksumSha256();
     const data = Uint8Array.from(DATA);
     const before = Array.from(data);
 
     // 実行
-    checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data });
+    await encode(data, { [VAR_NAME]: DIGEST });
 
     // 検証
     expect(Array.from(data)).toStrictEqual(before);
@@ -85,36 +167,37 @@ describe("副作用のなさ", () => {
 });
 
 describe("失敗後の再利用", () => {
-  test("不一致エラーの後でも同じインスタンスで再検証できる", ({ expect }) => {
+  test("不一致エラーの後でも同じインスタンスで再検証できる", async ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
 
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars: new Variables({ [VAR_NAME]: WRONG_DIGEST }), data: DATA });
+      const c = createEncodeContext(DATA, "", { values: { [VAR_NAME]: WRONG_DIGEST } });
+      await checksum.encode(
+        c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+        createNext(),
+      );
     } catch (error) {
       thrown = error;
     }
-    const result = checksum.decode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
+    const result = await decode(DATA, { [VAR_NAME]: DIGEST });
 
     // 検証
     expect(thrown).toBeInstanceOf(ChecksumMismatchError);
     expect(result).toBe(DATA);
   });
 
-  test("必須エラーの後でも同じインスタンスで再検証できる", ({ expect }) => {
-    // 準備
-    const checksum = new ChecksumSha256({ required: true });
-
+  test("必須エラーの後でも同じインスタンスで再検証できる", async ({ expect }) => {
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars: new Variables({}), data: DATA });
+      await encode(DATA, undefined, true);
     } catch (error) {
       thrown = error;
     }
-    const result = checksum.encode({ vars: new Variables({ [VAR_NAME]: DIGEST }), data: DATA });
+    const result = await encode(DATA, { [VAR_NAME]: DIGEST });
 
     // 検証
     expect(thrown).toBeInstanceOf(ChecksumRequiredError);
@@ -122,21 +205,12 @@ describe("失敗後の再利用", () => {
   });
 
   test("ストリームで不一致になった後でも同じインスタンスで再検証できる", async ({ expect }) => {
-    // 準備
-    const checksum = new ChecksumSha256();
-
     // 実行
-    const first = await runTransform(
-      checksum.getEncodable({ vars: new Variables({ [VAR_NAME]: WRONG_DIGEST }) }),
-      [DATA],
-    );
-    const second = await runTransform(
-      checksum.getDecodable({ vars: new Variables({ [VAR_NAME]: DIGEST }) }),
-      [DATA],
-    );
+    const first = await runStream([DATA], { [VAR_NAME]: WRONG_DIGEST }, false);
+    const second = await runStream([DATA], { [VAR_NAME]: DIGEST }, true);
 
     // 検証
-    expect(first.closeError).toBeInstanceOf(ChecksumMismatchError);
-    expect(second.closeError).toBeUndefined();
+    expect(first).toBeInstanceOf(ChecksumMismatchError);
+    expect(second).toBeUndefined();
   });
 });

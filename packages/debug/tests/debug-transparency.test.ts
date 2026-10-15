@@ -1,4 +1,12 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Debug from "../src/debug.js";
@@ -22,62 +30,78 @@ const TRANSPARENT_VALUES: readonly { readonly name: string; readonly value: unkn
   { name: "関数", value: () => 42 },
 ];
 
+/**
+ * データを書き込みとして記録し、そのまま返します。
+ */
+async function encode(debug: Debug, data: unknown): Promise<unknown> {
+  const c = createEncodeContext(data, "key");
+  await debug.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * データを読み込みとして記録し、そのまま返します。
+ */
+async function decode(debug: Debug, data: unknown): Promise<unknown> {
+  const c = createDecodeContext(data, "key");
+  await debug.decode(c as IMiddleware.DecodeContext, createNext());
+
+  return c.destination;
+}
+
 describe("データの透過", () => {
-  test.for(TRANSPARENT_VALUES)("encode は $name を同一参照で返す", ({ value }, { expect }) => {
+  test.for(TRANSPARENT_VALUES)("encode は $name を同一参照で返す", async ({ value }, { expect }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    const output = debug.encode({ vars: new Variables({}), data: value });
+    const output = await encode(debug, value);
 
     // 検証
     expect(output).toBe(value);
   });
 
-  test.for(TRANSPARENT_VALUES)("decode は $name を同一参照で返す", ({ value }, { expect }) => {
+  test.for(TRANSPARENT_VALUES)("decode は $name を同一参照で返す", async ({ value }, { expect }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    const output = debug.decode({ vars: new Variables({}), data: value });
+    const output = await decode(debug, value);
 
     // 検証
     expect(output).toBe(value);
   });
 
-  test("encode と decode は vars を変更しない", ({ expect }) => {
+  test("encode と decode はコンテキストの変数を変更しない", async ({ expect }) => {
     // 準備
     const debug = new Debug();
-    const vars = new Variables({
-      "unikvs:action": "set",
-      "unikvs:key": "greeting",
-      extra: true,
-    });
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    const encoded = debug.encode({ vars, data });
-    const decoded = debug.decode({ vars, data });
+    const encodedContext = createEncodeContext(data, "greeting", { values: { extra: true } });
+    await debug.encode(encodedContext as IMiddleware.EncodeContext, createNext());
+    const decodedContext = createDecodeContext(data, "greeting", { values: { extra: true } });
+    await debug.decode(decodedContext as IMiddleware.DecodeContext, createNext());
 
     // 検証
-    expect(encoded).toBe(data);
-    expect(decoded).toBe(data);
-    expect(Object.fromEntries(vars.entries())).toStrictEqual({
-      "unikvs:action": "set",
-      "unikvs:key": "greeting",
-      extra: true,
-    });
+    expect(encodedContext.destination).toBe(data);
+    expect(decodedContext.destination).toBe(data);
+    expect(encodedContext.get("extra")).toBe(true);
+    expect(decodedContext.get("extra")).toBe(true);
   });
 
-  test("データを処理した後も isOpen は true を返す", ({ expect }) => {
+  test("データを処理した後も isOpen は true を返す", async ({ expect }) => {
     // 準備
     const debug = new Debug();
 
     // 実行
-    debug.encode({ vars: new Variables({}), data: "a" });
-    debug.decode({ vars: new Variables({}), data: "b" });
-    debug.getEncodable({ vars: new Variables({}) });
-    debug.getDecodable({ vars: new Variables({}) });
+    await encode(debug, "a");
+    await decode(debug, "b");
+    const encodeStreamContext = createEncodeStreamContext(sourceFrom(["a"]), "key");
+    await debug.encodeStream(encodeStreamContext as IMiddleware.EncodeStreamContext, createNext());
+    const decodeStreamContext = createDecodeStreamContext(sourceFrom(["b"]), "key");
+    await debug.decodeStream(decodeStreamContext as IMiddleware.DecodeStreamContext, createNext());
 
     // 検証
     expect(debug.isOpen).toBe(true);

@@ -1,10 +1,10 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
 import WriteOnly, { type WriteOnlyOptions } from "../src/write-only.js";
 
-test("WriteOnly は ITransformer として扱える", () => {
-  expectTypeOf<WriteOnly>().toExtend<ITransformer>();
+test("WriteOnly は IMiddleware として扱える", () => {
+  expectTypeOf<WriteOnly>().toExtend<IMiddleware>();
 });
 
 test("コンストラクターはオプションなし・ありで組み立てられる", () => {
@@ -25,32 +25,37 @@ test("options の余剰プロパティーは受け付けない", () => {
     .toEqualTypeOf<WriteOnlyOptions>();
 });
 
-test("encode はデータの型をそのまま戻り値にする", () => {
-  // 準備
-  const transformer = new WriteOnly();
-
+test("encode はコンテキストと next を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf(transformer.encode<string>({ data: "hello" })).toEqualTypeOf<string>();
-  expectTypeOf(transformer.encode({ data: 123 })).toEqualTypeOf<number>();
-  expectTypeOf(transformer.encode({ data: { id: 1 } })).toEqualTypeOf<{ id: number }>();
+  expectTypeOf<WriteOnly["encode"]>().parameter(0).toEqualTypeOf<IMiddleware.EncodeContext>();
+  expectTypeOf<WriteOnly["encode"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<WriteOnly["encode"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("decode と getDecodable と onExists の戻り値は never である", () => {
-  // 準備
-  const transformer = new WriteOnly();
-
+test("decode は DecodeContext を受けて Promise<void> を返す", () => {
   // 実行と検証
-  expectTypeOf<typeof transformer.decode>().returns.toBeNever();
-  expectTypeOf<typeof transformer.getDecodable>().returns.toBeNever();
-  expectTypeOf<typeof transformer.onExists>().returns.toBeNever();
+  expectTypeOf<WriteOnly["decode"]>().parameter(0).toEqualTypeOf<IMiddleware.DecodeContext>();
+  expectTypeOf<WriteOnly["decode"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
-test("getEncodable は TransformStream を返す", () => {
-  // 準備
-  const transformer = new WriteOnly();
-
+test("encodeStream と decodeStream の引数と戻り値の型を保持する", () => {
   // 実行と検証
-  expectTypeOf(transformer.getEncodable()).toEqualTypeOf<TransformStream<any, any>>();
+  expectTypeOf<WriteOnly["encodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.EncodeStreamContext>();
+  expectTypeOf<WriteOnly["encodeStream"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<WriteOnly["encodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
+  expectTypeOf<WriteOnly["decodeStream"]>()
+    .parameter(0)
+    .toEqualTypeOf<IMiddleware.DecodeStreamContext>();
+  expectTypeOf<WriteOnly["decodeStream"]>().returns.toEqualTypeOf<Promise<void>>();
+});
+
+test("use は UseContext と next を受けて Promise<void> を返す", () => {
+  // 実行と検証
+  expectTypeOf<WriteOnly["use"]>().parameter(0).toEqualTypeOf<IMiddleware.UseContext>();
+  expectTypeOf<WriteOnly["use"]>().parameter(1).toEqualTypeOf<IMiddleware.INext>();
+  expectTypeOf<WriteOnly["use"]>().returns.toEqualTypeOf<Promise<void>>();
 });
 
 test("name と allowDelete と isOpen の型を保持する", () => {

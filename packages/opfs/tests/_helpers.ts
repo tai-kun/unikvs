@@ -1,3 +1,5 @@
+import type { IStorage } from "@unikvs/core";
+import { createOpenContext } from "@unikvs/testing";
 import { test as vitest } from "vitest";
 
 import Opfs from "../src/opfs.js";
@@ -43,7 +45,7 @@ export const test = vitest.extend<{
   },
   async storage({ root }, use) {
     const storage = new Opfs(root);
-    await storage.open({ signal });
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     await use(storage);
   },
 });

@@ -1,4 +1,4 @@
-import type { ITransformer } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
 import { Decoder, decode, encode } from "cbor-x";
 
@@ -174,7 +174,12 @@ function drain(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
  */
-export default class Cbor implements ITransformer {
+export default class Cbor implements IMiddleware<
+  unknown,
+  Uint8Array<ArrayBuffer>,
+  unknown,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
@@ -190,59 +195,76 @@ export default class Cbor implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
-  public encode(args: Pick<ITransformer.EncodeArgs<unknown>, "data">): Uint8Array<ArrayBuffer> {
-    const { data } = args;
-
-    return this.#encode(data);
+  public async encode(
+    c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = this.#encode(c.source);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
    */
-  public decode(args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">): unknown {
-    const { data } = args;
-
+  public async decode(
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     try {
-      return decode(data);
+      c.destination = decode(c.source);
     } catch (ex) {
       throw new CborDecodeError({ cause: ex });
     }
+
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#streams)
    */
-  public getEncodable(): TransformStream<unknown, Uint8Array<ArrayBuffer>> {
-    return new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
-      transform: (chunk, controller) => {
-        controller.enqueue(this.#encode(chunk));
-      },
-    });
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(
+      new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
+        transform: (chunk, controller) => {
+          controller.enqueue(this.#encode(chunk));
+        },
+      }),
+    );
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#streams)
    */
-  public getDecodable(): TransformStream<Uint8Array<ArrayBuffer>, unknown> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     // copyBuffers を有効にすると、デコードした型付き配列が内部バッファーを参照しなくなります。
     // バッファーを使い回すため、参照のままだと後続チャンクの追加で値が壊れます。
     const decoder = new Decoder({ useRecords: false, copyBuffers: true });
     const queue = new ByteQueue();
 
-    return new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
-      transform: (chunk, controller) => {
-        if (chunk.byteLength === 0) {
-          // 空のチャンクはデコードに影響しません。
-          return;
-        }
+    c.destination = c.source.pipeThrough(
+      new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
+        transform: (chunk, controller) => {
+          if (chunk.byteLength === 0) {
+            // 空のチャンクはデコードに影響しません。
+            return;
+          }
 
-        queue.append(chunk);
-        drain(decoder, queue, controller, false);
-      },
-      flush: (controller) => {
-        drain(decoder, queue, controller, true);
-      },
-    });
+          queue.append(chunk);
+          drain(decoder, queue, controller, false);
+        },
+        flush: (controller) => {
+          drain(decoder, queue, controller, true);
+        },
+      }),
+    );
+    await next();
   }
 
   /**

@@ -1,5 +1,5 @@
 import { getLogger } from "@logtape/logtape";
-import type { ITransformer, Variables } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import getTypeName from "type-name";
 
 const logger = getLogger(["@unikvs/*", "@unikvs/debug"]);
@@ -30,17 +30,17 @@ export type DebugInfoArgs = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly vars: Variables;
+  readonly vars: IPipelineContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly action: string | undefined;
+  readonly action: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
-  readonly key: string | undefined;
+  readonly key: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
@@ -83,7 +83,7 @@ export type DebugOptions = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
  */
-export default class Debug implements ITransformer {
+export default class Debug implements IMiddleware {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
    */
@@ -146,53 +146,54 @@ export default class Debug implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
    */
-  public encode(args: Pick<ITransformer.EncodeArgs, "vars" | "data">): unknown {
-    const { vars, data } = args;
-    this.#log("write", vars, data);
-
-    return data;
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+    this.#log("write", c, c.source);
+    c.destination = c.source;
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
    */
-  public decode(args: Pick<ITransformer.DecodeArgs, "vars" | "data">): unknown {
-    const { vars, data } = args;
-    this.#log("read", vars, data);
-
-    return data;
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+    this.#log("read", c, c.source);
+    c.destination = c.source;
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#streams)
    */
-  public getEncodable(
-    args: Pick<ITransformer.GetEncodableArgs, "vars">,
-  ): TransformStream<any, any> {
-    const { vars } = args;
-
-    return this.#createTransformStream("write", vars);
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(this.#createTransformStream("write", c));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#streams)
    */
-  public getDecodable(
-    args: Pick<ITransformer.GetDecodableArgs, "vars">,
-  ): TransformStream<any, any> {
-    const { vars } = args;
-
-    return this.#createTransformStream("read", vars);
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.pipeThrough(this.#createTransformStream("read", c));
+    await next();
   }
 
   /**
    * チャンクごとにログを記録する透過ストリームを作成する内部メソッドです。
    *
    * @param direction データが読み書きされた向きです。
-   * @param vars 操作に使用された変数です。
+   * @param c 操作のコンテキストです。
    * @returns 入力をそのまま出力する TransformStream オブジェクトです。
    */
-  #createTransformStream(direction: DebugDirection, vars: Variables): TransformStream<any, any> {
+  #createTransformStream(
+    direction: DebugDirection,
+    c: IPipelineContext & { readonly action: string; readonly key: string },
+  ): TransformStream<any, any> {
     return new TransformStream({
       /**
        * チャンクが到達するたびにログを記録し、そのまま下流へ流します。
@@ -201,7 +202,7 @@ export default class Debug implements ITransformer {
        * @param controller ストリームを制御するためのコントローラーです。
        */
       transform: (chunk, controller) => {
-        this.#log(direction, vars, chunk);
+        this.#log(direction, c, chunk);
         controller.enqueue(chunk);
       },
     });
@@ -211,17 +212,21 @@ export default class Debug implements ITransformer {
    * フィルターを適用したうえで、操作とキーとデータのデバッグ情報をログに記録する内部メソッドです。
    *
    * @param direction データが読み書きされた向きです。
-   * @param vars 操作に使用された変数です。
+   * @param c 操作のコンテキストです。
    * @param data 読み書きされたデータです。ストリームの場合はチャンクです。
    */
-  #log(direction: DebugDirection, vars: Variables, data: unknown): void {
-    const action = toStringVariable(vars.get("unikvs:action"));
-    if (action === undefined || !this.actionFilter(action)) {
+  #log(
+    direction: DebugDirection,
+    c: IPipelineContext & { readonly action: string; readonly key: string },
+    data: unknown,
+  ): void {
+    const action = c.action;
+    if (!this.actionFilter(action)) {
       return;
     }
 
-    const key = toStringVariable(vars.get("unikvs:key"));
-    if (key === undefined || !this.keyFilter(key)) {
+    const key = c.key;
+    if (!this.keyFilter(key)) {
       return;
     }
 
@@ -231,18 +236,8 @@ export default class Debug implements ITransformer {
         : "Data was read: action={action}, key={key}";
 
     logger.debug(message, () => {
-      const info = this.getDebugInfo({ vars, action, key, direction, data });
+      const info = this.getDebugInfo({ vars: c, action, key, direction, data });
       return { ...info, action, key, direction };
     });
   }
-}
-
-/**
- * 変数の値を文字列ならその値、それ以外なら `undefined` として取り出します。
- *
- * @param value 変数の値です。
- * @returns 文字列ならその値、それ以外なら `undefined` です。
- */
-function toStringVariable(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }

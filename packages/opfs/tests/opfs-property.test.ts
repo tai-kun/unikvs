@@ -1,5 +1,13 @@
-import { Variables } from "@unikvs/core";
-import { collectBytes } from "@unikvs/testing";
+import type { IStorage } from "@unikvs/core";
+import {
+  collectBytes,
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createStreamContext,
+} from "@unikvs/testing";
 import { type Random, forCasesAsync } from "@unikvs/testing";
 import { describe } from "vitest";
 
@@ -57,8 +65,8 @@ describe("決定的ファズテストの振る舞い", () => {
       const data = random.bytes(random.int(0, 4096));
 
       // 実行
-      await storage.write({ key, data, signal, vars: new Variables() });
-      const loaded = await storage.read({ key, signal });
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+      const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
       // 検証
       expect(loaded).toStrictEqual(data);
@@ -74,7 +82,9 @@ describe("決定的ファズテストの振る舞い", () => {
       const key = randomKey(random);
       const data = random.bytes(random.int(0, 4096));
       const chunkSizes = random.array(random.int(1, 10), () => random.int(1, 1000));
-      const writable = await storage.getWritable({ key, signal, vars: new Variables() });
+      const writable = await storage.getWritable(
+        createSetContext(key, { signal }) as IStorage.GetWritableContext,
+      );
       const writer = writable.getWriter();
 
       // 実行
@@ -88,7 +98,11 @@ describe("決定的ファズテストの振る舞い", () => {
       }
 
       await writer.close();
-      const loaded = await collectBytes(await storage.getReadable({ key, signal }));
+      const loaded = await collectBytes(
+        await storage.getReadable(
+          createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+        ),
+      );
 
       // 検証
       expect(loaded).toStrictEqual(data);
@@ -101,7 +115,7 @@ describe("決定的ファズテストの振る舞い", () => {
   }) => {
     await forCasesAsync(SEED + 2, CASE_COUNT, async (random) => {
       // 準備: 実行ごとに独立させるため、前の実行の状態を消去します。
-      await storage.clear({ signal });
+      await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
       const model = new Map<string, Uint8Array<ArrayBuffer>>();
       const commands = random.array(random.int(1, 20), () => randomCommand(random));
 
@@ -109,26 +123,30 @@ describe("決定的ファズテストの振る舞い", () => {
       for (const command of commands) {
         switch (command.type) {
           case "write": {
-            await storage.write({
-              key: command.key,
-              data: command.data,
-              signal,
-              vars: new Variables(),
-            });
+            await storage.write(
+              createSetContext(command.key, { signal }) as IStorage.WriteContext,
+              command.data,
+            );
             model.set(command.key, command.data);
             break;
           }
           case "exists": {
-            expect(await storage.exists({ key: command.key, signal })).toBe(model.has(command.key));
+            expect(
+              await storage.exists(
+                createHasContext(command.key, { signal }) as IStorage.ExistsContext,
+              ),
+            ).toBe(model.has(command.key));
             break;
           }
           case "delete": {
             if (model.has(command.key)) {
-              await storage.delete({ key: command.key, signal });
+              await storage.delete(
+                createDeleteContext(command.key, { signal }) as IStorage.DeleteContext,
+              );
               model.delete(command.key);
             } else {
               const error = await storage
-                .delete({ key: command.key, signal })
+                .delete(createDeleteContext(command.key, { signal }) as IStorage.DeleteContext)
                 .catch((ex: unknown) => ex);
               expect(error).toBeInstanceOf(DOMException);
               expect((error as DOMException).name).toBe("NotFoundError");
@@ -138,12 +156,14 @@ describe("決定的ファズテストの振る舞い", () => {
           }
           case "read": {
             if (model.has(command.key)) {
-              expect(await storage.read({ key: command.key, signal })).toStrictEqual(
-                model.get(command.key),
-              );
+              expect(
+                await storage.read(
+                  createGetContext(command.key, { signal }) as IStorage.ReadContext,
+                ),
+              ).toStrictEqual(model.get(command.key));
             } else {
               const error = await storage
-                .read({ key: command.key, signal })
+                .read(createGetContext(command.key, { signal }) as IStorage.ReadContext)
                 .catch((ex: unknown) => ex);
               expect(error).toBeInstanceOf(DOMException);
               expect((error as DOMException).name).toBe("NotFoundError");
@@ -152,7 +172,7 @@ describe("決定的ファズテストの振る舞い", () => {
             break;
           }
           case "clear": {
-            await storage.clear({ signal });
+            await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
             model.clear();
             expect(storage.isOpen).toBe(true);
             break;
@@ -161,9 +181,13 @@ describe("決定的ファズテストの振る舞い", () => {
       }
 
       for (const key of KEYS) {
-        expect(await storage.exists({ key, signal })).toBe(model.has(key));
+        expect(
+          await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+        ).toBe(model.has(key));
         if (model.has(key)) {
-          expect(await storage.read({ key, signal })).toStrictEqual(model.get(key));
+          expect(
+            await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+          ).toStrictEqual(model.get(key));
         }
       }
     });

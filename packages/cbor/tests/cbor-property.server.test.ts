@@ -1,5 +1,14 @@
+import type { IMiddleware } from "@unikvs/core";
 import { forCasesAsync, type Random } from "@unikvs/testing";
-import { concatBytes, pumpThrough } from "@unikvs/testing";
+import {
+  concatBytes,
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createNext,
+  readAll,
+  sourceFrom,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import Cbor from "../src/cbor.js";
@@ -100,16 +109,38 @@ function splitRandomly(random: Random, bytes: Uint8Array<ArrayBuffer>): Uint8Arr
   return chunks;
 }
 
+/**
+ * 値を CBOR のバイト列へ変換します。
+ */
+async function encode(data: unknown): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data);
+  await cbor.encode(c as IMiddleware.EncodeContext, createNext());
+
+  return c.destination;
+}
+
+/**
+ * バイト列のチャンク列をデコードストリームに流し、出力された値を返します。
+ */
+async function decodeChunks(chunks: readonly Uint8Array<ArrayBuffer>[]): Promise<unknown[]> {
+  const c = createDecodeStreamContext(sourceFrom(chunks));
+  await cbor.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+
+  return readAll(c.destination);
+}
+
 describe("決定的ファズテスト", () => {
   test("ランダムな値を一括で往復すると元の値に戻る", async ({ expect }) => {
     // 実行と検証
     await forCasesAsync(SEED, CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
 
-      const encoded = cbor.encode({ data: value });
-      const decoded = cbor.decode({ data: encoded });
+      const encodeContext = createEncodeContext(value);
+      await cbor.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+      const decodeContext = createDecodeContext(encodeContext.destination);
+      await cbor.decode(decodeContext as IMiddleware.DecodeContext, createNext());
 
-      expect(decoded, `case ${index}`).toStrictEqual(value);
+      expect(decodeContext.destination, `case ${index}`).toStrictEqual(value);
     });
   });
 
@@ -119,14 +150,12 @@ describe("決定的ファズテスト", () => {
     // 実行と検証
     await forCasesAsync(SEED + 1, STREAM_CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
-      const encoded = cbor.encode({ data: value });
+      const encoded = await encode(value);
       const chunks = splitRandomly(random, encoded);
 
-      const decoded = await pumpThrough(cbor.getDecodable(), chunks);
+      const decoded = await decodeChunks(chunks);
 
-      expect(decoded.writeError, `case ${index}`).toBeUndefined();
-      expect(decoded.readError, `case ${index}`).toBeUndefined();
-      expect(decoded.outputChunks, `case ${index}`).toStrictEqual([value]);
+      expect(decoded, `case ${index}`).toStrictEqual([value]);
     });
   });
 
@@ -134,14 +163,12 @@ describe("決定的ファズテスト", () => {
     // 実行と検証
     await forCasesAsync(SEED + 2, STREAM_CASE_COUNT, async (random, index) => {
       const values = random.array(random.uint(6), (childRandom) => generateValue(childRandom));
-      const encoded = concatBytes(values.map((value) => cbor.encode({ data: value })));
+      const encoded = concatBytes(await Promise.all(values.map((value) => encode(value))));
       const chunks = splitRandomly(random, encoded);
 
-      const decoded = await pumpThrough(cbor.getDecodable(), chunks);
+      const decoded = await decodeChunks(chunks);
 
-      expect(decoded.writeError, `case ${index}`).toBeUndefined();
-      expect(decoded.readError, `case ${index}`).toBeUndefined();
-      expect(decoded.outputChunks, `case ${index}`).toStrictEqual(values);
+      expect(decoded, `case ${index}`).toStrictEqual(values);
     });
   });
 });

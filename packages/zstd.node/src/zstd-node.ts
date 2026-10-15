@@ -1,4 +1,4 @@
-import type { ITransformer, ITransformStream } from "@unikvs/core";
+import type { IMiddleware, ITransformStream } from "@unikvs/core";
 import { toOwnedBytes, proxyTransformStream } from "@unikvs/utils";
 import { toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
@@ -37,7 +37,12 @@ function toOwnedBytesTransformStream(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
  */
-export default class ZstdNode implements ITransformer {
+export default class ZstdNode implements IMiddleware<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+> {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
    */
@@ -82,8 +87,7 @@ export default class ZstdNode implements ITransformer {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
-  public async open(args: Pick<ITransformer.OpenArgs, "signal">): Promise<void> {
-    const { signal } = args;
+  public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.env = await callAbortableFnOnce(
         ZstdNode.cache,
@@ -94,10 +98,10 @@ export default class ZstdNode implements ITransformer {
 
           return env;
         },
-        signal,
+        c.signal,
       );
     } catch (ex) {
-      signal.throwIfAborted();
+      c.signal.throwIfAborted();
       throw new UnsupportedRuntimeError({
         name: "ZstdNode",
         cause: ex,
@@ -110,49 +114,59 @@ export default class ZstdNode implements ITransformer {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
   public async encode(
-    args: Pick<ITransformer.EncodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+    c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
-    const buffer = await api.compress(env, data, {
+    const buffer = await api.compress(env, c.source, {
       level: this.level,
     });
 
-    return toOwnedBytes(buffer);
+    c.destination = toOwnedBytes(buffer);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
   public async decode(
-    args: Pick<ITransformer.DecodeArgs<Uint8Array<ArrayBuffer>>, "data">,
-  ): Promise<Uint8Array<ArrayBuffer>> {
+    c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-    const { data } = args;
-    const buffer = await api.decompress(env, data);
+    const buffer = await api.decompress(env, c.source);
 
-    return toOwnedBytes(buffer);
+    c.destination = toOwnedBytes(buffer);
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
-  public getEncodable(): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const transform = api.createCompress(env, {
       level: this.level,
     });
 
-    return toOwnedBytesTransformStream(transform);
+    c.destination = c.source.pipeThrough(toOwnedBytesTransformStream(transform));
+    await next();
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
    */
-  public getDecodable(): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
     const env = this.env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
     const transform = api.createDecompress(env);
 
-    return toOwnedBytesTransformStream(transform);
+    c.destination = c.source.pipeThrough(toOwnedBytesTransformStream(transform));
+    await next();
   }
 }

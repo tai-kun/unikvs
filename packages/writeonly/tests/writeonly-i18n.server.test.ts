@@ -1,4 +1,10 @@
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDeleteContext,
+  createClearContext,
+  createNext,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -32,13 +38,15 @@ describe("WriteOnlyDeleteNotAllowedError の国際化 (server)", () => {
     expect(error.message).toBe('WriteOnly.delete with allowDelete false cannot delete key "k1".');
   });
 
-  test("ja を設定すると onDelete のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.onDelete({ key: "k1" })).toThrow(
+    await expect(
+      transformer.use(createDeleteContext("k1") as IMiddleware.UseContext, createNext()),
+    ).rejects.toThrow(
       'WriteOnly.delete は allowDelete が false のためキー "k1" を削除できません。',
     );
   });
@@ -57,15 +65,15 @@ describe("WriteOnlyDeleteNotAllowedError の国際化 (server)", () => {
     expect(error.message).toBe('WriteOnly.delete with allowDelete false cannot delete key "k1".');
   });
 
-  test("日本語メッセージでもキーは meta にそのまま保持される", ({ expect, setLang }) => {
+  test("日本語メッセージでもキーは meta にそのまま保持される", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
     setLang("ja");
-    let error: unknown;
 
     // 実行
+    let error: unknown;
     try {
-      transformer.onDelete({ key: "キー🔑" });
+      await transformer.use(createDeleteContext("キー🔑") as IMiddleware.UseContext, createNext());
     } catch (ex) {
       error = ex;
     }
@@ -88,15 +96,15 @@ describe("WriteOnlyClearNotAllowedError の国際化 (server)", () => {
     expect(error.message).toBe("WriteOnly.clear with allowDelete false cannot delete all data.");
   });
 
-  test("ja を設定すると onClear のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると use のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.onClear()).toThrow(
-      "WriteOnly.clear は allowDelete が false のため全件を削除できません。",
-    );
+    await expect(
+      transformer.use(createClearContext() as IMiddleware.UseContext, createNext()),
+    ).rejects.toThrow("WriteOnly.clear は allowDelete が false のため全件を削除できません。");
   });
 
   test("en に戻すと英語メッセージになる", ({ expect, setLang }) => {
@@ -115,14 +123,15 @@ describe("WriteOnlyClearNotAllowedError の国際化 (server)", () => {
 });
 
 describe("KeyNotFoundError の国際化 (server)", () => {
-  test("ja を設定すると decode のエラーが日本語になる", ({ expect, setLang }) => {
+  test("ja を設定すると decode のエラーが日本語になる", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "k1" });
     setLang("ja");
 
     // 実行と検証
-    expect(() => transformer.decode({ vars, data: "v1" })).toThrow("キー k1 が見つかりません");
+    await expect(
+      transformer.decode(createDecodeContext("v1", "k1") as IMiddleware.DecodeContext),
+    ).rejects.toThrow("キー k1 が見つかりません");
   });
 
   test("en に戻すと英語メッセージになる", ({ expect, setLang }) => {
@@ -137,16 +146,15 @@ describe("KeyNotFoundError の国際化 (server)", () => {
     expect(error.message).toBe("Key not found: k1");
   });
 
-  test("日本語メッセージでもキーは meta にそのまま保持される", ({ expect, setLang }) => {
+  test("日本語メッセージでもキーは meta にそのまま保持される", async ({ expect, setLang }) => {
     // 準備
     const transformer = new WriteOnly();
-    const vars = new Variables({ "unikvs:key": "キー🔑" });
     setLang("ja");
     let error: unknown;
 
     // 実行
     try {
-      transformer.decode({ vars, data: "v1" });
+      await transformer.decode(createDecodeContext("v1", "キー🔑") as IMiddleware.DecodeContext);
     } catch (ex) {
       error = ex;
     }

@@ -1,5 +1,13 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import { Variables } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
+import {
+  createDecodeContext,
+  createDecodeStreamContext,
+  createEncodeContext,
+  createEncodeStreamContext,
+  createNext,
+  sourceFrom,
+} from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -44,6 +52,31 @@ class InvalidVarNameChecksum extends Checksum {
 const DATA = Uint8Array.from(new TextEncoder().encode("abc"));
 const ABC_DIGEST = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
+type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteEncodeStream = IMiddleware.EncodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteDecodeStream = IMiddleware.DecodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+
+/**
+ * データを検証してそのまま返します。
+ */
+async function encode(
+  checksum: ChecksumSha256 | InvalidVarNameChecksum,
+  data: Uint8Array<ArrayBuffer>,
+  values?: Record<string, unknown>,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const c = createEncodeContext(data, "", { values });
+  await checksum.encode(c as ByteEncode, createNext());
+
+  return c.destination;
+}
+
 describe("ChecksumMismatchError", () => {
   test("meta に actual と expected を保持し、既定では英語メッセージを返す", ({ expect }) => {
     // 準備と実行
@@ -67,16 +100,15 @@ describe("ChecksumMismatchError", () => {
     expect(error.message).toBe("bbbb を期待しましたが、aaaa を得ました");
   });
 
-  test("期待値の 16 進文字列が大文字のときは不一致として拒否する", ({ expect }) => {
+  test("期待値の 16 進文字列が大文字のときは不一致として拒否する", async ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
     const expected = ABC_DIGEST.toUpperCase();
-    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
 
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars, data: DATA });
+      await encode(checksum, DATA, { [ChecksumSha256.CHECKSUM_VAR_NAME]: expected });
     } catch (error) {
       thrown = error;
     }
@@ -89,15 +121,14 @@ describe("ChecksumMismatchError", () => {
     });
   });
 
-  test("期待値が空文字のときは不一致として拒否する", ({ expect }) => {
+  test("期待値が空文字のときは不一致として拒否する", async ({ expect }) => {
     // 準備
     const checksum = new ChecksumSha256();
-    const vars = new Variables({ [ChecksumSha256.CHECKSUM_VAR_NAME]: "" });
 
     // 実行
     let thrown: unknown;
     try {
-      checksum.encode({ vars, data: DATA });
+      await encode(checksum, DATA, { [ChecksumSha256.CHECKSUM_VAR_NAME]: "" });
     } catch (error) {
       thrown = error;
     }
@@ -132,42 +163,47 @@ describe("ChecksumRequiredError", () => {
 });
 
 describe("ChecksumInvalidVarNameError", () => {
-  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは encode で拒否する", ({ expect }) => {
+  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは encode で拒否する", async ({ expect }) => {
     // 準備
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.encode({ vars: new Variables({}), data: DATA })).toThrow(
+    await expect(encode(checksum, DATA)).rejects.toThrow(ChecksumInvalidVarNameError);
+  });
+
+  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは decode で拒否する", async ({ expect }) => {
+    // 準備
+    const checksum = new InvalidVarNameChecksum();
+
+    // 実行と検証
+    const c = createDecodeContext(DATA);
+    await expect(
+      checksum.decode(c as ByteDecode, createNext()),
+    ).rejects.toThrow(ChecksumInvalidVarNameError);
+  });
+
+  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは encodeStream で拒否する", async ({
+    expect,
+  }) => {
+    // 準備
+    const checksum = new InvalidVarNameChecksum();
+
+    // 実行と検証
+    const c = createEncodeStreamContext(sourceFrom([]));
+    await expect(checksum.encodeStream(c as ByteEncodeStream, createNext())).rejects.toThrow(
       ChecksumInvalidVarNameError,
     );
   });
 
-  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは decode で拒否する", ({ expect }) => {
+  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは decodeStream で拒否する", async ({
+    expect,
+  }) => {
     // 準備
     const checksum = new InvalidVarNameChecksum();
 
     // 実行と検証
-    expect(() => checksum.decode({ vars: new Variables({}), data: DATA })).toThrow(
-      ChecksumInvalidVarNameError,
-    );
-  });
-
-  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは getEncodable で拒否する", ({ expect }) => {
-    // 準備
-    const checksum = new InvalidVarNameChecksum();
-
-    // 実行と検証
-    expect(() => checksum.getEncodable({ vars: new Variables({}) })).toThrow(
-      ChecksumInvalidVarNameError,
-    );
-  });
-
-  test("CHECKSUM_VAR_NAME が文字列でないサブクラスは getDecodable で拒否する", ({ expect }) => {
-    // 準備
-    const checksum = new InvalidVarNameChecksum();
-
-    // 実行と検証
-    expect(() => checksum.getDecodable({ vars: new Variables({}) })).toThrow(
+    const c = createDecodeStreamContext(sourceFrom([]));
+    await expect(checksum.decodeStream(c as ByteDecodeStream, createNext())).rejects.toThrow(
       ChecksumInvalidVarNameError,
     );
   });
