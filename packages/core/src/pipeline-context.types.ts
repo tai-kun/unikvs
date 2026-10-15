@@ -34,16 +34,7 @@ export interface IMapKeyContext extends IPipelineContext {
 export interface IActionContext extends IPipelineContext {
   readonly signal: AbortSignal;
 
-  readonly action:
-    | "open"
-    | "close"
-    | "set"
-    | "get"
-    | "repair"
-    | "stream"
-    | "has"
-    | "delete"
-    | "clear";
+  readonly action: "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear";
 }
 
 export interface ILifecycleContext extends IActionContext {
@@ -59,7 +50,7 @@ export interface ICloseContext extends ILifecycleContext {
 }
 
 export interface IKeyedActionContext extends IActionContext {
-  readonly action: "set" | "repair" | "get" | "stream" | "has" | "delete" | "clear";
+  readonly action: "set" | "get" | "stream" | "has" | "delete" | "clear";
 
   readonly key: string;
 }
@@ -68,17 +59,25 @@ export interface ISetContext extends IKeyedActionContext {
   readonly action: "set";
 }
 
-export interface IRepairContext extends IKeyedActionContext {
-  readonly action: "repair";
+interface IRepairable {
+  readonly repair:
+    | {
+        readonly enabled: false;
 
-  readonly targets: readonly string[];
+        readonly targets: readonly [];
+      }
+    | {
+        readonly enabled: true;
+
+        readonly targets: readonly [string, ...string[]];
+      };
 }
 
-export interface IGetContext extends IKeyedActionContext {
+export interface IGetContext extends IKeyedActionContext, IRepairable {
   readonly action: "get";
 }
 
-export interface IStreamContext extends IKeyedActionContext {
+export interface IStreamContext extends IKeyedActionContext, IRepairable {
   readonly action: "stream";
 }
 
@@ -129,20 +128,20 @@ export interface IDecodeContext<
 export interface ITransformStreamContext<
   TSourceChunk = any,
   TDestinationChunk = TSourceChunk,
-> extends ITransformContext<TSourceChunk, TDestinationChunk> {
+> extends ITransformContext<IReadableStream<TSourceChunk>, IReadableStream<TDestinationChunk>> {
   readonly action: "set" | "stream";
 }
 
 export interface IEncodeStreamContext<
   TRawChunk = any,
   TEncodedChunk = TRawChunk,
-> extends ITransformStreamContext<IReadableStream<TRawChunk>, IReadableStream<TEncodedChunk>> {
+> extends ITransformStreamContext<TRawChunk, TEncodedChunk> {
   readonly action: "set";
 }
 
 export interface IDecodeStreamContext<
   TRawChunk = any,
   TDecodedChunk = TRawChunk,
-> extends ITransformStreamContext<IReadableStream<TRawChunk>, IReadableStream<TDecodedChunk>> {
+> extends ITransformStreamContext<TRawChunk, TDecodedChunk> {
   readonly action: "stream";
 }

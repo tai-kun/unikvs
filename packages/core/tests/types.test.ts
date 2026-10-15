@@ -24,7 +24,6 @@ import {
   type IOpenContext,
   type IPipelineContext,
   type IReadableStream,
-  type IRepairContext,
   type ISetContext,
   type IStorage,
   type IStreamContext,
@@ -132,8 +131,8 @@ test("IStorage のコンテキスト別名は pipeline-context と一致する",
   // 実行と検証
   expectTypeOf<IStorage.OpenContext>().toEqualTypeOf<IOpenContext>();
   expectTypeOf<IStorage.CloseContext>().toEqualTypeOf<ICloseContext>();
-  expectTypeOf<IStorage.WriteContext>().toEqualTypeOf<ISetContext | IRepairContext>();
-  expectTypeOf<IStorage.GetWritableContext>().toEqualTypeOf<ISetContext | IRepairContext>();
+  expectTypeOf<IStorage.WriteContext>().toEqualTypeOf<ISetContext>();
+  expectTypeOf<IStorage.GetWritableContext>().toEqualTypeOf<ISetContext>();
   expectTypeOf<IStorage.ReadContext>().toEqualTypeOf<IGetContext>();
   expectTypeOf<IStorage.GetReadableContext>().toEqualTypeOf<IStreamContext>();
   expectTypeOf<IStorage.ExistsContext>().toEqualTypeOf<IHasContext>();
@@ -180,13 +179,7 @@ test("IMiddleware のコンテキスト別名は pipeline-context と一致す�
   expectTypeOf<IMiddleware.OpenContext>().toEqualTypeOf<IOpenContext>();
   expectTypeOf<IMiddleware.CloseContext>().toEqualTypeOf<ICloseContext>();
   expectTypeOf<IMiddleware.UseContext>().toEqualTypeOf<
-    | ISetContext
-    | IRepairContext
-    | IGetContext
-    | IStreamContext
-    | IHasContext
-    | IDeleteContext
-    | IClearContext
+    ISetContext | IGetContext | IStreamContext | IHasContext | IDeleteContext | IClearContext
   >();
   expectTypeOf<IMiddleware.EncodeContext<string>>().toEqualTypeOf<IEncodeContext<string, string>>();
   expectTypeOf<IMiddleware.DecodeContext<string>>().toEqualTypeOf<IDecodeContext<string, string>>();
@@ -263,16 +256,15 @@ test("pipeline-context の key と action と signal は絞られる", () => {
   expectTypeOf<IKeyedActionContext["key"]>().toEqualTypeOf<string>();
   expectTypeOf<IActionContext["signal"]>().toEqualTypeOf<AbortSignal>();
   expectTypeOf<IActionContext["action"]>().toEqualTypeOf<
-    "open" | "close" | "set" | "get" | "repair" | "stream" | "has" | "delete" | "clear"
+    "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"
   >();
   expectTypeOf<ILifecycleContext["action"]>().toEqualTypeOf<"open" | "close">();
   expectTypeOf<IOpenContext["action"]>().toEqualTypeOf<"open">();
   expectTypeOf<ICloseContext["action"]>().toEqualTypeOf<"close">();
   expectTypeOf<IKeyedActionContext["action"]>().toEqualTypeOf<
-    "set" | "repair" | "get" | "stream" | "has" | "delete" | "clear"
+    "set" | "get" | "stream" | "has" | "delete" | "clear"
   >();
   expectTypeOf<ISetContext["action"]>().toEqualTypeOf<"set">();
-  expectTypeOf<IRepairContext["action"]>().toEqualTypeOf<"repair">();
   expectTypeOf<IGetContext["action"]>().toEqualTypeOf<"get">();
   expectTypeOf<IStreamContext["action"]>().toEqualTypeOf<"stream">();
   expectTypeOf<IHasContext["action"]>().toEqualTypeOf<"has">();
@@ -280,9 +272,13 @@ test("pipeline-context の key と action と signal は絞られる", () => {
   expectTypeOf<IClearContext["action"]>().toEqualTypeOf<"clear">();
 });
 
-test("IRepairContext は targets を持つ", () => {
+test("IGetContext と IStreamContext は書き戻し要求を持つ", () => {
   // 実行と検証
-  expectTypeOf<IRepairContext["targets"]>().toEqualTypeOf<readonly string[]>();
+  expectTypeOf<IGetContext["repair"]>().toEqualTypeOf<IStreamContext["repair"]>();
+  expectTypeOf<IGetContext["repair"]>().toEqualTypeOf<
+    | { readonly enabled: false; readonly targets: readonly [] }
+    | { readonly enabled: true; readonly targets: readonly [string, ...string[]] }
+  >();
 });
 
 test("IEncodeContext と IDecodeContext は source と destination を持つ", () => {

@@ -1,4 +1,3 @@
-import { forCases } from "@unikvs/testing";
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest } from "vitest";
 
@@ -23,6 +22,52 @@ const test = vitest.extend<{
 
 const seed = 20260930;
 const cases = 100;
+
+/**
+ * mulberry32 による決定的な擬似乱数生成器です。
+ */
+function createRandom(seed: number): {
+  string(length: number): string;
+  uint(max?: number): number;
+} {
+  let state = seed >>> 0;
+  const next = (): number => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+  const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+  return {
+    uint(max = 0xffffffff): number {
+      return Math.floor(next() * (max + 1));
+    },
+    string(length: number): string {
+      let result = "";
+
+      for (let index = 0; index < length; index++) {
+        result += alphabet[Math.floor(next() * alphabet.length)]!;
+      }
+
+      return result;
+    },
+  };
+}
+
+/**
+ * 決定的な乱数で count 回テスト本体を実行します。
+ */
+function forCases(
+  seed: number,
+  count: number,
+  run: (random: ReturnType<typeof createRandom>, index: number) => void,
+): void {
+  for (let index = 0; index < count; index++) {
+    run(createRandom((seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0), index);
+  }
+}
 
 type KeyNotFoundErrorArgs = {
   readonly key: string;

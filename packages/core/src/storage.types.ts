@@ -8,7 +8,6 @@ import type {
   IClearContext,
   ICloseContext,
   IDeleteContext,
-  IRepairContext,
   IStreamContext,
 } from "./pipeline-context.types.js";
 import type { IReadableStream, IWritableStream } from "./stream.types.js";
@@ -18,9 +17,9 @@ export namespace IStorage {
 
   export type CloseContext = ICloseContext;
 
-  export type WriteContext = ISetContext | IRepairContext;
+  export type WriteContext = ISetContext;
 
-  export type GetWritableContext = ISetContext | IRepairContext;
+  export type GetWritableContext = ISetContext;
 
   export type ReadContext = IGetContext;
 
@@ -32,6 +31,7 @@ export namespace IStorage {
 
   export type ClearContext = IClearContext;
 
+  // oxlint-disable-next-line typescript/no-duplicate-type-constituents
   export type OtherWriteErrorHandlerContext = WriteContext | GetWritableContext;
 
   export interface IOtherWriteError {

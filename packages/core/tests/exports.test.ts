@@ -72,7 +72,6 @@ test("pipeline-context の型はエントリーポイントから同一に解決
   expectTypeOf<pipelineContext.ICloseContext>().toEqualTypeOf<core.ICloseContext>();
   expectTypeOf<pipelineContext.IKeyedActionContext>().toEqualTypeOf<core.IKeyedActionContext>();
   expectTypeOf<pipelineContext.ISetContext>().toEqualTypeOf<core.ISetContext>();
-  expectTypeOf<pipelineContext.IRepairContext>().toEqualTypeOf<core.IRepairContext>();
   expectTypeOf<pipelineContext.IGetContext>().toEqualTypeOf<core.IGetContext>();
   expectTypeOf<pipelineContext.IStreamContext>().toEqualTypeOf<core.IStreamContext>();
   expectTypeOf<pipelineContext.IHasContext>().toEqualTypeOf<core.IHasContext>();

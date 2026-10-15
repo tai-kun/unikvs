@@ -11,7 +11,6 @@ import type {
   IDeleteContext,
   IEncodeContext,
   IMapKeyContext,
-  IRepairContext,
   IStreamContext,
   IDecodeStreamContext,
   IEncodeStreamContext,
@@ -30,7 +29,6 @@ export namespace IMiddleware {
 
   export type UseContext =
     | ISetContext
-    | IRepairContext
     | IGetContext
     | IStreamContext
     | IHasContext
