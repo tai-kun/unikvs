@@ -5,7 +5,7 @@ import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,
-  FakeTransformer,
+  FakeMiddleware,
   Gate,
   collect,
   streamOf,
@@ -127,9 +127,9 @@ describe("UniKvs - vars の伝播", () => {
   test("vars は middleware にも渡される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const transformer = new FakeTransformer("probe");
+    const middleware = new FakeMiddleware("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -138,7 +138,7 @@ describe("UniKvs - vars の伝播", () => {
     await kvs.set("foo", "value", { vars: { tag: "t4" } });
 
     // 検証
-    expect(transformer.callsOf("encode")[0]?.vars?.get("tag")).toBe("t4");
+    expect(middleware.callsOf("encode")[0]?.vars?.get("tag")).toBe("t4");
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t4");
 
     // 後片付け

@@ -5,13 +5,13 @@ import { MissingStorageError } from "../src/errors.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
-import { FakeStorage, FakeStreamStorage, FakeTransformer, collect, streamOf } from "./_helpers.js";
+import { FakeStorage, FakeStreamStorage, FakeMiddleware, collect, streamOf } from "./_helpers.js";
 
 /**
- * encode のたびに自身のタグを末尾へ付与し、decode で除去するトランスフォーマーです。
+ * encode のたびに自身のタグを末尾へ付与し、decode で除去するミドルウェアです。
  * 前段パイプラインの適用順序とストレージごとの分岐を検証するために使用します。
  */
-class TagTransformer extends FakeTransformer {
+class TagMiddleware extends FakeMiddleware {
   readonly #tag: string;
 
   public constructor(tag: string) {
@@ -19,14 +19,14 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("encode", { data: c.source, c });
     c.destination = `${String(c.source)}${this.#tag}`;
     await next!();
   }
 
-  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("decode", { data: c.source, c });
     const data = String(c.source);
@@ -71,7 +71,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 
   test("ストレージを登録せず create すると MissingStorageError を投げる", ({ expect }) => {
     // 準備
-    const config = new UniKvsConfig(UniKvs).connect(new FakeTransformer());
+    const config = new UniKvsConfig(UniKvs).connect(new FakeMiddleware());
 
     // 実行と検証
     expect(() => config.create()).toThrow(MissingStorageError);
@@ -95,12 +95,12 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     await kvs1.close();
   });
 
-  test("同じ Transformer で transform を重ねた回数分だけ適用される", async ({ expect }) => {
+  test("同じ Middleware で transform を重ねた回数分だけ適用される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new TagTransformer("X"))
-      .connect(new TagTransformer("X"))
+      .connect(new TagMiddleware("X"))
+      .connect(new TagMiddleware("X"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -158,15 +158,15 @@ describe("UniKvsConfig - ビルダーの構成", () => {
   });
 });
 
-describe("UniKvsConfig - トランスフォーマーとストレージの捕捉", () => {
+describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
   test("persist では登録時点のパイプラインのスナップショットを捕捉する", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new TagTransformer("1"))
+      .connect(new TagMiddleware("1"))
       .persist(storage1)
-      .connect(new TagTransformer("2"))
+      .connect(new TagMiddleware("2"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -182,7 +182,7 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     await kvs.close();
   });
 
-  test("ストレージ登録後にトランスフォーマーを追加しても既存ストレージのチェーンは変わらない", async ({
+  test("ストレージ登録後にミドルウェアを追加しても既存ストレージのチェーンは変わらない", async ({
     expect,
   }) => {
     // 準備
@@ -190,7 +190,7 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
-      .connect(new TagTransformer("1"))
+      .connect(new TagMiddleware("1"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -211,9 +211,9 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new TagTransformer("1"))
+      .connect(new TagMiddleware("1"))
       .persist(storage1)
-      .connect(new TagTransformer("2"))
+      .connect(new TagMiddleware("2"))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -233,7 +233,7 @@ describe("UniKvsConfig - トランスフォーマーとストレージの捕捉"
   test("persist なし末尾 connect は破棄され読み書きに影響しない", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const trailing = new TagTransformer("Z");
+    const trailing = new TagMiddleware("Z");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage)
       .connect(trailing)
@@ -263,11 +263,11 @@ describe("UniKvsConfig - fork", () => {
     const storageB = new FakeStorage("storageB");
     const storageC = new FakeStorage("storageC");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new TagTransformer("1"))
-      .fork(UniKvs.branch().connect(new TagTransformer("A")).persist(storageA))
-      .connect(new TagTransformer("2"))
-      .fork(UniKvs.branch().connect(new TagTransformer("B")).persist(storageB))
-      .connect(new TagTransformer("3"))
+      .connect(new TagMiddleware("1"))
+      .fork(UniKvs.branch().connect(new TagMiddleware("A")).persist(storageA))
+      .connect(new TagMiddleware("2"))
+      .fork(UniKvs.branch().connect(new TagMiddleware("B")).persist(storageB))
+      .connect(new TagMiddleware("3"))
       .persist(storageC)
       .create();
     await kvs.open();
@@ -292,15 +292,15 @@ describe("UniKvsConfig - fork", () => {
     const storage3 = new FakeStorage("storage3");
     const storageMain = new FakeStorage("storageMain");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new TagTransformer("1"))
+      .connect(new TagMiddleware("1"))
       .fork(
         UniKvs.branch()
-          .connect(new TagTransformer("A"))
+          .connect(new TagMiddleware("A"))
           .persist(storage1)
           .persist(storage2)
-          .fork(UniKvs.branch().connect(new TagTransformer("N")).persist(storage3)),
+          .fork(UniKvs.branch().connect(new TagMiddleware("N")).persist(storage3)),
       )
-      .connect(new TagTransformer("2"))
+      .connect(new TagMiddleware("2"))
       .persist(storageMain)
       .create();
     await kvs.open();
@@ -324,7 +324,7 @@ describe("UniKvsConfig - fork", () => {
     const storage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
     const kvs = new UniKvsConfig(UniKvs)
-      .connect(new TagTransformer("1"))
+      .connect(new TagMiddleware("1"))
       .fork(UniKvs.branch().persist(storage))
       .create();
     await kvs.open();

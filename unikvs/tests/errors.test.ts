@@ -132,29 +132,29 @@ describe("MultipartWriteNotSupportedError", () => {
 });
 
 describe("MiddlewareIsNotOpenError", () => {
-  test("指定されたトランスフォーマー名がエラーメッセージに含まれる", ({ expect }) => {
+  test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new MiddlewareIsNotOpenError({ name: "MyTransformer" });
-    }).toThrow(/MyTransformer/);
+      throw new MiddlewareIsNotOpenError({ name: "MyMiddleware" });
+    }).toThrow(/MyMiddleware/);
   });
 });
 
 describe("EncodableStreamNotSupportedError", () => {
-  test("指定されたトランスフォーマー名がエラーメッセージに含まれる", ({ expect }) => {
+  test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new EncodableStreamNotSupportedError({ name: "MyTransformer" });
-    }).toThrow(/MyTransformer/);
+      throw new EncodableStreamNotSupportedError({ name: "MyMiddleware" });
+    }).toThrow(/MyMiddleware/);
   });
 });
 
 describe("DecodableStreamNotSupportedError", () => {
-  test("指定されたトランスフォーマー名がエラーメッセージに含まれる", ({ expect }) => {
+  test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new DecodableStreamNotSupportedError({ name: "MyTransformer" });
-    }).toThrow(/MyTransformer/);
+      throw new DecodableStreamNotSupportedError({ name: "MyMiddleware" });
+    }).toThrow(/MyMiddleware/);
   });
 });
 
@@ -163,7 +163,7 @@ describe("PluginOperationAggregateError", () => {
     // 準備
     const errors = [
       { plugin: "storage" as const, reason: new Error("fail1") },
-      { plugin: "transformer" as const, reason: new Error("fail2") },
+      { plugin: "middleware" as const, reason: new Error("fail2") },
     ];
 
     // 実行

@@ -127,7 +127,7 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
   });
 });
 
-describe("UniKvs - 複数トランスフォーマーと複数ストレージ", () => {
+describe("UniKvs - 複数ミドルウェアと複数ストレージ", () => {
   test("ストレージごとに異なる圧縮形式のチェーンで往復できる", async ({ expect }) => {
     // 準備
     const storage1 = new Memory();

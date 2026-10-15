@@ -7,8 +7,8 @@ import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,
-  FakeStreamTransformer,
-  FakeTransformer,
+  FakeStreamMiddleware,
+  FakeMiddleware,
   Gate,
   collect,
   streamOf,
@@ -16,10 +16,10 @@ import {
 } from "./_helpers.js";
 
 /**
- * clear の呼び出し回数を記録するトランスフォーマーです。
+ * clear の呼び出し回数を記録するミドルウェアです。
  * 同一インスタンスが複数の節に現れてもライフサイクルが 1 回だけ実行されることを検証します。
  */
-class CountingOnClearTransformer extends FakeTransformer {
+class CountingOnClearMiddleware extends FakeMiddleware {
   public clearCallCount = 0;
 
   public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
@@ -34,7 +34,7 @@ class CountingOnClearTransformer extends FakeTransformer {
  * mapKey の呼び出し回数を記録するミドルウェアです。
  * 共有節のキー写像が操作内で 1 回だけ実行されることを検証します。
  */
-class CountingMapKeyTransformer extends FakeTransformer {
+class CountingMapKeyMiddleware extends FakeMiddleware {
   public mapKeyCallCount = 0;
 
   public override mapKey(c: IMiddleware.MapKeyContext): string {
@@ -122,9 +122,9 @@ class CancelObservableStorage implements IStorage {
  */
 function createMiddleSharedKvs(
   ar: AllowRepair,
-  a: FakeTransformer,
-  b: FakeTransformer,
-  c: FakeTransformer,
+  a: FakeMiddleware,
+  b: FakeMiddleware,
+  c: FakeMiddleware,
   c1: FakeStorage,
   c2: FakeStorage,
   server: FakeStorage,
@@ -142,9 +142,9 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
   }) => {
     // 準備
     const ar = new AllowRepair();
-    const a = new FakeTransformer("A");
-    const b = new FakeTransformer("B");
-    const c = new FakeTransformer("C");
+    const a = new FakeMiddleware("A");
+    const b = new FakeMiddleware("B");
+    const c = new FakeMiddleware("C");
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
@@ -166,14 +166,14 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     await kvs.close();
   });
 
-  test("stream set ではグローバル prefix 後の中間共有ノードの getEncodable を 1 回だけ呼ぶ", async ({
+  test("stream set ではグローバル prefix 後の中間共有ノードの encodeStream を 1 回だけ呼ぶ", async ({
     expect,
   }) => {
     // 準備
     const ar = new AllowRepair();
-    const a = new FakeStreamTransformer<Uint8Array>("A");
-    const b = new FakeStreamTransformer<Uint8Array>("B");
-    const c = new FakeStreamTransformer<Uint8Array>("C");
+    const a = new FakeStreamMiddleware<Uint8Array>("A");
+    const b = new FakeStreamMiddleware<Uint8Array>("B");
+    const c = new FakeStreamMiddleware<Uint8Array>("C");
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
@@ -189,9 +189,9 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     await kvs.set("logs", streamOf(chunks));
 
     // 検証
-    expect(a.callsOf("getEncodable")).toHaveLength(1);
-    expect(b.callsOf("getEncodable")).toHaveLength(1);
-    expect(c.callsOf("getEncodable")).toHaveLength(1);
+    expect(a.callsOf("encodeStream")).toHaveLength(1);
+    expect(b.callsOf("encodeStream")).toHaveLength(1);
+    expect(c.callsOf("encodeStream")).toHaveLength(1);
     expect(c1.map.get("logs")).toStrictEqual(chunks);
     expect(c2.map.get("logs")).toStrictEqual(chunks);
     expect(server.map.get("logs")).toStrictEqual(chunks);
@@ -205,9 +205,9 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
   }) => {
     // 準備
     const ar = new AllowRepair();
-    const a = new FakeTransformer("A");
-    const b = new FakeTransformer("B");
-    const c = new FakeTransformer("C");
+    const a = new FakeMiddleware("A");
+    const b = new FakeMiddleware("B");
+    const c = new FakeMiddleware("C");
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
@@ -231,14 +231,14 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     await kvs.close();
   });
 
-  test("stream repair ではグローバル prefix 後の中間共有ノードの getEncodable を 1 回だけ呼ぶ", async ({
+  test("stream repair ではグローバル prefix 後の中間共有ノードの encodeStream を 1 回だけ呼ぶ", async ({
     expect,
   }) => {
     // 準備
     const ar = new AllowRepair();
-    const a = new FakeStreamTransformer<Uint8Array>("A");
-    const b = new FakeStreamTransformer<Uint8Array>("B");
-    const c = new FakeStreamTransformer<Uint8Array>("C");
+    const a = new FakeStreamMiddleware<Uint8Array>("A");
+    const b = new FakeStreamMiddleware<Uint8Array>("B");
+    const c = new FakeStreamMiddleware<Uint8Array>("C");
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
@@ -256,9 +256,9 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     await collect(vs);
 
     // 検証
-    expect(a.callsOf("getEncodable")).toHaveLength(1);
-    expect(b.callsOf("getEncodable")).toHaveLength(1);
-    expect(c.callsOf("getEncodable")).toHaveLength(1);
+    expect(a.callsOf("encodeStream")).toHaveLength(1);
+    expect(b.callsOf("encodeStream")).toHaveLength(1);
+    expect(c.callsOf("encodeStream")).toHaveLength(1);
     expect(c1.map.get("logs")).toStrictEqual(chunks);
     expect(c2.map.get("logs")).toStrictEqual(chunks);
     expect(server.callsOf("getWritable")).toHaveLength(0);
@@ -445,15 +445,15 @@ describe("UniKvs - 書き戻しの並列性", () => {
 });
 
 describe("UniKvs - 重複インスタンスのライフサイクル", () => {
-  test("同一トランスフォーマーが複数の節に現れても open/onClear/close は 1 回だけ実行される", async ({
+  test("同一ミドルウェアが複数の節に現れても open/onClear/close は 1 回だけ実行される", async ({
     expect,
   }) => {
     // 準備
-    const transformer = new CountingOnClearTransformer("dup");
+    const middleware = new CountingOnClearMiddleware("dup");
     const storage = new FakeStorage("s");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
-      .connect(transformer)
+      .connect(middleware)
+      .connect(middleware)
       .persist(storage)
       .create();
 
@@ -461,13 +461,13 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     await kvs.open();
 
     // 検証: open は 1 回
-    expect(transformer.callsOf("open")).toHaveLength(1);
+    expect(middleware.callsOf("open")).toHaveLength(1);
 
     // 実行
     await kvs.set("foo", "value");
 
     // 検証: 節ごとにエンコードされる
-    expect(transformer.callsOf("encode")).toHaveLength(2);
+    expect(middleware.callsOf("encode")).toHaveLength(2);
     expect(storage.map.get("foo")).toBe("value");
 
     // 実行
@@ -475,20 +475,20 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     await kvs.close();
 
     // 検証: onClear と close も 1 回
-    expect(transformer.clearCallCount).toBe(1);
-    expect(transformer.callsOf("close")).toHaveLength(1);
+    expect(middleware.clearCallCount).toBe(1);
+    expect(middleware.callsOf("close")).toHaveLength(1);
   });
 
-  test("メインと fork 先で共有したトランスフォーマーもライフサイクルは 1 回だけ実行される", async ({
+  test("メインと fork 先で共有したミドルウェアもライフサイクルは 1 回だけ実行される", async ({
     expect,
   }) => {
     // 準備
-    const transformer = new CountingOnClearTransformer("shared");
+    const middleware = new CountingOnClearMiddleware("shared");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
-      .fork(UniKvs.branch().connect(transformer).persist(s1))
+      .connect(middleware)
+      .fork(UniKvs.branch().connect(middleware).persist(s1))
       .persist(s2)
       .create();
 
@@ -497,8 +497,8 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     await kvs.set("foo", "value");
 
     // 検証: 節ごとにエンコードされるが、ライフサイクルは 1 回だけ
-    expect(transformer.callsOf("encode")).toHaveLength(2);
-    expect(transformer.callsOf("open")).toHaveLength(1);
+    expect(middleware.callsOf("encode")).toHaveLength(2);
+    expect(middleware.callsOf("open")).toHaveLength(1);
     expect(s1.map.get("foo")).toBe("value");
     expect(s2.map.get("foo")).toBe("value");
 
@@ -507,19 +507,19 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     await kvs.close();
 
     // 検証
-    expect(transformer.clearCallCount).toBe(1);
-    expect(transformer.callsOf("close")).toHaveLength(1);
+    expect(middleware.clearCallCount).toBe(1);
+    expect(middleware.callsOf("close")).toHaveLength(1);
   });
 });
 
 describe("UniKvs - 共有節のキー写像", () => {
   test("delete は並列解決でも共有節の mapKey を 1 回だけ呼ぶ", async ({ expect }) => {
     // 準備
-    const transformer = new CountingMapKeyTransformer("shared");
+    const middleware = new CountingMapKeyMiddleware("shared");
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(a)
       .persist(b)
       .create();
@@ -529,7 +529,7 @@ describe("UniKvs - 共有節のキー写像", () => {
     await kvs.delete("foo");
 
     // 検証
-    expect(transformer.mapKeyCallCount).toBe(1);
+    expect(middleware.mapKeyCallCount).toBe(1);
 
     // 後片付け
     await kvs.close();
@@ -541,7 +541,7 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
     expect,
   }) => {
     // 準備: AllowRepair なしでは修復対象の部分木がスキップされる (新方式では repair 要求は get/stream のコンテキストで伝達され、canRepair のない葉は警告のうえスキップされる)
-    const outer = new FakeStreamTransformer<Uint8Array>("outer");
+    const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     const cache = new CancelObservableStorage("cache");
     const server = new CancelObservableStorage("server");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
@@ -576,8 +576,8 @@ describe("UniKvs - デコードの後始末", () => {
     // 準備: デコードは後段 (storage 側) から順に適用されるため、後段は成功して前段が失敗する
     const storage = new CancelObservableStorage("logs");
     storage.entries.set("logs", [new Uint8Array([1])]);
-    const inner = new FakeStreamTransformer<Uint8Array>("inner");
-    const outer = new FakeStreamTransformer<Uint8Array>("outer");
+    const inner = new FakeStreamMiddleware<Uint8Array>("inner");
+    const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     inner.errors["decodeStream"] = new Error("decodeStream failed");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(inner)

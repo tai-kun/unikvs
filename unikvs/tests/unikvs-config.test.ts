@@ -38,8 +38,8 @@ class MockStorage implements IStorage {
 /**
  * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
-class MockTransformer implements IMiddleware {
-  readonly name = "MockTransformer";
+class MockMiddleware implements IMiddleware {
+  readonly name = "MockMiddleware";
   readonly isOpen = true;
 
   async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -73,25 +73,25 @@ describe("UniKvsConfig", () => {
     expect(() => config.create()).toThrow(MissingStorageError);
   });
 
-  test("トランスフォーマーを追加してからストレージを追加できる", ({ expect }) => {
+  test("ミドルウェアを追加してからストレージを追加できる", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.connect(new MockTransformer()).persist(new MockStorage()).create();
+    const result = config.connect(new MockMiddleware()).persist(new MockStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
   });
 
-  test("ストレージを追加した後でもトランスフォーマーを追加できる", ({ expect }) => {
+  test("ストレージを追加した後でもミドルウェアを追加できる", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
     const result = config
       .persist(new MockStorage())
-      .connect(new MockTransformer())
+      .connect(new MockMiddleware())
       .persist(new MockStorage())
       .create();
 
@@ -99,18 +99,18 @@ describe("UniKvsConfig", () => {
     expect(result).toBeInstanceOf(UniKvs);
   });
 
-  test("トランスフォーマーとストレージを交互に追加できる", ({ expect }) => {
+  test("ミドルウェアとストレージを交互に追加できる", ({ expect }) => {
     // 準備
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
     const result = config
-      .connect(new MockTransformer())
-      .connect(new MockTransformer())
+      .connect(new MockMiddleware())
+      .connect(new MockMiddleware())
       .persist(new MockStorage())
-      .connect(new MockTransformer())
+      .connect(new MockMiddleware())
       .persist(new MockStorage())
-      .connect(new MockTransformer())
+      .connect(new MockMiddleware())
       .persist(new MockStorage())
       .create();
 
@@ -144,7 +144,7 @@ describe("UniKvsConfig", () => {
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
     const kvs = new UniKvsConfig(UniKvs)
       .persist(mainStorage)
-      .fork(UniKvs.branch().connect(new MockTransformer()).persist(branchStorage))
+      .fork(UniKvs.branch().connect(new MockMiddleware()).persist(branchStorage))
       .create();
     await kvs.open();
 

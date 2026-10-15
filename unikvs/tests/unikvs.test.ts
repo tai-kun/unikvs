@@ -77,8 +77,8 @@ class MockStorage implements IStorage {
 /**
  * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
-class MockTransformer implements IMiddleware {
-  readonly name = "MockTransformer";
+class MockMiddleware implements IMiddleware {
+  readonly name = "MockMiddleware";
   isOpen = true;
 
   async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -243,10 +243,10 @@ class CancelObservableStorage implements IStorage {
 }
 
 /**
- * getDecodable で常にエラーを投げるトランスフォーマーモックです。
+ * decodeStream で常にエラーを投げるミドルウェアモックです。
  */
-class FailGetDecodableTransformer implements IMiddleware {
-  readonly name = "FailGetDecodable";
+class FailDecodeStreamMiddleware implements IMiddleware {
+  readonly name = "FailDecodeStream";
   isOpen = true;
 
   async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -260,7 +260,7 @@ class FailGetDecodableTransformer implements IMiddleware {
   }
 
   async decodeStream(_c: IMiddleware.DecodeStreamContext, _next: IMiddleware.INext): Promise<void> {
-    throw new Error("getDecodable failed");
+    throw new Error("decodeStream failed");
   }
 }
 
@@ -1029,13 +1029,13 @@ describe("UniKvs - 複数ストレージ", () => {
   });
 });
 
-describe("UniKvs - トランスフォーマー連携", () => {
-  test("set 時にトランスフォーマーでエンコードされたデータがストレージに保存される", async ({
+describe("UniKvs - ミドルウェア連携", () => {
+  test("set 時にミドルウェアでエンコードされたデータがストレージに保存される", async ({
     expect,
   }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().connect(new MockTransformer()).persist(storage).create();
+    const kvs = UniKvs.config().connect(new MockMiddleware()).persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -1048,10 +1048,10 @@ describe("UniKvs - トランスフォーマー連携", () => {
     await kvs.close();
   });
 
-  test("get 時にトランスフォーマーでデコードされた値が返される", async ({ expect }) => {
+  test("get 時にミドルウェアでデコードされた値が返される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    const kvs = UniKvs.config().connect(new MockTransformer()).persist(storage).create();
+    const kvs = UniKvs.config().connect(new MockMiddleware()).persist(storage).create();
     await kvs.open();
     await kvs.set("key1", "hello");
 
@@ -1065,7 +1065,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
     await kvs.close();
   });
 
-  test("複数トランスフォーマーの適用順序は set で順方向、get で逆方向", async ({ expect }) => {
+  test("複数ミドルウェアの適用順序は set で順方向、get で逆方向", async ({ expect }) => {
     class Append implements IMiddleware {
       readonly name: string;
       isOpen = true;
@@ -1102,7 +1102,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   });
 
   test("encode が失敗してもストレージには書き込まれず set は安全に失敗する", async ({ expect }) => {
-    class BoomTransformer implements IMiddleware {
+    class BoomMiddleware implements IMiddleware {
       readonly name = "Boom";
       isOpen = true;
       encode(): never {
@@ -1116,7 +1116,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
     // 準備
     const storage = new Memory();
     const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .connect(new BoomTransformer())
+      .connect(new BoomMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -1130,7 +1130,7 @@ describe("UniKvs - トランスフォーマー連携", () => {
   });
 });
 
-describe("UniKvs - ストレージ間のトランスフォーマー", () => {
+describe("UniKvs - ストレージ間のミドルウェア", () => {
   test("set すると各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
     class Append implements IMiddleware {
       readonly name: string;
@@ -1732,23 +1732,23 @@ describe("UniKvs - stream 操作", () => {
     const storage = new CancelObservableStorage();
     storage.entries.set("logs", [Uint8Array.from([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FailGetDecodableTransformer())
+      .connect(new FailDecodeStreamMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    await expect(kvs.stream("logs")).rejects.toThrow("getDecodable failed");
+    await expect(kvs.stream("logs")).rejects.toThrow("decodeStream failed");
     expect(storage.sourceCancelled).toBe(true);
 
     // 後片付け
     await kvs.close();
   });
 
-  test("set(stream) 中に後段の getEncodable が失敗したとき、ソースストリームはキャンセルされる", async ({
+  test("set(stream) 中に後段の encodeStream が失敗したとき、ソースストリームはキャンセルされる", async ({
     expect,
   }) => {
-    class PassThroughTransformer implements IMiddleware {
+    class PassThroughMiddleware implements IMiddleware {
       readonly name = "PassThrough";
       isOpen = true;
 
@@ -1779,8 +1779,8 @@ describe("UniKvs - stream 操作", () => {
       }
     }
 
-    class BoomGetEncodableTransformer implements IMiddleware {
-      readonly name = "BoomGetEncodable";
+    class BoomEncodeStreamMiddleware implements IMiddleware {
+      readonly name = "BoomEncodeStream";
       isOpen = true;
 
       async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -1797,7 +1797,7 @@ describe("UniKvs - stream 操作", () => {
         _c: IMiddleware.EncodeStreamContext,
         _next: IMiddleware.INext,
       ): Promise<void> {
-        throw new Error("getEncodable failed");
+        throw new Error("encodeStream failed");
       }
     }
 
@@ -1812,14 +1812,14 @@ describe("UniKvs - stream 操作", () => {
       },
     });
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new PassThroughTransformer())
-      .connect(new BoomGetEncodableTransformer())
+      .connect(new PassThroughMiddleware())
+      .connect(new BoomEncodeStreamMiddleware())
       .persist(new Memory())
       .create();
     await kvs.open();
 
     // 実行と検証
-    await expect(kvs.set("logs", source)).rejects.toThrow("getEncodable failed");
+    await expect(kvs.set("logs", source)).rejects.toThrow("encodeStream failed");
     // キャンセルしないとソースストリームはロックされたままリークします。
     expect(cancelled).toBe(true);
 

@@ -276,8 +276,8 @@ describe("UniKvs - schema による入出力検証", () => {
 
   test("スキーマの検証は UniKvs の入出力で行われる", async ({ expect }) => {
     // 準備
-    class JsonTransformer implements IMiddleware {
-      readonly name = "JsonTransformer";
+    class JsonMiddleware implements IMiddleware {
+      readonly name = "JsonMiddleware";
       isOpen = true;
 
       async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -293,7 +293,7 @@ describe("UniKvs - schema による入出力検証", () => {
 
     const storage = new Memory();
     const kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .connect(new JsonTransformer())
+      .connect(new JsonMiddleware())
       .persist(storage)
       .create();
     await kvs.open();

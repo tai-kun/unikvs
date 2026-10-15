@@ -241,7 +241,7 @@ export class FakeStreamStorage extends FakeStorage {
   }
 }
 
-export type TransformerCall = {
+export type MiddlewareCall = {
   readonly method:
     | "open"
     | "close"
@@ -250,10 +250,7 @@ export type TransformerCall = {
     | "encodeStream"
     | "decodeStream"
     | "use"
-    | "mapKey"
-    // 旧名との互換のため残します。
-    | "getEncodable"
-    | "getDecodable";
+    | "mapKey";
   readonly data: unknown;
   readonly key: string | undefined;
   readonly action: string | undefined;
@@ -265,18 +262,18 @@ export type TransformerCall = {
  * open/close で isOpen を切り替え、呼び出しと vars を記録するミドルウェアモックです。
  * ミドルウェアのライフサイクルと vars 伝播の検証に使用します。
  */
-export class FakeTransformer<TData = any> implements IMiddleware<TData, TData, TData, TData> {
+export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TData, TData> {
   public readonly name: string;
   public isOpen = false;
-  public readonly calls: TransformerCall[] = [];
-  public readonly errors: Partial<Record<TransformerCall["method"], unknown>> = {};
-  public hook: ((call: TransformerCall) => void | Promise<void>) | undefined;
+  public readonly calls: MiddlewareCall[] = [];
+  public readonly errors: Partial<Record<MiddlewareCall["method"], unknown>> = {};
+  public hook: ((call: MiddlewareCall) => void | Promise<void>) | undefined;
 
-  public constructor(name = "FakeTransformer") {
+  public constructor(name = "FakeMiddleware") {
     this.name = name;
   }
 
-  public callsOf(method: TransformerCall["method"]): readonly TransformerCall[] {
+  public callsOf(method: MiddlewareCall["method"]): readonly MiddlewareCall[] {
     return this.calls.filter((call) => call.method === method);
   }
 
@@ -322,7 +319,7 @@ export class FakeTransformer<TData = any> implements IMiddleware<TData, TData, T
   }
 
   protected async record(
-    method: TransformerCall["method"],
+    method: MiddlewareCall["method"],
     args: {
       readonly data?: unknown;
       readonly c: {
@@ -332,7 +329,7 @@ export class FakeTransformer<TData = any> implements IMiddleware<TData, TData, T
       } & IPipelineContext;
     },
   ): Promise<void> {
-    const call: TransformerCall = {
+    const call: MiddlewareCall = {
       method,
       data: args.data,
       key: args.c.key,
@@ -350,16 +347,11 @@ export class FakeTransformer<TData = any> implements IMiddleware<TData, TData, T
 }
 
 /**
- * @deprecated `FakeTransformer` を使用してください。
- */
-export const FakeMiddleware = FakeTransformer;
-
-/**
  * encodeStream/decodeStream をサポートし、通過するチャンクにタグを付与するミドルウェアです。
  * ストリームパイプラインの構築順序と共有プレフィックスの検証に使用します。
  */
-export class FakeStreamTransformer<_TChunk = any> extends FakeTransformer {
-  public constructor(name = "FakeStreamTransformer") {
+export class FakeStreamMiddleware<_TChunk = any> extends FakeMiddleware {
+  public constructor(name = "FakeStreamMiddleware") {
     super(name);
   }
 
@@ -368,17 +360,6 @@ export class FakeStreamTransformer<_TChunk = any> extends FakeTransformer {
     next: IMiddleware.INext,
   ): Promise<void> {
     await this.record("encodeStream", { data: undefined, c });
-    // 旧 `getEncodable` との互換のため、透過ストリームで委譲したこととして記録します。
-    const compatCall: TransformerCall = {
-      method: "getEncodable",
-      data: undefined,
-      key: (c as { readonly key?: string }).key,
-      action: (c as { readonly action?: string }).action,
-      vars: c as IPipelineContext,
-      signal: (c as { readonly signal?: AbortSignal }).signal,
-    };
-    this.calls.push(compatCall);
-    await this.hook?.(compatCall);
     c.destination = c.source;
     await next();
   }
@@ -388,16 +369,6 @@ export class FakeStreamTransformer<_TChunk = any> extends FakeTransformer {
     next: IMiddleware.INext,
   ): Promise<void> {
     await this.record("decodeStream", { data: undefined, c });
-    const compatCall: TransformerCall = {
-      method: "getDecodable",
-      data: undefined,
-      key: (c as { readonly key?: string }).key,
-      action: (c as { readonly action?: string }).action,
-      vars: c as IPipelineContext,
-      signal: (c as { readonly signal?: AbortSignal }).signal,
-    };
-    this.calls.push(compatCall);
-    await this.hook?.(compatCall);
     c.destination = c.source;
     await next();
   }

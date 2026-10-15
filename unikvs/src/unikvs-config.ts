@@ -49,10 +49,10 @@ export interface IUniKvsConfigBuilder<
     [TKey in KeyofKVMap<TKeyValueMapping>]: $InferStreamValueChunkData<TKeyValueMapping[TKey]>;
   }>,
   TUniKvsChunkOutput = TUniKvsChunkInput,
-  TLastTransformerDecodeDataInput = TUniKvsDataOutput,
-  TLastTransformerEncodeDataOutput = TUniKvsDataInput,
-  TLastTransformerDecodeChunkInput = TUniKvsChunkOutput,
-  TLastTransformerEncodeChunkOutput = TUniKvsChunkInput,
+  TLastMiddlewareDecodeDataInput = TUniKvsDataOutput,
+  TLastMiddlewareEncodeDataOutput = TUniKvsDataInput,
+  TLastMiddlewareDecodeChunkInput = TUniKvsChunkOutput,
+  TLastMiddlewareEncodeChunkOutput = TUniKvsChunkInput,
 > {
   fork<
     TBranchChunkInput,
@@ -82,16 +82,16 @@ export interface IUniKvsConfigBuilder<
       TBranchHasPersist
     > &
       (TBranchHasPersist extends true
-        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
+        ? $CheckForkEncodeData<TLastMiddlewareEncodeDataOutput, TBranchHeadEncodeDataInput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
+        ? $CheckForkDecodeData<TLastMiddlewareDecodeDataInput, TBranchHeadDecodeDataOutput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        ? $CheckForkEncodeChunk<TLastMiddlewareEncodeChunkOutput, TBranchHeadEncodeChunkInput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        ? $CheckForkDecodeChunk<TLastMiddlewareDecodeChunkInput, TBranchHeadDecodeChunkOutput>
         : unknown),
   ): IUniKvsConfigBuilder<
     TKeyValueMapping,
@@ -111,17 +111,17 @@ export interface IUniKvsConfigBuilder<
           ? never
           : TUniKvsChunkOutput
       : TUniKvsChunkOutput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
   >;
 
   connect<
     TMiddleware extends IMiddleware<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
       any
     >,
   >(
@@ -148,31 +148,31 @@ export interface IUniKvsConfigBuilder<
 
   persist<
     TStorage extends IStorage<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
+      [TLastMiddlewareDecodeDataInput] extends [never] ? any : TLastMiddlewareDecodeDataInput,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
+      [TLastMiddlewareDecodeChunkInput] extends [never] ? any : TLastMiddlewareDecodeChunkInput
     >,
   >(
     storage: TStorage,
   ): IUniKvsConfigFinalizer<
     TKeyValueMapping,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeDataInput,
-    [TLastTransformerEncodeChunkOutput] extends [never]
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeDataInput,
+    [TLastMiddlewareEncodeChunkOutput] extends [never]
       ? never
       : [$InferWriteChunkInput<TStorage>] extends [never]
         ? never
-        : TLastTransformerEncodeChunkOutput,
-    [TLastTransformerDecodeChunkInput] extends [never]
+        : TLastMiddlewareEncodeChunkOutput,
+    [TLastMiddlewareDecodeChunkInput] extends [never]
       ? never
       : [$InferReadChunkOutput<TStorage>] extends [never]
         ? never
-        : TLastTransformerDecodeChunkInput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
+        : TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
   >;
 }
 
@@ -185,10 +185,10 @@ export interface IUniKvsConfigFinalizer<
   TReadDataOutput = any,
   TWriteChunkInput = any,
   TReadChunkOutput = any,
-  TLastTransformerDecodeDataInput = TReadDataOutput,
-  TLastTransformerEncodeDataOutput = TWriteDataInput,
-  TLastTransformerDecodeChunkInput = TReadChunkOutput,
-  TLastTransformerEncodeChunkOutput = TWriteChunkInput,
+  TLastMiddlewareDecodeDataInput = TReadDataOutput,
+  TLastMiddlewareEncodeDataOutput = TWriteDataInput,
+  TLastMiddlewareDecodeChunkInput = TReadChunkOutput,
+  TLastMiddlewareEncodeChunkOutput = TWriteChunkInput,
 > {
   fork<
     TBranchChunkInput,
@@ -218,16 +218,16 @@ export interface IUniKvsConfigFinalizer<
       TBranchHasPersist
     > &
       (TBranchHasPersist extends true
-        ? $CheckForkEncodeData<TLastTransformerEncodeDataOutput, TBranchHeadEncodeDataInput>
+        ? $CheckForkEncodeData<TLastMiddlewareEncodeDataOutput, TBranchHeadEncodeDataInput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkDecodeData<TLastTransformerDecodeDataInput, TBranchHeadDecodeDataOutput>
+        ? $CheckForkDecodeData<TLastMiddlewareDecodeDataInput, TBranchHeadDecodeDataOutput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkEncodeChunk<TLastTransformerEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        ? $CheckForkEncodeChunk<TLastMiddlewareEncodeChunkOutput, TBranchHeadEncodeChunkInput>
         : unknown) &
       (TBranchHasPersist extends true
-        ? $CheckForkDecodeChunk<TLastTransformerDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        ? $CheckForkDecodeChunk<TLastMiddlewareDecodeChunkInput, TBranchHeadDecodeChunkOutput>
         : unknown),
   ): IUniKvsConfigFinalizer<
     TKeyValueMapping,
@@ -247,17 +247,17 @@ export interface IUniKvsConfigFinalizer<
           ? never
           : TReadChunkOutput
       : TReadChunkOutput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
   >;
 
   connect<
     TMiddleware extends IMiddleware<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
       any
     >,
   >(
@@ -276,10 +276,10 @@ export interface IUniKvsConfigFinalizer<
 
   persist<
     TStorage extends IStorage<
-      [TLastTransformerEncodeDataOutput] extends [never] ? any : TLastTransformerEncodeDataOutput,
-      [TLastTransformerDecodeDataInput] extends [never] ? any : TLastTransformerDecodeDataInput,
-      [TLastTransformerEncodeChunkOutput] extends [never] ? any : TLastTransformerEncodeChunkOutput,
-      [TLastTransformerDecodeChunkInput] extends [never] ? any : TLastTransformerDecodeChunkInput
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
+      [TLastMiddlewareDecodeDataInput] extends [never] ? any : TLastMiddlewareDecodeDataInput,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
+      [TLastMiddlewareDecodeChunkInput] extends [never] ? any : TLastMiddlewareDecodeChunkInput
     >,
   >(
     storage: TStorage,
@@ -297,10 +297,10 @@ export interface IUniKvsConfigFinalizer<
       : [$InferReadChunkOutput<TStorage>] extends [never]
         ? never
         : TReadChunkOutput,
-    TLastTransformerDecodeDataInput,
-    TLastTransformerEncodeDataOutput,
-    TLastTransformerDecodeChunkInput,
-    TLastTransformerEncodeChunkOutput
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
   >;
 
   create(): UniKvs<TKeyValueMapping>;

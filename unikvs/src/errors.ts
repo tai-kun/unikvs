@@ -375,21 +375,6 @@ setErrorMessage(
 );
 
 /**
- * @deprecated `MiddlewareIsNotOpenError` を使用してください。
- */
-export type TransformerIsNotOpenErrorMeta = MiddlewareIsNotOpenErrorMeta;
-
-/**
- * @deprecated `MiddlewareIsNotOpenError` を使用してください。
- */
-export type TransformerIsNotOpenErrorArgs = MiddlewareIsNotOpenErrorArgs;
-
-/**
- * @deprecated `MiddlewareIsNotOpenError` を使用してください。
- */
-export const TransformerIsNotOpenError = MiddlewareIsNotOpenError;
-
-/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export type EncodableStreamNotSupportedErrorMeta = {
@@ -516,7 +501,7 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly plugin?: "storage" | "middleware" | "transformer";
+  readonly plugin?: "storage" | "middleware";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -530,7 +515,7 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
      */
-    readonly plugin?: "storage" | "middleware" | "transformer";
+    readonly plugin?: "storage" | "middleware";
 
     /**
      * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -560,9 +545,7 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
   public constructor(args: PluginOperationAggregateErrorArgs) {
     const { plugin, action, errors, ...options } = args;
     // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
-    // 旧 `transformer` 指定は新 `middleware` に読み替えます。
-    const normalizePlugin = (p: string): "storage" | "middleware" =>
-      p === "transformer" ? "middleware" : (p as "storage" | "middleware");
+    const normalizePlugin = (p: string): "storage" | "middleware" => p as "storage" | "middleware";
     const normalizedErrors = errors.map((error) => ({
       plugin: normalizePlugin((error.plugin ?? plugin ?? "") as string),
       ...(error.name !== undefined ? { name: error.name } : {}),

@@ -3,7 +3,7 @@ import { describe, test } from "vitest";
 import UniKvsMiddleware from "../src/_middleware.js";
 import { PipelineGraph } from "../src/_pipeline-graph.js";
 import UniKvsStorage from "../src/_storage.js";
-import { FakeStorage, FakeTransformer } from "./_helpers.js";
+import { FakeStorage, FakeMiddleware } from "./_helpers.js";
 
 /**
  * 生のモックをグラフ用のラッパーで包みます。
@@ -18,7 +18,7 @@ function wrapStorage(name: string): UniKvsStorage {
  * グラフの構造契約だけを検証するために使用します。
  */
 function wrapMiddleware(name: string): UniKvsMiddleware {
-  return new UniKvsMiddleware(new FakeTransformer(name));
+  return new UniKvsMiddleware(new FakeMiddleware(name));
 }
 
 describe("PipelineGraph - 構造の不変条件", () => {

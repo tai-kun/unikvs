@@ -735,13 +735,6 @@ export class PipelineGraph {
   }
 
   /**
-   * @deprecated `middlewares` を使用してください。
-   */
-  public get transformers(): readonly UniKvsMiddleware[] {
-    return this.#middlewares;
-  }
-
-  /**
    * 全葉数が 1 件かどうかです。
    */
   public get isSingleLeaf(): boolean {

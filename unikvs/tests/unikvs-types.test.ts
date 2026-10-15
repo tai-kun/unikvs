@@ -29,7 +29,7 @@ function typeOf<T>(_expression: () => T): T {
 }
 
 /**
- * string を number へ変換するコーデックトランスフォーマーです。
+ * string を number へ変換するコーデックミドルウェアです。
  * ビルダーの型絞り込みの検証に使用します。
  */
 class StringToNumber implements IMiddleware<string, number> {
@@ -217,7 +217,7 @@ describe("UniKvs - 型: 不正な組み合わせ", () => {
   });
 });
 
-describe("UniKvs - 型: schema とトランスフォーマーの推論", () => {
+describe("UniKvs - 型: schema とミドルウェアの推論", () => {
   test("schema からキーと値の型が推論される", () => {
     // 準備
     const kvs = UniKvs.config({
@@ -299,7 +299,7 @@ describe("UniKvs - 型: fork の互換検査", () => {
     // 実行と検証: 空分岐の fork は型エラーになりません。
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
 
-    // 準備: 未使用 transformer のみで persist なしの分岐も no-op のため検査しません。
+    // 準備: 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
     const unused = UniKvs.branch().connect(new StringToNumber());
 
     // 実行と検証: persist なし分岐の不一致は型エラーになりません。

@@ -2,7 +2,7 @@ import { describe, test } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
-import { FakeStorage, FakeStreamStorage, FakeTransformer, streamOf } from "./_helpers.js";
+import { FakeStorage, FakeStreamStorage, FakeMiddleware, streamOf } from "./_helpers.js";
 
 /**
  * 新方式では `unikvs:storageNames` 変数は廃止され、実行時変数は操作全体で共有されます。
@@ -14,7 +14,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     // 準備
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
-    const probe = new FakeTransformer("probe");
+    const probe = new FakeMiddleware("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(probe)
       .persist(a)
@@ -45,7 +45,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     // 準備
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const probe = new FakeTransformer("probe");
+    const probe = new FakeMiddleware("probe");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(probe)
       .persist(cache)

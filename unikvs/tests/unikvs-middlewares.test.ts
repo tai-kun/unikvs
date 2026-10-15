@@ -12,16 +12,16 @@ import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,
-  FakeStreamTransformer,
-  FakeTransformer,
+  FakeStreamMiddleware,
+  FakeMiddleware,
   streamOf,
 } from "./_helpers.js";
 
 /**
- * encode のたびに自身のタグを末尾へ付与し、decode で除去するトランスフォーマーです。
+ * encode ハンドラのたびに自身のタグを末尾へ付与し、decode ハンドラで除去するミドルウェアです。
  * チェーンの適用順序を検証するために使用します。
  */
-class TagTransformer extends FakeTransformer {
+class TagMiddleware extends FakeMiddleware {
   readonly #tag: string;
 
   public constructor(tag: string) {
@@ -29,14 +29,14 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("encode", { data: c.source, c });
     c.destination = `${String(c.source)}${this.#tag}`;
     await next!();
   }
 
-  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("decode", { data: c.source, c });
     const data = String(c.source);
@@ -45,57 +45,57 @@ class TagTransformer extends FakeTransformer {
   }
 }
 
-describe("UniKvs - トランスフォーマーのライフサイクル", () => {
-  test("閉じたトランスフォーマーは open で開かれ、close で閉じられる", async ({ expect }) => {
+describe("UniKvs - ミドルウェアのライフサイクル", () => {
+  test("閉じたミドルウェアは open で開かれ、close で閉じられる", async ({ expect }) => {
     // 準備
-    const transformer = new FakeTransformer();
-    expect(transformer.isOpen).toBe(false);
-    const kvs = UniKvs.config().connect(transformer).persist(new FakeStorage()).create();
+    const middleware = new FakeMiddleware();
+    expect(middleware.isOpen).toBe(false);
+    const kvs = UniKvs.config().connect(middleware).persist(new FakeStorage()).create();
 
     // 実行
     await kvs.open();
 
     // 検証
-    expect(transformer.isOpen).toBe(true);
-    expect(transformer.callsOf("open")).toHaveLength(1);
+    expect(middleware.isOpen).toBe(true);
+    expect(middleware.callsOf("open")).toHaveLength(1);
 
     // 実行
     await kvs.close();
 
     // 検証
-    expect(transformer.isOpen).toBe(false);
-    expect(transformer.callsOf("close")).toHaveLength(1);
+    expect(middleware.isOpen).toBe(false);
+    expect(middleware.callsOf("close")).toHaveLength(1);
   });
 
-  test("既に開いているトランスフォーマーは open/close を呼ばれない", async ({ expect }) => {
+  test("既に開いているミドルウェアは open/close を呼ばれない", async ({ expect }) => {
     // 準備
-    const transformer = new FakeTransformer();
-    transformer.isOpen = true;
-    const kvs = UniKvs.config().connect(transformer).persist(new FakeStorage()).create();
+    const middleware = new FakeMiddleware();
+    middleware.isOpen = true;
+    const kvs = UniKvs.config().connect(middleware).persist(new FakeStorage()).create();
 
     // 実行
     await kvs.open();
     await kvs.close();
 
     // 検証
-    expect(transformer.callsOf("open")).toHaveLength(0);
-    expect(transformer.callsOf("close")).toHaveLength(0);
-    expect(transformer.isOpen).toBe(true);
+    expect(middleware.callsOf("open")).toHaveLength(0);
+    expect(middleware.callsOf("close")).toHaveLength(0);
+    expect(middleware.isOpen).toBe(true);
   });
 
   test("クローズドのミドルウェアでの set/get は集約経由で MiddlewareIsNotOpenError を投げる", async ({
     expect,
   }) => {
     // 準備
-    const transformer = new FakeTransformer();
+    const middleware = new FakeMiddleware();
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
-    transformer.isOpen = false;
+    middleware.isOpen = false;
 
     // 実行と検証: `use` の失敗は集約されて投げられる
     const setError = await kvs.set("foo", "value").catch((ex) => ex);
@@ -110,18 +110,18 @@ describe("UniKvs - トランスフォーマーのライフサイクル", () => {
     );
 
     // 後片付け
-    transformer.isOpen = true;
+    middleware.isOpen = true;
     await kvs.close();
   });
 });
 
 describe("UniKvs - チェーンの順序", () => {
-  test("3 つのトランスフォーマーは set で順方向、get で逆方向に適用される", async ({ expect }) => {
+  test("3 つのミドルウェアは set で順方向、get で逆方向に適用される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const t1 = new TagTransformer("1");
-    const t2 = new TagTransformer("2");
-    const t3 = new TagTransformer("3");
+    const t1 = new TagMiddleware("1");
+    const t2 = new TagMiddleware("2");
+    const t3 = new TagMiddleware("3");
     const decodeOrder: string[] = [];
     t1.hook = (call) => {
       if (call.method === "decode") decodeOrder.push("1");
@@ -143,24 +143,24 @@ describe("UniKvs - チェーンの順序", () => {
     // 実行
     await kvs.set("foo", "x");
 
-    // 検証: encode は登録順
+    // 検証: encode ハンドラは登録順
     expect(storage.map.get("foo")).toBe("x123");
     expect(await kvs.get("foo")).toBe("x");
 
-    // 検証: decode は登録の逆順
+    // 検証: decode ハンドラは登録の逆順
     expect(decodeOrder).toStrictEqual(["3", "2", "1"]);
 
     // 後片付け
     await kvs.close();
   });
 
-  test("ストレージごとに encode が独立に実行される", async ({ expect }) => {
+  test("ストレージごとに encode ハンドラが独立に実行される", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     const storage3 = new FakeStorage("storage3");
-    const t1 = new TagTransformer("1");
-    const t2 = new TagTransformer("2");
+    const t1 = new TagMiddleware("1");
+    const t2 = new TagMiddleware("2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(t1)
       .connect(t2)
@@ -184,11 +184,11 @@ describe("UniKvs - チェーンの順序", () => {
     await kvs.close();
   });
 
-  test("vars はチェーンを流れ、後段のトランスフォーマーにも渡される", async ({ expect }) => {
+  test("vars はチェーンを流れ、後段のミドルウェアにも渡される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const t1 = new FakeTransformer("t1");
-    const t2 = new FakeTransformer("t2");
+    const t1 = new FakeMiddleware("t1");
+    const t2 = new FakeMiddleware("t2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(t1)
       .connect(t2)
@@ -209,13 +209,13 @@ describe("UniKvs - チェーンの順序", () => {
   });
 });
 
-describe("UniKvs - ストリーム対応トランスフォーマー", () => {
-  test("ストリーム書き込みではストレージごとに getEncodable が呼ばれる", async ({ expect }) => {
+describe("UniKvs - ストリーム対応ミドルウェア", () => {
+  test("ストリーム書き込みではストレージごとに encodeStream が呼ばれる", async ({ expect }) => {
     // 準備
     const storage1 = new FakeStreamStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
-    const t1 = new FakeStreamTransformer("t1");
-    const t2 = new FakeStreamTransformer("t2");
+    const t1 = new FakeStreamMiddleware("t1");
+    const t2 = new FakeStreamMiddleware("t2");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(t1)
       .connect(t2)
@@ -228,29 +228,29 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     await kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(t1.callsOf("getEncodable")).toHaveLength(1);
-    expect(t2.callsOf("getEncodable")).toHaveLength(1);
+    expect(t1.callsOf("encodeStream")).toHaveLength(1);
+    expect(t2.callsOf("encodeStream")).toHaveLength(1);
 
     // 後片付け
     await kvs.close();
   });
 
-  test("ストリーム読み取りでは getDecodable が逆順で呼ばれる", async ({ expect }) => {
+  test("ストリーム読み取りでは decodeStream が逆順で呼ばれる", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const t1 = new FakeStreamTransformer("t1");
-    const t2 = new FakeStreamTransformer("t2");
-    const t3 = new FakeStreamTransformer("t3");
-    const decodableOrder: string[] = [];
+    const t1 = new FakeStreamMiddleware("t1");
+    const t2 = new FakeStreamMiddleware("t2");
+    const t3 = new FakeStreamMiddleware("t3");
+    const decodeStreamOrder: string[] = [];
     t1.hook = (call) => {
-      if (call.method === "getDecodable") decodableOrder.push("t1");
+      if (call.method === "decodeStream") decodeStreamOrder.push("t1");
     };
     t2.hook = (call) => {
-      if (call.method === "getDecodable") decodableOrder.push("t2");
+      if (call.method === "decodeStream") decodeStreamOrder.push("t2");
     };
     t3.hook = (call) => {
-      if (call.method === "getDecodable") decodableOrder.push("t3");
+      if (call.method === "decodeStream") decodeStreamOrder.push("t3");
     };
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(t1)
@@ -265,21 +265,21 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     await vs.dispose();
 
     // 検証
-    expect(t3.callsOf("getDecodable")).toHaveLength(1);
-    expect(t2.callsOf("getDecodable")).toHaveLength(1);
-    expect(t1.callsOf("getDecodable")).toHaveLength(1);
-    expect(decodableOrder).toStrictEqual(["t3", "t2", "t1"]);
+    expect(t3.callsOf("decodeStream")).toHaveLength(1);
+    expect(t2.callsOf("decodeStream")).toHaveLength(1);
+    expect(t1.callsOf("decodeStream")).toHaveLength(1);
+    expect(decodeStreamOrder).toStrictEqual(["t3", "t2", "t1"]);
 
     // 後片付け
     await kvs.close();
   });
 
-  test("ストリーム非対応のトランスフォーマーへのストリーム書き込みは EncodableStreamNotSupportedError を投げる", async ({
+  test("ストリーム非対応のミドルウェアへのストリーム書き込みは EncodableStreamNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FakeTransformer())
+      .connect(new FakeMiddleware())
       .persist(new FakeStreamStorage())
       .create();
     await kvs.open();
@@ -293,14 +293,14 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
     await kvs.close();
   });
 
-  test("ストリーム非対応のトランスフォーマーからのストリーム読み取りは DecodableStreamNotSupportedError を投げる", async ({
+  test("ストリーム非対応のミドルウェアからのストリーム読み取りは DecodableStreamNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FakeTransformer())
+      .connect(new FakeMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -313,15 +313,15 @@ describe("UniKvs - ストリーム対応トランスフォーマー", () => {
   });
 });
 
-describe("UniKvs - トランスフォーマーのエラー伝播", () => {
-  test("decode のエラーはそのまま伝播する", async ({ expect }) => {
+describe("UniKvs - ミドルウェアのエラー伝播", () => {
+  test("decode ハンドラのエラーはそのまま伝播する", async ({ expect }) => {
     // 準備
-    const transformer = new FakeTransformer();
-    transformer.errors["decode"] = new Error("decode boom");
+    const middleware = new FakeMiddleware();
+    middleware.errors["decode"] = new Error("decode boom");
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -333,13 +333,15 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
     await kvs.close();
   });
 
-  test("encode のエラー後も KVS は壊れず、失敗したキーは保存されない", async ({ expect }) => {
+  test("encode ハンドラのエラー後も KVS は壊れず、失敗したキーは保存されない", async ({
+    expect,
+  }) => {
     // 準備
-    const transformer = new FakeTransformer();
-    transformer.errors["encode"] = new Error("encode boom");
+    const middleware = new FakeMiddleware();
+    middleware.errors["encode"] = new Error("encode boom");
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -349,7 +351,7 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
     expect(storage.map.has("foo")).toBe(false);
 
     // 実行
-    delete transformer.errors["encode"];
+    delete middleware.errors["encode"];
     await kvs.set("foo", "value");
 
     // 検証
@@ -360,7 +362,7 @@ describe("UniKvs - トランスフォーマーのエラー伝播", () => {
   });
 });
 
-describe("UniKvs - トランスフォーマーフック", () => {
+describe("UniKvs - ミドルウェアフック", () => {
   test("has は onExists をキー付きで呼び、vars 変異は storage に引き継がれる", async ({
     expect,
   }) => {
@@ -368,7 +370,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     const keys: string[] = [];
-    class ExistsHook extends FakeTransformer {
+    class ExistsMiddleware extends FakeMiddleware {
       public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
         if (c.action === "has") {
           keys.push(c.key);
@@ -378,7 +380,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new ExistsHook())
+      .connect(new ExistsMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -395,16 +397,14 @@ describe("UniKvs - トランスフォーマーフック", () => {
     await kvs.close();
   });
 
-  test("delete は onDelete を呼び、共有トランスフォーマーでも1回だけ実行される", async ({
-    expect,
-  }) => {
+  test("delete は onDelete を呼び、共有ミドルウェアでも1回だけ実行される", async ({ expect }) => {
     // 準備
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     a.map.set("foo", "stored");
     b.map.set("foo", "stored");
     const keys: string[] = [];
-    class DeleteHook extends FakeTransformer {
+    class DeleteMiddleware extends FakeMiddleware {
       public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
         if (c.action === "delete") {
           keys.push(c.key);
@@ -414,7 +414,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new DeleteHook())
+      .connect(new DeleteMiddleware())
       .persist(a)
       .persist(b)
       .create();
@@ -438,7 +438,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    class DenyExists extends FakeTransformer {
+    class DenyExistsMiddleware extends FakeMiddleware {
       public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
         if (c.action === "has") {
           throw new Error("exists denied");
@@ -447,7 +447,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new DenyExists())
+      .connect(new DenyExistsMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -475,7 +475,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    class DenyDelete extends FakeTransformer {
+    class DenyDeleteMiddleware extends FakeMiddleware {
       public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
         if (c.action === "delete") {
           throw new Error("delete denied");
@@ -484,7 +484,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new DenyDelete())
+      .connect(new DenyDeleteMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -511,7 +511,7 @@ describe("UniKvs - トランスフォーマーフック", () => {
     // 準備
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    class BoomDelete extends FakeTransformer {
+    class BoomDeleteMiddleware extends FakeMiddleware {
       readonly #message: string;
 
       public constructor(name: string, message: string) {
@@ -527,8 +527,8 @@ describe("UniKvs - トランスフォーマーフック", () => {
       }
     }
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new BoomDelete("boom1", "first"))
-      .connect(new BoomDelete("boom2", "second"))
+      .connect(new BoomDeleteMiddleware("boom1", "first"))
+      .connect(new BoomDeleteMiddleware("boom2", "second"))
       .persist(storage)
       .create();
     await kvs.open();

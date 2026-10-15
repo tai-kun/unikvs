@@ -7,8 +7,8 @@ import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,
-  FakeStreamTransformer,
-  FakeTransformer,
+  FakeStreamMiddleware,
+  FakeMiddleware,
   Gate,
   collect,
   isPending,
@@ -231,15 +231,15 @@ describe("UniKvs - 実行中 abort", () => {
     await kvs.close();
   });
 
-  test("transformer の encode 中に abort すると abort 理由がそのまま伝播する", async ({
+  test("middleware の encode 中に abort すると abort 理由がそのまま伝播する", async ({
     expect,
   }) => {
     // 準備
     const reason = new Error("USER-CANCEL");
-    const transformer = new FakeTransformer();
+    const middleware = new FakeMiddleware();
     const entered = new Gate();
     const release = new Gate();
-    transformer.hook = async (call) => {
+    middleware.hook = async (call) => {
       if (call.method === "encode") {
         entered.open();
         await release.wait();
@@ -248,7 +248,7 @@ describe("UniKvs - 実行中 abort", () => {
     };
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -306,7 +306,7 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     await kvs.close();
   });
 
-  test("トランスフォーマー経由で構築されたストリームもキーロック待機中の abort でキャンセルされる", async ({
+  test("ミドルウェア経由で構築されたストリームもキーロック待機中の abort でキャンセルされる", async ({
     expect,
   }) => {
     // 準備
@@ -314,7 +314,7 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FakeStreamTransformer())
+      .connect(new FakeStreamMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -375,16 +375,16 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
   });
 });
 
-describe("UniKvs - transformer の decode 中の abort", () => {
+describe("UniKvs - middleware の decode 中の abort", () => {
   test("get の decode 中に abort すると abort 理由がそのまま伝播する", async ({ expect }) => {
     // 準備
     const reason = new Error("USER-CANCEL");
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    const transformer = new FakeTransformer();
+    const middleware = new FakeMiddleware();
     const entered = new Gate();
     const release = new Gate();
-    transformer.hook = async (call) => {
+    middleware.hook = async (call) => {
       if (call.method === "decode") {
         entered.open();
         await release.wait();
@@ -392,7 +392,7 @@ describe("UniKvs - transformer の decode 中の abort", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();

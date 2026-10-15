@@ -8,7 +8,7 @@ import {
 } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue } from "../src/value-schemas.js";
-import { FakeStorage, FakeTransformer, Gate, isPending, withTimeout } from "./_helpers.js";
+import { FakeStorage, FakeMiddleware, Gate, isPending, withTimeout } from "./_helpers.js";
 
 describe("UniKvs - open の状態遷移", () => {
   test("open 待機中の 2 回目の open は UniKvsIsOpenError を投げる", async ({ expect }) => {
@@ -82,9 +82,9 @@ describe("UniKvs - open の状態遷移", () => {
   }) => {
     // 準備
     const storage = new FakeStorage();
-    const transformer = new FakeTransformer();
+    const middleware = new FakeMiddleware();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(transformer)
+      .connect(middleware)
       .persist(storage)
       .create();
 
@@ -96,8 +96,8 @@ describe("UniKvs - open の状態遷移", () => {
     // 検証
     expect(storage.callsOf("open")).toHaveLength(2);
     expect(storage.callsOf("close")).toHaveLength(1);
-    expect(transformer.callsOf("open")).toHaveLength(2);
-    expect(transformer.callsOf("close")).toHaveLength(1);
+    expect(middleware.callsOf("open")).toHaveLength(2);
+    expect(middleware.callsOf("close")).toHaveLength(1);
     expect(kvs.isOpen).toBe(true);
 
     // 後片付け
@@ -106,18 +106,18 @@ describe("UniKvs - open の状態遷移", () => {
 });
 
 describe("UniKvs - open 失敗時のロールバック", () => {
-  test("トランスフォーマーの open 失敗でも成功済みのストレージとトランスフォーマーは close される", async ({
+  test("ミドルウェアの open 失敗でも成功済みのストレージとミドルウェアは close される", async ({
     expect,
   }) => {
     // 準備
-    const failure = new Error("transformer open failed");
+    const failure = new Error("middleware open failed");
     const storage = new FakeStorage();
-    const okTransformer = new FakeTransformer("ok");
-    const ngTransformer = new FakeTransformer("ng");
-    ngTransformer.errors["open"] = failure;
+    const okMiddleware = new FakeMiddleware("ok");
+    const ngMiddleware = new FakeMiddleware("ng");
+    ngMiddleware.errors["open"] = failure;
     const kvs = UniKvs.config()
-      .connect(okTransformer)
-      .connect(ngTransformer)
+      .connect(okMiddleware)
+      .connect(ngMiddleware)
       .persist(storage)
       .create();
 
@@ -125,8 +125,8 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     await expect(kvs.open()).rejects.toThrow(PluginOperationAggregateError);
     expect(kvs.isOpen).toBe(false);
     expect(storage.callsOf("close")).toHaveLength(1);
-    expect(okTransformer.callsOf("close")).toHaveLength(1);
-    expect(ngTransformer.callsOf("close")).toHaveLength(0);
+    expect(okMiddleware.callsOf("close")).toHaveLength(1);
+    expect(ngMiddleware.callsOf("close")).toHaveLength(0);
   });
 
   test("open 失敗後も同じインスタンスで再び open できる", async ({ expect }) => {

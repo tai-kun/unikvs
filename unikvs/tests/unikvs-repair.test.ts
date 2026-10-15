@@ -9,8 +9,8 @@ import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   FakeStorage,
   FakeStreamStorage,
-  FakeStreamTransformer,
-  FakeTransformer,
+  FakeStreamMiddleware,
+  FakeMiddleware,
   Gate,
   collect,
   streamOf,
@@ -18,10 +18,10 @@ import {
 } from "./_helpers.js";
 
 /**
- * encode のたびに自身のタグを末尾へ付与し、decode で除去するトランスフォーマーです。
+ * encode のたびに自身のタグを末尾へ付与し、decode で除去するミドルウェアです。
  * 書き戻し先ごとに異なる段階のデータが保存されることを検証するために使用します。
  */
-class TagTransformer extends FakeTransformer {
+class TagMiddleware extends FakeMiddleware {
   readonly #tag: string;
 
   public constructor(tag: string) {
@@ -29,14 +29,14 @@ class TagTransformer extends FakeTransformer {
     this.#tag = tag;
   }
 
-  public override async encode(...args: Parameters<FakeTransformer["encode"]>): Promise<void> {
+  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("encode", { data: c.source, c });
     c.destination = `${String(c.source)}${this.#tag}`;
     await next!();
   }
 
-  public override async decode(...args: Parameters<FakeTransformer["decode"]>): Promise<void> {
+  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
     const [c, next] = args;
     await this.record("decode", { data: c.source, c });
     const data = String(c.source);
@@ -48,7 +48,7 @@ class TagTransformer extends FakeTransformer {
 /**
  * チャンクの末尾にタグを付与し、デコードで検証して除去するストリーム対応ミドルウェアです。
  */
-class TagStreamTransformer extends FakeStreamTransformer<Uint8Array> {
+class TagStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
   readonly #tag: number;
 
   public constructor(tag: number) {
@@ -107,8 +107,8 @@ describe("UniKvs - get の書き戻し", () => {
     const cache2 = new FakeStorage("cache2");
     const local = new FakeStorage("local");
     const server = new FakeStorage("server");
-    const serialize = new TagTransformer("S");
-    const compress = new TagTransformer("C");
+    const serialize = new TagMiddleware("S");
+    const compress = new TagMiddleware("C");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new AllowRepair())
       .persist(cache1)
@@ -144,7 +144,7 @@ describe("UniKvs - get の書き戻し", () => {
     // 準備
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const serialize = new TagTransformer("S");
+    const serialize = new TagMiddleware("S");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(cache)
       .connect(serialize)
@@ -168,7 +168,7 @@ describe("UniKvs - get の書き戻し", () => {
     // 準備
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const serialize = new TagTransformer("S");
+    const serialize = new TagMiddleware("S");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(cache)
       .connect(serialize)
@@ -197,8 +197,8 @@ describe("UniKvs - get の書き戻し", () => {
     const local = new FakeStorage("local");
     const server = new FakeStorage("server");
     local.errors["write"] = new Error("repair failed");
-    const serialize = new TagTransformer("S");
-    const compress = new TagTransformer("C");
+    const serialize = new TagMiddleware("S");
+    const compress = new TagMiddleware("C");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new AllowRepair())
       .persist(cache)
@@ -256,8 +256,8 @@ describe("UniKvs - stream の書き戻し", () => {
     const cache = new FakeStreamStorage("cache");
     const local = new FakeStreamStorage("local");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
-    const compress = new TagStreamTransformer(0x20);
+    const serialize = new TagStreamMiddleware(0x10);
+    const compress = new TagStreamMiddleware(0x20);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(cache)
@@ -298,7 +298,7 @@ describe("UniKvs - stream の書き戻し", () => {
     // 準備
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
       .connect(serialize)
@@ -324,7 +324,7 @@ describe("UniKvs - stream の書き戻し", () => {
     // 準備
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const writeGate = new Gate();
     cache.writeGate = writeGate;
     // ブラウザと Node で pipeTo の中断時の close 扱いが異なるため、ゲート解放後に中断を検出して書き込みを失敗させる。
@@ -365,7 +365,7 @@ describe("UniKvs - stream の書き戻し", () => {
     // 準備
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     cache.writeGate = new Gate();
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
@@ -610,7 +610,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
   test("書き戻しの encode には repair の目印が渡される", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
-    const probe = new FakeTransformer("probe");
+    const probe = new FakeMiddleware("probe");
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
@@ -837,7 +837,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     using warnSpy = vi.spyOn(repairLogger, "warn");
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
       .connect(serialize)
@@ -867,7 +867,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     using warnSpy = vi.spyOn(repairLogger, "warn");
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
       .connect(serialize)
@@ -887,10 +887,10 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     }
   });
 
-  test("書き戻しの getEncodable には repair の目印が渡される", async ({ expect }) => {
+  test("書き戻しの encodeStream には repair の目印が渡される", async ({ expect }) => {
     // 準備
     const gate = new AllowRepair();
-    const probe = new FakeStreamTransformer<Uint8Array>("probe");
+    const probe = new FakeStreamMiddleware<Uint8Array>("probe");
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
@@ -928,7 +928,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     using warnSpy = vi.spyOn(repairLogger, "warn");
     const cache = new DenyOnRepairStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(cache)
@@ -956,7 +956,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     // 準備
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const broken = new FakeStreamTransformer<Uint8Array>("broken");
+    const broken = new FakeStreamMiddleware<Uint8Array>("broken");
     broken.errors["encodeStream"] = new Error("setup failed");
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
@@ -980,7 +980,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     using warnSpy = vi.spyOn(repairLogger, "warn");
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const serialize = new TagStreamTransformer(0x10);
+    const serialize = new TagStreamMiddleware(0x10);
     const ac = new AbortController();
     const abortReason = new Error("aborted");
     server.hook = async (call) => {
@@ -1086,11 +1086,11 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     }
   });
 
-  test("AllowRepair と他トランスフォーマーの組合せでも書き戻される", async ({ expect }) => {
+  test("AllowRepair と他ミドルウェアの組合せでも書き戻される", async ({ expect }) => {
     // 準備
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const serialize = new TagTransformer("S");
+    const serialize = new TagMiddleware("S");
     const gate = new AllowRepair();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(gate)
@@ -1188,7 +1188,7 @@ describe("UniKvs - 共有 prefix の修復", () => {
     // 準備
     using warnSpy = vi.spyOn(repairLogger, "warn");
     using errorSpy = vi.spyOn(logger, "error");
-    const broken = new FakeTransformer("broken");
+    const broken = new FakeMiddleware("broken");
     broken.errors["encode"] = new Error("prefix failed");
     const cacheA = new FakeStorage("cacheA");
     const cacheB = new FakeStorage("cacheB");
@@ -1230,7 +1230,7 @@ describe("UniKvs - 共有 prefix の修復", () => {
     const cacheA = new FakeStreamStorage("cacheA");
     const cacheB = new FakeStreamStorage("cacheB");
     const server = new FakeStreamStorage("server");
-    const prefix = new TagStreamTransformer(0x10);
+    const prefix = new TagStreamMiddleware(0x10);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(prefix)

@@ -7,7 +7,7 @@ import { describe, test } from "vitest";
 import { KeyNotFoundError } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue, Value } from "../src/value-schemas.js";
-import { FakeStreamTransformer, collectBytes, streamOf } from "./_helpers.js";
+import { FakeStreamMiddleware, collectBytes, streamOf } from "./_helpers.js";
 
 const SEED = 20260930;
 const KEYS = ["a", "b", "c", ""] as const;
@@ -111,7 +111,7 @@ describe("UniKvs - 決定的ファズ: ストリーム往復", () => {
   });
 });
 
-describe("UniKvs - 決定的ファズ: トランスフォーマー構成", () => {
+describe("UniKvs - 決定的ファズ: ミドルウェア構成", () => {
   test("ランダムな圧縮・チェックサム・パススルー構成でもバイト列が往復する", async ({ expect }) => {
     // 実行と検証
     await forCasesAsync(SEED + 2, 30, async (rng) => {
@@ -128,7 +128,7 @@ describe("UniKvs - 決定的ファズ: トランスフォーマー構成", () =>
         config = config.connect(new Compression(compression));
       }
       if (usePassthrough) {
-        config = config.connect(new FakeStreamTransformer("pass-through"));
+        config = config.connect(new FakeStreamMiddleware("pass-through"));
       }
       const kvs = config.persist(new Memory()).create();
       await kvs.open();
