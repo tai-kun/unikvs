@@ -18,33 +18,33 @@ import {
 } from "../src/errors.js";
 
 function openContext(): IStorage.OpenContext {
-  return new OpenContext({ signal: new AbortController().signal }) as IStorage.OpenContext;
+  return new OpenContext({ signal: new AbortController().signal });
 }
 
 function setContext(key: string): IStorage.WriteContext {
-  return new SetContext({ key, signal: new AbortController().signal }) as IStorage.WriteContext;
+  return new SetContext({ key, signal: new AbortController().signal });
 }
 
 function getContext(key: string): IStorage.ReadContext {
-  return new GetContext({ key, signal: new AbortController().signal }) as IStorage.ReadContext;
+  return new GetContext({ key, signal: new AbortController().signal });
 }
 
 function hasContext(key: string): IStorage.ExistsContext {
-  return new HasContext({ key, signal: new AbortController().signal }) as IStorage.ExistsContext;
+  return new HasContext({ key, signal: new AbortController().signal });
 }
 
 function deleteContext(key: string): IStorage.DeleteContext {
   return new DeleteContext({
     key,
     signal: new AbortController().signal,
-  }) as IStorage.DeleteContext;
+  });
 }
 
 function clearContext(): IStorage.ClearContext {
   return new ClearContext({
     key: "",
     signal: new AbortController().signal,
-  }) as IStorage.ClearContext;
+  });
 }
 
 /**
@@ -211,7 +211,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     const c = new StreamContext({
       key: "k1",
       signal: new AbortController().signal,
-    }) as IStorage.GetReadableContext;
+    });
     await expect(storage.getReadable(c)).rejects.toThrow(ReadableStreamNotSupportedError);
   });
 
@@ -227,7 +227,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     const c = new SetContext({
       key: "k1",
       signal: new AbortController().signal,
-    }) as IStorage.GetWritableContext;
+    });
     await expect(storage.getWritable(c)).rejects.toThrow(WritableStreamNotSupportedError);
   });
 });
@@ -262,7 +262,7 @@ describe("UniKvsStorage - ストリーム", () => {
     const c = new StreamContext({
       key: "k1",
       signal: new AbortController().signal,
-    }) as IStorage.GetReadableContext;
+    });
     const readable = await storage.getReadable(c);
 
     // 検証
@@ -298,7 +298,7 @@ describe("UniKvsStorage - ストリーム", () => {
     const c = new SetContext({
       key: "k1",
       signal: new AbortController().signal,
-    }) as IStorage.GetWritableContext;
+    });
     const writable = await storage.getWritable(c);
     const writer = writable.getWriter();
     await writer.write(Uint8Array.from([1]));

@@ -385,7 +385,7 @@ function createEntries(
  */
 function applyMapKey(middleware: UniKvsMiddleware, key: string, scope: OperationScope): string {
   const c = new MapKeyContext({ key, store: scope.store });
-  return middleware.mapKey(c as IMiddleware.MapKeyContext);
+  return middleware.mapKey(c);
 }
 
 /**
@@ -413,7 +413,7 @@ async function applyEncode(
     source,
     store: scope.store,
   });
-  await middleware.encode(c as IMiddleware.EncodeContext, next);
+  await middleware.encode(c, next);
   scope.signal.throwIfAborted();
 
   return c.destination;
@@ -441,7 +441,7 @@ async function applyEncodeStream(
     source,
     store: scope.store,
   });
-  await middleware.encodeStream(c as IMiddleware.EncodeStreamContext, next);
+  await middleware.encodeStream(c, next);
   scope.signal.throwIfAborted();
 
   return c.destination as IReadableStream;
@@ -799,7 +799,7 @@ export class PipelineGraph {
         hasDownstream = true;
       };
 
-      await node.middleware.decode(ctx as IMiddleware.DecodeContext, next);
+      await node.middleware.decode(ctx, next);
       scope.signal.throwIfAborted();
 
       // 下流が実行されたときはその最終結果を返し、そうでなければ自らの出力を返す。
@@ -850,7 +850,7 @@ export class PipelineGraph {
           hasDownstream = true;
         };
 
-        await node.middleware.decodeStream(ctx as IMiddleware.DecodeStreamContext, next);
+        await node.middleware.decodeStream(ctx, next);
         scope.signal.throwIfAborted();
         const output = ctx.destination as IReadableStream;
         pipes.push(output);
@@ -912,7 +912,7 @@ export class PipelineGraph {
         }
       };
 
-      await node.middleware.encode(parentCtx as IMiddleware.EncodeContext, next);
+      await node.middleware.encode(parentCtx, next);
       scope.signal.throwIfAborted();
     };
 

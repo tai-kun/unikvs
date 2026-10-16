@@ -1,5 +1,4 @@
 import {
-  type IStorage,
   type IMiddleware,
   type IReadableStream,
   RepairNotAllowedError,
@@ -717,7 +716,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               signal,
               vars: pluginVars.entries(),
             });
-            await leaf.storage.open(c as IStorage.OpenContext);
+            await leaf.storage.open(c);
 
             dispose.push(async () => {
               try {
@@ -725,7 +724,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   signal,
                   vars: pluginVars.entries(),
                 });
-                await leaf.storage.close(cc as IStorage.CloseContext);
+                await leaf.storage.close(cc);
               } catch (ex) {
                 logger.error`Failed to close storage: ${ex}`;
               }
@@ -747,7 +746,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               signal,
               vars: pluginVars.entries(),
             });
-            await middleware.open(c as IMiddleware.OpenContext);
+            await middleware.open(c);
 
             dispose.push(async () => {
               try {
@@ -755,7 +754,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   signal,
                   vars: pluginVars.entries(),
                 });
-                await middleware.close(cc as IMiddleware.CloseContext);
+                await middleware.close(cc);
               } catch (ex) {
                 logger.error`Failed to close middleware: ${ex}`;
               }
@@ -847,7 +846,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 signal,
                 vars: new Map(operationVars).entries(),
               });
-              await leaf.storage.close(c as IStorage.CloseContext);
+              await leaf.storage.close(c);
             },
             "storage",
             leaf.name,
@@ -863,7 +862,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 signal,
                 vars: new Map(operationVars).entries(),
               });
-              await plugin.close(c as IMiddleware.CloseContext);
+              await plugin.close(c);
             },
             "middleware",
             plugin.name,
@@ -950,7 +949,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   signal: disposeSignal,
                   vars: new Map(operationVars).entries(),
                 });
-                await plugin.close(c as IMiddleware.CloseContext);
+                await plugin.close(c);
               } catch (ex) {
                 logger.error`Failed to close plugin after close failure: ${ex}`;
               }
@@ -1017,7 +1016,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             store,
           });
           await target.leaf.storage.onOtherWriteError(
-            c as IStorage.OtherWriteErrorHandlerContext,
+            c,
             error,
           );
         } catch (ex) {
@@ -1060,7 +1059,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       };
 
       try {
-        await middleware.use(useContext as IMiddleware.UseContext, next);
+        await middleware.use(useContext, next);
       } catch (ex) {
         const signal = useContext.signal;
         // 中断による失敗はそのまま投げます。
@@ -1108,7 +1107,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               key: target.key,
               store,
             });
-            await target.leaf.storage.write(c as IStorage.WriteContext, target.data);
+            await target.leaf.storage.write(c, target.data);
           } catch (ex) {
             errors.push({ name: target.leaf.name, index: target.leaf.index, reason: ex });
             failed.add(target.leaf);
@@ -1165,7 +1164,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               key: target.key,
               store,
             });
-            const w = await target.leaf.storage.getWritable(c as IStorage.GetWritableContext);
+            const w = await target.leaf.storage.getWritable(c);
             await target.stream.pipeTo(w, { signal });
           } catch (ex) {
             // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
@@ -1274,7 +1273,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           key: writeKey,
           store,
         });
-        await leaf.storage.write(c as IStorage.WriteContext, input);
+        await leaf.storage.write(c, input);
       },
     );
 
@@ -1361,12 +1360,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             store,
           });
           try {
-            if (!(await leaf.storage.exists(existsContext as IStorage.ExistsContext))) {
+            if (!(await leaf.storage.exists(existsContext))) {
               missing.push(leaf);
               continue;
             }
 
-            data = await leaf.storage.read(readContext as IStorage.ReadContext);
+            data = await leaf.storage.read(readContext);
             hit = resolved;
             break;
           } catch (ex) {
@@ -1499,12 +1498,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             store,
           });
           try {
-            if (!(await leaf.storage.exists(existsContext as IStorage.ExistsContext))) {
+            if (!(await leaf.storage.exists(existsContext))) {
               missing.push(leaf);
               continue;
             }
 
-            r = await leaf.storage.getReadable(readableContext as IStorage.GetReadableContext);
+            r = await leaf.storage.getReadable(readableContext);
             hit = resolved;
             break;
           } catch (ex) {
@@ -1536,7 +1535,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   key: target.key,
                   store,
                 });
-                const w = await target.leaf.storage.getWritable(wc as IStorage.GetWritableContext);
+                const w = await target.leaf.storage.getWritable(wc);
                 await target.stream.pipeTo(w, { signal: repairSignal });
               } catch (ex) {
                 // パイプが中断されたときは分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
@@ -1779,7 +1778,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               key: resolved.key,
               store,
             });
-            if (await leaf.storage.exists(c as IStorage.ExistsContext)) {
+            if (await leaf.storage.exists(c)) {
               return true;
             }
           } catch (ex) {
@@ -1863,8 +1862,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               store,
             });
             try {
-              if (await leaf.storage.exists(existsContext as IStorage.ExistsContext)) {
-                await leaf.storage.delete(deleteContext as IStorage.DeleteContext);
+              if (await leaf.storage.exists(existsContext)) {
+                await leaf.storage.delete(deleteContext);
               }
             } catch (ex) {
               errors.push({ name: leaf.name, index: leaf.index, reason: ex });
@@ -1923,7 +1922,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 key: "",
                 store,
               });
-              await leaf.storage.clear(c as IStorage.ClearContext);
+              await leaf.storage.clear(c);
             } catch (ex) {
               errors.push({ name: leaf.name, index, reason: ex });
             }

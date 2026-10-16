@@ -16,7 +16,7 @@ import {
 } from "../src/errors.js";
 
 function openContext(): IMiddleware.OpenContext {
-  return new OpenContext({ signal: new AbortController().signal }) as IMiddleware.OpenContext;
+  return new OpenContext({ signal: new AbortController().signal });
 }
 
 function encodeContext(source: unknown): IMiddleware.EncodeContext {
@@ -24,7 +24,7 @@ function encodeContext(source: unknown): IMiddleware.EncodeContext {
     key: "k1",
     signal: new AbortController().signal,
     source,
-  }) as IMiddleware.EncodeContext;
+  });
 }
 
 function decodeContext(source: unknown): IMiddleware.DecodeContext {
@@ -32,7 +32,7 @@ function decodeContext(source: unknown): IMiddleware.DecodeContext {
     key: "k1",
     signal: new AbortController().signal,
     source,
-  }) as IMiddleware.DecodeContext;
+  });
 }
 
 async function noop(): Promise<void> {}
@@ -157,7 +157,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
       key: "k1",
       signal: new AbortController().signal,
       source: new ReadableStream(),
-    }) as IMiddleware.EncodeStreamContext;
+    });
     await expect(middleware.encodeStream(c, noop)).rejects.toThrow(StreamEncodingNotSupportedError);
   });
 
@@ -173,7 +173,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
       key: "k1",
       signal: new AbortController().signal,
       source: new ReadableStream(),
-    }) as IMiddleware.DecodeStreamContext;
+    });
     await expect(middleware.decodeStream(c, noop)).rejects.toThrow(StreamDecodingNotSupportedError);
   });
 });
