@@ -77,7 +77,7 @@ All UniKVS errors extend `ErrorBase` and support Japanese and English messages. 
 | `InvalidPartSizeError`    | The part size for multipart upload is invalid.                                                        |
 | `StorageAbortedError`     | A writable stream was requested with an already aborted signal.                                       |
 | `RepairNotAllowedError`   | A repair write to a storage that does not allow it.                                                   |
-| `ReadonlyVariableError`   | Tried to modify a readonly variable. `meta.key` holds the key.                                        |
+| `ReadonlyVariableError`   | Tried to modify a readonly variable. `meta.name` holds the variable name.                                     |
 | `InvalidUsageErrorBase`   | Base class for errors caused by incorrect usage.                                                      |
 
 ```ts

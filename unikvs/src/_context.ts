@@ -228,7 +228,7 @@ export default class PipelineContext implements IPipelineContext {
    */
   public set<const TName extends string>(name: TName, value: any): this {
     if (this.#readonlyKeys.has(name)) {
-      throw new ReadonlyVariableError({ key: name });
+      throw new ReadonlyVariableError({ name });
     }
 
     this.#data.set(name, value);
@@ -245,7 +245,7 @@ export default class PipelineContext implements IPipelineContext {
    */
   public setReadonly<const TName extends string>(name: TName, value: any): this {
     if (this.#readonlyKeys.has(name)) {
-      throw new ReadonlyVariableError({ key: name });
+      throw new ReadonlyVariableError({ name });
     }
 
     this.#data.set(name, value);

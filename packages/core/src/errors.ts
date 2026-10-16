@@ -282,7 +282,7 @@ export type ReadonlyVariableErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
    */
-  readonly key: string;
+  readonly name: string;
 };
 
 /**
@@ -302,14 +302,14 @@ export class ReadonlyVariableError extends InvalidUsageErrorBase<ReadonlyVariabl
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
    */
   public constructor(args: ReadonlyVariableErrorArgs) {
-    const { key, ...options } = args;
-    const meta: ReadonlyVariableErrorMeta = { key };
-    super(meta, ({ key }) => `Cannot modify readonly variable: ${JSON.stringify(key)}`, options);
+    const { name, ...options } = args;
+    const meta: ReadonlyVariableErrorMeta = { name };
+    super(meta, ({ name }) => `Cannot modify readonly variable: ${JSON.stringify(name)}`, options);
   }
 }
 
 setErrorMessage(
   ReadonlyVariableError,
-  ({ key }) => `読み取り専用の変数 ${JSON.stringify(key)} は変更できません`,
+  ({ name }) => `読み取り専用の変数 ${JSON.stringify(name)} は変更できません`,
   "ja",
 );

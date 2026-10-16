@@ -161,24 +161,24 @@ describe("ReadonlyVariableError", () => {
   test("InvalidUsageErrorBase を継承し name は UniKvsReadonlyVariableError である", ({
     expect,
   }) => {
-    const error = new ReadonlyVariableError({ key: "x" });
+    const error = new ReadonlyVariableError({ name: "x" });
 
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
     expect(error.name).toBe("UniKvsReadonlyVariableError");
   });
 
   test("meta にキーを保持する", ({ expect }) => {
-    expect(new ReadonlyVariableError({ key: "x" }).meta).toStrictEqual({ key: "x" });
+    expect(new ReadonlyVariableError({ name: "x" }).meta).toStrictEqual({ name: "x" });
   });
 
   test("既定のメッセージはキーを含む", ({ expect }) => {
-    expect(new ReadonlyVariableError({ key: "x" }).message).toContain('"x"');
+    expect(new ReadonlyVariableError({ name: "x" }).message).toContain('"x"');
   });
 
   test("日本語では読み取り専用のメッセージを返す", ({ expect, setLang }) => {
     setLang("ja");
 
-    expect(new ReadonlyVariableError({ key: "x" }).message).toContain('"x"');
+    expect(new ReadonlyVariableError({ name: "x" }).message).toContain('"x"');
   });
 });
 

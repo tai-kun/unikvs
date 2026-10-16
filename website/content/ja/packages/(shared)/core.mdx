@@ -77,7 +77,7 @@ UniKVS のエラーはすべて `ErrorBase` を継承し、日本語と英語の
 | `InvalidPartSizeError`    | マルチパートアップロードのパートサイズ指定が不正です。                                                                                                                       |
 | `StorageAbortedError`     | 中断済みのシグナルで書き込みストリームを要求しました。                                                                                                                       |
 | `RepairNotAllowedError`   | 書き戻しが許可されていません。`meta.names` に書き戻し先の表示名一覧が入り、複数ある場合は `", "` 区切りで表示します。エラーの `name` は `UniKvsRepairNotAllowedError` です。 |
-| `ReadonlyVariableError`   | 読み取り専用の変数を変更しようとしました。`meta.key` にキー名が入ります。                                                                                                    |
+| `ReadonlyVariableError`   | 読み取り専用の変数を変更しようとしました。`meta.name` に変数名が入ります。                                                                                                   |
 | `InvalidUsageErrorBase`   | 使い方の誤りを示すエラーの基底クラスです。                                                                                                                                   |
 
 ```ts
