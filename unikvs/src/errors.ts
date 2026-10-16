@@ -1,13 +1,13 @@
 import {
-  InvalidUsageErrorBase,
-  KeyNotFoundError,
-  setErrorMessage,
-  ErrorBase,
   type ErrorOptions,
+  ErrorBase,
+  setErrorMessage,
+  KeyNotFoundError,
+  InvalidUsageErrorBase,
 } from "@unikvs/core";
 import type { BaseIssue } from "valibot";
 
-export { InvalidUsageErrorBase, KeyNotFoundError };
+export { KeyNotFoundError, InvalidUsageErrorBase };
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 
 // -------------------------------------------------------------------------------------------------
@@ -377,44 +377,54 @@ setErrorMessage(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type EncodableStreamNotSupportedErrorMeta = {
+export type MiddlewareDestinationMissingErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
   readonly name: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly operation: "encode" | "decode";
 };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type EncodableStreamNotSupportedErrorArgs = ErrorOptions &
-  EncodableStreamNotSupportedErrorMeta;
+export type MiddlewareDestinationMissingErrorArgs = ErrorOptions &
+  MiddlewareDestinationMissingErrorMeta;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export class EncodableStreamNotSupportedError extends ErrorBase<EncodableStreamNotSupportedErrorMeta> {
+export class MiddlewareDestinationMissingError extends ErrorBase<MiddlewareDestinationMissingErrorMeta> {
   static {
-    this.prototype.name = "UniKvsEncodableStreamNotSupportedError";
+    this.prototype.name = "UniKvsMiddlewareDestinationMissingError";
   }
 
-  public constructor(args: EncodableStreamNotSupportedErrorArgs) {
-    const { name, ...options } = args;
-    const meta: EncodableStreamNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Middleware "${name}" does not support encodable stream`, options);
+  public constructor(args: MiddlewareDestinationMissingErrorArgs) {
+    const { name, operation, ...options } = args;
+    const meta: MiddlewareDestinationMissingErrorMeta = { name, operation };
+    super(
+      meta,
+      ({ name, operation }) => `Middleware "${name}" did not set destination for ${operation}.`,
+      options,
+    );
   }
 }
 
 setErrorMessage(
-  EncodableStreamNotSupportedError,
-  ({ name }) => `ミドルウェア "${name}" はエンコード可能なストリームをサポートしていません`,
+  MiddlewareDestinationMissingError,
+  ({ name, operation }) =>
+    `ミドルウェア "${name}" は ${operation} の destination を設定しませんでした。`,
   "ja",
 );
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type DecodableStreamNotSupportedErrorMeta = {
+export type StreamEncodingNotSupportedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
@@ -424,26 +434,63 @@ export type DecodableStreamNotSupportedErrorMeta = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export type DecodableStreamNotSupportedErrorArgs = ErrorOptions &
-  DecodableStreamNotSupportedErrorMeta;
+export type StreamEncodingNotSupportedErrorArgs = ErrorOptions &
+  StreamEncodingNotSupportedErrorMeta;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
-export class DecodableStreamNotSupportedError extends ErrorBase<DecodableStreamNotSupportedErrorMeta> {
+export class StreamEncodingNotSupportedError extends ErrorBase<StreamEncodingNotSupportedErrorMeta> {
   static {
-    this.prototype.name = "UniKvsDecodableStreamNotSupportedError";
+    this.prototype.name = "UniKvsStreamEncodingNotSupportedError";
   }
 
-  public constructor(args: DecodableStreamNotSupportedErrorArgs) {
+  public constructor(args: StreamEncodingNotSupportedErrorArgs) {
     const { name, ...options } = args;
-    const meta: DecodableStreamNotSupportedErrorMeta = { name };
+    const meta: StreamEncodingNotSupportedErrorMeta = { name };
+    super(meta, ({ name }) => `Middleware "${name}" does not support stream encoding.`, options);
+  }
+}
+
+setErrorMessage(
+  StreamEncodingNotSupportedError,
+  ({ name }) => `ミドルウェア "${name}" はストリームのエンコードをサポートしていません。`,
+  "ja",
+);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type StreamDecodingNotSupportedErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly name: string;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type StreamDecodingNotSupportedErrorArgs = ErrorOptions &
+  StreamDecodingNotSupportedErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class StreamDecodingNotSupportedError extends ErrorBase<StreamDecodingNotSupportedErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsStreamDecodingNotSupportedError";
+  }
+
+  public constructor(args: StreamDecodingNotSupportedErrorArgs) {
+    const { name, ...options } = args;
+    const meta: StreamDecodingNotSupportedErrorMeta = { name };
     super(meta, ({ name }) => `Middleware "${name}" does not support decodable stream`, options);
   }
 }
 
 setErrorMessage(
-  DecodableStreamNotSupportedError,
+  StreamDecodingNotSupportedError,
   ({ name }) => `ミドルウェア "${name}" はデコード可能なストリームをサポートしていません`,
   "ja",
 );

@@ -101,7 +101,7 @@ export interface ITransformContext<
 
   readonly source: TSource;
 
-  destination: TDestination;
+  destination?: TDestination;
 }
 
 export interface ITransformDataContext<

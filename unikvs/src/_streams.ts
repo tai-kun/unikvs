@@ -16,11 +16,11 @@ export function isReadableStream(input: unknown): input is IReadableStream {
   const stream = input as Partial<IReadableStream>;
 
   return (
-    typeof stream.getReader === "function" &&
-    typeof stream.pipeThrough === "function" &&
-    typeof stream.pipeTo === "function" &&
     typeof stream.tee === "function" &&
-    typeof stream.cancel === "function"
+    typeof stream.cancel === "function" &&
+    typeof stream.pipeTo === "function" &&
+    typeof stream.getReader === "function" &&
+    typeof stream.pipeThrough === "function"
   );
 }
 
@@ -40,9 +40,9 @@ export function isWritableStream(input: unknown): input is IWritableStream {
   const stream = input as Partial<IWritableStream>;
 
   return (
-    typeof stream.getWriter === "function" &&
     typeof stream.abort === "function" &&
-    typeof stream.close === "function"
+    typeof stream.close === "function" &&
+    typeof stream.getWriter === "function"
   );
 }
 
