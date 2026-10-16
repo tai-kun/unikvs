@@ -11,8 +11,8 @@ import {
 import UniKvsMiddleware from "../src/_middleware.js";
 import {
   MiddlewareIsNotOpenError,
-  EncodableStreamNotSupportedError,
-  DecodableStreamNotSupportedError,
+  StreamEncodingNotSupportedError,
+  StreamDecodingNotSupportedError,
 } from "../src/errors.js";
 
 function openContext(): IMiddleware.OpenContext {
@@ -72,7 +72,7 @@ describe("UniKvsMiddleware - 初期化と接続管理", () => {
     // 準備
     const mock = new MockMiddleware();
     mock.isOpen = true;
-    const middleware = new UniKvsMiddleware(mock);
+    const middleware = UniKvsMiddleware.from(mock);
 
     // 実行
     await middleware.open(openContext());
@@ -87,7 +87,7 @@ describe("UniKvsMiddleware - 初期化と接続管理", () => {
     // 準備
     const mock = new MockMiddleware();
     mock.isOpen = false;
-    const middleware = new UniKvsMiddleware(mock);
+    const middleware = UniKvsMiddleware.from(mock);
 
     // 実行
     await middleware.open(openContext());
@@ -100,7 +100,7 @@ describe("UniKvsMiddleware - 初期化と接続管理", () => {
 describe("UniKvsMiddleware - エンコード / デコード", () => {
   test("エンコードしたデータをデコードすると元の値に戻る", async ({ expect }) => {
     // 準備
-    const middleware = new UniKvsMiddleware(new MockMiddleware());
+    const middleware = UniKvsMiddleware.from(new MockMiddleware());
     await middleware.open(openContext());
 
     // 実行
@@ -121,7 +121,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockMiddleware();
     mock.isOpen = false;
-    const middleware = new UniKvsMiddleware(mock);
+    const middleware = UniKvsMiddleware.from(mock);
 
     // 実行と検証
     await expect(middleware.encode(encodeContext("data"), noop)).rejects.toThrow(
@@ -135,7 +135,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockMiddleware();
     mock.isOpen = false;
-    const middleware = new UniKvsMiddleware(mock);
+    const middleware = UniKvsMiddleware.from(mock);
 
     // 実行と検証
     await expect(middleware.decode(decodeContext("data"), noop)).rejects.toThrow(
@@ -143,11 +143,11 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     );
   });
 
-  test("encodeStream でサポートしていないとき EncodableStreamNotSupportedError を投げる", async ({
+  test("encodeStream でサポートしていないとき StreamEncodingNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
-    const middleware = new UniKvsMiddleware(new MockMiddleware());
+    const middleware = UniKvsMiddleware.from(new MockMiddleware());
     await middleware.open(openContext());
 
     // 実行と検証
@@ -155,16 +155,14 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
       key: "k1",
       source: new ReadableStream(),
     }) as IMiddleware.EncodeStreamContext;
-    await expect(middleware.encodeStream(c, noop)).rejects.toThrow(
-      EncodableStreamNotSupportedError,
-    );
+    await expect(middleware.encodeStream(c, noop)).rejects.toThrow(StreamEncodingNotSupportedError);
   });
 
-  test("decodeStream でサポートしていないとき DecodableStreamNotSupportedError を投げる", async ({
+  test("decodeStream でサポートしていないとき StreamDecodingNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
-    const middleware = new UniKvsMiddleware(new MockMiddleware());
+    const middleware = UniKvsMiddleware.from(new MockMiddleware());
     await middleware.open(openContext());
 
     // 実行と検証
@@ -172,8 +170,6 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
       key: "k1",
       source: new ReadableStream(),
     }) as IMiddleware.DecodeStreamContext;
-    await expect(middleware.decodeStream(c, noop)).rejects.toThrow(
-      DecodableStreamNotSupportedError,
-    );
+    await expect(middleware.decodeStream(c, noop)).rejects.toThrow(StreamDecodingNotSupportedError);
   });
 });

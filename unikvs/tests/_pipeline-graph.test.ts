@@ -10,7 +10,7 @@ import { FakeStorage, FakeMiddleware } from "./_helpers.js";
  * グラフの構造契約だけを検証するために使用します。
  */
 function wrapStorage(name: string): UniKvsStorage {
-  return new UniKvsStorage(new FakeStorage(name));
+  return UniKvsStorage.from(new FakeStorage(name));
 }
 
 /**
@@ -18,7 +18,7 @@ function wrapStorage(name: string): UniKvsStorage {
  * グラフの構造契約だけを検証するために使用します。
  */
 function wrapMiddleware(name: string): UniKvsMiddleware {
-  return new UniKvsMiddleware(new FakeMiddleware(name));
+  return UniKvsMiddleware.from(new FakeMiddleware(name));
 }
 
 describe("PipelineGraph - 構造の不変条件", () => {

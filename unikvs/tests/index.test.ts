@@ -11,8 +11,8 @@ import {
   WritableStreamNotSupportedError,
   ReadableStreamNotSupportedError,
   MiddlewareIsNotOpenError,
-  EncodableStreamNotSupportedError,
-  DecodableStreamNotSupportedError,
+  StreamEncodingNotSupportedError,
+  StreamDecodingNotSupportedError,
   PluginOperationAggregateError,
   MissingStorageError,
 } from "../src/errors.js";
@@ -46,8 +46,8 @@ describe("index のエクスポート", () => {
     expect(index.WritableStreamNotSupportedError).toBe(WritableStreamNotSupportedError);
     expect(index.ReadableStreamNotSupportedError).toBe(ReadableStreamNotSupportedError);
     expect(index.MiddlewareIsNotOpenError).toBe(MiddlewareIsNotOpenError);
-    expect(index.EncodableStreamNotSupportedError).toBe(EncodableStreamNotSupportedError);
-    expect(index.DecodableStreamNotSupportedError).toBe(DecodableStreamNotSupportedError);
+    expect(index.StreamEncodingNotSupportedError).toBe(StreamEncodingNotSupportedError);
+    expect(index.StreamDecodingNotSupportedError).toBe(StreamDecodingNotSupportedError);
     expect(index.PluginOperationAggregateError).toBe(PluginOperationAggregateError);
     expect(index.MissingStorageError).toBe(MissingStorageError);
   });

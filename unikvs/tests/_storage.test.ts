@@ -89,7 +89,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
     // 準備
     const mock = new MockStorage();
     mock.isOpen = true;
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
 
     // 実行
     await storage.open(openContext());
@@ -104,7 +104,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
     // 準備
     const mock = new MockStorage();
     mock.isOpen = false;
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
 
     // 実行
     await storage.open(openContext());
@@ -117,7 +117,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
 describe("UniKvsStorage - 基本操作 (CRUD)", () => {
   test("write / read でデータを保存および取得できる", async ({ expect }) => {
     // 準備
-    const storage = new UniKvsStorage(new MockStorage());
+    const storage = UniKvsStorage.from(new MockStorage());
     await storage.open(openContext());
 
     // 実行
@@ -130,7 +130,7 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
 
   test("exists がデータの有無を正しく返す", async ({ expect }) => {
     // 準備
-    const storage = new UniKvsStorage(new MockStorage());
+    const storage = UniKvsStorage.from(new MockStorage());
     await storage.open(openContext());
     await storage.write(setContext("k1"), "v1");
 
@@ -145,7 +145,7 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
 
   test("delete でデータが削除される", async ({ expect }) => {
     // 準備
-    const storage = new UniKvsStorage(new MockStorage());
+    const storage = UniKvsStorage.from(new MockStorage());
     await storage.open(openContext());
     await storage.write(setContext("k1"), "v1");
 
@@ -158,7 +158,7 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
 
   test("clear で全データが削除される", async ({ expect }) => {
     // 準備
-    const storage = new UniKvsStorage(new MockStorage());
+    const storage = UniKvsStorage.from(new MockStorage());
     await storage.open(openContext());
     await storage.write(setContext("k1"), "v1");
     await storage.write(setContext("k2"), "v2");
@@ -177,7 +177,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockStorage();
     mock.isOpen = false;
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
 
     // 実行と検証
     await expect(storage.write(setContext("k1"), "v1")).rejects.toThrow(StorageIsNotOpenError);
@@ -187,7 +187,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     // 準備
     const mock = new MockStorage();
     mock.isOpen = false;
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
 
     // 実行と検証
     await expect(storage.read(getContext("k1"))).rejects.toThrow(StorageIsNotOpenError);
@@ -198,7 +198,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const mock = new MockStorage();
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
     await storage.open(openContext());
 
     // 実行と検証
@@ -213,7 +213,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
   }) => {
     // 準備
     const mock = new MockStorage();
-    const storage = new UniKvsStorage(mock);
+    const storage = UniKvsStorage.from(mock);
     await storage.open(openContext());
 
     // 実行と検証
@@ -247,7 +247,7 @@ describe("UniKvsStorage - ストリーム", () => {
         return compatible;
       }
     }
-    const storage = new UniKvsStorage(new StreamStorage());
+    const storage = UniKvsStorage.from(new StreamStorage());
     await storage.open(openContext());
 
     // 実行
@@ -282,7 +282,7 @@ describe("UniKvsStorage - ストリーム", () => {
         return compatible;
       }
     }
-    const storage = new UniKvsStorage(new StreamStorage());
+    const storage = UniKvsStorage.from(new StreamStorage());
     await storage.open(openContext());
 
     // 実行

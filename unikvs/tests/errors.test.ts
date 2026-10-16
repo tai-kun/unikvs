@@ -12,8 +12,8 @@ import {
   ReadableStreamNotSupportedError,
   MultipartWriteNotSupportedError,
   MiddlewareIsNotOpenError,
-  EncodableStreamNotSupportedError,
-  DecodableStreamNotSupportedError,
+  StreamEncodingNotSupportedError,
+  StreamDecodingNotSupportedError,
   PluginOperationAggregateError,
   MissingStorageError,
 } from "../src/errors.js";
@@ -140,20 +140,20 @@ describe("MiddlewareIsNotOpenError", () => {
   });
 });
 
-describe("EncodableStreamNotSupportedError", () => {
+describe("StreamEncodingNotSupportedError", () => {
   test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new EncodableStreamNotSupportedError({ name: "MyMiddleware" });
+      throw new StreamEncodingNotSupportedError({ name: "MyMiddleware" });
     }).toThrow(/MyMiddleware/);
   });
 });
 
-describe("DecodableStreamNotSupportedError", () => {
+describe("StreamDecodingNotSupportedError", () => {
   test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
     expect(() => {
-      throw new DecodableStreamNotSupportedError({ name: "MyMiddleware" });
+      throw new StreamDecodingNotSupportedError({ name: "MyMiddleware" });
     }).toThrow(/MyMiddleware/);
   });
 });

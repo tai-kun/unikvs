@@ -2,8 +2,8 @@ import type { IMiddleware } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
-  DecodableStreamNotSupportedError,
-  EncodableStreamNotSupportedError,
+  StreamDecodingNotSupportedError,
+  StreamEncodingNotSupportedError,
   PluginOperationAggregateError,
   MiddlewareIsNotOpenError,
 } from "../src/errors.js";
@@ -274,7 +274,7 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     await kvs.close();
   });
 
-  test("ストリーム非対応のミドルウェアへのストリーム書き込みは EncodableStreamNotSupportedError を投げる", async ({
+  test("ストリーム非対応のミドルウェアへのストリーム書き込みは StreamEncodingNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
@@ -286,14 +286,14 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
 
     // 実行と検証
     await expect(kvs.set("logs", streamOf([new Uint8Array([1])]))).rejects.toThrow(
-      EncodableStreamNotSupportedError,
+      StreamEncodingNotSupportedError,
     );
 
     // 後片付け
     await kvs.close();
   });
 
-  test("ストリーム非対応のミドルウェアからのストリーム読み取りは DecodableStreamNotSupportedError を投げる", async ({
+  test("ストリーム非対応のミドルウェアからのストリーム読み取りは StreamDecodingNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
@@ -306,7 +306,7 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     await kvs.open();
 
     // 実行と検証
-    await expect(kvs.stream("logs")).rejects.toThrow(DecodableStreamNotSupportedError);
+    await expect(kvs.stream("logs")).rejects.toThrow(StreamDecodingNotSupportedError);
 
     // 後片付け
     await kvs.close();
