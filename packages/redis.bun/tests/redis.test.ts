@@ -2,9 +2,11 @@ import type { IStorage } from "@unikvs/core";
 import {
   collectBytes,
   createClearContext,
+  createCloseContext,
   createDeleteContext,
   createGetContext,
   createHasContext,
+  createOpenContext,
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
@@ -32,6 +34,33 @@ describe("初期化と接続管理", () => {
   test("open を実行したとき、isOpen が true になる", ({ expect, storage }) => {
     // 実行と検証
     expect(storage.isOpen).toBe(true);
+  });
+
+  test("第 2 引数を省略した new Redis(url) でも開いて読み書きできる", async ({
+    expect,
+    signal,
+    url,
+  }) => {
+    // 準備
+    const storage = new Redis(url);
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      // 実行
+      const key = `omitted-options-${crypto.randomUUID()}.bin`;
+      const data = new Uint8Array([1, 2, 3]);
+      await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
+      // 検証
+      expect(storage.isOpen).toBe(true);
+      await expect(
+        storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
+    } finally {
+      if (storage.isOpen) {
+        storage.close(createCloseContext() as IStorage.CloseContext);
+      }
+    }
   });
 });
 
@@ -146,6 +175,23 @@ describe("基本操作 (CRUD)", () => {
     await expect(
       storage.exists(createHasContext("argless.txt", { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
+  });
+
+  test("何も保存していない状態で clear してもエラーにならない", async ({ expect, signal, url }) => {
+    // 準備
+    const fresh = new Redis(url, { keyPrefix: `empty-${crypto.randomUUID()}:` });
+    await fresh.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      // 実行と検証
+      await expect(
+        fresh.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+      ).resolves.toBe(undefined);
+    } finally {
+      if (fresh.isOpen) {
+        fresh.close(createCloseContext() as IStorage.CloseContext);
+      }
+    }
   });
 });
 

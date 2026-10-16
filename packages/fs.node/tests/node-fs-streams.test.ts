@@ -13,7 +13,7 @@ import {
   createStreamContext,
 } from "@unikvs/testing";
 import { listTemporaryFiles } from "@unikvs/testing/node";
-import { describe } from "vitest";
+import { describe, vi } from "vitest";
 
 import { test } from "./_helpers.js";
 
@@ -231,6 +231,37 @@ describe("getWritable の詳細", () => {
     ).rejects.toThrow();
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
+  });
+
+  test("文字列理由で中断したとき、一時ファイルが残らず既存データが保たれる", async ({
+    expect,
+    root,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "abort-string-reason.bin";
+    const original = new Uint8Array([7, 7, 7]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const controller = new AbortController();
+    const writer = (
+      await storage.getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
+    ).getWriter();
+    await writer.write(new Uint8Array([1, 2, 3]));
+
+    // 実行
+    controller.abort("中断理由");
+    await expect(writer.close()).rejects.toThrow();
+
+    // 検証
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(original);
+    await vi.waitFor(async () => {
+      expect(await listTemporaryFiles(root)).toStrictEqual([]);
+    });
   });
 });
 
