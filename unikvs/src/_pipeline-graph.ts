@@ -1,7 +1,7 @@
 import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
 
 import {
-  type VarsStore,
+  type VariablesStore,
   DecodeContext,
   EncodeContext,
   MapKeyContext,
@@ -277,7 +277,7 @@ type OperationScope = {
   /**
    * 操作内で共有される変数ストアです。
    */
-  readonly store: VarsStore;
+  readonly store: VariablesStore;
 };
 
 // -------------------------------------------------------------------------------------------------

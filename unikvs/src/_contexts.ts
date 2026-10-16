@@ -36,21 +36,53 @@ export type VariablesEntry = readonly [name: string, value: unknown];
 export type VariablesInit = { readonly [name: string]: unknown } | Iterable<VariablesEntry>;
 
 /**
+ * 実行時変数の初期値をエントリー列に正規化します。
+ *
+ * レコードは `Object.entries` で展開します。
+ * 反復子はそのまま返します。
+ *
+ * @param vars 初期値です。
+ * @returns エントリー列を返します。
+ */
+function normalizeVariablesInit(vars: VariablesInit | undefined): Iterable<VariablesEntry> {
+  if (!vars) {
+    return [];
+  }
+  if (Symbol.iterator in vars) {
+    return vars;
+  }
+
+  return Object.entries(vars);
+}
+
+/**
+ * 変数マップに初期値を書き込みます。
+ *
+ * @param data 書き込み先のマップです。
+ * @param vars 初期値です。
+ */
+function writeVariablesInit(data: Map<string, unknown>, vars: VariablesInit | undefined): void {
+  for (const [name, value] of normalizeVariablesInit(vars)) {
+    data.set(name, value);
+  }
+}
+
+/**
  * 複数のコンテキスト間で共有される変数ストアです。
  *
- * オニオン実行では、操作内の全コンテキストが同一ストアの `data`/`readonlyKeys` を参照し、
+ * オニオン実行では操作内の全コンテキストが同一ストアを参照します。
  * 下流の `set` を上流が `await next()` の後に `get` で参照できます。
  */
-export type VarsStore = {
+export type VariablesStore = {
   /**
    * 変数のマップです。
    */
   readonly data: Map<string, unknown>;
 
   /**
-   * 読み取り専用キー集合です。
+   * 読み取り専用の変数名の集合です。
    */
-  readonly readonlyKeys: Set<string>;
+  readonly readonly: Set<string>;
 };
 
 /**
@@ -59,1815 +91,1023 @@ export type VarsStore = {
  * @param vars 初期値です。
  * @returns 空ストアを返します。
  */
-export function createVarsStore(vars?: VariablesInit): VarsStore {
+export function createVariablesStore(vars: VariablesInit | undefined): VariablesStore {
+  vars = normalizeVariablesInit(vars);
+
   return {
-    data: new Map<string, unknown>(normalizeEntries(vars)),
-    readonlyKeys: new Set<string>(),
+    data: new Map(vars),
+    readonly: new Set(),
   };
 }
 
 /**
- * コンテキストのインスタンスごとの内部状態です。
- * ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、
- * 本モジュールのユーティリティー関数から内部アクセサー経由で参照できます。
- * `varsStates` 自体は外部に公開しません。
+ * `PipelineContext` の初期値です。
  */
-type VarsState = {
+type PipelineContextInit = {
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 共有する変数ストアです。
+   *
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
+   */
+  readonly store?: VariablesStore | undefined;
+};
+
+/**
+ * 実行時変数を保持する基底コンテキストです。
+ */
+class PipelineContext implements IPipelineContext {
   /**
    * 変数のマップです。共有ストアの参照である場合があります。
    */
-  readonly data: Map<string, unknown>;
+  readonly #data: Map<string, unknown>;
 
   /**
-   * 読み取り専用キー集合です。共有ストアの参照である場合があります。
+   * 読み取り専用の変数名の集合です。共有ストアの参照である場合があります。
    */
-  readonly readonlyKeys: Set<string>;
-};
-
-/**
- * インスタンスと内部状態の対応表です。
- * コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
- */
-const varsStates = /*#__PURE__*/ new WeakMap<IPipelineContext, VarsState>();
-
-function normalizeEntries(vars: VariablesInit | undefined): Iterable<readonly [string, unknown]> {
-  if (vars == null) {
-    return [];
-  }
-  if (Symbol.iterator in Object(vars)) {
-    return vars as Iterable<readonly [string, unknown]>;
-  }
-  return Object.entries(vars as { readonly [key: string]: unknown });
-}
-
-function writeVars(data: Map<string, unknown>, vars: VariablesInit | undefined): void {
-  for (const [k, v] of normalizeEntries(vars)) {
-    data.set(k, v);
-  }
-}
-
-function initVars(instance: IPipelineContext, vars?: VariablesInit, store?: VarsStore): void {
-  if (store !== undefined) {
-    // 共有ストアを参照し、下流の変更が上流に見えるようにします。
-    const state: VarsState = { data: store.data, readonlyKeys: store.readonlyKeys };
-    varsStates.set(instance, state);
-    writeVars(state.data, vars);
-    return;
-  }
-
-  const data = new Map<string, unknown>();
-  writeVars(data, vars);
-  varsStates.set(instance, { data, readonlyKeys: new Set<string>() });
-}
-
-function getVars(instance: IPipelineContext): VarsState {
-  const state = varsStates.get(instance);
-  if (state === undefined) {
-    throw new TypeError("Invalid context instance.");
-  }
-  return state;
-}
-
-/**
- * `T` の `readonly` を外した書き込み用の型です。
- *
- * 初期値オブジェクトを組み立ててからコンストラクターに渡すときに使用します。外部からは使用しません。
- */
-type Mutable<T> = {
-  -readonly [K in keyof T]: T[K];
-};
-
-/**
- * 独立した複写先へ変数と読み取り専用集合を複写し、上書きを読み取り専用を迂回して適用します。
- *
- * `clone*` ユーティリティーの実装に使用します。外部からは使用しません。
- *
- * @param source 複写元です。
- * @param target 複写先です。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- */
-function copyVars(source: VarsState, target: VarsState, overrides?: VariablesInit): void {
-  for (const [k, v] of source.data) {
-    target.data.set(k, v);
-  }
-  for (const k of source.readonlyKeys) {
-    target.readonlyKeys.add(k);
-  }
-  if (overrides != null) {
-    // 読み取り専用を迂回して差し替えます。
-    writeVars(target.data, overrides);
-  }
-}
-
-function getVariable(instance: IPipelineContext, name: string): unknown {
-  return getVars(instance).data.get(name);
-}
-
-function setVariable(instance: IPipelineContext, name: string, value: unknown): void {
-  const state = getVars(instance);
-  if (state.readonlyKeys.has(name)) {
-    throw new ReadonlyVariableError({ name });
-  }
-  state.data.set(name, value);
-}
-
-function setReadonlyVariable(instance: IPipelineContext, name: string, value: unknown): void {
-  const state = getVars(instance);
-  if (state.readonlyKeys.has(name)) {
-    throw new ReadonlyVariableError({ name });
-  }
-  state.data.set(name, value);
-  state.readonlyKeys.add(name);
-}
-
-function createSignal(signal?: AbortSignal): AbortSignal {
-  if (signal !== undefined) {
-    return signal;
-  }
-  return new AbortController().signal;
-}
-
-function createRepair(repair?: IGetContext["repair"]): IGetContext["repair"] {
-  if (repair !== undefined) {
-    return repair;
-  }
-  return { enabled: false, targets: [] };
-}
-
-type PipelineContextInit = {
-  readonly vars?: VariablesInit | undefined;
+  readonly #readonly: Set<string>;
 
   /**
-   * 共有する変数ストアです。
+   * コンテキストを作成します。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * @param init 初期値です。
    */
-  readonly store?: VarsStore | undefined;
-};
+  public constructor(init: PipelineContextInit) {
+    const { vars, store } = init;
+    if (store) {
+      // 共有ストアを参照し、下流の変更が上流に見えるようにします。
+      this.#data = store.data;
+      this.#readonly = store.readonly;
+    } else {
+      this.#data = new Map();
+      this.#readonly = new Set();
+    }
 
-export class PipelineContext implements IPipelineContext {
-  public constructor(init?: PipelineContextInit) {
-    initVars(this, init?.vars, init?.store);
+    writeVariablesInit(this.#data, vars);
   }
 
-  public get<const TName extends string>(name: TName): any {
-    return getVariable(this, name);
+  /**
+   * 変数の値を読み取ります。
+   *
+   * @param name 変数名です。
+   * @returns 変数の値を返します。
+   */
+  public get(name: string): unknown {
+    return this.#data.get(name);
   }
 
-  public set<const TName extends string>(name: TName, value: any): this {
-    setVariable(this, name, value);
+  /**
+   * 変数の値を書き込みます。
+   *
+   * @param name 変数名です。
+   * @param value 設定する値です。
+   * @returns 自身を返します。
+   */
+  public set(name: string, value: unknown): this {
+    if (this.#readonly.has(name)) {
+      throw new ReadonlyVariableError({ name });
+    }
+
+    this.#data.set(name, value);
+
     return this;
   }
 
-  public setReadonly<const TName extends string>(name: TName, value: any): this {
-    setReadonlyVariable(this, name, value);
+  /**
+   * 変数の値を設定し、読み取り専用にします。
+   *
+   * @param name 変数名です。
+   * @param value 設定する値です。
+   * @returns 自身を返します。
+   */
+  public setReadonly(name: string, value: unknown): this {
+    if (this.#readonly.has(name)) {
+      throw new ReadonlyVariableError({ name });
+    }
+
+    this.#data.set(name, value);
+    this.#readonly.add(name);
+
     return this;
   }
 }
 
+/**
+ * `MapKeyContext` の初期値です。
+ */
 type MapKeyContextInit = {
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
 export class MapKeyContext extends PipelineContext implements IMapKeyContext {
+  /**
+   * 対象のキーです。
+   */
   public readonly key: string;
 
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: MapKeyContextInit) {
-    super({ vars: init.vars, store: init.store });
-    this.key = init.key;
+    const { key, vars, store } = init;
+
+    super({ vars, store });
+
+    this.key = key;
   }
 }
 
-type ActionContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: IActionContext["action"] | undefined;
-  readonly vars?: VariablesInit | undefined;
+/**
+ * `ActionContext` の初期値です。
+ */
+type ActionContextInit<TAction extends IActionContext["action"]> = {
+  /**
+   * 実行する操作の種別です。
+   */
+  readonly action: TAction;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class ActionContext extends PipelineContext implements IActionContext {
+class ActionContext<const TAction extends IActionContext["action"]>
+  extends PipelineContext
+  implements IActionContext
+{
+  /**
+   * 実行する操作の種別です。
+   */
+  public readonly action: TAction;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
   public readonly signal: AbortSignal;
 
-  public readonly action: IActionContext["action"];
-
-  public constructor(init?: ActionContextInit) {
-    super({ vars: init?.vars, store: init?.store });
-    this.signal = createSignal(init?.signal);
-    this.action = init?.action ?? "set";
-  }
-}
-
-type LifecycleContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: ILifecycleContext["action"] | undefined;
-  readonly vars?: VariablesInit | undefined;
-
   /**
-   * 共有する変数ストアです。
+   * コンテキストを作成します。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * @param init 初期値です。
    */
-  readonly store?: VarsStore | undefined;
-};
+  public constructor(init: ActionContextInit<TAction>) {
+    const { vars, store, action, signal } = init;
 
-export class LifecycleContext extends ActionContext implements ILifecycleContext {
-  public override readonly action: ILifecycleContext["action"];
+    super({ vars, store });
 
-  public constructor(init?: LifecycleContextInit) {
-    super({
-      signal: init?.signal,
-      action: init?.action ?? "open",
-      vars: init?.vars,
-      store: init?.store,
-    });
-    this.action = init?.action ?? "open";
+    this.action = action;
+    this.signal = signal;
   }
 }
 
+class LifecycleContext<const TAction extends ILifecycleContext["action"]>
+  extends ActionContext<TAction>
+  implements ILifecycleContext {}
+
+/**
+ * `OpenContext` の初期値です。
+ */
 type OpenContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "open" | undefined;
-  readonly vars?: VariablesInit | undefined;
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class OpenContext extends LifecycleContext implements IOpenContext {
-  public override readonly action: "open";
-
-  public constructor(init?: OpenContextInit) {
-    super({ signal: init?.signal, action: "open", vars: init?.vars, store: init?.store });
-    this.action = "open";
+/**
+ * 開始処理のコンテキストです。
+ */
+export class OpenContext extends LifecycleContext<"open"> implements IOpenContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: OpenContextInit) {
+    super({ ...init, action: "open" });
   }
 }
 
+/**
+ * `CloseContext` の初期値です。
+ */
 type CloseContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "close" | undefined;
-  readonly vars?: VariablesInit | undefined;
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class CloseContext extends LifecycleContext implements ICloseContext {
-  public override readonly action: "close";
-
-  public constructor(init?: CloseContextInit) {
-    super({ signal: init?.signal, action: "close", vars: init?.vars, store: init?.store });
-    this.action = "close";
+/**
+ * 終了処理のコンテキストです。
+ */
+export class CloseContext extends LifecycleContext<"close"> implements ICloseContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: CloseContextInit) {
+    super({ ...init, action: "close" });
   }
 }
 
-type KeyedActionContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: IKeyedActionContext["action"] | undefined;
+/**
+ * `KeyedActionContext` の初期値です。
+ */
+type KeyedActionContextInit<TAction extends IKeyedActionContext["action"]> = {
+  /**
+   * 実行する操作の種別です。
+   */
+  readonly action: TAction;
+
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class KeyedActionContext extends ActionContext implements IKeyedActionContext {
-  public override readonly action: IKeyedActionContext["action"];
-
+class KeyedActionContext<TAction extends IKeyedActionContext["action"]>
+  extends ActionContext<TAction>
+  implements IKeyedActionContext
+{
+  /**
+   * 対象のキーです。
+   */
   public readonly key: string;
 
-  public constructor(init: KeyedActionContextInit) {
-    super({
-      signal: init.signal,
-      action: init.action ?? "set",
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = init.action ?? "set";
-    this.key = init.key;
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: KeyedActionContextInit<TAction>) {
+    const { key, ...superInit } = init;
+
+    super(superInit);
+
+    this.key = key;
   }
 }
 
+/**
+ * `SetContext` の初期値です。
+ */
 type SetContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "set" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class SetContext extends KeyedActionContext implements ISetContext {
-  public override readonly action: "set";
-
+/**
+ * 書き込み処理のコンテキストです。
+ */
+export class SetContext extends KeyedActionContext<"set"> implements ISetContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: SetContextInit) {
-    super({
-      signal: init.signal,
-      action: "set",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "set";
+    super({ ...init, action: "set" });
   }
 }
 
+/**
+ * `GetContext` の初期値です。
+ */
 type GetContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "get" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 修復の条件です。
+   *
+   * 省略時は修復しません。
+   */
   readonly repair?: IGetContext["repair"] | undefined;
-  readonly vars?: VariablesInit | undefined;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class GetContext extends KeyedActionContext implements IGetContext {
-  public override readonly action: "get";
-
+/**
+ * 読み取り処理のコンテキストです。
+ */
+export class GetContext extends KeyedActionContext<"get"> implements IGetContext {
+  /**
+   * 修復の条件です。
+   */
   public readonly repair: IGetContext["repair"];
 
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: GetContextInit) {
-    super({
-      signal: init.signal,
-      action: "get",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "get";
-    this.repair = createRepair(init.repair);
+    const {
+      repair = {
+        enabled: false,
+        targets: [],
+      },
+      ...superInit
+    } = init;
+
+    super({ ...superInit, action: "get" });
+
+    this.repair = repair;
   }
 }
 
+/**
+ * `StreamContext` の初期値です。
+ */
 type StreamContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "stream" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 修復の条件です。
+   *
+   * 省略時は修復しません。
+   */
   readonly repair?: IStreamContext["repair"] | undefined;
-  readonly vars?: VariablesInit | undefined;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class StreamContext extends KeyedActionContext implements IStreamContext {
-  public override readonly action: "stream";
-
+/**
+ * ストリーム処理のコンテキストです。
+ */
+export class StreamContext extends KeyedActionContext<"stream"> implements IStreamContext {
+  /**
+   * 修復の条件です。
+   */
   public readonly repair: IStreamContext["repair"];
 
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: StreamContextInit) {
-    super({
-      signal: init.signal,
-      action: "stream",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "stream";
-    this.repair = createRepair(init.repair);
+    const {
+      repair = {
+        enabled: false,
+        targets: [],
+      },
+      ...superInit
+    } = init;
+
+    super({ ...superInit, action: "stream" });
+
+    this.repair = repair;
   }
 }
 
+/**
+ * `HasContext` の初期値です。
+ */
 type HasContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "has" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class HasContext extends KeyedActionContext implements IHasContext {
-  public override readonly action: "has";
-
+/**
+ * 存在確認のコンテキストです。
+ */
+export class HasContext extends KeyedActionContext<"has"> implements IHasContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: HasContextInit) {
-    super({
-      signal: init.signal,
-      action: "has",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "has";
+    super({ ...init, action: "has" });
   }
 }
 
+/**
+ * `DeleteContext` の初期値です。
+ */
 type DeleteContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "delete" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class DeleteContext extends KeyedActionContext implements IDeleteContext {
-  public override readonly action: "delete";
-
+/**
+ * 削除処理のコンテキストです。
+ */
+export class DeleteContext extends KeyedActionContext<"delete"> implements IDeleteContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: DeleteContextInit) {
-    super({
-      signal: init.signal,
-      action: "delete",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "delete";
+    super({ ...init, action: "delete" });
   }
 }
 
+/**
+ * `ClearContext` の初期値です。
+ */
 type ClearContextInit = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "clear" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class ClearContext extends KeyedActionContext implements IClearContext {
-  public override readonly action: "clear";
-
+/**
+ * 全削除のコンテキストです。
+ */
+export class ClearContext extends KeyedActionContext<"clear"> implements IClearContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: ClearContextInit) {
-    super({
-      signal: init.signal,
-      action: "clear",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "clear";
+    super({ ...init, action: "clear" });
   }
 }
 
-type TransformContextInit<TSource = any, TDestination = TSource> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: ITransformContext["action"] | undefined;
+/**
+ * `TransformContext` の初期値です。
+ */
+type TransformContextInit<
+  TAction extends ITransformContext["action"],
+  TSource = any,
+  TDestination = TSource,
+> = {
+  /**
+   * 実行する操作の種別です。
+   */
+  readonly action: TAction;
+
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly source?: TSource | undefined;
-  readonly destination?: TDestination | undefined;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 変換前の値です。
+   */
+  readonly source: TSource;
+
+  /**
+   * 変換後の値です。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
+  readonly destination?: TDestination;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
-export class TransformContext<TSource = any, TDestination = TSource>
-  extends KeyedActionContext
+/**
+ * 値変換の基底コンテキストです。
+ */
+class TransformContext<
+  const TAction extends ITransformContext["action"],
+  TSource = any,
+  TDestination = TSource,
+>
+  extends KeyedActionContext<TAction>
   implements ITransformContext<TSource, TDestination>
 {
-  public override readonly action: ITransformContext["action"];
-
+  /**
+   * 変換前の値です。
+   */
   public readonly source: TSource;
 
+  /**
+   * 変換後の値です。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
   public destination?: TDestination;
 
-  public constructor(init: TransformContextInit<TSource, TDestination>) {
-    super({
-      signal: init.signal,
-      action: init.action ?? "set",
-      key: init.key,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = init.action ?? "set";
-    this.source = init.source as TSource;
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
-  }
-}
-
-type TransformDataContextInit<TSourceData = any, TDestinationData = TSourceData> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: ITransformDataContext["action"] | undefined;
-  readonly key: string;
-  readonly source?: TSourceData | undefined;
-  readonly destination?: TDestinationData | undefined;
-  readonly vars?: VariablesInit | undefined;
-
   /**
-   * 共有する変数ストアです。
+   * コンテキストを作成します。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * @param init 初期値です。
    */
-  readonly store?: VarsStore | undefined;
-};
+  public constructor(init: TransformContextInit<TAction, TSource, TDestination>) {
+    const { source, destination, ...superInit } = init;
 
-export class TransformDataContext<TSourceData = any, TDestinationData = TSourceData>
-  extends TransformContext<TSourceData, TDestinationData>
-  implements ITransformDataContext<TSourceData, TDestinationData>
-{
-  public override readonly action: ITransformDataContext["action"];
+    super(superInit);
 
-  public constructor(init: TransformDataContextInit<TSourceData, TDestinationData>) {
-    super({
-      signal: init.signal,
-      action: init.action ?? "set",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = init.action ?? "set";
+    this.source = source;
     if ("destination" in init) {
-      this.destination = init.destination as any;
+      this.destination = destination!;
     } else {
       delete this.destination;
     }
   }
 }
 
+/**
+ * データ変換の基底コンテキストです。
+ */
+class TransformDataContext<
+  const TAction extends ITransformDataContext["action"],
+  TSourceData = any,
+  TDestinationData = TSourceData,
+>
+  extends TransformContext<TAction, TSourceData, TDestinationData>
+  implements ITransformDataContext<TSourceData, TDestinationData> {}
+
+/**
+ * `EncodeContext` の初期値です。
+ */
 type EncodeContextInit<TRawData = any, TEncodedData = TRawData> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "set" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly source?: TRawData | undefined;
-  readonly destination?: TEncodedData | undefined;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 変換前の値です。
+   */
+  readonly source: TRawData;
+
+  /**
+   * 変換後の値です。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
+  readonly destination?: TEncodedData;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
+/**
+ * 符号化のコンテキストです。
+ */
 export class EncodeContext<TRawData = any, TEncodedData = TRawData>
-  extends TransformDataContext<TRawData, TEncodedData>
+  extends TransformDataContext<"set", TRawData, TEncodedData>
   implements IEncodeContext<TRawData, TEncodedData>
 {
-  public override readonly action: "set";
-
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: EncodeContextInit<TRawData, TEncodedData>) {
-    super({
-      signal: init.signal,
-      action: "set",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "set";
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
+    super({ ...init, action: "set" });
   }
 }
 
+/**
+ * `DecodeContext` の初期値です。
+ */
 type DecodeContextInit<TRawData = any, TDecodedData = TRawData> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "get" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly source?: TRawData | undefined;
-  readonly destination?: TDecodedData | undefined;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 変換前の値です。
+   */
+  readonly source: TRawData;
+
+  /**
+   * 変換後の値です。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
+  readonly destination?: TDecodedData;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
+/**
+ * 復号のコンテキストです。
+ */
 export class DecodeContext<TRawData = any, TDecodedData = TRawData>
-  extends TransformDataContext<TRawData, TDecodedData>
+  extends TransformDataContext<"get", TRawData, TDecodedData>
   implements IDecodeContext<TRawData, TDecodedData>
 {
-  public override readonly action: "get";
-
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: DecodeContextInit<TRawData, TDecodedData>) {
-    super({
-      signal: init.signal,
-      action: "get",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "get";
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
+    super({ ...init, action: "get" });
   }
 }
 
-type TransformStreamContextInit<TSourceChunk = any, TDestinationChunk = TSourceChunk> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: ITransformStreamContext["action"] | undefined;
-  readonly key: string;
-  readonly source?: IReadableStream<TSourceChunk> | undefined;
-  readonly destination?: IReadableStream<TDestinationChunk> | undefined;
-  readonly vars?: VariablesInit | undefined;
+/**
+ * ストリーム変換の基底コンテキストです。
+ */
+class TransformStreamContext<
+  TAction extends ITransformStreamContext["action"],
+  TSourceChunk = any,
+  TDestinationChunk = TSourceChunk,
+>
+  extends TransformContext<
+    TAction,
+    IReadableStream<TSourceChunk>,
+    IReadableStream<TDestinationChunk>
+  >
+  implements ITransformStreamContext<TSourceChunk, TDestinationChunk> {}
 
-  /**
-   * 共有する変数ストアです。
-   *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
-   */
-  readonly store?: VarsStore | undefined;
-};
-
-export class TransformStreamContext<TSourceChunk = any, TDestinationChunk = TSourceChunk>
-  extends TransformContext<IReadableStream<TSourceChunk>, IReadableStream<TDestinationChunk>>
-  implements ITransformStreamContext<TSourceChunk, TDestinationChunk>
-{
-  public override readonly action: ITransformStreamContext["action"];
-
-  public constructor(init: TransformStreamContextInit<TSourceChunk, TDestinationChunk>) {
-    super({
-      signal: init.signal,
-      action: init.action ?? "set",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = init.action ?? "set";
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
-  }
-}
-
+/**
+ * `EncodeStreamContext` の初期値です。
+ */
 type EncodeStreamContextInit<TRawChunk = any, TEncodedChunk = TRawChunk> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "set" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly source?: IReadableStream<TRawChunk> | undefined;
-  readonly destination?: IReadableStream<TEncodedChunk> | undefined;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 変換前のストリームです。
+   */
+  readonly source: IReadableStream<TRawChunk>;
+
+  /**
+   * 変換後のストリームです。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
+  readonly destination?: IReadableStream<TEncodedChunk>;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
+/**
+ * ストリーム符号化のコンテキストです。
+ */
 export class EncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>
-  extends TransformStreamContext<TRawChunk, TEncodedChunk>
+  extends TransformStreamContext<"set", TRawChunk, TEncodedChunk>
   implements IEncodeStreamContext<TRawChunk, TEncodedChunk>
 {
-  public override readonly action: "set";
-
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: EncodeStreamContextInit<TRawChunk, TEncodedChunk>) {
-    super({
-      signal: init.signal,
-      action: "set",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "set";
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
+    super({ ...init, action: "set" });
   }
 }
 
+/**
+ * `DecodeStreamContext` の初期値です。
+ */
 type DecodeStreamContextInit<TRawChunk = any, TDecodedChunk = TRawChunk> = {
-  readonly signal?: AbortSignal | undefined;
-  readonly action?: "stream" | undefined;
+  /**
+   * 対象のキーです。
+   */
   readonly key: string;
-  readonly source?: IReadableStream<TRawChunk> | undefined;
-  readonly destination?: IReadableStream<TDecodedChunk> | undefined;
-  readonly vars?: VariablesInit | undefined;
+
+  /**
+   * 中断を知らせるシグナルです。
+   */
+  readonly signal: AbortSignal;
+
+  /**
+   * 変換前のストリームです。
+   */
+  readonly source: IReadableStream<TRawChunk>;
+
+  /**
+   * 変換後のストリームです。
+   *
+   * ミドルウェアが設定します。
+   * 存在しない場合は未設定を表します。
+   */
+  readonly destination?: IReadableStream<TDecodedChunk>;
 
   /**
    * 共有する変数ストアです。
    *
-   * 指定したときは `vars` の複写ではなくストアの参照を共有し、下流の `set` が上流の `get` に見えます。
-   * オニオン実行のネストで使用します。指定しないときは独立したストアを作成します。
+   * 指定したときは `vars` を複写せず、ストアの参照を共有します。
+   * 下流の `set` は上流の `get` に見えます。
+   * オニオン実行のネストで使用します。
+   * 省略時は独立したストアを作成します。
    */
-  readonly store?: VarsStore | undefined;
+  readonly store?: VariablesStore | undefined;
+
+  /**
+   * 実行時変数の初期値です。
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
+/**
+ * ストリーム復号のコンテキストです。
+ */
 export class DecodeStreamContext<TRawChunk = any, TDecodedChunk = TRawChunk>
-  extends TransformStreamContext<TRawChunk, TDecodedChunk>
+  extends TransformStreamContext<"stream", TRawChunk, TDecodedChunk>
   implements IDecodeStreamContext<TRawChunk, TDecodedChunk>
 {
-  public override readonly action: "stream";
-
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
   public constructor(init: DecodeStreamContextInit<TRawChunk, TDecodedChunk>) {
-    super({
-      signal: init.signal,
-      action: "stream",
-      key: init.key,
-      source: init.source,
-      vars: init.vars,
-      store: init.store,
-    });
-    this.action = "stream";
-    if ("destination" in init) {
-      this.destination = init.destination as any;
-    } else {
-      delete this.destination;
-    }
+    super({ ...init, action: "stream" });
   }
-}
-
-// -------------------------------------------------------------------------------------------------
-//
-// ユーティリティー
-//
-// クラスにはインターフェイスで公開されているプロパティー・メソッド以外を公開しないため、
-// 変数ストアの参照・列挙・派生・複製は以下の関数で行います。
-// 内部状態へのアクセスは `varsStates` 経由です。
-//
-// -------------------------------------------------------------------------------------------------
-
-/**
- * 共有している変数ストアを返します。
- *
- * 派生コンテキストの作成に使用します。返される `data`/`readonlyKeys` は共有参照です。
- *
- * @param context 対象のコンテキストです。
- * @returns 変数ストアを返します。
- */
-export function getVarsStore(context: IPipelineContext): VarsStore {
-  const state = getVars(context);
-  return { data: state.data, readonlyKeys: state.readonlyKeys };
-}
-
-/**
- * 保持する変数のエントリー列を返します。
- *
- * @param context 対象のコンテキストです。
- * @returns 変数のエントリー列を返します。
- */
-export function getVarsEntries(context: IPipelineContext): IterableIterator<[string, unknown]> {
-  return getVars(context).data.entries();
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * 変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- * オニオン実行のネストで使用します。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function derivePipelineContext(
-  context: PipelineContext,
-  init: Omit<PipelineContextInit, "store" | "vars"> & {
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): PipelineContext {
-  return new PipelineContext({ vars: init.vars, store: getVarsStore(context) });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * 変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function clonePipelineContext(
-  context: PipelineContext,
-  overrides?: VariablesInit,
-): PipelineContext {
-  const cloned = new PipelineContext();
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveMapKeyContext(
-  context: MapKeyContext,
-  init: Omit<MapKeyContextInit, "store" | "vars" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): MapKeyContext {
-  return new MapKeyContext({
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneMapKeyContext(
-  context: MapKeyContext,
-  overrides?: VariablesInit,
-): MapKeyContext {
-  const cloned = new MapKeyContext({ key: context.key });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveActionContext(
-  context: ActionContext,
-  init: Omit<ActionContextInit, "store" | "vars"> & {
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): ActionContext {
-  return new ActionContext({
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneActionContext(
-  context: ActionContext,
-  overrides?: VariablesInit,
-): ActionContext {
-  const cloned = new ActionContext({ signal: context.signal, action: context.action });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveLifecycleContext(
-  context: LifecycleContext,
-  init: Omit<LifecycleContextInit, "store" | "vars"> & {
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): LifecycleContext {
-  return new LifecycleContext({
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneLifecycleContext(
-  context: LifecycleContext,
-  overrides?: VariablesInit,
-): LifecycleContext {
-  const cloned = new LifecycleContext({ signal: context.signal, action: context.action });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveOpenContext(
-  context: OpenContext,
-  init: Omit<OpenContextInit, "store" | "vars" | "action"> & {
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): OpenContext {
-  return new OpenContext({
-    signal: init.signal ?? context.signal,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneOpenContext(context: OpenContext, overrides?: VariablesInit): OpenContext {
-  const cloned = new OpenContext({ signal: context.signal });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveCloseContext(
-  context: CloseContext,
-  init: Omit<CloseContextInit, "store" | "vars" | "action"> & {
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): CloseContext {
-  return new CloseContext({
-    signal: init.signal ?? context.signal,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneCloseContext(context: CloseContext, overrides?: VariablesInit): CloseContext {
-  const cloned = new CloseContext({ signal: context.signal });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action`/`key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- * オニオン実行のネストで使用します。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveKeyedActionContext(
-  context: KeyedActionContext,
-  init: Omit<KeyedActionContextInit, "store" | "vars" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): KeyedActionContext {
-  return new KeyedActionContext({
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action`/`key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneKeyedActionContext(
-  context: KeyedActionContext,
-  overrides?: VariablesInit,
-): KeyedActionContext {
-  const cloned = new KeyedActionContext({
-    signal: context.signal,
-    action: context.action,
-    key: context.key,
-  });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveSetContext(
-  context: SetContext,
-  init: Omit<SetContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): SetContext {
-  return new SetContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneSetContext(context: SetContext, overrides?: VariablesInit): SetContext {
-  const cloned = new SetContext({ signal: context.signal, key: context.key });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`repair` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveGetContext(
-  context: GetContext,
-  init: Omit<GetContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): GetContext {
-  return new GetContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    repair: init.repair ?? context.repair,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`repair` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneGetContext(context: GetContext, overrides?: VariablesInit): GetContext {
-  const cloned = new GetContext({
-    signal: context.signal,
-    key: context.key,
-    repair: context.repair,
-  });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`repair` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveStreamContext(
-  context: StreamContext,
-  init: Omit<StreamContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): StreamContext {
-  return new StreamContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    repair: init.repair ?? context.repair,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`repair` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneStreamContext(
-  context: StreamContext,
-  overrides?: VariablesInit,
-): StreamContext {
-  const cloned = new StreamContext({
-    signal: context.signal,
-    key: context.key,
-    repair: context.repair,
-  });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveHasContext(
-  context: HasContext,
-  init: Omit<HasContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): HasContext {
-  return new HasContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneHasContext(context: HasContext, overrides?: VariablesInit): HasContext {
-  const cloned = new HasContext({ signal: context.signal, key: context.key });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveDeleteContext(
-  context: DeleteContext,
-  init: Omit<DeleteContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): DeleteContext {
-  return new DeleteContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneDeleteContext(
-  context: DeleteContext,
-  overrides?: VariablesInit,
-): DeleteContext {
-  const cloned = new DeleteContext({ signal: context.signal, key: context.key });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key` は上書きでき、変数マップは共有されるため、下流の `set` が上流の `get` に見えます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveClearContext(
-  context: ClearContext,
-  init: Omit<ClearContextInit, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): ClearContext {
-  return new ClearContext({
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    vars: init.vars,
-    store: getVarsStore(context),
-  });
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneClearContext(context: ClearContext, overrides?: VariablesInit): ClearContext {
-  const cloned = new ClearContext({ signal: context.signal, key: context.key });
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveTransformContext<TSource = any, TDestination = TSource>(
-  context: TransformContext<TSource, TDestination>,
-  init: Omit<TransformContextInit<TSource, TDestination>, "store" | "vars" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): TransformContext<TSource, TDestination> {
-  const derivedInit: Mutable<TransformContextInit<TSource, TDestination>> = {
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new TransformContext<TSource, TDestination>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneTransformContext<TSource = any, TDestination = TSource>(
-  context: TransformContext<TSource, TDestination>,
-  overrides?: VariablesInit,
-): TransformContext<TSource, TDestination> {
-  const clonedInit: Mutable<TransformContextInit<TSource, TDestination>> = {
-    signal: context.signal,
-    action: context.action,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new TransformContext<TSource, TDestination>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveTransformDataContext<TSourceData = any, TDestinationData = TSourceData>(
-  context: TransformDataContext<TSourceData, TDestinationData>,
-  init: Omit<TransformDataContextInit<TSourceData, TDestinationData>, "store" | "vars" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): TransformDataContext<TSourceData, TDestinationData> {
-  const derivedInit: Mutable<TransformDataContextInit<TSourceData, TDestinationData>> = {
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new TransformDataContext<TSourceData, TDestinationData>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneTransformDataContext<TSourceData = any, TDestinationData = TSourceData>(
-  context: TransformDataContext<TSourceData, TDestinationData>,
-  overrides?: VariablesInit,
-): TransformDataContext<TSourceData, TDestinationData> {
-  const clonedInit: Mutable<TransformDataContextInit<TSourceData, TDestinationData>> = {
-    signal: context.signal,
-    action: context.action,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new TransformDataContext<TSourceData, TDestinationData>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveEncodeContext<TRawData = any, TEncodedData = TRawData>(
-  context: EncodeContext<TRawData, TEncodedData>,
-  init: Omit<EncodeContextInit<TRawData, TEncodedData>, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): EncodeContext<TRawData, TEncodedData> {
-  const derivedInit: Mutable<EncodeContextInit<TRawData, TEncodedData>> = {
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new EncodeContext<TRawData, TEncodedData>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneEncodeContext<TRawData = any, TEncodedData = TRawData>(
-  context: EncodeContext<TRawData, TEncodedData>,
-  overrides?: VariablesInit,
-): EncodeContext<TRawData, TEncodedData> {
-  const clonedInit: Mutable<EncodeContextInit<TRawData, TEncodedData>> = {
-    signal: context.signal,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new EncodeContext<TRawData, TEncodedData>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveDecodeContext<TRawData = any, TDecodedData = TRawData>(
-  context: DecodeContext<TRawData, TDecodedData>,
-  init: Omit<DecodeContextInit<TRawData, TDecodedData>, "store" | "vars" | "action" | "key"> & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): DecodeContext<TRawData, TDecodedData> {
-  const derivedInit: Mutable<DecodeContextInit<TRawData, TDecodedData>> = {
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new DecodeContext<TRawData, TDecodedData>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneDecodeContext<TRawData = any, TDecodedData = TRawData>(
-  context: DecodeContext<TRawData, TDecodedData>,
-  overrides?: VariablesInit,
-): DecodeContext<TRawData, TDecodedData> {
-  const clonedInit: Mutable<DecodeContextInit<TRawData, TDecodedData>> = {
-    signal: context.signal,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new DecodeContext<TRawData, TDecodedData>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveTransformStreamContext<TSourceChunk = any, TDestinationChunk = TSourceChunk>(
-  context: TransformStreamContext<TSourceChunk, TDestinationChunk>,
-  init: Omit<
-    TransformStreamContextInit<TSourceChunk, TDestinationChunk>,
-    "store" | "vars" | "key"
-  > & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): TransformStreamContext<TSourceChunk, TDestinationChunk> {
-  const derivedInit: Mutable<TransformStreamContextInit<TSourceChunk, TDestinationChunk>> = {
-    signal: init.signal ?? context.signal,
-    action: init.action ?? context.action,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new TransformStreamContext<TSourceChunk, TDestinationChunk>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`action`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneTransformStreamContext<TSourceChunk = any, TDestinationChunk = TSourceChunk>(
-  context: TransformStreamContext<TSourceChunk, TDestinationChunk>,
-  overrides?: VariablesInit,
-): TransformStreamContext<TSourceChunk, TDestinationChunk> {
-  const clonedInit: Mutable<TransformStreamContextInit<TSourceChunk, TDestinationChunk>> = {
-    signal: context.signal,
-    action: context.action,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new TransformStreamContext<TSourceChunk, TDestinationChunk>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveEncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>(
-  context: EncodeStreamContext<TRawChunk, TEncodedChunk>,
-  init: Omit<
-    EncodeStreamContextInit<TRawChunk, TEncodedChunk>,
-    "store" | "vars" | "action" | "key"
-  > & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): EncodeStreamContext<TRawChunk, TEncodedChunk> {
-  const derivedInit: Mutable<EncodeStreamContextInit<TRawChunk, TEncodedChunk>> = {
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new EncodeStreamContext<TRawChunk, TEncodedChunk>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneEncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>(
-  context: EncodeStreamContext<TRawChunk, TEncodedChunk>,
-  overrides?: VariablesInit,
-): EncodeStreamContext<TRawChunk, TEncodedChunk> {
-  const clonedInit: Mutable<EncodeStreamContextInit<TRawChunk, TEncodedChunk>> = {
-    signal: context.signal,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new EncodeStreamContext<TRawChunk, TEncodedChunk>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
-}
-
-/**
- * 同一ストアを共有する派生コンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は上書きでき、変数マップは共有されるため、
- * 下流の `set` が上流の `get` に見えます。`source`/`destination` は存在の有無で引き継ぐため、
- * 明示的な `undefined` で上書きできます。
- *
- * @param context 派生元のコンテキストです。
- * @param init 上書きするフィールドです。`vars` を指定したときは共有ストアに追記されます。
- * @returns 派生したコンテキストを返します。
- */
-export function deriveDecodeStreamContext<TRawChunk = any, TDecodedChunk = TRawChunk>(
-  context: DecodeStreamContext<TRawChunk, TDecodedChunk>,
-  init: Omit<
-    DecodeStreamContextInit<TRawChunk, TDecodedChunk>,
-    "store" | "vars" | "action" | "key"
-  > & {
-    readonly key?: string | undefined;
-    readonly vars?: VariablesInit | undefined;
-  } = {},
-): DecodeStreamContext<TRawChunk, TDecodedChunk> {
-  const derivedInit: Mutable<DecodeStreamContextInit<TRawChunk, TDecodedChunk>> = {
-    signal: init.signal ?? context.signal,
-    key: init.key ?? context.key,
-    source: "source" in init ? init.source : context.source,
-    vars: init.vars,
-    store: getVarsStore(context),
-  };
-  if ("destination" in init) {
-    derivedInit.destination = init.destination;
-  } else if ("destination" in context) {
-    derivedInit.destination = context.destination;
-  }
-  return new DecodeStreamContext<TRawChunk, TDecodedChunk>(derivedInit);
-}
-
-/**
- * 変数マップを複製した新しいコンテキストを作成します。
- *
- * `signal`/`key`/`source`/`destination` は引き継ぎ、変数と読み取り専用集合だけを複写します。
- * 上書きが指定されたときは、読み取り専用を迂回して差し替えます。
- *
- * @param context 複写元のコンテキストです。
- * @param overrides 上書きする変数です。省略時は複写のみ行います。
- * @returns 複製したコンテキストを返します。
- */
-export function cloneDecodeStreamContext<TRawChunk = any, TDecodedChunk = TRawChunk>(
-  context: DecodeStreamContext<TRawChunk, TDecodedChunk>,
-  overrides?: VariablesInit,
-): DecodeStreamContext<TRawChunk, TDecodedChunk> {
-  const clonedInit: Mutable<DecodeStreamContextInit<TRawChunk, TDecodedChunk>> = {
-    signal: context.signal,
-    key: context.key,
-    source: context.source,
-  };
-  if ("destination" in context) {
-    clonedInit.destination = context.destination;
-  }
-  const cloned = new DecodeStreamContext<TRawChunk, TDecodedChunk>(clonedInit);
-  copyVars(getVars(context), getVars(cloned), overrides);
-  return cloned;
 }

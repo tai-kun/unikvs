@@ -8,10 +8,9 @@ import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import {
-  type VarsStore,
-  createVarsStore,
   type VariablesInit,
   type VariablesEntry,
+  type VariablesStore,
   GetContext,
   HasContext,
   SetContext,
@@ -20,6 +19,7 @@ import {
   CloseContext,
   DeleteContext,
   StreamContext,
+  createVariablesStore,
 } from "./_contexts.js";
 import { logger, repairLogger } from "./_logger.js";
 import {
@@ -626,8 +626,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param varsOption 操作固有の変数です。
    * @returns 共有ストアを返します。
    */
-  #createOperationStore(varsOption?: VariablesInit): VarsStore {
-    return createVarsStore([...this.#baseVars, ...normalizeVarsInit(varsOption)]);
+  #createOperationStore(varsOption?: VariablesInit): VariablesStore {
+    return createVariablesStore([...this.#baseVars, ...normalizeVarsInit(varsOption)]);
   }
 
   /**
@@ -988,7 +988,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       readonly leaf: PipelineLeaf;
       readonly key: string;
     }[],
-    store: VarsStore,
+    store: VariablesStore,
     failed: ReadonlySet<PipelineLeaf>,
     errors: PluginErrorRecord[],
     signal: AbortSignal,
@@ -1092,7 +1092,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     io: Asyncmux,
     signal: AbortSignal,
     key: string,
-    store: VarsStore,
+    store: VariablesStore,
     value: unknown,
   ): Promise<void> {
     const targets = await this.#pipeline.encode({ signal, key, store }, value);
@@ -1135,7 +1135,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     io: Asyncmux,
     signal: AbortSignal,
     key: string,
-    store: VarsStore,
+    store: VariablesStore,
     value: IReadableStream,
   ): Promise<void> {
     const streams = new Set<IReadableStream>([value]);
@@ -1256,7 +1256,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     data: unknown,
     hit: ResolvedLeaf,
     missing: readonly PipelineLeaf[],
-    store: VarsStore,
+    store: VariablesStore,
     key: string,
     signal: AbortSignal,
     throwOnRepairDenied: boolean,
