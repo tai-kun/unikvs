@@ -16,12 +16,13 @@ import {
 } from "../src/errors.js";
 
 function openContext(): IMiddleware.OpenContext {
-  return new OpenContext() as IMiddleware.OpenContext;
+  return new OpenContext({ signal: new AbortController().signal }) as IMiddleware.OpenContext;
 }
 
 function encodeContext(source: unknown): IMiddleware.EncodeContext {
   return new EncodeContext({
     key: "k1",
+    signal: new AbortController().signal,
     source,
   }) as IMiddleware.EncodeContext;
 }
@@ -29,6 +30,7 @@ function encodeContext(source: unknown): IMiddleware.EncodeContext {
 function decodeContext(source: unknown): IMiddleware.DecodeContext {
   return new DecodeContext({
     key: "k1",
+    signal: new AbortController().signal,
     source,
   }) as IMiddleware.DecodeContext;
 }
@@ -153,6 +155,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     // 実行と検証
     const c = new EncodeStreamContext({
       key: "k1",
+      signal: new AbortController().signal,
       source: new ReadableStream(),
     }) as IMiddleware.EncodeStreamContext;
     await expect(middleware.encodeStream(c, noop)).rejects.toThrow(StreamEncodingNotSupportedError);
@@ -168,6 +171,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     // 実行と検証
     const c = new DecodeStreamContext({
       key: "k1",
+      signal: new AbortController().signal,
       source: new ReadableStream(),
     }) as IMiddleware.DecodeStreamContext;
     await expect(middleware.decodeStream(c, noop)).rejects.toThrow(StreamDecodingNotSupportedError);
