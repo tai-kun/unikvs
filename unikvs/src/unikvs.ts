@@ -1,18 +1,26 @@
 import {
-  type IMiddleware,
   type IStorage,
+  type IMiddleware,
   type IReadableStream,
   RepairNotAllowedError,
 } from "@unikvs/core";
 import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
-import PipelineContext, {
+import {
   type VarsStore,
-  type VariablesEntry,
-  type VariablesInit,
   createVarsStore,
-} from "./_context.js";
+  type VariablesInit,
+  type VariablesEntry,
+  GetContext,
+  HasContext,
+  SetContext,
+  OpenContext,
+  ClearContext,
+  CloseContext,
+  DeleteContext,
+  StreamContext,
+} from "./_contexts.js";
 import { logger, repairLogger } from "./_logger.js";
 import {
   type PipelineLeaf,
@@ -705,19 +713,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         openFns.push([
           async () => {
             const pluginVars = new Map(operationVars);
-            const c = new PipelineContext({
+            const c = new OpenContext({
               signal,
-              action: "open",
-              values: pluginVars.entries(),
+              vars: pluginVars.entries(),
             });
             await leaf.storage.open(c as IStorage.OpenContext);
 
             dispose.push(async () => {
               try {
-                const cc = new PipelineContext({
+                const cc = new CloseContext({
                   signal,
-                  action: "close",
-                  values: pluginVars.entries(),
+                  vars: pluginVars.entries(),
                 });
                 await leaf.storage.close(cc as IStorage.CloseContext);
               } catch (ex) {
@@ -737,19 +743,17 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         openFns.push([
           async () => {
             const pluginVars = new Map(operationVars);
-            const c = new PipelineContext({
+            const c = new OpenContext({
               signal,
-              action: "open",
-              values: pluginVars.entries(),
+              vars: pluginVars.entries(),
             });
             await middleware.open(c as IMiddleware.OpenContext);
 
             dispose.push(async () => {
               try {
-                const cc = new PipelineContext({
+                const cc = new CloseContext({
                   signal,
-                  action: "close",
-                  values: pluginVars.entries(),
+                  vars: pluginVars.entries(),
                 });
                 await middleware.close(cc as IMiddleware.CloseContext);
               } catch (ex) {
@@ -839,10 +843,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const [index, leaf] of this.#pipeline.leaves.entries()) {
           closeFns.push([
             async () => {
-              const c = new PipelineContext({
+              const c = new CloseContext({
                 signal,
-                action: "close",
-                values: new Map(operationVars).entries(),
+                vars: new Map(operationVars).entries(),
               });
               await leaf.storage.close(c as IStorage.CloseContext);
             },
@@ -856,10 +859,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const [index, plugin] of this.#pipeline.middlewares.entries()) {
           closeFns.push([
             async () => {
-              const c = new PipelineContext({
+              const c = new CloseContext({
                 signal,
-                action: "close",
-                values: new Map(operationVars).entries(),
+                vars: new Map(operationVars).entries(),
               });
               await plugin.close(c as IMiddleware.CloseContext);
             },
@@ -944,10 +946,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               ...this.#pipeline.middlewares,
             ].map(async (plugin) => {
               try {
-                const c = new PipelineContext({
+                const c = new CloseContext({
                   signal: disposeSignal,
-                  action: "close",
-                  values: new Map(operationVars).entries(),
+                  vars: new Map(operationVars).entries(),
                 });
                 await plugin.close(c as IMiddleware.CloseContext);
               } catch (ex) {
@@ -1010,9 +1011,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         try {
-          const c = new PipelineContext({
+          const c = new SetContext({
             signal,
-            action: "set",
             key: target.key,
             store,
           });
@@ -1044,7 +1044,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   async #runMiddlewareUse(
     action: "read" | "write" | "delete" | "clear",
-    useContext: PipelineContext,
+    useContext: IMiddleware.UseContext,
   ): Promise<void> {
     useContext.signal.throwIfAborted();
 
@@ -1103,9 +1103,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       await Promise.all(
         targets.map(async (target) => {
           try {
-            const c = new PipelineContext({
+            const c = new SetContext({
               signal,
-              action: "set",
               key: target.key,
               store,
             });
@@ -1161,9 +1160,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       await Promise.all(
         tree.targets.map(async (target) => {
           try {
-            const c = new PipelineContext({
+            const c = new SetContext({
               signal,
-              action: "set",
               key: target.key,
               store,
             });
@@ -1224,9 +1222,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       // 書き込み前の `use` による検証を行います。変異は後続のエンコード・書き込みに引き継がれます。
-      const useContext = new PipelineContext({
+      const useContext = new SetContext({
         signal,
-        action: "set",
         key,
         store,
       });
@@ -1272,9 +1269,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throwOnRepairDenied,
       raw,
       async (leaf, writeKey, input) => {
-        const c = new PipelineContext({
+        const c = new SetContext({
           signal,
-          action: "set",
           key: writeKey,
           store,
         });
@@ -1326,9 +1322,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
       const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
-      const useContext = new PipelineContext({
+      const useContext = new GetContext({
         signal,
-        action: "get",
         key,
         repair: repair
           ? { enabled: true, targets: leafNames as [string, ...string[]] }
@@ -1348,9 +1343,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const resolver = this.#pipeline.createResolver({ signal, key, store });
         for (const leaf of this.#pipeline) {
           const resolved = resolver.resolve(leaf);
-          const existsContext = new PipelineContext({
+          const existsContext = new HasContext({
             signal,
-            action: "has",
             key: resolved.key,
             store,
           });
@@ -1360,9 +1354,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 targets: leafNames as [string, ...string[]],
               }
             : { enabled: false as const, targets: [] as const };
-          const readContext = new PipelineContext({
+          const readContext = new GetContext({
             signal,
-            action: "get",
             key: resolved.key,
             repair: readRepair,
             store,
@@ -1461,9 +1454,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
       const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
-      const useContext = new PipelineContext({
+      const useContext = new StreamContext({
         signal,
-        action: "stream",
         key,
         repair: repair
           ? { enabled: true, targets: leafNames as [string, ...string[]] }
@@ -1489,9 +1481,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         const resolver = this.#pipeline.createResolver({ signal, key, store });
         for (const leaf of this.#pipeline) {
           const resolved = resolver.resolve(leaf);
-          const existsContext = new PipelineContext({
+          const existsContext = new HasContext({
             signal,
-            action: "has",
             key: resolved.key,
             store,
           });
@@ -1501,9 +1492,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 targets: leafNames as [string, ...string[]],
               }
             : { enabled: false as const, targets: [] as const };
-          const readableContext = new PipelineContext({
+          const readableContext = new StreamContext({
             signal,
-            action: "stream",
             key: resolved.key,
             repair: readableRepair,
             store,
@@ -1541,9 +1531,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           fillTasks.push(
             (async () => {
               try {
-                const wc = new PipelineContext({
+                const wc = new SetContext({
                   signal: repairSignal,
-                  action: "set",
                   key: target.key,
                   store,
                 });
@@ -1770,9 +1759,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       // 存在確認に先立ち、各ミドルウェアの `use` を実行します。
       // `use` による vars の変更は後続の解決・走査に引き継がれます。
-      const useContext = new PipelineContext({
+      const useContext = new HasContext({
         signal,
-        action: "has",
         key,
         store,
       });
@@ -1786,9 +1774,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         for (const leaf of this.#pipeline) {
           const resolved = resolver.resolve(leaf);
           try {
-            const c = new PipelineContext({
+            const c = new HasContext({
               signal,
-              action: "has",
               key: resolved.key,
               store,
             });
@@ -1851,9 +1838,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       // 削除に先立ち、各ミドルウェアの `use` を実行します。
       // `use` による vars の変更は後続の解決・削除に引き継がれます。
-      const useContext = new PipelineContext({
+      const useContext = new DeleteContext({
         signal,
-        action: "delete",
         key,
         store,
       });
@@ -1866,15 +1852,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         await Promise.all(
           this.#pipeline.leaves.map(async (leaf) => {
             const resolved = resolver.resolve(leaf);
-            const existsContext = new PipelineContext({
+            const existsContext = new HasContext({
               signal,
-              action: "has",
               key: resolved.key,
               store,
             });
-            const deleteContext = new PipelineContext({
+            const deleteContext = new DeleteContext({
               signal,
-              action: "delete",
               key: resolved.key,
               store,
             });
@@ -1921,9 +1905,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       // 全ミドルウェアの `use` を実行します。
-      const useContext = new PipelineContext({
+      const useContext = new ClearContext({
         signal,
-        action: "clear",
         key: "",
         store,
       });
@@ -1935,9 +1918,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         await Promise.all(
           this.#pipeline.leaves.map(async (leaf, index) => {
             try {
-              const c = new PipelineContext({
+              const c = new ClearContext({
                 signal,
-                action: "clear",
                 key: "",
                 store,
               });

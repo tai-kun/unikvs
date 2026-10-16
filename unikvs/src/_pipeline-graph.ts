@@ -1,6 +1,13 @@
 import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
 
-import PipelineContext, { type VarsStore } from "./_context.js";
+import {
+  type VarsStore,
+  DecodeContext,
+  EncodeContext,
+  MapKeyContext,
+  DecodeStreamContext,
+  EncodeStreamContext,
+} from "./_contexts.js";
 import { logger, repairLogger } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import type UniKvsStorage from "./_storage.js";
@@ -255,7 +262,6 @@ type BuildEncodeTreeOptions = {
  * 操作共通の実行時情報です。
  *
  * `store` は操作内の全コンテキストで共有され、下流の `set` が上流の `get` に見えます。
- * `base` は派生元のコンテキストであり、`derive` で共有ストアを引き継いだ派生コンテキストを作成します。
  */
 type OperationScope = {
   /**
@@ -272,14 +278,6 @@ type OperationScope = {
    * 操作内で共有される変数ストアです。
    */
   readonly store: VarsStore;
-
-  /**
-   * 派生元のベースコンテキストです。
-   *
-   * `signal`/`action`/`key`/`repair` の既定値として使用し、`derive` で共有ストアを引き継ぎます。
-   * 省略時は `signal`/`key`/`store` から都度生成します。
-   */
-  readonly base?: PipelineContext | undefined;
 };
 
 // -------------------------------------------------------------------------------------------------
@@ -376,27 +374,6 @@ function createEntries(
 }
 
 /**
- * 操作のベースコンテキストを作成します。
- *
- * 共有ストアを引き継ぎ、`signal`/`key` を操作スコープの値で上書きした派生コンテキストの雛形を返します。
- * 各 `apply*` はここから `derive` でデータ用コンテキストを作成し、ストアを共有します。
- *
- * @param scope 操作共通の実行時情報です。
- * @returns ベースコンテキストを返します。
- */
-function createBaseContext(scope: OperationScope): PipelineContext {
-  if (scope.base) {
-    return scope.base;
-  }
-
-  return new PipelineContext({
-    signal: scope.signal,
-    key: scope.key,
-    store: scope.store,
-  });
-}
-
-/**
  * 単一ミドルウェアの `mapKey` を実行します。
  *
  * 共有ストアを参照するため、カスタム変数の下流変更が写像にも見えます。
@@ -407,8 +384,7 @@ function createBaseContext(scope: OperationScope): PipelineContext {
  * @returns 写像後のキーを返します。
  */
 function applyMapKey(middleware: UniKvsMiddleware, key: string, scope: OperationScope): string {
-  const base = createBaseContext(scope);
-  const c = base.derive({ key });
+  const c = new MapKeyContext({ key, store: scope.store });
   return middleware.mapKey(c as IMiddleware.MapKeyContext);
 }
 
@@ -431,12 +407,11 @@ async function applyEncode(
   next: IMiddleware.INext = async () => {},
 ): Promise<unknown> {
   scope.signal.throwIfAborted();
-  const base = createBaseContext(scope);
-  const c = base.derive({
-    action: "set",
+  const c = new EncodeContext({
+    signal: scope.signal,
     key: scope.key,
     source,
-    destination: undefined,
+    store: scope.store,
   });
   await middleware.encode(c as IMiddleware.EncodeContext, next);
   scope.signal.throwIfAborted();
@@ -460,12 +435,11 @@ async function applyEncodeStream(
   next: IMiddleware.INext = async () => {},
 ): Promise<IReadableStream> {
   scope.signal.throwIfAborted();
-  const base = createBaseContext(scope);
-  const c = base.derive({
-    action: "set",
+  const c = new EncodeStreamContext({
+    signal: scope.signal,
     key: scope.key,
     source,
-    destination: undefined,
+    store: scope.store,
   });
   await middleware.encodeStream(c as IMiddleware.EncodeStreamContext, next);
   scope.signal.throwIfAborted();
@@ -798,7 +772,7 @@ export class PipelineGraph {
    * 各段の前後で中断を確認します。
    *
    * @param leaf デコード元の葉です。
-   * @param scope 操作共通の実行時情報です。`key` は論理キー、`action` は呼び出し側で `get` として扱います。
+   * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param data デコードするデータです。
    * @returns デコード済みのデータを返します。
    */
@@ -812,12 +786,11 @@ export class PipelineGraph {
       }
 
       const node = reversed[index]!;
-      const base = createBaseContext(scope);
-      const ctx = base.derive({
-        action: "get",
+      const ctx = new DecodeContext({
+        signal: scope.signal,
         key: scope.key,
         source: input,
-        destination: undefined,
+        store: scope.store,
       });
       let downstreamResult: unknown;
       let hasDownstream = false;
@@ -864,12 +837,11 @@ export class PipelineGraph {
         }
 
         const node = reversed[index]!;
-        const base = createBaseContext(scope);
-        const ctx = base.derive({
-          action: "stream",
+        const ctx = new DecodeStreamContext({
+          signal: scope.signal,
           key: scope.key,
           source: input,
-          destination: undefined,
+          store: scope.store,
         });
         let downstreamResult: IReadableStream | undefined;
         let hasDownstream = false;
@@ -916,12 +888,11 @@ export class PipelineGraph {
 
       // 親コンテキストを共有ストアで作成し、`next` 内で子の入力として `destination` を参照します。
       // ミドルウェアは `destination` を設定してから `next` を呼ぶため、`next` 実行時点では親出力が確定しています。
-      const base = createBaseContext(scope);
-      const parentCtx = base.derive({
-        action: "set",
+      const parentCtx = new EncodeContext({
+        signal: scope.signal,
         key: scope.key,
         source: input,
-        destination: undefined,
+        store: scope.store,
       });
       let nodeKey = parentKey;
       const next: IMiddleware.INext = async () => {

@@ -1,7 +1,15 @@
 import type { IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
 import { describe, test } from "vitest";
 
-import PipelineContext from "../src/_context.js";
+import {
+  ClearContext,
+  DeleteContext,
+  GetContext,
+  HasContext,
+  OpenContext,
+  SetContext,
+  StreamContext,
+} from "../src/_contexts.js";
 import UniKvsStorage from "../src/_storage.js";
 import {
   StorageIsNotOpenError,
@@ -10,27 +18,27 @@ import {
 } from "../src/errors.js";
 
 function openContext(): IStorage.OpenContext {
-  return new PipelineContext({ action: "open" }) as IStorage.OpenContext;
+  return new OpenContext() as IStorage.OpenContext;
 }
 
 function setContext(key: string): IStorage.WriteContext {
-  return new PipelineContext({ action: "set", key }) as IStorage.WriteContext;
+  return new SetContext({ key }) as IStorage.WriteContext;
 }
 
 function getContext(key: string): IStorage.ReadContext {
-  return new PipelineContext({ action: "get", key }) as IStorage.ReadContext;
+  return new GetContext({ key }) as IStorage.ReadContext;
 }
 
 function hasContext(key: string): IStorage.ExistsContext {
-  return new PipelineContext({ action: "has", key }) as IStorage.ExistsContext;
+  return new HasContext({ key }) as IStorage.ExistsContext;
 }
 
 function deleteContext(key: string): IStorage.DeleteContext {
-  return new PipelineContext({ action: "delete", key }) as IStorage.DeleteContext;
+  return new DeleteContext({ key }) as IStorage.DeleteContext;
 }
 
 function clearContext(): IStorage.ClearContext {
-  return new PipelineContext({ action: "clear", key: "" }) as IStorage.ClearContext;
+  return new ClearContext({ key: "" }) as IStorage.ClearContext;
 }
 
 /**
@@ -194,8 +202,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     await storage.open(openContext());
 
     // 実行と検証
-    const c = new PipelineContext({
-      action: "stream",
+    const c = new StreamContext({
       key: "k1",
     }) as IStorage.GetReadableContext;
     await expect(storage.getReadable(c)).rejects.toThrow(ReadableStreamNotSupportedError);
@@ -210,8 +217,7 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
     await storage.open(openContext());
 
     // 実行と検証
-    const c = new PipelineContext({
-      action: "set",
+    const c = new SetContext({
       key: "k1",
     }) as IStorage.GetWritableContext;
     await expect(storage.getWritable(c)).rejects.toThrow(WritableStreamNotSupportedError);
@@ -245,8 +251,7 @@ describe("UniKvsStorage - ストリーム", () => {
     await storage.open(openContext());
 
     // 実行
-    const c = new PipelineContext({
-      action: "stream",
+    const c = new StreamContext({
       key: "k1",
     }) as IStorage.GetReadableContext;
     const readable = await storage.getReadable(c);
@@ -281,8 +286,7 @@ describe("UniKvsStorage - ストリーム", () => {
     await storage.open(openContext());
 
     // 実行
-    const c = new PipelineContext({
-      action: "set",
+    const c = new SetContext({
       key: "k1",
     }) as IStorage.GetWritableContext;
     const writable = await storage.getWritable(c);

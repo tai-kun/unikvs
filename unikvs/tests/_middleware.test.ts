@@ -1,7 +1,13 @@
 import type { IMiddleware } from "@unikvs/core";
 import { describe, test } from "vitest";
 
-import PipelineContext from "../src/_context.js";
+import {
+  DecodeContext,
+  DecodeStreamContext,
+  EncodeContext,
+  EncodeStreamContext,
+  OpenContext,
+} from "../src/_contexts.js";
 import UniKvsMiddleware from "../src/_middleware.js";
 import {
   MiddlewareIsNotOpenError,
@@ -10,20 +16,18 @@ import {
 } from "../src/errors.js";
 
 function openContext(): IMiddleware.OpenContext {
-  return new PipelineContext({ action: "open" }) as IMiddleware.OpenContext;
+  return new OpenContext() as IMiddleware.OpenContext;
 }
 
 function encodeContext(source: unknown): IMiddleware.EncodeContext {
-  return new PipelineContext({
-    action: "set",
+  return new EncodeContext({
     key: "k1",
     source,
   }) as IMiddleware.EncodeContext;
 }
 
 function decodeContext(source: unknown): IMiddleware.DecodeContext {
-  return new PipelineContext({
-    action: "get",
+  return new DecodeContext({
     key: "k1",
     source,
   }) as IMiddleware.DecodeContext;
@@ -147,8 +151,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     await middleware.open(openContext());
 
     // 実行と検証
-    const c = new PipelineContext({
-      action: "set",
+    const c = new EncodeStreamContext({
       key: "k1",
       source: new ReadableStream(),
     }) as IMiddleware.EncodeStreamContext;
@@ -165,8 +168,7 @@ describe("UniKvsMiddleware - 異常系・エラーハンドリング", () => {
     await middleware.open(openContext());
 
     // 実行と検証
-    const c = new PipelineContext({
-      action: "stream",
+    const c = new DecodeStreamContext({
       key: "k1",
       source: new ReadableStream(),
     }) as IMiddleware.DecodeStreamContext;

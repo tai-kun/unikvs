@@ -36,13 +36,6 @@ export type VariablesEntry = readonly [name: string, value: unknown];
 export type VariablesInit = { readonly [name: string]: unknown } | Iterable<VariablesEntry>;
 
 /**
- * 書き戻し要求の形状です。
- *
- * `IGetContext` と `IStreamContext` の `repair` と同じ形状です。
- */
-export type PipelineRepair = IGetContext["repair"];
-
-/**
  * 複数のコンテキスト間で共有される変数ストアです。
  *
  * オニオン実行では、操作内の全コンテキストが同一ストアの `data`/`readonlyKeys` を参照し、
@@ -95,7 +88,7 @@ type VarsState = {
  * インスタンスと内部状態の対応表です。
  * コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
  */
-export const varsStates = /*#__PURE__*/ new WeakMap<IPipelineContext, VarsState>();
+const varsStates = /*#__PURE__*/ new WeakMap<IPipelineContext, VarsState>();
 
 function normalizeEntries(vars: VariablesInit | undefined): Iterable<readonly [string, unknown]> {
   if (vars == null) {
@@ -201,7 +194,7 @@ function createRepair(repair?: IGetContext["repair"]): IGetContext["repair"] {
   return { enabled: false, targets: [] };
 }
 
-export type PipelineContextInit = {
+type PipelineContextInit = {
   readonly vars?: VariablesInit | undefined;
 
   /**
@@ -233,7 +226,7 @@ export class PipelineContext implements IPipelineContext {
   }
 }
 
-export type MapKeyContextInit = {
+type MapKeyContextInit = {
   readonly key: string;
   readonly vars?: VariablesInit | undefined;
 
@@ -255,7 +248,7 @@ export class MapKeyContext extends PipelineContext implements IMapKeyContext {
   }
 }
 
-export type ActionContextInit = {
+type ActionContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: IActionContext["action"] | undefined;
   readonly vars?: VariablesInit | undefined;
@@ -281,7 +274,7 @@ export class ActionContext extends PipelineContext implements IActionContext {
   }
 }
 
-export type LifecycleContextInit = {
+type LifecycleContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: ILifecycleContext["action"] | undefined;
   readonly vars?: VariablesInit | undefined;
@@ -309,7 +302,7 @@ export class LifecycleContext extends ActionContext implements ILifecycleContext
   }
 }
 
-export type OpenContextInit = {
+type OpenContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "open" | undefined;
   readonly vars?: VariablesInit | undefined;
@@ -332,7 +325,7 @@ export class OpenContext extends LifecycleContext implements IOpenContext {
   }
 }
 
-export type CloseContextInit = {
+type CloseContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "close" | undefined;
   readonly vars?: VariablesInit | undefined;
@@ -355,7 +348,7 @@ export class CloseContext extends LifecycleContext implements ICloseContext {
   }
 }
 
-export type KeyedActionContextInit = {
+type KeyedActionContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: IKeyedActionContext["action"] | undefined;
   readonly key: string;
@@ -387,7 +380,7 @@ export class KeyedActionContext extends ActionContext implements IKeyedActionCon
   }
 }
 
-export type SetContextInit = {
+type SetContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "set" | undefined;
   readonly key: string;
@@ -417,7 +410,7 @@ export class SetContext extends KeyedActionContext implements ISetContext {
   }
 }
 
-export type GetContextInit = {
+type GetContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "get" | undefined;
   readonly key: string;
@@ -451,7 +444,7 @@ export class GetContext extends KeyedActionContext implements IGetContext {
   }
 }
 
-export type StreamContextInit = {
+type StreamContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "stream" | undefined;
   readonly key: string;
@@ -485,7 +478,7 @@ export class StreamContext extends KeyedActionContext implements IStreamContext 
   }
 }
 
-export type HasContextInit = {
+type HasContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "has" | undefined;
   readonly key: string;
@@ -515,7 +508,7 @@ export class HasContext extends KeyedActionContext implements IHasContext {
   }
 }
 
-export type DeleteContextInit = {
+type DeleteContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "delete" | undefined;
   readonly key: string;
@@ -545,7 +538,7 @@ export class DeleteContext extends KeyedActionContext implements IDeleteContext 
   }
 }
 
-export type ClearContextInit = {
+type ClearContextInit = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "clear" | undefined;
   readonly key: string;
@@ -575,7 +568,7 @@ export class ClearContext extends KeyedActionContext implements IClearContext {
   }
 }
 
-export type TransformContextInit<TSource = any, TDestination = TSource> = {
+type TransformContextInit<TSource = any, TDestination = TSource> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: ITransformContext["action"] | undefined;
   readonly key: string;
@@ -620,7 +613,7 @@ export class TransformContext<TSource = any, TDestination = TSource>
   }
 }
 
-export type TransformDataContextInit<TSourceData = any, TDestinationData = TSourceData> = {
+type TransformDataContextInit<TSourceData = any, TDestinationData = TSourceData> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: ITransformDataContext["action"] | undefined;
   readonly key: string;
@@ -661,7 +654,7 @@ export class TransformDataContext<TSourceData = any, TDestinationData = TSourceD
   }
 }
 
-export type EncodeContextInit<TRawData = any, TEncodedData = TRawData> = {
+type EncodeContextInit<TRawData = any, TEncodedData = TRawData> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "set" | undefined;
   readonly key: string;
@@ -702,7 +695,7 @@ export class EncodeContext<TRawData = any, TEncodedData = TRawData>
   }
 }
 
-export type DecodeContextInit<TRawData = any, TDecodedData = TRawData> = {
+type DecodeContextInit<TRawData = any, TDecodedData = TRawData> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "get" | undefined;
   readonly key: string;
@@ -743,7 +736,7 @@ export class DecodeContext<TRawData = any, TDecodedData = TRawData>
   }
 }
 
-export type TransformStreamContextInit<TSourceChunk = any, TDestinationChunk = TSourceChunk> = {
+type TransformStreamContextInit<TSourceChunk = any, TDestinationChunk = TSourceChunk> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: ITransformStreamContext["action"] | undefined;
   readonly key: string;
@@ -784,7 +777,7 @@ export class TransformStreamContext<TSourceChunk = any, TDestinationChunk = TSou
   }
 }
 
-export type EncodeStreamContextInit<TRawChunk = any, TEncodedChunk = TRawChunk> = {
+type EncodeStreamContextInit<TRawChunk = any, TEncodedChunk = TRawChunk> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "set" | undefined;
   readonly key: string;
@@ -825,7 +818,7 @@ export class EncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>
   }
 }
 
-export type DecodeStreamContextInit<TRawChunk = any, TDecodedChunk = TRawChunk> = {
+type DecodeStreamContextInit<TRawChunk = any, TDecodedChunk = TRawChunk> = {
   readonly signal?: AbortSignal | undefined;
   readonly action?: "stream" | undefined;
   readonly key: string;
