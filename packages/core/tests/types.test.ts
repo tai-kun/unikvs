@@ -284,14 +284,14 @@ test("IGetContext と IStreamContext は書き戻し要求を持つ", () => {
 test("IEncodeContext と IDecodeContext は source と destination を持つ", () => {
   // 実行と検証
   expectTypeOf<IEncodeContext<string, number>["source"]>().toEqualTypeOf<string>();
-  expectTypeOf<IEncodeContext<string, number>["destination"]>().toEqualTypeOf<number>();
+  expectTypeOf<IEncodeContext<string, number>["destination"]>().toEqualTypeOf<number | undefined>();
   expectTypeOf<IDecodeContext<string, number>["source"]>().toEqualTypeOf<string>();
-  expectTypeOf<IDecodeContext<string, number>["destination"]>().toEqualTypeOf<number>();
+  expectTypeOf<IDecodeContext<string, number>["destination"]>().toEqualTypeOf<number | undefined>();
   expectTypeOf<IEncodeStreamContext<ArrayBuffer, number>["source"]>().toEqualTypeOf<
     IReadableStream<ArrayBuffer>
   >();
   expectTypeOf<IDecodeStreamContext<ArrayBuffer, number>["destination"]>().toEqualTypeOf<
-    IReadableStream<number>
+    IReadableStream<number> | undefined
   >();
 });
 

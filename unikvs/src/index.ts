@@ -12,14 +12,18 @@ export type {
   MiddlewareIsNotOpenErrorMeta,
   PluginOperationAggregateErrorArgs,
   PluginOperationAggregateErrorMeta,
+  MultipartWriteNotSupportedErrorArgs,
+  MultipartWriteNotSupportedErrorMeta,
   ReadableStreamNotSupportedErrorArgs,
   ReadableStreamNotSupportedErrorMeta,
+  StreamDecodingNotSupportedErrorArgs,
+  StreamDecodingNotSupportedErrorMeta,
+  StreamEncodingNotSupportedErrorArgs,
+  StreamEncodingNotSupportedErrorMeta,
   WritableStreamNotSupportedErrorArgs,
   WritableStreamNotSupportedErrorMeta,
-  DecodableStreamNotSupportedErrorArgs,
-  DecodableStreamNotSupportedErrorMeta,
-  EncodableStreamNotSupportedErrorArgs,
-  EncodableStreamNotSupportedErrorMeta,
+  MiddlewareDestinationMissingErrorArgs,
+  MiddlewareDestinationMissingErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
@@ -32,10 +36,12 @@ export {
   StorageIsNotOpenError,
   MiddlewareIsNotOpenError,
   PluginOperationAggregateError,
+  MultipartWriteNotSupportedError,
   ReadableStreamNotSupportedError,
+  StreamDecodingNotSupportedError,
+  StreamEncodingNotSupportedError,
   WritableStreamNotSupportedError,
-  DecodableStreamNotSupportedError,
-  EncodableStreamNotSupportedError,
+  MiddlewareDestinationMissingError,
 } from "./errors.js";
 
 export type * from "./types.js";
