@@ -1,9 +1,19 @@
+import type { IReadableStream } from "@unikvs/core";
 import { describe, test } from "vitest";
 
+import { createVariablesStore } from "../src/_contexts.js";
 import UniKvsMiddleware from "../src/_middleware.js";
 import { PipelineGraph } from "../src/_pipeline-graph.js";
 import UniKvsStorage from "../src/_storage.js";
-import { FakeStorage, FakeMiddleware } from "./_helpers.js";
+import { MiddlewareNextNotCalledError } from "../src/errors.js";
+import {
+  FakeMiddleware,
+  FakeStorage,
+  FakeStreamMiddleware,
+  collect,
+  streamOf,
+  withTimeout,
+} from "./_helpers.js";
 
 /**
  * 生のモックをグラフ用のラッパーで包みます。
@@ -90,5 +100,64 @@ describe("PipelineGraph - 構造の不変条件", () => {
     expect(graph.isSingleLeaf).toBe(true);
     expect(graph.size).toBe(1);
     expect(graph.leaves[0]!.name).toBe("only");
+  });
+});
+
+describe("PipelineGraph - ストリーム木の構築", () => {
+  // バグ回帰: 根直下の節の失敗を onNodeError が引き受けたとき、tee 分岐の cancel を await すると、
+  // まだ消費されていない兄弟分岐の解放まで buildEncodeTree が停止する (_pipeline-graph.ts:1665 付近)。
+  test("根直下の失敗を引き受けると、その分岐を解放して後続の根直下の分岐を構築する", async ({
+    expect,
+  }) => {
+    // 準備: 根直下に next() を呼ばない節と、素通しする節を並べる
+    class NoNextStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public override async encodeStream(): Promise<void> {}
+    }
+    const deny = new NoNextStreamMiddleware("deny");
+    const pass = new FakeStreamMiddleware<Uint8Array>("pass");
+    // グラフ単体では open を行わないため、ミドルウェアを開いた状態にします。
+    deny.isOpen = true;
+    pass.isOpen = true;
+    const graph = PipelineGraph.compile([
+      { storage: wrapStorage("s1"), middlewares: [UniKvsMiddleware.from(deny)] },
+      { storage: wrapStorage("s2"), middlewares: [UniKvsMiddleware.from(pass)] },
+    ]);
+    const source = streamOf([new Uint8Array([1])]);
+    const streams = new Set<IReadableStream>([source]);
+    const failures: { readonly error: unknown; readonly names: readonly string[] }[] = [];
+
+    // 実行: 失敗した節のスキップを引き受ける
+    const tree = await withTimeout(
+      graph.buildEncodeTree(
+        {
+          key: "logs",
+          signal: new AbortController().signal,
+          store: createVariablesStore(undefined),
+        },
+        source,
+        streams,
+        {
+          onNodeError: (ex, activeLeaves) => {
+            failures.push({ error: ex, names: activeLeaves.map((leaf) => leaf.name) });
+
+            return true;
+          },
+        },
+      ),
+      1500,
+      "build",
+    );
+
+    // 検証: 失敗は対象名付きで引き受けられ、後続の根直下の分岐は構築される
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.error).toBeInstanceOf(MiddlewareNextNotCalledError);
+    expect(failures[0]?.names).toStrictEqual(["s1"]);
+    expect(tree.targets.map((target) => target.leaf.name)).toStrictEqual(["s2"]);
+
+    // 検証: 後続分岐のストリームは読み取れる (skip した分岐の解放も停滞しない)
+    const target = tree.targets[0]!;
+    await expect(withTimeout(collect(target.stream), 1500, "target")).resolves.toStrictEqual([
+      new Uint8Array([1]),
+    ]);
   });
 });
