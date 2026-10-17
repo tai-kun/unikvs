@@ -950,28 +950,39 @@ export class PipelineGraph {
           });
         };
 
-        await node.middleware.decodeStream(ctx, next);
-        scope.signal.throwIfAborted();
-        if (!nextCalled) {
-          throw new MiddlewareNextNotCalledError({
-            name: node.middleware.name,
-            operation: "decode",
-          });
-        }
-        if (!nextSettled) {
-          throw new MiddlewareNextNotAwaitedError({
-            name: node.middleware.name,
-            operation: "decode",
-          });
-        }
-        const output = requireStreamDestination(node.middleware, ctx, "decode");
-        pipes.push(output);
+        try {
+          await node.middleware.decodeStream(ctx, next);
+          scope.signal.throwIfAborted();
+          if (!nextCalled) {
+            throw new MiddlewareNextNotCalledError({
+              name: node.middleware.name,
+              operation: "decode",
+            });
+          }
+          if (!nextSettled) {
+            throw new MiddlewareNextNotAwaitedError({
+              name: node.middleware.name,
+              operation: "decode",
+            });
+          }
+          const output = requireStreamDestination(node.middleware, ctx, "decode");
+          pipes.push(output);
 
-        if (hasDownstream) {
-          return downstreamResult!;
-        }
+          if (hasDownstream) {
+            return downstreamResult!;
+          }
 
-        return output;
+          return output;
+        } catch (ex) {
+          // ミドルウェアが設定した destination は `pipes` に未登録のことがあるため、投げる前に解放対象へ加えます。
+          // `source.pipeThrough(...)` で入力をロックした出力は、ここで収集しないと呼び出し側から解放できません。
+          // abort 判定より前に加えることで、next() 完了後の abort でもロックした出力を解放できます。
+          if (ctx.destination !== undefined) {
+            pipes.push(ctx.destination);
+          }
+
+          throw ex;
+        }
       }
 
       return await run(0, source);
@@ -1293,9 +1304,23 @@ export class PipelineGraph {
         ) {
           throw ex;
         }
-        // 下流開始後の失敗は子節で確定済み (単一拒否は記録、共有拒否は投げ) のため、そのまま伝播します。
+        // 下流開始後の失敗は子節で確定済み (単一拒否は記録、共有拒否は投げ) です。
+        // repair は補助処理のため、拒否以外の失敗は記録に留め、読み取りは成功させます。
         if (downstreamStarted) {
-          throw ex;
+          if (ex instanceof RepairNotAllowedError) {
+            if (throwOnRepairDenied) {
+              throw ex;
+            }
+
+            // 拒否をエラーにしない指定では、下流開始前と同じく警告に留めて読み取りを成功させます。
+            repairLogger.warn`Failed to repair a storage: ${ex}`;
+
+            return;
+          }
+
+          logger.error`Failed to repair a storage: ${ex}`;
+
+          return;
         }
         if (ex instanceof RepairNotAllowedError) {
           repairLogger.warn`Failed to repair a storage: ${ex}`;
@@ -1403,6 +1428,8 @@ export class PipelineGraph {
       let nextCalled = false;
       let nextSettled = false;
       let downstreamStarted = false;
+      let downstreamError: unknown;
+      let hasDownstreamError = false;
       let emptyBranches = false;
       const next: IMiddleware.INext = function next() {
         if (nextCalled) {
@@ -1426,12 +1453,14 @@ export class PipelineGraph {
 
         return Promise.try(async () => {
           try {
+            // pipeThrough で入力をロックした出力は、以降の失敗でも解放できるよう先に収集します。
+            output = encoded;
+            streams.add(output);
+
             // `mapKey` は親出力確定後に、共有ストアで適用します。
             // ここでの失敗は節固有のセットアップ失敗であり、下流開始前として扱います。
             nodeKey = applyMapKey(node.middleware, parentKey, scope);
             scope.signal.throwIfAborted();
-            output = encoded;
-            streams.add(output);
             downstreamStarted = true;
 
             // 直下の分岐を登録順に tee で割り当てます。最後の分岐は tee せず残りを使います。
@@ -1473,10 +1502,17 @@ export class PipelineGraph {
                   // スキップされた部分木の分岐は解放します。
                   try {
                     await stream.cancel(new Error("Skipped branch"));
-                  } catch {}
+                  } catch {
+                    // 解放に失敗してもスキップの判断を優先します。
+                  }
                 }
               }
             }
+          } catch (ex) {
+            // 下流のセットアップ失敗を親の後処理失敗と取り違えないよう、由来を記録します。
+            downstreamError = ex;
+            hasDownstreamError = true;
+            throw ex;
           } finally {
             nextSettled = true;
           }
@@ -1499,6 +1535,13 @@ export class PipelineGraph {
           });
         }
       } catch (ex) {
+        // next() を呼ぶ前に設定された destination は `streams` に未登録のため、投げる前に解放対象へ加えます。
+        // pipeThrough で入力をロックした出力は、呼び出し側の `streams` のキャンセルでしか解放できません。
+        // abort 判定・規約違反判定より前に加えることで、どちらの失敗でもロックした出力を解放できます。
+        if (ctx.destination !== undefined) {
+          streams.add(ctx.destination);
+        }
+
         // 意図的な中断時は中断理由で失敗します。
         if (scope.signal.aborted) {
           throw ex;
@@ -1513,11 +1556,42 @@ export class PipelineGraph {
         ) {
           throw ex;
         }
+
         // 下流開始後の失敗は子節で確定済みのため、そのまま伝播し、根直下で `onNodeError` に分類させます。
         if (downstreamStarted) {
+          // 子節のセットアップ失敗は、親の後処理失敗ではないため repair でも握り潰しません。
+          if (hasDownstreamError && ex === downstreamError) {
+            throw ex;
+          }
+
+          // repair は補助処理のため、下流開始後の拒否以外の失敗は記録に留め、読み取りは成功させます。
+          if (onNodeError !== undefined) {
+            if (ex instanceof RepairNotAllowedError) {
+              if (onNodeError(ex, activeLeaves)) {
+                // 書き戻しの分岐は既に構築済みのため、そのまま読み取りを続けます。
+                return output === undefined ? null : { key: nodeKey, output };
+              }
+            }
+
+            logger.error`Failed to repair a storage: ${ex}`;
+
+            return output === undefined ? null : { key: nodeKey, output };
+          }
+
           throw ex;
         }
         if (onNodeError?.(ex, activeLeaves)) {
+          // 構築済みの出力は親の入力を pipeThrough でロックしており、親側からの解放は失敗するため、出力側からキャンセルを伝播させます。
+          // next() 前の失敗で output が未確定のときは、設定済みの destination を直接キャンセルします。
+          const abandoned = output ?? ctx.destination;
+          if (abandoned !== undefined) {
+            try {
+              await abandoned.cancel(ex);
+            } catch {
+              // キャンセルに失敗してもスキップの判断を優先します。
+            }
+          }
+
           return null;
         }
 
@@ -1584,7 +1658,9 @@ export class PipelineGraph {
               if (child === null) {
                 try {
                   await stream.cancel(new Error("Skipped branch"));
-                } catch {}
+                } catch {
+                  // 解放に失敗してもスキップの判断を優先します。
+                }
               }
             } catch (ex) {
               if (onNodeError) {
@@ -1594,7 +1670,9 @@ export class PipelineGraph {
                 if (onNodeError(ex, leaves)) {
                   try {
                     await stream.cancel(ex);
-                  } catch {}
+                  } catch {
+                    // 解放に失敗してもスキップの判断を優先します。
+                  }
                   continue;
                 }
               }
