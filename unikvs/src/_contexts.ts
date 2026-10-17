@@ -56,18 +56,6 @@ function normalizeVariablesInit(vars: VariablesInit | undefined): Iterable<Varia
 }
 
 /**
- * 変数マップに初期値を書き込みます。
- *
- * @param data 書き込み先のマップです。
- * @param vars 初期値です。
- */
-function writeVariablesInit(data: Map<string, unknown>, vars: VariablesInit | undefined): void {
-  for (const [name, value] of normalizeVariablesInit(vars)) {
-    data.set(name, value);
-  }
-}
-
-/**
  * 複数のコンテキスト間で共有される変数ストアです。
  *
  * オニオン実行では操作内の全コンテキストが同一ストアを参照します。
@@ -140,7 +128,7 @@ class PipelineContext implements IPipelineContext {
    * @param init 初期値です。
    */
   public constructor(init: PipelineContextInit) {
-    const { vars, store } = init;
+    const { store } = init;
     if (store) {
       // 共有ストアを参照し、下流の変更が上流に見えるようにします。
       this.#data = store.data;
@@ -150,7 +138,10 @@ class PipelineContext implements IPipelineContext {
       this.#readonly = new Set();
     }
 
-    writeVariablesInit(this.#data, vars);
+    const vars = normalizeVariablesInit(init.vars);
+    for (const [name, value] of vars) {
+      this.#data.set(name, value);
+    }
   }
 
   /**
@@ -754,11 +745,7 @@ export class ClearContext extends KeyedActionContext<"clear"> implements IClearC
 /**
  * `TransformContext` の初期値です。
  */
-type TransformContextInit<
-  TAction extends ITransformContext["action"],
-  TSource = any,
-  TDestination = TSource,
-> = {
+type TransformContextInit<TAction extends ITransformContext["action"], TSource = any> = {
   /**
    * 実行する操作の種別です。
    */
@@ -778,14 +765,6 @@ type TransformContextInit<
    * 変換前の値です。
    */
   readonly source: TSource;
-
-  /**
-   * 変換後の値です。
-   *
-   * ミドルウェアが設定します。
-   * 存在しない場合は未設定を表します。
-   */
-  readonly destination?: TDestination;
 
   /**
    * 共有する変数ストアです。
@@ -824,6 +803,7 @@ class TransformContext<
    *
    * ミドルウェアが設定します。
    * 存在しない場合は未設定を表します。
+   * `next` の実行後は凍結され、読み取りはできますが設定すると `MiddlewareDestinationFrozenError` を投げます。
    */
   public destination?: TDestination;
 
@@ -832,17 +812,12 @@ class TransformContext<
    *
    * @param init 初期値です。
    */
-  public constructor(init: TransformContextInit<TAction, TSource, TDestination>) {
-    const { source, destination, ...superInit } = init;
+  public constructor(init: TransformContextInit<TAction, TSource>) {
+    const { source, ...superInit } = init;
 
     super(superInit);
 
     this.source = source;
-    if ("destination" in init) {
-      this.destination = destination!;
-    } else {
-      delete this.destination;
-    }
   }
 }
 
@@ -860,7 +835,7 @@ class TransformDataContext<
 /**
  * `EncodeContext` の初期値です。
  */
-type EncodeContextInit<TRawData = any, TEncodedData = TRawData> = {
+type EncodeContextInit<TRawData = any> = {
   /**
    * 対象のキーです。
    */
@@ -875,14 +850,6 @@ type EncodeContextInit<TRawData = any, TEncodedData = TRawData> = {
    * 変換前の値です。
    */
   readonly source: TRawData;
-
-  /**
-   * 変換後の値です。
-   *
-   * ミドルウェアが設定します。
-   * 存在しない場合は未設定を表します。
-   */
-  readonly destination?: TEncodedData;
 
   /**
    * 共有する変数ストアです。
@@ -912,7 +879,7 @@ export class EncodeContext<TRawData = any, TEncodedData = TRawData>
    *
    * @param init 初期値です。
    */
-  public constructor(init: EncodeContextInit<TRawData, TEncodedData>) {
+  public constructor(init: EncodeContextInit<TRawData>) {
     super({ ...init, action: "set" });
   }
 }
@@ -920,7 +887,7 @@ export class EncodeContext<TRawData = any, TEncodedData = TRawData>
 /**
  * `DecodeContext` の初期値です。
  */
-type DecodeContextInit<TRawData = any, TDecodedData = TRawData> = {
+type DecodeContextInit<TRawData = any> = {
   /**
    * 対象のキーです。
    */
@@ -935,14 +902,6 @@ type DecodeContextInit<TRawData = any, TDecodedData = TRawData> = {
    * 変換前の値です。
    */
   readonly source: TRawData;
-
-  /**
-   * 変換後の値です。
-   *
-   * ミドルウェアが設定します。
-   * 存在しない場合は未設定を表します。
-   */
-  readonly destination?: TDecodedData;
 
   /**
    * 共有する変数ストアです。
@@ -972,7 +931,7 @@ export class DecodeContext<TRawData = any, TDecodedData = TRawData>
    *
    * @param init 初期値です。
    */
-  public constructor(init: DecodeContextInit<TRawData, TDecodedData>) {
+  public constructor(init: DecodeContextInit<TRawData>) {
     super({ ...init, action: "get" });
   }
 }
@@ -995,7 +954,7 @@ class TransformStreamContext<
 /**
  * `EncodeStreamContext` の初期値です。
  */
-type EncodeStreamContextInit<TRawChunk = any, TEncodedChunk = TRawChunk> = {
+type EncodeStreamContextInit<TRawChunk = any> = {
   /**
    * 対象のキーです。
    */
@@ -1010,14 +969,6 @@ type EncodeStreamContextInit<TRawChunk = any, TEncodedChunk = TRawChunk> = {
    * 変換前のストリームです。
    */
   readonly source: IReadableStream<TRawChunk>;
-
-  /**
-   * 変換後のストリームです。
-   *
-   * ミドルウェアが設定します。
-   * 存在しない場合は未設定を表します。
-   */
-  readonly destination?: IReadableStream<TEncodedChunk>;
 
   /**
    * 共有する変数ストアです。
@@ -1047,7 +998,7 @@ export class EncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>
    *
    * @param init 初期値です。
    */
-  public constructor(init: EncodeStreamContextInit<TRawChunk, TEncodedChunk>) {
+  public constructor(init: EncodeStreamContextInit<TRawChunk>) {
     super({ ...init, action: "set" });
   }
 }
@@ -1055,7 +1006,7 @@ export class EncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>
 /**
  * `DecodeStreamContext` の初期値です。
  */
-type DecodeStreamContextInit<TRawChunk = any, TDecodedChunk = TRawChunk> = {
+type DecodeStreamContextInit<TRawChunk = any> = {
   /**
    * 対象のキーです。
    */
@@ -1070,14 +1021,6 @@ type DecodeStreamContextInit<TRawChunk = any, TDecodedChunk = TRawChunk> = {
    * 変換前のストリームです。
    */
   readonly source: IReadableStream<TRawChunk>;
-
-  /**
-   * 変換後のストリームです。
-   *
-   * ミドルウェアが設定します。
-   * 存在しない場合は未設定を表します。
-   */
-  readonly destination?: IReadableStream<TDecodedChunk>;
 
   /**
    * 共有する変数ストアです。
@@ -1107,7 +1050,7 @@ export class DecodeStreamContext<TRawChunk = any, TDecodedChunk = TRawChunk>
    *
    * @param init 初期値です。
    */
-  public constructor(init: DecodeStreamContextInit<TRawChunk, TDecodedChunk>) {
+  public constructor(init: DecodeStreamContextInit<TRawChunk>) {
     super({ ...init, action: "stream" });
   }
 }

@@ -1,21 +1,10 @@
-import type { IMiddleware, IReadableStream } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 
-import { isReadableStream } from "./_streams.js";
-import * as v from "./_valibot.js";
 import {
   MiddlewareIsNotOpenError,
   StreamDecodingNotSupportedError,
   StreamEncodingNotSupportedError,
-  MiddlewareDestinationMissingError,
 } from "./errors.js";
-
-/**
- * `ReadableStream` のインターフェースを満たすかを検証するためのスキーマです。
- */
-const ReadableStreamSchema = v.custom<IReadableStream>(
-  isReadableStream,
-  "Expected a ReadableStream",
-);
 
 /**
  * 同じオブジェクトに対して同じ `UniKvsMiddleware` インスタンスを返すためのメモです。
@@ -157,14 +146,6 @@ export default class UniKvsMiddleware {
     } else {
       await this.#mw.encode(c, next);
     }
-
-    const hasDestination = "destination" in c;
-    if (!hasDestination) {
-      throw new MiddlewareDestinationMissingError({
-        name: this.name,
-        operation: "encode",
-      });
-    }
   }
 
   /**
@@ -186,14 +167,6 @@ export default class UniKvsMiddleware {
     } else {
       await this.#mw.decode(c, next);
     }
-
-    const hasDestination = "destination" in c;
-    if (!hasDestination) {
-      throw new MiddlewareDestinationMissingError({
-        name: this.name,
-        operation: "decode",
-      });
-    }
   }
 
   /**
@@ -214,17 +187,6 @@ export default class UniKvsMiddleware {
     }
 
     await this.#mw.encodeStream(c, next);
-
-    const hasDestination = "destination" in c;
-    if (!hasDestination) {
-      throw new MiddlewareDestinationMissingError({
-        name: this.name,
-        operation: "decode",
-      });
-    }
-
-    // ストリームの場合は destination の型も検証する必要があります。
-    c.destination = v.parseOutput(ReadableStreamSchema, c.destination);
   }
 
   /**
@@ -245,16 +207,5 @@ export default class UniKvsMiddleware {
     }
 
     await this.#mw.decodeStream(c, next);
-
-    const hasDestination = "destination" in c;
-    if (!hasDestination) {
-      throw new MiddlewareDestinationMissingError({
-        name: this.name,
-        operation: "decode",
-      });
-    }
-
-    // ストリームの場合は destination の型も検証する必要があります。
-    c.destination = v.parseOutput(ReadableStreamSchema, c.destination);
   }
 }

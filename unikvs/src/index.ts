@@ -24,6 +24,14 @@ export type {
   WritableStreamNotSupportedErrorMeta,
   MiddlewareDestinationMissingErrorArgs,
   MiddlewareDestinationMissingErrorMeta,
+  MiddlewareDestinationFrozenErrorArgs,
+  MiddlewareDestinationFrozenErrorMeta,
+  MiddlewareNextNotCalledErrorArgs,
+  MiddlewareNextNotCalledErrorMeta,
+  MiddlewareNextNotAwaitedErrorArgs,
+  MiddlewareNextNotAwaitedErrorMeta,
+  MiddlewareNextCalledMultipleTimesErrorArgs,
+  MiddlewareNextCalledMultipleTimesErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
@@ -42,6 +50,10 @@ export {
   StreamEncodingNotSupportedError,
   WritableStreamNotSupportedError,
   MiddlewareDestinationMissingError,
+  MiddlewareDestinationFrozenError,
+  MiddlewareNextNotCalledError,
+  MiddlewareNextNotAwaitedError,
+  MiddlewareNextCalledMultipleTimesError,
 } from "./errors.js";
 
 export type * from "./types.js";

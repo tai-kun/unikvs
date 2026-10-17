@@ -1,4 +1,9 @@
-import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
+import {
+  type IMiddleware,
+  type IReadableStream,
+  ITransformContext,
+  RepairNotAllowedError,
+} from "@unikvs/core";
 
 import {
   type VariablesStore,
@@ -11,7 +16,15 @@ import {
 import { logger, repairLogger } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import type UniKvsStorage from "./_storage.js";
-import { cancelStreams } from "./_streams.js";
+import { cancelStreams, isReadableStream } from "./_streams.js";
+import * as v from "./_valibot.js";
+import {
+  MiddlewareDestinationFrozenError,
+  MiddlewareDestinationMissingError,
+  MiddlewareNextNotCalledError,
+  MiddlewareNextNotAwaitedError,
+  MiddlewareNextCalledMultipleTimesError,
+} from "./errors.js";
 
 // -------------------------------------------------------------------------------------------------
 //
@@ -265,14 +278,14 @@ type BuildEncodeTreeOptions = {
  */
 type OperationScope = {
   /**
-   * 中断シグナルです。
-   */
-  readonly signal: AbortSignal;
-
-  /**
    * 操作対象の論理キーです。
    */
   readonly key: string;
+
+  /**
+   * 中断シグナルです。
+   */
+  readonly signal: AbortSignal;
 
   /**
    * 操作内で共有される変数ストアです。
@@ -374,6 +387,85 @@ function createEntries(
 }
 
 /**
+ * 変換後のデータが設定されていることを検証し、変換後のデータを返します。
+ *
+ * ミドルウェアが `destination` を設定しなかったときに投げます。
+ *
+ * @param middleware 対象のミドルウェアです。
+ * @param ctx 検証するコンテキストです。
+ * @param operation エラーに付与する操作名です。
+ * @returns 変換後のデータを返します。
+ */
+function requireDestination(
+  middleware: UniKvsMiddleware,
+  ctx: EncodeContext | DecodeContext | EncodeStreamContext | DecodeStreamContext,
+  operation: "encode" | "decode",
+): unknown {
+  if ("destination" in ctx) {
+    return ctx.destination;
+  }
+
+  throw new MiddlewareDestinationMissingError({
+    name: middleware.name,
+    operation,
+  });
+}
+
+/**
+ * `ReadableStream` のインターフェースを満たすかを検証するためのスキーマです。
+ */
+const ReadableStreamSchema = v.custom<IReadableStream>(
+  isReadableStream,
+  "Expected a ReadableStream",
+);
+
+/**
+ * 変換後のストリームが設定されていることを検証し、型を検証したストリームを返します。
+ *
+ * ミドルウェアが `destination` を設定しなかったときに投げます。
+ * ストリームの場合は存在確認に加えて `ReadableStream` の型も検証します。
+ *
+ * @param middleware 対象のミドルウェアです。
+ * @param ctx 検証するコンテキストです。
+ * @param operation エラーに付与する操作名です。
+ * @returns 変換後のストリームを返します。
+ */
+function requireStreamDestination(
+  middleware: UniKvsMiddleware,
+  ctx: EncodeStreamContext | DecodeStreamContext,
+  operation: "encode" | "decode",
+): IReadableStream {
+  const destination = requireDestination(middleware, ctx, operation);
+
+  return v.parseOutput(ReadableStreamSchema, destination);
+}
+
+/**
+ * コンテキストの `destination` を凍結します。
+ *
+ * パイプラインの `next` から同期的に呼び出します。
+ * 凍結後の読み取りはできますが、書き込むと `MiddlewareDestinationFrozenError` を投げます。
+ *
+ * @param ctx 凍結するコンテキストです。
+ */
+function freezeDestination(ctx: ITransformContext): void {
+  const { destination } = ctx;
+  Object.defineProperty(ctx, "destination", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return destination;
+    },
+    set() {
+      throw new MiddlewareDestinationFrozenError({
+        key: ctx.key,
+        action: ctx.action,
+      });
+    },
+  });
+}
+
+/**
  * 単一ミドルウェアの `mapKey` を実行します。
  *
  * 共有ストアを参照するため、カスタム変数の下流変更が写像にも見えます。
@@ -416,7 +508,7 @@ async function applyEncode(
   await middleware.encode(c, next);
   scope.signal.throwIfAborted();
 
-  return c.destination;
+  return requireDestination(middleware, c, "encode");
 }
 
 /**
@@ -444,7 +536,7 @@ async function applyEncodeStream(
   await middleware.encodeStream(c, next);
   scope.signal.throwIfAborted();
 
-  return c.destination as IReadableStream;
+  return requireStreamDestination(middleware, c, "encode");
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -780,36 +872,76 @@ export class PipelineGraph {
     // 経路を逆順 (葉→根) にネスト実行し、下流 (根側) の `set` が上流 (葉側) の `await next()` 後に見えるようにします。
     // データは外側から内側へ鎖状に渡し、最終結果を外側へ伝播させます。
     const reversed = leaf.path.toReversed();
-    const run = async (index: number, input: unknown): Promise<unknown> => {
+    async function run(index: number, input: unknown): Promise<unknown> {
       if (index >= reversed.length) {
         return input;
       }
 
       const node = reversed[index]!;
       const ctx = new DecodeContext({
-        signal: scope.signal,
         key: scope.key,
-        source: input,
         store: scope.store,
+        signal: scope.signal,
+        source: input,
       });
       let downstreamResult: unknown;
       let hasDownstream = false;
-      const next: IMiddleware.INext = async () => {
-        downstreamResult = await run(index + 1, ctx.destination);
-        hasDownstream = true;
+      let nextCalled = false;
+      let nextSettled = false;
+      const next: IMiddleware.INext = function next() {
+        if (nextCalled) {
+          return Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "decode",
+            }),
+          );
+        }
+        nextCalled = true;
+
+        // next() の実行後、即座に destination の確認と凍結を行います。
+        let decoded: unknown;
+        try {
+          decoded = requireDestination(node.middleware, ctx, "decode");
+          freezeDestination(ctx);
+        } catch (ex) {
+          return Promise.reject(ex);
+        }
+
+        return Promise.try(async () => {
+          try {
+            downstreamResult = await run(index + 1, decoded);
+            hasDownstream = true;
+          } finally {
+            nextSettled = true;
+          }
+        });
       };
 
       await node.middleware.decode(ctx, next);
       scope.signal.throwIfAborted();
+      if (!nextCalled) {
+        throw new MiddlewareNextNotCalledError({
+          name: node.middleware.name,
+          operation: "decode",
+        });
+      }
+      if (!nextSettled) {
+        throw new MiddlewareNextNotAwaitedError({
+          name: node.middleware.name,
+          operation: "decode",
+        });
+      }
+      const destination = requireDestination(node.middleware, ctx, "decode");
 
       // 下流が実行されたときはその最終結果を返し、そうでなければ自らの出力を返す。
-      // (`next` を呼ばないミドルウェアでは自らの出力が最終となる。)
+      // (下流の失敗を握り潰したミドルウェアでは自らの出力が最終となる。)
       if (hasDownstream) {
         return downstreamResult;
       }
 
-      return ctx.destination;
-    };
+      return destination;
+    }
 
     return run(0, data);
   }
@@ -831,28 +963,67 @@ export class PipelineGraph {
     const pipes: IReadableStream[] = [];
     try {
       const reversed = leaf.path.toReversed();
-      const run = async (index: number, input: IReadableStream): Promise<IReadableStream> => {
+      async function run(index: number, input: IReadableStream): Promise<IReadableStream> {
         if (index >= reversed.length) {
           return input;
         }
 
         const node = reversed[index]!;
         const ctx = new DecodeStreamContext({
-          signal: scope.signal,
           key: scope.key,
-          source: input,
           store: scope.store,
+          signal: scope.signal,
+          source: input,
         });
         let downstreamResult: IReadableStream | undefined;
         let hasDownstream = false;
-        const next: IMiddleware.INext = async () => {
-          downstreamResult = await run(index + 1, ctx.destination as IReadableStream);
-          hasDownstream = true;
+        let nextCalled = false;
+        let nextSettled = false;
+        const next: IMiddleware.INext = function next() {
+          if (nextCalled) {
+            return Promise.reject(
+              new MiddlewareNextCalledMultipleTimesError({
+                name: node.middleware.name,
+                operation: "decode",
+              }),
+            );
+          }
+          nextCalled = true;
+
+          // next() の実行後、即座に destination の確認と凍結を行います。
+          let decoded: IReadableStream;
+          try {
+            decoded = requireStreamDestination(node.middleware, ctx, "decode");
+            freezeDestination(ctx);
+          } catch (ex) {
+            return Promise.reject(ex);
+          }
+
+          return Promise.try(async () => {
+            try {
+              downstreamResult = await run(index + 1, decoded);
+              hasDownstream = true;
+            } finally {
+              nextSettled = true;
+            }
+          });
         };
 
         await node.middleware.decodeStream(ctx, next);
         scope.signal.throwIfAborted();
-        const output = ctx.destination as IReadableStream;
+        if (!nextCalled) {
+          throw new MiddlewareNextNotCalledError({
+            name: node.middleware.name,
+            operation: "decode",
+          });
+        }
+        if (!nextSettled) {
+          throw new MiddlewareNextNotAwaitedError({
+            name: node.middleware.name,
+            operation: "decode",
+          });
+        }
+        const output = requireStreamDestination(node.middleware, ctx, "decode");
         pipes.push(output);
 
         if (hasDownstream) {
@@ -860,7 +1031,7 @@ export class PipelineGraph {
         }
 
         return output;
-      };
+      }
 
       return await run(0, source);
     } catch (ex) {
@@ -883,38 +1054,76 @@ export class PipelineGraph {
     // オニオン実行により、下流の `set` が上流の `await next()` 後の `get` に見えます (共有ストアのため)。
     const targets: EncodeTarget[] = [];
 
-    const walk = async (node: PipelineNode, input: unknown, parentKey: string): Promise<void> => {
+    async function walk(node: PipelineNode, input: unknown, parentKey: string): Promise<void> {
       scope.signal.throwIfAborted();
 
       // 親コンテキストを共有ストアで作成し、`next` 内で子の入力として `destination` を参照します。
       // ミドルウェアは `destination` を設定してから `next` を呼ぶため、`next` 実行時点では親出力が確定しています。
-      const parentCtx = new EncodeContext({
-        signal: scope.signal,
+      const ctx = new EncodeContext({
         key: scope.key,
-        source: input,
         store: scope.store,
+        signal: scope.signal,
+        source: input,
       });
       let nodeKey = parentKey;
-      const next: IMiddleware.INext = async () => {
-        // `mapKey` は親出力確定後に、共有ストアで適用します。
-        nodeKey = applyMapKey(node.middleware, parentKey, scope);
-        const encoded = parentCtx.destination;
-        for (const entry of node.entries) {
-          if (entry.kind === "node") {
-            await walk(entry.node, encoded, nodeKey);
-          } else {
-            targets.push({
-              key: nodeKey,
-              data: encoded,
-              leaf: entry.leaf,
-            });
-          }
+      let nextCalled = false;
+      let nextSettled = false;
+      const next: IMiddleware.INext = function next() {
+        if (nextCalled) {
+          return Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
         }
+        nextCalled = true;
+
+        // next() の実行後、即座に destination の確認と凍結を行います。
+        let encoded: unknown;
+        try {
+          encoded = requireDestination(node.middleware, ctx, "encode");
+          freezeDestination(ctx);
+        } catch (ex) {
+          return Promise.reject(ex);
+        }
+
+        return Promise.try(async () => {
+          try {
+            // `mapKey` は親出力確定後に、共有ストアで適用します。
+            nodeKey = applyMapKey(node.middleware, parentKey, scope);
+            for (const entry of node.entries) {
+              if (entry.kind === "node") {
+                await walk(entry.node, encoded, nodeKey);
+              } else {
+                targets.push({
+                  key: nodeKey,
+                  data: encoded,
+                  leaf: entry.leaf,
+                });
+              }
+            }
+          } finally {
+            nextSettled = true;
+          }
+        });
       };
 
-      await node.middleware.encode(parentCtx, next);
+      await node.middleware.encode(ctx, next);
       scope.signal.throwIfAborted();
-    };
+      if (!nextCalled) {
+        throw new MiddlewareNextNotCalledError({
+          name: node.middleware.name,
+          operation: "encode",
+        });
+      }
+      if (!nextSettled) {
+        throw new MiddlewareNextNotAwaitedError({
+          name: node.middleware.name,
+          operation: "encode",
+        });
+      }
+    }
 
     for (const entry of this.#entries) {
       if (entry.kind === "node") {

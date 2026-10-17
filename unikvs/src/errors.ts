@@ -424,6 +424,192 @@ setErrorMessage(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
+export type MiddlewareDestinationFrozenErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly action: "set" | "get" | "stream";
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly key: string;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareDestinationFrozenErrorArgs = ErrorOptions &
+  MiddlewareDestinationFrozenErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class MiddlewareDestinationFrozenError extends ErrorBase<MiddlewareDestinationFrozenErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsMiddlewareDestinationFrozenError";
+  }
+
+  public constructor(args: MiddlewareDestinationFrozenErrorArgs) {
+    const { action, key, ...options } = args;
+    const meta: MiddlewareDestinationFrozenErrorMeta = { action, key };
+    super(
+      meta,
+      ({ action, key }) =>
+        `Cannot set destination after next() was called for ${action} operation on key ${JSON.stringify(key)}.`,
+      options,
+    );
+  }
+}
+
+setErrorMessage(
+  MiddlewareDestinationFrozenError,
+  ({ action, key }) =>
+    `next() を呼び出した後に destination を設定できません（${action} 操作、キー ${JSON.stringify(key)}）。`,
+  "ja",
+);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextNotCalledErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly name: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly operation: "encode" | "decode";
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextNotCalledErrorArgs = ErrorOptions & MiddlewareNextNotCalledErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class MiddlewareNextNotCalledError extends ErrorBase<MiddlewareNextNotCalledErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsMiddlewareNextNotCalledError";
+  }
+
+  public constructor(args: MiddlewareNextNotCalledErrorArgs) {
+    const { name, operation, ...options } = args;
+    const meta: MiddlewareNextNotCalledErrorMeta = { name, operation };
+    super(
+      meta,
+      ({ name, operation }) => `Middleware "${name}" did not call next() for ${operation}.`,
+      options,
+    );
+  }
+}
+
+setErrorMessage(
+  MiddlewareNextNotCalledError,
+  ({ name, operation }) => `ミドルウェア "${name}" は ${operation} で next() を呼びませんでした。`,
+  "ja",
+);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextNotAwaitedErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly name: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly operation: "encode" | "decode";
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextNotAwaitedErrorArgs = ErrorOptions & MiddlewareNextNotAwaitedErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class MiddlewareNextNotAwaitedError extends ErrorBase<MiddlewareNextNotAwaitedErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsMiddlewareNextNotAwaitedError";
+  }
+
+  public constructor(args: MiddlewareNextNotAwaitedErrorArgs) {
+    const { name, operation, ...options } = args;
+    const meta: MiddlewareNextNotAwaitedErrorMeta = { name, operation };
+    super(
+      meta,
+      ({ name, operation }) => `Middleware "${name}" did not await next() for ${operation}.`,
+      options,
+    );
+  }
+}
+
+setErrorMessage(
+  MiddlewareNextNotAwaitedError,
+  ({ name, operation }) =>
+    `ミドルウェア "${name}" は ${operation} で next() を await しませんでした。`,
+  "ja",
+);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextCalledMultipleTimesErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly name: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+   */
+  readonly operation: "encode" | "decode";
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export type MiddlewareNextCalledMultipleTimesErrorArgs = ErrorOptions &
+  MiddlewareNextCalledMultipleTimesErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class MiddlewareNextCalledMultipleTimesError extends ErrorBase<MiddlewareNextCalledMultipleTimesErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsMiddlewareNextCalledMultipleTimesError";
+  }
+
+  public constructor(args: MiddlewareNextCalledMultipleTimesErrorArgs) {
+    const { name, operation, ...options } = args;
+    const meta: MiddlewareNextCalledMultipleTimesErrorMeta = { name, operation };
+    super(
+      meta,
+      ({ name, operation }) =>
+        `Middleware "${name}" called next() multiple times for ${operation}.`,
+      options,
+    );
+  }
+}
+
+setErrorMessage(
+  MiddlewareNextCalledMultipleTimesError,
+  ({ name, operation }) => `ミドルウェア "${name}" は ${operation} で next() を複数回呼びました。`,
+  "ja",
+);
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
 export type StreamEncodingNotSupportedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)

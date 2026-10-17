@@ -6,6 +6,10 @@ import {
   StreamEncodingNotSupportedError,
   PluginOperationAggregateError,
   MiddlewareIsNotOpenError,
+  MiddlewareDestinationFrozenError,
+  MiddlewareNextNotCalledError,
+  MiddlewareNextNotAwaitedError,
+  MiddlewareNextCalledMultipleTimesError,
 } from "../src/errors.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
@@ -544,6 +548,309 @@ describe("UniKvs - ミドルウェアフック", () => {
     expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual(["first"]);
     expect(aggregate.meta.errors.map((e) => [e.name, e.index])).toStrictEqual([["boom1", 0]]);
     expect(storage.callsOf("delete")).toHaveLength(0);
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - destination の凍結", () => {
+  test("encode で next() の実行後に destination を設定すると MiddlewareDestinationFrozenError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class EvilMiddleware extends FakeMiddleware {
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+        c.destination = c.source;
+      }
+    }
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new EvilMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.set("foo", "value").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareDestinationFrozenError);
+    expect((error as MiddlewareDestinationFrozenError).meta).toStrictEqual({
+      action: "set",
+      key: "foo",
+    });
+    expect(storage.map.has("foo")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("decode で next() の実行後に destination を設定すると MiddlewareDestinationFrozenError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class EvilMiddleware extends FakeMiddleware {
+      public override async decode(
+        c: IMiddleware.DecodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+        c.destination = c.source;
+      }
+    }
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new EvilMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.get("foo").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareDestinationFrozenError);
+    expect((error as MiddlewareDestinationFrozenError).meta).toStrictEqual({
+      action: "get",
+      key: "foo",
+    });
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("next() の実行後も destination の読み取りはできる", async ({ expect }) => {
+    // 準備
+    class ReadAfterNextMiddleware extends FakeMiddleware {
+      public readonly readValues: unknown[] = [];
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = `${String(c.source)}!`;
+        await next();
+        this.readValues.push(c.destination);
+      }
+    }
+    const middleware = new ReadAfterNextMiddleware();
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(middleware)
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行
+    await kvs.set("foo", "x");
+
+    // 検証
+    expect(middleware.readValues).toStrictEqual(["x!"]);
+    expect(await kvs.get("foo")).toBe("x!");
+
+    // 後片付け
+    await kvs.close();
+  });
+});
+
+describe("UniKvs - next の呼び出し規約", () => {
+  test("encode で next() を呼ばないと MiddlewareNextNotCalledError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class SilentMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("Silent");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        _next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+      }
+    }
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new SilentMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.set("foo", "value").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
+    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
+      name: "Silent",
+      operation: "encode",
+    });
+    expect(storage.map.has("foo")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("decode で next() を呼ばないと MiddlewareNextNotCalledError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class SilentMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("Silent");
+      }
+
+      public override async decode(
+        c: IMiddleware.DecodeContext,
+        _next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+      }
+    }
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new SilentMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.get("foo").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
+    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
+      name: "Silent",
+      operation: "decode",
+    });
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("decodeStream で next() を呼ばないと MiddlewareNextNotCalledError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class SilentMiddleware extends FakeStreamMiddleware {
+      public constructor() {
+        super("Silent");
+      }
+
+      public override async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        _next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+      }
+    }
+    const storage = new FakeStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .connect(new SilentMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.stream("logs").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
+    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
+      name: "Silent",
+      operation: "decode",
+    });
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("encode で next() を複数回呼ぶと MiddlewareNextCalledMultipleTimesError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class TwiceMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("Twice");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+        await next();
+      }
+    }
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new TwiceMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.set("foo", "value").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareNextCalledMultipleTimesError);
+    expect((error as MiddlewareNextCalledMultipleTimesError).meta).toStrictEqual({
+      name: "Twice",
+      operation: "encode",
+    });
+    expect(storage.map.has("foo")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("encode で next() を await しなかったとき MiddlewareNextNotAwaitedError を投げる", async ({
+    expect,
+  }) => {
+    // 準備
+    class FireAndForgetMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("FireAndForget");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        void next();
+      }
+    }
+    class SlowMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("Slow");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        await next();
+      }
+    }
+    const storage = new FakeStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(new FireAndForgetMiddleware())
+      .connect(new SlowMiddleware())
+      .persist(storage)
+      .create();
+    await kvs.open();
+
+    // 実行と検証
+    const error = await kvs.set("foo", "value").catch((ex) => ex);
+    expect(error).toBeInstanceOf(MiddlewareNextNotAwaitedError);
+    expect((error as MiddlewareNextNotAwaitedError).meta).toStrictEqual({
+      name: "FireAndForget",
+      operation: "encode",
+    });
+    expect(storage.map.has("foo")).toBe(false);
 
     // 後片付け
     await kvs.close();
