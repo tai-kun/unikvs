@@ -13,6 +13,7 @@ import {
   FakeMiddleware,
   Gate,
   collect,
+  isPending,
   streamOf,
   withTimeout,
 } from "./_helpers.js";
@@ -294,6 +295,45 @@ describe("UniKvs - stream の書き戻し", () => {
     await kvs.close();
   });
 
+  test("next 後の非拒否失敗は error に記録して読み取りを成功させる", async ({ expect }) => {
+    // 準備: next() 後に失敗するミドルウェアを書き戻し経路に置く
+    using errorSpy = vi.spyOn(logger, "error");
+    class ThrowAfterNextStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public override async encodeStream(
+        c: import("@unikvs/core").IMiddleware.EncodeStreamContext,
+        next: import("@unikvs/core").IMiddleware.INext,
+      ): Promise<void> {
+        await super.encodeStream(c, next);
+        throw new Error("post-next stream failure");
+      }
+    }
+    const cache = new FakeStreamStorage("cache");
+    const server = new FakeStreamStorage("server");
+    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      .connect(new AllowRepair())
+      .connect(new ThrowAfterNextStreamMiddleware("PostFailStream"))
+      .persist(cache)
+      .persist(server)
+      .create();
+    await kvs.open();
+    const chunks = [new Uint8Array([1]), new Uint8Array([2])];
+    server.map.set("logs", chunks);
+
+    try {
+      // 実行: 下流開始後の失敗があっても読み取りは成功する
+      const vs = await kvs.stream("logs", { repair: true });
+      expect(await collect(vs)).toStrictEqual(chunks);
+
+      // 検証: 補助処理の失敗は error に記録される
+      expect(errorSpy).toHaveBeenCalled();
+
+      // 後片付け
+      await vs.dispose();
+    } finally {
+      await kvs.close();
+    }
+  });
+
   test("repair を指定しない場合は前段へ書き戻さない", async ({ expect }) => {
     // 準備
     const cache = new FakeStreamStorage("cache");
@@ -377,16 +417,16 @@ describe("UniKvs - stream の書き戻し", () => {
     server.map.set("logs", [new Uint8Array([1, 0x10])]);
 
     // 実行: 書き戻しがゲートで保留されたまま読み切る
+    const writeStarted = Promise.withResolvers<void>();
+    cache.onWriteStart = () => writeStarted.resolve();
     const vs = await kvs.stream("logs", { repair: true });
     const pending = collect(vs);
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // 書き戻しがゲートで保留されたことを待ち、保留中に起こりうる後続処理を流し切る
+    await writeStarted.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // 検証: 書き戻しが完了するまで collect は完了しない
-    const settled = await Promise.race([
-      pending.then(() => true),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 50)),
-    ]);
-    expect(settled).toBe(false);
+    expect(await isPending(pending)).toBe(true);
 
     // 後片付け
     cache.writeGate.open();

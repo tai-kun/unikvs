@@ -232,6 +232,44 @@ describe("UniKvs - close の失敗と回復", () => {
     await expect(kvs.set("foo", "value")).rejects.toThrow(UniKvsIsNotOpenError);
   });
 
+  test("close の signal が abort しても retry は新しい signal で実 close を完了する", async ({
+    expect,
+  }) => {
+    // 準備: abort 済み signal では close が失敗するストレージ
+    const storage = new FakeStorage("abort-sensitive");
+    const entered = new Gate();
+    const release = new Gate();
+    storage.hook = async (call) => {
+      if (call.method === "close") {
+        entered.open();
+        await release.wait();
+        call.signal?.throwIfAborted();
+      }
+    };
+    const reason = new Error("close aborted");
+    const ac = new AbortController();
+    const kvs = UniKvs.config().persist(storage).create();
+    await kvs.open();
+
+    // 実行: close を保留中に signal を abort し、通常 close を失敗させる
+    const closing = kvs.close({ signal: ac.signal });
+    await entered.wait();
+    ac.abort(reason);
+    release.open();
+    const error = await closing.catch((ex: unknown) => ex);
+
+    // 検証: close は集約エラーで失敗する
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    const aggregate = error as PluginOperationAggregateError;
+    expect(aggregate.meta.action).toBe("close");
+    expect(aggregate.meta.errors[0]?.reason).toBe(reason);
+
+    // 検証: retry は新しい signal で実 close を完了し、実体は閉じられる
+    expect(storage.isOpen).toBe(false);
+    expect(kvs.isOpen).toBe(false);
+    expect(storage.callsOf("close")).toHaveLength(2);
+  });
+
   test("close を 2 回呼ぶと 2 回目は UniKvsIsNotOpenError を投げる", async ({ expect }) => {
     // 準備
     const kvs = UniKvs.config().persist(new FakeStorage()).create();

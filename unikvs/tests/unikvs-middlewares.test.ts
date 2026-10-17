@@ -18,6 +18,7 @@ import {
   FakeStreamStorage,
   FakeStreamMiddleware,
   FakeMiddleware,
+  Gate,
   streamOf,
 } from "./_helpers.js";
 
@@ -809,6 +810,8 @@ describe("UniKvs - next の呼び出し規約", () => {
   }) => {
     // 準備
     class FireAndForgetMiddleware extends FakeMiddleware {
+      public detached: Promise<void> | undefined;
+
       public constructor() {
         super("FireAndForget");
       }
@@ -818,10 +821,13 @@ describe("UniKvs - next の呼び出し規約", () => {
         next: IMiddleware.INext,
       ): Promise<void> {
         c.destination = c.source;
-        void next();
+        // 切り離した next() はテスト側で完了を待ち、close 後の未処理拒否を防ぎます。
+        this.detached = next();
       }
     }
     class SlowMiddleware extends FakeMiddleware {
+      public readonly gate = new Gate();
+
       public constructor() {
         super("Slow");
       }
@@ -831,14 +837,16 @@ describe("UniKvs - next の呼び出し規約", () => {
         next: IMiddleware.INext,
       ): Promise<void> {
         c.destination = c.source;
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await this.gate.wait();
         await next();
       }
     }
     const storage = new FakeStorage();
+    const fireAndForget = new FireAndForgetMiddleware();
+    const slow = new SlowMiddleware();
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new FireAndForgetMiddleware())
-      .connect(new SlowMiddleware())
+      .connect(fireAndForget)
+      .connect(slow)
       .persist(storage)
       .create();
     await kvs.open();
@@ -852,7 +860,9 @@ describe("UniKvs - next の呼び出し規約", () => {
     });
     expect(storage.map.has("foo")).toBe(false);
 
-    // 後片付け
+    // 後片付け: 切り離した next() の完了を待ってから閉じる
+    slow.gate.open();
+    await fireAndForget.detached;
     await kvs.close();
   });
 });

@@ -79,7 +79,8 @@ describe("UniKvs + NodeFs", () => {
     });
     const ac = new AbortController();
 
-    // 実行
+    // 実行: 書き込み処理が始まるまで待ってから中断する
+    // (NodeFs 内部の書き込み開始は外部から観測できないため、実時間の待機を使用する)
     const p = kvs.set("foo", slow, { signal: ac.signal });
     await new Promise((resolve) => setTimeout(resolve, 30));
     ac.abort(new Error("stop"));

@@ -150,11 +150,16 @@ describe("UniKvs - vars の伝播", () => {
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     const gate = new Gate();
+    const bEntered = new Gate();
     let bSawA = false;
     a.hook = async () => {
       await gate.wait();
     };
     b.hook = (call) => {
+      // b の open がゲート待機中の a と並列に進んだことを記録する
+      if (call.method === "open") {
+        bEntered.open();
+      }
       // a が設定した変数が b に見えないことを確認する (分離)
       if ((call.vars?.get("fromA") as unknown) === true) {
         bSawA = true;
@@ -171,7 +176,7 @@ describe("UniKvs - vars の伝播", () => {
     // 実行: open を並列開始し、b が先に進んでも a の変異が見えないことを確認する
     const openPromise = kvs.open();
     // b の open がゲート待機中の a と並列に進むのを待つ
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await bEntered.wait();
     gate.open();
     await openPromise;
 

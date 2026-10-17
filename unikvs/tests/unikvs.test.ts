@@ -627,11 +627,12 @@ describe("UniKvs - オープン / クローズ", () => {
   }) => {
     class SlowOpenStorage implements IStorage {
       readonly name = "SlowOpenStorage";
+      readonly gate = Promise.withResolvers<void>();
       isOpen = false;
 
       async open(): Promise<void> {
-        // signal を無視して時間のかかるオープン処理を模倣します。
-        await new Promise((resolve) => setTimeout(resolve, 30));
+        // signal を無視して、テストが解放するまで時間のかかるオープン処理を模倣します。
+        await this.gate.promise;
         this.isOpen = true;
       }
 
@@ -651,9 +652,8 @@ describe("UniKvs - オープン / クローズ", () => {
     }
 
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .persist(new SlowOpenStorage())
-      .create();
+    const storage = new SlowOpenStorage();
+    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
 
     // 実行: open の完了を待たずに close を呼び出す (#con はまだ null)
     const openPromise = kvs.open();
@@ -662,6 +662,9 @@ describe("UniKvs - オープン / クローズ", () => {
       (ex) => `rejected: ${(ex as Error).name}`,
     );
     expect(closeResult.startsWith("rejected")).toBe(true);
+
+    // 後片付け: 保留していた open を解放する
+    storage.gate.resolve();
 
     // 検証: abort 済みの接続が開かれたままにならないこと
     await expect(openPromise).rejects.toThrow(UniKvsIsNotOpenError);
