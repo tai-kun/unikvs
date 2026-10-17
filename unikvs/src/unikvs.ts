@@ -37,6 +37,9 @@ import type {
 import {
   type KeyNotFoundErrorArgs,
   KeyNotFoundError,
+  MiddlewareNextCalledMultipleTimesError,
+  MiddlewareNextNotAwaitedError,
+  MiddlewareNextNotCalledError,
   UniKvsIsOpenError,
   UniKvsIsNotOpenError,
   PluginOperationAggregateError,
@@ -1063,6 +1066,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * ミドルウェアの `use` をオニオン実行し、失敗時は集約して投げます。
    *
    * 同一コンテキストオブジェクトを全ミドルウェアで共有し、`next` で下流をネスト実行するため、下流の `set` が上流の `await next()` 後の `get` に見えます。
+   * `encode`/`decode` と同じく `next()` の呼び出し規約を検証し、違反したときは操作を実行せず失敗させます (fail-close)。
    * いずれかのミドルウェアが投げたときは即時に確定し、後段は実行しません (fail-fast)。
    * 失敗は集約エラー (単一件) として投げます。
    *
@@ -1082,16 +1086,77 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }
 
       const middleware = middlewares[index]!;
-      const next: IMiddleware.INext = async () => {
-        await dispatch(index + 1);
+      let nextCalled = false;
+      let nextSettled = false;
+      let downstreamError: unknown;
+      let hasDownstreamError = false;
+      const next: IMiddleware.INext = function next() {
+        if (nextCalled) {
+          // 2 回目以降の `next()` は下流を実行せず拒否だけを返します。
+          const rejection = Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: middleware.name,
+              operation: "use",
+            }),
+          );
+          // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
+          rejection.catch(() => {});
+
+          return rejection;
+        }
+        nextCalled = true;
+
+        const promise = Promise.try(async () => {
+          try {
+            await dispatch(index + 1);
+          } catch (ex) {
+            // 下流の失敗を親自身の失敗と取り違えないよう、由来を記録します。
+            downstreamError = ex;
+            hasDownstreamError = true;
+            throw ex;
+          } finally {
+            nextSettled = true;
+          }
+        });
+        // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
+        promise.catch(() => {});
+
+        return promise;
       };
 
       try {
         await middleware.use(useContext, next);
+        useContext.signal.throwIfAborted();
+        if (!nextCalled) {
+          throw new MiddlewareNextNotCalledError({
+            name: middleware.name,
+            operation: "use",
+          });
+        }
+        if (!nextSettled) {
+          throw new MiddlewareNextNotAwaitedError({
+            name: middleware.name,
+            operation: "use",
+          });
+        }
       } catch (ex) {
         const signal = useContext.signal;
         // 中断による失敗はそのまま投げます。
         if (signal.aborted && ex === signal.reason) {
+          throw ex;
+        }
+
+        // 規約違反はプログラミングエラーであり、集約せずに投げます。
+        if (
+          ex instanceof MiddlewareNextNotCalledError ||
+          ex instanceof MiddlewareNextNotAwaitedError ||
+          ex instanceof MiddlewareNextCalledMultipleTimesError
+        ) {
+          throw ex;
+        }
+
+        // `next()` から伝播した下流の失敗は再集約せず、そのまま投げます。
+        if (hasDownstreamError && ex === downstreamError) {
           throw ex;
         }
 
@@ -1259,6 +1324,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           store,
         });
         await this.#runMiddlewareUse("write", useContext);
+        // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+        signal.throwIfAborted();
         // `use` による変異を操作変数に反映します。
         // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
         if (stream !== null) {
@@ -1376,6 +1443,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
+      // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+      signal.throwIfAborted();
       let data: unknown = undefined;
       let hit: ResolvedLeaf | null = null;
       const missing: PipelineLeaf[] = [];
@@ -1508,6 +1577,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
+      // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+      signal.throwIfAborted();
       // NONE は getReadable の呼び出し前を表す番兵値です。
       const NONE: any = {};
       let r: IReadableStream = NONE;
@@ -1820,6 +1891,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         store,
       });
       await this.#runMiddlewareUse("read", useContext);
+      // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+      signal.throwIfAborted();
       const lock = await io.rLock({ key, signal });
       try {
         // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
@@ -1899,6 +1972,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         store,
       });
       await this.#runMiddlewareUse("delete", useContext);
+      // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+      signal.throwIfAborted();
       const lock = await io.lock({ key, signal });
       try {
         // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
@@ -1968,6 +2043,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       const lock = await io.lock({ signal });
       try {
         await this.#runMiddlewareUse("clear", useContext);
+        // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+        signal.throwIfAborted();
         // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
         const errors: PluginErrorRecord[] = [];
         await Promise.all(

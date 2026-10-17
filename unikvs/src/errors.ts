@@ -481,7 +481,7 @@ export type MiddlewareNextNotCalledErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly operation: "encode" | "decode";
+  readonly operation: "encode" | "decode" | "use";
 };
 
 /**
@@ -526,7 +526,7 @@ export type MiddlewareNextNotAwaitedErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly operation: "encode" | "decode";
+  readonly operation: "encode" | "decode" | "use";
 };
 
 /**
@@ -572,7 +572,7 @@ export type MiddlewareNextCalledMultipleTimesErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly operation: "encode" | "decode";
+  readonly operation: "encode" | "decode" | "use";
 };
 
 /**
