@@ -23,7 +23,8 @@ function createDynamicKvs(storage = new FakeStorage()): {
 describe("UniKvs - 引数形式の等価性", () => {
   test("set は位置引数形式とオプションオブジェクト形式で同じ結果になる", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = createDynamicKvs();
+    const storage = new FakeStorage();
+    await using kvs = createDynamicKvs(storage).kvs;
     await kvs.open();
 
     // 実行
@@ -33,35 +34,30 @@ describe("UniKvs - 引数形式の等価性", () => {
     // 検証
     expect(storage.map.get("a")).toBe("value-a");
     expect(storage.map.get("b")).toBe("value-b");
-    expect(await kvs.get("a")).toBe("value-a");
-    expect(await kvs.get({ key: "b" })).toBe("value-b");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("a")).resolves.toBe("value-a");
+    await expect(kvs.get({ key: "b" })).resolves.toBe("value-b");
   });
 
   test("has と delete も両形式で同じ結果になる", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
     await kvs.set("a", "value-a");
     await kvs.set("b", "value-b");
 
     // 実行と検証
-    expect(await kvs.has("a")).toBe(true);
-    expect(await kvs.has({ key: "a" })).toBe(true);
+    await expect(kvs.has("a")).resolves.toBe(true);
+    await expect(kvs.has({ key: "a" })).resolves.toBe(true);
     await kvs.delete("a");
     await kvs.delete({ key: "b" });
-    expect(await kvs.has("a")).toBe(false);
-    expect(await kvs.has("b")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.has("a")).resolves.toBe(false);
+    await expect(kvs.has("b")).resolves.toBe(false);
   });
 
   test("位置引数形式のオプション引数で vars と signal を渡せる", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = createDynamicKvs();
+    const storage = new FakeStorage();
+    await using kvs = createDynamicKvs(storage).kvs;
     await kvs.open();
     const signal = new AbortController().signal;
 
@@ -81,9 +77,6 @@ describe("UniKvs - 引数形式の等価性", () => {
         .find((call) => call.vars?.get("via") === "has")
         ?.vars?.get("via"),
     ).toBe("has");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -109,19 +102,17 @@ describe("UniKvs - 引数の検証", () => {
     { name: "clear の引数が文字列", op: (kvs: UniKvs) => kvs.clear("all" as never) },
   ])("$name は InvalidInputError を投げる", async ({ op }, { expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
 
     // 実行と検証
     await expect(op(kvs)).rejects.toThrow(InvalidInputError);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("無効な引数でも KVS は壊れず次の操作が成功する", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = createDynamicKvs();
+    const storage = new FakeStorage();
+    await using kvs = createDynamicKvs(storage).kvs;
     await kvs.open();
 
     // 実行
@@ -130,35 +121,30 @@ describe("UniKvs - 引数の検証", () => {
     // 検証
     await kvs.set("a", "value");
     expect(storage.map.get("a")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
 describe("UniKvs - キーの境界", () => {
   test("空文字キーでも set/get/has/delete が動作する", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = createDynamicKvs();
+    const storage = new FakeStorage();
+    await using kvs = createDynamicKvs(storage).kvs;
     await kvs.open();
 
     // 実行
     await kvs.set("", "empty-key");
 
     // 検証
-    expect(await kvs.has("")).toBe(true);
-    expect(await kvs.get("")).toBe("empty-key");
+    await expect(kvs.has("")).resolves.toBe(true);
+    await expect(kvs.get("")).resolves.toBe("empty-key");
     expect(storage.map.has("")).toBe(true);
     await kvs.delete("");
-    expect(await kvs.has("")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.has("")).resolves.toBe(false);
   });
 
   test("長いキー・Unicode・制御文字を含むキーでも動作する", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
     const keys = [
       "k".repeat(10_000),
@@ -171,35 +157,29 @@ describe("UniKvs - キーの境界", () => {
     // 実行と検証
     for (const [index, key] of keys.entries()) {
       await kvs.set(key, `value-${index}`);
-      expect(await kvs.get(key)).toBe(`value-${index}`);
-      expect(await kvs.has(key)).toBe(true);
+      await expect(kvs.get(key)).resolves.toBe(`value-${index}`);
+      await expect(kvs.has(key)).resolves.toBe(true);
     }
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("get の KeyNotFoundError は meta.key に対象キーを保持する", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
 
     // 実行
-    const error = await kvs.get("missing").catch((ex: unknown) => ex);
+    const getting = kvs.get("missing");
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect((error as KeyNotFoundError).meta.key).toBe("missing");
-
-    // 後片付け
-    await kvs.close();
+    await expect(getting).rejects.toThrow(KeyNotFoundError);
+    await expect(getting).rejects.toMatchObject({ meta: { key: "missing" } });
   });
 });
 
 describe("UniKvs - 基本操作の不変条件", () => {
   test("同じキーへ set を繰り返すと最後の値で上書きされる", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
 
     // 実行
@@ -208,15 +188,12 @@ describe("UniKvs - 基本操作の不変条件", () => {
     await kvs.set("a", "third");
 
     // 検証
-    expect(await kvs.get("a")).toBe("third");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("a")).resolves.toBe("third");
   });
 
   test("複数キーの操作が互いに干渉しない", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
 
     // 実行
@@ -225,16 +202,14 @@ describe("UniKvs - 基本操作の不変条件", () => {
     await kvs.delete("a");
 
     // 検証
-    expect(await kvs.has("a")).toBe(false);
-    expect(await kvs.get("b")).toBe("vb");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.has("a")).resolves.toBe(false);
+    await expect(kvs.get("b")).resolves.toBe("vb");
   });
 
   test("clear は削除後の再 set も含めて一貫して動作する", async ({ expect }) => {
     // 準備
-    const { kvs, storage } = createDynamicKvs();
+    const storage = new FakeStorage();
+    await using kvs = createDynamicKvs(storage).kvs;
     await kvs.open();
     await kvs.set("a", "va");
     await kvs.set("b", "vb");
@@ -245,31 +220,25 @@ describe("UniKvs - 基本操作の不変条件", () => {
     // 検証
     expect(storage.map.size).toBe(0);
     await expect(kvs.get("a")).rejects.toThrow(KeyNotFoundError);
-    expect(await kvs.has("b")).toBe(false);
+    await expect(kvs.has("b")).resolves.toBe(false);
 
     // 実行
     await kvs.set("c", "vc");
 
     // 検証
-    expect(await kvs.get("c")).toBe("vc");
-    expect(await kvs.has("a")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("c")).resolves.toBe("vc");
+    await expect(kvs.has("a")).resolves.toBe(false);
   });
 
   test("存在しないキーの delete は成功し、既存キーにも影響しない", async ({ expect }) => {
     // 準備
-    const { kvs } = createDynamicKvs();
+    await using kvs = createDynamicKvs().kvs;
     await kvs.open();
     await kvs.set("a", "va");
 
     // 実行と検証
     await expect(kvs.delete("missing")).resolves.toBeUndefined();
-    expect(await kvs.get("a")).toBe("va");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("a")).resolves.toBe("va");
   });
 });
 
@@ -279,15 +248,12 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行と検証: schema なしでは検証されないが、値はプレーン書き込みとして扱われる
     await expect(kvs.set("logs", "plain" as never)).resolves.toBeUndefined();
     expect(storage.map.get("logs")).toBe("plain");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream に対応しないストレージへのストリーム書き込みは集約エラーになる", async ({
@@ -295,18 +261,15 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("logs", streamOf([new Uint8Array([1])])).catch((ex: unknown) => ex);
+    const setting = kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    expect((error as PluginOperationAggregateError).meta.action).toBe("write");
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toMatchObject({ meta: { action: "write" } });
     expect(storage.map.has("logs")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 });

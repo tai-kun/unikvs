@@ -17,22 +17,22 @@ afterEach(() => {
 });
 
 /**
- * 一時ディレクトリーをルートとする NodeFs ストレージを持つ UniKvs を生成します。
+ * 一時ディレクトリーをルートとするパスを作成します。
  * 生成したルートディレクトリーは afterEach で削除されます。
  */
-function createKvs(rootSuffix = "") {
+function createRoot(rootSuffix = ""): string {
   const root = `.tmp-unikvs-nodefs-${Date.now()}${rootSuffix}`;
   roots.push(root);
-  const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-    .persist(new NodeFs(root))
-    .create();
-  return { kvs, root };
+
+  return root;
 }
 
 describe("UniKvs + NodeFs", () => {
   test("通常のキーで set / get / clear / has が動作する", async ({ expect }) => {
     // 準備
-    const { kvs } = createKvs();
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+      .persist(new NodeFs(createRoot()))
+      .create();
     await kvs.open();
 
     // 実行
@@ -41,15 +41,14 @@ describe("UniKvs + NodeFs", () => {
     // 検証
     expect([...(await kvs.get("foo"))]).toEqual([1]);
     await kvs.clear();
-    expect(await kvs.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.has("foo")).resolves.toBe(false);
   });
 
   test("パストラバーサル系のキーは拒否される", async ({ expect }) => {
     // 準備
-    const { kvs } = createKvs();
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+      .persist(new NodeFs(createRoot()))
+      .create();
     await kvs.open();
 
     // 実行と検証
@@ -59,14 +58,14 @@ describe("UniKvs + NodeFs", () => {
         `key=${JSON.stringify(key)}`,
       ).rejects.toThrow(PluginOperationAggregateError);
     }
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストリーム書き込み中断時、既存データは無傷で一時ファイルも残らない", async ({ expect }) => {
     // 準備
-    const { kvs, root } = createKvs("-abort");
+    const root = createRoot("-abort");
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+      .persist(new NodeFs(root))
+      .create();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([1, 1, 1]));
 
@@ -90,14 +89,13 @@ describe("UniKvs + NodeFs", () => {
     await expect(p).rejects.toThrow(PluginOperationAggregateError);
     expect([...(await kvs.get("foo"))]).toEqual([1, 1, 1]);
     expect(readdirSync(root).filter((file) => file.endsWith(".tmp"))).toEqual([]);
-
-    // 後片付け
-    await kvs.close();
   }, 15000);
 
   test("同一キーへの並行書き込みでも破損しない", async ({ expect }) => {
     // 準備
-    const { kvs } = createKvs("-race");
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+      .persist(new NodeFs(createRoot("-race")))
+      .create();
     await kvs.open();
 
     // 実行
@@ -108,10 +106,7 @@ describe("UniKvs + NodeFs", () => {
 
     // 検証: どちらか一方の値で一貫している
     const value = await kvs.get("foo");
-    expect(value.length).toBe(4);
+    expect(value).toHaveLength(4);
     expect(new Set(value.values()).size).toBe(1);
-
-    // 後片付け
-    await kvs.close();
   });
 });

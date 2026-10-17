@@ -27,6 +27,10 @@ describe("parseInput", () => {
   test("エラーコンストラクターを上書きできる", ({ expect }) => {
     // 準備
     const schema = string();
+    /**
+     * コンストラクター引数の value をメッセージに含めるカスタムエラーです。
+     * parseInput が差し替えられたエラーコンストラクターを呼び出すことを検証するために使用します。
+     */
     class CustomError extends Error {
       constructor(args: any) {
         super(`Custom: ${args.value}`);
@@ -41,14 +45,17 @@ describe("parseInput", () => {
     // 準備
     const schema = object({ name: string(), age: number() });
 
-    // 実行
+    // 実行: parseInput は同期的に例外を投げるため、try/catch で拒否理由を回収する
+    let error: InvalidInputError | undefined;
     try {
       parseInput(schema, { name: "Alice", age: "twenty" });
-    } catch (error) {
-      // 検証
-      expect(error).toBeInstanceOf(InvalidInputError);
-      expect((error as InvalidInputError).meta.issues.length).toBeGreaterThan(0);
+    } catch (ex) {
+      error = ex as InvalidInputError;
     }
+
+    // 検証
+    expect(error).toBeInstanceOf(InvalidInputError);
+    expect((error as InvalidInputError).meta.issues.length).toBeGreaterThan(0);
   });
 });
 
@@ -75,6 +82,10 @@ describe("parseOutput", () => {
   test("エラーコンストラクターを上書きできる", ({ expect }) => {
     // 準備
     const schema = string();
+    /**
+     * コンストラクター引数の value をメッセージに含めるカスタムエラーです。
+     * parseOutput が差し替えられたエラーコンストラクターを呼び出すことを検証するために使用します。
+     */
     class CustomError extends Error {
       constructor(args: any) {
         super(`Custom: ${args.value}`);

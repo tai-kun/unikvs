@@ -19,36 +19,9 @@ import {
   FakeStreamMiddleware,
   FakeMiddleware,
   Gate,
+  TagMiddleware,
   streamOf,
 } from "./_helpers.js";
-
-/**
- * encode ハンドラのたびに自身のタグを末尾へ付与し、decode ハンドラで除去するミドルウェアです。
- * チェーンの適用順序を検証するために使用します。
- */
-class TagMiddleware extends FakeMiddleware {
-  readonly #tag: string;
-
-  public constructor(tag: string) {
-    super(`Tag(${tag})`);
-    this.#tag = tag;
-  }
-
-  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
-    const [c, next] = args;
-    await this.record("encode", { data: c.source, c });
-    c.destination = `${String(c.source)}${this.#tag}`;
-    await next!();
-  }
-
-  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
-    const [c, next] = args;
-    await this.record("decode", { data: c.source, c });
-    const data = String(c.source);
-    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
-    await next!();
-  }
-}
 
 describe("UniKvs - ミドルウェアのライフサイクル", () => {
   test("閉じたミドルウェアは open で開かれ、close で閉じられる", async ({ expect }) => {
@@ -103,15 +76,23 @@ describe("UniKvs - ミドルウェアのライフサイクル", () => {
     middleware.isOpen = false;
 
     // 実行と検証: `use` の失敗は集約されて投げられる
-    const setError = await kvs.set("foo", "value").catch((ex) => ex);
-    expect(setError).toBeInstanceOf(PluginOperationAggregateError);
-    expect((setError as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
-      MiddlewareIsNotOpenError,
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ reason: expect.any(MiddlewareIsNotOpenError) })],
+        }),
+      }),
     );
-    const getError = await kvs.get("foo").catch((ex) => ex);
-    expect(getError).toBeInstanceOf(PluginOperationAggregateError);
-    expect((getError as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
-      MiddlewareIsNotOpenError,
+    const getting = kvs.get("foo");
+    await expect(getting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ reason: expect.any(MiddlewareIsNotOpenError) })],
+        }),
+      }),
     );
 
     // 後片付け
@@ -137,7 +118,7 @@ describe("UniKvs - チェーンの順序", () => {
     t3.hook = (call) => {
       if (call.method === "decode") decodeOrder.push("3");
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(t1)
       .connect(t2)
       .connect(t3)
@@ -150,13 +131,10 @@ describe("UniKvs - チェーンの順序", () => {
 
     // 検証: encode ハンドラは登録順
     expect(storage.map.get("foo")).toBe("x123");
-    expect(await kvs.get("foo")).toBe("x");
+    await expect(kvs.get("foo")).resolves.toBe("x");
 
     // 検証: decode ハンドラは登録の逆順
     expect(decodeOrder).toStrictEqual(["3", "2", "1"]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストレージごとに encode ハンドラが独立に実行される", async ({ expect }) => {
@@ -166,7 +144,7 @@ describe("UniKvs - チェーンの順序", () => {
     const storage3 = new FakeStorage("storage3");
     const t1 = new TagMiddleware("1");
     const t2 = new TagMiddleware("2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(t1)
       .connect(t2)
       .persist(storage1)
@@ -184,9 +162,6 @@ describe("UniKvs - チェーンの順序", () => {
     expect(storage1.map.get("foo")).toBe("x12");
     expect(storage2.map.get("foo")).toBe("x12");
     expect(storage3.map.get("foo")).toBe("x12");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("vars はチェーンを流れ、後段のミドルウェアにも渡される", async ({ expect }) => {
@@ -194,7 +169,7 @@ describe("UniKvs - チェーンの順序", () => {
     const storage = new FakeStorage();
     const t1 = new FakeMiddleware("t1");
     const t2 = new FakeMiddleware("t2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(t1)
       .connect(t2)
       .persist(storage)
@@ -208,9 +183,6 @@ describe("UniKvs - チェーンの順序", () => {
     expect(t1.callsOf("encode")[0]?.vars?.get("request")).toBe("r");
     expect(t2.callsOf("encode")[0]?.vars?.get("request")).toBe("r");
     expect(t2.callsOf("encode")[0]?.data).toBe("x");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -221,7 +193,7 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     const storage2 = new FakeStreamStorage("storage2");
     const t1 = new FakeStreamMiddleware("t1");
     const t2 = new FakeStreamMiddleware("t2");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(t1)
       .connect(t2)
       .persist(storage1)
@@ -235,9 +207,6 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     // 検証
     expect(t1.callsOf("encodeStream")).toHaveLength(1);
     expect(t2.callsOf("encodeStream")).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストリーム読み取りでは decodeStream が逆順で呼ばれる", async ({ expect }) => {
@@ -257,7 +226,7 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     t3.hook = (call) => {
       if (call.method === "decodeStream") decodeStreamOrder.push("t3");
     };
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(t1)
       .connect(t2)
       .connect(t3)
@@ -274,16 +243,13 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     expect(t2.callsOf("decodeStream")).toHaveLength(1);
     expect(t1.callsOf("decodeStream")).toHaveLength(1);
     expect(decodeStreamOrder).toStrictEqual(["t3", "t2", "t1"]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストリーム非対応のミドルウェアへのストリーム書き込みは StreamEncodingNotSupportedError を投げる", async ({
     expect,
   }) => {
     // 準備
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new FakeMiddleware())
       .persist(new FakeStreamStorage())
       .create();
@@ -293,9 +259,6 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     await expect(kvs.set("logs", streamOf([new Uint8Array([1])]))).rejects.toThrow(
       StreamEncodingNotSupportedError,
     );
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストリーム非対応のミドルウェアからのストリーム読み取りは StreamDecodingNotSupportedError を投げる", async ({
@@ -304,7 +267,7 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     // 準備
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new FakeMiddleware())
       .persist(storage)
       .create();
@@ -312,9 +275,6 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
 
     // 実行と検証
     await expect(kvs.stream("logs")).rejects.toThrow(StreamDecodingNotSupportedError);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -325,7 +285,7 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
     middleware.errors["decode"] = new Error("decode boom");
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -333,9 +293,6 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
 
     // 実行と検証
     await expect(kvs.get("foo")).rejects.toThrow("decode boom");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("encode ハンドラのエラー後も KVS は壊れず、失敗したキーは保存されない", async ({
@@ -345,7 +302,7 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
     const middleware = new FakeMiddleware();
     middleware.errors["encode"] = new Error("encode boom");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -360,10 +317,7 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
     await kvs.set("foo", "value");
 
     // 検証
-    expect(await kvs.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("value");
   });
 });
 
@@ -384,7 +338,7 @@ describe("UniKvs - ミドルウェアフック", () => {
         await next();
       }
     }
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new ExistsMiddleware())
       .persist(storage)
       .create();
@@ -397,9 +351,6 @@ describe("UniKvs - ミドルウェアフック", () => {
     expect(result).toBe(true);
     expect(keys).toStrictEqual(["foo"]);
     expect(storage.callsOf("exists")[0]?.vars?.get("checkedBy")).toBe("hook");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("delete は onDelete を呼び、共有ミドルウェアでも1回だけ実行される", async ({ expect }) => {
@@ -418,7 +369,7 @@ describe("UniKvs - ミドルウェアフック", () => {
         await next();
       }
     }
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new DeleteMiddleware())
       .persist(a)
       .persist(b)
@@ -432,9 +383,6 @@ describe("UniKvs - ミドルウェアフック", () => {
     expect(keys).toStrictEqual(["foo"]);
     expect(a.callsOf("delete")[0]?.vars?.get("deletedBy")).toBe("hook");
     expect(b.callsOf("delete")[0]?.vars?.get("deletedBy")).toBe("hook");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("onExists の失敗は取りまとめられて has から投げられ、storage には触れない", async ({
@@ -451,27 +399,32 @@ describe("UniKvs - ミドルウェアフック", () => {
         await next();
       }
     }
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new DenyExistsMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.has("foo").catch((ex) => ex);
+    const checking = kvs.has("foo");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("middleware");
-    expect(aggregate.meta.action).toBe("read");
-    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
-      "exists denied",
-    ]);
+    await expect(checking).rejects.toThrow(PluginOperationAggregateError);
+    await expect(checking).rejects.toMatchObject({
+      meta: { plugin: "middleware", action: "read" },
+    });
+    await expect(checking).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [
+            expect.objectContaining({
+              reason: expect.objectContaining({ message: "exists denied" }),
+            }),
+          ],
+        }),
+      }),
+    );
     expect(storage.callsOf("exists")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("onDelete の失敗は取りまとめられて delete から投げられ、storage から削除されない", async ({
@@ -488,28 +441,33 @@ describe("UniKvs - ミドルウェアフック", () => {
         await next();
       }
     }
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new DenyDeleteMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.delete("foo").catch((ex) => ex);
+    const deleting = kvs.delete("foo");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("middleware");
-    expect(aggregate.meta.action).toBe("delete");
-    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual([
-      "delete denied",
-    ]);
+    await expect(deleting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(deleting).rejects.toMatchObject({
+      meta: { plugin: "middleware", action: "delete" },
+    });
+    await expect(deleting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [
+            expect.objectContaining({
+              reason: expect.objectContaining({ message: "delete denied" }),
+            }),
+          ],
+        }),
+      }),
+    );
     expect(storage.callsOf("delete")).toHaveLength(0);
     expect(storage.map.has("foo")).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("複数の use の失敗は fail-fast で1件目が報告される", async ({ expect }) => {
@@ -531,7 +489,7 @@ describe("UniKvs - ミドルウェアフック", () => {
         await next();
       }
     }
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new BoomDeleteMiddleware("boom1", "first"))
       .connect(new BoomDeleteMiddleware("boom2", "second"))
       .persist(storage)
@@ -539,19 +497,32 @@ describe("UniKvs - ミドルウェアフック", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.delete("foo").catch((ex) => ex);
+    const deleting = kvs.delete("foo");
 
     // 検証: オニオン実行では先頭の失敗で即時確定し、後段は実行されない
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.plugin).toBe("middleware");
-    expect(aggregate.meta.action).toBe("delete");
-    expect(aggregate.meta.errors.map((e) => (e.reason as Error).message)).toStrictEqual(["first"]);
-    expect(aggregate.meta.errors.map((e) => [e.name, e.index])).toStrictEqual([["boom1", 0]]);
+    await expect(deleting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(deleting).rejects.toMatchObject({
+      meta: { plugin: "middleware", action: "delete" },
+    });
+    await expect(deleting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [
+            expect.objectContaining({
+              reason: expect.objectContaining({ message: "first" }),
+            }),
+          ],
+        }),
+      }),
+    );
+    await expect(deleting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ name: "boom1", index: 0 })],
+        }),
+      }),
+    );
     expect(storage.callsOf("delete")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -571,23 +542,19 @@ describe("UniKvs - destination の凍結", () => {
       }
     }
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new EvilMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.set("foo", "value").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareDestinationFrozenError);
-    expect((error as MiddlewareDestinationFrozenError).meta).toStrictEqual({
-      action: "set",
-      key: "foo",
-    });
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareDestinationFrozenError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { action: "set", key: "foo" } }),
+    );
     expect(storage.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("decode で next() の実行後に destination を設定すると MiddlewareDestinationFrozenError を投げる", async ({
@@ -606,22 +573,18 @@ describe("UniKvs - destination の凍結", () => {
     }
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new EvilMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.get("foo").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareDestinationFrozenError);
-    expect((error as MiddlewareDestinationFrozenError).meta).toStrictEqual({
-      action: "get",
-      key: "foo",
-    });
-
-    // 後片付け
-    await kvs.close();
+    const getting = kvs.get("foo");
+    await expect(getting).rejects.toThrow(MiddlewareDestinationFrozenError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({ meta: { action: "get", key: "foo" } }),
+    );
   });
 
   test("next() の実行後も destination の読み取りはできる", async ({ expect }) => {
@@ -640,7 +603,7 @@ describe("UniKvs - destination の凍結", () => {
     }
     const middleware = new ReadAfterNextMiddleware();
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -651,10 +614,7 @@ describe("UniKvs - destination の凍結", () => {
 
     // 検証
     expect(middleware.readValues).toStrictEqual(["x!"]);
-    expect(await kvs.get("foo")).toBe("x!");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x!");
   });
 });
 
@@ -676,23 +636,19 @@ describe("UniKvs - next の呼び出し規約", () => {
       }
     }
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new SilentMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.set("foo", "value").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
-    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
-      name: "Silent",
-      operation: "encode",
-    });
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextNotCalledError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "Silent", operation: "encode" } }),
+    );
     expect(storage.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("decode で next() を呼ばないと MiddlewareNextNotCalledError を投げる", async ({
@@ -713,22 +669,18 @@ describe("UniKvs - next の呼び出し規約", () => {
     }
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new SilentMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.get("foo").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
-    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
-      name: "Silent",
-      operation: "decode",
-    });
-
-    // 後片付け
-    await kvs.close();
+    const getting = kvs.get("foo");
+    await expect(getting).rejects.toThrow(MiddlewareNextNotCalledError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "Silent", operation: "decode" } }),
+    );
   });
 
   test("decodeStream で next() を呼ばないと MiddlewareNextNotCalledError を投げる", async ({
@@ -749,22 +701,18 @@ describe("UniKvs - next の呼び出し規約", () => {
     }
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new SilentMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.stream("logs").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
-    expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
-      name: "Silent",
-      operation: "decode",
-    });
-
-    // 後片付け
-    await kvs.close();
+    const streaming = kvs.stream("logs");
+    await expect(streaming).rejects.toThrow(MiddlewareNextNotCalledError);
+    await expect(streaming).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "Silent", operation: "decode" } }),
+    );
   });
 
   test("encode で next() を複数回呼ぶと MiddlewareNextCalledMultipleTimesError を投げる", async ({
@@ -786,23 +734,19 @@ describe("UniKvs - next の呼び出し規約", () => {
       }
     }
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TwiceMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.set("foo", "value").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareNextCalledMultipleTimesError);
-    expect((error as MiddlewareNextCalledMultipleTimesError).meta).toStrictEqual({
-      name: "Twice",
-      operation: "encode",
-    });
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "Twice", operation: "encode" } }),
+    );
     expect(storage.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("encode で next() を await しなかったとき MiddlewareNextNotAwaitedError を投げる", async ({
@@ -844,7 +788,7 @@ describe("UniKvs - next の呼び出し規約", () => {
     const storage = new FakeStorage();
     const fireAndForget = new FireAndForgetMiddleware();
     const slow = new SlowMiddleware();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(fireAndForget)
       .connect(slow)
       .persist(storage)
@@ -852,17 +796,15 @@ describe("UniKvs - next の呼び出し規約", () => {
     await kvs.open();
 
     // 実行と検証
-    const error = await kvs.set("foo", "value").catch((ex) => ex);
-    expect(error).toBeInstanceOf(MiddlewareNextNotAwaitedError);
-    expect((error as MiddlewareNextNotAwaitedError).meta).toStrictEqual({
-      name: "FireAndForget",
-      operation: "encode",
-    });
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextNotAwaitedError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "FireAndForget", operation: "encode" } }),
+    );
     expect(storage.map.has("foo")).toBe(false);
 
     // 後片付け: 切り離した next() の完了を待ってから閉じる
     slow.gate.open();
     await fireAndForget.detached;
-    await kvs.close();
   });
 });

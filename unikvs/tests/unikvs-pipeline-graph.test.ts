@@ -148,7 +148,7 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
-    const kvs = createMiddleSharedKvs(ar, a, b, c, c1, c2, server);
+    await using kvs = createMiddleSharedKvs(ar, a, b, c, c1, c2, server);
     await kvs.open();
 
     // 実行
@@ -161,9 +161,6 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     expect(c1.map.get("foo")).toBe("value");
     expect(c2.map.get("foo")).toBe("value");
     expect(server.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream set ではグローバル prefix 後の中間共有ノードの encodeStream を 1 回だけ呼ぶ", async ({
@@ -178,7 +175,7 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(ar)
       .fork(UniKvs.branch().connect(a).connect(b).persist(c1).connect(c).persist(c2))
       .persist(server)
@@ -195,9 +192,6 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     expect(c1.map.get("logs")).toStrictEqual(chunks);
     expect(c2.map.get("logs")).toStrictEqual(chunks);
     expect(server.map.get("logs")).toStrictEqual(chunks);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain repair ではグローバル prefix 後の中間共有ノードを書き戻しで 1 回だけエンコードする", async ({
@@ -211,7 +205,7 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
-    const kvs = createMiddleSharedKvs(ar, a, b, c, c1, c2, server);
+    await using kvs = createMiddleSharedKvs(ar, a, b, c, c1, c2, server);
     await kvs.open();
     server.map.set("foo", "value");
 
@@ -226,9 +220,6 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     expect(c1.map.get("foo")).toBe("value");
     expect(c2.map.get("foo")).toBe("value");
     expect(server.callsOf("write")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream repair ではグローバル prefix 後の中間共有ノードの encodeStream を 1 回だけ呼ぶ", async ({
@@ -243,7 +234,7 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(ar)
       .fork(UniKvs.branch().connect(a).connect(b).persist(c1).connect(c).persist(c2))
       .persist(server)
@@ -265,7 +256,6 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 });
 
@@ -290,7 +280,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
         enteredC2.open();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(ar)
       .persist(c1)
       .persist(c2)
@@ -309,9 +299,6 @@ describe("UniKvs - 書き戻しの並列性", () => {
     await expect(pending).resolves.toBe("value");
     expect(c1.map.get("foo")).toBe("value");
     expect(c2.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("対象単位の拒否があっても他の対象の書き戻しは実行される", async ({ expect }) => {
@@ -326,7 +313,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
         enteredC2.open();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(c1)
       .connect(ar)
       .persist(c2)
@@ -344,9 +331,6 @@ describe("UniKvs - 書き戻しの並列性", () => {
       expect(c2.map.get("foo")).toBe("value");
     });
     expect(c1.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("拒否があっても保留中の他の書き込みを待たずに失敗する", async ({ expect }) => {
@@ -363,7 +347,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
         await releaseC2.wait();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(c1)
       .connect(ar)
       .persist(c2)
@@ -377,23 +361,15 @@ describe("UniKvs - 書き戻しの並列性", () => {
 
     // 検証: 許可された対象の書き込みは開始し、拒否はその完了を待たずに確定する
     await expect(withTimeout(enteredC2.wait(), 1000, "c2-start")).resolves.toBeUndefined();
-    await expect(
-      withTimeout(
-        pending.then(
-          () => null,
-          (ex: unknown) => ex,
-        ),
-        1000,
-        "fail-fast",
-      ),
-    ).resolves.toBeInstanceOf(RepairNotAllowedError);
+    await expect(withTimeout(pending, 1000, "fail-fast")).rejects.toBeInstanceOf(
+      RepairNotAllowedError,
+    );
 
     // 後片付け: 保留中の書き込みを解放して完了させてから閉じる
     releaseC2.open();
     await vi.waitFor(() => {
       expect(c2.map.get("foo")).toBe("value");
     });
-    await kvs.close();
   });
 
   test("書き込み時の拒否も応答のない他の書き戻しを待たずに失敗する", async ({ expect }) => {
@@ -410,7 +386,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
         await releaseC2.wait();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(ar)
       .persist(c1)
       .persist(c2)
@@ -424,23 +400,15 @@ describe("UniKvs - 書き戻しの並列性", () => {
 
     // 検証: 保留中の書き込みは開始しているが、書き込み時の拒否はその完了を待たずに確定する
     await expect(withTimeout(enteredC2.wait(), 1000, "c2-start")).resolves.toBeUndefined();
-    await expect(
-      withTimeout(
-        pending.then(
-          () => null,
-          (ex: unknown) => ex,
-        ),
-        1000,
-        "fail-fast-write",
-      ),
-    ).resolves.toBeInstanceOf(RepairNotAllowedError);
+    await expect(withTimeout(pending, 1000, "fail-fast-write")).rejects.toBeInstanceOf(
+      RepairNotAllowedError,
+    );
 
     // 後片付け: 保留中の書き込みを解放して完了させてから閉じる
     releaseC2.open();
     await vi.waitFor(() => {
       expect(c2.map.get("foo")).toBe("value");
     });
-    await kvs.close();
   });
 });
 
@@ -518,7 +486,7 @@ describe("UniKvs - 共有節のキー写像", () => {
     const middleware = new CountingMapKeyMiddleware("shared");
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(a)
       .persist(b)
@@ -530,9 +498,6 @@ describe("UniKvs - 共有節のキー写像", () => {
 
     // 検証
     expect(middleware.mapKeyCallCount).toBe(1);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -544,7 +509,7 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
     const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     const cache = new CancelObservableStorage("cache");
     const server = new CancelObservableStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(outer)
       .persist(cache)
       .persist(server)
@@ -565,9 +530,6 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
 
     // 検証: ソースが解放される
     expect(server.sourceCancelled).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -579,7 +541,7 @@ describe("UniKvs - デコードの後始末", () => {
     const inner = new FakeStreamMiddleware<Uint8Array>("inner");
     const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     inner.errors["decodeStream"] = new Error("decodeStream failed");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(inner)
       .connect(outer)
       .persist(storage)
@@ -589,9 +551,6 @@ describe("UniKvs - デコードの後始末", () => {
     // 実行と検証: 失敗は伝播し、構築済みパイプ経由でソースが解放される
     await expect(kvs.stream("logs")).rejects.toThrow("decodeStream failed");
     expect(storage.sourceCancelled).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -604,7 +563,7 @@ describe("UniKvs - 書き戻し中の読み取り", () => {
     const writeGate = new Gate();
     cache.writeGate = writeGate;
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(ar)
       .persist(cache)
       .persist(server)
@@ -635,6 +594,5 @@ describe("UniKvs - 書き戻し中の読み取り", () => {
     expect(remaining).toStrictEqual(chunks.slice(1));
     await vs.dispose();
     expect(cache.map.get("logs")).toStrictEqual(chunks);
-    await kvs.close();
   });
 });

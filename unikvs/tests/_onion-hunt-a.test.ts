@@ -272,7 +272,7 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const s3 = new FakeStorage("s3");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(s1))
       .fork(UniKvs.branch().connect(c).persist(s2))
@@ -298,9 +298,6 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     expect(s1.map.get("foo")).toBe("value");
     expect(s2.map.get("foo")).toBe("value");
     expect(s3.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain set の親 post は子 post の非同期処理の完了を待つ", async ({ expect }) => {
@@ -309,7 +306,7 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const a = new OrderMiddleware("A", log, "encode");
     const b = new GatedPostEncodeMiddleware("B");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .connect(b)
       .persist(storage)
@@ -328,8 +325,6 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     await expect(pending).resolves.toBeUndefined();
     expect(log).toStrictEqual(["A:encode:pre", "A:encode:post"]);
     expect(storage.map.get("foo")).toBe("value");
-
-    await kvs.close();
   });
 
   test("plain set で下流の encode が失敗すると上流の post は実行されず、どのストレージにも書かれない", async ({
@@ -341,7 +336,7 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const b = new PreThrowEncodeMiddleware("B", log, "B-pre-boom");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .connect(b)
       .persist(s1)
@@ -350,16 +345,14 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証: B の pre で失敗し、A の post は実行されない
-    expect((error as Error).message).toBe("B-pre-boom");
+    await expect(setting).rejects.toThrow(Error);
+    await expect(setting).rejects.toMatchObject({ message: "B-pre-boom" });
     expect(log).toStrictEqual(["A:encode:pre", "B:encode:pre"]);
     expect(s1.callsOf("write")).toHaveLength(0);
     expect(s2.callsOf("write")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain set で共有節の兄弟分岐が post で失敗すると、兄弟の post までは実行されるが親の post は実行されない", async ({
@@ -372,7 +365,7 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const c = new PostThrowEncodeMiddleware("C", log, "C-post-boom");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(s1))
       .fork(UniKvs.branch().connect(c).persist(s2))
@@ -380,10 +373,11 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証: 先に完了した兄弟 B の post は残り、C の失敗で A の post は実行されない
-    expect((error as Error).message).toBe("C-post-boom");
+    await expect(setting).rejects.toThrow(Error);
+    await expect(setting).rejects.toMatchObject({ message: "C-post-boom" });
     expect(log).toStrictEqual([
       "A:encode:pre",
       "B:encode:pre",
@@ -393,9 +387,6 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     ]);
     expect(s1.callsOf("write")).toHaveLength(0);
     expect(s2.callsOf("write")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -410,7 +401,7 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     const c = new OrderMiddleware("C", log, "decode");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(s1))
       .fork(UniKvs.branch().connect(c).persist(s2))
@@ -425,9 +416,6 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     expect(value).toBe("value");
     expect(log).toStrictEqual(["C:decode:pre", "A:decode:pre", "A:decode:post", "C:decode:post"]);
     expect(b.callsOf("decode")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain get で根側の decode post が失敗すると、葉側の post は実行されず get は失敗する", async ({
@@ -439,7 +427,7 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     const b = new OrderMiddleware("B", log, "decode");
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .connect(b)
       .persist(storage)
@@ -447,14 +435,12 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.get("foo").catch((ex: unknown) => ex);
+    const getting = kvs.get("foo");
 
     // 検証: 根側 A の post で失敗し、葉側 B の post は実行されない
-    expect((error as Error).message).toBe("A-decode-post-boom");
+    await expect(getting).rejects.toThrow(Error);
+    await expect(getting).rejects.toMatchObject({ message: "A-decode-post-boom" });
     expect(log).toStrictEqual(["B:decode:pre", "A:decode:pre", "A:decode:post"]);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -470,7 +456,7 @@ describe("UniKvs - プレーン repair のオニオン順序", () => {
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new AllowRepair())
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(c1))
@@ -496,9 +482,6 @@ describe("UniKvs - プレーン repair のオニオン順序", () => {
     expect(log.filter((entry) => entry === "A:encode:pre")).toHaveLength(1);
     expect(c1.map.get("foo")).toBe("value");
     expect(c2.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -535,7 +518,7 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     }
     const reader = new Reader("Reader");
     const writer = new Writer("Writer");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(reader)
       .connect(writer)
       .persist(new FakeStorage())
@@ -547,9 +530,6 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
 
     // 検証: 上流の post から下流 pre の変更が見える
     expect(reader.seen).toBe("from-writer");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain get は葉側の post で根側の decode が設定した変数を読める", async ({ expect }) => {
@@ -579,7 +559,7 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     const leafReader = new LeafReader("LeafReader");
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new RootWriter("RootWriter"))
       .connect(leafReader)
       .persist(storage)
@@ -592,9 +572,6 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     // 検証: 葉側の post から根側 pre の変更が見える
     expect(value).toBe("value");
     expect(leafReader.seen).toBe("root");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("共有節の分岐をまたいだ変数は親の post から見えるが、先に完了した兄弟の post からは見えない", async ({
@@ -639,7 +616,7 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     const parent = new ParentMiddleware("Parent");
     const b = new BranchMiddleware("B", "b", "from-b", "c");
     const c = new BranchMiddleware("C", "c", "from-c", "b");
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .connect(parent)
       .fork(UniKvs.branch().connect(b).persist(new FakeStorage("s1")))
       .fork(UniKvs.branch().connect(c).persist(new FakeStorage("s2")))
@@ -653,9 +630,6 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     expect(b.seen).toBeUndefined();
     expect(c.seen).toBe("from-b");
     expect(parent.seen).toStrictEqual({ b: "from-b", c: "from-c" });
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -676,7 +650,7 @@ describe("UniKvs - use のオニオン実行", () => {
     const c = new UseOrderMiddleware("C", log);
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .connect(b)
       .connect(c)
@@ -716,9 +690,6 @@ describe("UniKvs - use のオニオン実行", () => {
     await kvs.clear();
     expect(log).toStrictEqual(expected("clear"));
     expect(storage.callsOf("clear")).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("use の post は下流の use が共有ストアに書いた変数を読める", async ({ expect }) => {
@@ -738,7 +709,7 @@ describe("UniKvs - use のオニオン実行", () => {
       }
     }
     const reader = new Reader("Reader");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(reader)
       .connect(new Writer("Writer"))
       .persist(new FakeStorage())
@@ -750,9 +721,6 @@ describe("UniKvs - use のオニオン実行", () => {
 
     // 検証
     expect(reader.seen).toBe("from-writer");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("use の post で失敗したとき、失敗したミドルウェアが集約エラーに報告される", async ({
@@ -769,31 +737,37 @@ describe("UniKvs - use のオニオン実行", () => {
       }
     }
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new FakeMiddleware("A"))
       .connect(new PostThrowUse("B"))
       .persist(storage)
       .create();
     await kvs.open();
 
-    try {
-      // 実行
-      const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    // 実行
+    const setting = kvs.set("foo", "value");
 
-      // 検証: 集約エラーは実際に失敗した B を単一件で報告する
-      expect(error).toBeInstanceOf(PluginOperationAggregateError);
-      const aggregate = error as PluginOperationAggregateError;
-      expect(aggregate.meta.errors).toHaveLength(1);
-      expect(aggregate.meta.errors[0]?.name).toBe("B");
-      expect(aggregate.meta.errors[0]?.index).toBe(1);
-      const reason = aggregate.meta.errors[0]?.reason;
-      expect(reason).toBeInstanceOf(Error);
-      expect((reason as Error).message).toBe("B-use-boom");
-      expect(storage.map.has("foo")).toBe(false);
-    } finally {
-      // 後片付け
-      await kvs.close();
-    }
+    // 検証: 集約エラーは実際に失敗した B を単一件で報告する
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ name: "B", index: 1, reason: expect.any(Error) })],
+        }),
+      }),
+    );
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [
+            expect.objectContaining({
+              reason: expect.objectContaining({ message: "B-use-boom" }),
+            }),
+          ],
+        }),
+      }),
+    );
+    expect(storage.map.has("foo")).toBe(false);
   });
 
   test("use が next を呼ばない場合、MiddlewareNextNotCalledError で失敗し、後続の use と操作は実行されない", async ({
@@ -802,29 +776,23 @@ describe("UniKvs - use のオニオン実行", () => {
     // 準備: A が next() を呼ばずに戻る
     const downstream = new FakeMiddleware("B");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new NoNextUseMiddleware("A"))
       .connect(downstream)
       .persist(storage)
       .create();
     await kvs.open();
 
-    try {
-      // 実行: フェイルクローズのため操作は失敗する
-      const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    // 実行: フェイルクローズのため操作は失敗する
+    const setting = kvs.set("foo", "value");
 
-      // 検証: 規約違反が報告され、後段の use と書き込みは実行されない
-      expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
-      expect((error as MiddlewareNextNotCalledError).meta).toStrictEqual({
-        name: "A",
-        operation: "use",
-      });
-      expect(downstream.callsOf("use")).toHaveLength(0);
-      expect(storage.map.has("foo")).toBe(false);
-    } finally {
-      // 後片付け
-      await kvs.close();
-    }
+    // 検証: 規約違反が報告され、後段の use と書き込みは実行されない
+    await expect(setting).rejects.toThrow(MiddlewareNextNotCalledError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "A", operation: "use" } }),
+    );
+    expect(downstream.callsOf("use")).toHaveLength(0);
+    expect(storage.map.has("foo")).toBe(false);
   });
 
   test("use が next を複数回呼ぶと MiddlewareNextCalledMultipleTimesError で失敗し、後続の use と操作は実行されない", async ({
@@ -833,30 +801,24 @@ describe("UniKvs - use のオニオン実行", () => {
     // 準備
     const downstream = new FakeMiddleware("B");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new DoubleNextUseMiddleware("A"))
       .connect(downstream)
       .persist(storage)
       .create();
     await kvs.open();
 
-    try {
-      // 実行
-      const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    // 実行
+    const setting = kvs.set("foo", "value");
 
-      // 検証: 2 回目の next() は下流を実行せず、規約違反として報告される
-      expect(error).toBeInstanceOf(MiddlewareNextCalledMultipleTimesError);
-      expect((error as MiddlewareNextCalledMultipleTimesError).meta).toStrictEqual({
-        name: "A",
-        operation: "use",
-      });
-      expect(downstream.callsOf("use")).toHaveLength(1);
-      expect(storage.callsOf("write")).toHaveLength(0);
-      expect(storage.map.has("foo")).toBe(false);
-    } finally {
-      // 後片付け
-      await kvs.close();
-    }
+    // 検証: 2 回目の next() は下流を実行せず、規約違反として報告される
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "A", operation: "use" } }),
+    );
+    expect(downstream.callsOf("use")).toHaveLength(1);
+    expect(storage.callsOf("write")).toHaveLength(0);
+    expect(storage.map.has("foo")).toBe(false);
   });
 
   test("use が next を await しない場合、MiddlewareNextNotAwaitedError で失敗し、操作は実行されない", async ({
@@ -866,7 +828,7 @@ describe("UniKvs - use のオニオン実行", () => {
     const fireAndForget = new FireAndForgetUseMiddleware("A");
     const slow = new GatedUseMiddleware("B");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(fireAndForget)
       .connect(slow)
       .persist(storage)
@@ -878,20 +840,16 @@ describe("UniKvs - use のオニオン実行", () => {
     await slow.entered.wait();
 
     // 検証: 切り離された next() の完了を待たずに規約違反として失敗し、書き込みは行われない
-    const error = await withTimeout(pending, 1000, "set-before-use-complete").catch(
-      (ex: unknown) => ex,
+    const setFails = withTimeout(pending, 1000, "set-before-use-complete");
+    await expect(setFails).rejects.toThrow(MiddlewareNextNotAwaitedError);
+    await expect(setFails).rejects.toEqual(
+      expect.objectContaining({ meta: { name: "A", operation: "use" } }),
     );
-    expect(error).toBeInstanceOf(MiddlewareNextNotAwaitedError);
-    expect((error as MiddlewareNextNotAwaitedError).meta).toStrictEqual({
-      name: "A",
-      operation: "use",
-    });
     expect(storage.callsOf("write")).toHaveLength(0);
 
-    // 後片付け: 切り離した next() の完了を待ってから閉じる
+    // 後片付け: 切り離した next() の完了を待つ
     slow.release.open();
     await fireAndForget.detached;
-    await kvs.close();
   });
 });
 
@@ -910,7 +868,7 @@ describe("UniKvs - mapKey の適用タイミング", () => {
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const s3 = new FakeStorage("s3");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(s1))
       .fork(UniKvs.branch().connect(c).persist(s2))
@@ -926,9 +884,6 @@ describe("UniKvs - mapKey の適用タイミング", () => {
     expect(s1.map.get("p:p:foo")).toBe("value");
     expect(s2.map.get("p:p:foo")).toBe("value");
     expect(s3.map.get("p:foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain get と has は最初にヒットした葉までの mapKey だけを各 1 回呼ぶ", async ({
@@ -940,7 +895,7 @@ describe("UniKvs - mapKey の適用タイミング", () => {
     const c = new CountingMapKeyMiddleware("C");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .connect(a)
       .fork(UniKvs.branch().connect(b).persist(s1))
       .fork(UniKvs.branch().connect(c).persist(s2))
@@ -962,9 +917,6 @@ describe("UniKvs - mapKey の適用タイミング", () => {
 
     // 検証: has も同じ経路だけを写像する
     expect([a.count, b.count, c.count]).toStrictEqual([1, 1, 0]);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -983,7 +935,7 @@ describe("UniKvs - use 実行中の abort", () => {
       const use = new GatedUseMiddleware(`Gated-${action}`);
       const storage = new FakeStorage(`s-${action}`);
       storage.map.set("foo", "stored");
-      const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
         .connect(use)
         .persist(storage)
         .create();
@@ -1020,9 +972,6 @@ describe("UniKvs - use 実行中の abort", () => {
       expect(storage.map.get("foo")).toBe("stored");
       expect(storage.callsOf("write")).toHaveLength(0);
       expect(storage.callsOf("delete")).toHaveLength(0);
-
-      // 後片付け
-      await kvs.close();
     }
   });
 
@@ -1033,26 +982,24 @@ describe("UniKvs - use 実行中の abort", () => {
     const use = new GatedUseMiddleware("Gated-clear");
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().connect(use).persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      .connect(use)
+      .persist(storage)
+      .create();
     await kvs.open();
     const ac = new AbortController();
     const reason = new Error("ABORT-clear");
 
-    try {
-      // 実行: use を保留したまま abort する
-      const pending = kvs.clear({ signal: ac.signal });
-      await use.entered.wait();
-      ac.abort(reason);
-      use.release.open();
+    // 実行: use を保留したまま abort する
+    const pending = kvs.clear({ signal: ac.signal });
+    await use.entered.wait();
+    ac.abort(reason);
+    use.release.open();
 
-      // 検証: clear も abort 理由で失敗し、ストレージは削除されない
-      await expect(pending).rejects.toBe(reason);
-      expect(storage.map.get("foo")).toBe("stored");
-      expect(storage.callsOf("clear")).toHaveLength(0);
-    } finally {
-      // 後片付け
-      await kvs.close();
-    }
+    // 検証: clear も abort 理由で失敗し、ストレージは削除されない
+    await expect(pending).rejects.toBe(reason);
+    expect(storage.map.get("foo")).toBe("stored");
+    expect(storage.callsOf("clear")).toHaveLength(0);
   });
 });
 
@@ -1076,23 +1023,18 @@ describe("UniKvs - プレーン実行の post 中の abort", () => {
     }
     const middleware = new PostAbort("PostAbort");
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs
-      .set("foo", "value", { signal: middleware.ac.signal })
-      .catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value", { signal: middleware.ac.signal });
 
     // 検証: post の abort は理由ごと伝播し、encode が完了しないため書き込まれない
-    expect(error).toBe(middleware.reason);
+    await expect(setting).rejects.toBe(middleware.reason);
     expect(storage.callsOf("write")).toHaveLength(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("plain get の post で abort すると abort 理由で失敗する", async ({ expect }) => {
@@ -1113,7 +1055,7 @@ describe("UniKvs - プレーン実行の post 中の abort", () => {
     const middleware = new PostAbort("PostAbort");
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -1121,8 +1063,5 @@ describe("UniKvs - プレーン実行の post 中の abort", () => {
 
     // 実行と検証
     await expect(kvs.get("foo", { signal: middleware.ac.signal })).rejects.toBe(middleware.reason);
-
-    // 後片付け
-    await kvs.close();
   });
 });

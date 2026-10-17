@@ -5,68 +5,41 @@ import { MissingStorageError } from "../src/errors.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
-import { FakeStorage, FakeStreamStorage, FakeMiddleware, collect, streamOf } from "./_helpers.js";
-
-/**
- * encode のたびに自身のタグを末尾へ付与し、decode で除去するミドルウェアです。
- * 前段パイプラインの適用順序とストレージごとの分岐を検証するために使用します。
- */
-class TagMiddleware extends FakeMiddleware {
-  readonly #tag: string;
-
-  public constructor(tag: string) {
-    super(`Tag(${tag})`);
-    this.#tag = tag;
-  }
-
-  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
-    const [c, next] = args;
-    await this.record("encode", { data: c.source, c });
-    c.destination = `${String(c.source)}${this.#tag}`;
-    await next!();
-  }
-
-  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
-    const [c, next] = args;
-    await this.record("decode", { data: c.source, c });
-    const data = String(c.source);
-    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
-    await next!();
-  }
-}
+import {
+  FakeMiddleware,
+  FakeStorage,
+  FakeStreamStorage,
+  TagMiddleware,
+  collect,
+  streamOf,
+} from "./_helpers.js";
 
 describe("UniKvsConfig - ビルダーの構成", () => {
   test("schema なしでストレージを 1 つ追加して create できる", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
+    await using storage = new FakeStorage();
 
     // 実行
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     await kvs.set("foo", "bar");
 
     // 検証
     expect(kvs).toBeInstanceOf(UniKvs);
     expect(storage.map.get("foo")).toBe("bar");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("空のオプションオブジェクトでも config できる", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
+    await using storage = new FakeStorage();
 
     // 実行
-    const kvs = UniKvs.config({}).persist(storage).create();
+    await using kvs = UniKvs.config({}).persist(storage).create();
     await kvs.open();
 
     // 検証
     expect(kvs).toBeInstanceOf(UniKvs);
     expect(kvs.isOpen).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストレージを登録せず create すると MissingStorageError を投げる", ({ expect }) => {
@@ -82,7 +55,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     const config = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory());
 
     // 実行
-    const kvs1 = config.create();
+    await using kvs1 = config.create();
     const kvs2 = config.create();
     await kvs1.open();
 
@@ -90,15 +63,12 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     expect(kvs1).not.toBe(kvs2);
     expect(kvs1.isOpen).toBe(true);
     expect(kvs2.isOpen).toBe(false);
-
-    // 後片付け
-    await kvs1.close();
   });
 
   test("同じ Middleware で transform を重ねた回数分だけ適用される", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage = new FakeStorage();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TagMiddleware("X"))
       .connect(new TagMiddleware("X"))
       .persist(storage)
@@ -110,17 +80,14 @@ describe("UniKvsConfig - ビルダーの構成", () => {
 
     // 検証
     expect(storage.map.get("foo")).toBe("aXX");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("同じ Storage を persist で複数回登録するとすべての登録先へ書き込まれる", async ({
     expect,
   }) => {
     // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage = new FakeStorage();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage)
       .persist(storage)
       .create();
@@ -132,9 +99,6 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     // 検証
     expect(storage.callsOf("write")).toHaveLength(2);
     expect(storage.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("多数の Storage を persist で登録してもすべてに書き込まれる", async ({ expect }) => {
@@ -142,7 +106,7 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     const storages = Array.from({ length: 25 }, (_, i) => new FakeStorage(`storage-${i}`));
     const [first, ...rest] = storages;
     const config = UniKvs.config<{ foo: PlainValue<string> }>().persist(first!);
-    const kvs = rest.reduce((c, storage) => c.persist(storage), config).create();
+    await using kvs = rest.reduce((c, storage) => c.persist(storage), config).create();
     await kvs.open();
 
     // 実行
@@ -152,18 +116,15 @@ describe("UniKvsConfig - ビルダーの構成", () => {
     for (const storage of storages) {
       expect(storage.map.get("foo")).toBe("value");
     }
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
 describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
   test("persist では登録時点のパイプラインのスナップショットを捕捉する", async ({ expect }) => {
     // 準備
-    const storage1 = new FakeStorage("storage1");
-    const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage1 = new FakeStorage("storage1");
+    await using storage2 = new FakeStorage("storage2");
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TagMiddleware("1"))
       .persist(storage1)
       .connect(new TagMiddleware("2"))
@@ -177,18 +138,15 @@ describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
     // 検証
     expect(storage1.map.get("foo")).toBe("x1");
     expect(storage2.map.get("foo")).toBe("x12");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストレージ登録後にミドルウェアを追加しても既存ストレージのチェーンは変わらない", async ({
     expect,
   }) => {
     // 準備
-    const storage1 = new FakeStorage("storage1");
-    const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage1 = new FakeStorage("storage1");
+    await using storage2 = new FakeStorage("storage2");
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .connect(new TagMiddleware("1"))
       .persist(storage2)
@@ -201,16 +159,13 @@ describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
     // 検証
     expect(storage1.map.get("foo")).toBe("x");
     expect(storage2.map.get("foo")).toBe("x1");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("get は書き込み時と同じストレージ別のチェーンでデコードする", async ({ expect }) => {
     // 準備
-    const storage1 = new FakeStorage("storage1");
-    const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage1 = new FakeStorage("storage1");
+    await using storage2 = new FakeStorage("storage2");
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TagMiddleware("1"))
       .persist(storage1)
       .connect(new TagMiddleware("2"))
@@ -225,15 +180,12 @@ describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
 
     // 検証
     expect(value).toBe("x");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("persist なし末尾 connect は破棄され読み書きに影響しない", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
-    const trailing = new TagMiddleware("Z");
+    await using storage = new FakeStorage();
+    await using trailing = new TagMiddleware("Z");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage)
       .connect(trailing)
@@ -259,10 +211,10 @@ describe("UniKvsConfig - ミドルウェアとストレージの捕捉", () => {
 describe("UniKvsConfig - fork", () => {
   test("fork の分岐先ごとに異なるパイプライン出力が保持される", async ({ expect }) => {
     // 準備
-    const storageA = new FakeStorage("storageA");
-    const storageB = new FakeStorage("storageB");
-    const storageC = new FakeStorage("storageC");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storageA = new FakeStorage("storageA");
+    await using storageB = new FakeStorage("storageB");
+    await using storageC = new FakeStorage("storageC");
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TagMiddleware("1"))
       .fork(UniKvs.branch().connect(new TagMiddleware("A")).persist(storageA))
       .connect(new TagMiddleware("2"))
@@ -279,19 +231,16 @@ describe("UniKvsConfig - fork", () => {
     expect(storageA.map.get("foo")).toBe("x1A");
     expect(storageB.map.get("foo")).toBe("x12B");
     expect(storageC.map.get("foo")).toBe("x123");
-    expect(await kvs.get("foo")).toBe("x");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x");
   });
 
   test("fork 内の追加は分岐先に閉じ、後のメインの connect は漏れない", async ({ expect }) => {
     // 準備
-    const storage1 = new FakeStorage("storage1");
-    const storage2 = new FakeStorage("storage2");
-    const storage3 = new FakeStorage("storage3");
-    const storageMain = new FakeStorage("storageMain");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage1 = new FakeStorage("storage1");
+    await using storage2 = new FakeStorage("storage2");
+    await using storage3 = new FakeStorage("storage3");
+    await using storageMain = new FakeStorage("storageMain");
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new TagMiddleware("1"))
       .fork(
         UniKvs.branch()
@@ -313,17 +262,14 @@ describe("UniKvsConfig - fork", () => {
     expect(storage2.map.get("foo")).toBe("x1A");
     expect(storage3.map.get("foo")).toBe("x1AN");
     expect(storageMain.map.get("foo")).toBe("x12");
-    expect(await kvs.get("foo")).toBe("x");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x");
   });
 
   test("connect 後に fork 先で追加したストレージも create 対象になる", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
+    await using storage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .connect(new TagMiddleware("1"))
       .fork(UniKvs.branch().persist(storage))
       .create();
@@ -334,17 +280,14 @@ describe("UniKvsConfig - fork", () => {
 
     // 検証
     expect(storage.map.get("foo")).toBe("x1");
-    expect(await kvs.get("foo")).toBe("x");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x");
   });
 
   test("fork 先のストレージへストリーム書き込みできる", async ({ expect }) => {
     // 準備
-    const storageA = new FakeStreamStorage("storageA");
-    const storageB = new FakeStreamStorage("storageB");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using storageA = new FakeStreamStorage("storageA");
+    await using storageB = new FakeStreamStorage("storageB");
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .fork(UniKvs.branch().persist(storageA))
       .persist(storageB)
       .create();
@@ -362,13 +305,12 @@ describe("UniKvsConfig - fork", () => {
 
     // 後片付け
     await valueStream.dispose();
-    await kvs.close();
   });
 
   test("空の branch を fork してもストレージは増えず読み書きできる", async ({ expect }) => {
     // 準備
-    const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using storage = new FakeStorage();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage)
       .fork(UniKvs.branch())
       .create();
@@ -382,8 +324,5 @@ describe("UniKvsConfig - fork", () => {
     expect(value).toBe("x");
     expect(storage.map.get("foo")).toBe("x");
     expect(storage.callsOf("write")).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 });

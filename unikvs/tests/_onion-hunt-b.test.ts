@@ -193,7 +193,7 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     const c3 = new FakeStreamStorage("c3");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(s)
       .persist(c1)
       .connect(a)
@@ -213,9 +213,6 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     for (const storage of [c1, c2, c3]) {
       expect(storage.map.get("logs")).toStrictEqual(chunks);
     }
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("decodeStream は葉側から pre、根側から post の順で実行し、チャンク列を変えない", async ({
@@ -228,7 +225,7 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     const c = new OnionOrderStreamMiddleware("C", order);
     const storage = new FakeStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1]), new Uint8Array([2])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(a)
       .connect(b)
       .connect(c)
@@ -253,7 +250,6 @@ describe("UniKvs - ストリームオニオンの順序", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 
   test("stream set は登録順に各分岐の書き込みを開始する", async ({ expect }) => {
@@ -266,7 +262,7 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     for (const storage of [c1, c2, c3]) {
       storage.onGetWritable = (key) => writableOrder.push(`${storage.name}:${key}`);
     }
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(c1)
       .connect(a)
       .persist(c2)
@@ -279,9 +275,6 @@ describe("UniKvs - ストリームオニオンの順序", () => {
 
     // 検証: getWritable は葉の登録順に呼ばれる
     expect(writableOrder).toStrictEqual(["c1:logs", "c2:logs", "c3:logs"]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("decodeStream の共有ストアは葉側の pre の変異を根側の post に見せる", async ({ expect }) => {
@@ -310,7 +303,7 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     // decode は葉側から実行されるため、葉側の writer を登録順で後ろに置く
     const storage = new FakeStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new ReaderMiddleware("reader"))
       .connect(new WriterMiddleware("writer"))
       .persist(storage)
@@ -326,7 +319,6 @@ describe("UniKvs - ストリームオニオンの順序", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 });
 
@@ -357,7 +349,7 @@ describe("UniKvs - ストリーム失敗時の解放と集約", () => {
     });
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new ThrowBeforeNextStreamMiddleware("ThrowBeforeNext"))
       .persist(c1)
       .persist(c2)
@@ -365,17 +357,15 @@ describe("UniKvs - ストリーム失敗時の解放と集約", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("logs", source).catch((ex: unknown) => ex);
+    const setting = kvs.set("logs", source);
 
     // 検証
-    expect((error as Error).message).toBe("PRE-BOOM");
+    await expect(setting).rejects.toThrow(Error);
+    await expect(setting).rejects.toMatchObject({ message: "PRE-BOOM" });
     expect(cancelled).toBe(true);
     expect(source.locked).toBe(false);
     expect(c1.map.has("logs")).toBe(false);
     expect(c2.map.has("logs")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("decodeStream の post 失敗は stream を失敗させ、読み取りソースを解放する", async ({
@@ -394,21 +384,19 @@ describe("UniKvs - ストリーム失敗時の解放と集約", () => {
     }
     const storage = new CancelProbeReadStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new ThrowAfterNextDecodeStreamMiddleware("PostFail"))
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.stream("logs").catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs");
 
     // 検証
-    expect((error as Error).message).toBe("DECODE-POST-BOOM");
+    await expect(streaming).rejects.toThrow(Error);
+    await expect(streaming).rejects.toMatchObject({ message: "DECODE-POST-BOOM" });
     expect(storage.cancels).toBe(1);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -423,7 +411,7 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     // 準備: 上流 reader が post で、下流 writer が pre で変数を扱う
     const reader = new StreamVarReaderMiddleware("reader");
     const writer = new StreamVarWriterMiddleware("writer");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(reader)
       .connect(writer)
       .persist(new FakeStreamStorage("c1"))
@@ -436,9 +424,6 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
 
     // 検証
     expect(reader.seenInPost).toBe("from-writer");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream repair は下流 encodeStream の変異を上流 post から読める", async ({ expect }) => {
@@ -447,7 +432,7 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     const writer = new StreamVarWriterMiddleware("writer");
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(reader)
       .connect(writer)
@@ -466,7 +451,6 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 
   test("stream repair は分岐をまたいだ変異を後続分岐の pre から読める", async ({ expect }) => {
@@ -476,7 +460,7 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     const cache1 = new FakeStreamStorage("cache1");
     const cache2 = new FakeStreamStorage("cache2");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .fork(UniKvs.branch().connect(writer).persist(cache1))
       .fork(UniKvs.branch().connect(reader).persist(cache2))
@@ -494,7 +478,6 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 });
 
@@ -524,7 +507,7 @@ describe("UniKvs - repair のオニオン", () => {
     }
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new AllowRepair())
       .connect(new PostProbeMiddleware())
       .persist(cache)
@@ -539,9 +522,6 @@ describe("UniKvs - repair のオニオン", () => {
     // 検証: next() は書き込みを開始してから戻るため、post 時点で開始済み
     expect(value).toBe("value");
     expect(events).toStrictEqual(["post:writes=1"]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   // バグ回帰: 拒否された部分木の tee 分岐の cancel を await すると、unlocked の兄弟分岐が
@@ -576,7 +556,11 @@ describe("UniKvs - repair のオニオン", () => {
     expect(read).toStrictEqual(chunks);
     expect(cache1.map.get("logs")).toStrictEqual(chunks);
     expect(cache2.map.has("logs")).toBe(false);
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      ["Failed to repair a storage: ", ""],
+      expect.any(RepairNotAllowedError),
+    );
 
     // 検証: キーロックが解放されているため、同じキーへの操作と close が完了する
     await withTimeout(vs.dispose(), 1500, "dispose");
@@ -649,7 +633,7 @@ describe("UniKvs - repair のオニオン", () => {
     const cache1 = new FakeStreamStorage("cache1");
     const cache2 = new FakeStreamStorage("cache2");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .fork(
         UniKvs.branch()
@@ -663,18 +647,15 @@ describe("UniKvs - repair のオニオン", () => {
     server.map.set("logs", [new Uint8Array([1])]);
 
     // 実行
-    const error = await kvs
-      .stream("logs", { repair: true, throwOnRepairDenied: true })
-      .catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs", { repair: true, throwOnRepairDenied: true });
 
     // 検証
-    expect(error).toBeInstanceOf(RepairNotAllowedError);
-    expect((error as RepairNotAllowedError).meta).toStrictEqual({ names: ["cache1", "cache2"] });
+    await expect(streaming).rejects.toThrow(RepairNotAllowedError);
+    await expect(streaming).rejects.toEqual(
+      expect.objectContaining({ meta: { names: ["cache1", "cache2"] } }),
+    );
     expect(cache1.map.has("logs")).toBe(false);
     expect(cache2.map.has("logs")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   // バグ回帰: 根直下の部分木を skip するとき、tee 分岐の cancel を await すると、まだ消費されて
@@ -708,7 +689,11 @@ describe("UniKvs - repair のオニオン", () => {
     // 検証: 拒否分岐だけが skip され、読み取りは成功する
     expect(read).toStrictEqual(chunks);
     expect(cache.map.has("logs")).toBe(false);
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      ["Failed to repair a storage: ", ""],
+      expect.any(RepairNotAllowedError),
+    );
 
     // 検証: キーロックが解放されているため、同じキーへの操作と close が完了する
     await withTimeout(vs.dispose(), 1500, "dispose");
@@ -739,15 +724,17 @@ describe("UniKvs - repair のオニオン", () => {
     await kvs.open();
 
     // 実行: 拒否をエラーとして確定させる
-    const error = await withTimeout(
-      kvs.stream("logs", { repair: true, throwOnRepairDenied: true }).catch((ex: unknown) => ex),
+    const streaming = withTimeout(
+      kvs.stream("logs", { repair: true, throwOnRepairDenied: true }),
       1500,
       "stream-denied",
     );
 
     // 検証: 対象名付きで失敗し、読み取りソースが解放され、書き戻しは開始されない
-    expect(error).toBeInstanceOf(RepairNotAllowedError);
-    expect((error as RepairNotAllowedError).meta).toStrictEqual({ names: ["cache"] });
+    await expect(streaming).rejects.toThrow(RepairNotAllowedError);
+    await expect(streaming).rejects.toEqual(
+      expect.objectContaining({ meta: { names: ["cache"] } }),
+    );
     expect(server.cancels).toBe(1);
     expect(cache.map.has("logs")).toBe(false);
 
@@ -765,7 +752,7 @@ describe("UniKvs - repair のオニオン", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(broken)
       .persist(cache)
@@ -782,11 +769,14 @@ describe("UniKvs - repair のオニオン", () => {
     expect(read).toStrictEqual(chunks);
     expect(cache.map.get("logs")).toStrictEqual(chunks);
     expect(broken.map.has("logs")).toBe(false);
-    expect(errorSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      ["Failed to repair a storage: ", ""],
+      expect.objectContaining({ message: "broken: getWritable failed" }),
+    );
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 });
 
@@ -806,7 +796,7 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
     server.map.set("p:logs", chunks);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(prefix)
       .persist(cache)
@@ -826,7 +816,6 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 
   test("stream repair の読み取り中 abort は読み取りを中断し、dispose 後に同じキーへ書き込める", async ({
@@ -838,7 +827,7 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new AbortableReadStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1]), new Uint8Array([2])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(cache)
       .persist(server)
@@ -871,9 +860,6 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     await expect(
       withTimeout(kvs.set("logs", streamOf([new Uint8Array([3])])), 1500, "set-after-abort"),
     ).resolves.toBeUndefined();
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream repair の構築中 abort はソースを解放して中断理由で失敗する", async ({ expect }) => {
@@ -893,7 +879,7 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new CancelProbeReadStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(new AbortBeforeNextStreamMiddleware("abort-mid-build"))
       .persist(cache)
@@ -902,17 +888,12 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs
-      .stream("logs", { repair: true, signal: ac.signal })
-      .catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs", { repair: true, signal: ac.signal });
 
     // 検証
-    expect(error).toBe(reason);
+    await expect(streaming).rejects.toBe(reason);
     expect(server.cancels).toBe(1);
     expect(cache.map.has("logs")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream repair の拒否で失敗した後も同じキーへ書き込める", async ({ expect }) => {
@@ -920,7 +901,7 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
       .persist(server)
       .create();
@@ -935,9 +916,6 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     await expect(
       withTimeout(kvs.set("logs", streamOf([new Uint8Array([2])])), 1500, "set-after-denial"),
     ).resolves.toBeUndefined();
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -953,7 +931,7 @@ describe("UniKvs - ストリームと mapKey", () => {
     const prefix = new PrefixStreamMiddleware();
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(prefix)
       .persist(c1)
       .persist(c2)
@@ -968,9 +946,6 @@ describe("UniKvs - ストリームと mapKey", () => {
     expect(prefix.mapKeyCalls).toBe(1);
     expect(c1.map.get("p:logs")).toStrictEqual(chunks);
     expect(c2.map.get("p:logs")).toStrictEqual(chunks);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream repair の書き戻し元と書き戻し先は同じ写像キーを使う", async ({ expect }) => {
@@ -981,7 +956,7 @@ describe("UniKvs - ストリームと mapKey", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1])];
     server.map.set("p:logs", chunks);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(prefix)
       .persist(cache)
@@ -1001,7 +976,6 @@ describe("UniKvs - ストリームと mapKey", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 });
 
@@ -1024,7 +998,7 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     const entered = Promise.withResolvers<void>();
     cache1.onWriteStart = () => entered.resolve();
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(cache1)
       .persist(cache2)
@@ -1058,7 +1032,6 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     expect(remaining).toStrictEqual(chunks.slice(1));
     await vs.dispose();
     expect(cache1.map.get("logs")).toStrictEqual(chunks);
-    await kvs.close();
   });
 
   test("読み取り前に dispose しても書き戻しの保留で停止しない", async ({ expect }) => {
@@ -1068,7 +1041,7 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     const writeGate = new Gate();
     cache.writeGate = writeGate;
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .persist(cache)
       .persist(server)
@@ -1085,8 +1058,5 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     await expect(
       withTimeout(kvs.set("logs", streamOf([new Uint8Array([3])])), 1500, "set-after-dispose"),
     ).resolves.toBeUndefined();
-
-    // 後片付け
-    await kvs.close();
   });
 });

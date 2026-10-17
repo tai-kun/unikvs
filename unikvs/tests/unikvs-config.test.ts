@@ -1,39 +1,10 @@
-import type { IMiddleware, IStorage } from "@unikvs/core";
+import type { IMiddleware } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import { MissingStorageError } from "../src/errors.js";
 import UniKvsConfig from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStorage } from "./_helpers.js";
-
-/**
- * create の動作確認に使用する、Map 上にデータを保存するだけのストレージモックです。
- */
-class MockStorage implements IStorage {
-  readonly name = "MockStorage";
-  isOpen = true;
-  private readonly map = new Map<string, any>();
-
-  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
-    this.map.set(c.key, data);
-  }
-
-  async read(c: IStorage.ReadContext): Promise<unknown> {
-    return this.map.get(c.key);
-  }
-
-  async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    return this.map.has(c.key);
-  }
-
-  async delete(c: IStorage.DeleteContext): Promise<void> {
-    this.map.delete(c.key);
-  }
-
-  async clear(_c: IStorage.ClearContext): Promise<void> {
-    this.map.clear();
-  }
-}
 
 /**
  * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
@@ -59,7 +30,7 @@ describe("UniKvsConfig", () => {
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.persist(new MockStorage()).create();
+    const result = config.persist(new FakeStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
@@ -78,7 +49,7 @@ describe("UniKvsConfig", () => {
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.connect(new MockMiddleware()).persist(new MockStorage()).create();
+    const result = config.connect(new MockMiddleware()).persist(new FakeStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
@@ -90,9 +61,9 @@ describe("UniKvsConfig", () => {
 
     // 実行
     const result = config
-      .persist(new MockStorage())
+      .persist(new FakeStorage())
       .connect(new MockMiddleware())
-      .persist(new MockStorage())
+      .persist(new FakeStorage())
       .create();
 
     // 検証
@@ -107,11 +78,11 @@ describe("UniKvsConfig", () => {
     const result = config
       .connect(new MockMiddleware())
       .connect(new MockMiddleware())
-      .persist(new MockStorage())
+      .persist(new FakeStorage())
       .connect(new MockMiddleware())
-      .persist(new MockStorage())
+      .persist(new FakeStorage())
       .connect(new MockMiddleware())
-      .persist(new MockStorage())
+      .persist(new FakeStorage())
       .create();
 
     // 検証
@@ -124,17 +95,14 @@ describe("UniKvsConfig", () => {
 
     // 実行
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
-    const kvs = new UniKvsConfig(UniKvs).fork(UniKvs.branch().persist(storage)).create();
+    await using kvs = new UniKvsConfig(UniKvs).fork(UniKvs.branch().persist(storage)).create();
     await kvs.open();
     await kvs.set("foo", "x");
 
     // 検証
     expect(kvs).toBeInstanceOf(UniKvs);
     expect(storage.map.get("foo")).toBe("x");
-    expect(await kvs.get("foo")).toBe("x");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x");
   });
 
   test("fork 内の connect は分岐先のストレージにのみ適用される", async ({ expect }) => {
@@ -142,7 +110,7 @@ describe("UniKvsConfig", () => {
     const mainStorage = new FakeStorage();
     const branchStorage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
-    const kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new UniKvsConfig(UniKvs)
       .persist(mainStorage)
       .fork(UniKvs.branch().connect(new MockMiddleware()).persist(branchStorage))
       .create();
@@ -154,9 +122,6 @@ describe("UniKvsConfig", () => {
     // 検証
     expect(mainStorage.map.get("foo")).toBe("x");
     expect(branchStorage.map.get("foo")).toBe("e:x");
-    expect(await kvs.get("foo")).toBe("x");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("x");
   });
 });

@@ -110,8 +110,8 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     await entered.wait();
     // 待機側が実 open の完了待ちに入るまでマイクロタスクを流します。
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await isPending(aOpen)).toBe(true);
-    expect(await isPending(bOpen)).toBe(true);
+    await expect(isPending(aOpen)).resolves.toBe(true);
+    await expect(isPending(bOpen)).resolves.toBe(true);
     release.open();
     await aOpen;
     await bOpen;
@@ -123,7 +123,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     expect(storage.isOpen).toBe(true);
     expect(storage.callsOf("close")).toHaveLength(0);
     await b.set("a", "value");
-    expect(await b.get("a")).toBe("value");
+    await expect(b.get("a")).resolves.toBe("value");
 
     // 後片付け: 最後の close で実体が閉じられる
     await b.close();
@@ -155,8 +155,8 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     await entered.wait();
     // 待機側が実 open の完了待ちに入るまでマイクロタスクを流します。
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await isPending(aOpen)).toBe(true);
-    expect(await isPending(bOpen)).toBe(true);
+    await expect(isPending(aOpen)).resolves.toBe(true);
+    await expect(isPending(bOpen)).resolves.toBe(true);
     release.open();
     await aOpen;
     await bOpen;
@@ -168,7 +168,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     expect(middleware.isOpen).toBe(true);
     expect(middleware.callsOf("close")).toHaveLength(0);
     await b.set("a", "value");
-    expect(await b.get("a")).toBe("value");
+    await expect(b.get("a")).resolves.toBe("value");
 
     // 後片付け: 最後の close で実体が閉じられる
     await b.close();
@@ -251,7 +251,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     await bReachedOpen.wait();
 
     // 検証: B は close 完了前に実 open せず、close 待ちで保留している
-    expect(await isPending(opening)).toBe(true);
+    await expect(isPending(opening)).resolves.toBe(true);
     expect(storage.callsOf("open")).toHaveLength(1);
 
     release.open();
@@ -260,7 +260,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
 
     // 検証: B は close 完了を待って実 open しており、操作を継続できる
     await b.set("a", "value");
-    expect(await b.get("a")).toBe("value");
+    await expect(b.get("a")).resolves.toBe("value");
     expect(storage.callsOf("open")).toHaveLength(2);
 
     // 後片付け
@@ -287,7 +287,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
 
     // 検証
     expect(storage.callsOf("open")).toHaveLength(2);
-    expect(await kvs2.get("a")).toBe("value");
+    await expect(kvs2.get("a")).resolves.toBe("value");
 
     // 検証: kvs2 の close では kvs1 の参照が残るため実 close しない
     await kvs2.close();
@@ -333,7 +333,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     await entered.wait();
     const opening = b.open();
     await bReachedOpen.wait();
-    expect(await isPending(opening)).toBe(true);
+    await expect(isPending(opening)).resolves.toBe(true);
     release.open();
     await expect(closing).rejects.toThrow(PluginOperationAggregateError);
     await opening;
@@ -342,7 +342,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     expect(storage.isOpen).toBe(true);
     expect(storage.callsOf("close")).toHaveLength(1);
     await b.set("a", "value");
-    expect(await b.get("a")).toBe("value");
+    await expect(b.get("a")).resolves.toBe("value");
 
     // 後片付け: B の close でだけ実体が閉じられる
     await b.close();
@@ -411,7 +411,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
 
     // 後片付け: B はそのまま操作でき、B の close で P が実際に閉じられる
     await b.set("a", "value");
-    expect(await b.get("a")).toBe("value");
+    await expect(b.get("a")).resolves.toBe("value");
     await b.close();
     expect(p.isOpen).toBe(false);
     expect(p.callsOf("close")).toHaveLength(1);
@@ -433,7 +433,7 @@ describe("UniKvs - 同一キー書き込みのキーロック解放", () => {
         call.signal?.throwIfAborted();
       }
     };
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
     const controller = new AbortController();
 
@@ -448,9 +448,6 @@ describe("UniKvs - 同一キー書き込みのキーロック解放", () => {
     await expect(first).rejects.toThrow(PluginOperationAggregateError);
     await expect(second).resolves.toBeUndefined();
     expect(storage.map.get("a")).toBe("second");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -461,7 +458,7 @@ describe("UniKvs - set の前段失敗時のストリーム後始末", () => {
     // 準備
     const reason = new Error("USER-CANCEL");
     const storage: IStorage = new FakeStreamStorage();
-    const kvs = UniKvs.config({
+    await using kvs = UniKvs.config({
       schema: { logs: StreamValue(v.instance(Uint8Array)) },
     })
       .persist(storage)
@@ -482,15 +479,12 @@ describe("UniKvs - set の前段失敗時のストリーム後始末", () => {
     // 検証: 消費されないソースストリームは解放されている
     await Promise.resolve();
     expect(cancelled.value).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("use が失敗したストリーム set はソースストリームをキャンセルする", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
+    await using kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
       .connect(new ThrowingUseMiddleware())
       .persist(storage)
       .create();
@@ -508,9 +502,6 @@ describe("UniKvs - set の前段失敗時のストリーム後始末", () => {
     // 検証: 消費されないソースストリームは解放されている
     await Promise.resolve();
     expect(cancelled.value).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -518,7 +509,7 @@ describe("UniKvs - キー写像と CRUD", () => {
   test("mapKey の写像結果が set/get/has/delete で一貫して使われる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .connect(new PrefixKeyMiddleware())
       .persist(storage)
       .create();
@@ -530,24 +521,21 @@ describe("UniKvs - キー写像と CRUD", () => {
     // 検証: 物理キーは写像後
     expect(storage.map.get("p:a")).toBe("value");
     expect(storage.map.has("a")).toBe(false);
-    expect(await kvs.has("a")).toBe(true);
-    expect(await kvs.get("a")).toBe("value");
+    await expect(kvs.has("a")).resolves.toBe(true);
+    await expect(kvs.get("a")).resolves.toBe("value");
 
     // 実行
     await kvs.delete("a");
 
     // 検証
     expect(storage.map.has("p:a")).toBe(false);
-    expect(await kvs.has("a")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.has("a")).resolves.toBe(false);
   });
 
   test("falsy な値でも get は保存した値をそのまま返す", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{
+    await using kvs = UniKvs.config<{
       a: PlainValue<false>;
       b: PlainValue<0>;
       c: PlainValue<"">;
@@ -563,15 +551,12 @@ describe("UniKvs - キー写像と CRUD", () => {
     await kvs.set("c", "");
     await kvs.set("d", null);
 
-    expect(await kvs.get("a")).toBe(false);
-    expect(await kvs.get("b")).toBe(0);
-    expect(await kvs.get("c")).toBe("");
-    expect(await kvs.get("d")).toBe(null);
-    expect(await kvs.has("a")).toBe(true);
-    expect(await kvs.has("d")).toBe(true);
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("a")).resolves.toBe(false);
+    await expect(kvs.get("b")).resolves.toBe(0);
+    await expect(kvs.get("c")).resolves.toBe("");
+    await expect(kvs.get("d")).resolves.toBe(null);
+    await expect(kvs.has("a")).resolves.toBe(true);
+    await expect(kvs.has("d")).resolves.toBe(true);
   });
 });
 
@@ -595,22 +580,24 @@ describe("UniKvs - 読み取り専用の変数", () => {
       }
     }
     const storage = new VarWritingStorage();
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .connect(new LockVarMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("a", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("a", "value");
 
     // 検証: 共有ストアの読み取り専用がストレージのコンテキストまで引き継がれる
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const reasons = (error as PluginOperationAggregateError).meta.errors.map((e) => e.reason);
-    expect(reasons[0]).toBeInstanceOf(ReadonlyVariableError);
-
-    // 後片付け
-    await kvs.close();
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ reason: expect.any(ReadonlyVariableError) })],
+        }),
+      }),
+    );
   });
 });
 
@@ -644,7 +631,7 @@ describe("UniKvs - repair の next 後の拒否", () => {
     }
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(new AllowRepair())
       .connect(new DenyAfterNextMiddleware("DenyAfterNext"))
       .persist(cache)
@@ -653,23 +640,19 @@ describe("UniKvs - repair の next 後の拒否", () => {
     await kvs.open();
     server.map.set("foo", "value");
 
-    try {
-      // 実行: 既定では拒否を警告に留め、読み取りは成功する
-      const value = await kvs.get("foo", { repair: true });
+    // 実行: 既定では拒否を警告に留め、読み取りは成功する
+    const value = await kvs.get("foo", { repair: true });
 
-      // 検証
-      expect(value).toBe("value");
-      expect(warnSpy).toHaveBeenCalledTimes(1);
+    // 検証
+    expect(value).toBe("value");
+    expect(warnSpy).toHaveBeenCalledTimes(1);
 
-      // 実行: 厳格指定では拒否で読み取りが失敗する
-      cache.map.delete("foo");
-      warnSpy.mockClear();
-      await expect(kvs.get("foo", { repair: true, throwOnRepairDenied: true })).rejects.toThrow(
-        RepairNotAllowedError,
-      );
-      expect(warnSpy).not.toHaveBeenCalled();
-    } finally {
-      await kvs.close();
-    }
+    // 実行: 厳格指定では拒否で読み取りが失敗する
+    cache.map.delete("foo");
+    warnSpy.mockClear();
+    await expect(kvs.get("foo", { repair: true, throwOnRepairDenied: true })).rejects.toThrow(
+      RepairNotAllowedError,
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

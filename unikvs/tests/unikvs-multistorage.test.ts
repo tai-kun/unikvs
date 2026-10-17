@@ -49,7 +49,7 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
         entered2.open();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -69,7 +69,6 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
     await pending;
     expect(storage1.map.get("foo")).toBe("value");
     expect(storage2.map.get("foo")).toBe("value");
-    await kvs.close();
   });
 
   test("clear は 1 つのストレージがゲートで保留中でも他のストレージを並列に空にする", async ({
@@ -88,7 +87,7 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
         await release1.wait();
       }
     };
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -108,7 +107,6 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
     await pending;
     expect(storage1.map.size).toBe(0);
     expect(storage2.map.size).toBe(0);
-    await kvs.close();
   });
 });
 
@@ -121,22 +119,25 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage1 = new FakeStorage("storage1");
     storage1.errors["write"] = failure;
     const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.action).toBe("write");
-    expect(aggregate.meta.errors).toStrictEqual([
-      { plugin: "storage", name: "storage1", index: 0, reason: failure },
-    ]);
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toMatchObject({ meta: { action: "write" } });
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [{ plugin: "storage", name: "storage1", index: 0, reason: failure }],
+        }),
+      }),
+    );
     expect(storage2.otherWriteErrors).toHaveLength(1);
     const notified = storage2
       .otherWriteErrors[0] as readonly import("@unikvs/core").IStorage.IOtherWriteError[];
@@ -144,9 +145,6 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     expect(notified[0]?.errors.map((e) => e.reason)).toStrictEqual([failure]);
     expect(storage1.otherWriteErrors).toHaveLength(0);
     expect(storage2.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("2 番目のストレージだけが失敗すると name と index で特定できる", async ({ expect }) => {
@@ -155,27 +153,27 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     storage2.errors["write"] = failure;
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.errors).toStrictEqual([
-      { plugin: "storage", name: "storage2", index: 1, reason: failure },
-    ]);
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [{ plugin: "storage", name: "storage2", index: 1, reason: failure }],
+        }),
+      }),
+    );
     expect(storage1.otherWriteErrors).toHaveLength(1);
     expect(storage2.otherWriteErrors).toHaveLength(0);
     expect(storage1.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("複数のストレージが失敗するとすべての理由が集約される", async ({ expect }) => {
@@ -185,7 +183,7 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["write"] = new Error("write failed 2");
     const storage3 = new FakeStorage("storage3");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .persist(storage3)
@@ -193,18 +191,20 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.errors.map((e) => e.reason)).toStrictEqual([
-      new Error("write failed 1"),
-      new Error("write failed 2"),
-    ]);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [
+            expect.objectContaining({ reason: new Error("write failed 1") }),
+            expect.objectContaining({ reason: new Error("write failed 2") }),
+          ],
+        }),
+      }),
+    );
     expect(storage3.otherWriteErrors).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("onOtherWriteError 自体が失敗しても set は集約エラーを投げる", async ({ expect }) => {
@@ -213,21 +213,18 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     storage1.errors["write"] = new Error("write failed");
     const storage2 = new FakeStorage("storage2");
     storage2.errors["onOtherWriteError"] = new Error("notification failed");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証: 通知の失敗は元の集約エラーを置き換えない
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    expect((error as PluginOperationAggregateError).meta.action).toBe("write");
-
-    // 後片付け
-    await kvs.close();
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(setting).rejects.toMatchObject({ meta: { action: "write" } });
   });
 
   test("ストリーム書き込みでも片方の失敗時に他のストレージへ通知される", async ({ expect }) => {
@@ -240,21 +237,18 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
 
     const storage1 = new FailGetWritableStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("logs", streamOf([new Uint8Array([1])])).catch((ex: unknown) => ex);
+    const setting = kvs.set("logs", streamOf([new Uint8Array([1])]));
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
     expect(storage2.otherWriteErrors).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -265,22 +259,19 @@ describe("UniKvs - 削除系エラーの集約", () => {
     storage1.errors["clear"] = new Error("clear failed");
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.clear().catch((ex: unknown) => ex);
+    const clearing = kvs.clear();
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    expect((error as PluginOperationAggregateError).meta.action).toBe("clear");
+    await expect(clearing).rejects.toThrow(PluginOperationAggregateError);
+    await expect(clearing).rejects.toMatchObject({ meta: { action: "clear" } });
     expect(storage2.map.size).toBe(0);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("delete の複数失敗は action が delete の集約エラーになる", async ({ expect }) => {
@@ -291,23 +282,20 @@ describe("UniKvs - 削除系エラーの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["delete"] = new Error("delete failed 2");
     storage2.map.set("a", "1");
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.delete("a").catch((ex: unknown) => ex);
+    const deleting = kvs.delete("a");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.action).toBe("delete");
-    expect(aggregate.meta.errors).toHaveLength(2);
-
-    // 後片付け
-    await kvs.close();
+    await expect(deleting).rejects.toThrow(PluginOperationAggregateError);
+    await expect(deleting).rejects.toMatchObject({
+      meta: { action: "delete", errors: [expect.anything(), expect.anything()] },
+    });
   });
 });
 
@@ -318,24 +306,29 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     // 準備
     const storage1 = new ExistsErrorStorage("storage1");
     const storage2 = new ExistsErrorStorage("storage2");
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.has("a").catch((ex: unknown) => ex);
+    const checking = kvs.has("a");
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect((error as KeyNotFoundError).cause).toBeInstanceOf(PluginOperationAggregateError);
-    expect(
-      ((error as KeyNotFoundError).cause as PluginOperationAggregateError).meta.errors,
-    ).toHaveLength(2);
-
-    // 後片付け
-    await kvs.close();
+    await expect(checking).rejects.toThrow(KeyNotFoundError);
+    await expect(checking).rejects.toEqual(
+      expect.objectContaining({ cause: expect.any(PluginOperationAggregateError) }),
+    );
+    await expect(checking).rejects.toEqual(
+      expect.objectContaining({
+        cause: expect.objectContaining({
+          meta: expect.objectContaining({
+            errors: [expect.anything(), expect.anything()],
+          }),
+        }),
+      }),
+    );
   });
 
   test("stream はすべてのストレージで読み取りが失敗すると集約された cause 付きの KeyNotFoundError を投げる", async ({
@@ -350,21 +343,20 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     };
     const storage2 = new FakeStorage("storage2");
     storage2.hook = storage1.hook;
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.stream("logs").catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs");
 
     // 検証
-    expect(error).toBeInstanceOf(KeyNotFoundError);
-    expect((error as KeyNotFoundError).cause).toBeInstanceOf(PluginOperationAggregateError);
-
-    // 後片付け
-    await kvs.close();
+    await expect(streaming).rejects.toThrow(KeyNotFoundError);
+    await expect(streaming).rejects.toEqual(
+      expect.objectContaining({ cause: expect.any(PluginOperationAggregateError) }),
+    );
   });
 
   test("has は最初のストレージの exists 失敗後も次のストレージで存在を確認できる", async ({
@@ -374,7 +366,7 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage1 = new ExistsErrorStorage("storage1");
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -382,9 +374,6 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
 
     // 実行と検証
     await expect(withTimeout(kvs.has("a"), 1500, "has-fallback")).resolves.toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -405,7 +394,7 @@ describe("UniKvs - 複数ストレージの中断", () => {
         call.signal?.throwIfAborted();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -419,17 +408,18 @@ describe("UniKvs - 複数ストレージの中断", () => {
     release.open();
 
     // 検証
-    const error = await pending.catch((ex: unknown) => ex);
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.errors).toStrictEqual([
-      { plugin: "storage", name: "storage1", index: 0, reason },
-    ]);
+    const setFails = expect(pending).rejects.toThrow(PluginOperationAggregateError);
+    const setMetaFails = expect(pending).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [{ plugin: "storage", name: "storage1", index: 0, reason }],
+        }),
+      }),
+    );
+    await setFails;
+    await setMetaFails;
     expect(storage2.map.get("foo")).toBe("value");
     expect(storage1.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("abort 後も KVS は壊れず次の操作が成功する", async ({ expect }) => {
@@ -446,7 +436,7 @@ describe("UniKvs - 複数ストレージの中断", () => {
         call.signal?.throwIfAborted();
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -465,12 +455,9 @@ describe("UniKvs - 複数ストレージの中断", () => {
     await kvs.set("foo", "second");
 
     // 検証
-    expect(await kvs.get("foo")).toBe("second");
+    await expect(kvs.get("foo")).resolves.toBe("second");
     expect(storage1.map.get("foo")).toBe("second");
     expect(storage2.map.get("foo")).toBe("second");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -481,7 +468,7 @@ describe("UniKvs - ストレージごとの独立したチェーン", () => {
     // 準備
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .create();
@@ -495,9 +482,6 @@ describe("UniKvs - ストレージごとの独立したチェーン", () => {
 
     // 検証
     expect(value).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -528,21 +512,18 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
     }
 
     const storage2 = new FakeStorage("storage2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(new BareStorage())
       .persist(storage2)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("foo", "value").catch((ex: unknown) => ex);
+    const setting = kvs.set("foo", "value");
 
     // 検証
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    await expect(setting).rejects.toThrow(PluginOperationAggregateError);
     expect(storage2.otherWriteErrors).toHaveLength(1);
     expect(storage2.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 });

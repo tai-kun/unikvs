@@ -10,7 +10,7 @@ import { afterEach, describe, test } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
 import type { Value } from "../src/value-schemas.js";
-import { collectBytes, streamOf } from "./_helpers.js";
+import { collectBytes, isGzip, mapOf, sha256Hex, streamOf } from "./_helpers.js";
 
 const roots: string[] = [];
 
@@ -31,26 +31,12 @@ function createRoot(): string {
   return root;
 }
 
-/**
- * Memory ストレージ内部の Map をテストから参照するためのアクセサーです。
- */
-function mapOf(storage: Memory): Map<string, unknown> {
-  return (storage as unknown as { map: Map<string, unknown> }).map;
-}
-
-/**
- * gzip のマジックナンバー (0x1f 0x8b) で始まるかを確認します。
- */
-function isGzip(data: Uint8Array): boolean {
-  return data[0] === 0x1f && data[1] === 0x8b;
-}
-
 describe("UniKvs + Memory + NodeFs", () => {
   test("set は両方に書き込まれ、Memory が優先して読み出される", async ({ expect }) => {
     // 準備
     const root = createRoot();
     const memory = new Memory();
-    const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
       .create();
@@ -63,16 +49,13 @@ describe("UniKvs + Memory + NodeFs", () => {
     expect([...(mapOf(memory).get("foo") as Uint8Array)]).toEqual([1, 2, 3]);
     expect([...readFileSync(join(root, "foo"))]).toEqual([1, 2, 3]);
     expect([...(await kvs.get("foo"))]).toEqual([1, 2, 3]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("Memory から消えても NodeFs へフォールバックして読み出せる", async ({ expect }) => {
     // 準備
     const root = createRoot();
     const memory = new Memory();
-    const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
       .create();
@@ -85,16 +68,13 @@ describe("UniKvs + Memory + NodeFs", () => {
 
     // 検証
     expect([...value]).toEqual([4, 5, 6]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("delete と clear は両方のストレージに届く", async ({ expect }) => {
     // 準備
     const root = createRoot();
     const memory = new Memory();
-    const kvs = UniKvs.config<{
+    await using kvs = UniKvs.config<{
       foo: Value<Uint8Array<ArrayBuffer>>;
       bar: Value<Uint8Array<ArrayBuffer>>;
     }>()
@@ -118,16 +98,13 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 検証
     expect(mapOf(memory).size).toBe(0);
     expect(readdirSync(root)).toEqual([]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("ストリーム書き込みも両方に保存され、フォールバックして読み出せる", async ({ expect }) => {
     // 準備
     const root = createRoot();
     const memory = new Memory();
-    const kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
       .create();
@@ -152,20 +129,18 @@ describe("UniKvs + Memory + NodeFs", () => {
 
     // 後片付け
     await vs.dispose();
-    await kvs.close();
   });
 
   test("Compression + Checksum + NodeFs で検証付きの圧縮往復ができる", async ({ expect }) => {
     // 準備
     const root = createRoot();
-    const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .connect(new ChecksumSha256())
       .connect(new Compression("gzip"))
       .persist(new NodeFs(root))
       .create();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    const sum = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const sum = await sha256Hex(data);
     const vars = { "@unikvs/checksum:sha256": sum };
     await kvs.open();
 
@@ -175,22 +150,18 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 検証: ファイルには圧縮後のデータが保存される
     expect(isGzip(readFileSync(join(root, "foo")))).toBe(true);
     expect([...(await kvs.get("foo", { vars }))]).toEqual([...data]);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("チェックサム不一致の読み取りは ChecksumMismatchError になる", async ({ expect }) => {
     // 準備
     const root = createRoot();
-    const kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .connect(new ChecksumSha256())
       .connect(new Compression("gzip"))
       .persist(new NodeFs(root))
       .create();
     const data = new Uint8Array([7, 8, 9]);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    const sum = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const sum = await sha256Hex(data);
     const wrongSum = "0".repeat(64);
     await kvs.open();
     await kvs.set("foo", data, { vars: { "@unikvs/checksum:sha256": sum } });
@@ -199,8 +170,5 @@ describe("UniKvs + Memory + NodeFs", () => {
     await expect(kvs.get("foo", { vars: { "@unikvs/checksum:sha256": wrongSum } })).rejects.toThrow(
       ChecksumMismatchError,
     );
-
-    // 後片付け
-    await kvs.close();
   });
 });

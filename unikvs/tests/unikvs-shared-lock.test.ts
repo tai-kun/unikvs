@@ -2,6 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import UniKvs from "../src/unikvs.js";
+import { withTimeout } from "./_helpers.js";
 
 /**
  * gate() で指定したキーの exists 処理を保留状態にできるストレージモックです。
@@ -73,22 +74,11 @@ class GatedExistsStorage implements IStorage {
   }
 }
 
-/**
- * 指定時間内に Promise が解決しなければ TIMEOUT エラーで拒否します。
- * デッドロック時にテストが固まるのを防ぐために使用します。
- */
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT(${label})`)), ms)),
-  ]);
-}
-
 describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -111,14 +101,13 @@ describe("UniKvs - 共有ロック", () => {
       await expect(pendingHasA).resolves.toBe(false);
     } finally {
       storage.ungate();
-      await kvs.close();
     }
   });
 
   test("stream のセットアップが保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     storage.map.set("a", [Uint8Array.from([1])]);
 
@@ -155,14 +144,13 @@ describe("UniKvs - 共有ロック", () => {
         }
       }
       await vs?.dispose();
-      await kvs.close();
     }
   });
 
   test("has の存在確認が保留中でも別キーの set は完了できる", async ({ expect }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -186,7 +174,6 @@ describe("UniKvs - 共有ロック", () => {
       await expect(kvs.get("b")).resolves.toBe("value");
     } finally {
       storage.ungate();
-      await kvs.close();
     }
   });
 
@@ -195,7 +182,7 @@ describe("UniKvs - 共有ロック", () => {
   }) => {
     // 準備
     const storage = new GatedExistsStorage();
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -220,7 +207,6 @@ describe("UniKvs - 共有ロック", () => {
       await expect(kvs.get("a")).resolves.toBe("value");
     } finally {
       storage.ungate();
-      await kvs.close();
     }
   });
 
@@ -230,7 +216,7 @@ describe("UniKvs - 共有ロック", () => {
     // 準備: stream("a") がキー a の読み取りロックを保持し続ける
     const storage = new GatedExistsStorage();
     storage.map.set("a", [Uint8Array.from([1])]);
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     const vs = await kvs.stream("a");
 
@@ -251,7 +237,6 @@ describe("UniKvs - 共有ロック", () => {
       await expect(kvs.get("a")).resolves.toBe("value");
     } finally {
       await vs.dispose();
-      await kvs.close();
     }
   });
 
@@ -261,7 +246,7 @@ describe("UniKvs - 共有ロック", () => {
     // 準備
     const storage = new GatedExistsStorage();
     storage.map.set("a", "value");
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -286,7 +271,6 @@ describe("UniKvs - 共有ロック", () => {
       expect(storage.map.size).toBe(0);
     } finally {
       storage.ungate();
-      await kvs.close();
     }
   });
 });

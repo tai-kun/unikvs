@@ -20,7 +20,7 @@ describe("UniKvs - vars の伝播", () => {
   test("set/get/has/delete/stream の操作種別とキーはコンテキストで伝わる", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string>; logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string>; logs: StreamValue<Uint8Array> }>()
       .persist(storage)
       .create();
     await kvs.open();
@@ -37,18 +37,20 @@ describe("UniKvs - vars の伝播", () => {
 
     // 検証: ストレージ呼び出しのキーと操作が正しい
     expect(storage.callsOf("write")[0]?.key).toBe("foo");
+    expect(storage.callsOf("write")[0]?.action).toBe("set");
     expect(storage.callsOf("read")[0]?.key).toBe("foo");
+    expect(storage.callsOf("read")[0]?.action).toBe("get");
     expect(storage.callsOf("exists").some((call) => call.key === "foo")).toBe(true);
     expect(storage.callsOf("delete")[0]?.key).toBe("foo");
-
-    // 後片付け
-    await kvs.close();
+    expect(storage.callsOf("delete")[0]?.action).toBe("delete");
+    expect(storage.callsOf("getWritable")[0]?.key).toBe("logs");
+    expect(storage.callsOf("getReadable")[0]?.key).toBe("logs");
   });
 
   test("clear の操作種別はコンテキストで伝わる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -57,15 +59,12 @@ describe("UniKvs - vars の伝播", () => {
     // 検証
     expect(storage.callsOf("clear")).toHaveLength(1);
     expect(storage.callsOf("clear")[0]?.action).toBe("clear");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("操作ごとの vars はストレージへ渡される", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -73,15 +72,12 @@ describe("UniKvs - vars の伝播", () => {
 
     // 検証
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t1");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("操作ごとの vars をエントリー配列形式でも指定できる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -89,15 +85,12 @@ describe("UniKvs - vars の伝播", () => {
 
     // 検証
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t2");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("操作ごとの vars に Map を指定できる", async ({ expect }) => {
     // 準備
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -105,9 +98,6 @@ describe("UniKvs - vars の伝播", () => {
 
     // 検証
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t3");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("open と close にも操作ごとの vars を渡せる", async ({ expect }) => {
@@ -128,7 +118,7 @@ describe("UniKvs - vars の伝播", () => {
     // 準備
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware("probe");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -140,9 +130,6 @@ describe("UniKvs - vars の伝播", () => {
     // 検証
     expect(middleware.callsOf("encode")[0]?.vars?.get("tag")).toBe("t4");
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t4");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("open/close の vars 変異は並列プラグイン間で分離される", async ({ expect }) => {
@@ -171,7 +158,7 @@ describe("UniKvs - vars の伝播", () => {
       (c as { set: (k: string, v: unknown) => void }).set("fromA", true);
       await origOpenA(c);
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
 
     // 実行: open を並列開始し、b が先に進んでも a の変異が見えないことを確認する
     const openPromise = kvs.open();
@@ -182,8 +169,5 @@ describe("UniKvs - vars の伝播", () => {
 
     // 検証
     expect(bSawA).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 });

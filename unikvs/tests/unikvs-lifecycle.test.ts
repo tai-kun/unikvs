@@ -47,7 +47,7 @@ describe("UniKvs - open の状態遷移", () => {
         await release.wait();
       }
     };
-    const kvs = UniKvs.config().persist(storage).create();
+    await using kvs = UniKvs.config().persist(storage).create();
 
     // 実行
     const pending = kvs.open();
@@ -58,9 +58,6 @@ describe("UniKvs - open の状態遷移", () => {
     release.open();
     await pending;
     expect(kvs.isOpen).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("実行前に abort された signal で open するとストレージを開かずに abort 理由で失敗する", async ({
@@ -83,7 +80,7 @@ describe("UniKvs - open の状態遷移", () => {
     // 準備
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(middleware)
       .persist(storage)
       .create();
@@ -99,9 +96,6 @@ describe("UniKvs - open の状態遷移", () => {
     expect(middleware.callsOf("open")).toHaveLength(2);
     expect(middleware.callsOf("close")).toHaveLength(1);
     expect(kvs.isOpen).toBe(true);
-
-    // 後片付け
-    await kvs.close();
   });
 });
 
@@ -139,7 +133,7 @@ describe("UniKvs - open 失敗時のロールバック", () => {
         throw new Error("transient open failure");
       }
     };
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
 
     // 実行と検証
     await expect(kvs.open()).rejects.toThrow(PluginOperationAggregateError);
@@ -151,9 +145,6 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     // 検証
     expect(kvs.isOpen).toBe(true);
     expect(storage.map.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("open で abort と通常失敗が混在したときは集約エラーに abort 理由も含まれる", async ({
@@ -180,10 +171,14 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     controller.abort(cancel);
 
     // 検証
-    const error = await pending.catch((ex: unknown) => ex);
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const reasons = (error as PluginOperationAggregateError).meta.errors.map((e) => e.reason);
-    expect(reasons).toContain(cancel);
+    await expect(pending).rejects.toThrow(PluginOperationAggregateError);
+    await expect(pending).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: expect.arrayContaining([expect.objectContaining({ reason: cancel })]),
+        }),
+      }),
+    );
     expect(kvs.isOpen).toBe(false);
   });
 });
@@ -211,7 +206,7 @@ describe("UniKvs - close の失敗と回復", () => {
     await kvs.set("foo", "value");
 
     // 検証
-    expect(await kvs.get("foo")).toBe("value");
+    await expect(kvs.get("foo")).resolves.toBe("value");
 
     // 後片付け
     await kvs.close();
@@ -256,13 +251,17 @@ describe("UniKvs - close の失敗と回復", () => {
     await entered.wait();
     ac.abort(reason);
     release.open();
-    const error = await closing.catch((ex: unknown) => ex);
 
     // 検証: close は集約エラーで失敗する
-    expect(error).toBeInstanceOf(PluginOperationAggregateError);
-    const aggregate = error as PluginOperationAggregateError;
-    expect(aggregate.meta.action).toBe("close");
-    expect(aggregate.meta.errors[0]?.reason).toBe(reason);
+    await expect(closing).rejects.toThrow(PluginOperationAggregateError);
+    await expect(closing).rejects.toMatchObject({ meta: { action: "close" } });
+    await expect(closing).rejects.toEqual(
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          errors: [expect.objectContaining({ reason })],
+        }),
+      }),
+    );
 
     // 検証: retry は新しい signal で実 close を完了し、実体は閉じられる
     expect(storage.isOpen).toBe(false);

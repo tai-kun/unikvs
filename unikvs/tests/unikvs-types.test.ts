@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { describe, expectTypeOf, test } from "vitest";
 
 import type { IValueStream as ValueStream } from "../src/types.js";
-import type { IUniKvsConfigBuilder } from "../src/unikvs-config.js";
+import UniKvsConfig, { type IUniKvsConfigBuilder } from "../src/unikvs-config.js";
 import type {
   KeyofKeyValueMappingHasPlainValue,
   KeyofKeyValueMappingHasStreamValue,
@@ -264,7 +264,7 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
     const storage = new NumberStorage();
     // @ts-expect-error 変換なしでは number 専用ストレージへ接続できない
     const invalidConfig = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage);
-    expect(invalidConfig).toBeDefined();
+    expect(invalidConfig).toBeInstanceOf(UniKvsConfig);
   });
 
   test("fork のみでは Builder のまま型レベルで create できない", ({ expect }) => {

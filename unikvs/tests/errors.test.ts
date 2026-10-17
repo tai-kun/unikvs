@@ -71,90 +71,74 @@ describe("InvalidOutputError", () => {
 describe("UniKvsIsOpenError", () => {
   test("投げられたとき、メッセージが `UniKvs is open` である", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new UniKvsIsOpenError();
-    }).toThrow("UniKvs is open");
+    expect(new UniKvsIsOpenError().message).toMatch(/UniKvs is open/);
   });
 });
 
 describe("UniKvsIsNotOpenError", () => {
   test("投げられたとき、メッセージが `UniKvs is not open` である", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new UniKvsIsNotOpenError();
-    }).toThrow("UniKvs is not open");
+    expect(new UniKvsIsNotOpenError().message).toMatch(/UniKvs is not open/);
   });
 });
 
 describe("KeyNotFoundError", () => {
   test("指定されたキーがエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new KeyNotFoundError({ key: "my-key" });
-    }).toThrow(/my-key/);
+    expect(new KeyNotFoundError({ key: "my-key" }).message).toMatch(/my-key/);
   });
 });
 
 describe("StorageIsNotOpenError", () => {
   test("指定されたストレージ名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new StorageIsNotOpenError({ name: "MyStorage" });
-    }).toThrow(/MyStorage/);
+    expect(new StorageIsNotOpenError({ name: "MyStorage" }).message).toMatch(/MyStorage/);
   });
 });
 
 describe("WritableStreamNotSupportedError", () => {
   test("指定されたストレージ名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new WritableStreamNotSupportedError({ name: "MyStorage" });
-    }).toThrow(/MyStorage/);
+    expect(new WritableStreamNotSupportedError({ name: "MyStorage" }).message).toMatch(/MyStorage/);
   });
 });
 
 describe("ReadableStreamNotSupportedError", () => {
   test("指定されたストレージ名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new ReadableStreamNotSupportedError({ name: "MyStorage" });
-    }).toThrow(/MyStorage/);
+    expect(new ReadableStreamNotSupportedError({ name: "MyStorage" }).message).toMatch(/MyStorage/);
   });
 });
 
 describe("MultipartWriteNotSupportedError", () => {
   test("指定されたストレージ名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new MultipartWriteNotSupportedError({ name: "MyStorage" });
-    }).toThrow(/MyStorage/);
+    expect(new MultipartWriteNotSupportedError({ name: "MyStorage" }).message).toMatch(/MyStorage/);
   });
 });
 
 describe("MiddlewareIsNotOpenError", () => {
   test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new MiddlewareIsNotOpenError({ name: "MyMiddleware" });
-    }).toThrow(/MyMiddleware/);
+    expect(new MiddlewareIsNotOpenError({ name: "MyMiddleware" }).message).toMatch(/MyMiddleware/);
   });
 });
 
 describe("StreamEncodingNotSupportedError", () => {
   test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new StreamEncodingNotSupportedError({ name: "MyMiddleware" });
-    }).toThrow(/MyMiddleware/);
+    expect(new StreamEncodingNotSupportedError({ name: "MyMiddleware" }).message).toMatch(
+      /MyMiddleware/,
+    );
   });
 });
 
 describe("StreamDecodingNotSupportedError", () => {
   test("指定されたミドルウェア名がエラーメッセージに含まれる", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new StreamDecodingNotSupportedError({ name: "MyMiddleware" });
-    }).toThrow(/MyMiddleware/);
+    expect(new StreamDecodingNotSupportedError({ name: "MyMiddleware" }).message).toMatch(
+      /MyMiddleware/,
+    );
   });
 });
 
@@ -218,8 +202,6 @@ describe("PluginOperationAggregateError", () => {
 describe("MissingStorageError", () => {
   test("エラーメッセージがストレージ不足を伝える", ({ expect }) => {
     // 実行と検証
-    expect(() => {
-      throw new MissingStorageError();
-    }).toThrow(/At least one storage is required/);
+    expect(new MissingStorageError().message).toMatch(/At least one storage is required/);
   });
 });

@@ -58,7 +58,7 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
     const d = config.create();
     await d.open();
     await d.set("a", "value");
-    expect(await d.get("a")).toBe("value");
+    await expect(d.get("a")).resolves.toBe("value");
     await d.close();
     expect(storage.isOpen).toBe(false);
   });
@@ -130,7 +130,7 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
     // 検証: 二重解放されておらず、再 open/close が一貫する
     await kvs.open();
     await kvs.set("a", "value");
-    expect(await kvs.get("a")).toBe("value");
+    await expect(kvs.get("a")).resolves.toBe("value");
     await kvs.close();
     expect(storage.callsOf("close")).toHaveLength(2);
     expect(storage.callsOf("open")).toHaveLength(2);
@@ -171,7 +171,7 @@ describe("UniKvs - ミドルウェアの close 回復", () => {
     // 実行: 失敗状態からの再 open は所有権を引き継ぎ、操作を継続できる
     await kvs.open();
     await kvs.set("foo", "value");
-    expect(await kvs.get("foo")).toBe("value");
+    await expect(kvs.get("foo")).resolves.toBe("value");
 
     // 後片付け: この close で実体が閉じられる
     await kvs.close();
@@ -199,7 +199,7 @@ describe("UniKvs - 外部で開かれたプラグインは管理対象外", () =
 
     // 検証: 外部の open を重ねず、操作はそのまま利用できる
     expect(storage.callsOf("open")).toHaveLength(0);
-    expect(await kvs.get("a")).toBe("value");
+    await expect(kvs.get("a")).resolves.toBe("value");
 
     // 実行
     await kvs.close();
@@ -225,7 +225,7 @@ describe("UniKvs - 外部で開かれたプラグインは管理対象外", () =
 
     // 検証
     expect(middleware.callsOf("open")).toHaveLength(0);
-    expect(await kvs.get("a")).toBe("value");
+    await expect(kvs.get("a")).resolves.toBe("value");
 
     // 実行
     await kvs.close();
@@ -260,7 +260,7 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     }
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(new ThrowAfterNextStreamMiddleware("PostFailStream"))
       .persist(cache)
@@ -270,20 +270,20 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     server.map.set("logs", chunks);
 
-    try {
-      // 実行
-      const vs = await kvs.stream("logs", { repair: true });
-      expect(await collect(vs)).toStrictEqual(chunks);
+    // 実行
+    const vs = await kvs.stream("logs", { repair: true });
+    await expect(collect(vs)).resolves.toStrictEqual(chunks);
 
-      // 検証: 補助処理の失敗は error に記録され、読み取り自体は壊れない
-      expect(errorSpy).toHaveBeenCalled();
+    // 検証: 補助処理の失敗は error に記録され、読み取り自体は壊れない
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      ["Failed to repair a storage: ", ""],
+      expect.objectContaining({ message: "post-next stream failure" }),
+    );
 
-      // 検証: 書き戻しは dispose までに完了している
-      await vs.dispose();
-      expect(cache.map.get("logs")).toStrictEqual(chunks);
-    } finally {
-      await kvs.close();
-    }
+    // 検証: 書き戻しは dispose までに完了している
+    await vs.dispose();
+    expect(cache.map.get("logs")).toStrictEqual(chunks);
   });
 
   test("next 後の拒否は既定では warn のみで読み取り成功し、書き戻しも完了する", async ({
@@ -303,7 +303,7 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     }
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
@@ -313,18 +313,18 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     server.map.set("logs", chunks);
 
-    try {
-      // 実行
-      const vs = await kvs.stream("logs", { repair: true });
-      expect(await collect(vs)).toStrictEqual(chunks);
+    // 実行
+    const vs = await kvs.stream("logs", { repair: true });
+    await expect(collect(vs)).resolves.toStrictEqual(chunks);
 
-      // 検証: 拒否は warn に留められ、書き戻しは構築済みの分岐で完了する
-      expect(warnSpy).toHaveBeenCalled();
-      await vs.dispose();
-      expect(cache.map.get("logs")).toStrictEqual(chunks);
-    } finally {
-      await kvs.close();
-    }
+    // 検証: 拒否は warn に留められ、書き戻しは構築済みの分岐で完了する
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      ["Failed to repair a storage: ", ""],
+      expect.any(RepairNotAllowedError),
+    );
+    await vs.dispose();
+    expect(cache.map.get("logs")).toStrictEqual(chunks);
   });
 
   test("next 後の拒否は throwOnRepairDenied 指定時のみ読み取りを失敗させる", async ({ expect }) => {
@@ -341,7 +341,7 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     }
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
@@ -350,18 +350,12 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1])]);
 
-    try {
-      // 実行
-      const error = await kvs
-        .stream("logs", { repair: true, throwOnRepairDenied: true })
-        .catch((ex: unknown) => ex);
+    // 実行
+    const streaming = kvs.stream("logs", { repair: true, throwOnRepairDenied: true });
 
-      // 検証: 厳格指定では読み取りが失敗し、書き戻しも行われない
-      expect(error).toBeInstanceOf(RepairNotAllowedError);
-      expect(cache.map.has("logs")).toBe(false);
-    } finally {
-      await kvs.close();
-    }
+    // 検証: 厳格指定では読み取りが失敗し、書き戻しも行われない
+    await expect(streaming).rejects.toThrow(RepairNotAllowedError);
+    expect(cache.map.has("logs")).toBe(false);
   });
 
   test("子節のセットアップ失敗は best-effort に丸めず読み取りを失敗させる", async ({ expect }) => {
@@ -370,7 +364,7 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const server = new FakeStreamStorage("server");
     const broken = new FakeStreamMiddleware<Uint8Array>("broken");
     broken.errors["encodeStream"] = new Error("child setup failed");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AllowRepair())
       .connect(new FakeStreamMiddleware<Uint8Array>("parent"))
       .connect(broken)
@@ -380,12 +374,8 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1])]);
 
-    try {
-      // 実行と検証: 親の後処理失敗と取り違えず、読み取り全体が失敗する
-      await expect(kvs.stream("logs", { repair: true })).rejects.toThrow("child setup failed");
-    } finally {
-      await kvs.close();
-    }
+    // 実行と検証: 親の後処理失敗と取り違えず、読み取り全体が失敗する
+    await expect(kvs.stream("logs", { repair: true })).rejects.toThrow("child setup failed");
   });
 });
 
@@ -445,15 +435,16 @@ describe("UniKvs - close とストリーム操作の競合", () => {
     });
 
     // 実行: 書き込み開始後に close を呼ぶ
-    const pending = kvs.set("logs", source).catch((ex: unknown) => ex);
+    const pending = kvs.set("logs", source);
+    const setFails = expect(withTimeout(pending, 2000, "set-during-close")).rejects.toThrow(
+      PluginOperationAggregateError,
+    );
     await entered.promise;
     const closing = kvs.close();
     writeGate.open();
 
     // 検証: 書き込みは close の abort で集約エラーになり、close は待機後に完了する
-    expect(await withTimeout(pending, 2000, "set-during-close")).toBeInstanceOf(
-      PluginOperationAggregateError,
-    );
+    await setFails;
     await expect(withTimeout(closing, 2000, "close-during-set")).resolves.toBeUndefined();
     expect(kvs.isOpen).toBe(false);
     expect(storage.isOpen).toBe(false);
@@ -496,21 +487,19 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
       },
     });
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new WrapThenThrowStreamMiddleware("WrapThenThrow"))
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("logs", source).catch((ex: unknown) => ex);
+    const setting = kvs.set("logs", source);
 
     // 検証: 失敗してもソースのリソースは解放される
-    expect((error as Error).message).toBe("boom after wrap without next");
+    await expect(setting).rejects.toMatchObject({ message: "boom after wrap without next" });
     expect(cancelled).toBe(true);
     expect(source.locked).toBe(false);
-
-    await kvs.close();
   });
 
   test("decodeStream が destination を分岐させて失敗してもソースは解放される", async ({
@@ -543,20 +532,18 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     }
     const storage = new CancelObservableReadStorage("cancelaware");
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new WrapThenThrowDecodeMiddleware("WrapThenThrowDecode"))
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.stream("logs").catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs");
 
     // 検証: 失敗してもソースのリソースは解放される
-    expect((error as Error).message).toBe("decode boom after wrap");
+    await expect(streaming).rejects.toMatchObject({ message: "decode boom after wrap" });
     expect(storage.cancelled).toBe(true);
-
-    await kvs.close();
   });
 
   test("decodeStream の next 完了後に abort してもソースストリームが解放される", async ({
@@ -592,20 +579,18 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     }
     const storage = new CancelObservableReadStorage("cancelaware-abort-after-next");
     storage.map.set("logs", [new Uint8Array([1])]);
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new AbortAfterNextDecodeMiddleware("AbortAfterNextDecode"))
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.stream("logs", { signal: ac.signal }).catch((ex: unknown) => ex);
+    const streaming = kvs.stream("logs", { signal: ac.signal });
 
     // 検証: 中断理由で失敗し、ロックされたソースも解放される
-    expect(error).toBe(reason);
+    await expect(streaming).rejects.toBe(reason);
     expect(storage.cancelled).toBe(true);
-
-    await kvs.close();
   });
 
   test("encodeStream が destination を設定して next を呼ばず規約違反で失敗してもソースは解放される", async ({
@@ -631,20 +616,18 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
       },
     });
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .connect(new WrapWithoutNextStreamMiddleware("WrapWithoutNext"))
       .persist(storage)
       .create();
     await kvs.open();
 
     // 実行
-    const error = await kvs.set("logs", source).catch((ex: unknown) => ex);
+    const setting = kvs.set("logs", source);
 
     // 検証: 規約違反エラーは維持され、失敗してもソースのリソースは解放される
-    expect(error).toBeInstanceOf(MiddlewareNextNotCalledError);
+    await expect(setting).rejects.toThrow(MiddlewareNextNotCalledError);
     expect(cancelled).toBe(true);
     expect(source.locked).toBe(false);
-
-    await kvs.close();
   });
 });

@@ -8,7 +8,9 @@ import type { PlainValue } from "../src/value-schemas.js";
 describe("UniKvs + Memory", () => {
   test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>().persist(new Memory()).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
+      .persist(new Memory())
+      .create();
     await kvs.open();
 
     // 実行
@@ -19,24 +21,18 @@ describe("UniKvs + Memory", () => {
 
     // 検証: Memory は structuredClone で複製するため 1 のまま
     expect(got[0]).toBe(1);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("存在しないキーへの操作", async ({ expect }) => {
     // 準備
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
     await kvs.open();
 
     // 実行と検証
-    expect(await kvs.has("foo")).toBe(false);
+    await expect(kvs.has("foo")).resolves.toBe(false);
     await expect(kvs.get("foo")).rejects.toThrow(KeyNotFoundError);
     await expect(kvs.stream("foo" as never)).rejects.toThrow(KeyNotFoundError);
     // delete は存在確認つきなので静かに成功する
     await expect(kvs.delete("foo")).resolves.toBeUndefined();
-
-    // 後片付け
-    await kvs.close();
   });
 });

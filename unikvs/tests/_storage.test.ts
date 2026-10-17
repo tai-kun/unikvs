@@ -269,7 +269,7 @@ describe("UniKvsStorage - 初期化と接続管理", () => {
 
     // 検証: もう片方の利用者は操作を続けられる
     await storage.write(setContext("k1"), "v1");
-    expect(await storage.read(getContext("k1"))).toBe("v1");
+    await expect(storage.read(getContext("k1"))).resolves.toBe("v1");
 
     // 後片付け: 最後の close で実体が閉じられる
     await storage.close(closeContext());
@@ -479,7 +479,7 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
     await storage.delete(deleteContext("k1"));
 
     // 検証
-    expect(await storage.exists(hasContext("k1"))).toBe(false);
+    await expect(storage.exists(hasContext("k1"))).resolves.toBe(false);
   });
 
   test("clear で全データが削除される", async ({ expect }) => {
@@ -493,8 +493,8 @@ describe("UniKvsStorage - 基本操作 (CRUD)", () => {
     await storage.clear(clearContext());
 
     // 検証
-    expect(await storage.exists(hasContext("k1"))).toBe(false);
-    expect(await storage.exists(hasContext("k2"))).toBe(false);
+    await expect(storage.exists(hasContext("k1"))).resolves.toBe(false);
+    await expect(storage.exists(hasContext("k2"))).resolves.toBe(false);
   });
 });
 
@@ -587,7 +587,10 @@ describe("UniKvsStorage - ストリーム", () => {
 
     // 検証
     const reader = readable.getReader();
-    expect(await reader.read()).toStrictEqual({ done: false, value: Uint8Array.from([1]) });
+    await expect(reader.read()).resolves.toStrictEqual({
+      done: false,
+      value: Uint8Array.from([1]),
+    });
     await reader.cancel();
   });
 

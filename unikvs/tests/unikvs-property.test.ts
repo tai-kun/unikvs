@@ -35,45 +35,41 @@ describe("UniKvs - 決定的ファズ: CRUD モデル", () => {
   test("ランダムな操作列が Map リファレンスと一致する", async ({ expect }) => {
     // 実行と検証
     await forCasesAsync(SEED, 40, async (rng) => {
-      const kvs = UniKvs.config<Record<string, PlainValue<string>>>()
+      await using kvs = UniKvs.config<Record<string, PlainValue<string>>>()
         .persist(new Memory())
         .create();
       await kvs.open();
       const model = new Map<string, string>();
 
-      try {
-        for (const op of generateOps(rng, rng.int(0, 30))) {
-          switch (op.type) {
-            case "set":
-              await kvs.set(op.key, op.value);
-              model.set(op.key, op.value);
-              break;
-            case "get":
-              if (model.has(op.key)) {
-                expect(await kvs.get(op.key)).toBe(model.get(op.key));
-              } else {
-                await expect(kvs.get(op.key)).rejects.toThrow(KeyNotFoundError);
-              }
-              break;
-            case "has":
-              expect(await kvs.has(op.key)).toBe(model.has(op.key));
-              break;
-            case "delete":
-              await kvs.delete(op.key);
-              model.delete(op.key);
-              break;
-            case "clear":
-              await kvs.clear();
-              model.clear();
-              break;
-          }
+      for (const op of generateOps(rng, rng.int(0, 30))) {
+        switch (op.type) {
+          case "set":
+            await kvs.set(op.key, op.value);
+            model.set(op.key, op.value);
+            break;
+          case "get":
+            if (model.has(op.key)) {
+              await expect(kvs.get(op.key)).resolves.toBe(model.get(op.key));
+            } else {
+              await expect(kvs.get(op.key)).rejects.toThrow(KeyNotFoundError);
+            }
+            break;
+          case "has":
+            await expect(kvs.has(op.key)).resolves.toBe(model.has(op.key));
+            break;
+          case "delete":
+            await kvs.delete(op.key);
+            model.delete(op.key);
+            break;
+          case "clear":
+            await kvs.clear();
+            model.clear();
+            break;
         }
+      }
 
-        for (const key of KEYS) {
-          expect(await kvs.has(key)).toBe(model.has(key));
-        }
-      } finally {
-        await kvs.close();
+      for (const key of KEYS) {
+        await expect(kvs.has(key)).resolves.toBe(model.has(key));
       }
     });
   });
@@ -83,30 +79,28 @@ describe("UniKvs - 決定的ファズ: ストリーム往復", () => {
   test("ランダムなチャンク分割でもバイト列が一致する", async ({ expect }) => {
     // 実行と検証
     await forCasesAsync(SEED + 1, 40, async (rng) => {
-      const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(new Memory()).create();
+      await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+        .persist(new Memory())
+        .create();
       await kvs.open();
 
-      try {
-        const bytes = rng.bytes(rng.int(0, 64));
-        const chunks: Uint8Array<ArrayBuffer>[] = [];
-        let offset = 0;
-        for (let i = 0, n = rng.int(0, 8); i < n && offset < bytes.length; i++) {
-          const size = rng.int(1, 16);
-          chunks.push(bytes.slice(offset, offset + size));
-          offset += size;
-        }
-        if (offset < bytes.length) {
-          chunks.push(bytes.slice(offset));
-        }
-
-        await kvs.set("logs", streamOf(chunks));
-        const vs = await kvs.stream("logs");
-        const got = await collectBytes(vs);
-        expect([...got]).toEqual([...bytes]);
-        await vs.dispose();
-      } finally {
-        await kvs.close();
+      const bytes = rng.bytes(rng.int(0, 64));
+      const chunks: Uint8Array<ArrayBuffer>[] = [];
+      let offset = 0;
+      for (let i = 0, n = rng.int(0, 8); i < n && offset < bytes.length; i++) {
+        const size = rng.int(1, 16);
+        chunks.push(bytes.slice(offset, offset + size));
+        offset += size;
       }
+      if (offset < bytes.length) {
+        chunks.push(bytes.slice(offset));
+      }
+
+      await kvs.set("logs", streamOf(chunks));
+      const vs = await kvs.stream("logs");
+      const got = await collectBytes(vs);
+      expect([...got]).toEqual([...bytes]);
+      await vs.dispose();
     });
   });
 });
@@ -130,19 +124,15 @@ describe("UniKvs - 決定的ファズ: ミドルウェア構成", () => {
       if (usePassthrough) {
         config = config.connect(new FakeStreamMiddleware("pass-through"));
       }
-      const kvs = config.persist(new Memory()).create();
+      await using kvs = config.persist(new Memory()).create();
       await kvs.open();
 
-      try {
-        await kvs.set("data", bytes);
-        expect([...(await kvs.get("data"))]).toEqual([...bytes]);
+      await kvs.set("data", bytes);
+      expect([...(await kvs.get("data"))]).toEqual([...bytes]);
 
-        const vs = await kvs.stream("data");
-        expect([...(await collectBytes(vs))]).toEqual([...bytes]);
-        await vs.dispose();
-      } finally {
-        await kvs.close();
-      }
+      const vs = await kvs.stream("data");
+      expect([...(await collectBytes(vs))]).toEqual([...bytes]);
+      await vs.dispose();
     });
   });
 });

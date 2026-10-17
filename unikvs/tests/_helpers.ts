@@ -1,4 +1,7 @@
 import type { IMiddleware, IPipelineContext, IStorage } from "@unikvs/core";
+import type { Memory } from "@unikvs/memory";
+
+import { CloseContext } from "../src/_contexts.js";
 
 /**
  * 任意のタイミングでテスト側から解放できるゲートです。
@@ -96,6 +99,17 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
   public async close(c: IStorage.CloseContext): Promise<void> {
     await this.record("close", c, undefined);
     this.isOpen = false;
+  }
+
+  /**
+   * `await using` で自動的に閉じるための破棄処理です。開いているときだけ close を呼びます。
+   */
+  public async [Symbol.asyncDispose](): Promise<void> {
+    if (!this.isOpen) {
+      return;
+    }
+
+    await this.close(new CloseContext({ signal: AbortSignal.timeout(10e3) }));
   }
 
   public async write(c: IStorage.WriteContext, data: TData): Promise<void> {
@@ -287,6 +301,17 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
     this.isOpen = false;
   }
 
+  /**
+   * `await using` で自動的に閉じるための破棄処理です。開いているときだけ close を呼びます。
+   */
+  public async [Symbol.asyncDispose](): Promise<void> {
+    if (!this.isOpen) {
+      return;
+    }
+
+    await this.close(new CloseContext({ signal: AbortSignal.timeout(10e3) }));
+  }
+
   public mapKey(c: IMiddleware.MapKeyContext): string {
     // 記録は同期的には行わず、呼び出し回数の検証用に残します (非同期フックは呼びません)。
     this.calls.push({
@@ -375,6 +400,34 @@ export class FakeStreamMiddleware<_TChunk = any> extends FakeMiddleware {
 }
 
 /**
+ * encode で接尾辞を付与し、decode で除去するミドルウェアです。
+ * パイプラインの構成順とオニオン実行の検証に使用します。
+ */
+export class TagMiddleware extends FakeMiddleware {
+  readonly #tag: string;
+
+  public constructor(tag: string) {
+    super(`Tag(${tag})`);
+    this.#tag = tag;
+  }
+
+  public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("encode", { data: c.source, c });
+    c.destination = `${String(c.source)}${this.#tag}`;
+    await next!();
+  }
+
+  public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
+    const [c, next] = args;
+    await this.record("decode", { data: c.source, c });
+    const data = String(c.source);
+    c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
+    await next!();
+  }
+}
+
+/**
  * チャンク列を順に流す ReadableStream を作成します。
  */
 export function streamOf<T>(chunks: readonly T[]): ReadableStream<T> {
@@ -416,6 +469,32 @@ export async function collectBytes(
   }
 
   return merged;
+}
+
+/**
+ * Memory ストレージが内部で保持する Map をテストから参照するためのアクセサーです。
+ * どのデータが実際にどのストレージへ書き込まれたかを確認するために使用します。
+ */
+export function mapOf(storage: Memory): Map<string, unknown> {
+  return (storage as unknown as { map: Map<string, unknown> }).map;
+}
+
+/**
+ * データの SHA-256 ハッシュを 16 進文字列として計算します。
+ * チェックサム検証の期待値を作るために使用します。
+ */
+export async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * データが gzip のマジックナンバー (0x1f 0x8b) で始まるかを確認します。
+ * 圧縮が実際に適用されたことを検証するために使用します。
+ */
+export function isGzip(data: Uint8Array): boolean {
+  return data[0] === 0x1f && data[1] === 0x8b;
 }
 
 /**

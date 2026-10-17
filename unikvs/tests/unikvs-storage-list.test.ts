@@ -15,7 +15,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     const probe = new FakeMiddleware("probe");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(probe)
       .persist(a)
       .persist(b)
@@ -36,9 +36,6 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     expect(probe.callsOf("encode")).toHaveLength(1);
     expect(probe.callsOf("encode")[0]?.vars?.get("tag")).toBe("t1");
     expect(probe.callsOf("encode")[0]?.key).toBe("foo");
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("get は読取元からデコードして返す", async ({ expect }) => {
@@ -46,7 +43,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     const probe = new FakeMiddleware("probe");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .connect(probe)
       .persist(cache)
       .persist(server)
@@ -61,9 +58,6 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     expect(value).toBe("value");
     expect(server.callsOf("read")[0]?.vars?.get("tag")).toBe("t2");
     expect(probe.callsOf("decode")).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("has と delete と clear は全宛先で実行される", async ({ expect }) => {
@@ -72,11 +66,11 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const b = new FakeStorage("b");
     a.map.set("foo", "value");
     b.map.set("foo", "value");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
     await kvs.open();
 
     // 実行と検証: has
-    expect(await kvs.has("foo")).toBe(true);
+    await expect(kvs.has("foo")).resolves.toBe(true);
     // 実行と検証: delete
     await kvs.delete("foo");
     expect(a.map.has("foo")).toBe(false);
@@ -88,15 +82,12 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     await kvs.clear();
     expect(a.map.has("foo")).toBe(false);
     expect(b.map.has("foo")).toBe(false);
-
-    // 後片付け
-    await kvs.close();
   });
 
   test("stream の set/get はストリームで往復する", async ({ expect }) => {
     // 準備
     const storage = new FakeStreamStorage("s");
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
     await kvs.open();
 
     // 実行: 書き込み
@@ -112,16 +103,14 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
 
     // 検証
     expect(chunks).toHaveLength(1);
-
-    // 後片付け
-    await kvs.close();
+    expect(chunks[0]).toEqual(new Uint8Array([1, 2]));
   });
 
   test("fork の分岐先ごとに異なるストレージへ書き込まれる", async ({ expect }) => {
     // 準備
     const mainStorage = new FakeStorage("main");
     const branchStorage = new FakeStorage("branch");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(mainStorage)
       .fork(UniKvs.branch().persist(branchStorage))
       .create();
@@ -133,9 +122,6 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     // 検証
     expect(mainStorage.map.get("foo")).toBe("value");
     expect(branchStorage.map.get("foo")).toBe("value");
-    expect(await kvs.get("foo")).toBe("value");
-
-    // 後片付け
-    await kvs.close();
+    await expect(kvs.get("foo")).resolves.toBe("value");
   });
 });
