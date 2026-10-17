@@ -1,0 +1,58 @@
+---
+title: "はじめに"
+description: "UniKVS の概要と、ドキュメントの読み進め方を説明します。"
+---
+
+UniKVS は TypeScript 製のモジュラーでポータブルな KVS クライアントです。透過的にデータを変換するトランスフォーマーと、複数バックエンドに書き込むストレージを、ビルダーパターンで組み合わせられます。
+
+主な特徴は次のとおりです。
+
+- トランスフォーマーによる透過的なエンコード・デコードに対応します。
+- 複数のストレージへの並列書き込みに対応します。
+- キーごとに値の型を定義し、利用可能な操作を型レベルで制御します。
+- Valibot スキーマによる入出力値の実行時検証に対応します。
+- 単一値とストリームの両方に対応します。
+- `AbortSignal` によるキャンセルと実行時変数の受け渡しに対応します。
+- Node.js とブラウザーの両方に対応したストレージを用意しています。
+
+## 最小の例 [#minimal-example]
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array<ArrayBuffer>>;
+}>()
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+await kvs.set("foo", Uint8Array.from([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+
+await kvs.close();
+```
+
+ビルダーで設定を組み立て、`create()` でクライアントを作り、`open()` から `close()` までが一般的な流れです。
+
+## ドキュメントの読み進め方 [#how-to-read]
+
+<CardGroup cols={2}>
+  <Card title="インストール" href="./installation" icon="download">
+    パッケージをインストールします。
+  </Card>
+  <Card title="クイックスタート" href="./quickstart" icon="rocket">
+    最小の構成で基本操作までを試します。
+  </Card>
+  <Card title="パイプライン" href="./pipeline" icon="git-branch">
+    トランスフォーマーとストレージの組み立て方を学びます。
+  </Card>
+  <Card title="値の型" href="./value-types" icon="shapes">
+    キーごとに使える操作を型で制御します。
+  </Card>
+</CardGroup>
+
+概念や設計の背景知識は[基本概念](/concepts)に、目的別の手順は[ガイド](/guides)にまとめています。保存先の選び方に迷ったら、[ストレージ比較](/reference/comparison)が指針になります。

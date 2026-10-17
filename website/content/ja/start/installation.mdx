@@ -1,0 +1,63 @@
+---
+title: "インストール"
+description: "UniKVS のパッケージのインストール方法を説明します。"
+---
+
+`unikvs` 本体に加えて、利用するストレージとトランスフォーマーのパッケージをインストールします。
+
+## インストール [#install]
+
+保存先は、まず [`@unikvs/memory`](/packages/memory) が最も手軽です。`unikvs` 本体とあわせてインストールしてください。
+
+```package-install
+npm i unikvs @unikvs/memory
+```
+
+<Tabs>
+  <Tab title="pnpm">
+    ```package-install
+    pnpm add unikvs @unikvs/memory
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```package-install
+    yarn add unikvs @unikvs/memory
+    ```
+  </Tab>
+  <Tab title="bun">
+    ```package-install
+    bun add unikvs @unikvs/memory
+    ```
+  </Tab>
+</Tabs>
+
+圧縮や検証を透過的に行いたい場合は、トランスフォーマーのパッケージも追加します。
+
+```package-install
+npm i unikvs @unikvs/fs.node @unikvs/compression
+```
+
+パッケージの一覧は[パッケージリファレンス](/packages)を参照してください。
+
+## ランタイムの確認 [#runtime]
+
+UniKVS は Node.js と Bun とブラウザーで動作します。ただしストレージパッケージの多くは、動かせる環境が限定されています。
+
+| パッケージ        | Node.js | Bun    | ブラウザー |
+| ----------------- | ------- | ------ | ---------- |
+| `unikvs`          | ✅      | ✅     | ✅         |
+| `@unikvs/memory`  | ✅      | ✅     | ✅         |
+| `@unikvs/fs.node` | ✅      | ❌     | ❌         |
+| `@unikvs/opfs`    | ❌      | ❌     | ✅         |
+
+環境ごとの対応表は[パッケージリファレンス](/packages)と[ストレージ比較](/reference/comparison)を参照してください。
+
+## Valibot を使う場合 [#valibot]
+
+Valibot スキーマによる検証を使う場合は、`valibot` を別途インストールします。
+
+```package-install
+npm i valibot
+```
+
+スキーマ検証については[スキーマによる検証](./validation)で説明します。

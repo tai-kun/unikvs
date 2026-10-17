@@ -125,7 +125,7 @@ flowchart LR
 - 書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御します。書き戻したいストレージの前段に配置し、`disable()` で拒否に切り替えられます。配置がないストレージへの書き戻しはスキップし、警告ログに残ります。
 - 拒否時のエラーは [`@unikvs/core`](/packages/core) の `RepairNotAllowedError` で、`meta.names` に書き戻し先の表示名が入ります。
 - 書き戻しの警告は `["@unikvs/*", "@unikvs/allow-repair"]` のカテゴリーで出力します。
-- 書き戻しの書き込みには、実行時変数に `unikvs:repair: true` が付与されます。通常の書き込みと区別したい場合に使えます。
+- 書き戻しの要求は実行時変数ではなく、`get`・`stream` のコンテキストの `repair` フィールドで伝えます。`repair.enabled` と `repair.targets` で書き戻しの有無と対象の表示名を参照できます。
 - 読み取りから書き戻しまでは、同じキーへの書き込みと直列化されます。`stream` の場合は、読み切るか破棄するまで書き込みロックを保持します。
 - 既定は無効です。書き込み増幅を避けたい場合は指定しないでください。
 

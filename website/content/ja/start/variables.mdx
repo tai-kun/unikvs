@@ -1,0 +1,37 @@
+---
+title: "実行時変数とキャンセル"
+description: "UniKVS で実行時変数 (vars) を渡す方法と AbortSignal によるキャンセルを説明します。"
+---
+
+すべての操作は、実行時変数 (`vars`) の受け渡しと `AbortSignal` によるキャンセルに対応します。引数はオプションオブジェクト形式と位置引数形式のどちらでも指定できます。
+
+## 実行時変数 [#variables]
+
+操作ごとに `vars` を渡すと、プラグインが実行時の設定を読み取れます。チェックサムの変数指定などがその例です。
+
+```ts
+// 操作ごとに vars を渡します
+await kvs.set("foo", new Uint8Array([1]), {
+  vars: { region: "us-east-1" },
+});
+
+// 配列形式でも指定できます
+await kvs.get("foo", {
+  vars: [["region", "us-east-1"]],
+});
+```
+
+変数は `Record`・`Map`・エントリー配列・`Variables` のいずれでも指定できます。変数そのものの仕組みは、[実行時変数](/concepts/variables)を参照してください。
+
+## キャンセル [#cancellation]
+
+`AbortSignal` で操作を中断できます。中断した操作は理由とともに失敗します。
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
+```
+
+長時間かかる `set` やストリームの転送で特に有効です。ストリーム操作の詳細は[ストリーミング](/guides/streaming)を参照してください。

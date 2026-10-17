@@ -3,25 +3,9 @@ title: "UniKVS"
 description: "TypeScript 製のモジュラーな KVS クライアント UniKVS の概要とドキュメント案内です。"
 ---
 
-## UniKVSとは [#what-is-unikvs]
-
 UniKVS は TypeScript 製のモジュラーでポータブルな KVS クライアントです。透過的にデータを変換するトランスフォーマーと、複数バックエンドに書き込むストレージを、ビルダーパターンで組み合わせます。
 
-主な特徴は次のとおりです。
-
-- トランスフォーマーによる透過的なエンコード・デコードに対応します。
-- 複数のストレージへの並列書き込みに対応します。
-- キーごとに値の型を定義し、利用可能な操作を型レベルで制御します。
-- Valibot スキーマによる入出力値の実行時検証に対応します。
-- 単一値とストリームの両方に対応します。
-- `AbortSignal` によるキャンセルと実行時変数の受け渡しに対応します。
-- Node.js とブラウザーの両方に対応したストレージを用意しています。
-
 ## クイックスタート [#quickstart]
-
-```package-install
-npm i unikvs @unikvs/compression @unikvs/fs.node
-```
 
 ```ts
 import { Compression } from "@unikvs/compression";
@@ -53,102 +37,51 @@ await kvs.close();
 ## ドキュメントの読み進め方 [#how-to-read]
 
 <CardGroup cols={2}>
-  <Card title="はじめに" href="./getting-started" icon="rocket">
+  <Card title="はじめに" href="/start" icon="rocket">
     インストールから基本操作までの最短手順を試します。
   </Card>
-  <Card title="基本概念" href="./concepts" icon="book-open">
+  <Card title="基本概念" href="/concepts" icon="book-open">
     パイプライン、値の型、変数の仕組みを理解します。
   </Card>
-  <Card title="ガイド" href="./guides" icon="layers">
+  <Card title="ガイド" href="/guides" icon="layers">
     目的別の使い方を確認します。
   </Card>
-  <Card title="ストレージ比較" href="./reference/comparison" icon="database">
+  <Card title="ストレージ比較" href="/reference/comparison" icon="database">
     保存先の選択に迷った場合の指針です。
   </Card>
 </CardGroup>
 
-## パッケージ一覧 [#packages]
+## 主な特徴 [#features]
+
+- トランスフォーマーによる透過的なエンコード・デコードに対応します。
+- 複数のストレージへの並列書き込みに対応します。
+- キーごとに値の型を定義し、利用可能な操作を型レベルで制御します。
+- Valibot スキーマによる入出力値の実行時検証に対応します。
+- 単一値とストリームの両方に対応します。
+- `AbortSignal` によるキャンセルと実行時変数の受け渡しに対応します。
+- Node.js とブラウザーの両方に対応したストレージを用意しています。
+
+## パッケージ [#packages]
+
+パッケージごとの使い方は[パッケージリファレンス](/packages)にまとめています。代表的なパッケージは次のとおりです。
 
 <CardGroup cols={2}>
-  <Card title="UniKVS" href="./packages/unikvs" icon="package">
+  <Card title="UniKVS" href="/packages/unikvs" icon="package">
     設定ビルダーと KVS クライアント本体です。
   </Card>
-  <Card title="@unikvs/core" href="./packages/core" icon="cpu">
-    全パッケージ共有の型とエラー基盤です。
-  </Card>
-  <Card title="@unikvs/utils" href="./packages/utils" icon="wrench">
-    プラグイン実装者向けの共有関数群です。
-  </Card>
-  <Card title="@unikvs/compression" href="./packages/compression" icon="archive">
-    gzip・deflate・deflate-raw による圧縮と展開を行います。
-  </Card>
-  <Card title="@unikvs/checksum" href="./packages/checksum" icon="shield-check">
-    MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の検証を行います。
-  </Card>
-  <Card title="@unikvs/json" href="./packages/json" icon="braces">
-    値を JSON に、ストリームでは JSON Lines に変換します。
-  </Card>
-  <Card title="@unikvs/superjson" href="./packages/superjson" icon="boxes">
-    Date・Map・Set・BigInt・undefined を保持したまま SuperJSON で変換します。
-  </Card>
-  <Card title="@unikvs/cbor" href="./packages/cbor" icon="binary">
-    値を CBOR に、ストリームでは CBOR シーケンスに変換します。
-  </Card>
-  <Card title="@unikvs/memory" href="./packages/memory" icon="zap">
+  <Card title="@unikvs/memory" href="/packages/memory" icon="zap">
     メモリー上に任意のデータを保存します。
   </Card>
-  <Card title="@unikvs/fs.node" href="./packages/fs-node" icon="hard-drive">
+  <Card title="@unikvs/compression" href="/packages/compression" icon="archive">
+    gzip・deflate・deflate-raw による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/checksum" href="/packages/checksum" icon="shield-check">
+    MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の検証を行います。
+  </Card>
+  <Card title="@unikvs/fs.node" href="/packages/fs-node" icon="hard-drive">
     Node.js のローカルファイルシステムに保存します。
   </Card>
-  <Card title="@unikvs/fs.bun" href="./packages/fs-bun" icon="hard-drive">
-    Bun のローカルファイルシステムに保存します。
-  </Card>
-  <Card title="@unikvs/redis.bun" href="./packages/redis-bun" icon="database">
-    Bun の Redis クライアントで Redis に保存します。
-  </Card>
-  <Card title="@unikvs/s3.node" href="./packages/s3-node" icon="cloud">
-    S3 互換のオブジェクトストレージに保存します。
-  </Card>
-  <Card title="@unikvs/s3.bun" href="./packages/s3-bun" icon="cloud">
-    Bun で S3 互換のオブジェクトストレージに保存します。
-  </Card>
-  <Card title="@unikvs/opfs" href="./packages/opfs" icon="globe">
+  <Card title="@unikvs/opfs" href="/packages/opfs" icon="globe">
     ブラウザーの OPFS に保存します。
   </Card>
-  <Card title="@unikvs/indexeddb" href="./packages/indexeddb" icon="table">
-    ブラウザーの IndexedDB に保存します。
-  </Card>
-  <Card title="@unikvs/writeonly" href="./packages/writeonly" icon="lock">
-    既存のストレージを書き込み専用にします。
-  </Card>
-  <Card title="@unikvs/debug" href="./packages/debug" icon="bug">
-    読み書きされる操作とデータのデバッグ情報をログに記録します。
-  </Card>
-  <Card title="@unikvs/passthrough" href="./packages/passthrough" icon="arrow-right-left">
-    データを何も変換せずそのまま透過させます。
-  </Card>
 </CardGroup>
-
-## 動作環境 [#environments]
-
-| パッケージ            | Node.js        | Bun            | ブラウザー     |
-| --------------------- | -------------- | -------------- | -------------- |
-| `unikvs`              | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/core`        | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/utils`       | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/compression` | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/checksum`    | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/json`        | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/superjson`   | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/cbor`        | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/memory`      | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/fs.node`     | 対応します。   | 対応しません。 | 対応しません。 |
-| `@unikvs/fs.bun`      | 対応しません。 | 対応します。   | 対応しません。 |
-| `@unikvs/redis.bun`   | 対応しません。 | 対応します。   | 対応しません。 |
-| `@unikvs/s3.node`     | 対応します。   | 対応しません。 | 対応しません。 |
-| `@unikvs/s3.bun`      | 対応しません。 | 対応します。   | 対応しません。 |
-| `@unikvs/opfs`        | 対応しません。 | 対応しません。 | 対応します。   |
-| `@unikvs/indexeddb`   | 対応しません。 | 対応しません。 | 対応します。   |
-| `@unikvs/writeonly`   | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/debug`       | 対応します。   | 対応します。   | 対応します。   |
-| `@unikvs/passthrough` | 対応します。   | 対応します。   | 対応します。   |
