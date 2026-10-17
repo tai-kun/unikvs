@@ -1499,12 +1499,9 @@ export class PipelineGraph {
               } else {
                 const child = await walk(entry.node, stream, nodeKey);
                 if (child === null) {
-                  // スキップされた部分木の分岐は解放します。
-                  try {
-                    await stream.cancel(new Error("Skipped branch"));
-                  } catch {
-                    // 解放に失敗してもスキップの判断を優先します。
-                  }
+                  // スキップされた部分木の分岐は解放します。tee の cancel は兄弟分岐の cancel/drain まで
+                  // 解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
+                  Promise.try(() => stream.cancel(new Error("Skipped branch"))).catch(() => {});
                 }
               }
             }
@@ -1583,13 +1580,10 @@ export class PipelineGraph {
         if (onNodeError?.(ex, activeLeaves)) {
           // 構築済みの出力は親の入力を pipeThrough でロックしており、親側からの解放は失敗するため、出力側からキャンセルを伝播させます。
           // next() 前の失敗で output が未確定のときは、設定済みの destination を直接キャンセルします。
+          // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
           const abandoned = output ?? ctx.destination;
           if (abandoned !== undefined) {
-            try {
-              await abandoned.cancel(ex);
-            } catch {
-              // キャンセルに失敗してもスキップの判断を優先します。
-            }
+            Promise.try(() => abandoned.cancel(ex)).catch(() => {});
           }
 
           return null;
@@ -1656,11 +1650,9 @@ export class PipelineGraph {
             try {
               const child = await walk(entry.node, stream, scope.key);
               if (child === null) {
-                try {
-                  await stream.cancel(new Error("Skipped branch"));
-                } catch {
-                  // 解放に失敗してもスキップの判断を優先します。
-                }
+                // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません
+                // (未処理 rejection も残しません)。
+                Promise.try(() => stream.cancel(new Error("Skipped branch"))).catch(() => {});
               }
             } catch (ex) {
               if (onNodeError) {
@@ -1668,11 +1660,9 @@ export class PipelineGraph {
                   (leaf) => isActive === undefined || isActive(leaf),
                 );
                 if (onNodeError(ex, leaves)) {
-                  try {
-                    await stream.cancel(ex);
-                  } catch {
-                    // 解放に失敗してもスキップの判断を優先します。
-                  }
+                  // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません
+                  // (未処理 rejection も残しません)。
+                  Promise.try(() => stream.cancel(ex)).catch(() => {});
                   continue;
                 }
               }
