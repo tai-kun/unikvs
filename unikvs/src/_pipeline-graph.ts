@@ -480,65 +480,6 @@ function applyMapKey(middleware: UniKvsMiddleware, key: string, scope: Operation
   return middleware.mapKey(c);
 }
 
-/**
- * 単一ミドルウェアの `encode` を実行し、変換後のデータを返します。
- *
- * `next` に下流の実行を渡すことで、オニオン実行となり、下流の `set` が上流の `await next()` 後の `get` に見えます。
- * 共有ストアのため、変数は全コンテキストで同一参照です。
- *
- * @param middleware 対象のミドルウェアです。
- * @param scope 操作共通の実行時情報です。
- * @param source 変換前のデータです。
- * @param next 下流の実行です。省略時はダミーです。
- * @returns 変換後のデータを返します。
- */
-async function applyEncode(
-  middleware: UniKvsMiddleware,
-  scope: OperationScope,
-  source: unknown,
-  next: IMiddleware.INext = async () => {},
-): Promise<unknown> {
-  scope.signal.throwIfAborted();
-  const c = new EncodeContext({
-    signal: scope.signal,
-    key: scope.key,
-    source,
-    store: scope.store,
-  });
-  await middleware.encode(c, next);
-  scope.signal.throwIfAborted();
-
-  return requireDestination(middleware, c, "encode");
-}
-
-/**
- * 単一ミドルウェアの `encodeStream` を実行し、変換後のストリームを返します。
- *
- * @param middleware 対象のミドルウェアです。
- * @param scope 操作共通の実行時情報です。
- * @param source 変換前のストリームです。
- * @param next 下流の実行です。省略時はダミーです。
- * @returns 変換後のストリームを返します。
- */
-async function applyEncodeStream(
-  middleware: UniKvsMiddleware,
-  scope: OperationScope,
-  source: IReadableStream,
-  next: IMiddleware.INext = async () => {},
-): Promise<IReadableStream> {
-  scope.signal.throwIfAborted();
-  const c = new EncodeStreamContext({
-    signal: scope.signal,
-    key: scope.key,
-    source,
-    store: scope.store,
-  });
-  await middleware.encodeStream(c, next);
-  scope.signal.throwIfAborted();
-
-  return requireStreamDestination(middleware, c, "encode");
-}
-
 // -------------------------------------------------------------------------------------------------
 //
 // LeafResolver
@@ -1228,66 +1169,156 @@ export class PipelineGraph {
         return;
       }
 
-      let output = input;
-      let nodeKey = parentKey;
       const shared = activeLeaves.length >= 2;
 
       // 単一対象の節でも許可があれば再エンコードを行います。
       // 許可がなければ書き込みに到達しないため、副作用のないスキップに正規化しています。
-      if (shared || activeLeaves[0]!.canRepair) {
+      // ミドルウェアを実行せず、下流へそのまま伝播します。
+      if (!(shared || activeLeaves[0]!.canRepair)) {
+        scope.signal.throwIfAborted();
+
+        for (const entry of node.entries) {
+          if (entry.kind === "node") {
+            await walk(entry.node, input, parentKey);
+          } else {
+            if (!isTarget(entry.leaf)) {
+              continue;
+            }
+            if (!entry.leaf.canRepair) {
+              skipDenied(entry.leaf);
+              continue;
+            }
+
+            writeLeaf(entry.leaf, input, parentKey);
+          }
+        }
+
+        return;
+      }
+
+      scope.signal.throwIfAborted();
+
+      // オニオン実行により、下流の `set` が上流の `await next()` 後の `get` に見えます (共有ストアのため)。
+      // 子走査は `next()` 内で行い、親ミドルウェアの後段としてネスト実行します。
+      const ctx = new EncodeContext({
+        key: scope.key,
+        store: scope.store,
+        signal: scope.signal,
+        source: input,
+      });
+      let nodeKey = parentKey;
+      let nextCalled = false;
+      let nextSettled = false;
+      let downstreamStarted = false;
+      const next: IMiddleware.INext = function next() {
+        if (nextCalled) {
+          return Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
+        }
+        nextCalled = true;
+
+        // next() の実行後、即座に destination の確認と凍結を行います。
+        let encoded: unknown;
         try {
-          scope.signal.throwIfAborted();
-
-          output = await applyEncode(node.middleware, scope, input);
-          nodeKey = applyMapKey(node.middleware, parentKey, scope);
+          encoded = requireDestination(node.middleware, ctx, "encode");
+          freezeDestination(ctx);
         } catch (ex) {
-          // 意図的な中断時は中断理由で失敗します。
-          if (scope.signal.aborted) {
-            if (shared) {
-              throw ex;
-            }
+          return Promise.reject(ex);
+        }
 
-            return;
-          }
-          if (ex instanceof RepairNotAllowedError) {
-            repairLogger.warn`Failed to repair a storage: ${ex}`;
+        return Promise.try(async () => {
+          try {
+            // `mapKey` は親出力確定後に、共有ストアで適用します。
+            // ここでの失敗は節固有のセットアップ失敗であり、下流開始前として扱います。
+            nodeKey = applyMapKey(node.middleware, parentKey, scope);
+            scope.signal.throwIfAborted();
+            downstreamStarted = true;
 
-            if (throwOnRepairDenied) {
-              const denied = new RepairNotAllowedError({
-                names: activeLeaves.map((leaf) => leaf.name),
-                cause: ex,
-              });
-              // 複数対象が共有する節の拒否は、旧実装同様に書き込み開始前に確定させます。
-              if (shared) {
-                throw denied;
+            for (const entry of node.entries) {
+              if (entry.kind === "node") {
+                await walk(entry.node, encoded, nodeKey);
+              } else {
+                if (!isTarget(entry.leaf)) {
+                  continue;
+                }
+                if (!entry.leaf.canRepair) {
+                  skipDenied(entry.leaf);
+                  continue;
+                }
+
+                writeLeaf(entry.leaf, encoded, nodeKey);
               }
-
-              recordTraversalDenial(denied);
             }
-
-            return;
+          } finally {
+            nextSettled = true;
           }
+        });
+      };
 
-          logger.error`Failed to repair a storage: ${ex}`;
+      try {
+        await node.middleware.encode(ctx, next);
+        scope.signal.throwIfAborted();
+        if (!nextCalled) {
+          throw new MiddlewareNextNotCalledError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+        }
+        if (!nextSettled) {
+          throw new MiddlewareNextNotAwaitedError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+        }
+      } catch (ex) {
+        // 意図的な中断時は中断理由で失敗します。
+        if (scope.signal.aborted) {
+          if (shared) {
+            throw ex;
+          }
 
           return;
         }
-      }
-
-      for (const entry of node.entries) {
-        if (entry.kind === "node") {
-          await walk(entry.node, output, nodeKey);
-        } else {
-          if (!isTarget(entry.leaf)) {
-            continue;
-          }
-          if (!entry.leaf.canRepair) {
-            skipDenied(entry.leaf);
-            continue;
-          }
-
-          writeLeaf(entry.leaf, output, nodeKey);
+        // 規約違反はプログラミングエラーであり、握り潰さずに投げます。
+        if (
+          ex instanceof MiddlewareNextNotCalledError ||
+          ex instanceof MiddlewareNextNotAwaitedError ||
+          ex instanceof MiddlewareNextCalledMultipleTimesError ||
+          ex instanceof MiddlewareDestinationMissingError ||
+          ex instanceof MiddlewareDestinationFrozenError
+        ) {
+          throw ex;
         }
+        // 下流開始後の失敗は子節で確定済み (単一拒否は記録、共有拒否は投げ) のため、そのまま伝播します。
+        if (downstreamStarted) {
+          throw ex;
+        }
+        if (ex instanceof RepairNotAllowedError) {
+          repairLogger.warn`Failed to repair a storage: ${ex}`;
+
+          if (throwOnRepairDenied) {
+            const denied = new RepairNotAllowedError({
+              names: activeLeaves.map((leaf) => leaf.name),
+              cause: ex,
+            });
+            // 複数対象が共有する節の拒否は、旧実装同様に書き込み開始前に確定させます。
+            if (shared) {
+              throw denied;
+            }
+
+            recordTraversalDenial(denied);
+          }
+
+          return;
+        }
+
+        logger.error`Failed to repair a storage: ${ex}`;
+
+        return;
       }
     };
 
@@ -1347,6 +1378,8 @@ export class PipelineGraph {
 
     // 段階 1 は共有節の単一実行と tee 分岐です。対象外の部分木は作りません。
     // 旧 `planNode` + `buildGraph` の 2 段階を、新 `encodeStream` の直接実行に統合しています。
+    // オニオン実行により、下流の `set` が上流の `await next()` 後の `get` に見えます (共有ストアのため)。
+    // 子走査と tee 分岐は `next()` 内で行い、親ミドルウェアの後段としてネスト実行します。
     const walk = async (
       node: PipelineNode,
       input: IReadableStream,
@@ -1359,13 +1392,131 @@ export class PipelineGraph {
 
       scope.signal.throwIfAborted();
 
-      let output: IReadableStream;
-      let nodeKey: string;
+      const ctx = new EncodeStreamContext({
+        key: scope.key,
+        store: scope.store,
+        signal: scope.signal,
+        source: input,
+      });
+      let nodeKey: string = parentKey;
+      let output: IReadableStream | undefined;
+      let nextCalled = false;
+      let nextSettled = false;
+      let downstreamStarted = false;
+      let emptyBranches = false;
+      const next: IMiddleware.INext = function next() {
+        if (nextCalled) {
+          return Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
+        }
+        nextCalled = true;
+
+        // next() の実行後、即座に destination の確認と凍結を行います。
+        let encoded: IReadableStream;
+        try {
+          encoded = requireStreamDestination(node.middleware, ctx, "encode");
+          freezeDestination(ctx);
+        } catch (ex) {
+          return Promise.reject(ex);
+        }
+
+        return Promise.try(async () => {
+          try {
+            // `mapKey` は親出力確定後に、共有ストアで適用します。
+            // ここでの失敗は節固有のセットアップ失敗であり、下流開始前として扱います。
+            nodeKey = applyMapKey(node.middleware, parentKey, scope);
+            scope.signal.throwIfAborted();
+            output = encoded;
+            streams.add(output);
+            downstreamStarted = true;
+
+            // 直下の分岐を登録順に tee で割り当てます。最後の分岐は tee せず残りを使います。
+            const branchEntries = node.entries.filter((entry) => {
+              if (entry.kind === "leaf") {
+                return isActive === undefined || isActive(entry.leaf);
+              }
+
+              const leaves = entry.node.allLeaves;
+              return isActive === undefined || leaves.some(isActive);
+            });
+            if (branchEntries.length === 0) {
+              emptyBranches = true;
+              return;
+            }
+
+            const assigned: IReadableStream[] = [];
+            let current = output;
+            for (let i = 0; i < branchEntries.length; i++) {
+              if (i < branchEntries.length - 1) {
+                const [branch, rest] = current.tee();
+                streams.add(branch);
+                streams.add(rest);
+                assigned.push(branch);
+                current = rest;
+              } else {
+                assigned.push(current);
+              }
+            }
+
+            for (let i = 0; i < branchEntries.length; i++) {
+              const entry = branchEntries[i]!;
+              const stream = assigned[i]!;
+              if (entry.kind === "leaf") {
+                targets.push({ leaf: entry.leaf, key: nodeKey, stream });
+              } else {
+                const child = await walk(entry.node, stream, nodeKey);
+                if (child === null) {
+                  // スキップされた部分木の分岐は解放します。
+                  try {
+                    await stream.cancel(new Error("Skipped branch"));
+                  } catch {}
+                }
+              }
+            }
+          } finally {
+            nextSettled = true;
+          }
+        });
+      };
+
       try {
-        output = await applyEncodeStream(node.middleware, scope, input);
-        streams.add(output);
-        nodeKey = applyMapKey(node.middleware, parentKey, scope);
+        await node.middleware.encodeStream(ctx, next);
+        scope.signal.throwIfAborted();
+        if (!nextCalled) {
+          throw new MiddlewareNextNotCalledError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+        }
+        if (!nextSettled) {
+          throw new MiddlewareNextNotAwaitedError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+        }
       } catch (ex) {
+        // 意図的な中断時は中断理由で失敗します。
+        if (scope.signal.aborted) {
+          throw ex;
+        }
+        // 規約違反はプログラミングエラーであり、`onNodeError` を経由せずに投げます。
+        if (
+          ex instanceof MiddlewareNextNotCalledError ||
+          ex instanceof MiddlewareNextNotAwaitedError ||
+          ex instanceof MiddlewareNextCalledMultipleTimesError ||
+          ex instanceof MiddlewareDestinationMissingError ||
+          ex instanceof MiddlewareDestinationFrozenError
+        ) {
+          throw ex;
+        }
+        // 下流開始後の失敗は子節で確定済みのため、そのまま伝播し、根直下で `onNodeError` に分類させます。
+        if (downstreamStarted) {
+          throw ex;
+        }
         if (onNodeError?.(ex, activeLeaves)) {
           return null;
         }
@@ -1373,47 +1524,8 @@ export class PipelineGraph {
         throw ex;
       }
 
-      // 直下の分岐を登録順に tee で割り当てます。最後の分岐は tee せず残りを使います。
-      const branchEntries = node.entries.filter((entry) => {
-        if (entry.kind === "leaf") {
-          return isActive === undefined || isActive(entry.leaf);
-        }
-
-        const leaves = entry.node.allLeaves;
-        return isActive === undefined || leaves.some(isActive);
-      });
-      if (branchEntries.length === 0) {
+      if (emptyBranches || output === undefined) {
         return null;
-      }
-
-      const assigned: IReadableStream[] = [];
-      let current = output;
-      for (let i = 0; i < branchEntries.length; i++) {
-        if (i < branchEntries.length - 1) {
-          const [branch, rest] = current.tee();
-          streams.add(branch);
-          streams.add(rest);
-          assigned.push(branch);
-          current = rest;
-        } else {
-          assigned.push(current);
-        }
-      }
-
-      for (let i = 0; i < branchEntries.length; i++) {
-        const entry = branchEntries[i]!;
-        const stream = assigned[i]!;
-        if (entry.kind === "leaf") {
-          targets.push({ leaf: entry.leaf, key: nodeKey, stream });
-        } else {
-          const child = await walk(entry.node, stream, nodeKey);
-          if (child === null) {
-            // スキップされた部分木の分岐は解放します。
-            try {
-              await stream.cancel(new Error("Skipped branch"));
-            } catch {}
-          }
-        }
       }
 
       return { key: nodeKey, output };
