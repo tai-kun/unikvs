@@ -1,8 +1,4 @@
-import {
-  type IMiddleware,
-  type IReadableStream,
-  RepairNotAllowedError,
-} from "@unikvs/core";
+import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
 import { combineSignals } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
@@ -819,6 +815,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     operationVars: Map<string, unknown>,
     signal: AbortSignal,
     con: Connection,
+    progress: { pluginsStarted: boolean },
   ): Promise<void> {
     const lock = await asyncmux(this, signal);
     try {
@@ -832,6 +829,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         const closeFns: [
           () => Promise<void>,
+          () => Promise<void>,
           plugin: "storage" | "middleware",
           name: string,
           index: number,
@@ -840,14 +838,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         // ストレージのクローズ処理を登録します。
         // open と同じ方針でプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
         for (const [index, leaf] of this.#pipeline.leaves.entries()) {
+          const createContext = (): CloseContext =>
+            new CloseContext({
+              signal,
+              vars: new Map(operationVars).entries(),
+            });
+          // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
+          const createRetryContext = (): CloseContext =>
+            new CloseContext({
+              signal: AbortSignal.timeout(10e3),
+              vars: new Map(operationVars).entries(),
+            });
           closeFns.push([
-            async () => {
-              const c = new CloseContext({
-                signal,
-                vars: new Map(operationVars).entries(),
-              });
-              await leaf.storage.close(c);
-            },
+            () => leaf.storage.close(createContext()),
+            () => leaf.storage.retryClose(createRetryContext()),
             "storage",
             leaf.name,
             index,
@@ -856,14 +860,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         // ミドルウェアのクローズ処理を登録します。
         for (const [index, plugin] of this.#pipeline.middlewares.entries()) {
+          const createContext = (): CloseContext =>
+            new CloseContext({
+              signal,
+              vars: new Map(operationVars).entries(),
+            });
+          // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
+          const createRetryContext = (): CloseContext =>
+            new CloseContext({
+              signal: AbortSignal.timeout(10e3),
+              vars: new Map(operationVars).entries(),
+            });
           closeFns.push([
-            async () => {
-              const c = new CloseContext({
-                signal,
-                vars: new Map(operationVars).entries(),
-              });
-              await plugin.close(c);
-            },
+            () => plugin.close(createContext()),
+            () => plugin.retryClose(createRetryContext()),
             "middleware",
             plugin.name,
             index,
@@ -871,22 +881,38 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         // すべての処理を並列に実行し、エラーが発生した場合は集約します。
+        progress.pluginsStarted = true;
         const errors: {
           plugin: "storage" | "middleware";
           name: string;
           index: number;
           reason: unknown;
         }[] = [];
+        const retries: (() => Promise<void>)[] = [];
         await Promise.all(
-          closeFns.map(async ([f, plugin, name, index]) => {
+          closeFns.map(async ([f, retry, plugin, name, index]) => {
             try {
               await f();
             } catch (ex) {
               errors.push({ plugin, name, index, reason: ex });
+              // 通常の close で再試行すると、close 失敗後に別の利用者が引き継いだ参照まで解放してしまいます。
+              retries.push(retry);
             }
           }),
         );
         if (errors.length > 0) {
+          // 失敗したプラグインだけを 1 回再試行します。
+          // 成功済みのプラグインを再 close すると、参照カウントが二重に解放され、共有している他の利用者の実体まで閉じてしまうためです。
+          await Promise.all(
+            retries.map(async (f) => {
+              try {
+                await f();
+              } catch (ex) {
+                logger.error`Failed to retry closing a plugin: ${ex}`;
+              }
+            }),
+          );
+
           throw new PluginOperationAggregateError({ action: "close", errors });
         }
       } finally {
@@ -932,29 +958,34 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
       }
 
-      return this.#close(operationVars, signal, con).catch(async (ex) => {
+      const progress = { pluginsStarted: false };
+      return this.#close(operationVars, signal, con, progress).catch(async (ex) => {
         // #close が失敗した場合、コネクションの AbortController はすでに abort 済みで、以降の操作がすべて即座に失敗する不整合な状態になります。
-        // そこで接続を破棄して isOpen=false の一貫した状態に戻し、プラグインのクローズ処理はできる範囲で実行します。
+        // そこで接続を破棄して isOpen=false の一貫した状態に戻します。
         if (this.#con === con) {
           this.#con = null;
 
-          const disposeSignal = AbortSignal.timeout(10e3);
-          await Promise.all(
-            [
-              ...this.#pipeline.leaves.map((leaf) => leaf.storage),
-              ...this.#pipeline.middlewares,
-            ].map(async (plugin) => {
-              try {
-                const c = new CloseContext({
-                  signal: disposeSignal,
-                  vars: new Map(operationVars).entries(),
-                });
-                await plugin.close(c);
-              } catch (ex) {
-                logger.error`Failed to close plugin after close failure: ${ex}`;
-              }
-            }),
-          );
+          // プラグインの close 段階まで到達していれば、成功分の参照は解放済みで、失敗分は #close が再試行済みです。
+          // ここで全プラグインを再度閉じると参照を二重解放してしまうため、close 段階に到達できなかったときだけ破棄します。
+          if (!progress.pluginsStarted) {
+            const disposeSignal = AbortSignal.timeout(10e3);
+            await Promise.all(
+              [
+                ...this.#pipeline.leaves.map((leaf) => leaf.storage),
+                ...this.#pipeline.middlewares,
+              ].map(async (plugin) => {
+                try {
+                  const c = new CloseContext({
+                    signal: disposeSignal,
+                    vars: new Map(operationVars).entries(),
+                  });
+                  await plugin.close(c);
+                } catch (ex) {
+                  logger.error`Failed to close plugin after close failure: ${ex}`;
+                }
+              }),
+            );
+          }
         }
 
         throw ex;
@@ -1015,10 +1046,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             key: target.key,
             store,
           });
-          await target.leaf.storage.onOtherWriteError(
-            c,
-            error,
-          );
+          await target.leaf.storage.onOtherWriteError(c, error);
         } catch (ex) {
           notifyErrors.push(ex);
         }
@@ -1213,29 +1241,47 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const store = this.#createOperationStore(varsOption);
 
-    const lock = await asyncmux.readonly(this, signal);
+    // `#setStream` へ所有権を渡す前の失敗では、ソースをロックしたままにしないよう派生ストリームをキャンセルします。
+    const stream = isReadableStream(value) ? value : null;
+    let ownsStream = stream !== null;
     try {
-      // ロック待機中に接続状態が変更されていないか再確認します。
-      if (this.#con === null) {
-        throw new UniKvsIsNotOpenError();
+      const lock = await asyncmux.readonly(this, signal);
+      try {
+        // ロック待機中に接続状態が変更されていないか再確認します。
+        if (this.#con === null) {
+          throw new UniKvsIsNotOpenError();
+        }
+
+        // 書き込み前の `use` による検証を行います。変異は後続のエンコード・書き込みに引き継がれます。
+        const useContext = new SetContext({
+          signal,
+          key,
+          store,
+        });
+        await this.#runMiddlewareUse("write", useContext);
+        // `use` による変異を操作変数に反映します。
+        // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
+        if (stream !== null) {
+          // これ以降の後始末は `#setStream` が所有します。
+          ownsStream = false;
+          await this.#setStream(io, signal, key, store, stream);
+        } else {
+          await this.#setPlain(io, signal, key, store, value);
+        }
+      } finally {
+        lock.release();
+      }
+    } catch (ex) {
+      if (ownsStream && stream !== null) {
+        // 消費されないストリームをキャンセルし、ソースの解放を伝播させます。
+        try {
+          await stream.cancel(ex);
+        } catch {
+          // キャンセルに失敗しても元の例外の伝播を優先します。
+        }
       }
 
-      // 書き込み前の `use` による検証を行います。変異は後続のエンコード・書き込みに引き継がれます。
-      const useContext = new SetContext({
-        signal,
-        key,
-        store,
-      });
-      await this.#runMiddlewareUse("write", useContext);
-      // `use` による変異を操作変数に反映します。
-      // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
-      if (isReadableStream(value)) {
-        await this.#setStream(io, signal, key, store, value);
-      } else {
-        await this.#setPlain(io, signal, key, store, value);
-      }
-    } finally {
-      lock.release();
+      throw ex;
     }
   }
 
@@ -1541,7 +1587,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 // パイプが中断されたときは分岐を解放し、tee が後続のチャンクを保持し続けないようにします。
                 try {
                   await target.stream.cancel(ex);
-                } catch {}
+                } catch {
+                  // 解放に失敗しても書き戻しの失敗処理を優先します。
+                }
 
                 // 意図的な中断時はエラーではありません。
                 if (repairSignal.aborted) {
@@ -1566,7 +1614,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             fillBranches.map(async (branch) => {
               try {
                 await branch.cancel(reason);
-              } catch {}
+              } catch {
+                // 解放に失敗しても残りの分岐の解放を優先します。
+              }
             }),
           );
           await Promise.all(fillTasks);
@@ -1677,7 +1727,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           } finally {
             try {
               lock.release();
-            } catch {}
+            } catch {
+              // 解放済みでも dispose を失敗させません。
+            }
           }
         };
 
@@ -1691,7 +1743,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           async () => {
             try {
               ioLockRegistry.unregister(unregisterToken);
-            } catch {}
+            } catch {
+              // 未登録でも dispose を失敗させません。
+            }
             await dispose();
           },
           beforeDispose,
@@ -1715,7 +1769,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           // getReadable の成功後にセットアップで失敗したときは、ソースストリームが保持するリソース (S3 レスポンスボディなど) を解放するためキャンセルします。
           try {
             await r.cancel(ex);
-          } catch {}
+          } catch {
+            // キャンセルに失敗しても元の例外の伝播を優先します。
+          }
         }
 
         lock.release();
