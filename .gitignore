@@ -224,5 +224,6 @@ $RECYCLE.BIN/
 .tmp/
 .vitest-attachments/
 __screenshots__/
+skills/
 .temp-*
 .tmp-*
