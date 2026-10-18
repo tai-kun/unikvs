@@ -154,9 +154,11 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     const cancel = new Error("USER-CANCEL");
     const storage = new FakeStorage("ng");
     storage.errors["open"] = new Error("open failed");
+    const entered = new Gate();
     const hangingStorage = new FakeStorage("hanging");
     hangingStorage.hook = async (call) => {
       if (call.method === "open") {
+        entered.open();
         await new Promise<never>((_, reject) => {
           call.signal?.addEventListener("abort", () => reject(call.signal?.reason), { once: true });
         });
@@ -167,7 +169,7 @@ describe("UniKvs - open 失敗時のロールバック", () => {
 
     // 実行
     const pending = kvs.open({ signal: controller.signal });
-    await Promise.resolve();
+    await entered.wait();
     controller.abort(cancel);
 
     // 検証

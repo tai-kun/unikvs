@@ -1,8 +1,10 @@
 import { defineConfig } from "vitest/config";
 
 import isDebugMode from "./_is-debug-mode.js";
+import proposalDecorators from "./_proposal-decorators.js";
 
 export default defineConfig({
+  plugins: [proposalDecorators()],
   oxc: {
     target: "es2020",
   },
