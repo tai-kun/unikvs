@@ -2032,7 +2032,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     using _ioLock = await io.lock({ signal });
     // 全ミドルウェアの `use` を実行します。
     const useContext = new ClearContext({
-      key: "",
       store,
       signal,
     });
@@ -2045,9 +2044,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       this.#pipeline.leaves.map(async (leaf, index) => {
         try {
           const c = new ClearContext({
-            signal,
-            key: "",
             store,
+            signal,
           });
           await leaf.storage.clear(c);
         } catch (ex) {

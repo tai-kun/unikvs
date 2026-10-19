@@ -262,7 +262,7 @@ test("pipeline-context の key と action と signal は絞られる", () => {
   expectTypeOf<IOpenContext["action"]>().toEqualTypeOf<"open">();
   expectTypeOf<ICloseContext["action"]>().toEqualTypeOf<"close">();
   expectTypeOf<IKeyedActionContext["action"]>().toEqualTypeOf<
-    "set" | "get" | "stream" | "has" | "delete" | "clear"
+    "set" | "get" | "stream" | "has" | "delete"
   >();
   expectTypeOf<ISetContext["action"]>().toEqualTypeOf<"set">();
   expectTypeOf<IGetContext["action"]>().toEqualTypeOf<"get">();

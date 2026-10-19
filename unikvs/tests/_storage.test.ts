@@ -48,7 +48,6 @@ function deleteContext(key: string): IStorage.DeleteContext {
 
 function clearContext(): IStorage.ClearContext {
   return new ClearContext({
-    key: "",
     signal: new AbortController().signal,
   });
 }

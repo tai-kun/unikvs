@@ -701,11 +701,6 @@ export class DeleteContext extends KeyedActionContext<"delete"> implements IDele
  */
 type ClearContextInit = {
   /**
-   * 対象のキーです。
-   */
-  readonly key: string;
-
-  /**
    * 中断を知らせるシグナルです。
    */
   readonly signal: AbortSignal;
@@ -729,7 +724,7 @@ type ClearContextInit = {
 /**
  * 全削除のコンテキストです。
  */
-export class ClearContext extends KeyedActionContext<"clear"> implements IClearContext {
+export class ClearContext extends ActionContext<"clear"> implements IClearContext {
   /**
    * コンテキストを作成します。
    *

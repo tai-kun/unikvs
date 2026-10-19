@@ -50,7 +50,7 @@ export interface ICloseContext extends ILifecycleContext {
 }
 
 export interface IKeyedActionContext extends IActionContext {
-  readonly action: "set" | "get" | "stream" | "has" | "delete" | "clear";
+  readonly action: "set" | "get" | "stream" | "has" | "delete";
 
   readonly key: string;
 }
@@ -89,7 +89,7 @@ export interface IDeleteContext extends IKeyedActionContext {
   readonly action: "delete";
 }
 
-export interface IClearContext extends IKeyedActionContext {
+export interface IClearContext extends IActionContext {
   readonly action: "clear";
 }
 
