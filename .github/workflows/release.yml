@@ -69,7 +69,7 @@ jobs:
               continue
             fi
 
-            if [ "$(jq -r '.private // false' "$dir/package.json")" = "true" ]; then
+            if [ "$(jq -r '.name' "$dir/package.json")" = "website" ]; then
               continue
             fi
 
