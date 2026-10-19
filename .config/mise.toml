@@ -2,8 +2,11 @@
 minimum_release_age = "7d"
 
 [tools]
+bun = "1"
 node = "24"
 pnpm = "11"
+redis = "8"
+rustfs = "1.0.0-rc.5"
 
 [tasks.test]
 run = [{ task = "test:format" }]
