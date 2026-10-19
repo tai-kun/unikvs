@@ -1,5 +1,5 @@
 import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
-import { combineSignals } from "abort-signal-utils";
+import { combineSignals, throwIfAborted } from "abort-signal-utils";
 import { type AsyncmuxLock, asyncmux, Asyncmux } from "asyncmux";
 
 import {
@@ -685,7 +685,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const operationVars = this.#createOperationVars(varsOption);
 
-    signal.throwIfAborted();
+    throwIfAborted(signal);
 
     this.#acSet.add(ac);
 
@@ -791,7 +791,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
         // すべてのプラグインのオープンが成功した後も、待機中に中断されていないか最終確認します。
         // 中断済みのシグナルを持つ接続を作ると、isOpen が true なのに以降の操作がすべて即座に失敗する不整合な状態になります。
-        signal.throwIfAborted();
+        throwIfAborted(signal);
 
         this.#con = {
           ac,
@@ -1062,13 +1062,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * 失敗は集約エラー (単一件) として投げます。
    *
    * @param action 集約エラーに付与する操作名です。
-   * @param useContext 共有の `use` コンテキストです。
+   * @param c 共有の `use` コンテキストです。
    */
-  async #runMiddlewareUse(
+  async #use(
     action: "read" | "write" | "delete" | "clear",
-    useContext: IMiddleware.UseContext,
+    c: IMiddleware.UseContext,
   ): Promise<void> {
-    useContext.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const middlewares = this.#pipeline.middlewares;
     const dispatch = async (index: number): Promise<void> => {
@@ -1116,8 +1116,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       };
 
       try {
-        await middleware.use(useContext, next);
-        useContext.signal.throwIfAborted();
+        await middleware.use(c, next);
+        throwIfAborted(c.signal);
         if (!nextCalled) {
           throw new MiddlewareNextNotCalledError({
             name: middleware.name,
@@ -1131,9 +1131,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           });
         }
       } catch (ex) {
-        const signal = useContext.signal;
         // 中断による失敗はそのまま投げます。
-        if (signal.aborted && ex === signal.reason) {
+        if (c.signal.aborted && ex === c.signal.reason) {
           throw ex;
         }
 
@@ -1305,9 +1304,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         key,
         store,
       });
-      await this.#runMiddlewareUse("write", useContext);
+      await this.#use("write", useContext);
       // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       // `use` による変異を操作変数に反映します。
       // ロックはインスタンス (読み取り) からキーの順で取得し、逆順で解放します。
       if (stream !== null) {
@@ -1369,7 +1368,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       },
     );
 
-    signal.throwIfAborted();
+    throwIfAborted(signal);
 
     return raw;
   }
@@ -1420,9 +1419,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         : { enabled: false, targets: [] },
       store,
     });
-    await this.#runMiddlewareUse("read", useContext);
+    await this.#use("read", useContext);
     // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     let data: unknown = undefined;
     let hit: ResolvedLeaf | null = null;
     const missing: PipelineLeaf[] = [];
@@ -1541,9 +1540,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           : { enabled: false, targets: [] },
         store,
       });
-      await this.#runMiddlewareUse("read", useContext);
+      await this.#use("read", useContext);
       // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-      signal.throwIfAborted();
+      throwIfAborted(signal);
       // NONE は getReadable の呼び出し前を表す番兵値です。
       const NONE: any = {};
       let r: IReadableStream = NONE;
@@ -1693,9 +1692,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               splitRead: true,
               onNodeError: (ex: unknown, activeLeaves: readonly PipelineLeaf[]) => {
                 // 意図的な中断時は中断理由で失敗します。
-                if (signal.aborted) {
-                  signal.throwIfAborted();
-                }
+                throwIfAborted(signal);
+
                 if (ex instanceof RepairNotAllowedError) {
                   repairLogger.warn`Failed to repair a storage: ${ex}`;
 
@@ -1720,7 +1718,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             }
           }
 
-          signal.throwIfAborted();
+          throwIfAborted(signal);
         }
 
         // デコード後のチャンクを検証します。
@@ -1854,11 +1852,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       key,
       store,
     });
-    await this.#runMiddlewareUse("read", useContext);
+    await this.#use("read", useContext);
     // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-    signal.throwIfAborted();
+    throwIfAborted(signal);
 
-    using __ioLock = await io.rLock({ key, signal });
+    using _ioLock = await io.rLock({ key, signal });
     // 登録順に走査し、いずれかのストレージに存在すれば true を返します。
     // exists に失敗したときは次のストレージを試します。
     const errors: PluginErrorRecord[] = [];
@@ -1928,10 +1926,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       key,
       store,
     });
-    await this.#runMiddlewareUse("delete", useContext);
-    // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-    signal.throwIfAborted();
-    using _ioLock = await io.lock({ key, signal });
+    await this.#use("delete", useContext);
+    using _ioLock = await io.lock({
+      key,
+      signal, // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
+    });
     // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
     const errors: PluginErrorRecord[] = [];
     const resolver = this.#pipeline.createResolver({ signal, key, store });
@@ -1990,9 +1989,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       store,
       signal,
     });
-    await this.#runMiddlewareUse("clear", useContext);
+    await this.#use("clear", useContext);
     // `use` の完了直後に中断を確認し、後続処理での検出に依存しないようにします。
-    signal.throwIfAborted();
+    throwIfAborted(signal);
     // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
     const errors: PluginErrorRecord[] = [];
     await Promise.all(
