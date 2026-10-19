@@ -79,9 +79,7 @@ export type VariablesStore = {
  * @param vars 初期値です。
  * @returns 空ストアを返します。
  */
-export function createVariablesStore(vars: VariablesInit | undefined): VariablesStore {
-  vars = normalizeVariablesInit(vars);
-
+export function createVariablesStore(vars: readonly VariablesEntry[] | undefined): VariablesStore {
   return {
     data: new Map(vars),
     readonly: new Set(),

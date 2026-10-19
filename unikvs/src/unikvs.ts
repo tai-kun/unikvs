@@ -158,26 +158,6 @@ function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
   return v.parseInput(info.schema, value);
 }
 
-/**
- * 実行時変数の初期値を正規化し、エントリー列で返します。
- *
- * レコードまたは反復子の両方を受け付けます。
- *
- * @param init 正規化する初期値です。
- * @returns エントリー列を返します。
- */
-function normalizeVarsInit(init: VariablesInit | undefined): (readonly [string, unknown])[] {
-  if (init == null) {
-    return [];
-  }
-
-  if (Symbol.iterator in Object(init)) {
-    return [...(init as Iterable<readonly [string, unknown]>)];
-  }
-
-  return Object.entries(init as { readonly [key: string]: unknown });
-}
-
 // -------------------------------------------------------------------------------------------------
 //
 // スキーマ
@@ -186,14 +166,23 @@ function normalizeVarsInit(init: VariablesInit | undefined): (readonly [string, 
 
 const VariablesKeySchema = v.string();
 
-const VariablesInitSchema = v.union([
-  v.custom<{ [Symbol.iterator](): Iterator<VariablesEntry> }>(
-    // TODO(tai-kun): 各アイテムも要検証です。
-    (input) => typeof input === "object" && !!input && Symbol.iterator in input,
-    "Expected a Iterable object",
-  ),
-  v.record(VariablesKeySchema, v.unknown()),
-]);
+const VariablesInitSchema = v.pipe(
+  v.union([
+    v.custom<Iterable<VariablesEntry>>(
+      // TODO(tai-kun): 各アイテムも要検証です。
+      (input) => typeof input === "object" && !!input && Symbol.iterator in input,
+      "Expected a Iterable object",
+    ),
+    v.record(VariablesKeySchema, v.unknown()),
+  ]),
+  v.transform((input): readonly VariablesEntry[] => {
+    if (Symbol.iterator in input) {
+      return [...input];
+    }
+
+    return Object.entries(input);
+  }),
+);
 
 const OpenOptionsSchema = v.object({
   /**
@@ -537,22 +526,28 @@ type PluginErrorRecord = {
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
- */
-export type UniKvsDestination = PipelineLeaf;
-
-/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
 export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> {
-  public static config<
-    TKeyValueMapping extends KeyValueMapping,
-  >(): IUniKvsConfigBuilder<TKeyValueMapping>;
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public static config<TKeyValueMapping extends KeyValueMapping>(
+    options?: Omit<UniKvsConfigOptions, "schema">,
+  ): IUniKvsConfigBuilder<TKeyValueMapping>;
 
-  public static config<const TSchema extends UniKvsSchema>(options: {
-    readonly schema: TSchema;
-  }): IUniKvsConfigBuilder<$InferKeyValueMapping<TSchema>>;
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
+  public static config<const TSchema extends UniKvsSchema>(
+    options: Omit<UniKvsConfigOptions, "schema"> & {
+      readonly schema: TSchema;
+    },
+  ): IUniKvsConfigBuilder<$InferKeyValueMapping<TSchema>>;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+   */
   public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder;
 
   public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder<any> {
@@ -575,7 +570,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    *
    * コンストラクターで受け取った初期値をエントリー列で保持します。操作ごとに複写して使用します。
    */
-  readonly #baseVars: readonly (readonly [string, unknown])[];
+  #baseVars: readonly VariablesEntry[];
 
   /**
    * コンパイル済みのパイプライン・グラフです。
@@ -587,28 +582,80 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
+  /**
+   * @internal
+   */
   public constructor(
-    vars: VariablesInit,
+    vars: readonly VariablesEntry[],
     pipeline: PipelineGraph,
     valueSchemaResolver: IValueSchemaResolver | null = null,
   ) {
     this.#con = null;
     this.#acSet = new Set();
-    this.#baseVars = Object.freeze(normalizeVarsInit(vars));
+    this.#baseVars = vars;
     this.#pipeline = pipeline;
     this.#valueSchemaResolver = valueSchemaResolver;
   }
 
   /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-set-vars)
+   */
+  public setVars(vars: VariablesInit): this;
+
+  public setVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+
+    this.#baseVars = vars;
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-assign-vars)
+   */
+  public assignVars(vars: VariablesInit): this;
+
+  public assignVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+
+    const map = new Map(this.#baseVars);
+    for (const [name, value] of vars) {
+      map.set(name, value);
+    }
+
+    this.#baseVars = [...map];
+
+    return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-defaults-vars)
+   */
+  public defaultsVars(vars: VariablesInit): this;
+
+  public defaultsVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+
+    const map = new Map(vars);
+    for (const [name, value] of this.#baseVars) {
+      map.set(name, value);
+    }
+
+    this.#baseVars = [...map];
+
+    return this;
+  }
+
+  /**
    * 基本変数と操作固有変数を結合した実行時変数マップを作成します。
    *
-   * @param varsOption 操作固有の変数です。
+   * @param vars 操作固有の変数です。
    * @returns 結合した変数マップを返します。
    */
-  #createOperationVars(varsOption?: VariablesInit): Map<string, unknown> {
-    const map = new Map<string, unknown>(this.#baseVars);
-    if (varsOption != null) {
-      for (const [k, v] of normalizeVarsInit(varsOption)) {
+  #createOperationVars(vars: readonly VariablesEntry[] | undefined): Map<string, unknown> {
+    const map = new Map(this.#baseVars);
+    if (vars) {
+      for (const [k, v] of vars) {
         map.set(k, v);
       }
     }
@@ -624,8 +671,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param varsOption 操作固有の変数です。
    * @returns 共有ストアを返します。
    */
-  #createOperationStore(varsOption?: VariablesInit): VariablesStore {
-    return createVariablesStore([...this.#baseVars, ...normalizeVarsInit(varsOption)]);
+  #createOperationStore(vars: readonly VariablesEntry[] | undefined): VariablesStore {
+    return createVariablesStore([...this.#baseVars, ...(vars || [])]);
   }
 
   /**

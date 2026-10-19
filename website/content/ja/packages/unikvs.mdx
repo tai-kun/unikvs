@@ -301,6 +301,59 @@ setTimeout(() => ac.abort(), 1000);
 await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 ```
 
+## 基本 vars [#base-vars]
+
+`config({ vars })` で基本 vars を設定します。各操作の `vars` と結合して使われ、操作側のキーが勝ちます。`Record`・`Map`・エントリー配列・`Variables` のいずれでも指定できます。不正な形式は `InvalidInputError` を投げます。
+
+```ts
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>({
+  vars: { region: "us-east-1" },
+})
+  .persist(storage)
+  .create();
+
+await kvs.open();
+
+// 操作側の vars と結合します。操作側の `region` が勝ちます
+await kvs.set("foo", new Uint8Array([1]), {
+  vars: { region: "eu-west-1", traceId: "abc-123" },
+});
+// 実行時変数は { region: "eu-west-1", traceId: "abc-123" } になります
+```
+
+`create()` は呼び出し時点の基本 vars をスナップショットします。ビルダーの再利用は可能で、後からビルダーを変更しても作成済みのクライアントには影響しません。
+
+ビルダー (`UniKvsConfig`) とクライアント (`UniKvs`) の両方に、基本 vars を変更する同名メソッドがあります。いずれも自身を返すため、メソッドチェーンできます。クライアント側の変更は以降の操作から有効になります。
+
+### `setVars` [#base-vars-set-vars]
+
+基本 vars を丸ごと置き換えます。
+
+```ts
+config.setVars({ region: "us-east-1" });
+kvs.setVars({ region: "us-east-1" });
+```
+
+### `assignVars` [#base-vars-assign-vars]
+
+引数の `vars` で基本 vars を上書きします。引数に含まれるキーが勝ちます。
+
+```ts
+// 基本 vars が { a: 1, b: 2 } のとき
+config.assignVars({ b: 20, c: 3 });
+// 基本 vars は { a: 1, b: 20, c: 3 } になります
+```
+
+### `defaultsVars` [#base-vars-defaults-vars]
+
+引数の `vars` をベースに基本 vars で上書きします。現在の基本 vars に含まれるキーが勝ちます。
+
+```ts
+// 基本 vars が { a: 1, b: 2 } のとき
+config.defaultsVars({ b: 20, c: 3 });
+// 基本 vars は { a: 1, b: 2, c: 3 } になります
+```
+
 ## 読み取り時の書き戻し [#read-repair]
 
 `get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しが拒否されても既定では読み取りは成功し、警告ログに残ります。拒否時に読み取りも失敗させる場合は `throwOnRepairDenied: true` を指定します (既定は `false`)。書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御し、拒否時の `meta.names` に書き戻し先の表示名が入ります。詳細は複数ストレージのガイドを参照してください。

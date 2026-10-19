@@ -1,5 +1,6 @@
 import type { IMiddleware, IStorage } from "@unikvs/core";
 
+import type { VariablesInit, VariablesEntry } from "./_contexts.js";
 import UniKvsMiddleware from "./_middleware.js";
 import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
@@ -174,6 +175,21 @@ export interface IUniKvsConfigBuilder<
     TLastMiddlewareDecodeChunkInput,
     TLastMiddlewareEncodeChunkOutput
   >;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-set-vars)
+   */
+  setVars(vars: VariablesInit): this;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-assign-vars)
+   */
+  assignVars(vars: VariablesInit): this;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-defaults-vars)
+   */
+  defaultsVars(vars: VariablesInit): this;
 }
 
 /**
@@ -303,6 +319,21 @@ export interface IUniKvsConfigFinalizer<
     TLastMiddlewareEncodeChunkOutput
   >;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-set-vars)
+   */
+  setVars(vars: VariablesInit): this;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-assign-vars)
+   */
+  assignVars(vars: VariablesInit): this;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-defaults-vars)
+   */
+  defaultsVars(vars: VariablesInit): this;
+
   create(): UniKvs<TKeyValueMapping>;
 }
 
@@ -310,10 +341,11 @@ export interface IUniKvsConfigFinalizer<
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export type UniKvsConfigOptions = {
-  /**
-   * キーと値のスキーマ定義です。指定すると入出力値が検証されます。
-   */
   readonly schema?: UniKvsSchema | undefined;
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars)
+   */
+  readonly vars?: VariablesInit | undefined;
 };
 
 /**
@@ -358,6 +390,28 @@ function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
   );
 }
 
+const VariablesKeySchema = v.string();
+
+const VariablesInitSchema = v.pipe(
+  v.union([
+    v.custom<Iterable<VariablesEntry>>(
+      // TODO(tai-kun): 各アイテムも要検証です。
+      (input) => typeof input === "object" && !!input && Symbol.iterator in input,
+      "Expected a Iterable object",
+    ),
+    v.record(VariablesKeySchema, v.unknown()),
+  ]),
+  v.transform((input): readonly VariablesEntry[] => {
+    if (Symbol.iterator in input) {
+      return [...input];
+    }
+
+    return Object.entries(input);
+  }),
+);
+
+const UniKvsVarsArgsSchema = v.tuple([VariablesInitSchema]);
+
 const UniKvsConfigOptionsSchema = v.object({
   /**
    * キーと値のスキーマ定義です。
@@ -373,6 +427,11 @@ const UniKvsConfigOptionsSchema = v.object({
       v.record(v.string(), v.custom<ValueSchemaInfo>(isValueSchemaInfo)),
     ]),
   ),
+
+  /**
+   * 基本となる実行時変数です。
+   */
+  vars: v.optional(VariablesInitSchema),
 });
 
 const UniKvsConfigArgsSchema = v.tuple([v.optional(UniKvsConfigOptionsSchema)]);
@@ -413,13 +472,26 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
 
-  public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions) {
-    const [{ schema } = {}] = v.parseInput(UniKvsConfigArgsSchema, [options]);
+  /**
+   * 基本となる実行時変数です。
+   *
+   * 各操作の `vars` と結合して使用されます。
+   */
+  readonly #vars: Map<string, unknown>;
+
+  /**
+   * @internal
+   */
+  public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions);
+
+  public constructor(UniKvsConstructor: typeof UniKvs, ...args: unknown[]) {
+    const [{ vars, schema } = {}] = v.parseInput(UniKvsConfigArgsSchema, args);
 
     this.#UniKvs = UniKvsConstructor;
     this.#destinations = [];
     this.#middlewares = [];
     this.#valueSchemaResolver = null;
+    this.#vars = new Map(vars);
     if (schema) {
       this.#valueSchemaResolver = createValueSchemaResolver(schema);
     }
@@ -455,6 +527,49 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     return this;
   }
 
+  public setVars(vars: VariablesInit): this;
+
+  public setVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+
+    this.#vars.clear();
+    for (const [name, value] of vars) {
+      this.#vars.set(name, value);
+    }
+
+    return this;
+  }
+
+  public assignVars(vars: VariablesInit): this;
+
+  public assignVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+
+    const target = this.#vars;
+    const source = vars;
+    for (const [name, value] of source) {
+      target.set(name, value);
+    }
+
+    return this;
+  }
+
+  public defaultsVars(vars: VariablesInit): this;
+
+  public defaultsVars(...args: unknown[]): this {
+    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+
+    const target = new Map(vars);
+    const source = this.#vars;
+    for (const [name, value] of source) {
+      target.set(name, value);
+    }
+
+    this.setVars(target);
+
+    return this;
+  }
+
   public create(): UniKvs {
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (this.#destinations.length === 0) {
@@ -462,7 +577,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     }
 
     return new this.#UniKvs(
-      {},
+      [...this.#vars.entries()],
       // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
       // 同じミドルウェアインスタンスに対するラッパーは共有します。
       PipelineGraph.compile([...this.#destinations]),
