@@ -1,0 +1,63 @@
+import type { IStorage } from "@unikvs/core";
+import { createDeleteContext, createSetContext } from "@unikvs/testing";
+import { describe, test } from "vitest";
+
+import Cookies from "../src/cookies.js";
+import { createFakeCookieStore } from "./_helpers.js";
+
+const { signal } = new AbortController();
+
+describe("属性の引き渡し", () => {
+  test("write は cookieAttributes を添えて保存する", ({ expect }) => {
+    // 準備
+    const store = createFakeCookieStore();
+    const storage = new Cookies({
+      store,
+      cookieAttributes: { path: "/", secure: true, sameSite: "Lax", maxAge: 3600 },
+    });
+
+    // 実行
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+
+    // 検証
+    expect(store.setCalls).toHaveLength(1);
+    expect(store.setCalls[0]?.attributes).toEqual({
+      path: "/",
+      secure: true,
+      sameSite: "Lax",
+      maxAge: 3600,
+    });
+  });
+
+  test("属性を指定しない write は空の属性で保存する", ({ expect }) => {
+    // 準備
+    const store = createFakeCookieStore();
+    const storage = new Cookies({ store });
+
+    // 実行
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+
+    // 検証
+    expect(store.setCalls[0]?.attributes).toEqual({});
+  });
+
+  test("delete は同じ属性を添えて失効させる", ({ expect }) => {
+    // 準備
+    const store = createFakeCookieStore();
+    const attributes = {
+      path: "/",
+      domain: "example.com",
+      secure: true,
+      sameSite: "Strict" as const,
+    };
+    const storage = new Cookies({ store, cookieAttributes: attributes });
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+
+    // 実行
+    storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
+
+    // 検証
+    expect(store.deleteCalls).toHaveLength(1);
+    expect(store.deleteCalls[0]?.attributes).toEqual(attributes);
+  });
+});

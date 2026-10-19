@@ -45,6 +45,30 @@
       "name": "@unikvs/lru-cache",
       "path": "packages/lru-cache",
     },
+    {
+      "name": "@unikvs/cache-storage",
+      "path": "packages/cache-storage",
+    },
+    {
+      "name": "@unikvs/etcd",
+      "path": "packages/etcd",
+    },
+    {
+      "name": "@unikvs/memcached",
+      "path": "packages/memcached",
+    },
+    {
+      "name": "@unikvs/valkey",
+      "path": "packages/valkey",
+    },
+    {
+      "name": "@unikvs/retry",
+      "path": "packages/retry",
+    },
+    {
+      "name": "@unikvs/rate-limit",
+      "path": "packages/rate-limit",
+    },
 
     // browser
     {
@@ -62,6 +86,10 @@
     {
       "name": "@unikvs/session-storage",
       "path": "packages/session-storage",
+    },
+    {
+      "name": "@unikvs/cookies",
+      "path": "packages/cookies",
     },
 
     // nodejs
@@ -90,6 +118,34 @@
     {
       "name": "@unikvs/redis.bun",
       "path": "packages/redis.bun",
+    },
+
+    // cloudflare
+    {
+      "name": "@unikvs/cloudflare-kv",
+      "path": "packages/cloudflare-kv",
+    },
+    {
+      "name": "@unikvs/cloudflare-r2",
+      "path": "packages/cloudflare-r2",
+    },
+    {
+      "name": "@unikvs/cloudflare-cache",
+      "path": "packages/cloudflare-cache",
+    },
+
+    // vercel
+    {
+      "name": "@unikvs/vercel-blob",
+      "path": "packages/vercel-blob",
+    },
+    {
+      "name": "@unikvs/vercel-kv",
+      "path": "packages/vercel-kv",
+    },
+    {
+      "name": "@unikvs/vercel-runtime-cache",
+      "path": "packages/vercel-runtime-cache",
     },
 
     // middleware
@@ -143,6 +199,36 @@
       "name": "@unikvs/zstd.node",
       "path": "packages/zstd.node",
     },
+    {
+      "name": "@unikvs/zstd.bun",
+      "path": "packages/zstd.bun",
+    },
+    {
+      "name": "@unikvs/brotli.node",
+      "path": "packages/brotli.node",
+    },
+    {
+      "name": "@unikvs/brotli.wasm",
+      "path": "packages/brotli.wasm",
+    },
+    {
+      "name": "@unikvs/brotli.bun",
+      "path": "packages/brotli.bun",
+    },
+
+    // lifecycle
+    {
+      "name": "@unikvs/ttl",
+      "path": "packages/ttl",
+    },
+    {
+      "name": "@unikvs/expiry",
+      "path": "packages/expiry",
+    },
+    {
+      "name": "@unikvs/soft-delete",
+      "path": "packages/soft-delete",
+    },
 
     // dev
     {
@@ -164,6 +250,18 @@
     {
       "name": "@unikvs/writeonly",
       "path": "packages/writeonly",
+    },
+    {
+      "name": "@unikvs/readonly",
+      "path": "packages/readonly",
+    },
+    {
+      "name": "@unikvs/metrics",
+      "path": "packages/metrics",
+    },
+    {
+      "name": "@unikvs/tracing",
+      "path": "packages/tracing",
     },
 
     // docs

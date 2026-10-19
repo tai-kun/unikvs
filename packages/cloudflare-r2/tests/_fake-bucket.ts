@@ -1,0 +1,76 @@
+import type { R2BucketLike, R2ObjectBodyLike, R2ObjectsLike } from "../src/cloudflare-r2.js";
+
+/**
+ * テスト用のインメモリ R2 バケットです。
+ *
+ * 実バインディングと同じ `null` 契約 (`get`/`head` の未ヒットで `null`) を再現します。
+ * `put` では入力を複写して実 R2 の値意味を再現します。
+ */
+export function createFakeBucket(): R2BucketLike & {
+  readonly store: Map<string, Uint8Array<ArrayBuffer>>;
+} {
+  const store = new Map<string, Uint8Array<ArrayBuffer>>();
+
+  const bucket: R2BucketLike = {
+    async put(key, value) {
+      store.set(key, value.slice());
+
+      return { key };
+    },
+
+    async get(key): Promise<R2ObjectBodyLike | null> {
+      const data = store.get(key);
+      if (data === undefined) {
+        return null;
+      }
+
+      const snapshot = data.slice();
+      const body: R2ObjectBodyLike = {
+        key,
+        async arrayBuffer(): Promise<ArrayBuffer> {
+          const buffer = new ArrayBuffer(snapshot.byteLength);
+          new Uint8Array(buffer).set(snapshot);
+
+          return buffer;
+        },
+      };
+
+      return body;
+    },
+
+    async head(key) {
+      return store.has(key) ? { key } : null;
+    },
+
+    async delete(keys) {
+      const targets = typeof keys === "string" ? [keys] : keys;
+      for (const target of targets) {
+        store.delete(target);
+      }
+    },
+
+    async list(options = {}): Promise<R2ObjectsLike> {
+      const { prefix = "", cursor, limit = 1000 } = options;
+      const keys = [...store.keys()].filter((key) => key.startsWith(prefix)).sort();
+      // 実 R2 と同様にキー基準のカーソルで再開します。削除しながら列挙してもずれません。
+      const start =
+        cursor === undefined
+          ? 0
+          : (() => {
+              const index = keys.findIndex((key) => key > cursor);
+
+              return index === -1 ? keys.length : index;
+            })();
+      const page = keys.slice(start, start + limit);
+      const truncated = start + page.length < keys.length;
+
+      return {
+        objects: page.map((key) => ({ key })),
+        truncated,
+        ...(truncated ? { cursor: page[page.length - 1] } : {}),
+      };
+    },
+  };
+
+  return Object.assign(bucket, { store });
+}

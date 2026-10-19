@@ -1,0 +1,10 @@
+export type { InvalidChunkTypeErrorArgs, InvalidChunkTypeErrorMeta } from "./errors.js";
+export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "./errors.js";
+export {
+  CacheStorageNotAvailableError,
+  InvalidChunkTypeError,
+  KeyNotFoundError,
+} from "./errors.js";
+
+export type * from "./cache-storage.js";
+export { default as CacheStorage } from "./cache-storage.js";

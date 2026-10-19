@@ -1,0 +1,666 @@
+import { KeyNotFoundError, type IPipelineContext, type IStorage } from "@unikvs/core";
+import { del, head, list, put } from "@vercel/blob";
+
+import {
+  BlobNetworkError,
+  BlobOperationError,
+  BlobResponseError,
+  InvalidAccessError,
+  InvalidChunkTypeError,
+  InvalidTokenError,
+} from "./errors.js";
+
+/**
+ * `fetch` 実装の最小形状です。
+ *
+ * Blob URL からのダウンロードに使います。未指定のときは `globalThis.fetch` を使います。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface IFetch {
+  (request: Request): Promise<Response>;
+}
+
+/**
+ * Blob の公開範囲です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export type BlobAccess = "public" | "private";
+
+/**
+ * クライアントへ渡す操作の共通項目です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobRequestOptions {
+  /**
+   * 操作に使うトークンです。
+   *
+   * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly token?: string | undefined;
+
+  /**
+   * 操作の中断に使うシグナルです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly abortSignal?: AbortSignal | undefined;
+}
+
+/**
+ * `put` へ渡す項目です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobPutRequestOptions extends BlobRequestOptions {
+  /**
+   * Blob の公開範囲です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly access: BlobAccess;
+
+  /**
+   * Blob の内容形式です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly contentType?: string | undefined;
+}
+
+/**
+ * `list` へ渡す項目です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobListRequestOptions extends BlobRequestOptions {
+  /**
+   * 一致する pathname の接頭辞です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly prefix?: string | undefined;
+
+  /**
+   * 取得の再開位置です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly cursor?: string | undefined;
+}
+
+/**
+ * `put` の結果の最小形状です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobPutResult {
+  /**
+   * 保存した Blob の URL です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly url: string;
+
+  /**
+   * 保存した Blob の pathname です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly pathname: string;
+}
+
+/**
+ * `head` の結果の最小形状です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobHeadResult {
+  /**
+   * Blob の URL です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly url: string;
+
+  /**
+   * Blob の pathname です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly pathname: string;
+}
+
+/**
+ * `list` の項目の最小形状です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobListItem {
+  /**
+   * Blob の URL です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly url: string;
+
+  /**
+   * Blob の pathname です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly pathname: string;
+}
+
+/**
+ * `list` の結果の最小形状です。
+ *
+ * `hasMore` が `true` のときは次の頁を取得する `cursor` を返します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobListResult {
+  /**
+   * 取得した Blob の一覧です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly blobs: readonly BlobListItem[];
+
+  /**
+   * 次の頁の再開位置です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly cursor?: string | undefined;
+
+  /**
+   * 残りの頁があるかどうかです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly hasMore: boolean;
+}
+
+/**
+ * Vercel Blob クライアントが満たすべき最小形状です。
+ *
+ * `@vercel/blob` の `put` / `head` / `del` / `list` はこの形状を満たすため、そのまま渡せます。
+ * テストではネットワークを使わない疑似実装を渡します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export interface BlobClientLike {
+  /**
+   * `pathname` にバイト列を保存します。
+   */
+  put(
+    pathname: string,
+    body: Uint8Array<ArrayBuffer>,
+    options: BlobPutRequestOptions,
+  ): Promise<BlobPutResult>;
+
+  /**
+   * `pathname` のメタ情報を取得します。存在しないときは拒否します。
+   */
+  head(pathname: string, options: BlobRequestOptions): Promise<BlobHeadResult>;
+
+  /**
+   * `pathname` の Blob を削除します。
+   */
+  del(pathname: string | readonly string[], options: BlobRequestOptions): Promise<void>;
+
+  /**
+   * Blob の一覧を頁単位で取得します。
+   */
+  list(options: BlobListRequestOptions): Promise<BlobListResult>;
+}
+
+/**
+ * `VercelBlob` のコンストラクターオプションです。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export type VercelBlobOptions = {
+  /**
+   * 操作に使うトークンです。
+   *
+   * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
+   * コンテキスト変数 `@unikvs/vercel-blob:token` / `@unikvs/fetch:token` が優先されます。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly token?: string | undefined;
+
+  /**
+   * 使用する Vercel Blob クライアントです。
+   *
+   * 未指定のときは `@vercel/blob` の関数を使います。
+   * テストではネットワークを使わない疑似実装を渡します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly client?: BlobClientLike | undefined;
+
+  /**
+   * すべてのキーに付与する接頭辞です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly keyPrefix?: string | undefined;
+
+  /**
+   * 保存する Blob の公開範囲です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly access?: BlobAccess | undefined;
+
+  /**
+   * Blob URL からのダウンロードに使う `fetch` 実装です。
+   *
+   * 未指定のときは `globalThis.fetch` を使います。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  readonly fetch?: IFetch | undefined;
+};
+
+const DEFAULT_ACCESS: BlobAccess = "private";
+
+// 既定のクライアントとして `@vercel/blob` の関数を使います。
+// `undefined` の項目を取り除いて渡します。
+// 実クライアントの型が `exactOptionalPropertyTypes` のもとで明示 `undefined` を拒否するためです。
+function createDefaultClient(): BlobClientLike {
+  return {
+    put: (pathname, body, options) =>
+      put(pathname, body.buffer as ArrayBuffer, {
+        access: options.access,
+        ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
+        allowOverwrite: true,
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
+    head: (pathname, options) =>
+      head(pathname, {
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
+    del: (pathname, options) =>
+      del(Array.isArray(pathname) ? [...pathname] : pathname, {
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
+    list: (options) =>
+      list({
+        ...(options.prefix !== undefined ? { prefix: options.prefix } : null),
+        ...(options.cursor !== undefined ? { cursor: options.cursor } : null),
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
+  };
+}
+
+// `token` 値が空でない文字列であることを検証します。
+function assertTokenValue(value: unknown): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value === "string" && value !== "") {
+    return value;
+  }
+
+  throw new InvalidTokenError({ actual: value });
+}
+
+// `access` 値が公開範囲のどちらかであることを検証します。
+function assertAccessValue(value: unknown): BlobAccess {
+  if (value === undefined) {
+    return DEFAULT_ACCESS;
+  }
+
+  if (value === "public" || value === "private") {
+    return value;
+  }
+
+  throw new InvalidAccessError({ actual: value });
+}
+
+// 欠番を表す失敗かどうかを判定します。
+// 実クライアントの `BlobNotFoundError` と疑似実装の同名・同状態の失敗に対応します。
+function isBlobNotFound(ex: unknown): boolean {
+  if (typeof ex !== "object" || ex === null) {
+    return false;
+  }
+
+  const record = ex as {
+    name?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+    constructor?: unknown;
+  };
+
+  if (record.name === "BlobNotFoundError") {
+    return true;
+  }
+
+  if (typeof record.constructor === "function" && record.constructor.name === "BlobNotFoundError") {
+    return true;
+  }
+
+  return record.status === 404 || record.statusCode === 404;
+}
+
+/**
+ * Vercel Blob にバイト列を保存するストレージです。
+ *
+ * キーを `${keyPrefix}${key}` の pathname に変換し、`put` / `head` / `del` / `list` します。
+ * 読み取りは `head` で解決した URL を `fetch` でダウンロードします。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ */
+export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  public readonly name: string;
+
+  // 使用する Vercel Blob クライアントです。
+  readonly #client: BlobClientLike;
+
+  // すべてのキーに付与する接頭辞です。
+  readonly #keyPrefix: string;
+
+  // 保存する Blob の公開範囲です。
+  readonly #access: BlobAccess;
+
+  // 既定のトークンです。
+  readonly #token: string | undefined;
+
+  // ダウンロードに使う `fetch` 実装です。
+  readonly #fetchImpl: IFetch | undefined;
+
+  /**
+   * Vercel Blob にバイト列を保存するストレージです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   */
+  public constructor(options: VercelBlobOptions = {}) {
+    const { token, client, keyPrefix = "", access, fetch: fetchImpl } = options;
+    this.name = "VercelBlob";
+    this.#client = client ?? createDefaultClient();
+    this.#keyPrefix = keyPrefix;
+    this.#access = assertAccessValue(access);
+    this.#token = assertTokenValue(token);
+    this.#fetchImpl = fetchImpl;
+  }
+
+  // 使用する `fetch` 実装を解決します。
+  #resolveFetch(): IFetch {
+    return this.#fetchImpl ?? globalThis.fetch;
+  }
+
+  // 送信トークンを三層優先度で解決します。
+  #resolveToken(c: Pick<IPipelineContext, "get">): string | undefined {
+    const specificToken = assertTokenValue(c.get("@unikvs/vercel-blob:token"));
+    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
+
+    return specificToken ?? commonToken ?? this.#token;
+  }
+
+  // キーに対応する pathname を組み立てます。
+  #pathname(key: string): string {
+    return `${this.#keyPrefix}${key}`;
+  }
+
+  // ダウンロード要求を組み立てます。
+  #downloadRequest(url: string, token: string | undefined, signal: AbortSignal): Request {
+    const headers: Record<string, string> = {};
+
+    if (token !== undefined) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    return new Request(url, { headers, signal });
+  }
+
+  // URL からバイト列をダウンロードします。
+  async #download(
+    c: IStorage.ReadContext | IStorage.GetReadableContext,
+    url: string,
+    token: string | undefined,
+  ): Promise<Response> {
+    const fetchFn = this.#resolveFetch();
+    let response: Response;
+
+    try {
+      response = await fetchFn(this.#downloadRequest(url, token, c.signal));
+    } catch (ex) {
+      c.signal.throwIfAborted();
+      throw new BlobNetworkError({ url, key: c.key, cause: ex });
+    }
+
+    if (response.status === 404 || response.status === 410) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (!response.ok) {
+      throw new BlobResponseError({
+        url,
+        key: c.key,
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+
+    return response;
+  }
+
+  public get isOpen(): boolean {
+    return true;
+  }
+
+  public async open(c: IStorage.OpenContext): Promise<void> {
+    c.signal.throwIfAborted();
+  }
+
+  public async close(c: IStorage.CloseContext): Promise<void> {
+    c.signal.throwIfAborted();
+  }
+
+  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+
+    try {
+      await this.#client.put(this.#pathname(c.key), data.slice(), {
+        access: this.#access,
+        contentType: "application/octet-stream",
+        token,
+        abortSignal: c.signal,
+      });
+    } catch (ex) {
+      c.signal.throwIfAborted();
+      throw new BlobOperationError({ operation: "put", key: c.key, cause: ex });
+    }
+  }
+
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+    let url: string;
+
+    try {
+      ({ url } = await this.#client.head(this.#pathname(c.key), {
+        token,
+        abortSignal: c.signal,
+      }));
+    } catch (ex) {
+      if (isBlobNotFound(ex)) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      c.signal.throwIfAborted();
+      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+    }
+
+    const response = await this.#download(c, url, token);
+    const buffer = await response.arrayBuffer();
+
+    return new Uint8Array(buffer);
+  }
+
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+
+    try {
+      await this.#client.head(this.#pathname(c.key), { token, abortSignal: c.signal });
+
+      return true;
+    } catch (ex) {
+      if (isBlobNotFound(ex)) {
+        return false;
+      }
+
+      c.signal.throwIfAborted();
+      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+    }
+  }
+
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+
+    try {
+      await this.#client.del(this.#pathname(c.key), { token, abortSignal: c.signal });
+    } catch (ex) {
+      // 削除は冪等とし存在しないキーは成功扱いにします。
+      if (isBlobNotFound(ex)) {
+        return;
+      }
+
+      c.signal.throwIfAborted();
+      throw new BlobOperationError({ operation: "del", key: c.key, cause: ex });
+    }
+  }
+
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+    // 削除しながら頁を進めると欠落するため、先に全 pathname を集めてから削除します。
+    const pathnames: string[] = [];
+    let cursor: string | undefined;
+
+    do {
+      let page: BlobListResult;
+
+      try {
+        page = await this.#client.list({
+          prefix: this.#keyPrefix,
+          cursor,
+          token,
+          abortSignal: c.signal,
+        });
+      } catch (ex) {
+        c.signal.throwIfAborted();
+        throw new BlobOperationError({ operation: "list", cause: ex });
+      }
+
+      for (const blob of page.blobs) {
+        pathnames.push(blob.pathname);
+      }
+
+      cursor = page.hasMore ? page.cursor : undefined;
+    } while (cursor !== undefined);
+
+    if (pathnames.length > 0) {
+      try {
+        await this.#client.del(pathnames, { token, abortSignal: c.signal });
+      } catch (ex) {
+        c.signal.throwIfAborted();
+        throw new BlobOperationError({ operation: "del", cause: ex });
+      }
+    }
+  }
+
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    c.signal.throwIfAborted();
+
+    // Blob にストリーミング `put` はないため蓄積して `close` 時に一括送信します。
+    const chunks: Uint8Array[] = [];
+
+    return new WritableStream<Uint8Array<ArrayBuffer>>({
+      write(chunk) {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({ key: c.key, chunk });
+        }
+
+        chunks.push(chunk.slice());
+      },
+      close: async () => {
+        c.signal.throwIfAborted();
+
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+        const merged = new Uint8Array(totalLength);
+        let offset = 0;
+
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+
+        await this.write(c, merged as Uint8Array<ArrayBuffer>);
+      },
+      abort() {
+        chunks.length = 0;
+      },
+    });
+  }
+
+  public async getReadable(
+    c: IStorage.GetReadableContext,
+  ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
+    c.signal.throwIfAborted();
+
+    const token = this.#resolveToken(c);
+    let url: string;
+
+    try {
+      ({ url } = await this.#client.head(this.#pathname(c.key), {
+        token,
+        abortSignal: c.signal,
+      }));
+    } catch (ex) {
+      if (isBlobNotFound(ex)) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      c.signal.throwIfAborted();
+      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+    }
+
+    const response = await this.#download(c, url, token);
+
+    // ボディなし応答は空ストリームとして返します。
+    if (response.body === null) {
+      return new ReadableStream<Uint8Array<ArrayBuffer>>({
+        start(controller) {
+          controller.close();
+        },
+      });
+    }
+
+    return response.body;
+  }
+}
