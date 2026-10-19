@@ -979,7 +979,7 @@ describe("UniKvs - ミドルウェア連携", () => {
   }) => {
     // 準備
     const storage = new MockStorage();
-    await using kvs = UniKvs.config().connect(new MockMiddleware()).persist(storage).create();
+    await using kvs = UniKvs.config().use(new MockMiddleware()).persist(storage).create();
     await kvs.open();
 
     // 実行
@@ -992,7 +992,7 @@ describe("UniKvs - ミドルウェア連携", () => {
   test("get 時にミドルウェアでデコードされた値が返される", async ({ expect }) => {
     // 準備
     const storage = new MockStorage();
-    await using kvs = UniKvs.config().connect(new MockMiddleware()).persist(storage).create();
+    await using kvs = UniKvs.config().use(new MockMiddleware()).persist(storage).create();
     await kvs.open();
     await kvs.set("key1", "hello");
 
@@ -1025,8 +1025,8 @@ describe("UniKvs - ミドルウェア連携", () => {
 
     // 準備
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new Append("A"))
-      .connect(new Append("B"))
+      .use(new Append("A"))
+      .use(new Append("B"))
       .persist(new Memory())
       .create();
     await kvs.open();
@@ -1051,7 +1051,7 @@ describe("UniKvs - ミドルウェア連携", () => {
     // 準備
     const storage = new Memory();
     await using kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .connect(new BoomMiddleware())
+      .use(new BoomMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -1088,12 +1088,12 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
     const storage2 = new Memory();
     const storage3 = new Memory();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new Append("1"))
-      .connect(new Append("2"))
+      .use(new Append("1"))
+      .use(new Append("2"))
       .persist(storage1)
-      .connect(new Append("3"))
+      .use(new Append("3"))
       .persist(storage2)
-      .connect(new Append("4"))
+      .use(new Append("4"))
       .persist(storage3)
       .create();
     await kvs.open();
@@ -1132,12 +1132,12 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
     const storage2 = new Memory();
     const storage3 = new Memory();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new Append("1"))
-      .connect(new Append("2"))
+      .use(new Append("1"))
+      .use(new Append("2"))
       .persist(storage1)
-      .connect(new Append("3"))
+      .use(new Append("3"))
       .persist(storage2)
-      .connect(new Append("4"))
+      .use(new Append("4"))
       .persist(storage3)
       .create();
     await kvs.open();
@@ -1210,10 +1210,10 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
     const storage1 = new Memory();
     const storage2 = new Memory();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new Suffix(1))
-      .connect(new Suffix(2))
+      .use(new Suffix(1))
+      .use(new Suffix(2))
       .persist(storage1)
-      .connect(new Suffix(3))
+      .use(new Suffix(3))
       .persist(storage2)
       .create();
     await kvs.open();
@@ -1239,7 +1239,7 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const storage = new Memory();
     await using kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
-      .connect(new ChecksumSha256())
+      .use(new ChecksumSha256())
       .persist(storage)
       .create();
     const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
@@ -1260,7 +1260,7 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const storage = new Memory();
     await using kvs = UniKvs.config<{ logs2: StreamValue<Uint8Array> }>()
-      .connect(new ChecksumSha256())
+      .use(new ChecksumSha256())
       .persist(storage)
       .create();
     const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
@@ -1292,7 +1292,7 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const sum = await sha256Hex(new Uint8Array([4, 5, 6]));
     await using kvs = UniKvs.config<{ logs3: StreamValue<Uint8Array> }>()
-      .connect(new ChecksumSha256())
+      .use(new ChecksumSha256())
       .persist(new Memory())
       .create();
     await kvs.open();
@@ -1313,7 +1313,7 @@ describe("UniKvs - 変数とチェックサム", () => {
     // 準備
     const sum = await sha256Hex(new Uint8Array([1, 2, 3]));
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new ChecksumSha256())
+      .use(new ChecksumSha256())
       .persist(new Memory())
       .create();
     await kvs.open();
@@ -1637,7 +1637,7 @@ describe("UniKvs - stream 操作", () => {
     const storage = new CancelObservableStorage();
     storage.entries.set("logs", [Uint8Array.from([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FailDecodeStreamMiddleware())
+      .use(new FailDecodeStreamMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -1714,8 +1714,8 @@ describe("UniKvs - stream 操作", () => {
       },
     });
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new PassThroughMiddleware())
-      .connect(new BoomEncodeStreamMiddleware())
+      .use(new PassThroughMiddleware())
+      .use(new BoomEncodeStreamMiddleware())
       .persist(new Memory())
       .create();
     await kvs.open();

@@ -84,12 +84,12 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagMiddleware("S");
     const compress = new TagMiddleware("C");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache1)
       .persist(cache2)
-      .connect(serialize)
+      .use(serialize)
       .persist(local)
-      .connect(compress)
+      .use(compress)
       .persist(server)
       .create();
     await kvs.open();
@@ -118,7 +118,7 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagMiddleware("S");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -139,7 +139,7 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagMiddleware("S");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -165,11 +165,11 @@ describe("UniKvs - get の書き戻し", () => {
     const serialize = new TagMiddleware("S");
     const compress = new TagMiddleware("C");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(local)
-      .connect(compress)
+      .use(compress)
       .persist(server)
       .create();
     await kvs.open();
@@ -191,7 +191,7 @@ describe("UniKvs - get の書き戻し", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(broken)
       .persist(cache)
       .persist(server)
@@ -218,11 +218,11 @@ describe("UniKvs - stream の書き戻し", () => {
     const serialize = new TagStreamMiddleware(0x10);
     const compress = new TagStreamMiddleware(0x20);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(local)
-      .connect(compress)
+      .use(compress)
       .persist(server)
       .create();
     await kvs.open();
@@ -267,8 +267,8 @@ describe("UniKvs - stream の書き戻し", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new ThrowAfterNextStreamMiddleware("PostFailStream"))
+      .use(new AllowRepair())
+      .use(new ThrowAfterNextStreamMiddleware("PostFailStream"))
       .persist(cache)
       .persist(server)
       .create();
@@ -298,7 +298,7 @@ describe("UniKvs - stream の書き戻し", () => {
     const serialize = new TagStreamMiddleware(0x10);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -328,9 +328,9 @@ describe("UniKvs - stream の書き戻し", () => {
     const writeStarted = Promise.withResolvers<void>();
     cache.onWriteStart = () => writeStarted.resolve();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -361,9 +361,9 @@ describe("UniKvs - stream の書き戻し", () => {
     const serialize = new TagStreamMiddleware(0x10);
     cache.writeGate = new Gate();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -447,7 +447,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();
@@ -470,7 +470,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -501,7 +501,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -542,7 +542,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -563,7 +563,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const server2 = new FakeStorage("server2");
     const gate2 = new AllowRepair();
     await using kvs2 = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate2)
+      .use(gate2)
       .persist(cache2)
       .persist(server2)
       .create();
@@ -589,8 +589,8 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
-      .connect(probe)
+      .use(gate)
+      .use(probe)
       .persist(cache)
       .persist(server)
       .create();
@@ -612,7 +612,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const gateA = new AllowRepair();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(cacheB)
-      .connect(gateA)
+      .use(gateA)
       .persist(cacheA)
       .persist(server)
       .create();
@@ -637,7 +637,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const cacheB = new FakeStorage("cacheB");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(shared)
+      .use(shared)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)
@@ -706,7 +706,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
     const server = new FakeStorage("server");
     local.errors["write"] = new Error("storage failed");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
       .persist(local)
       .persist(server)
@@ -771,7 +771,7 @@ describe("UniKvs - get の書き戻し不許可", () => {
       }
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -803,7 +803,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const serialize = new TagStreamMiddleware(0x10);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -833,7 +833,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const serialize = new TagStreamMiddleware(0x10);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -857,8 +857,8 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(gate)
-      .connect(probe)
+      .use(gate)
+      .use(probe)
       .persist(cache)
       .persist(server)
       .create();
@@ -889,9 +889,9 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const server = new FakeStreamStorage("server");
     const serialize = new TagStreamMiddleware(0x10);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -918,8 +918,8 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const broken = new FakeStreamMiddleware<Uint8Array>("broken");
     broken.errors["encodeStream"] = new Error("setup failed");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(broken)
+      .use(new AllowRepair())
+      .use(broken)
       .persist(cache)
       .persist(server)
       .create();
@@ -945,7 +945,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     };
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -969,7 +969,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -1014,7 +1014,7 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
       .persist(server)
       .create();
@@ -1054,9 +1054,9 @@ describe("UniKvs - stream の書き戻し不許可", () => {
     const serialize = new TagMiddleware("S");
     const gate = new AllowRepair();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cache)
-      .connect(serialize)
+      .use(serialize)
       .persist(server)
       .create();
     await kvs.open();
@@ -1079,7 +1079,7 @@ describe("UniKvs - 共有 prefix の修復", () => {
     const cacheB = new FakeStorage("cacheB");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)
@@ -1103,7 +1103,7 @@ describe("UniKvs - 共有 prefix の修復", () => {
     const cacheB = new FakeStorage("cacheB");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(gate)
+      .use(gate)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)
@@ -1151,7 +1151,7 @@ describe("UniKvs - 共有 prefix の修復", () => {
     const cacheB = new FakeStorage("cacheB");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(broken)
+      .use(broken)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)
@@ -1185,8 +1185,8 @@ describe("UniKvs - 共有 prefix の修復", () => {
     const server = new FakeStreamStorage("server");
     const prefix = new TagStreamMiddleware(0x10);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(prefix)
+      .use(new AllowRepair())
+      .use(prefix)
       .persist(cacheA)
       .persist(cacheB)
       .persist(server)

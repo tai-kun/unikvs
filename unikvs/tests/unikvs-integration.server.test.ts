@@ -135,8 +135,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備
     const root = createRoot();
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(new NodeFs(root))
       .create();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
@@ -156,8 +156,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備
     const root = createRoot();
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(new NodeFs(root))
       .create();
     const data = new Uint8Array([7, 8, 9]);

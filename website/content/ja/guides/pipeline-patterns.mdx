@@ -11,11 +11,11 @@ description: "書き込み・読み取り・分岐・修復の様々なパイプ
 どの構成も、入力を根 (root) とする根付き有向木 (arborescence) として表せます。
 
 - 根 (root): 入力 `Input` です。入次数は 0 です。
-- 内部頂点 (internal vertex): `connect()` で積んだトランスフォーマーです。
+- 内部頂点 (internal vertex): `use()` で積んだトランスフォーマーです。
 - 葉 (leaf): `persist()` で登録したストレージです。出次数は 0 です。
 - 辺 (edge) は根から葉へ向かいます。根以外の各頂点は 1 つの親しか持たず、経路が合流する頂点は存在しません。
 - ストレージの変換チェーンは、根からその葉までの経路 (path) と一致します。経路が同じなら保存される値も同じです。
-- `persist()` はその時点の根からの経路を確定させて葉を 1 つ付けます。`connect()` はカーソルを 1 頂点だけ葉方向へ進めます。
+- `persist()` はその時点の根からの経路を確定させて葉を 1 つ付けます。`use()` はカーソルを 1 頂点だけ葉方向へ進めます。
 - `fork()` はカーソル位置の頂点へ、独立した部分木 (branch) を接ぎ木します。部分木での追加は親の経路に入りません。
 
 書き込みと読み取りは、同じ経路を反対方向にたどります。
@@ -40,12 +40,12 @@ flowchart LR
 
 ## 2. 単一パイプライン + 単一ストレージ [#single-pipeline]
 
-根から葉まで一直線にトランスフォーマーが並ぶ経路です。`connect()` ごとにカーソルが 1 頂点だけ葉方向へ進み、`persist()` がその位置に葉を付けます。
+根から葉まで一直線にトランスフォーマーが並ぶ経路です。`use()` ごとにカーソルが 1 頂点だけ葉方向へ進み、`persist()` がその位置に葉を付けます。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Compression("gzip"))
-  .connect(new ChecksumSha256())
+  .use(new Compression("gzip"))
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data"))
   .create();
 ```
@@ -89,11 +89,11 @@ flowchart LR
 
 ## 4. 共通パイプライン + 複数ストレージ [#shared-pipeline]
 
-`connect()` の後に `persist()` を並べると、共通の内部頂点から 2 つの葉が分岐します。両方の葉が根から `Compression` までの経路を共有するため、同じ変換結果をそれぞれ保存します。
+`use()` の後に `persist()` を並べると、共通の内部頂点から 2 つの葉が分岐します。両方の葉が根から `Compression` までの経路を共有するため、同じ変換結果をそれぞれ保存します。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new Memory())
   .persist(new NodeFs(".tmp"))
   .create();
@@ -108,13 +108,13 @@ flowchart LR
 
 ## 5. スナップショット分岐 (ストレージごとに変換を変える) [#snapshot-branch]
 
-`persist()` はその時点の根からの経路をスナップショットとして確定し、葉を付けます。`connect()` はカーソルを葉方向へ進めるだけなので、後から付けた葉ほど経路が長くなります。`connect()` と `persist()` を交互に呼び出すと、頂点が増えるたびに新しい分岐ができ、先に付けた葉の経路は変わりません。
+`persist()` はその時点の根からの経路をスナップショットとして確定し、葉を付けます。`use()` はカーソルを葉方向へ進めるだけなので、後から付けた葉ほど経路が長くなります。`use()` と `persist()` を交互に呼び出すと、頂点が増えるたびに新しい分岐ができ、先に付けた葉の経路は変わりません。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new Memory()) // 圧縮のみ
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".tmp")) // 圧縮 + チェックサム
   .create();
 ```
@@ -131,14 +131,14 @@ flowchart LR
 
 ## 6. fork() による 3 分岐 (キャッシュ / 監査 / 本命) [#fork-three-branches]
 
-`connect()` と `persist()` を交互に置くだけでは、後から追加したトランスフォーマーはカーソル上の共通経路に入り、後続の葉にも適用されてしまいます。分岐内だけに置きたい頂点は、`fork()` で独立した部分木として接ぎ木します。A・B・C の共通部分から分岐する典型例です。
+`use()` と `persist()` を交互に置くだけでは、後から追加したトランスフォーマーはカーソル上の共通経路に入り、後続の葉にも適用されてしまいます。分岐内だけに置きたい頂点は、`fork()` で独立した部分木として接ぎ木します。A・B・C の共通部分から分岐する典型例です。
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Compression("gzip")) // A・B・C 共通
+  .use(new Compression("gzip")) // A・B・C 共通
   .fork(UniKvs.branch().persist(new Memory())) // A: gzip のみ (高速なキャッシュ)
-  .connect(new ChecksumSha256()) // B・C 共通
-  .fork(UniKvs.branch().connect(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + チェックサム 2 重 (監査用)
+  .use(new ChecksumSha256()) // B・C 共通
+  .fork(UniKvs.branch().use(new ChecksumMd5()).persist(new NodeFs(".cache"))) // B: gzip + チェックサム 2 重 (監査用)
   .persist(new NodeFs(".data")) // C: gzip + チェックサム (本命)
   .create();
 ```
@@ -155,7 +155,7 @@ flowchart LR
 
 `Compression` までの共通経路から 3 つの葉が分かれます。`Memory` は gzip のみ、`.cache` は gzip + チェックサム 2 重、`.data` は gzip + チェックサムという経路を持ちます。
 
-`fork()` を使わずに `connect()` を挟むと、その変換は共通経路に入り、対象の C にも適用されます。共通経路を伸ばす `connect()` と、部分木を分ける `fork()` を交互に組み合わせると、木を段階的に拡張できます。
+`fork()` を使わずに `use()` を挟むと、その変換は共通経路に入り、対象の C にも適用されます。共通経路を伸ばす `use()` と、部分木を分ける `fork()` を交互に組み合わせると、木を段階的に拡張できます。
 
 ## 7. fork() のネスト・並列分岐 [#nested-fork]
 
@@ -163,11 +163,11 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<any> }>()
-  .connect(new Cbor())
+  .use(new Cbor())
   .fork(UniKvs.branch().persist(new Memory()))
   .fork(
     UniKvs.branch()
-      .connect(new Compression("gzip"))
+      .use(new Compression("gzip"))
       .fork(UniKvs.branch().persist(new NodeFs(".cache")))
       .persist(new NodeFs(".data")),
   )
@@ -195,11 +195,11 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Cbor())
+  .use(new Cbor())
   .fork(
-    UniKvs.branch().connect(new AllowRepair()).persist(new Memory()), // 圧縮前
+    UniKvs.branch().use(new AllowRepair()).persist(new Memory()), // 圧縮前
   )
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new NodeFs(".tmp")) // 圧縮後
   .create();
 
@@ -221,10 +221,10 @@ flowchart LR
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory())
-  .connect(new Compression("gzip"))
-  .connect(new AllowRepair())
+  .use(new Compression("gzip"))
+  .use(new AllowRepair())
   .persist(new NodeFs(".cache"))
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data"))
   .create();
 ```
@@ -244,10 +244,10 @@ flowchart LR
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory())
-  .connect(new Compression("gzip"))
-  .connect(new AllowRepair())
+  .use(new Compression("gzip"))
+  .use(new AllowRepair())
   .persist(new NodeFs(".cache"))
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data"))
   .create();
 ```
@@ -270,10 +270,10 @@ flowchart LR
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory()) // AllowRepair なし → 書き戻し対象外
-  .connect(new Compression("gzip"))
-  .connect(new AllowRepair())
+  .use(new Compression("gzip"))
+  .use(new AllowRepair())
   .persist(new NodeFs(".cache")) // AllowRepair あり → 書き戻し対象
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data")) // AllowRepair あり → 書き戻し対象だけど、そもそも最終端なので書き戻しされることはない
   .create();
 ```
@@ -283,11 +283,11 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .fork(
-    UniKvs.branch().connect(new AllowRepair()).persist(new Memory()), // AllowRepair あり → 書き戻し対象
+    UniKvs.branch().use(new AllowRepair()).persist(new Memory()), // AllowRepair あり → 書き戻し対象
   )
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new NodeFs(".cache")) // AllowRepair なし → 書き戻し対象外
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data")) // AllowRepair なし → 書き戻し対象外だし、そもそも最終端なので書き戻しされることはない
   .create();
 ```
@@ -296,13 +296,13 @@ const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new AllowRepair())
+  .use(new AllowRepair())
   .fork(
     UniKvs.branch().persist(new Memory()), // AllowRepair あり → 書き戻し対象
   )
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new NodeFs(".cache")) // AllowRepair あり → 書き戻し対象
-  .connect(new ChecksumSha256())
+  .use(new ChecksumSha256())
   .persist(new NodeFs(".data")) // AllowRepair あり → 書き戻し対象だけど、最終端なので書き戻しされることはない
   .create();
 ```
@@ -355,7 +355,7 @@ flowchart LR
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
   .persist(new Memory())
   .persist(new NodeFs(".data"))
-  .connect(new WriteOnly())
+  .use(new WriteOnly())
   .persist(new S3Archive())
   .create();
 ```
@@ -386,9 +386,9 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<any> }>()
-  .connect(new Cbor())
-  .connect(new Compression("gzip"))
-  .connect(new Base64())
+  .use(new Cbor())
+  .use(new Compression("gzip"))
+  .use(new Base64())
   .persist(new Memory())
   .create();
 ```
@@ -405,9 +405,9 @@ flowchart LR
 
 ```ts
 const kvs = UniKvs.config<{ foo: Value<any> }>()
-  .connect(new Cbor())
-  .connect(new Compression("gzip"))
-  .fork(UniKvs.branch().connect(new Base64()).persist(new Memory())) // テキスト系
+  .use(new Cbor())
+  .use(new Compression("gzip"))
+  .fork(UniKvs.branch().use(new Base64()).persist(new Memory())) // テキスト系
   .persist(new NodeFs(".data")) // バイナリー系
   .create();
 ```

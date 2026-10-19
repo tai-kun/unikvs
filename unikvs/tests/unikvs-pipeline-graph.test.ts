@@ -130,8 +130,8 @@ function createMiddleSharedKvs(
   server: FakeStorage,
 ): UniKvs<{ foo: PlainValue<string> }> {
   return UniKvs.config<{ foo: PlainValue<string> }>()
-    .connect(ar)
-    .fork(UniKvs.branch().connect(a).connect(b).persist(c1).connect(c).persist(c2))
+    .use(ar)
+    .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
     .persist(server)
     .create();
 }
@@ -176,8 +176,8 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(ar)
-      .fork(UniKvs.branch().connect(a).connect(b).persist(c1).connect(c).persist(c2))
+      .use(ar)
+      .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
       .persist(server)
       .create();
     await kvs.open();
@@ -235,8 +235,8 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(ar)
-      .fork(UniKvs.branch().connect(a).connect(b).persist(c1).connect(c).persist(c2))
+      .use(ar)
+      .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
       .persist(server)
       .create();
     await kvs.open();
@@ -281,7 +281,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(ar)
+      .use(ar)
       .persist(c1)
       .persist(c2)
       .persist(server)
@@ -315,7 +315,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(c1)
-      .connect(ar)
+      .use(ar)
       .persist(c2)
       .persist(server)
       .create();
@@ -349,7 +349,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
       .persist(c1)
-      .connect(ar)
+      .use(ar)
       .persist(c2)
       .persist(server)
       .create();
@@ -387,7 +387,7 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(ar)
+      .use(ar)
       .persist(c1)
       .persist(c2)
       .persist(server)
@@ -420,8 +420,8 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     const middleware = new CountingOnClearMiddleware("dup");
     const storage = new FakeStorage("s");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
-      .connect(middleware)
+      .use(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
 
@@ -455,8 +455,8 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
-      .fork(UniKvs.branch().connect(middleware).persist(s1))
+      .use(middleware)
+      .fork(UniKvs.branch().use(middleware).persist(s1))
       .persist(s2)
       .create();
 
@@ -487,7 +487,7 @@ describe("UniKvs - 共有節のキー写像", () => {
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(a)
       .persist(b)
       .create();
@@ -510,7 +510,7 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
     const cache = new CancelObservableStorage("cache");
     const server = new CancelObservableStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(outer)
+      .use(outer)
       .persist(cache)
       .persist(server)
       .create();
@@ -542,8 +542,8 @@ describe("UniKvs - デコードの後始末", () => {
     const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     inner.errors["decodeStream"] = new Error("decodeStream failed");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(inner)
-      .connect(outer)
+      .use(inner)
+      .use(outer)
       .persist(storage)
       .create();
     await kvs.open();
@@ -564,7 +564,7 @@ describe("UniKvs - 書き戻し中の読み取り", () => {
     cache.writeGate = writeGate;
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(ar)
+      .use(ar)
       .persist(cache)
       .persist(server)
       .create();

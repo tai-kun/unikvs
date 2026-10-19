@@ -49,7 +49,7 @@ describe("UniKvsConfig", () => {
     const config = new UniKvsConfig(UniKvs);
 
     // 実行
-    const result = config.connect(new MockMiddleware()).persist(new FakeStorage()).create();
+    const result = config.use(new MockMiddleware()).persist(new FakeStorage()).create();
 
     // 検証
     expect(result).toBeInstanceOf(UniKvs);
@@ -62,7 +62,7 @@ describe("UniKvsConfig", () => {
     // 実行
     const result = config
       .persist(new FakeStorage())
-      .connect(new MockMiddleware())
+      .use(new MockMiddleware())
       .persist(new FakeStorage())
       .create();
 
@@ -76,12 +76,12 @@ describe("UniKvsConfig", () => {
 
     // 実行
     const result = config
-      .connect(new MockMiddleware())
-      .connect(new MockMiddleware())
+      .use(new MockMiddleware())
+      .use(new MockMiddleware())
       .persist(new FakeStorage())
-      .connect(new MockMiddleware())
+      .use(new MockMiddleware())
       .persist(new FakeStorage())
-      .connect(new MockMiddleware())
+      .use(new MockMiddleware())
       .persist(new FakeStorage())
       .create();
 
@@ -105,14 +105,14 @@ describe("UniKvsConfig", () => {
     await expect(kvs.get("foo")).resolves.toBe("x");
   });
 
-  test("fork 内の connect は分岐先のストレージにのみ適用される", async ({ expect }) => {
+  test("fork 内の use は分岐先のストレージにのみ適用される", async ({ expect }) => {
     // 準備
     const mainStorage = new FakeStorage();
     const branchStorage = new FakeStorage();
     // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
     await using kvs = new UniKvsConfig(UniKvs)
       .persist(mainStorage)
-      .fork(UniKvs.branch().connect(new MockMiddleware()).persist(branchStorage))
+      .fork(UniKvs.branch().use(new MockMiddleware()).persist(branchStorage))
       .create();
     await kvs.open();
 

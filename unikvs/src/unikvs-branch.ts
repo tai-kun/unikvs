@@ -130,7 +130,7 @@ export interface IUniKvsBranch<
     TBranchHasPersist extends true ? true : TSubHasPersist
   >;
 
-  connect<
+  use<
     TMiddleware extends IMiddleware<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
       any,
@@ -237,7 +237,7 @@ export default class UniKvsBranch {
     return this;
   }
 
-  public connect(middleware: IMiddleware): this {
+  public use(middleware: IMiddleware): this {
     const state = branchStates.get(this)!;
     state.middlewares.push(UniKvsMiddleware.from(middleware));
 
@@ -248,7 +248,7 @@ export default class UniKvsBranch {
     const state = branchStates.get(this)!;
     state.destinations.push({
       storage: UniKvsStorage.from(storage),
-      // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
+      // 登録時点のチェーンをスナップショットして保持するため、以降の use はこの登録に影響しません。
       middlewares: [...state.middlewares],
     });
 

@@ -253,10 +253,10 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
     expect(typeOf(() => void kvs.set("count", 42))).toBeUndefined();
   });
 
-  test("connect と persist は接続可能な組み合わせのみを型で受け付ける", ({ expect }) => {
+  test("use と persist は接続可能な組み合わせのみを型で受け付ける", ({ expect }) => {
     // 実行と検証: string を number に変換するチェーンは number ストレージへ接続できる
     UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new StringToNumber())
+      .use(new StringToNumber())
       .persist(new NumberStorage())
       .create();
 
@@ -300,7 +300,7 @@ describe("UniKvs - 型: fork の互換検査", () => {
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
 
     // 準備: 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
-    const unused = UniKvs.branch().connect(new StringToNumber());
+    const unused = UniKvs.branch().use(new StringToNumber());
 
     // 実行と検証: persist なし分岐の不一致は型エラーになりません。
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused))).toBeUndefined();

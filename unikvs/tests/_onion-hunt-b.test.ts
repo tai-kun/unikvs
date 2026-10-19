@@ -194,9 +194,9 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     const c2 = new FakeStreamStorage("c2");
     const c3 = new FakeStreamStorage("c3");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(s)
+      .use(s)
       .persist(c1)
-      .connect(a)
+      .use(a)
       .persist(c2)
       .persist(c3)
       .create();
@@ -226,9 +226,9 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     const storage = new FakeStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1]), new Uint8Array([2])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(a)
-      .connect(b)
-      .connect(c)
+      .use(a)
+      .use(b)
+      .use(c)
       .persist(storage)
       .create();
     await kvs.open();
@@ -264,7 +264,7 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     }
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(c1)
-      .connect(a)
+      .use(a)
       .persist(c2)
       .persist(c3)
       .create();
@@ -304,8 +304,8 @@ describe("UniKvs - ストリームオニオンの順序", () => {
     const storage = new FakeStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new ReaderMiddleware("reader"))
-      .connect(new WriterMiddleware("writer"))
+      .use(new ReaderMiddleware("reader"))
+      .use(new WriterMiddleware("writer"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -350,7 +350,7 @@ describe("UniKvs - ストリーム失敗時の解放と集約", () => {
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new ThrowBeforeNextStreamMiddleware("ThrowBeforeNext"))
+      .use(new ThrowBeforeNextStreamMiddleware("ThrowBeforeNext"))
       .persist(c1)
       .persist(c2)
       .create();
@@ -385,7 +385,7 @@ describe("UniKvs - ストリーム失敗時の解放と集約", () => {
     const storage = new CancelProbeReadStreamStorage("s");
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new ThrowAfterNextDecodeStreamMiddleware("PostFail"))
+      .use(new ThrowAfterNextDecodeStreamMiddleware("PostFail"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -412,8 +412,8 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     const reader = new StreamVarReaderMiddleware("reader");
     const writer = new StreamVarWriterMiddleware("writer");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(reader)
-      .connect(writer)
+      .use(reader)
+      .use(writer)
       .persist(new FakeStreamStorage("c1"))
       .persist(new FakeStreamStorage("c2"))
       .create();
@@ -433,9 +433,9 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(reader)
-      .connect(writer)
+      .use(new AllowRepair())
+      .use(reader)
+      .use(writer)
       .persist(cache)
       .persist(server)
       .create();
@@ -461,9 +461,9 @@ describe("UniKvs - ストリームオニオンの共有ストア", () => {
     const cache2 = new FakeStreamStorage("cache2");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .fork(UniKvs.branch().connect(writer).persist(cache1))
-      .fork(UniKvs.branch().connect(reader).persist(cache2))
+      .use(new AllowRepair())
+      .fork(UniKvs.branch().use(writer).persist(cache1))
+      .fork(UniKvs.branch().use(reader).persist(cache2))
       .persist(server)
       .create();
     await kvs.open();
@@ -508,8 +508,8 @@ describe("UniKvs - repair のオニオン", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
-      .connect(new PostProbeMiddleware())
+      .use(new AllowRepair())
+      .use(new PostProbeMiddleware())
       .persist(cache)
       .persist(server)
       .create();
@@ -539,9 +539,9 @@ describe("UniKvs - repair のオニオン", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache1)
-      .connect(new DenyBeforeNextStreamMiddleware("deny"))
+      .use(new DenyBeforeNextStreamMiddleware("deny"))
       .persist(cache2)
       .persist(server)
       .create();
@@ -597,9 +597,9 @@ describe("UniKvs - repair のオニオン", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1])];
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache1)
-      .connect(new DenyMapKeyIdentityMiddleware("deny"))
+      .use(new DenyMapKeyIdentityMiddleware("deny"))
       .persist(cache2)
       .persist(server)
       .create();
@@ -634,10 +634,10 @@ describe("UniKvs - repair のオニオン", () => {
     const cache2 = new FakeStreamStorage("cache2");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .fork(
         UniKvs.branch()
-          .connect(new DenyBeforeNextStreamMiddleware("deny"))
+          .use(new DenyBeforeNextStreamMiddleware("deny"))
           .persist(cache1)
           .persist(cache2),
       )
@@ -674,8 +674,8 @@ describe("UniKvs - repair のオニオン", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new DenyBeforeNextStreamMiddleware("deny"))
-      .connect(new AllowRepair())
+      .use(new DenyBeforeNextStreamMiddleware("deny"))
+      .use(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();
@@ -716,8 +716,8 @@ describe("UniKvs - repair のオニオン", () => {
     const server = new CancelProbeReadStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1])]);
     const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new DenyBeforeNextStreamMiddleware("deny"))
-      .connect(new AllowRepair())
+      .use(new DenyBeforeNextStreamMiddleware("deny"))
+      .use(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();
@@ -753,7 +753,7 @@ describe("UniKvs - repair のオニオン", () => {
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(broken)
       .persist(cache)
       .persist(server)
@@ -797,8 +797,8 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
     server.map.set("p:logs", chunks);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(prefix)
+      .use(new AllowRepair())
+      .use(prefix)
       .persist(cache)
       .persist(server)
       .create();
@@ -828,7 +828,7 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const server = new AbortableReadStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1]), new Uint8Array([2])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();
@@ -880,8 +880,8 @@ describe("UniKvs - splitRead と読み取り側の独立性", () => {
     const server = new CancelProbeReadStreamStorage("server");
     server.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new AbortBeforeNextStreamMiddleware("abort-mid-build"))
+      .use(new AllowRepair())
+      .use(new AbortBeforeNextStreamMiddleware("abort-mid-build"))
       .persist(cache)
       .persist(server)
       .create();
@@ -932,7 +932,7 @@ describe("UniKvs - ストリームと mapKey", () => {
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(prefix)
+      .use(prefix)
       .persist(c1)
       .persist(c2)
       .create();
@@ -957,10 +957,10 @@ describe("UniKvs - ストリームと mapKey", () => {
     const chunks = [new Uint8Array([1])];
     server.map.set("p:logs", chunks);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(prefix)
+      .use(new AllowRepair())
+      .use(prefix)
       .persist(cache)
-      .connect(tag)
+      .use(tag)
       .persist(server)
       .create();
     await kvs.open();
@@ -999,7 +999,7 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     cache1.onWriteStart = () => entered.resolve();
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache1)
       .persist(cache2)
       .persist(server)
@@ -1042,7 +1042,7 @@ describe("UniKvs - stream repair の書き戻しの並列性", () => {
     cache.writeGate = writeGate;
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
+      .use(new AllowRepair())
       .persist(cache)
       .persist(server)
       .create();

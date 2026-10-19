@@ -277,7 +277,7 @@ describe("UniKvs - destination 未設定の規約違反", () => {
     // 準備
     const storage = new FakeStorage();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new MissingDestinationMiddleware("NoDest"))
+      .use(new MissingDestinationMiddleware("NoDest"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -300,7 +300,7 @@ describe("UniKvs - destination 未設定の規約違反", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new MissingDestinationMiddleware("NoDest"))
+      .use(new MissingDestinationMiddleware("NoDest"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -321,7 +321,7 @@ describe("UniKvs - destination 未設定の規約違反", () => {
     // 準備
     const storage = new FakeStreamStorage();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new MissingDestinationStreamMiddleware("NoDestStream"))
+      .use(new MissingDestinationStreamMiddleware("NoDestStream"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -344,7 +344,7 @@ describe("UniKvs - destination 未設定の規約違反", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new MissingDestinationStreamMiddleware("NoDestStream"))
+      .use(new MissingDestinationStreamMiddleware("NoDestStream"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -391,8 +391,8 @@ describe("UniKvs - next() の await 忘れ", () => {
     const fireAndForget = new FireAndForgetStreamMiddleware("FireAndForgetStream");
     const slow = new SlowStreamMiddleware();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(fireAndForget)
-      .connect(slow)
+      .use(fireAndForget)
+      .use(slow)
       .persist(storage)
       .create();
     await kvs.open();
@@ -436,8 +436,8 @@ describe("UniKvs - next() の await 忘れ", () => {
     const slow = new SlowMiddleware();
     const fireAndForget = new FireAndForgetMiddleware("FireAndForget");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(slow)
-      .connect(fireAndForget)
+      .use(slow)
+      .use(fireAndForget)
       .persist(storage)
       .create();
     await kvs.open();
@@ -481,8 +481,8 @@ describe("UniKvs - next() の await 忘れ", () => {
     const slow = new SlowStreamMiddleware();
     const fireAndForget = new FireAndForgetStreamMiddleware("FireAndForgetStream");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(slow)
-      .connect(fireAndForget)
+      .use(slow)
+      .use(fireAndForget)
       .persist(storage)
       .create();
     await kvs.open();
@@ -519,7 +519,7 @@ describe("UniKvs - next() の await 忘れ", () => {
     }
     const storage = new FakeStreamStorage();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new SilentStreamMiddleware())
+      .use(new SilentStreamMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -552,8 +552,8 @@ describe("UniKvs - オニオン実行の順序", () => {
     const b = new OnionOrderMiddleware("B", order);
     const storage = new FakeStorage();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(a)
-      .connect(b)
+      .use(a)
+      .use(b)
       .persist(storage)
       .create();
     await kvs.open();
@@ -577,9 +577,9 @@ describe("UniKvs - オニオン実行の順序", () => {
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
-      .connect(a)
-      .connect(b)
+      .use(new AllowRepair())
+      .use(a)
+      .use(b)
       .persist(c1)
       .persist(c2)
       .persist(server)
@@ -607,8 +607,8 @@ describe("UniKvs - オニオン実行の順序", () => {
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(a)
-      .connect(b)
+      .use(a)
+      .use(b)
       .persist(c1)
       .persist(c2)
       .create();
@@ -634,9 +634,9 @@ describe("UniKvs - オニオン実行の順序", () => {
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(a)
-      .connect(b)
+      .use(new AllowRepair())
+      .use(a)
+      .use(b)
       .persist(c1)
       .persist(c2)
       .persist(server)
@@ -734,7 +734,7 @@ describe("UniKvs - ストリームの境界と部分失敗", () => {
     const cache = new MidWriteFailStreamStorage("cache", 2);
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(ar)
+      .use(ar)
       .persist(cache)
       .persist(server)
       .create();
@@ -770,7 +770,7 @@ describe("UniKvs - 後段開始後のミドルウェア失敗", () => {
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(failing)
+      .use(failing)
       .persist(c1)
       .persist(c2)
       .create();
@@ -803,7 +803,7 @@ describe("UniKvs - 後段開始後のミドルウェア失敗", () => {
     const c1 = new FakeStreamStorage("c1");
     const c2 = new FakeStreamStorage("c2");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new ThrowAfterNextStreamMiddleware("PostFailStream"))
+      .use(new ThrowAfterNextStreamMiddleware("PostFailStream"))
       .persist(c1)
       .persist(c2)
       .create();
@@ -853,7 +853,7 @@ describe("UniKvs - 構築失敗時のソース解放", () => {
     const storage = new FakeStreamStorage();
     const ac = new AbortController();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AbortThenNextMiddleware(ac))
+      .use(new AbortThenNextMiddleware(ac))
       .persist(storage)
       .create();
     await kvs.open();
@@ -909,8 +909,8 @@ describe("UniKvs - 構築失敗時のソース解放", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(middleware)
+      .use(new AllowRepair())
+      .use(middleware)
       .persist(cache)
       .persist(server)
       .create();
@@ -948,7 +948,7 @@ describe("UniKvs - 構築失敗時のソース解放", () => {
     const deep = new FakeStreamStorage("deep");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(shallow)
-      .connect(new ThrowMapKeyDeepMiddleware())
+      .use(new ThrowMapKeyDeepMiddleware())
       .persist(deep)
       .create();
     await kvs.open();
@@ -1069,7 +1069,7 @@ describe("UniKvs - repair の冪等性", () => {
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(ar)
+      .use(ar)
       .persist(c1)
       .persist(c2)
       .persist(server)
@@ -1119,8 +1119,8 @@ describe("UniKvs - repair 中のミドルウェア失敗", () => {
     const c1 = new FakeStorage("c1");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
-      .connect(failing)
+      .use(new AllowRepair())
+      .use(failing)
       .persist(c1)
       .persist(server)
       .create();
@@ -1181,9 +1181,9 @@ describe("UniKvs - repair の共有ストア", () => {
     const c1 = new FakeStorage("c1");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
-      .connect(reader)
-      .connect(writer)
+      .use(new AllowRepair())
+      .use(reader)
+      .use(writer)
       .persist(c1)
       .persist(server)
       .create();
@@ -1211,9 +1211,9 @@ describe("UniKvs - Compression + Checksum + repair 統合", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new Memory();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array<ArrayBuffer>> }>()
-      .connect(new AllowRepair())
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new AllowRepair())
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(cache as unknown as IStorage)
       .persist(server)
       .create();
@@ -1356,7 +1356,7 @@ describe("UniKvs - ストリーム読み取り中の書き込み操作", () => {
     // 準備: gzip のマジックナンバーで始まる不正データを直接保存する
     const storage = new Memory();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new Compression("gzip"))
+      .use(new Compression("gzip"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -1383,7 +1383,7 @@ describe("UniKvs - ストリーム読み取り中の書き込み操作", () => {
     const branch = new FakeStreamMiddleware<Uint8Array>("branch");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
       .persist(c1)
-      .connect(branch)
+      .use(branch)
       .persist(c2)
       .persist(c3)
       .create();

@@ -119,7 +119,7 @@ describe("UniKvs - vars の伝播", () => {
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware("probe");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
     await kvs.open();

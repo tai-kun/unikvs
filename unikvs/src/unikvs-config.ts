@@ -117,7 +117,7 @@ export interface IUniKvsConfigBuilder<
     TLastMiddlewareEncodeChunkOutput
   >;
 
-  connect<
+  use<
     TMiddleware extends IMiddleware<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
@@ -253,7 +253,7 @@ export interface IUniKvsConfigFinalizer<
     TLastMiddlewareEncodeChunkOutput
   >;
 
-  connect<
+  use<
     TMiddleware extends IMiddleware<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
@@ -439,7 +439,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     return this;
   }
 
-  public connect(middleware: IMiddleware): this {
+  public use(middleware: IMiddleware): this {
     this.#middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
@@ -448,7 +448,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public persist(storage: IStorage): this {
     this.#destinations.push({
       storage: UniKvsStorage.from(storage),
-      // 登録時点のチェーンをスナップショットして保持するため、以降の connect はこの登録に影響しません。
+      // 登録時点のチェーンをスナップショットして保持するため、以降の use はこの登録に影響しません。
       middlewares: [...this.#middlewares],
     });
 

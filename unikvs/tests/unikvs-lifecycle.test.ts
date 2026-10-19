@@ -81,7 +81,7 @@ describe("UniKvs - open の状態遷移", () => {
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
 
@@ -110,8 +110,8 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     const ngMiddleware = new FakeMiddleware("ng");
     ngMiddleware.errors["open"] = failure;
     const kvs = UniKvs.config()
-      .connect(okMiddleware)
-      .connect(ngMiddleware)
+      .use(okMiddleware)
+      .use(ngMiddleware)
       .persist(storage)
       .create();
 

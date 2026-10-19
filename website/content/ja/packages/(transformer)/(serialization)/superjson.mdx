@@ -45,7 +45,7 @@ type Profile = {
 };
 
 const kvs = UniKvs.config<{ profile: PlainValue<Profile> }>()
-  .connect(new Superjson())
+  .use(new Superjson())
   .persist(new Memory())
   .create();
 

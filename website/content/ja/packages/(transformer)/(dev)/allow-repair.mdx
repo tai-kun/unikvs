@@ -38,7 +38,7 @@ import { UniKvs, type PlainValue } from "unikvs";
 const allowRepair = new AllowRepair();
 
 const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
-  .connect(allowRepair)
+  .use(allowRepair)
   .persist(new Memory())
   .persist(new NodeFs("./.tmp"))
   .create();

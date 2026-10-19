@@ -16,7 +16,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const b = new FakeStorage("b");
     const probe = new FakeMiddleware("probe");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(probe)
+      .use(probe)
       .persist(a)
       .persist(b)
       .create();
@@ -44,7 +44,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const server = new FakeStorage("server");
     const probe = new FakeMiddleware("probe");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(probe)
+      .use(probe)
       .persist(cache)
       .persist(server)
       .create();

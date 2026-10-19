@@ -19,10 +19,10 @@ import type UniKvsStorage from "./_storage.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import * as v from "./_valibot.js";
 import {
-  MiddlewareDestinationFrozenError,
-  MiddlewareDestinationMissingError,
   MiddlewareNextNotCalledError,
   MiddlewareNextNotAwaitedError,
+  MiddlewareDestinationFrozenError,
+  MiddlewareDestinationMissingError,
   MiddlewareNextCalledMultipleTimesError,
 } from "./errors.js";
 

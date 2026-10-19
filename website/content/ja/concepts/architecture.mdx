@@ -21,11 +21,11 @@ flowchart LR
 どの構成も、入力を根 (root) とする根付き有向木として表せます。
 
 - 根 (root): 入力 `Input` です。入次数は 0 です。
-- 内部頂点 (internal vertex): `connect()` で積んだトランスフォーマーです。
+- 内部頂点 (internal vertex): `use()` で積んだトランスフォーマーです。
 - 葉 (leaf): `persist()` で登録したストレージです。出次数は 0 です。
 - 辺 (edge) は根から葉へ向かいます。根以外の各頂点は 1 つの親しか持たず、経路が合流する頂点は存在しません。
 - ストレージの変換チェーンは、根からその葉までの経路 (path) と一致します。経路が同じなら保存される値も同じです。
-- `persist()` はその時点の根からの経路を確定させて葉を 1 つ付けます。`connect()` はカーソルを 1 頂点だけ葉方向へ進めます。
+- `persist()` はその時点の根からの経路を確定させて葉を 1 つ付けます。`use()` はカーソルを 1 頂点だけ葉方向へ進めます。
 - `fork()` はカーソル位置の頂点へ、独立した部分木 (branch) を接ぎ木します。部分木での追加は親の経路に入りません。
 
 ## 書き込みと読み取り [#read-and-write]
@@ -48,7 +48,7 @@ flowchart LR
 
 ## スナップショット [#snapshot]
 
-各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを親パイプラインに使います。`connect()` を挟むたびに新しい分岐ができて、先に付けた葉の経路は変わりません。
+各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを親パイプラインに使います。`use()` を挟むたびに新しい分岐ができて、先に付けた葉の経路は変わりません。
 
 ```ts
 import { Compression } from "@unikvs/compression";
@@ -56,7 +56,7 @@ import { Memory } from "@unikvs/memory";
 import { UniKvs, type Value } from "unikvs";
 
 const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
-  .connect(new Compression("gzip"))
+  .use(new Compression("gzip"))
   .persist(new Memory()) // 圧縮のみ
   .persist(new Memory()) // 圧縮のみ (先の葉も変わらない)
   .create();

@@ -45,7 +45,7 @@ type Snapshot = {
 };
 
 const kvs = UniKvs.config<{ snapshot: PlainValue<Snapshot> }>()
-  .connect(new Cbor())
+  .use(new Cbor())
   .persist(new Memory())
   .create();
 

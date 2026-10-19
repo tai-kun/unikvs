@@ -240,7 +240,7 @@ describe("UniKvs - schema による入出力検証", () => {
 
     const storage = new Memory();
     await using kvs = UniKvs.config({ schema: { message: PlainValue(v.string()) } })
-      .connect(new JsonMiddleware())
+      .use(new JsonMiddleware())
       .persist(storage)
       .create();
     await kvs.open();

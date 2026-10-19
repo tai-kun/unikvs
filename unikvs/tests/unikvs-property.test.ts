@@ -116,13 +116,13 @@ describe("UniKvs - 決定的ファズ: ミドルウェア構成", () => {
 
       let config = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>();
       if (useChecksum) {
-        config = config.connect(new ChecksumSha256());
+        config = config.use(new ChecksumSha256());
       }
       if (compression !== "none") {
-        config = config.connect(new Compression(compression));
+        config = config.use(new Compression(compression));
       }
       if (usePassthrough) {
-        config = config.connect(new FakeStreamMiddleware("pass-through"));
+        config = config.use(new FakeStreamMiddleware("pass-through"));
       }
       await using kvs = config.persist(new Memory()).create();
       await kvs.open();

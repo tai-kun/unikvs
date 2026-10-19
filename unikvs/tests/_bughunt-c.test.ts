@@ -156,7 +156,7 @@ describe("UniKvs - ミドルウェアの close 回復", () => {
       }
     };
     const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -215,7 +215,7 @@ describe("UniKvs - 外部で開かれたプラグインは管理対象外", () =
     middleware.isOpen = true;
     const storage = new FakeStorage();
     const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
 
@@ -261,8 +261,8 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new ThrowAfterNextStreamMiddleware("PostFailStream"))
+      .use(new AllowRepair())
+      .use(new ThrowAfterNextStreamMiddleware("PostFailStream"))
       .persist(cache)
       .persist(server)
       .create();
@@ -304,8 +304,8 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
+      .use(new AllowRepair())
+      .use(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
       .persist(server)
       .create();
@@ -342,8 +342,8 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
+      .use(new AllowRepair())
+      .use(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
       .persist(server)
       .create();
@@ -365,9 +365,9 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const broken = new FakeStreamMiddleware<Uint8Array>("broken");
     broken.errors["encodeStream"] = new Error("child setup failed");
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AllowRepair())
-      .connect(new FakeStreamMiddleware<Uint8Array>("parent"))
-      .connect(broken)
+      .use(new AllowRepair())
+      .use(new FakeStreamMiddleware<Uint8Array>("parent"))
+      .use(broken)
       .persist(cache)
       .persist(server)
       .create();
@@ -488,7 +488,7 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     });
     const storage = new FakeStreamStorage();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new WrapThenThrowStreamMiddleware("WrapThenThrow"))
+      .use(new WrapThenThrowStreamMiddleware("WrapThenThrow"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -533,7 +533,7 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     const storage = new CancelObservableReadStorage("cancelaware");
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new WrapThenThrowDecodeMiddleware("WrapThenThrowDecode"))
+      .use(new WrapThenThrowDecodeMiddleware("WrapThenThrowDecode"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -580,7 +580,7 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     const storage = new CancelObservableReadStorage("cancelaware-abort-after-next");
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new AbortAfterNextDecodeMiddleware("AbortAfterNextDecode"))
+      .use(new AbortAfterNextDecodeMiddleware("AbortAfterNextDecode"))
       .persist(storage)
       .create();
     await kvs.open();
@@ -617,7 +617,7 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     });
     const storage = new FakeStreamStorage();
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new WrapWithoutNextStreamMiddleware("WrapWithoutNext"))
+      .use(new WrapWithoutNextStreamMiddleware("WrapWithoutNext"))
       .persist(storage)
       .create();
     await kvs.open();

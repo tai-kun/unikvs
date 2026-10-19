@@ -74,7 +74,7 @@ configureSync({
 });
 
 const kvs = UniKvs.config<{ greeting: PlainValue<string> }>()
-  .connect(new Debug())
+  .use(new Debug())
   .persist(new Memory())
   .create();
 

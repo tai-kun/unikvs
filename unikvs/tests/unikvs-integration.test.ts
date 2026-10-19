@@ -12,8 +12,8 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
     // 準備
     const memory = new Memory();
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(memory)
       .create();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
@@ -36,8 +36,8 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
   test("チェックサム不一致の読み取りは ChecksumMismatchError になる", async ({ expect }) => {
     // 準備
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(new Memory())
       .create();
     const data = new Uint8Array([1, 2, 3]);
@@ -56,8 +56,8 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
     // 準備
     const memory = new Memory();
     await using kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("gzip"))
+      .use(new ChecksumSha256())
+      .use(new Compression("gzip"))
       .persist(memory)
       .create();
     const data = Uint8Array.from({ length: 1024 }, (_, i) => i % 253);
@@ -80,8 +80,8 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
   test("チェックサム未指定でも既定では検証をスキップして往復できる", async ({ expect }) => {
     // 準備
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new ChecksumSha256())
-      .connect(new Compression("deflate"))
+      .use(new ChecksumSha256())
+      .use(new Compression("deflate"))
       .persist(new Memory())
       .create();
     const data = new Uint8Array([4, 5, 6]);
@@ -101,9 +101,9 @@ describe("UniKvs - 複数ミドルウェアと複数ストレージ", () => {
     const storage1 = new Memory();
     const storage2 = new Memory();
     await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
-      .connect(new Compression("gzip"))
+      .use(new Compression("gzip"))
       .persist(storage1)
-      .connect(new Compression("deflate"))
+      .use(new Compression("deflate"))
       .persist(storage2)
       .create();
     const data = Uint8Array.from({ length: 64 }, (_, i) => i);

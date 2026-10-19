@@ -225,7 +225,7 @@ describe("UniKvs - 実行中 abort", () => {
     };
     const storage = new FakeStorage();
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
     await kvs.open();
@@ -287,7 +287,7 @@ describe("UniKvs - set のキーロック待機中の abort", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
     await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
-      .connect(new FakeStreamMiddleware())
+      .use(new FakeStreamMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -363,7 +363,7 @@ describe("UniKvs - middleware の decode 中の abort", () => {
       }
     };
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(middleware)
+      .use(middleware)
       .persist(storage)
       .create();
     await kvs.open();

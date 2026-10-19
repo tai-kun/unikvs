@@ -63,7 +63,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
     // 準備: 同じビルダーから 2 つのクライアントを作り、同じストレージとミドルウェアを共有する
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware();
-    const config = UniKvs.config().connect(middleware).persist(storage);
+    const config = UniKvs.config().use(middleware).persist(storage);
     const a = config.create();
     const b = config.create();
     await a.open();
@@ -145,7 +145,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
         await release.wait();
       }
     };
-    const config = UniKvs.config<{ a: PlainValue<string> }>().connect(middleware).persist(storage);
+    const config = UniKvs.config<{ a: PlainValue<string> }>().use(middleware).persist(storage);
     const a = config.create();
     const b = config.create();
 
@@ -233,7 +233,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
         await release.wait();
       }
     };
-    const config = UniKvs.config<{ a: PlainValue<string> }>().connect(probe).persist(storage);
+    const config = UniKvs.config<{ a: PlainValue<string> }>().use(probe).persist(storage);
     const a = config.create();
     const b = config.create();
     await a.open();
@@ -318,7 +318,7 @@ describe("UniKvs - ストレージの共有とライフサイクル", () => {
         throw new Error("close failed");
       }
     };
-    const config = UniKvs.config<{ a: PlainValue<string> }>().connect(probe).persist(storage);
+    const config = UniKvs.config<{ a: PlainValue<string> }>().use(probe).persist(storage);
     const a = config.create();
     const b = config.create();
     await a.open();
@@ -485,7 +485,7 @@ describe("UniKvs - set の前段失敗時のストリーム後始末", () => {
     // 準備
     const storage = new FakeStreamStorage();
     await using kvs = UniKvs.config({ schema: { logs: StreamValue(v.instance(Uint8Array)) } })
-      .connect(new ThrowingUseMiddleware())
+      .use(new ThrowingUseMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -510,7 +510,7 @@ describe("UniKvs - キー写像と CRUD", () => {
     // 準備
     const storage = new FakeStorage();
     await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .connect(new PrefixKeyMiddleware())
+      .use(new PrefixKeyMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -581,7 +581,7 @@ describe("UniKvs - 読み取り専用の変数", () => {
     }
     const storage = new VarWritingStorage();
     await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .connect(new LockVarMiddleware())
+      .use(new LockVarMiddleware())
       .persist(storage)
       .create();
     await kvs.open();
@@ -632,8 +632,8 @@ describe("UniKvs - repair の next 後の拒否", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .connect(new AllowRepair())
-      .connect(new DenyAfterNextMiddleware("DenyAfterNext"))
+      .use(new AllowRepair())
+      .use(new DenyAfterNextMiddleware("DenyAfterNext"))
       .persist(cache)
       .persist(server)
       .create();
