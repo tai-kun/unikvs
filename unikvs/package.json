@@ -30,7 +30,6 @@
   },
   "dependencies": {
     "@tai-kun/valibot-extra-lab": "^0.0.5",
-    "@unikvs/allow-repair": "workspace:*",
     "@unikvs/core": "workspace:*",
     "abort-signal-utils": "^0.0.6",
     "asyncmux": "^0.0.12",
@@ -43,6 +42,7 @@
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.19.1",
+    "@unikvs/allow-repair": "workspace:*",
     "@unikvs/checksum": "workspace:*",
     "@unikvs/compression": "workspace:*",
     "@unikvs/fs.node": "workspace:*",

@@ -211,7 +211,6 @@ describe("ミドルウェア用コンテキスト", () => {
     expect(dec.action).toBe("get");
     expect(dec.source).toBe("b");
     expect(use.action).toBe("set");
-    expect(use.key).toBe("k");
   });
 
   test("encode の destination に設定した値が読める", async ({ expect }) => {

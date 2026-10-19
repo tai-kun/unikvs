@@ -1679,9 +1679,6 @@ importers:
       '@tai-kun/valibot-extra-lab':
         specifier: ^0.0.5
         version: 0.0.5(fast-utf8@0.0.7)(valibot@1.5.0(typescript@7.0.2))
-      '@unikvs/allow-repair':
-        specifier: workspace:*
-        version: link:../packages/allow-repair
       '@unikvs/core':
         specifier: workspace:*
         version: link:../packages/core
@@ -1716,6 +1713,9 @@ importers:
       '@types/node':
         specifier: 24.19.1
         version: 24.19.1
+      '@unikvs/allow-repair':
+        specifier: workspace:*
+        version: link:../packages/allow-repair
       '@unikvs/checksum':
         specifier: workspace:*
         version: link:../packages/checksum

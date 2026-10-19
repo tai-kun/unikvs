@@ -25,10 +25,7 @@ type TestMapping = {
  */
 async function createWriteOnlyKvs(options?: WriteOnlyOptions) {
   const storage = new Memory();
-  const kvs = UniKvs.config<TestMapping>()
-    .use(new WriteOnly(options))
-    .persist(storage)
-    .create();
+  const kvs = UniKvs.config<TestMapping>().use(new WriteOnly(options)).persist(storage).create();
   await kvs.open();
 
   return { kvs, storage };

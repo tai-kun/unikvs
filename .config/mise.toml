@@ -13,10 +13,23 @@ run = [{ task = "test:format" }]
 env = { CI = 1 }
 
 [tasks."test:format"]
-run = { task = "format", args = ["--check"] }
+run = [
+  { task = "format:oxc", args = [
+    "--check",
+  ] },
+  { task = "format:sort-workspaces", args = [
+    "--check",
+  ] },
+]
 
 [tasks.format]
+run = [{ task = "format:oxc" }, { task = "format:sort-workspaces" }]
+
+[tasks."format:oxc"]
 run = "set -e; cp .config/.oxfmtrc.json .tmp-oxfmtrc.json; trap 'rm -f .tmp-oxfmtrc.json' EXIT; npx oxfmt --config .tmp-oxfmtrc.json"
+
+[tasks."format:sort-workspaces"]
+run = "node scripts/sort-workspaces.mjs"
 
 [tasks.update]
 run = [
