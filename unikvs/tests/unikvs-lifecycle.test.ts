@@ -109,11 +109,7 @@ describe("UniKvs - open 失敗時のロールバック", () => {
     const okMiddleware = new FakeMiddleware("ok");
     const ngMiddleware = new FakeMiddleware("ng");
     ngMiddleware.errors["open"] = failure;
-    const kvs = UniKvs.config()
-      .use(okMiddleware)
-      .use(ngMiddleware)
-      .persist(storage)
-      .create();
+    const kvs = UniKvs.config().use(okMiddleware).use(ngMiddleware).persist(storage).create();
 
     // 実行と検証
     await expect(kvs.open()).rejects.toThrow(PluginOperationAggregateError);
