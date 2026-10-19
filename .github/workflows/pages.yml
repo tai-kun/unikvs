@@ -41,7 +41,7 @@ jobs:
           restore-keys: blume-og-${{ runner.os }}-
 
       - name: "ビルド"
-        run: npm run build
+        run: pnpm build
         working-directory: website
 
       - name: "GitHub Pages を設定"

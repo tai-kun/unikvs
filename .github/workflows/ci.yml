@@ -99,48 +99,95 @@ jobs:
       - name: "内部依存パッケージのビルド"
         run: |
           root_dir="$(pwd)"
+          target_dir="${{ matrix.package.directory }}"
 
-          # 1. ルートの workspaces 設定から、全内部パッケージの「パッケージ名」と「ディレクトリ名」のマップを作成
-          internal_pkg_map=$(jq -r '
-            .workspaces[] as $ws 
-            | ($ws | sub("/\\*$"; "")) as $path 
-            | $path 
-          ' package.json | xargs -I {} sh -c '
-            if [ -f "{}/package.json" ]; then
-              name=$(jq -r .name "{}/package.json")
-              echo "{\"$name\": \"{}\"}"
-            fi
-          ' | jq -s 'add')
+          # 内部パッケージの推移的依存をトポロジカル順（依存先→依存元）で列挙する。
+          # 従来は直接依存のみを workspaces 定義順でビルドしていたため、
+          # 推移的依存のビルド漏れ（例: unikvs → allow-repair → passthrough）や
+          # 順序逆転（例: passthrough より後に testing）が起きていた。
+          mapfile -t ordered_dep_dirs < <(
+            ROOT_DIR="$root_dir" TARGET_DIR="$target_dir" python3 - <<'PY'
+          import glob
+          import json
+          import os
+          import pathlib
 
-          cd "${{ matrix.package.directory }}"
+          root = pathlib.Path(os.environ["ROOT_DIR"])
+          target_rel = os.environ["TARGET_DIR"]
 
-          # 2. 現在のパッケージの全依存関係を取得
-          all_deps_in_pkg=$(jq -r '
-            ( .dependencies // {}, 
-              .devDependencies // {}, 
-              .peerDependencies // {}, 
-              .optionalDependencies // {} 
-            ) | keys[]
-          ' package.json | sort -u)
+          with open(root / "package.json") as f:
+              workspaces = json.load(f)["workspaces"]
 
-          # 3. ルートの workspaces の定義順（ビルド順序のヒント）に従って、依存している内部パッケージを抽出
-          ordered_internal_deps=$(jq -r --argjson map "$internal_pkg_map" '
-            .workspaces[] as $ws 
-            | ($ws | sub("/\\*$"; "")) as $path
-            | ($map | to_entries[] | select(.value == $path) | .key) as $pkg_name
-            | $pkg_name
-          ' "${root_dir}/package.json")
+          # workspaces の "pkg/*" 形式も展開できるよう、ディレクトリ列に正規化する
+          dirs: list[str] = []
+          for ws in workspaces:
+              if ws.endswith("/*"):
+                  base = ws[:-2]
+                  dirs.extend(
+                      sorted(
+                          str(pathlib.Path(p).relative_to(root))
+                          for p in glob.glob(str(root / base / "*"))
+                          if (pathlib.Path(p) / "package.json").is_file()
+                      )
+                  )
+              else:
+                  dirs.append(ws)
 
-          for dep_name in $ordered_internal_deps; do
-            # 現在のパッケージがその内部パッケージに依存しているかチェック
-            if echo "$all_deps_in_pkg" | grep -qx "$dep_name"; then
-              target_rel_path=$(echo "$internal_pkg_map" | jq -r ".\"$dep_name\"")
-              target_abs_path="${root_dir}/${target_rel_path}"
+          name_to_dir: dict[str, str] = {}
+          for d in dirs:
+              pj = root / d / "package.json"
+              if not pj.is_file():
+                  continue
+              with open(pj) as f:
+                  name_to_dir[json.load(f)["name"]] = d
 
-              echo "${target_rel_path} で内部依存パッケージ ${dep_name} をビルドします"
-              (cd "${target_abs_path}" && npm run build)
-              echo
-            fi
+          dir_to_name = {v: k for k, v in name_to_dir.items()}
+          target_name = dir_to_name[target_rel]
+
+          def direct_internal_deps(pkg_name: str) -> list[str]:
+              with open(root / name_to_dir[pkg_name] / "package.json") as f:
+                  pkg = json.load(f)
+              deps: set[str] = set()
+              for key in (
+                  "dependencies",
+                  "devDependencies",
+                  "peerDependencies",
+                  "optionalDependencies",
+              ):
+                  deps.update((pkg.get(key) or {}).keys())
+              return sorted(d for d in deps if d in name_to_dir)
+
+          # DFS の post-order で推移閉包を収集すれば、依存先が先になる
+          visited: set[str] = set()
+          visiting: set[str] = set()
+          order: list[str] = []
+
+          def visit(name: str) -> None:
+              if name in visited:
+                  return
+              if name in visiting:
+                  raise ValueError(f"circular dependency detected at {name}")
+              visiting.add(name)
+              for dep in direct_internal_deps(name):
+                  visit(dep)
+              visiting.remove(name)
+              visited.add(name)
+              order.append(name)
+
+          visit(target_name)
+          order.pop()  # 自分自身を除く
+
+          for name in order:
+              print(name_to_dir[name])
+          PY
+          )
+
+          for rel_path in ${ordered_dep_dirs[@]+"${ordered_dep_dirs[@]}"}; do
+            [ -n "$rel_path" ] || continue
+            dep_name=$(jq -r .name "${root_dir}/${rel_path}/package.json")
+            echo "${rel_path} で内部依存パッケージ ${dep_name} をビルドします"
+            (cd "${root_dir}/${rel_path}" && pnpm build)
+            echo
           done
 
       - name: "依存関係をインストール（パッケージ）"
@@ -158,7 +205,7 @@ jobs:
         working-directory: ${{ matrix.package.directory }}
 
       - name: "ビルド"
-        run: npm run build
+        run: pnpm build
         working-directory: ${{ matrix.package.directory }}
 
       - name: "テスト"
@@ -188,7 +235,7 @@ jobs:
         run: pnpm i
 
       - name: "ビルド"
-        run: npm run build --workspaces
+        run: pnpm build --workspaces
 
       - name: "パッケージ検証"
         run: |

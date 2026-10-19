@@ -2,25 +2,21 @@
 minimum_release_age = "7d"
 
 [tools]
-bun = "1"
 node = "24"
 pnpm = "11"
-redis = "8"
-rustfs = "1.0.0-rc.5"
 
 [tasks.test]
 run = [{ task = "test:format" }]
 env = { CI = 1 }
 
 [tasks."test:format"]
-run = [
-  { task = "format:oxc", args = [
-    "--check",
-  ] },
-  { task = "format:sort-workspaces", args = [
-    "--check",
-  ] },
-]
+run = [{ task = "test:format:oxc" }, { task = "test:format:sort-workspaces" }]
+
+[tasks."test:format:oxc"]
+run = { task = "format:oxc", args = ["--check"] }
+
+[tasks."test:format:sort-workspaces"]
+run = { task = "format:sort-workspaces", args = ["--check"] }
 
 [tasks.format]
 run = [{ task = "format:oxc" }, { task = "format:sort-workspaces" }]
