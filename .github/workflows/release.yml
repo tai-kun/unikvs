@@ -81,7 +81,7 @@ jobs:
             echo "::group::$dir"
             (
               cd "$dir" || exit 1
-              pnpm build
+              npm run build
             )
             echo "::endgroup::"
           done <<< "$dirs"

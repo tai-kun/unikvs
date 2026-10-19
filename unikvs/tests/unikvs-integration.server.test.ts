@@ -96,7 +96,8 @@ describe("UniKvs + Memory + NodeFs", () => {
     await kvs.clear();
 
     // 検証
-    expect(mapOf(memory).size).toBe(0);
+    expect(mapOf(memory).has("foo")).toBe(false);
+    expect(mapOf(memory).has("bar")).toBe(false);
     expect(readdirSync(root)).toEqual([]);
   });
 

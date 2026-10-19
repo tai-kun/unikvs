@@ -1,5 +1,12 @@
 import type { IMiddleware, IPipelineContext, IStorage } from "@unikvs/core";
 import type { Memory } from "@unikvs/memory";
+import {
+  createClearContext,
+  createDeleteContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 
 import { CloseContext } from "../src/_contexts.js";
 
@@ -472,11 +479,46 @@ export async function collectBytes(
 }
 
 /**
- * Memory ストレージが内部で保持する Map をテストから参照するためのアクセサーです。
+ * Memory ストレージの内容をテストから操作するためのアクセサーです。
+ * Memory の内部マップは ECMAScript のプライベートフィールド (#map) のため外部から直接参照できません。
+ * そのため公開 API (write/read/exists/delete/clear) 経由で Map ライクに読み書きします。
  * どのデータが実際にどのストレージへ書き込まれたかを確認するために使用します。
  */
-export function mapOf(storage: Memory): Map<string, unknown> {
-  return (storage as unknown as { map: Map<string, unknown> }).map;
+export function mapOf(storage: Memory): {
+  readonly get: (key: string) => unknown;
+  readonly set: (key: string, value: unknown) => unknown;
+  readonly has: (key: string) => boolean;
+  readonly delete: (key: string) => boolean;
+  readonly clear: () => void;
+} {
+  return {
+    get: (key: string): unknown => {
+      try {
+        return storage.read(createGetContext(key) as unknown as IStorage.ReadContext);
+      } catch {
+        return undefined;
+      }
+    },
+    set: (key: string, value: unknown): unknown => {
+      storage.write(createSetContext(key) as unknown as IStorage.WriteContext, value);
+      return undefined;
+    },
+    has: (key: string): boolean => {
+      // storage.exists は MaybePromise<boolean> ですが、Memory の実装は同期的です。
+      return storage.exists(createHasContext(key) as unknown as IStorage.ExistsContext) as boolean;
+    },
+    delete: (key: string): boolean => {
+      try {
+        storage.delete(createDeleteContext(key) as unknown as IStorage.DeleteContext);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    clear: (): void => {
+      storage.clear(createClearContext() as unknown as IStorage.ClearContext);
+    },
+  };
 }
 
 /**

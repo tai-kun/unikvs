@@ -6,7 +6,7 @@ bun = "1"
 node = "24"
 pnpm = "11"
 redis = "8"
-rustfs = "1.0.0-rc.5"
+rustfs = "1.0.1"
 
 [tasks.test]
 run = [{ task = "test:format" }]
