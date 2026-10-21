@@ -1,3 +1,8 @@
+import {
+  FAKE_DEFAULT_LOCALE,
+  typeTableDetailsIds,
+  routeByBrowserLanguage,
+} from "@tai-kun/blume-integrations";
 import { defineConfig } from "blume";
 import { filesystem, githubReleases } from "blume/sources";
 
@@ -6,6 +11,8 @@ const GITHUB_REPO = "unikvs";
 const GITHUB_OWNER = "tai-kun";
 
 export default defineConfig({
+  integrations: [typeTableDetailsIds(), routeByBrowserLanguage()],
+
   content: {
     sources: [
       filesystem({
@@ -28,7 +35,7 @@ export default defineConfig({
   navigation: {
     repo: `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}`,
     // タブのラベルは必ず en を一番上にしてください。
-    // 既定の言語コードが und なので、ドキュメント以外のページでは英語版の UI にフォールバックされるようにします。
+    // ドキュメント以外のページでは英語版の UI にフォールバックされるようにします。
     tabs: [
       {
         label: {
@@ -46,9 +53,6 @@ export default defineConfig({
       },
     ],
   },
-  // 対応するロケール以外の言語コードを規定値にすることで、トップレベルのページが無いコンテンツのルーティングを可能にします。
-  // ここでは ISO 639-2 で定義されている特殊コードの 1 つである und（言語不明）を採用しています。
-  // und は Blume の内部処理をハックするために使用されているため、言語セレクターから theme.css で消します。
   i18n: {
     locales: [
       {
@@ -59,11 +63,8 @@ export default defineConfig({
         code: "en",
         label: "English",
       },
-      {
-        code: "und",
-        label: "UNDETERMINED",
-      },
+      FAKE_DEFAULT_LOCALE,
     ],
-    defaultLocale: "und",
+    defaultLocale: FAKE_DEFAULT_LOCALE.code,
   },
 });

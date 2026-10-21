@@ -1,4 +1,0 @@
-/* ハックのために使用されている言語コードを言語セレクターから消します。 */
-[data-blume-header] [hreflang="und"][lang="und"] {
-  display: none;
-}
