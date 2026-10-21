@@ -1,7 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
   createClearContext,
-  createCloseContext,
   createDeleteContext,
   createGetContext,
   createHasContext,
@@ -17,7 +16,14 @@ import {
   InvalidChunkTypeError,
   KeyNotFoundError,
 } from "../src/errors.js";
-import { createCacheName, createFakeCaches, runWithGlobalCaches } from "./_helpers.js";
+import {
+  createCacheName,
+  createFakeCaches,
+  createRequest,
+  readBytes,
+  runWithGlobalCaches,
+  writeBytes,
+} from "./_helpers.js";
 
 const { signal } = new AbortController();
 
@@ -33,39 +39,23 @@ describe("Cache API 不在の環境", () => {
   test("コンストラクターは backend 不在でも throw しない", ({ expect }) => {
     // 実行と検証
     withoutBackend(() => {
-      expect(() => new CacheStorage(createCacheName())).not.toThrow();
+      expect(
+        () => new CacheStorage({ cacheName: createCacheName(), toRequest: createRequest }),
+      ).not.toThrow();
     });
   });
 
-  test("注入なしの全操作は CacheStorageNotAvailableError を投げる", async ({ expect }) => {
+  test("open は CacheStorageNotAvailableError を投げる", async ({ expect }) => {
+    // 準備
+    const storage = new CacheStorage({ cacheName: createCacheName(), toRequest: createRequest });
+
     // 実行と検証
-    await withoutBackend(async () => {
-      const storage = new CacheStorage(createCacheName());
-      await expect(
-        storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      await expect(
-        storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, new Uint8Array()),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      await expect(
-        storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      await expect(
-        storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      await expect(
-        storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      await expect(
-        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
-      ).rejects.toThrow(CacheStorageNotAvailableError);
-      expect(() =>
-        storage.getWritable(createSetContext("k", { signal }) as IStorage.GetWritableContext),
-      ).toThrow(CacheStorageNotAvailableError);
-      expect(() =>
-        storage.getReadable(createStreamContext("k", { signal }) as IStorage.GetReadableContext),
-      ).toThrow(CacheStorageNotAvailableError);
-    });
+    await withoutBackend(() =>
+      expect(storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).rejects.toThrow(
+        CacheStorageNotAvailableError,
+      ),
+    );
+    expect(storage.isOpen).toBe(false);
   });
 
   test("CacheStorageNotAvailableError は利用エラーである", ({ expect }) => {
@@ -79,38 +69,66 @@ describe("Cache API 不在の環境", () => {
   test("注入フェイクがあれば backend 不在環境でも CRUD できる", async ({ expect }) => {
     // 実行と検証
     await withoutBackend(async () => {
-      const storage = new CacheStorage(createCacheName(), { caches: createFakeCaches() });
+      const storage = new CacheStorage({
+        cacheName: createCacheName(),
+        caches: createFakeCaches(),
+        toRequest: createRequest,
+      });
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
-      await storage.write(
-        createSetContext("k", { signal }) as IStorage.WriteContext,
-        new Uint8Array([1]),
-      );
-      expect(
-        await storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
-      ).toStrictEqual(new Uint8Array([1]));
-      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
+      await writeBytes(storage, "k", new Uint8Array([1]));
+      expect(await readBytes(storage, "k")).toStrictEqual(new Uint8Array([1]));
+      await storage.close();
     });
   });
 });
 
 describe("未オープン時の誤用", () => {
-  test("backend があっても open 前の操作は TypeError を投げる", async ({ expect }) => {
+  test("open 前の非ストリーム操作は TypeError を投げる", async ({ expect }) => {
     // 準備
-    const storage = new CacheStorage(createCacheName(), { caches: createFakeCaches() });
+    const storage = new CacheStorage({
+      cacheName: createCacheName(),
+      caches: createFakeCaches(),
+      toRequest: createRequest,
+    });
 
     // 実行と検証
     await expect(
       storage.write(
         createSetContext("k", { signal }) as IStorage.WriteContext,
-        new Uint8Array([1]),
+        new Response(new Uint8Array([1])),
       ),
-    ).rejects.toThrow("CacheStorage is not open");
+    ).rejects.toThrow(TypeError);
     await expect(
       storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
     ).rejects.toThrow(TypeError);
-    expect(() =>
-      storage.getWritable(createSetContext("k", { signal }) as IStorage.GetWritableContext),
-    ).toThrow(TypeError);
+    await expect(
+      storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
+    ).rejects.toThrow(TypeError);
+    await expect(
+      storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
+    ).rejects.toThrow(TypeError);
+    await expect(
+      storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
+    ).rejects.toThrow(TypeError);
+  });
+
+  test("open 前のストリーム操作は使用時に TypeError を投げる", async ({ expect }) => {
+    // 準備
+    const storage = new CacheStorage({
+      cacheName: createCacheName(),
+      caches: createFakeCaches(),
+      toRequest: createRequest,
+    });
+    const writer = storage
+      .getWritable(createSetContext("k", { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+    const reader = storage
+      .getReadable(createStreamContext("k", { signal }) as IStorage.GetReadableContext)
+      .getReader();
+
+    // 実行と検証
+    await expect(writer.close()).rejects.toThrow(TypeError);
+    await expect(reader.read()).rejects.toThrow(TypeError);
   });
 });
 

@@ -12,7 +12,7 @@ import {
   createOpenContext,
   createSetContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { beforeEach, describe, test, vi } from "vitest";
 
 import {
   ClearWithoutPrefixNotAllowedError,
@@ -23,9 +23,40 @@ import {
 import VercelKv, { type KVClientLike } from "../src/vercel-kv.js";
 import { FakeKv } from "./_helpers.js";
 
+const kvModule = vi.hoisted(() => ({
+  createClientCalls: [] as { readonly url: string; readonly token: string }[],
+  createClient: undefined as
+    | ((config: { readonly url: string; readonly token: string }) => unknown)
+    | undefined,
+}));
+
+// `@vercel/kv` は任意依存です。実モジュールの有無やネットワークに依存せず、
+// `VercelKv` が `createClient` をどう解決・再利用するかを検証するために差し替えます。
+vi.mock("@vercel/kv", () => ({
+  get createClient() {
+    return kvModule.createClient;
+  },
+}));
+
+function stubKvModule(
+  createClient: (config: { url: string; token: string }) => KVClientLike,
+): void {
+  kvModule.createClient = (config) => {
+    kvModule.createClientCalls.push(config);
+
+    return createClient(config);
+  };
+}
+
 function freshSignal(): AbortSignal {
   return AbortSignal.timeout(5_000);
 }
+
+beforeEach(() => {
+  kvModule.createClientCalls.length = 0;
+  kvModule.createClient = undefined;
+  vi.unstubAllEnvs();
+});
 
 describe("ライフサイクル", () => {
   test("ストレージ名は VercelKv である", ({ expect }) => {
@@ -138,28 +169,36 @@ describe("基本データ操作 (CRUD)", () => {
     ).resolves.toStrictEqual(new Uint8Array(0));
   });
 
-  test("値は Base64 文字列として格納される", async ({ expect }) => {
+  test("保存値は標準 Base64 文字列と一致し、読み取りで元のバイト列に戻る", async ({ expect }) => {
     // 準備
     const kv = new FakeKv();
     const storage = new VercelKv({ kv });
-    const data = new TextEncoder().encode("こんにちは、世界! 🚀 Ω");
+    // Base64 のパディングが 0/1/2 個になる長さと、任意のバイナリを含めます。
+    const cases = [
+      new Uint8Array(0),
+      new Uint8Array([0]),
+      new Uint8Array([0, 127]),
+      new Uint8Array([0, 127, 255]),
+      new TextEncoder().encode("こんにちは、世界! 🚀 Ω"),
+      createAllByteValues(256),
+    ];
 
-    // 実行
-    await storage.write(
-      createSetContext("unicode-data.txt", { signal: freshSignal() }) as IStorage.WriteContext,
-      data,
-    );
+    for (const [index, data] of cases.entries()) {
+      const key = `base64-${index}.bin`;
 
-    // 検証
-    const stored = kv.store.get("unikvs:unicode-data.txt");
-    expect(typeof stored).toBe("string");
-    expect(new TextDecoder().decode(new Uint8Array(Buffer.from(stored!, "base64")))).toBe(
-      "こんにちは、世界! 🚀 Ω",
-    );
-    const result = await storage.read(
-      createGetContext("unicode-data.txt", { signal: freshSignal() }) as IStorage.ReadContext,
-    );
-    expect(new TextDecoder().decode(result)).toBe("こんにちは、世界! 🚀 Ω");
+      // 実行
+      await storage.write(
+        createSetContext(key, { signal: freshSignal() }) as IStorage.WriteContext,
+        data,
+      );
+
+      // 検証
+      // 他クライアントからも読める形式であることを、Node の標準実装と突き合わせます。
+      expect(kv.store.get(`unikvs:${key}`)).toBe(Buffer.from(data).toString("base64"));
+      await expect(
+        storage.read(createGetContext(key, { signal: freshSignal() }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(data);
+    }
   });
 
   test("存在しないキーの読み取りは KeyNotFoundError になる", async ({ expect }) => {
@@ -212,6 +251,7 @@ describe("基本データ操作 (CRUD)", () => {
 
     // 検証
     expect(error).toBeInstanceOf(Error);
+    expect((error as { message: string }).message).toContain("unexpected value type");
   });
 
   test("削除を 2 回行っても 2 回目はエラーにならない", async ({ expect }) => {
@@ -311,31 +351,41 @@ describe("基本データ操作 (CRUD)", () => {
     ).resolves.toBe(true);
   });
 
-  test("中断済みシグナルの操作は中断例外を投げる", async ({ expect }) => {
+  test("中断済みシグナルの操作は開始前に拒否され、副作用を残さない", async ({ expect }) => {
     // 準備
-    const storage = new VercelKv({ kv: new FakeKv() });
+    const kv = new FakeKv();
+    const storage = new VercelKv({ kv });
+    await storage.write(
+      createSetContext("kept.bin", { signal: freshSignal() }) as IStorage.WriteContext,
+      new Uint8Array([9]),
+    );
 
     // 実行と検証
     await expect(
       storage.write(
-        createSetContext("k", { signal: abortedSignal() }) as IStorage.WriteContext,
+        createSetContext("new.bin", { signal: abortedSignal() }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
     ).rejects.toBeInstanceOf(DOMException);
     await expect(
-      storage.read(createGetContext("k", { signal: abortedSignal() }) as IStorage.ReadContext),
+      storage.read(
+        createGetContext("kept.bin", { signal: abortedSignal() }) as IStorage.ReadContext,
+      ),
     ).rejects.toBeInstanceOf(DOMException);
     await expect(
-      storage.exists(createHasContext("k", { signal: abortedSignal() }) as IStorage.ExistsContext),
+      storage.exists(
+        createHasContext("kept.bin", { signal: abortedSignal() }) as IStorage.ExistsContext,
+      ),
     ).rejects.toBeInstanceOf(DOMException);
     await expect(
       storage.delete(
-        createDeleteContext("k", { signal: abortedSignal() }) as IStorage.DeleteContext,
+        createDeleteContext("kept.bin", { signal: abortedSignal() }) as IStorage.DeleteContext,
       ),
     ).rejects.toBeInstanceOf(DOMException);
     await expect(
       storage.clear(createClearContext("", { signal: abortedSignal() }) as IStorage.ClearContext),
     ).rejects.toBeInstanceOf(DOMException);
+    expect([...kv.store.keys()]).toStrictEqual(["unikvs:kept.bin"]);
   });
 });
 
@@ -437,6 +487,7 @@ describe("キー空間の分離", () => {
 
     // 検証
     expect(error).toBeInstanceOf(Error);
+    expect((error as { message: string }).message).toContain("unexpected KEYS result");
   });
 });
 
@@ -489,37 +540,10 @@ describe("有効期限 (ttlSeconds)", () => {
 describe("クライアント解決", () => {
   test("kv・url・token・環境変数がなければ ClientNotAvailableError になる", async ({ expect }) => {
     // 準備
-    const savedUrl = process.env["KV_REST_API_URL"];
-    const savedToken = process.env["KV_REST_API_TOKEN"];
-    delete process.env["KV_REST_API_URL"];
-    delete process.env["KV_REST_API_TOKEN"];
-
-    try {
-      const storage = new VercelKv();
-
-      // 実行
-      const error = await captureRejection(
-        storage.read(createGetContext("k", { signal: freshSignal() }) as IStorage.ReadContext),
-      );
-
-      // 検証
-      expect(error).toBeInstanceOf(ClientNotAvailableError);
-    } finally {
-      if (savedUrl !== undefined) {
-        process.env["KV_REST_API_URL"] = savedUrl;
-      }
-
-      if (savedToken !== undefined) {
-        process.env["KV_REST_API_TOKEN"] = savedToken;
-      }
-    }
-  });
-
-  test("url と token があっても @vercel/kv がなければ ClientNotAvailableError になる", async ({
-    expect,
-  }) => {
-    // 準備
-    const storage = new VercelKv({ url: "https://example.com", token: "secret" });
+    vi.stubEnv("KV_REST_API_URL", undefined);
+    vi.stubEnv("KV_REST_API_TOKEN", undefined);
+    stubKvModule(() => new FakeKv());
+    const storage = new VercelKv();
 
     // 実行
     const error = await captureRejection(
@@ -527,8 +551,105 @@ describe("クライアント解決", () => {
     );
 
     // 検証
-    // `@vercel/kv` が任意依存のため、未導入環境では解決失敗、
-    // 導入済み環境では到達不能な URL への接続失敗のいずれかになる。
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(ClientNotAvailableError);
+    expect(kvModule.createClientCalls).toStrictEqual([]);
+  });
+
+  test("url と token からクライアントを 1 度だけ生成して再利用する", async ({ expect }) => {
+    // 準備
+    const kv = new FakeKv();
+    stubKvModule(() => kv);
+    const storage = new VercelKv({ url: "https://kv.example", token: "secret" });
+
+    // 実行
+    await storage.write(
+      createSetContext("a.bin", { signal: freshSignal() }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("b.bin", { signal: freshSignal() }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
+    await storage.read(
+      createGetContext("a.bin", { signal: freshSignal() }) as IStorage.ReadContext,
+    );
+
+    // 検証
+    expect(kvModule.createClientCalls).toStrictEqual([
+      { url: "https://kv.example", token: "secret" },
+    ]);
+    expect([...kv.store.keys()]).toStrictEqual(["unikvs:a.bin", "unikvs:b.bin"]);
+  });
+
+  test("url と token を省略すると環境変数からクライアントを生成する", async ({ expect }) => {
+    // 準備
+    vi.stubEnv("KV_REST_API_URL", "https://env.example");
+    vi.stubEnv("KV_REST_API_TOKEN", "env-secret");
+    stubKvModule(() => new FakeKv());
+    const storage = new VercelKv();
+
+    // 実行
+    await storage.exists(
+      createHasContext("k", { signal: freshSignal() }) as IStorage.ExistsContext,
+    );
+
+    // 検証
+    expect(kvModule.createClientCalls).toStrictEqual([
+      { url: "https://env.example", token: "env-secret" },
+    ]);
+  });
+
+  test("明示した url と token は環境変数より優先される", async ({ expect }) => {
+    // 準備
+    vi.stubEnv("KV_REST_API_URL", "https://env.example");
+    vi.stubEnv("KV_REST_API_TOKEN", "env-secret");
+    stubKvModule(() => new FakeKv());
+    const storage = new VercelKv({
+      url: "https://explicit.example",
+      token: "explicit-secret",
+    });
+
+    // 実行
+    await storage.exists(
+      createHasContext("k", { signal: freshSignal() }) as IStorage.ExistsContext,
+    );
+
+    // 検証
+    expect(kvModule.createClientCalls).toStrictEqual([
+      { url: "https://explicit.example", token: "explicit-secret" },
+    ]);
+  });
+
+  test("kv を注入したときはクライアントを生成しない", async ({ expect }) => {
+    // 準備
+    const kv = new FakeKv();
+    stubKvModule(() => new FakeKv());
+    const storage = new VercelKv({ kv, url: "https://kv.example", token: "secret" });
+
+    // 実行
+    await storage.write(
+      createSetContext("k", { signal: freshSignal() }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+
+    // 検証
+    expect(kvModule.createClientCalls).toStrictEqual([]);
+    expect([...kv.store.keys()]).toStrictEqual(["unikvs:k"]);
+  });
+
+  test("モジュールに createClient がなければ ClientNotAvailableError になる", async ({
+    expect,
+  }) => {
+    // 準備
+    // beforeEach で `@vercel/kv` の createClient は未定義に戻されています。
+    const storage = new VercelKv({ url: "https://kv.example", token: "secret" });
+
+    // 実行
+    const error = await captureRejection(
+      storage.read(createGetContext("k", { signal: freshSignal() }) as IStorage.ReadContext),
+    );
+
+    // 検証
+    expect(error).toBeInstanceOf(ClientNotAvailableError);
   });
 });

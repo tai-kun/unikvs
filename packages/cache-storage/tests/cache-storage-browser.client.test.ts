@@ -2,7 +2,6 @@ import type { IStorage } from "@unikvs/core";
 import {
   createClearContext,
   createDeleteContext,
-  createGetContext,
   createHasContext,
   createOpenContext,
   createSetContext,
@@ -11,7 +10,14 @@ import {
 import { describe } from "vitest";
 
 import CacheStorage from "../src/cache-storage.js";
-import { createCacheName, hasNativeCaches, test } from "./_helpers.js";
+import {
+  createCacheName,
+  createRequest,
+  hasNativeCaches,
+  readBytes,
+  test,
+  writeBytes,
+} from "./_helpers.js";
 
 const { signal } = new AbortController();
 
@@ -20,24 +26,19 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
   test("書き込み・読み取り・存在確認・削除ができる", async ({ expect }) => {
     // 準備
     const cacheName = createCacheName();
-    const storage = new CacheStorage(cacheName);
+    const storage = new CacheStorage({ cacheName, toRequest: createRequest });
 
     try {
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
       // 実行
-      await storage.write(
-        createSetContext("k1", { signal }) as IStorage.WriteContext,
-        new Uint8Array([1, 2, 3]),
-      );
+      await writeBytes(storage, "k1", new Uint8Array([1, 2, 3]));
 
       // 検証
       expect(
         await storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext),
       ).toBe(true);
-      expect(
-        await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext),
-      ).toStrictEqual(new Uint8Array([1, 2, 3]));
+      expect(await readBytes(storage, "k1")).toStrictEqual(new Uint8Array([1, 2, 3]));
 
       // 実行
       await storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
@@ -47,6 +48,7 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
         await storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext),
       ).toBe(false);
     } finally {
+      await storage.close();
       await globalThis.caches.delete(cacheName);
     }
   });
@@ -54,7 +56,7 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
   test("ストリーム経由で書き込んだ値を読み取れる", async ({ expect }) => {
     // 準備
     const cacheName = createCacheName();
-    const storage = new CacheStorage(cacheName);
+    const storage = new CacheStorage({ cacheName, toRequest: createRequest });
 
     try {
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
@@ -65,10 +67,7 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
       // 実行
       await writer.write(new Uint8Array([4, 5]));
       await writer.close();
-      await storage.write(
-        createSetContext("k2", { signal }) as IStorage.WriteContext,
-        new Uint8Array([6]),
-      );
+      await writeBytes(storage, "k2", new Uint8Array([6]));
 
       // 検証
       const reader = storage
@@ -89,6 +88,7 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
         await storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext),
       ).toBe(false);
     } finally {
+      await storage.close();
       await globalThis.caches.delete(cacheName);
     }
   });

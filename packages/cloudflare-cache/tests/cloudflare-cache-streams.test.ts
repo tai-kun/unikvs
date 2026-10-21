@@ -71,6 +71,33 @@ describe("getWritable", () => {
     ).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
   });
 
+  test("チャンクを 1 つも書かずに close したとき、0 バイトの値が保存される", async ({ expect }) => {
+    // 準備
+    const storage = new CloudflareCache({ cache: createFakeCache() });
+    const writer = storage
+      .getWritable(
+        createSetContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+
+    // 実行
+    await writer.close();
+
+    // 検証
+    expect(
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
+    ).toBe(true);
+    expect(
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
+    ).toStrictEqual(new Uint8Array(0));
+  });
+
   test("書き込み後に元のチャンクを変更しても保存値は変わらない", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache() });
@@ -141,11 +168,20 @@ describe("getWritable", () => {
 
     // 検証
     expect(error).toBeInstanceOf(InvalidChunkTypeError);
+    expect(
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
+    ).toBe(false);
   });
 
-  test("中断後に abort しても値は保存されない", async ({ expect }) => {
+  test("abort したとき値は保存されず、既存の値は残る", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache() });
+    await storage.write(
+      createSetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([9]),
+    );
     const writer = storage
       .getWritable(
         createSetContext("s1", {
@@ -160,10 +196,10 @@ describe("getWritable", () => {
 
     // 検証
     expect(
-      await storage.exists(
-        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      await storage.read(
+        createGetContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
       ),
-    ).toBe(false);
+    ).toStrictEqual(new Uint8Array([9]));
   });
 
   test("中断済みシグナルでの getWritable は中断例外を投げる", ({ expect }) => {
@@ -184,6 +220,35 @@ describe("getWritable", () => {
     // 検証
     expect(error).toBeInstanceOf(DOMException);
     expect((error as DOMException).name).toBe("AbortError");
+  });
+
+  test("getWritable 取得後に中断したとき、close は中断理由で拒否され値は保存されない", async ({
+    expect,
+  }) => {
+    // 準備
+    const storage = new CloudflareCache({ cache: createFakeCache() });
+    const controller = new AbortController();
+    const writer = storage
+      .getWritable(
+        createSetContext("s1", {
+          signal: controller.signal,
+        }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+    const reason = new Error("独自の中断理由");
+
+    // 実行
+    await writer.write(new Uint8Array([1, 2, 3]));
+    controller.abort(reason);
+    const error = await captureRejection(writer.close());
+
+    // 検証
+    expect(error).toBe(reason);
+    expect(
+      await storage.exists(
+        createHasContext("s1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
+    ).toBe(false);
   });
 });
 

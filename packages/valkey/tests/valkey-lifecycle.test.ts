@@ -12,7 +12,8 @@ import {
   createStreamContext,
 } from "@unikvs/testing";
 import { acquireFreePort } from "@unikvs/testing/node";
-import { afterAll, beforeAll, describe } from "vitest";
+import { Redis as Ioredis } from "ioredis";
+import { afterAll, beforeAll, describe, vi } from "vitest";
 
 import { ConnectTimeoutError } from "../src/errors.js";
 import Valkey from "../src/valkey.js";
@@ -57,13 +58,18 @@ describe("ライフサイクル管理", () => {
     );
   });
 
-  test("注入されたクライアントは close しても quit されない", async ({ expect, fake, storage }) => {
+  test("注入されたクライアントは open でも close でも接続・切断されない", async ({
+    expect,
+    fake,
+    storage,
+  }) => {
     // 実行
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
     // 検証
-    // 所有権は呼び出し側にあるため、切断は行わない。
+    // 所有権は呼び出し側にあるため、接続も切断も行わない。
     expect(storage.isOpen).toBe(false);
+    expect(fake.connectCalls).toBe(0);
     expect(fake.quitCalls).toBe(0);
     expect(fake.disconnectCalls).toBe(0);
   });
@@ -147,7 +153,8 @@ describe("ライフサイクル管理", () => {
   }) => {
     // 準備
     // 即時失敗 (ECONNREFUSED) を検証する。
-    const unreachable = new Valkey("redis://127.0.0.1:1", {
+    const port = await acquireFreePort();
+    const unreachable = new Valkey(`redis://127.0.0.1:${port}`, {
       keyPrefix,
       connectTimeout: 1000,
     });
@@ -162,10 +169,11 @@ describe("ライフサイクル管理", () => {
     keyPrefix,
   }) => {
     // 準備
-    // 到達不能な接続先を環境変数で渡し、`url` 引数より環境変数が使われることを確認する。
+    // `url` 引数を省略し、到達不能な接続先を環境変数で渡して `VALKEY_URL` が使われることを確認する。
+    const port = await acquireFreePort();
     const prevValkeyUrl = process.env["VALKEY_URL"];
     const prevRedisUrl = process.env["REDIS_URL"];
-    process.env["VALKEY_URL"] = "redis://127.0.0.1:1";
+    process.env["VALKEY_URL"] = `redis://127.0.0.1:${port}`;
     delete process.env["REDIS_URL"];
     const fromEnv = new Valkey(undefined, { keyPrefix, connectTimeout: 1000 });
 
@@ -187,20 +195,28 @@ describe("ライフサイクル管理", () => {
     }
   });
 
-  test("url も環境変数もないとき、既定の接続先で open を試みる", async ({ expect, keyPrefix }) => {
+  test("url も環境変数もないとき、オプションの接続先で open を試みる", async ({
+    expect,
+    keyPrefix,
+  }) => {
     // 準備
-    // `connectTimeout` も省略し、既定値で打ち切られることを確認する。
-    // 何も listen していない既定ポート (127.0.0.1:6379) への接続は即時失敗する。
+    // `url` を使わず、`RedisOptions` の host / port が ioredis へ透過することを確認する。
+    const port = await acquireFreePort();
     const prevValkeyUrl = process.env["VALKEY_URL"];
     const prevRedisUrl = process.env["REDIS_URL"];
     delete process.env["VALKEY_URL"];
     delete process.env["REDIS_URL"];
-    const byDefault = new Valkey(undefined, { keyPrefix });
+    const byOptions = new Valkey(undefined, {
+      keyPrefix,
+      host: "127.0.0.1",
+      port,
+      connectTimeout: 1000,
+    });
 
     try {
       // 実行と検証
-      await expect(byDefault.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
-      expect(byDefault.isOpen).toBe(false);
+      await expect(byOptions.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
+      expect(byOptions.isOpen).toBe(false);
     } finally {
       if (prevValkeyUrl === undefined) {
         delete process.env["VALKEY_URL"];
@@ -375,6 +391,39 @@ describe("接続タイムアウト", () => {
     );
     expect(Date.now() - start).toBeLessThan(10e3);
     expect(silent.isOpen).toBe(false);
+  });
+});
+
+describe("切断タイムアウト", () => {
+  test("quit が応答しないとき、close は closeTimeout で復帰し disconnect する", async ({
+    expect,
+    keyPrefix,
+  }) => {
+    // 準備
+    // 接続確立は成功したものとし、`quit` だけをハングさせて打ち切り経路を通す。
+    const connect = vi.spyOn(Ioredis.prototype, "connect").mockResolvedValue(undefined);
+    const quit = vi
+      .spyOn(Ioredis.prototype, "quit")
+      .mockImplementation(() => new Promise<never>(() => {}));
+    const disconnect = vi.spyOn(Ioredis.prototype, "disconnect");
+    const storage = new Valkey("redis://127.0.0.1:1", { keyPrefix, closeTimeout: 100 });
+
+    try {
+      await storage.open(createOpenContext() as IStorage.OpenContext);
+
+      // 実行
+      const start = Date.now();
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+
+      // 検証
+      expect(Date.now() - start).toBeLessThan(10e3);
+      expect(connect).toHaveBeenCalled();
+      expect(quit).toHaveBeenCalled();
+      expect(disconnect).toHaveBeenCalled();
+      expect(storage.isOpen).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 

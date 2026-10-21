@@ -3,20 +3,35 @@ import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
 import type { IMiddleware } from "@unikvs/core";
 import {
   abortedSignal,
+  bytesEqual,
   captureRejection,
+  concatBytes,
   createDecodeContext,
+  createDecodeStreamContext,
   createEncodeContext,
+  createEncodeStreamContext,
   createNext,
   createOpenContext,
   createPseudoRandomBytes,
+  readAll,
+  sourceFrom,
 } from "@unikvs/testing";
 import { describe, test, vi } from "vitest";
 
 import { api } from "../src/_core.js";
 import ZstdBun from "../src/zstd-bun.js";
+import { createLevelSensitiveInput } from "./_fixtures.js";
 
 type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
 type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+type ByteEncodeStream = IMiddleware.EncodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
+type ByteDecodeStream = IMiddleware.DecodeStreamContext<
+  Uint8Array<ArrayBuffer>,
+  Uint8Array<ArrayBuffer>
+>;
 
 /**
  * ターゲットを開きます。
@@ -136,6 +151,64 @@ describe("実行環境の解決", () => {
       }
     },
   );
+
+  test.skipIf(!hasZstd)(
+    "node:zlib フォールバックでは一括変換とストリーム変換の出力を所有化する",
+    async ({ expect, signal }) => {
+      // 準備
+      vi.resetModules();
+
+      try {
+        const freshCore = await import("../src/_core.js");
+        const fresh = await import("../src/zstd-bun.js");
+        vi.spyOn(freshCore.api, "detectBun").mockReturnValue(undefined);
+        const target = new fresh.default();
+        await openTarget(target, signal);
+        const input = createPseudoRandomBytes(128, 58);
+
+        // 前提: node:zlib の出力は 16 KiB の pool を共有するため、所有化しないと
+        // byteLength と buffer.byteLength が一致しない。前提が崩れると検出力が失われる。
+        const raw = zstdCompressSync(input);
+        expect(raw.byteLength).toBeLessThan(raw.buffer.byteLength);
+
+        // 実行 (一括変換)
+        const encoded = await encode(target, input);
+        const decoded = await decode(target, encoded);
+
+        // 検証
+        expect(encoded.byteOffset).toBe(0);
+        expect(encoded.byteLength).toBe(encoded.buffer.byteLength);
+        expect(decoded.byteOffset).toBe(0);
+        expect(decoded.byteLength).toBe(decoded.buffer.byteLength);
+        expect(decoded).toStrictEqual(input);
+
+        // 実行 (ストリーム変換)
+        const encodeContext = createEncodeStreamContext(sourceFrom([input]));
+        await target.encodeStream(encodeContext as ByteEncodeStream, createNext());
+        const encodedChunks = await readAll(
+          encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
+        );
+        const decodeContext = createDecodeStreamContext(sourceFrom([concatBytes(encodedChunks)]));
+        await target.decodeStream(decodeContext as ByteDecodeStream, createNext());
+        const decodedChunks = await readAll(
+          decodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
+        );
+
+        // 検証
+        expect(encodedChunks.length).toBeGreaterThan(0);
+        expect(decodedChunks.length).toBeGreaterThan(0);
+
+        for (const chunk of [...encodedChunks, ...decodedChunks]) {
+          expect(chunk.byteOffset).toBe(0);
+          expect(chunk.byteLength).toBe(chunk.buffer.byteLength);
+        }
+
+        expect(concatBytes(decodedChunks)).toStrictEqual(input);
+      } finally {
+        vi.restoreAllMocks();
+      }
+    },
+  );
 });
 
 describe("実行環境の検出", () => {
@@ -200,6 +273,24 @@ describe("実行環境の検出", () => {
       expect(env.kind).toBe("node");
       const input = new Uint8Array([1, 2, 3]);
       expect(new Uint8Array(env.decompressSync(env.compressSync(input, 3)))).toStrictEqual(input);
+    },
+  );
+
+  test.skipIf(!hasZstd)(
+    "createNodeEnv は指定したレベルを ZSTD_c_compressionLevel に変換する",
+    async ({ expect }) => {
+      // 準備
+      const zlib = await import("node:zlib");
+      const env = api.createNodeEnv(zlib);
+      const input = createLevelSensitiveInput();
+
+      // 実行
+      const low = env.compressSync(input, 1);
+      const high = env.compressSync(input, 19);
+
+      // 検証
+      // params の変換が欠落したり固定値になると、レベル 1 と 19 の出力が一致する。
+      expect(bytesEqual(low, high)).toBe(false);
     },
   );
 });

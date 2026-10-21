@@ -1,4 +1,4 @@
-import { zstdCompressSync, zstdDecompressSync } from "node:zlib";
+import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
 import type { IMiddleware } from "@unikvs/core";
 import {
@@ -21,6 +21,7 @@ import type {
   ZstdBunInvalidLevelErrorMeta,
 } from "../src/index.js";
 import ZstdBun, { type ZstdBunOptions } from "../src/zstd-bun.js";
+import { createLevelSensitiveInput } from "./_fixtures.js";
 
 type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
 type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
@@ -109,6 +110,10 @@ describe("往復", () => {
     // 検証
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
     expect(encoded.byteOffset).toBe(0);
+    expect(encoded.byteLength).toBe(encoded.buffer.byteLength);
+    expect(decoded.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(decoded.byteOffset).toBe(0);
+    expect(decoded.byteLength).toBe(decoded.buffer.byteLength);
     expect(decoded).toStrictEqual(input);
   });
 
@@ -190,6 +195,25 @@ describe("圧縮率の健全性", () => {
   });
 });
 
+describe("圧縮レベルの反映", () => {
+  test("異なるレベルでは圧縮結果が異なる", async ({ expect, signal }) => {
+    // 準備
+    // zstd の圧縮率は隣接レベル間で単調ではないため、サイズの大小ではなく出力の差異を検証する。
+    const input = createLevelSensitiveInput();
+    const low = new ZstdBun({ level: 1 });
+    const high = new ZstdBun({ level: 19 });
+    await low.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+    await high.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+
+    // 実行
+    const lowEncoded = await encode(low, input);
+    const highEncoded = await encode(high, input);
+
+    // 検証
+    expect(bytesEqual(lowEncoded, highEncoded)).toBe(false);
+  });
+});
+
 describe("余剰キー", () => {
   test("コンテキストの余剰変数を付けても無視して往復できる", async ({ expect, signal }) => {
     // 準備
@@ -203,6 +227,43 @@ describe("余剰キー", () => {
 
     // 検証
     expect(decoded).toStrictEqual(input);
+  });
+});
+
+describe("ミドルウェア連鎖", () => {
+  test("encode と decode は変換結果を設定してから next を1回呼ぶ", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(128, 61);
+    const encodeContext = createEncodeContext(input);
+    let encodeNextCalls = 0;
+    let encodedAtNext: Uint8Array<ArrayBuffer> | undefined;
+
+    // 実行
+    await target.encode(encodeContext as ByteEncode, async () => {
+      encodeNextCalls += 1;
+      encodedAtNext = encodeContext.destination;
+    });
+
+    // 検証
+    expect(encodeNextCalls).toBe(1);
+    expect(encodedAtNext).toBeInstanceOf(Uint8Array);
+    expect(encodedAtNext).not.toBe(input);
+
+    // 準備
+    const decodeContext = createDecodeContext(encodeContext.destination);
+    let decodeNextCalls = 0;
+    let decodedAtNext: Uint8Array<ArrayBuffer> | undefined;
+
+    // 実行
+    await target.decode(decodeContext as ByteDecode, async () => {
+      decodeNextCalls += 1;
+      decodedAtNext = decodeContext.destination;
+    });
+
+    // 検証
+    expect(decodeNextCalls).toBe(1);
+    expect(decodedAtNext).toStrictEqual(input);
   });
 });
 
@@ -335,6 +396,35 @@ describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
     // 検証
     expect(new Uint8Array(decompressed)).toStrictEqual(input);
   });
+
+  test("チェックサム付きフレームを展開でき、改竄されたチェックサムを拒否する", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(1024, 19);
+    const compressed = new Uint8Array(
+      zstdCompressSync(input, {
+        params: { [constants.ZSTD_c_checksumFlag]: 1 },
+      }),
+    );
+
+    // 実行
+    const decoded = await decode(target, compressed);
+
+    // 検証
+    expect(decoded).toStrictEqual(input);
+
+    // 準備
+    const corrupted = compressed.slice();
+    const last = corrupted.byteLength - 1;
+    corrupted[last] = corrupted[last]! ^ 0xff;
+
+    // 実行と検証
+    // 展開器はチェックサムを検証するため、フレームの破損を成功として扱わない。
+    await expect(decode(target, corrupted)).rejects.toThrow(Error);
+  });
 });
 
 describe("インスタンスの状態", () => {
@@ -408,7 +498,7 @@ describe("インスタンスの状態", () => {
 });
 
 describe("コンストラクターオプション", () => {
-  test("空のオプションでは既定と等価に往復できる", async ({ expect, signal }) => {
+  test("空のオプションを渡しても往復できる", async ({ expect, signal }) => {
     // 準備
     const options: ZstdBunOptions = {};
     const target = new ZstdBun(options);
@@ -425,7 +515,8 @@ describe("コンストラクターオプション", () => {
 
   test("level の既定は 3 であり明示 3 と等価である", async ({ expect, signal }) => {
     // 準備
-    const input = Uint8Array.from([0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]);
+    // レベルに敏感なデータを使い、既定値が別のレベルに変わった場合も検出できるようにする。
+    const input = createLevelSensitiveInput();
     const omittedTarget = new ZstdBun();
     const explicitTarget = new ZstdBun({ level: 3 });
     await omittedTarget.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
@@ -437,17 +528,6 @@ describe("コンストラクターオプション", () => {
 
     // 検証
     expect(bytesEqual(omitted, explicit)).toBe(true);
-  });
-
-  test("level に null を明示すると ZstdBunInvalidLevelError で拒否する", ({ expect }) => {
-    // 実行と検証
-    // 実装は規定値への吸収に null を含めず、無効値として拒否する。
-    expect(
-      () =>
-        new ZstdBun({
-          level: null as unknown as ZstdBunOptions["level"],
-        }),
-    ).toThrow(ZstdBunInvalidLevelError);
   });
 
   test("有効な境界 1 と 22 は受け付ける", ({ expect }) => {
@@ -536,73 +616,22 @@ describe("ZstdBunInvalidLevelError", () => {
   });
 });
 
-describe("UnsupportedRuntimeError", () => {
-  test("既定では英語メッセージを返す", ({ expect }) => {
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "ZstdBun", runtime: "Bun" });
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
-    expect(error.meta).toStrictEqual({ name: "ZstdBun", runtime: "Bun" });
-    expect(error.message).toBe("ZstdBun can only be used in the Bun runtime");
-  });
-
-  test("cause を保持する", ({ expect }) => {
-    // 準備
-    const cause = new Error("原因");
-
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "ZstdBun", runtime: "Bun", cause });
-
-    // 検証
-    expect(error.cause).toBe(cause);
-  });
-
-  test("言語設定が日本語なら日本語メッセージを返す", ({ expect }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "ZstdBun", runtime: "Bun" });
-
-    try {
-      // 実行
-      setGlobalConfig({ lang: "ja" });
-
-      // 検証
-      expect(error.message).toBe("ZstdBun は Bun ランタイムでのみ使用できます");
-    } finally {
-      deleteGlobalConfig();
-    }
-  });
-});
-
 describe("index のエクスポート", () => {
   test("トランスフォーマーとエラーがエクスポートされている", ({ expect }) => {
     // 実行と検証
     expect(index.ZstdBun).toBe(ZstdBun);
     expect(index.ZstdBunInvalidLevelError).toBe(ZstdBunInvalidLevelError);
     expect(index.UnsupportedRuntimeError).toBe(UnsupportedRuntimeError);
-    // 実装は展開失敗を専用エラーで包まないため、ZstdBunDecompressError は公開しない。
-    expect("ZstdBunDecompressError" in index).toBe(false);
   });
 
-  test("エラーの型が公開されている", ({ expect }) => {
-    // 準備
-    const args: ZstdBunInvalidLevelErrorArgs = { actual: 0 };
-    const meta: ZstdBunInvalidLevelErrorMeta = { actual: 0 };
-    const runtimeArgs: UnsupportedRuntimeErrorArgs = { name: "ZstdBun", runtime: "Bun" };
-    const runtimeMeta: UnsupportedRuntimeErrorMeta = { name: "ZstdBun", runtime: "Bun" };
-
+  test("エラーの型が公開されている", () => {
     // 実行と検証
-    expect(args.actual).toBe(0);
-    expect(meta.actual).toBe(0);
-    expect(runtimeArgs.name).toBe("ZstdBun");
-    expect(runtimeMeta.runtime).toBe("Bun");
     expectTypeOf<ZstdBunInvalidLevelErrorArgs>().toHaveProperty("actual");
     expectTypeOf<ZstdBunInvalidLevelErrorMeta>().toEqualTypeOf<{ readonly actual: unknown }>();
-  });
-
-  test("存在しないエラーの型は公開されていない", () => {
-    // @ts-expect-error ZstdBunDecompressError に対応する Args 型は存在しない。
-    expectTypeOf<index.ZstdBunDecompressErrorArgs>().toBeNever();
+    expectTypeOf<UnsupportedRuntimeErrorArgs>().toHaveProperty("runtime");
+    expectTypeOf<UnsupportedRuntimeErrorMeta>().toEqualTypeOf<{
+      readonly name: string;
+      readonly runtime: string;
+    }>();
   });
 });

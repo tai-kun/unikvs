@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import { InvalidBindingError, InvalidKeyPrefixError, InvalidTtlSecondsError } from "./errors.js";
 
@@ -159,15 +160,15 @@ export default class CloudflareKv implements IStorage {
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // ビューの `byteOffset` を持ち込まないよう正確な長さで複製します。
     const buffer = new ArrayBuffer(data.byteLength);
@@ -181,9 +182,13 @@ export default class CloudflareKv implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const buffer = await this.#binding.get(this.#fullKey(c.key), "arrayBuffer");
+    const buffer = await Promise.race([
+      this.#binding.get(this.#fullKey(c.key), "arrayBuffer"),
+      abortPromise,
+    ]);
 
     if (buffer === null) {
       throw new KeyNotFoundError({ key: c.key });
@@ -193,23 +198,28 @@ export default class CloudflareKv implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     // KV に `head` 相当の API がないため `get` で存在を確認します。
-    const buffer = await this.#binding.get(this.#fullKey(c.key), "arrayBuffer");
+    const buffer = await Promise.race([
+      this.#binding.get(this.#fullKey(c.key), "arrayBuffer"),
+      abortPromise,
+    ]);
 
     return buffer !== null;
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // 削除は冪等とし存在しないキーも成功扱いにします。
     await this.#binding.delete(this.#fullKey(c.key));
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     // 接頭辞配下のキーを `list` の頁送りで列挙します。
     // 列挙しながら削除すると頁送りがずれて取りこぼすため、先に全件集めてから削除します。
@@ -217,9 +227,12 @@ export default class CloudflareKv implements IStorage {
     let cursor: string | undefined = undefined;
 
     do {
-      const page = await this.#binding.list(
-        cursor === undefined ? { prefix: this.#keyPrefix } : { prefix: this.#keyPrefix, cursor },
-      );
+      const page: KVNamespaceListResult = await Promise.race([
+        this.#binding.list(
+          cursor === undefined ? { prefix: this.#keyPrefix } : { prefix: this.#keyPrefix, cursor },
+        ),
+        abortPromise,
+      ]);
 
       for (const key of page.keys) {
         names.push(key.name);
@@ -229,7 +242,7 @@ export default class CloudflareKv implements IStorage {
     } while (cursor !== undefined);
 
     for (const name of names) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       await this.#binding.delete(name);
     }
   }

@@ -61,4 +61,26 @@ describe("document.cookie バックエンド (client)", () => {
       data,
     );
   });
+
+  test("既定の document.cookie で複数の Cookie を clear できる", ({ expect }) => {
+    // 準備
+    cleanup();
+    const keys = ["unikvs-client-clear-1", "unikvs-client-clear-2"];
+    for (const key of keys) {
+      storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v");
+      expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+        true,
+      );
+    }
+
+    // 実行
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+
+    // 検証
+    for (const key of keys) {
+      expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
+        false,
+      );
+    }
+  });
 });

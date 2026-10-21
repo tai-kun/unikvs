@@ -144,9 +144,6 @@ describe("往復", () => {
     // 検証
     expect(encoded.byteLength).toBeLessThan(input.byteLength);
     expect(decoded).toStrictEqual(input);
-    expect(JSON.parse(new TextDecoder().decode(decoded))).toStrictEqual(
-      JSON.parse(new TextDecoder().decode(input)),
-    );
   });
 
   test("すべてのバイト値を含むデータを往復すると元のデータに戻る", async ({ expect, signal }) => {
@@ -154,18 +151,6 @@ describe("往復", () => {
     // バイナリーセーフであることを検証する。
     const target = await createOpenedTarget(signal);
     const input = createAllByteValues(1024);
-
-    // 実行
-    const decoded = await decode(target, await encode(target, input));
-
-    // 検証
-    expect(decoded).toStrictEqual(input);
-  });
-
-  test("疑似乱数を既定レベルで往復すると元のデータに戻る", async ({ expect, signal }) => {
-    // 準備
-    const target = await createOpenedTarget(signal);
-    const input = createPseudoRandomBytes(4096, 11);
 
     // 実行
     const decoded = await decode(target, await encode(target, input));
@@ -227,6 +212,28 @@ describe("往復", () => {
   }, 30_000);
 });
 
+describe("出力の所有化", () => {
+  test("encode と decode の出力は自身の ArrayBuffer を所有する", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(256, 17);
+
+    // 実行
+    const encoded = await encode(target, input);
+    const decoded = await decode(target, encoded);
+
+    // 検証
+    for (const [label, output] of [
+      ["encode", encoded],
+      ["decode", decoded],
+    ] as const) {
+      expect(output.buffer, label).toBeInstanceOf(ArrayBuffer);
+      expect(output.byteOffset, label).toBe(0);
+      expect(output.byteLength, label).toBe(output.buffer.byteLength);
+    }
+  });
+});
+
 describe("圧縮率の健全性", () => {
   test("反復テキストは入力より小さくなる", async ({ expect, signal }) => {
     // 準備
@@ -239,10 +246,24 @@ describe("圧縮率の健全性", () => {
     // 検証
     expect(encoded.byteLength).toBeLessThan(input.byteLength);
   });
+
+  test("level が高いほど反復テキストを小さく圧縮する", async ({ expect, signal }) => {
+    // 準備
+    const input = createRepetitiveInput();
+    const low = await createOpenedTarget(signal, { level: 0 });
+    const high = await createOpenedTarget(signal, { level: 11 });
+
+    // 実行
+    const lowEncoded = await encode(low, input);
+    const highEncoded = await encode(high, input);
+
+    // 検証
+    expect(highEncoded.byteLength).toBeLessThan(lowEncoded.byteLength);
+  });
 });
 
 describe("コンストラクターオプション", () => {
-  test("空のオプションでは既定と等価に往復できる", async ({ expect, signal }) => {
+  test("空のオプションを渡しても往復できる", async ({ expect, signal }) => {
     // 準備
     const options: BrotliWasmOptions = {};
     const target = await createOpenedTarget(signal, options);
@@ -253,53 +274,60 @@ describe("コンストラクターオプション", () => {
 
     // 検証
     expect(decoded).toStrictEqual(input);
-    expect(target.name).toBe("BrotliWasm");
   });
 
-  test("level の既定は 11 であり明示 11 と等価である", async ({ expect, signal }) => {
+  test("level の既定は 11 であり省略と undefined 明示は等価である", async ({ expect, signal }) => {
     // 準備
     const input = Uint8Array.from([0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]);
     const omittedTarget = await createOpenedTarget(signal);
     const explicitTarget = await createOpenedTarget(signal, { level: 11 });
-
-    // 実行
-    const omitted = await encode(omittedTarget, input);
-    const explicit = await encode(explicitTarget, input);
-
-    // 検証
-    expect(bytesEqual(omitted, explicit)).toBe(true);
-  });
-
-  test("level 省略と undefined 明示は等価である", async ({ expect, signal }) => {
-    // 準備
-    const input = Uint8Array.from([0x66, 0x6f, 0x6f, 0x62, 0x61, 0x72]);
-    const omittedTarget = await createOpenedTarget(signal);
     const undefinedTarget = await createOpenedTarget(signal, { level: undefined });
 
     // 実行
     const omitted = await encode(omittedTarget, input);
+    const explicit = await encode(explicitTarget, input);
     const undefinedLevel = await encode(undefinedTarget, input);
 
     // 検証
+    expect(bytesEqual(omitted, explicit)).toBe(true);
     expect(bytesEqual(omitted, undefinedLevel)).toBe(true);
   });
+});
 
-  test("level に null を明示すると BrotliWasmInvalidLevelError で拒否される", async ({
-    expect,
-    signal,
-  }) => {
+describe("ミドルウェア連鎖", () => {
+  test("encode と decode は変換結果を設定してから next を1回呼ぶ", async ({ expect, signal }) => {
     // 準備
-    const { BrotliWasmInvalidLevelError } = await import("../src/errors.js");
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(128, 16);
+    const encodeContext = createEncodeContext(input);
+    let encodeNextCalls = 0;
+    let encodedAtNext: Uint8Array<ArrayBuffer> | undefined;
 
-    // 実行と検証
-    // 実装は規定値への吸収に null を含めず、無効値として拒否する。
-    expect(
-      () =>
-        new BrotliWasm({
-          level: null as unknown as BrotliWasmOptions["level"],
-        }),
-    ).toThrow(BrotliWasmInvalidLevelError);
-    expect(signal.aborted).toBe(false);
+    // 実行
+    await target.encode(encodeContext as ByteEncode, async () => {
+      encodeNextCalls += 1;
+      encodedAtNext = encodeContext.destination;
+    });
+
+    // 検証
+    expect(encodeNextCalls).toBe(1);
+    expect(encodedAtNext).toBeInstanceOf(Uint8Array);
+    expect(encodedAtNext).not.toBe(input);
+
+    // 準備
+    const decodeContext = createDecodeContext(encodeContext.destination);
+    let decodeNextCalls = 0;
+    let decodedAtNext: Uint8Array<ArrayBuffer> | undefined;
+
+    // 実行
+    await target.decode(decodeContext as ByteDecode, async () => {
+      decodeNextCalls += 1;
+      decodedAtNext = decodeContext.destination;
+    });
+
+    // 検証
+    expect(decodeNextCalls).toBe(1);
+    expect(decodedAtNext).toStrictEqual(input);
   });
 });
 

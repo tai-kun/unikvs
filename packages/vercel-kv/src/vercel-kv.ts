@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
   ClientNotAvailableError,
@@ -281,15 +282,15 @@ export default class VercelKv implements IStorage {
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const client = await this.#client();
     const value = encodeBase64(data);
@@ -302,10 +303,11 @@ export default class VercelKv implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     const client = await this.#client();
-    const stored: unknown = await client.get(this.#toKey(c.key));
+    const stored: unknown = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
 
     if (stored === null || stored === undefined) {
       throw new KeyNotFoundError({ key: c.key });
@@ -319,15 +321,16 @@ export default class VercelKv implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     const client = await this.#client();
 
-    return (await client.exists(this.#toKey(c.key))) > 0;
+    return (await Promise.race([client.exists(this.#toKey(c.key)), abortPromise])) > 0;
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const client = await this.#client();
 
@@ -339,11 +342,12 @@ export default class VercelKv implements IStorage {
       throw new ClearWithoutPrefixNotAllowedError();
     }
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     const client = await this.#client();
     const pattern = `${this.#keyPrefix}*`;
-    const found = await client.keys(pattern);
+    const found = await Promise.race([client.keys(pattern), abortPromise]);
 
     if (!Array.isArray(found) || !found.every((key) => typeof key === "string")) {
       throw new Error(

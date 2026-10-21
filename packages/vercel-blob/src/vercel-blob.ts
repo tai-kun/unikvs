@@ -1,5 +1,6 @@
 import { KeyNotFoundError, type IPipelineContext, type IStorage } from "@unikvs/core";
 import { del, head, list, put } from "@vercel/blob";
+import { throwIfAborted } from "abort-signal-utils";
 
 import {
   BlobNetworkError,
@@ -441,7 +442,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     try {
       response = await fetchFn(this.#downloadRequest(url, token, c.signal));
     } catch (ex) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobNetworkError({ url, key: c.key, cause: ex });
     }
 
@@ -466,15 +467,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
 
@@ -486,13 +487,13 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         abortSignal: c.signal,
       });
     } catch (ex) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobOperationError({ operation: "put", key: c.key, cause: ex });
     }
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
     let url: string;
@@ -507,7 +508,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         throw new KeyNotFoundError({ key: c.key });
       }
 
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
     }
 
@@ -518,7 +519,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
 
@@ -531,13 +532,13 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         return false;
       }
 
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
     }
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
 
@@ -549,13 +550,13 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         return;
       }
 
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobOperationError({ operation: "del", key: c.key, cause: ex });
     }
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
     // 削除しながら頁を進めると欠落するため、先に全 pathname を集めてから削除します。
@@ -573,7 +574,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
           abortSignal: c.signal,
         });
       } catch (ex) {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
         throw new BlobOperationError({ operation: "list", cause: ex });
       }
 
@@ -588,14 +589,14 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       try {
         await this.#client.del(pathnames, { token, abortSignal: c.signal });
       } catch (ex) {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
         throw new BlobOperationError({ operation: "del", cause: ex });
       }
     }
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // Blob にストリーミング `put` はないため蓄積して `close` 時に一括送信します。
     const chunks: Uint8Array[] = [];
@@ -609,7 +610,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         chunks.push(chunk.slice());
       },
       close: async () => {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
 
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
@@ -631,7 +632,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
     let url: string;
@@ -646,7 +647,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         throw new KeyNotFoundError({ key: c.key });
       }
 
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
     }
 

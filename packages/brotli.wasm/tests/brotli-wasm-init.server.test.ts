@@ -109,16 +109,19 @@ describe("open の中断", () => {
       const freshCore = await import("../src/_core.js");
       const initSpy = vi.spyOn(freshCore.api, "init");
       const target = new fresh.default();
+      const reason = new Error("pre-abort");
 
       try {
         // 実行
         const error = await captureRejection(
-          target.open(createOpenContext({ signal: abortedSignal() }) as IMiddleware.OpenContext),
+          target.open(
+            createOpenContext({ signal: abortedSignal(reason) }) as IMiddleware.OpenContext,
+          ),
         );
 
         // 検証
-        // 事前中断では初期化自体を開始しない。
-        expect(error).toBeInstanceOf(DOMException);
+        // 事前中断では初期化自体を開始せず、理由をそのまま伝播する。
+        expect(error).toBe(reason);
         expect(target.isOpen).toBe(false);
         expect(initSpy).not.toHaveBeenCalled();
 
@@ -130,6 +133,48 @@ describe("open の中断", () => {
         expect(decoded).toStrictEqual(input);
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        initSpy.mockRestore();
+      }
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("実行中に中断された open は中断理由で拒否し再試行できる", async ({ expect, signal }) => {
+    // 準備
+    vi.resetModules();
+
+    try {
+      const fresh = await import("../src/brotli-wasm.js");
+      const freshCore = await import("../src/_core.js");
+      // 中断が実装されていなくても初期化が完了してしまわないよう、解決しない Promise を使う。
+      const initSpy = vi
+        .spyOn(freshCore.api, "init")
+        .mockImplementationOnce(() => new Promise<never>(() => {}));
+      const target = new fresh.default();
+      const controller = new AbortController();
+      const reason = new Error("mid-flight-abort");
+
+      try {
+        // 実行
+        const opening = target.open(
+          createOpenContext({ signal: controller.signal }) as IMiddleware.OpenContext,
+        );
+        controller.abort(reason);
+
+        // 検証
+        await expect(opening).rejects.toBe(reason);
+        expect(target.isOpen).toBe(false);
+
+        // 実行と検証
+        // 実行中の中断はキャッシュを残さないため、有効な signal では再試行できる。
+        await openTarget(target, signal);
+        const input = createPseudoRandomBytes(64, 33);
+        const decoded = await decode(target, await encode(target, input));
+        expect(decoded).toStrictEqual(input);
+        expect(target.isOpen).toBe(true);
+        expect(initSpy).toHaveBeenCalledTimes(2);
       } finally {
         initSpy.mockRestore();
       }

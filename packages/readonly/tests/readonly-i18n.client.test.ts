@@ -1,7 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   createClearContext,
-  createDecodeContext,
   createDeleteContext,
   createEncodeContext,
   createNext,
@@ -102,20 +101,5 @@ describe("ReadOnlyClearNotAllowedError の国際化 (client)", () => {
     await expect(
       transformer.use(createClearContext() as IMiddleware.UseContext, createNext()),
     ).rejects.toThrow("ReadOnly.clear は allowDelete が false のため全件を削除できません。");
-  });
-});
-
-describe("decode の国際化 (client)", () => {
-  test("ja を設定しても decode はエラーを投げずに透過する", async ({ expect, setLang }) => {
-    // 準備
-    const transformer = new ReadOnly();
-    setLang("ja");
-
-    // 実行
-    const c = createDecodeContext("v1", "k1");
-    await transformer.decode(c as IMiddleware.DecodeContext, createNext());
-
-    // 検証
-    expect(c.destination).toBe("v1");
   });
 });

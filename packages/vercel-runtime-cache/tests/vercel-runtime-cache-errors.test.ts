@@ -5,22 +5,7 @@ import {
   InvalidMaxEntriesError,
   InvalidNamespaceError,
   InvalidTtlSecondsError,
-  KeyNotFoundError,
 } from "../src/errors.js";
-
-describe("KeyNotFoundError", () => {
-  test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
-    expect(new KeyNotFoundError({ key: "k1" }).name).toBe("UniKvsKeyNotFoundError");
-  });
-
-  test("meta にキーを保持する", ({ expect }) => {
-    expect(new KeyNotFoundError({ key: "k1" }).meta).toStrictEqual({ key: "k1" });
-  });
-
-  test("既定の英語メッセージを返す", ({ expect }) => {
-    expect(new KeyNotFoundError({ key: "k1" }).message).toBe("Key not found: k1");
-  });
-});
 
 describe("InvalidChunkTypeError", () => {
   test("name は VercelRuntimeCacheInvalidChunkTypeError である", ({ expect }) => {

@@ -6,13 +6,18 @@
  */
 
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext } from "@unikvs/testing";
+import { createGetContext, createSetContext } from "@unikvs/testing";
 import { test as vitest } from "vitest";
 
 import CacheStorage from "../src/cache-storage.js";
 
 // DOM の `CacheStorage` とクラス名が衝突するため、型参照用の別名を用意します。
 export type NativeCacheStorage = typeof globalThis.caches;
+
+/**
+ * テストで論理キーを `Request` に変換するときの基底 URL です。
+ */
+const BASE_URL = "https://unikvs.local/";
 
 const { signal } = new AbortController();
 
@@ -29,6 +34,50 @@ export function createCacheName(): string {
 }
 
 /**
+ * 論理キーをテスト用の `Request` に変換します。
+ * `encodeURIComponent` により、任意のキーを 1 対 1 で URL に対応させます。
+ */
+export function createRequest(key: string): Request {
+  return new Request(BASE_URL + encodeURIComponent(key));
+}
+
+/**
+ * `Response` のボディをバイト列として読み取ります。
+ * `write` / `getReadable` の結果をバイト単位で比較するために使用します。
+ */
+export async function readBody(response: Response): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+/**
+ * バイト列を `Response` としてストレージへ書き込みます。
+ * 各テストで書き込みコンテキストの組み立てを繰り返さないために使用します。
+ */
+export async function writeBytes(
+  storage: CacheStorage,
+  key: string,
+  data: Uint8Array<ArrayBuffer>,
+): Promise<void> {
+  await storage.write(
+    createSetContext(key, { signal }) as IStorage.WriteContext,
+    new Response(data),
+  );
+}
+
+/**
+ * キーに対応する値を読み取り、ボディをバイト列で返します。
+ * 保存値の比較を簡潔にするために使用します。
+ */
+export async function readBytes(
+  storage: CacheStorage,
+  key: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const response = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
+
+  return readBody(response);
+}
+
+/**
  * `Request` から正規化した URL を取り出します。
  * 文字列・`URL`・`Request` のいずれも受け付けます。
  */
@@ -36,14 +85,32 @@ function toUrl(request: RequestInfo | URL): string {
   return new Request(request).url;
 }
 
+type StoredResponse = {
+  readonly body: ArrayBuffer | null;
+  readonly status: number;
+  readonly statusText: string;
+  readonly headers: Headers;
+};
+
+type FakeCachesOptions = {
+  /**
+   * 保留し続ける操作です。
+   * 中断処理が待機中のバックエンド呼び出しを打ち切ることを検証するために使用します。
+   */
+  readonly pending?: "open" | "match" | "keys" | undefined;
+};
+
 /**
  * テスト用のインメモリー `CacheStorage` を作ります。
- * `put` 時にバイト列を複製し、`match` のたびに新しい `Response` を返します。
+ * `put` 時にボディと応答メタデータを複製し、`match` のたびに新しい `Response` を返します。
  */
-export function createFakeCaches(): NativeCacheStorage {
-  const stores = new Map<string, Map<string, Uint8Array<ArrayBuffer>>>();
+export function createFakeCaches(options: FakeCachesOptions = {}): NativeCacheStorage {
+  const stores = new Map<string, Map<string, StoredResponse>>();
 
-  const getStore = (name: string): Map<string, Uint8Array<ArrayBuffer>> => {
+  // 中断がなければテストがタイムアウトするまで解決しない Promise です。
+  const neverResolve = <T>(): Promise<T> => new Promise<T>(() => {});
+
+  const getStore = (name: string): Map<string, StoredResponse> => {
     let store = stores.get(name);
 
     if (store === undefined) {
@@ -59,24 +126,39 @@ export function createFakeCaches(): NativeCacheStorage {
 
     return {
       async match(request: RequestInfo | URL): Promise<Response | undefined> {
+        if (options.pending === "match") {
+          return neverResolve();
+        }
+
         const found = store.get(toUrl(request));
 
         if (found === undefined) {
           return undefined;
         }
 
-        return new Response(found.slice(), {
-          headers: { "Content-Type": "application/octet-stream" },
+        return new Response(found.body?.slice() ?? null, {
+          status: found.status,
+          statusText: found.statusText,
+          headers: found.headers,
         });
       },
       async put(request: RequestInfo | URL, response: Response): Promise<void> {
-        const buff = await response.arrayBuffer();
-        store.set(toUrl(request), new Uint8Array(buff));
+        const body = response.body === null ? null : await response.arrayBuffer();
+        store.set(toUrl(request), {
+          body,
+          status: response.status,
+          statusText: response.statusText,
+          headers: new Headers(response.headers),
+        });
       },
       async delete(request: RequestInfo | URL): Promise<boolean> {
         return store.delete(toUrl(request));
       },
       async keys(): Promise<readonly Request[]> {
+        if (options.pending === "keys") {
+          return neverResolve();
+        }
+
         return [...store.keys()].map((url) => new Request(url));
       },
     } as unknown as Cache;
@@ -84,6 +166,10 @@ export function createFakeCaches(): NativeCacheStorage {
 
   const backend = {
     async open(cacheName: string): Promise<Cache> {
+      if (options.pending === "open") {
+        return neverResolve();
+      }
+
       return openCache(cacheName);
     },
     async has(cacheName: string): Promise<boolean> {
@@ -176,10 +262,14 @@ export const test = vitest.extend<{ cacheName: string; storage: CacheStorage }>(
     await use(createCacheName());
   },
   async storage({ cacheName }, use) {
-    const storage = new CacheStorage(cacheName, { caches: createFakeCaches() });
+    const storage = new CacheStorage({
+      cacheName,
+      caches: createFakeCaches(),
+      toRequest: createRequest,
+    });
     await use(storage);
     if (storage.isOpen) {
-      await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
+      await storage.close();
     }
   },
 });

@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
   InvalidChunkTypeError,
@@ -219,11 +220,11 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   #storageKey(key: string): string {
@@ -289,7 +290,7 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     const storedValue = this.#clone(data);
     const expiresAt = this.#expiresAt();
 
@@ -317,11 +318,12 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<any> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     if (this.#backend !== undefined) {
+      using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
-      const raw = await this.#backend.get(storedKey);
+      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
       if (raw === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
@@ -348,11 +350,12 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     if (this.#backend !== undefined) {
+      using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
-      const raw = await this.#backend.get(storedKey);
+      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
       if (raw === undefined) {
         return false;
       }
@@ -390,11 +393,12 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     if (this.#backend !== undefined) {
+      using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
-      const raw = await this.#backend.get(storedKey);
+      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
       if (raw === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
@@ -430,7 +434,9 @@ export default class VercelRuntimeCache implements IStorage {
     this.#fallback.delete(storedKey);
   }
 
-  public async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    throwIfAborted(c.signal);
+
     if (this.#backend !== undefined) {
       if (typeof this.#backend.clear === "function") {
         await this.#backend.clear();
@@ -439,6 +445,8 @@ export default class VercelRuntimeCache implements IStorage {
       }
 
       for (const storedKey of this.#backendKeys) {
+        throwIfAborted(c.signal);
+
         await this.#backend.delete(storedKey);
       }
 
@@ -449,10 +457,12 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
       write: (chunk) => {
+        throwIfAborted(c.signal);
+
         if (!(chunk instanceof Uint8Array)) {
           throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
@@ -478,7 +488,7 @@ export default class VercelRuntimeCache implements IStorage {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     const value = await this.read(c as unknown as IStorage.ReadContext);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller) => {

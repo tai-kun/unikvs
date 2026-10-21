@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { Client } from "memjs";
 
 import {
@@ -259,17 +260,21 @@ export default class Memcached implements IStorage {
     return this.#con !== null;
   }
 
-  public async open(_c: IStorage.OpenContext): Promise<void> {
+  public async open(c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
     // 並行 `close` 同士は一方が `TypeError` reject する形で直列化されます。
+    throwIfAborted(c.signal);
+
     if (this.#con) {
-      await this.close(_c as unknown as IStorage.CloseContext);
+      await this.close(c as unknown as IStorage.CloseContext);
     }
 
     const injected = this.#injectedClient;
     const client: MemcachedClientLike = injected ?? createClient(this.#servers);
     const owned = injected === undefined;
+
+    using abortPromise = toAbortPromise(c.signal);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -282,6 +287,7 @@ export default class Memcached implements IStorage {
             reject(new ConnectTimeoutError({ timeoutMs: this.#connectTimeout }));
           }, this.#connectTimeout);
         }),
+        abortPromise,
       ]);
     } catch (error) {
       if (owned) {
@@ -316,7 +322,7 @@ export default class Memcached implements IStorage {
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // memcached テキスト互換のため、バイナリーは base64 文字列として格納します。
     await client.set(this.#toKey(c.key), encodeBase64(data), { expires: this.#ttlSeconds });
@@ -325,9 +331,12 @@ export default class Memcached implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const data = normalizeGetResult(await client.get(this.#toKey(c.key)));
+    const data = normalizeGetResult(
+      await Promise.race([client.get(this.#toKey(c.key)), abortPromise]),
+    );
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -338,24 +347,28 @@ export default class Memcached implements IStorage {
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     // memcached に存在確認コマンドはないため、`get` の成否で判定します。
-    return normalizeGetResult(await client.get(this.#toKey(c.key))) !== null;
+    return (
+      normalizeGetResult(await Promise.race([client.get(this.#toKey(c.key)), abortPromise])) !==
+      null
+    );
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     await invokeClient(client, ["delete", "del"], this.#toKey(c.key));
   }
 
-  public async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#con!;
 
-    _c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // memcached にキー列挙手段はないため、`flush` で全件削除します。
     // プレフィックスの内外を問わず、サーバー上の全キーが対象になります。

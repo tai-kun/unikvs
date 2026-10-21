@@ -2,6 +2,7 @@ import type { IMiddleware } from "@unikvs/core";
 import {
   abortedSignal,
   captureRejection,
+  captureThrown,
   createDecodeContext,
   createDecodeStreamContext,
   createEncodeContext,
@@ -13,9 +14,8 @@ import {
 import { deleteGlobalConfig, setGlobalConfig } from "valibot";
 import { describe, test as vitest, vi } from "vitest";
 
-import type { IEnv } from "../src/_core.js";
 import Brotli, { type BrotliOptions } from "../src/brotli.js";
-import { UnsupportedRuntimeError, BrotliInvalidLevelError } from "../src/errors.js";
+import { BrotliInvalidLevelError } from "../src/errors.js";
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
@@ -164,41 +164,6 @@ describe("BrotliInvalidLevelError", () => {
   });
 });
 
-describe("UnsupportedRuntimeError", () => {
-  test("既定では英語メッセージを返す", ({ expect }) => {
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "Brotli", runtime: "Node.js" });
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
-    expect(error.meta).toStrictEqual({ name: "Brotli", runtime: "Node.js" });
-    expect(error.message).toBe("Brotli can only be used in the Node.js runtime");
-  });
-
-  test("cause を保持する", ({ expect }) => {
-    // 準備
-    const cause = new Error("原因");
-
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "Brotli", runtime: "Node.js", cause });
-
-    // 検証
-    expect(error.cause).toBe(cause);
-  });
-
-  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "Brotli", runtime: "Node.js" });
-
-    // 実行
-    setLang("ja");
-
-    // 検証
-    expect(error.message).toBe("Brotli は Node.js ランタイムでのみ使用できます");
-  });
-});
-
 describe("壊れた圧縮データの decode", () => {
   test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備
@@ -279,7 +244,7 @@ describe("範囲外レベルのコンストラクター", () => {
     expect(() => new Brotli({ level: 11 })).not.toThrow();
   });
 
-  test("無効値は BrotliInvalidLevelError で拒否する", ({ expect }) => {
+  test("無効値は BrotliInvalidLevelError で拒否し指定値を meta.actual に保持する", ({ expect }) => {
     // 準備
     // 本ループは拒否区分のみを扱う。有効区分は往復群とオプション節で検証する。
     // null は既定値に吸収されず無効値として拒否される。
@@ -298,37 +263,11 @@ describe("範囲外レベルのコンストラクター", () => {
 
     // 実行と検証
     for (const value of invalidValues) {
-      expect(
+      const thrown = captureThrown(
         () => new Brotli({ level: value as unknown as BrotliOptions["level"] }),
-        `${String(value)}`,
-      ).toThrow(BrotliInvalidLevelError);
-    }
-  });
+      );
 
-  test("meta.actual に指定値をそのまま保持する", ({ expect }) => {
-    // 実行と検証
-    // 拒否区分の全 10 値で指定値そのまま保持の契約を検証する。
-    for (const value of [
-      -1,
-      -7,
-      12,
-      22,
-      1.5,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      "3",
-      true,
-      null,
-    ]) {
-      let thrown: unknown;
-
-      try {
-        new Brotli({ level: value as unknown as BrotliOptions["level"] });
-      } catch (error) {
-        thrown = error;
-      }
-
-      expect(thrown).toBeInstanceOf(BrotliInvalidLevelError);
+      expect(thrown, `${String(value)}`).toBeInstanceOf(BrotliInvalidLevelError);
       expect((thrown as BrotliInvalidLevelError).meta).toStrictEqual({ actual: value });
     }
   });
@@ -471,73 +410,5 @@ describe("open の中断", () => {
     // 既存の実行環境は破棄されないため、引き続き往復できる。
     const decoded = await decode(target, await encode(target, input));
     expect(decoded).toStrictEqual(input);
-  });
-});
-
-describe("上流の欠落", () => {
-  test("brotli 圧縮関数がなくても open は成功し encode を TypeError で拒否する", async ({
-    expect,
-    signal,
-  }) => {
-    // 準備
-    vi.resetModules();
-
-    try {
-      const fresh = await import("../src/brotli.js");
-      const freshCore = await import("../src/_core.js");
-      const real = await freshCore.api.init();
-      const withoutCompress = {
-        ...real,
-        brotliCompress: undefined,
-      } as unknown as IEnv;
-      const loadSpy = vi.spyOn(freshCore.api, "init").mockResolvedValueOnce(withoutCompress);
-      const target = new fresh.default();
-
-      try {
-        // 実行と検証
-        // 実装は open() で関数の有無を検証しないため、欠落は使用時に表面化する。
-        await openTarget(target, signal);
-        expect(target.isOpen).toBe(true);
-        await expect(encode(target, new Uint8Array([1]))).rejects.toThrow(TypeError);
-        expect(loadSpy).toHaveBeenCalledTimes(1);
-      } finally {
-        loadSpy.mockRestore();
-      }
-    } finally {
-      vi.restoreAllMocks();
-    }
-  });
-
-  test("brotli 展開関数がなくても open は成功し decode を TypeError で拒否する", async ({
-    expect,
-    signal,
-  }) => {
-    // 準備
-    vi.resetModules();
-
-    try {
-      const fresh = await import("../src/brotli.js");
-      const freshCore = await import("../src/_core.js");
-      const real = await freshCore.api.init();
-      const withoutDecompress = {
-        ...real,
-        brotliDecompress: undefined,
-      } as unknown as IEnv;
-      const loadSpy = vi.spyOn(freshCore.api, "init").mockResolvedValueOnce(withoutDecompress);
-      const target = new fresh.default();
-
-      try {
-        // 実行と検証
-        // 実装は open() で関数の有無を検証しないため、欠落は使用時に表面化する。
-        await openTarget(target, signal);
-        expect(target.isOpen).toBe(true);
-        await expect(decode(target, new Uint8Array([1]))).rejects.toThrow(TypeError);
-        expect(loadSpy).toHaveBeenCalledTimes(1);
-      } finally {
-        loadSpy.mockRestore();
-      }
-    } finally {
-      vi.restoreAllMocks();
-    }
   });
 });

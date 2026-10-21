@@ -116,6 +116,30 @@ describe("エラーの記録", () => {
     expect(span.ended).toBe(true);
   });
 
+  test("next が失敗した後に destination を取り消してもエラー状態のまま 1 回だけ終了する", async ({
+    expect,
+  }) => {
+    // 準備
+    const tracer = new RecordingTracer();
+    const tracing = new Tracing({ tracer });
+    const failure = new Error("setup failed");
+    const c = createEncodeStreamContext(sourceFrom(["a"]), "stream");
+
+    // 実行
+    await expect(
+      tracing.encodeStream(c as IMiddleware.EncodeStreamContext, createFailingNext(failure)),
+    ).rejects.toBe(failure);
+    // パイプラインは next の失敗後に destination を解放するため、後から取り消されます。
+    await (c.destination as ReadableStream<string>).cancel("teardown");
+
+    // 検証
+    expect(tracer.spans).toHaveLength(1);
+    const span = tracer.spans[0]!;
+    expect(span.attributes.get("success")).toBe(false);
+    expect(span.status).toStrictEqual({ code: "error", message: "setup failed" });
+    expect(span.endCount).toBe(1);
+  });
+
   test("ストリーム本体が失敗したらスパンをエラーで終了する", async ({ expect }) => {
     // 準備
     const tracer = new RecordingTracer();
@@ -145,11 +169,21 @@ describe("エラーの記録", () => {
     expect(span.ended).toBe(true);
   });
 
-  test("ストリームを取り消してもスパンを終了する", async ({ expect }) => {
+  test("ストリームを取り消すと上流に理由を伝えてスパンを正常終了する", async ({ expect }) => {
     // 準備
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
-    const c = createEncodeStreamContext(sourceFrom(["a", "b"]), "stream");
+    let upstreamCancelReason: unknown;
+    const source = new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue("a");
+        controller.enqueue("b");
+      },
+      cancel(reason) {
+        upstreamCancelReason = reason;
+      },
+    });
+    const c = createEncodeStreamContext(source, "stream");
     await tracing.encodeStream(c as IMiddleware.EncodeStreamContext, async () => {});
     const reader = (c.destination as ReadableStream<string>).getReader();
 
@@ -158,10 +192,12 @@ describe("エラーの記録", () => {
     await reader.cancel("cancelled");
 
     // 検証
+    expect(upstreamCancelReason).toBe("cancelled");
     expect(tracer.spans).toHaveLength(1);
     const span = tracer.spans[0]!;
     expect(span.attributes.get("success")).toBe(true);
     expect(span.status).toStrictEqual({ code: "ok" });
     expect(span.ended).toBe(true);
+    expect(span.endCount).toBe(1);
   });
 });

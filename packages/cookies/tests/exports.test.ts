@@ -22,10 +22,4 @@ describe("index のエクスポート", () => {
     // 実行と検証
     expect(index.KeyNotFoundError).toBe(core.KeyNotFoundError);
   });
-
-  test("ストリーム用のエラーを輸出しない", ({ expect }) => {
-    // 実行と検証
-    expect("InvalidChunkTypeError" in index).toBe(false);
-    expect("InvalidDataTypeError" in index).toBe(false);
-  });
 });

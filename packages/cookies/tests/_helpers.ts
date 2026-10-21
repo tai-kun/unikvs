@@ -17,6 +17,10 @@ export type FakeCookieStore = CookieStoreLike & {
   readonly deleteCalls: DeleteCall[];
 };
 
+/**
+ * 注入先の CookieStoreLike として使うインメモリーストアです。
+ * set/delete に渡された値と属性を記録し、呼び出し契約を検証できるようにします。
+ */
 export function createFakeCookieStore(): FakeCookieStore {
   const entries = new Map<string, string>();
   const setCalls: SetCall[] = [];
@@ -51,6 +55,12 @@ export type FakeDocument = {
   cookie: string;
 };
 
+/**
+ * document.cookie だけを持つフェイクです。
+ * 書き込まれた Set-Cookie 文字列を解析し、Max-Age が 0 以下のときの削除を再現します。
+ * Path / Domain によるスコープ、Expires、正の Max-Age の期限切れ、Secure / SameSite の
+ * 適用は模倣しません。属性は書き込まれた文字列を直接検証してください。
+ */
 export function createFakeDocument(): FakeDocument & { writes: string[] } {
   const jar = new Map<string, string>();
   const writes: string[] = [];
@@ -99,6 +109,10 @@ export function createFakeDocument(): FakeDocument & { writes: string[] } {
   return fake;
 }
 
+/**
+ * テスト中だけ globalThis.document を差し替え、終了後に元の状態へ戻します。
+ * document 不在時のフォールバックをサーバー環境で検証するために使用します。
+ */
 export function runWithGlobalDocument<T>(document: FakeDocument | undefined, fn: () => T): T {
   const holder = globalThis as Record<string, unknown>;
   const hadOwn = Object.hasOwn(holder, "document");

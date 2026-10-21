@@ -53,6 +53,8 @@ describe("ライフサイクル", () => {
     expect(storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toBe("v");
   });
 
+  // すべての操作は同期的に完了するため、実行中の中断は扱いません。
+  // ここでは各メソッド先頭の中断確認だけを検証します。
   test("中断済みシグナルの open と close は中断例外を投げる", ({ expect, storage }) => {
     // 実行と検証
     expect(() =>
@@ -120,10 +122,11 @@ describe.skipIf(typeof globalThis.document !== "undefined")("backend 不在", ()
 
   test("backend 不在でも close は成功する", ({ expect }) => {
     // 実行と検証
-    runWithGlobalDocument(undefined, () =>
-      new Cookies().close(createCloseContext({ signal }) as IStorage.CloseContext),
-    );
-    expect(true).toBe(true);
+    expect(() =>
+      runWithGlobalDocument(undefined, () =>
+        new Cookies().close(createCloseContext({ signal }) as IStorage.CloseContext),
+      ),
+    ).not.toThrow();
   });
 });
 
@@ -135,11 +138,6 @@ describe("エラークラス", () => {
     );
     expect(new CookieNotAvailableError().name).toBe("CookieNotAvailableError");
     expect(new KeyNotFoundError({ key: "k" }).name).toBe("UniKvsKeyNotFoundError");
-  });
-
-  test("KeyNotFoundError は core の定義を使う", ({ expect }) => {
-    // 実行と検証
-    expect(KeyNotFoundError).toBe(core.KeyNotFoundError);
   });
 
   test("新設クラスは用途別に基底クラスを継承する", ({ expect }) => {

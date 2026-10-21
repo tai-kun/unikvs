@@ -5,7 +5,7 @@ import * as index from "../src/index.js";
 import RateLimit from "../src/rate-limit.js";
 
 describe("index のエクスポート", () => {
-  test("トランスフォーマーがエクスポートされている", ({ expect }) => {
+  test("RateLimit ミドルウェアがエクスポートされている", ({ expect }) => {
     expect(index.RateLimit).toBe(RateLimit);
   });
 

@@ -1,6 +1,5 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  createClearContext,
   createDecodeContext,
   createDecodeStreamContext,
   createDeleteContext,
@@ -68,7 +67,7 @@ async function pumpDecode(
 }
 
 describe("初期化と基本属性", () => {
-  test("name プロパティは Tracing を返す", ({ expect }) => {
+  test("name プロパティは Tracing である", ({ expect }) => {
     // 準備
     const tracing = new Tracing();
 
@@ -127,6 +126,31 @@ describe("初期化と基本属性", () => {
     // 検証
     expect(output).toBe(data);
   });
+
+  test("encode と decode は next を呼ぶ前に destination を設定する", async ({ expect }) => {
+    // 準備
+    const tracing = new Tracing();
+    const encoded = new Uint8Array([1, 2, 3]);
+    const decoded = "hello";
+    const seen: unknown[] = [];
+    const encodeContext = createEncodeContext(encoded, "key");
+    const decodeContext = createDecodeContext(decoded, "key");
+
+    // 実行
+    await tracing.encode(encodeContext as IMiddleware.EncodeContext, async () => {
+      seen.push(encodeContext.destination);
+    });
+    await tracing.decode(decodeContext as IMiddleware.DecodeContext, async () => {
+      seen.push(decodeContext.destination);
+    });
+
+    // 検証
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe(encoded);
+    expect(seen[1]).toBe(decoded);
+    expect(encodeContext.destination).toBe(encoded);
+    expect(decodeContext.destination).toBe(decoded);
+  });
 });
 
 describe("操作ごとのスパン", () => {
@@ -134,27 +158,32 @@ describe("操作ごとのスパン", () => {
     // 準備
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
-    const contexts = [
-      createSetContext("set-key"),
-      createGetContext("get-key"),
-      createStreamContext("stream-key"),
-      createHasContext("has-key"),
-      createDeleteContext("delete-key"),
-      createClearContext(""),
-    ] as IMiddleware.UseContext[];
+    // 本番の clear コンテキストは key を持たないため、同じ形のコンテキストを使います。
+    const clearContext = {
+      action: "clear",
+      signal: new AbortController().signal,
+    } as unknown as IMiddleware.UseContext;
+    const cases = [
+      [createSetContext("set-key"), "set-key"],
+      [createGetContext("get-key"), "get-key"],
+      [createStreamContext("stream-key"), "stream-key"],
+      [createHasContext("has-key"), "has-key"],
+      [createDeleteContext("delete-key"), "delete-key"],
+      [clearContext, ""],
+    ] as [IMiddleware.UseContext, string][];
 
     // 実行
-    for (const c of contexts) {
+    for (const [c] of cases) {
       await tracing.use(c, createNext());
     }
 
     // 検証
-    expect(tracer.spans).toHaveLength(contexts.length);
+    expect(tracer.spans).toHaveLength(cases.length);
 
-    for (const [index, c] of contexts.entries()) {
+    for (const [index, [c, key]] of cases.entries()) {
       const span = tracer.spans[index]!;
       expect(span.name).toBe(`unikvs.use.${c.action}`);
-      expect(span.attributes.get("key")).toBe("key" in c ? c.key : "");
+      expect(span.attributes.get("key")).toBe(key);
       expect(span.attributes.get("action")).toBe(c.action);
       expect(span.attributes.get("success")).toBe(true);
       expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
@@ -255,6 +284,35 @@ describe("操作ごとのスパン", () => {
     expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
     expect(span.status).toStrictEqual({ code: "ok" });
     expect(span.ended).toBe(true);
+  });
+
+  test("encodeStream と decodeStream は next を呼ぶ前に destination を設定する", async ({
+    expect,
+  }) => {
+    // 準備
+    const tracing = new Tracing();
+    const encodeContext = createEncodeStreamContext(sourceFrom(["a", "bc"]), "stream-key");
+    const decodeContext = createDecodeStreamContext(sourceFrom(["d"]), "stream-key");
+    const seen: unknown[] = [];
+
+    // 実行
+    await tracing.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, async () => {
+      seen.push(encodeContext.destination);
+    });
+    await tracing.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, async () => {
+      seen.push(decodeContext.destination);
+    });
+    const encodedChunks = await readAll(encodeContext.destination as ReadableStream<string>);
+    const decodedChunks = await readAll(decodeContext.destination as ReadableStream<string>);
+
+    // 検証
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBeDefined();
+    expect(seen[1]).toBeDefined();
+    expect(seen[0]).toBe(encodeContext.destination);
+    expect(seen[1]).toBe(decodeContext.destination);
+    expect(encodedChunks).toStrictEqual(["a", "bc"]);
+    expect(decodedChunks).toStrictEqual(["d"]);
   });
 
   test("spanNamePrefix を指定するとスパン名に反映される", async ({ expect }) => {

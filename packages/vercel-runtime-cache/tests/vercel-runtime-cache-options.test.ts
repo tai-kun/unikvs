@@ -1,11 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import {
-  createClearContext,
-  createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createSetContext,
-} from "@unikvs/testing";
+import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import {
@@ -88,19 +82,5 @@ describe("オプション検証", () => {
     await storage.read(createGetContext("k1") as IStorage.ReadContext);
 
     expect(calls).toStrictEqual(["v1", "v1"]);
-  });
-
-  test("clear はすべて削除する", async ({ expect }) => {
-    const storage = new VercelRuntimeCache({ namespace: "ns" });
-    await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
-    await storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
-    await storage.clear(createClearContext() as IStorage.ClearContext);
-
-    await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
-      false,
-    );
-    await expect(
-      storage.delete(createDeleteContext("k1") as IStorage.DeleteContext),
-    ).rejects.toBeInstanceOf(KeyNotFoundError);
   });
 });

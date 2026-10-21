@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
   CacheBindingNotFoundError,
@@ -167,60 +168,60 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const request = this.#requestFor(c.key);
 
     try {
       await this.#cache.put(request, CloudflareCache.#toResponse(data.slice()));
     } catch (ex) {
-      c.signal.throwIfAborted();
       throw new CacheOperationError({ operation: "put", key: c.key, cause: ex });
     }
   }
 
-  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
-
-    const request = this.#requestFor(c.key);
-    let response: Response | undefined;
-
+  // `match` の失敗を `CacheOperationError` に包みます。
+  // 中断の打ち切りは呼び出し側で `toAbortPromise` と競争させるため、ここでは判定しません。
+  async #match(
+    c: IStorage.ReadContext | IStorage.ExistsContext | IStorage.GetReadableContext,
+    request: Request,
+  ): Promise<Response | undefined> {
     try {
-      response = await this.#cache.match(request);
+      return await this.#cache.match(request);
     } catch (ex) {
-      c.signal.throwIfAborted();
       throw new CacheOperationError({ operation: "match", key: c.key, cause: ex });
     }
+  }
+
+  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
+
+    const request = this.#requestFor(c.key);
+    const response = await Promise.race([this.#match(c, request), abortPromise]);
 
     if (response === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    const buffer = await response.arrayBuffer();
+    const buffer = await Promise.race([response.arrayBuffer(), abortPromise]);
 
     return new Uint8Array(buffer);
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     const request = this.#requestFor(c.key);
-    let response: Response | undefined;
-
-    try {
-      response = await this.#cache.match(request);
-    } catch (ex) {
-      c.signal.throwIfAborted();
-      throw new CacheOperationError({ operation: "match", key: c.key, cause: ex });
-    }
+    const response = await Promise.race([this.#match(c, request), abortPromise]);
 
     if (response === undefined) {
       return false;
@@ -233,14 +234,13 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const request = this.#requestFor(c.key);
 
     try {
       await this.#cache.delete(request);
     } catch (ex) {
-      c.signal.throwIfAborted();
       throw new CacheOperationError({ operation: "delete", key: c.key, cause: ex });
     }
   }
@@ -250,7 +250,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const request = this.#requestFor(c.key);
     const cache = this.#cache;
@@ -260,6 +260,8 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       write(chunk) {
+        throwIfAborted(signal);
+
         if (!(chunk instanceof Uint8Array)) {
           throw new InvalidChunkTypeError({ key: c.key, chunk });
         }
@@ -267,7 +269,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
         chunks.push(chunk.slice());
       },
       close: async () => {
-        signal.throwIfAborted();
+        throwIfAborted(signal);
 
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
@@ -281,7 +283,6 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
         try {
           await cache.put(request, CloudflareCache.#toResponse(merged));
         } catch (ex) {
-          signal.throwIfAborted();
           throw new CacheOperationError({ operation: "put", key: c.key, cause: ex });
         }
       },
@@ -294,17 +295,11 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     const request = this.#requestFor(c.key);
-    let response: Response | undefined;
-
-    try {
-      response = await this.#cache.match(request);
-    } catch (ex) {
-      c.signal.throwIfAborted();
-      throw new CacheOperationError({ operation: "match", key: c.key, cause: ex });
-    }
+    const response = await Promise.race([this.#match(c, request), abortPromise]);
 
     if (response === undefined) {
       throw new KeyNotFoundError({ key: c.key });

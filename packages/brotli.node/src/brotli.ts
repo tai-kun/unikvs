@@ -1,6 +1,6 @@
 import type { IMiddleware, ITransformStream } from "@unikvs/core";
 import { toOwnedBytes, proxyTransformStream } from "@unikvs/utils";
-import { toAbortPromise } from "abort-signal-utils";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
 
 import { type IEnv, api } from "./_core.js";
@@ -102,7 +102,7 @@ export default class Brotli implements IMiddleware {
         c.signal,
       );
     } catch (ex) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new UnsupportedRuntimeError({
         name: "Brotli",
         cause: ex,

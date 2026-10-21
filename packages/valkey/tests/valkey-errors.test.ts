@@ -7,7 +7,7 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe, vi } from "vitest";
 
 import {
   CloseTimeoutError,
@@ -245,6 +245,29 @@ describe("中断された signal", () => {
     // 準備
     const controller = new AbortController();
     controller.abort();
+
+    // 実行と検証
+    await expect(
+      storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
+    ).rejects.toThrow();
+  });
+
+  test("clear は SCAN の途中でも中断できる", async ({ expect, fake, signal, storage }) => {
+    // 準備
+    // 1 ページ (COUNT 1000) に収まらない件数を作り、次のページへ進む前に中断する。
+    const count = 1001;
+    for (let index = 0; index < count; index += 1) {
+      await storage.write(
+        createSetContext(`bulk/${index}.bin`, { signal }) as IStorage.WriteContext,
+        new Uint8Array([index % 256]),
+      );
+    }
+    const controller = new AbortController();
+    const scan = fake.scan.bind(fake);
+    vi.spyOn(fake, "scan").mockImplementationOnce(async (cursor, ...args) => {
+      controller.abort();
+      return scan(cursor, ...args);
+    });
 
     // 実行と検証
     await expect(

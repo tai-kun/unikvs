@@ -1,3 +1,4 @@
+import { KeyNotFoundError as CoreKeyNotFoundError } from "@unikvs/core";
 import { describe, test } from "vitest";
 
 import {
@@ -13,6 +14,10 @@ import VercelRuntimeCache from "../src/vercel-runtime-cache.js";
 describe("index のエクスポート", () => {
   test("ストレージがエクスポートされている", ({ expect }) => {
     expect(index.VercelRuntimeCache).toBe(VercelRuntimeCache);
+  });
+
+  test("KeyNotFoundError は core のエラークラスを再エクスポートしている", ({ expect }) => {
+    expect(index.KeyNotFoundError).toBe(CoreKeyNotFoundError);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {

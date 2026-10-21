@@ -119,9 +119,12 @@ describe("削除の墓標化", () => {
     await kvs.close();
   });
 
-  test("存在しないキーへの delete は成功する", async ({ expect }) => {
+  test("存在しないキーの has は false を返し、delete も成功する", async ({ expect }) => {
     // 準備
     const { kvs } = await createSoftDeleteKvs();
+
+    // 実行前の検証
+    expect(await kvs.has("report")).toBe(false);
 
     // 実行と検証
     await kvs.delete("report");
@@ -152,6 +155,9 @@ describe("二重削除の挙動", () => {
     expect(await kvs.has("report")).toBe(false);
     const error = await captureRejection(kvs.get("report"));
     expect(error).toBeInstanceOf(KeyNotFoundError);
+
+    // 検証: 墓標のスナップショットは最初の削除時のまま
+    expect(await softDelete.restore("report")).toBe("hello");
 
     // 後片付け
     await kvs.close();
@@ -217,6 +223,9 @@ describe("復元", () => {
       name: "UniKvsTombstoneNotFoundError",
       meta: { key: "report" },
     });
+
+    // 検証: 復元に失敗しても有効な値は変わらない
+    expect(await kvs.get("report")).toBe("hello");
 
     // 後片付け
     await kvs.close();
@@ -340,10 +349,13 @@ describe("墓標の一覧", () => {
 
   test("墓標のないときは空配列を返す", async ({ expect }) => {
     // 準備
-    const { softDelete } = await createSoftDeleteKvs();
+    const { kvs, softDelete } = await createSoftDeleteKvs();
 
     // 実行と検証
     expect(await softDelete.listTombstones()).toStrictEqual([]);
+
+    // 後片付け
+    await kvs.close();
   });
 });
 

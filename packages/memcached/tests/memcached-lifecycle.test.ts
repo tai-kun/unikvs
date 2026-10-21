@@ -1,3 +1,5 @@
+import { createServer, type Socket } from "node:net";
+
 import type { IStorage } from "@unikvs/core";
 import {
   createClearContext,
@@ -8,6 +10,7 @@ import {
   createOpenContext,
   createSetContext,
 } from "@unikvs/testing";
+import { acquireFreePort } from "@unikvs/testing/node";
 import { describe } from "vitest";
 
 import { ConnectTimeoutError } from "../src/errors.js";
@@ -144,16 +147,55 @@ describe("ライフサイクル管理", () => {
     expect(unreachable.isOpen).toBe(false);
   });
 
-  test("servers を配列と host/port でも指定できる", async ({ expect, keyPrefix }) => {
+  test("servers・host/port で指定した接続先が使われる", async ({ expect, keyPrefix }) => {
     // 準備
-    const fromArray = new Memcached(["127.0.0.1:1"], { keyPrefix });
-    const fromHostPort = new Memcached(undefined, { host: "127.0.0.1", port: 1, keyPrefix });
+    // 接続は受け付けるが応答しない TCP サーバーを立てます。
+    // 接続先が無視されて既定の 127.0.0.1:11211 が使われた場合、
+    // 接続拒否 (別のエラー) になるか open が成功するため、解決結果を判別できます。
+    const port = await acquireFreePort();
+    const sockets = new Set<Socket>();
+    const server = createServer((socket) => {
+      sockets.add(socket);
+      socket.on("error", () => {});
+      socket.on("close", () => {
+        sockets.delete(socket);
+      });
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(port, "127.0.0.1", resolve);
+    });
 
-    // 実行と検証
-    await expect(fromArray.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
-    expect(fromArray.isOpen).toBe(false);
-    await expect(fromHostPort.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
-    expect(fromHostPort.isOpen).toBe(false);
+    const storages = [
+      new Memcached([`127.0.0.1:${port}`], { keyPrefix, connectTimeout: 100 }),
+      new Memcached(undefined, {
+        servers: `127.0.0.1:${port}`,
+        keyPrefix,
+        connectTimeout: 100,
+      }),
+      new Memcached(undefined, { host: "127.0.0.1", port, keyPrefix, connectTimeout: 100 }),
+      // host を省略したときは 127.0.0.1 が使われます。
+      new Memcached(undefined, { port, keyPrefix, connectTimeout: 100 }),
+    ];
+
+    try {
+      // 実行と検証
+      for (const storage of storages) {
+        await expect(storage.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow(
+          ConnectTimeoutError,
+        );
+        expect(storage.isOpen).toBe(false);
+      }
+    } finally {
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+      sockets.clear();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+    }
   });
 
   test("応答しないクライアントのとき、open は connectTimeout で打ち切られる", async ({

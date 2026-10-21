@@ -5,8 +5,9 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  readAll,
 } from "@unikvs/testing";
-import { PluginOperationAggregateError, UniKvs, type Value } from "unikvs";
+import { PluginOperationAggregateError, UniKvs, type StreamValue, type Value } from "unikvs";
 import { describe, test } from "vitest";
 
 import {
@@ -23,6 +24,7 @@ import ReadOnly from "../src/readonly.js";
 type TestMapping = {
   report: Value<string>;
   archived: Value<string>;
+  blob: StreamValue<Uint8Array>;
 };
 
 /**
@@ -31,7 +33,7 @@ type TestMapping = {
  * シードデータはミドルウェアーを介さず下流ストレージへ直接書き込みます。
  */
 async function createReadOnlyKvs(
-  seed: Record<string, string> = { report: "hello" },
+  seed: Record<string, unknown> = { report: "hello" },
   allowDelete = false,
 ) {
   const storage = new Memory();
@@ -71,6 +73,25 @@ describe("読み出しと存在確認", () => {
     // 実行と検証
     expect(await kvs.has("report")).toBe(true);
     expect(await kvs.has("archived")).toBe(false);
+
+    // 後片付け
+    await kvs.close();
+  });
+
+  test("stream を呼び出したとき、下流ストレージのチャンクがそのまま返る", async ({ expect }) => {
+    // 準備
+    const data = new Uint8Array([1, 2, 3]);
+    const { kvs } = await createReadOnlyKvs({ blob: data });
+
+    // 実行
+    const stream = await kvs.stream("blob");
+
+    // 検証: Memory は書き込み時にチャンクを結合するため 1 チャンクになる。
+    try {
+      expect(await readAll(stream as unknown as ReadableStream<Uint8Array>)).toStrictEqual([data]);
+    } finally {
+      await stream.dispose();
+    }
 
     // 後片付け
     await kvs.close();

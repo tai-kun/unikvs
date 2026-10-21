@@ -9,8 +9,9 @@ import {
   InvalidTokenError,
   KeyNotFoundError,
 } from "../src/errors.js";
+import type { BlobClientLike, VercelBlobOptions } from "../src/index.js";
 import * as index from "../src/index.js";
-import VercelBlob, { type BlobClientLike, type VercelBlobOptions } from "../src/vercel-blob.js";
+import VercelBlob from "../src/vercel-blob.js";
 import { createFakeClient, createFakeDownload } from "./_helpers.js";
 
 describe("index のエクスポート", () => {

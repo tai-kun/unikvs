@@ -2,6 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import {
   abortedSignal,
   bytesEqual,
+  captureRejection,
   createAllByteValues,
   createClearContext,
   createCloseContext,
@@ -15,7 +16,8 @@ import {
 import { describe } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
-import { createStorage, test } from "./_helpers.js";
+import type { MemcachedClientLike } from "../src/memcached.js";
+import { createStorage, randomKeyPrefix, test } from "./_helpers.js";
 
 describe("基本データ操作 (CRUD)", () => {
   test("全 256 種類のバイト値を含むデータが byte-for-byte で往復する", async ({
@@ -315,6 +317,56 @@ describe("基本データ操作 (CRUD)", () => {
   });
 });
 
+describe("注入クライアントの get 戻り値", () => {
+  test("get が Base64 文字列をそのまま返すクライアントでも読み取れる", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備
+    // `MemcachedGetResult` は memjs の `{ value }` 形式に加えて生の文字列も受け付けます。
+    const client: MemcachedClientLike = {
+      get: async () => "AQID",
+      set: async () => true,
+      delete: async () => true,
+      flush: async () => true,
+      quit: () => {},
+    };
+    const storage = createStorage(client, randomKeyPrefix());
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      // 実行と検証
+      await expect(
+        storage.read(createGetContext("raw-string.bin", { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(new Uint8Array([1, 2, 3]));
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
+  });
+
+  test("get が Base64 のバイト列を返すクライアントでも読み取れる", async ({ expect, signal }) => {
+    // 準備
+    const client: MemcachedClientLike = {
+      get: async () => new TextEncoder().encode("AQID"),
+      set: async () => true,
+      delete: async () => true,
+      flush: async () => true,
+      quit: () => {},
+    };
+    const storage = createStorage(client, randomKeyPrefix());
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      // 実行と検証
+      await expect(
+        storage.read(createGetContext("raw-bytes.bin", { signal }) as IStorage.ReadContext),
+      ).resolves.toStrictEqual(new Uint8Array([1, 2, 3]));
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
+  });
+});
+
 describe("読み取れないキー", () => {
   test("削除したキーの read は KeyNotFoundError を投げる", async ({ expect, signal, storage }) => {
     // 準備
@@ -354,58 +406,104 @@ describe("読み取れないキー", () => {
 });
 
 describe("中断の検証", () => {
-  test("中断済みシグナルでの write は拒否される", async ({ expect, storage }) => {
+  // 実装は各操作の入口で `throwIfAborted` するのみで、開始後の中断はサポートしません。
+  // そのため「中断済みシグナルでは操作を開始せず、バックエンドに副作用が及ばない」ことを検証します。
+  test("中断済みシグナルでの write は拒否され、クライアントに書き込まれない", async ({
+    client,
+    expect,
+    storage,
+  }) => {
     // 準備
     const signal = abortedSignal();
 
-    // 実行と検証
-    await expect(
+    // 実行
+    const error = await captureRejection(
       storage.write(
         createSetContext("aborted-write.bin", { signal }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
-    ).rejects.toThrow();
+    );
+
+    // 検証
+    expect(error).toHaveProperty("name", "AbortError");
+    expect(client.setCalls).toStrictEqual([]);
   });
 
-  test("中断済みシグナルでの read は拒否される", async ({ expect, storage }) => {
+  test("中断済みシグナルでの read は拒否され、クライアントを呼び出さない", async ({
+    client,
+    expect,
+    storage,
+  }) => {
     // 準備
     const signal = abortedSignal();
+    const getCallsBefore = client.getCalls;
 
-    // 実行と検証
-    await expect(
+    // 実行
+    const error = await captureRejection(
       storage.read(createGetContext("aborted-read.bin", { signal }) as IStorage.ReadContext),
-    ).rejects.toThrow();
+    );
+
+    // 検証
+    expect(error).toHaveProperty("name", "AbortError");
+    expect(client.getCalls).toBe(getCallsBefore);
   });
 
-  test("中断済みシグナルでの exists は拒否される", async ({ expect, storage }) => {
+  test("中断済みシグナルでの exists は拒否され、クライアントを呼び出さない", async ({
+    client,
+    expect,
+    storage,
+  }) => {
     // 準備
     const signal = abortedSignal();
+    const getCallsBefore = client.getCalls;
 
-    // 実行と検証
-    await expect(
+    // 実行
+    const error = await captureRejection(
       storage.exists(createHasContext("aborted-exists.bin", { signal }) as IStorage.ExistsContext),
-    ).rejects.toThrow();
+    );
+
+    // 検証
+    expect(error).toHaveProperty("name", "AbortError");
+    expect(client.getCalls).toBe(getCallsBefore);
   });
 
-  test("中断済みシグナルでの delete は拒否される", async ({ expect, storage }) => {
+  test("中断済みシグナルでの delete は拒否され、クライアントを呼び出さない", async ({
+    client,
+    expect,
+    storage,
+  }) => {
     // 準備
     const signal = abortedSignal();
+    const deleteCallsBefore = client.deleteCalls;
 
-    // 実行と検証
-    await expect(
+    // 実行
+    const error = await captureRejection(
       storage.delete(
         createDeleteContext("aborted-delete.bin", { signal }) as IStorage.DeleteContext,
       ),
-    ).rejects.toThrow();
+    );
+
+    // 検証
+    expect(error).toHaveProperty("name", "AbortError");
+    expect(client.deleteCalls).toBe(deleteCallsBefore);
   });
 
-  test("中断済みシグナルでの clear は拒否される", async ({ expect, storage }) => {
+  test("中断済みシグナルでの clear は拒否され、クライアントを呼び出さない", async ({
+    client,
+    expect,
+    storage,
+  }) => {
     // 準備
     const signal = abortedSignal();
+    const flushCallsBefore = client.flushCalls;
 
-    // 実行と検証
-    await expect(
+    // 実行
+    const error = await captureRejection(
       storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
-    ).rejects.toThrow();
+    );
+
+    // 検証
+    expect(error).toHaveProperty("name", "AbortError");
+    expect(client.flushCalls).toBe(flushCallsBefore);
   });
 });

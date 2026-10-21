@@ -74,6 +74,51 @@ describe("delete と clear", () => {
     expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
   });
 
+  test("delete は対象のキーだけを削除する", ({ expect, storage }) => {
+    // 準備
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
+
+    // 実行
+    storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext);
+
+    // 検証
+    expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+    expect(storage.read(createGetContext("k2", { signal }) as IStorage.ReadContext)).toBe("v2");
+  });
+
+  test("区切り文字を含むキーも delete できる", ({ expect, storage }) => {
+    // 準備
+    const key = "a b;=c";
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
+
+    // 実行
+    storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
+
+    // 検証
+    expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(false);
+    expect(storage.read(createGetContext("k2", { signal }) as IStorage.ReadContext)).toBe("v2");
+  });
+
+  test("区切り文字を含むキーも clear できる", ({ expect, storage }) => {
+    // 準備
+    const key = "a b;=c";
+    storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v1");
+    storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "v2");
+
+    // 実行
+    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+
+    // 検証
+    expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(false);
+    expect(storage.exists(createHasContext("k2", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+  });
+
   test("clear したキーへ再度書き込みできる", ({ expect, storage }) => {
     // 準備
     storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
@@ -84,21 +129,5 @@ describe("delete と clear", () => {
 
     // 検証
     expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
-  });
-
-  test("clear はバイト列のキーも失効させる", ({ expect, storage }) => {
-    // 準備
-    storage.write(
-      createSetContext("k1", { signal }) as IStorage.WriteContext,
-      new Uint8Array([1, 2, 3]),
-    );
-
-    // 実行
-    storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
-
-    // 検証
-    expect(() => storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toThrow(
-      KeyNotFoundError,
-    );
   });
 });

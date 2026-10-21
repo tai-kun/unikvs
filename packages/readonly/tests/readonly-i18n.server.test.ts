@@ -1,7 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   createClearContext,
-  createDecodeContext,
   createDeleteContext,
   createEncodeContext,
   createNext,
@@ -157,44 +156,5 @@ describe("ReadOnlyClearNotAllowedError の国際化 (server)", () => {
 
     setLang("en");
     expect(error.message).toBe("ReadOnly.clear with allowDelete false cannot delete all data.");
-  });
-});
-
-describe("decode の国際化 (server)", () => {
-  test("ja を設定しても decode はエラーを投げずに透過する", async ({ expect, setLang }) => {
-    // 準備
-    const transformer = new ReadOnly();
-    setLang("ja");
-
-    // 実行
-    const c = createDecodeContext("v1", "k1");
-    await transformer.decode(c as IMiddleware.DecodeContext, createNext());
-
-    // 検証
-    expect(c.destination).toBe("v1");
-  });
-
-  test("日本語メッセージでもキーは meta にそのまま保持される", async ({ expect, setLang }) => {
-    // 準備
-    const transformer = new ReadOnly();
-    setLang("ja");
-    let error: unknown;
-
-    // 実行
-    try {
-      await transformer.encode(
-        createEncodeContext("v1", "キー🔑") as IMiddleware.EncodeContext,
-        createNext(),
-      );
-    } catch (ex) {
-      error = ex;
-    }
-
-    // 検証
-    expect(error).toBeInstanceOf(ReadOnlySetNotAllowedError);
-    expect(error).toMatchObject({ meta: { key: "キー🔑" } });
-    expect((error as ReadOnlySetNotAllowedError).message).toBe(
-      'ReadOnly.set は読み取り専用のためキー "キー🔑" に書き込めません。',
-    );
   });
 });

@@ -18,6 +18,12 @@ export class FakeMemcachedClient implements MemcachedClientLike {
 
   public closeCalls = 0;
 
+  public getCalls = 0;
+
+  public deleteCalls = 0;
+
+  public flushCalls = 0;
+
   public readonly setCalls: { key: string; value: string; expires: number | undefined }[] = [];
 
   public get size(): number {
@@ -36,6 +42,8 @@ export class FakeMemcachedClient implements MemcachedClientLike {
   }
 
   public async get(key: string): Promise<MemcachedGetResult> {
+    this.getCalls += 1;
+
     const entry = this.#store.get(key);
 
     if (entry === undefined || this.#isExpired(entry)) {
@@ -69,10 +77,13 @@ export class FakeMemcachedClient implements MemcachedClientLike {
   }
 
   public async delete(key: string): Promise<boolean> {
+    this.deleteCalls += 1;
+
     return this.#store.delete(key);
   }
 
   public async flush(): Promise<boolean> {
+    this.flushCalls += 1;
     this.#store.clear();
 
     return true;
@@ -125,9 +136,9 @@ export function randomKeyPrefix(): string {
 }
 
 /**
- * 偽クライアントを使う未オープンの Memcached ストレージを作成します。
+ * クライアントを注入した未オープンの Memcached ストレージを作成します。
  * 別インスタンスからの読み取りや再接続の検証に使用します。
  */
-export function createStorage(client: FakeMemcachedClient, keyPrefix: string): Memcached {
+export function createStorage(client: MemcachedClientLike, keyPrefix: string): Memcached {
   return new Memcached(undefined, { client, keyPrefix });
 }

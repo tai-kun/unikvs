@@ -6,6 +6,14 @@ export type RecordedSetCall = {
   readonly options: { ex?: number } | undefined;
 };
 
+/**
+ * Vercel KV (Redis) の外部境界を模倣する最小のフェイクです。
+ *
+ * `VercelKv` が実際に発行する操作だけを再現します。
+ * - `set` の `ex` は引数として記録しますが、期限切れは再現しません (Vercel KV 側の責務)。
+ * - `keys` は末尾の `*` のみを接頭辞一致として扱います。`VercelKv` は `${keyPrefix}*` しか
+ *   発行しないためです。Redis の完全な glob (`?`, `[...]` など) は実装しません。
+ */
 export class FakeKv implements KVClientLike {
   public readonly store = new Map<string, string>();
 

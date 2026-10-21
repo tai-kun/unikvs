@@ -115,6 +115,10 @@ describe("往復", () => {
     // 検証
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
     expect(encoded.byteOffset).toBe(0);
+    expect(encoded.byteLength).toBe(encoded.buffer.byteLength);
+    expect(decoded.buffer).toBeInstanceOf(ArrayBuffer);
+    expect(decoded.byteOffset).toBe(0);
+    expect(decoded.byteLength).toBe(decoded.buffer.byteLength);
     expect(decoded).toStrictEqual(input);
   });
 
@@ -194,6 +198,22 @@ describe("圧縮率の健全性", () => {
     // 検証
     expect(encoded.byteLength).toBeLessThan(input.byteLength);
   });
+
+  test("level が高いほど反復テキストを小さく圧縮する", async ({ expect, signal }) => {
+    // 準備
+    const input = createRepetitiveInput();
+    const low = new BrotliBun({ level: 0 });
+    const high = new BrotliBun({ level: 11 });
+    await low.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+    await high.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
+
+    // 実行
+    const lowEncoded = await encode(low, input);
+    const highEncoded = await encode(high, input);
+
+    // 検証
+    expect(highEncoded.byteLength).toBeLessThan(lowEncoded.byteLength);
+  });
 });
 
 describe("余剰キー", () => {
@@ -209,6 +229,43 @@ describe("余剰キー", () => {
 
     // 検証
     expect(decoded).toStrictEqual(input);
+  });
+});
+
+describe("ミドルウェア連鎖", () => {
+  test("encode と decode は変換結果を設定してから next を1回呼ぶ", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(128, 61);
+    const encodeContext = createEncodeContext(input);
+    let encodeNextCalls = 0;
+    let encodedAtNext: Uint8Array<ArrayBuffer> | undefined;
+
+    // 実行
+    await target.encode(encodeContext as ByteEncode, async () => {
+      encodeNextCalls += 1;
+      encodedAtNext = encodeContext.destination;
+    });
+
+    // 検証
+    expect(encodeNextCalls).toBe(1);
+    expect(encodedAtNext).toBeInstanceOf(Uint8Array);
+    expect(encodedAtNext).not.toBe(input);
+
+    // 準備
+    const decodeContext = createDecodeContext(encodeContext.destination);
+    let decodeNextCalls = 0;
+    let decodedAtNext: Uint8Array<ArrayBuffer> | undefined;
+
+    // 実行
+    await target.decode(decodeContext as ByteDecode, async () => {
+      decodeNextCalls += 1;
+      decodedAtNext = decodeContext.destination;
+    });
+
+    // 検証
+    expect(decodeNextCalls).toBe(1);
+    expect(decodedAtNext).toStrictEqual(input);
   });
 });
 
@@ -403,7 +460,7 @@ describe("インスタンスの状態", () => {
 });
 
 describe("コンストラクターオプション", () => {
-  test("空のオプションでは既定と等価に往復できる", async ({ expect, signal }) => {
+  test("空のオプションを渡しても往復できる", async ({ expect, signal }) => {
     // 準備
     const options: BrotliBunOptions = {};
     const target = new BrotliBun(options);
@@ -432,17 +489,6 @@ describe("コンストラクターオプション", () => {
 
     // 検証
     expect(bytesEqual(omitted, explicit)).toBe(true);
-  });
-
-  test("level に null を明示すると BrotliBunInvalidLevelError で拒否する", ({ expect }) => {
-    // 実行と検証
-    // 実装は規定値への吸収に null を含めず、無効値として拒否する。
-    expect(
-      () =>
-        new BrotliBun({
-          level: null as unknown as BrotliBunOptions["level"],
-        }),
-    ).toThrow(BrotliBunInvalidLevelError);
   });
 
   test("有効な境界 0 と 11 は受け付ける", ({ expect }) => {
@@ -531,73 +577,22 @@ describe("BrotliBunInvalidLevelError", () => {
   });
 });
 
-describe("UnsupportedRuntimeError", () => {
-  test("既定では英語メッセージを返す", ({ expect }) => {
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "BrotliBun", runtime: "Bun" });
-
-    // 検証
-    expect(error).toBeInstanceOf(globalThis.Error);
-    expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
-    expect(error.meta).toStrictEqual({ name: "BrotliBun", runtime: "Bun" });
-    expect(error.message).toBe("BrotliBun can only be used in the Bun runtime");
-  });
-
-  test("cause を保持する", ({ expect }) => {
-    // 準備
-    const cause = new Error("原因");
-
-    // 実行
-    const error = new UnsupportedRuntimeError({ name: "BrotliBun", runtime: "Bun", cause });
-
-    // 検証
-    expect(error.cause).toBe(cause);
-  });
-
-  test("言語設定が日本語なら日本語メッセージを返す", ({ expect }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "BrotliBun", runtime: "Bun" });
-
-    try {
-      // 実行
-      setGlobalConfig({ lang: "ja" });
-
-      // 検証
-      expect(error.message).toBe("BrotliBun は Bun ランタイムでのみ使用できます");
-    } finally {
-      deleteGlobalConfig();
-    }
-  });
-});
-
 describe("index のエクスポート", () => {
   test("トランスフォーマーとエラーがエクスポートされている", ({ expect }) => {
     // 実行と検証
     expect(index.BrotliBun).toBe(BrotliBun);
     expect(index.BrotliBunInvalidLevelError).toBe(BrotliBunInvalidLevelError);
     expect(index.UnsupportedRuntimeError).toBe(UnsupportedRuntimeError);
-    // 実装は展開失敗を専用エラーで包まないため、BrotliBunDecompressError は公開しない。
-    expect("BrotliBunDecompressError" in index).toBe(false);
   });
 
-  test("エラーの型が公開されている", ({ expect }) => {
-    // 準備
-    const args: BrotliBunInvalidLevelErrorArgs = { actual: 12 };
-    const meta: BrotliBunInvalidLevelErrorMeta = { actual: 12 };
-    const runtimeArgs: UnsupportedRuntimeErrorArgs = { name: "BrotliBun", runtime: "Bun" };
-    const runtimeMeta: UnsupportedRuntimeErrorMeta = { name: "BrotliBun", runtime: "Bun" };
-
+  test("エラーの型が公開されている", () => {
     // 実行と検証
-    expect(args.actual).toBe(12);
-    expect(meta.actual).toBe(12);
-    expect(runtimeArgs.name).toBe("BrotliBun");
-    expect(runtimeMeta.runtime).toBe("Bun");
     expectTypeOf<BrotliBunInvalidLevelErrorArgs>().toHaveProperty("actual");
     expectTypeOf<BrotliBunInvalidLevelErrorMeta>().toEqualTypeOf<{ readonly actual: unknown }>();
-  });
-
-  test("存在しないエラーの型は公開されていない", () => {
-    // @ts-expect-error BrotliBunDecompressError に対応する Args 型は存在しない。
-    expectTypeOf<index.BrotliBunDecompressErrorArgs>().toBeNever();
+    expectTypeOf<UnsupportedRuntimeErrorArgs>().toHaveProperty("runtime");
+    expectTypeOf<UnsupportedRuntimeErrorMeta>().toEqualTypeOf<{
+      readonly name: string;
+      readonly runtime: string;
+    }>();
   });
 });

@@ -54,6 +54,7 @@ describe("既定クライアントの委譲", () => {
       access: "private",
       allowOverwrite: true,
       token: "secret",
+      abortSignal: expect.any(AbortSignal),
     });
   });
 
@@ -100,7 +101,7 @@ describe("既定クライアントの委譲", () => {
   test("client 未指定のとき、delete が del に委譲する", async ({ expect }) => {
     // 準備
     mockDel.mockResolvedValue(undefined);
-    const storage = new VercelBlob();
+    const storage = new VercelBlob({ token: "secret" });
 
     // 実行
     await storage.delete(
@@ -111,7 +112,7 @@ describe("既定クライアントの委譲", () => {
 
     // 検証
     expect(mockDel).toHaveBeenCalledWith("k", {
-      token: undefined,
+      token: "secret",
       abortSignal: expect.any(AbortSignal),
     });
   });
@@ -127,7 +128,7 @@ describe("既定クライアントの委譲", () => {
       hasMore: false,
     });
     mockDel.mockResolvedValue(undefined);
-    const storage = new VercelBlob({ keyPrefix: "pre:" });
+    const storage = new VercelBlob({ keyPrefix: "pre:", token: "secret" });
 
     // 実行
     await storage.clear(
@@ -140,11 +141,11 @@ describe("既定クライアントの委譲", () => {
     expect(mockList).toHaveBeenCalledWith({
       prefix: "pre:",
       cursor: undefined,
-      token: undefined,
+      token: "secret",
       abortSignal: expect.any(AbortSignal),
     });
     expect(mockDel).toHaveBeenCalledWith(["a", "b"], {
-      token: undefined,
+      token: "secret",
       abortSignal: expect.any(AbortSignal),
     });
   });

@@ -10,7 +10,7 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 
 import { RateLimitExceededError, RateLimitInvalidOptionError } from "../src/errors.js";
 import RateLimit from "../src/rate-limit.js";
@@ -21,9 +21,6 @@ function createManualClock(start = 0) {
 
   return {
     now: (): number => now,
-    advance: (ms: number): void => {
-      now += ms;
-    },
     sleep: (ms: number): Promise<void> => {
       sleeps.push(ms);
       now += ms;
@@ -32,6 +29,38 @@ function createManualClock(start = 0) {
     },
     sleeps,
   };
+}
+
+/**
+ * sleep を保留状態にし、テストから明示的に完了させられる偽時計です。
+ * 待機中の中断と、中断後に待ち行列が解放されることを検証するために使用します。
+ */
+function createPendingClock() {
+  let now = 0;
+  const waits: Array<{ complete: () => void }> = [];
+
+  return {
+    now: (): number => now,
+    sleep: (ms: number, signal: AbortSignal): Promise<void> =>
+      new Promise<void>((resolve, reject) => {
+        const complete = (): void => {
+          now += ms;
+          resolve();
+        };
+        waits.push({ complete });
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+    waits,
+  };
+}
+
+/**
+ * 待機中のリクエストが sleep の呼び出しに到達するまでマイクロタスクを進めます。
+ * 実時間に依存せず、待機状態を確実に作るために使用します。
+ */
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function useSet(limiter: RateLimit, key = "k1", init: { signal?: AbortSignal } = {}) {
@@ -120,12 +149,14 @@ describe("コンストラクターの検証", () => {
 });
 
 describe("バースト", () => {
-  test("上限までは連続操作を通し、上限超過で投げる", async ({ expect }) => {
+  test("上限までは連続操作を通し、キーが違っても上限超過で投げる", async ({ expect }) => {
+    // バケットはキーごとではなくミドルウェアインスタンスで共有される
     const limiter = new RateLimit({
       tokensPerInterval: 1,
       intervalMs: 1000,
       maxTokens: 3,
       strategy: "throw",
+      now: () => 0,
     });
 
     await useSet(limiter, "k1");
@@ -208,7 +239,7 @@ describe("時間経過による回復", () => {
 });
 
 describe("throw 戦略", () => {
-  test("制限超過で待たずに投げる", async ({ expect }) => {
+  test("制限超過で待たずに投げ、next を呼ばない", async ({ expect }) => {
     const clock = createManualClock();
     const limiter = new RateLimit({
       tokensPerInterval: 2,
@@ -218,13 +249,21 @@ describe("throw 戦略", () => {
       now: clock.now,
       sleep: clock.sleep,
     });
+    let calls = 0;
+    const next = async (): Promise<void> => {
+      calls += 1;
+    };
 
-    await useSet(limiter);
-    const error = (await captureRejection(useSet(limiter))) as RateLimitExceededError;
+    await limiter.use(createSetContext("k1") as IMiddleware.UseContext, next);
+    const error = (await captureRejection(
+      limiter.use(createSetContext("k2") as IMiddleware.UseContext, next),
+    )) as RateLimitExceededError;
 
     expect(error).toBeInstanceOf(RateLimitExceededError);
     expect(error.meta).toStrictEqual({ retryAfterMs: 500 });
     expect(clock.sleeps).toStrictEqual([]);
+    expect(calls).toBe(1);
+    expect(limiter.availableTokens).toBe(0);
   });
 });
 
@@ -252,22 +291,33 @@ describe("wait 戦略", () => {
     expect(clock.sleeps).toStrictEqual([500]);
   });
 
-  test("実時計でも回復まで待ってから実行する", async ({ expect }) => {
-    const limiter = new RateLimit({
-      tokensPerInterval: 1,
-      intervalMs: 20,
-      maxTokens: 1,
-      strategy: "wait",
-    });
-    let calls = 0;
-    const next = async (): Promise<void> => {
-      calls += 1;
-    };
+  test("既定の sleep はタイマーで回復を待つ", async ({ expect }) => {
+    vi.useFakeTimers();
+    try {
+      let now = 0;
+      const limiter = new RateLimit({
+        tokensPerInterval: 1,
+        intervalMs: 20,
+        maxTokens: 1,
+        strategy: "wait",
+        now: () => now,
+      });
+      let calls = 0;
+      const next = async (): Promise<void> => {
+        calls += 1;
+      };
 
-    await limiter.use(createSetContext("k1") as IMiddleware.UseContext, next);
-    await limiter.use(createSetContext("k2") as IMiddleware.UseContext, next);
+      await limiter.use(createSetContext("k1") as IMiddleware.UseContext, next);
+      const pending = limiter.use(createSetContext("k2") as IMiddleware.UseContext, next);
+      await flushMicrotasks();
+      now = 20;
+      await vi.advanceTimersByTimeAsync(20);
+      await pending;
 
-    expect(calls).toBe(2);
+      expect(calls).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("待ち行列は先着順に実行される", async ({ expect }) => {
@@ -305,8 +355,12 @@ describe("操作の種類", () => {
       intervalMs: 1000,
       maxTokens: 6,
       strategy: "throw",
+      now: () => 0,
     });
-    const next = createNext();
+    let calls = 0;
+    const next = async (): Promise<void> => {
+      calls += 1;
+    };
 
     await limiter.use(createSetContext("k") as IMiddleware.UseContext, next);
     await limiter.use(createGetContext("k") as IMiddleware.UseContext, next);
@@ -315,44 +369,95 @@ describe("操作の種類", () => {
     await limiter.use(createDeleteContext("k") as IMiddleware.UseContext, next);
     await limiter.use(createClearContext() as IMiddleware.UseContext, next);
 
+    expect(calls).toBe(6);
     expect(limiter.availableTokens).toBe(0);
     await expect(useSet(limiter)).rejects.toThrow(RateLimitExceededError);
   });
 });
 
 describe("中断", () => {
-  test("中断済みシグナルでは待たずに中断する", async ({ expect }) => {
+  test("中断済みシグナルではトークンを消費せず中断する", async ({ expect }) => {
     const limiter = new RateLimit({ maxTokens: 1, strategy: "wait" });
+    let calls = 0;
+    const next = async (): Promise<void> => {
+      calls += 1;
+    };
 
     const error = await captureRejection(
       limiter.use(
         createSetContext("k1", { signal: abortedSignal() }) as IMiddleware.UseContext,
-        createNext(),
+        next,
       ),
     );
 
     expect((error as DOMException).name).toBe("AbortError");
+    expect(limiter.availableTokens).toBe(1);
+    expect(calls).toBe(0);
   });
 
-  test("待ちの途中で中断できる", async ({ expect }) => {
+  test("待機中に中断するとエラーになり、後続の要求は待ち行列に残らない", async ({ expect }) => {
+    const clock = createPendingClock();
     const limiter = new RateLimit({
       tokensPerInterval: 1,
-      intervalMs: 60_000,
+      intervalMs: 1000,
       maxTokens: 1,
       strategy: "wait",
+      now: clock.now,
+      sleep: clock.sleep,
     });
+    let calls = 0;
+    const next = async (): Promise<void> => {
+      calls += 1;
+    };
 
-    await useSet(limiter, "k1");
+    await limiter.use(createSetContext("k1") as IMiddleware.UseContext, next);
+
+    // 準備: 2 件目を sleep で待機させる
+    const controller = new AbortController();
+    const pending = limiter.use(
+      createSetContext("k2", { signal: controller.signal }) as IMiddleware.UseContext,
+      next,
+    );
+    await flushMicrotasks();
+    expect(clock.waits).toHaveLength(1);
+
+    // 実行
+    controller.abort();
+
+    // 検証: 中断した要求は next を呼ばない
+    const error = await captureRejection(pending);
+    expect((error as DOMException).name).toBe("AbortError");
+    expect(calls).toBe(1);
+
+    // 検証: 中断した要求が待ち行列を塞いでいない
+    const queued = limiter.use(createSetContext("k3") as IMiddleware.UseContext, next);
+    await flushMicrotasks();
+    expect(clock.waits).toHaveLength(2);
+    clock.waits[1]!.complete();
+    await queued;
+    expect(calls).toBe(2);
+  });
+
+  test("既定の待機処理は中断で打ち切られる", async ({ expect }) => {
+    const limiter = new RateLimit({ intervalMs: 60_000, maxTokens: 1 });
+    let calls = 0;
+    const next = async (): Promise<void> => {
+      calls += 1;
+    };
+
+    await limiter.use(createSetContext("k1") as IMiddleware.UseContext, next);
 
     const controller = new AbortController();
     const pending = limiter.use(
       createSetContext("k2", { signal: controller.signal }) as IMiddleware.UseContext,
-      createNext(),
+      next,
     );
+    await flushMicrotasks();
     controller.abort();
 
     const error = await captureRejection(pending);
 
     expect((error as DOMException).name).toBe("AbortError");
+    expect(calls).toBe(1);
   });
 });

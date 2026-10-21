@@ -38,10 +38,11 @@ describe("4KB 制限", () => {
         createSetContext("k1", { signal }) as IStorage.WriteContext,
         new Uint8Array(4097),
       ),
-    );
+    ) as CookieTooLargeError;
 
     // 検証
     expect(error).toBeInstanceOf(CookieTooLargeError);
+    expect(error.meta.actual).toBe(4097);
   });
 
   test("上限ちょうどの値は書き込める", ({ expect, storage }) => {
@@ -84,6 +85,22 @@ describe("4KB 制限", () => {
     ).toThrow(CookieTooLargeError);
     storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "hey");
     expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("hey");
+  });
+
+  test("文字数の上限ではなく UTF-8 のバイト数で判定する", ({ expect }) => {
+    // 準備
+    const storage = new Cookies({ store: createFakeCookieStore(), sizeLimitBytes: 4 });
+
+    // 実行
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "あ");
+    const error = captureThrown(() =>
+      storage.write(createSetContext("k2", { signal }) as IStorage.WriteContext, "ああ"),
+    ) as CookieTooLargeError;
+
+    // 検証
+    expect(error).toBeInstanceOf(CookieTooLargeError);
+    expect(error.meta.actual).toBe(6);
+    expect(error.meta.limit).toBe(4);
   });
 
   test("上限超過で失敗した write は既存値を壊さない", ({ expect, storage }) => {

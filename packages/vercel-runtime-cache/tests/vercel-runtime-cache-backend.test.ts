@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  captureRejection,
   createClearContext,
   createDeleteContext,
   createGetContext,
@@ -10,34 +11,8 @@ import {
 import { describe, test } from "vitest";
 
 import { InvalidChunkTypeError, KeyNotFoundError } from "../src/errors.js";
-import VercelRuntimeCache, { type VercelRuntimeCacheBackend } from "../src/vercel-runtime-cache.js";
-
-function createMapBackend() {
-  const map = new Map<string, unknown>();
-  const backend: VercelRuntimeCacheBackend = {
-    get: (key: string) => map.get(key),
-    set: (key: string, value: unknown) => {
-      map.set(key, value);
-    },
-    delete: (key: string) => {
-      map.delete(key);
-    },
-    clear: () => {
-      map.clear();
-    },
-  };
-  return { map, backend };
-}
-
-async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("Promise が拒否されませんでした");
-}
+import VercelRuntimeCache from "../src/vercel-runtime-cache.js";
+import { createFakeRuntimeCache } from "./_helpers.js";
 
 describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
   test("フォールバック時は backend が undefined", ({ expect }) => {
@@ -47,7 +22,7 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
   });
 
   test("明示バックエンドに読み書きできる", async ({ expect }) => {
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ backend });
     expect(storage.backend).toBe(backend);
 
@@ -60,7 +35,7 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
   });
 
   test("バックエンドの欠落は KeyNotFoundError", async ({ expect }) => {
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ backend });
 
     await expect(
@@ -75,8 +50,8 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
   });
 
   test("バックエンドの素の値 (エンベロープなし) も読める", async ({ expect }) => {
-    const { map, backend } = createMapBackend();
-    map.set("k1", "raw-value");
+    const backend = createFakeRuntimeCache();
+    backend.store.set("k1", "raw-value");
     const storage = new VercelRuntimeCache({ backend });
 
     await expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).resolves.toBe(
@@ -89,7 +64,7 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
 
   test("バックエンドの期限切れエントリは削除して KeyNotFoundError", async ({ expect }) => {
     let now = 0;
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ ttlSeconds: 10, backend, now: () => now });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     now += 11_000;
@@ -97,11 +72,12 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
     await expect(
       storage.read(createGetContext("k1") as IStorage.ReadContext),
     ).rejects.toBeInstanceOf(KeyNotFoundError);
+    expect(backend.store.has("k1")).toBe(false);
   });
 
-  test("バックエンドの期限切れ delete は KeyNotFoundError", async ({ expect }) => {
+  test("バックエンドの期限切れ delete は削除して KeyNotFoundError", async ({ expect }) => {
     let now = 0;
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ ttlSeconds: 10, backend, now: () => now });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     now += 11_000;
@@ -109,10 +85,34 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
     await expect(
       storage.delete(createDeleteContext("k1") as IStorage.DeleteContext),
     ).rejects.toBeInstanceOf(KeyNotFoundError);
+    expect(backend.store.has("k1")).toBe(false);
+  });
+
+  test("undefined を保存したキーも exists は true", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const storage = new VercelRuntimeCache({ backend });
+    await storage.write(createSetContext("k1") as IStorage.WriteContext, undefined);
+
+    await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
+      true,
+    );
+    await expect(
+      storage.read(createGetContext("k1") as IStorage.ReadContext),
+    ).resolves.toBeUndefined();
+  });
+
+  test("バックエンドへ ttlSeconds を渡す", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const storage = new VercelRuntimeCache({ ttlSeconds: 30, backend });
+    await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    expect(backend.setCalls).toHaveLength(1);
+    expect(backend.setCalls[0]?.key).toBe("k1");
+    expect(backend.setCalls[0]?.options).toStrictEqual({ ttlSeconds: 30 });
   });
 
   test("バックエンドの delete と clear が効く", async ({ expect }) => {
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ backend });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
@@ -127,37 +127,33 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
     );
   });
 
-  test("clear に backend.clear がなければフォールバックを消す", async ({ expect }) => {
-    const map = new Map<string, unknown>();
-    const backend: VercelRuntimeCacheBackend = {
-      get: (key: string) => map.get(key),
-      set: (key: string, value: unknown) => {
-        map.set(key, value);
-      },
-      delete: (key: string) => {
-        map.delete(key);
-      },
-    };
+  test("backend.clear がなくても書き込んだキーをすべて削除する", async ({ expect }) => {
+    const backend = createFakeRuntimeCache({ supportsClear: false });
     const storage = new VercelRuntimeCache({ backend });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
     await storage.clear(createClearContext() as IStorage.ClearContext);
 
+    expect(backend.store.size).toBe(0);
     await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
+      false,
+    );
+    await expect(storage.exists(createHasContext("k2") as IStorage.ExistsContext)).resolves.toBe(
       false,
     );
   });
 
   test("namespace 付きバックエンドは接頭辞で分離される", async ({ expect }) => {
-    const { map, backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ namespace: "ns", backend });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    expect(map.has("ns:k1")).toBe(true);
+    expect(backend.store.has("ns:k1")).toBe(true);
     await expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).resolves.toBe("v1");
   });
 
   test("グローバルから Vercel ランタイムキャッシュを検出する", async ({ expect }) => {
-    const { backend } = createMapBackend();
+    const backend = createFakeRuntimeCache();
     const g = globalThis as Record<string, unknown>;
     const prev = g["__VERCEL_RUNTIME_CACHE__"];
     g["__VERCEL_RUNTIME_CACHE__"] = backend;
@@ -192,6 +188,22 @@ describe("ストリーム", () => {
     await expect(
       storage.read(createGetContext("s1") as IStorage.ReadContext),
     ).resolves.toStrictEqual(new Uint8Array([1, 2, 3, 4]));
+  });
+
+  test("空のストリームを close すると空のバイト列が保存される", async ({ expect }) => {
+    const storage = new VercelRuntimeCache();
+    const writer = storage
+      .getWritable(createSetContext("s1") as IStorage.GetWritableContext)
+      .getWriter();
+
+    await writer.close();
+
+    await expect(storage.exists(createHasContext("s1") as IStorage.ExistsContext)).resolves.toBe(
+      true,
+    );
+    await expect(
+      storage.read(createGetContext("s1") as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array(0));
   });
 
   test("Uint8Array 以外のチャンクは InvalidChunkTypeError", async ({ expect }) => {

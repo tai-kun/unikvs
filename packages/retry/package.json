@@ -29,7 +29,8 @@
     "build": "tsc --project ./.config/tsconfig.build.json"
   },
   "dependencies": {
-    "@unikvs/core": "workspace:*"
+    "@unikvs/core": "workspace:*",
+    "abort-signal-utils": "^0.0.6"
   },
   "devDependencies": {
     "@tsconfig/node24": "24.0.5",

@@ -54,20 +54,6 @@ describe("初期化と接続管理", () => {
     expect(storage.isOpen).toBe(true);
   });
 
-  test("操作のあとも isOpen は true のままである", async ({ expect }) => {
-    // 準備
-    const { storage } = setup();
-
-    // 実行
-    await storage.write(
-      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
-      new Uint8Array([1]),
-    );
-
-    // 検証
-    expect(storage.isOpen).toBe(true);
-  });
-
   test("binding なしでは組み立てられない", ({ expect }) => {
     // 実行と検証
     expect(() => new CloudflareKv({ binding: undefined as never })).toThrow(InvalidBindingError);
@@ -117,19 +103,49 @@ describe("初期化と接続管理", () => {
     expect(() => setupWith({ ttlSeconds: -60 }).storage).toThrow(InvalidTtlSecondsError);
     expect(() => setupWith({ ttlSeconds: Number.NaN }).storage).toThrow(InvalidTtlSecondsError);
   });
+});
 
-  test("中断済みシグナルでの open は中断例外を投げる", async ({ expect }) => {
+describe("中断", () => {
+  test("中断済みシグナルの各操作は binding を呼び出さずに拒否される", async ({ expect }) => {
     // 準備
-    const { storage } = setup();
+    const { binding, storage } = setup();
+    const signal = abortedSignal();
+    const cases: [string, () => Promise<unknown>][] = [
+      ["open", () => storage.open(createOpenContext({ signal }) as IStorage.OpenContext)],
+      ["close", () => storage.close(createCloseContext({ signal }) as IStorage.CloseContext)],
+      [
+        "write",
+        () =>
+          storage.write(
+            createSetContext("k1", { signal }) as IStorage.WriteContext,
+            new Uint8Array([1]),
+          ),
+      ],
+      ["read", () => storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)],
+      [
+        "exists",
+        () => storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext),
+      ],
+      [
+        "delete",
+        () => storage.delete(createDeleteContext("k1", { signal }) as IStorage.DeleteContext),
+      ],
+      ["clear", () => storage.clear(createClearContext("", { signal }) as IStorage.ClearContext)],
+    ];
 
-    // 実行
-    const error = await captureRejection(
-      storage.open(createOpenContext({ signal: abortedSignal() }) as IStorage.OpenContext),
-    );
+    // 実行と検証
+    for (const [label, run] of cases) {
+      const error = await captureRejection(run());
 
-    // 検証
-    expect(error).toBeInstanceOf(DOMException);
-    expect((error as DOMException).name).toBe("AbortError");
+      expect(error, label).toBeInstanceOf(DOMException);
+      expect((error as DOMException).name, label).toBe("AbortError");
+    }
+
+    expect(binding.puts, "write は put を呼ばない").toStrictEqual([]);
+    expect(binding.gets, "read と exists は get を呼ばない").toStrictEqual([]);
+    expect(binding.deletes, "delete と clear は delete を呼ばない").toStrictEqual([]);
+    expect(binding.lists, "clear は list を呼ばない").toStrictEqual([]);
+    expect(binding.store.size, "どの操作も副作用を残さない").toBe(0);
   });
 });
 
@@ -151,19 +167,20 @@ describe("基本操作（CRUD）", () => {
     expect(result).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
-  test("保存したキーは接頭辞付きで binding に届く", async ({ expect }) => {
+  test("キーは変換されず接頭辞と連結されて binding に届く", async ({ expect }) => {
     // 準備
     const { binding, storage } = setup();
+    const key = "a/b c:%2F";
 
     // 実行
     await storage.write(
-      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
       new Uint8Array([9]),
     );
 
     // 検証
-    expect(binding.store.has("unikvs:k1")).toBe(true);
-    expect(new Uint8Array(binding.store.get("unikvs:k1")!)).toStrictEqual(new Uint8Array([9]));
+    expect(binding.store.has(`unikvs:${key}`)).toBe(true);
+    expect(new Uint8Array(binding.store.get(`unikvs:${key}`)!)).toStrictEqual(new Uint8Array([9]));
   });
 
   test("独自の keyPrefix を使える", async ({ expect }) => {
@@ -247,12 +264,16 @@ describe("基本操作（CRUD）", () => {
     expect(result).toBe(false);
   });
 
-  test("データを削除したとき、そのデータが存在しなくなる", async ({ expect }) => {
+  test("データを削除したとき、そのデータだけが存在しなくなる", async ({ expect }) => {
     // 準備
     const { storage } = setup();
     await storage.write(
       createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
       new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("k2", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
     );
 
     // 実行
@@ -266,6 +287,11 @@ describe("基本操作（CRUD）", () => {
         createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
       ),
     ).toBe(false);
+    expect(
+      await storage.read(
+        createGetContext("k2", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
+    ).toStrictEqual(new Uint8Array([2]));
   });
 
   test("存在しないキーを削除しても成功する", async ({ expect }) => {
@@ -297,20 +323,6 @@ describe("基本操作（CRUD）", () => {
     expect(error).toBeInstanceOf(KeyNotFoundError);
     expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "unknown" });
   });
-
-  test("中断済みシグナルでの read は中断例外を投げる", async ({ expect }) => {
-    // 準備
-    const { storage } = setup();
-
-    // 実行
-    const error = await captureRejection(
-      storage.read(createGetContext("k1", { signal: abortedSignal() }) as IStorage.ReadContext),
-    );
-
-    // 検証
-    expect(error).toBeInstanceOf(DOMException);
-    expect((error as DOMException).name).toBe("AbortError");
-  });
 });
 
 describe("バイナリーの往復", () => {
@@ -334,6 +346,30 @@ describe("バイナリーの往復", () => {
 
     // 検証
     expect(result).toStrictEqual(data);
+  });
+
+  test("ArrayBuffer の一部を指すビューを保存したとき、その範囲だけが保存される", async ({
+    expect,
+  }) => {
+    // 準備
+    const { binding, storage } = setup();
+    const backing = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]);
+    const view = backing.subarray(2, 6);
+
+    // 実行
+    await storage.write(
+      createSetContext("view", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      view,
+    );
+    const result = await storage.read(
+      createGetContext("view", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+    );
+
+    // 検証
+    expect(new Uint8Array(binding.store.get("unikvs:view")!)).toStrictEqual(
+      new Uint8Array([2, 3, 4, 5]),
+    );
+    expect(result).toStrictEqual(new Uint8Array([2, 3, 4, 5]));
   });
 
   test("0 バイトの値を保存したとき、exists は true を返す", async ({ expect }) => {
@@ -415,9 +451,9 @@ describe("全削除（clear）", () => {
     ).toBe(false);
   });
 
-  test("接頭辞の外側のキーは消去されない", async ({ expect }) => {
+  test("clear は独自の keyPrefix 配下だけを消去する", async ({ expect }) => {
     // 準備
-    const { binding, storage } = setup();
+    const { binding, storage } = setupWith({ keyPrefix: "app:" });
     binding.store.set("other:k9", new Uint8Array([9]).buffer as ArrayBuffer);
     await storage.write(
       createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
@@ -431,7 +467,7 @@ describe("全削除（clear）", () => {
 
     // 検証
     expect(binding.store.has("other:k9")).toBe(true);
-    expect(binding.store.has("unikvs:k1")).toBe(false);
+    expect(binding.store.has("app:k1")).toBe(false);
   });
 
   test("list が複数ページに分かれてもすべて消去される", async ({ expect }) => {
@@ -456,19 +492,5 @@ describe("全削除（clear）", () => {
     // 検証
     expect(binding.store.size).toBe(0);
     expect(binding.deletes).toHaveLength(5);
-  });
-
-  test("中断済みシグナルでの clear は中断例外を投げる", async ({ expect }) => {
-    // 準備
-    const { storage } = setup();
-
-    // 実行
-    const error = await captureRejection(
-      storage.clear(createClearContext("", { signal: abortedSignal() }) as IStorage.ClearContext),
-    );
-
-    // 検証
-    expect(error).toBeInstanceOf(DOMException);
-    expect((error as DOMException).name).toBe("AbortError");
   });
 });

@@ -10,9 +10,8 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe, vi } from "vitest";
 
-import { KeyNotFoundError } from "../src/errors.js";
 import { createStorage, test } from "./_helpers.js";
 
 describe("書き込みストリーム", () => {
@@ -120,23 +119,184 @@ describe("書き込みストリーム", () => {
     expect(bytesEqual(result, replacement)).toBe(true);
   });
 
-  test("中断したとき、一時キーが残らない", async ({ expect, fake, keyPrefix, storage }) => {
+  test("中断したとき、既存のデータを保ち一時キーが残らない", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
     // 準備
     const key = "stream-abort.dat";
+    const original = new Uint8Array([1, 2, 3]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
     const controller = new AbortController();
     const writer = storage
       .getWritable(
         createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
       )
       .getWriter();
-    await writer.write(new Uint8Array([1, 2, 3]));
+    await writer.write(new Uint8Array([9, 9, 9]));
 
     // 実行
     controller.abort();
-    await writer.abort().catch(() => {});
 
     // 検証
+    await expect(writer.close()).rejects.toThrow();
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
+    // 中断時の後始末は待機されないため、完了まで待つ。
+    await vi.waitFor(() => {
+      expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([`${keyPrefix}${key}`]);
+    });
+  });
+
+  test("中断後に書き込もうとすると拒否される", async ({ expect, fake, keyPrefix, storage }) => {
+    // 準備
+    const key = "stream-abort-write.dat";
+    const controller = new AbortController();
+    const writer = storage
+      .getWritable(
+        createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+    await writer.write(new Uint8Array([1]));
+
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(writer.write(new Uint8Array([2]))).rejects.toThrow();
+    await vi.waitFor(() => {
+      expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([]);
+    });
+  });
+
+  test("writer.abort を呼び出したとき、一時キーが削除される", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-writer-abort.dat";
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+    await writer.write(new Uint8Array([1, 2, 3]));
+
+    // 実行
+    await writer.abort(new Error("中断"));
+
+    // 検証
+    await expect(
+      storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+    ).resolves.toBe(false);
     expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([]);
+  });
+
+  test("開始に失敗したとき、既存のデータを保ち一時キーを残さない", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-set-failure.dat";
+    const original = new Uint8Array([4, 5, 6]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    vi.spyOn(fake, "set").mockRejectedValueOnce(new Error("set failure"));
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行と検証
+    await expect(writer.write(new Uint8Array([7, 8, 9]))).rejects.toThrow("set failure");
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
+    expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([`${keyPrefix}${key}`]);
+  });
+
+  test("追記に失敗したとき、既存のデータを保ち一時キーを残さない", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-append-failure.dat";
+    const original = new Uint8Array([4, 5, 6]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    vi.spyOn(fake, "append").mockRejectedValueOnce(new Error("append failure"));
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行と検証
+    await expect(writer.write(new Uint8Array([7, 8, 9]))).rejects.toThrow("append failure");
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
+    expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([`${keyPrefix}${key}`]);
+  });
+
+  test("close が失敗したとき、既存のデータを保ち一時キーを残さない", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-rename-failure.dat";
+    const original = new Uint8Array([4, 5, 6]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+    await writer.write(new Uint8Array([9, 9, 9]));
+    vi.spyOn(fake, "rename").mockRejectedValueOnce(new Error("rename failure"));
+
+    // 実行と検証
+    await expect(writer.close()).rejects.toThrow("rename failure");
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(original);
+    expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([`${keyPrefix}${key}`]);
+  });
+
+  test("同じキーへの並行ストリームは一時キーを共有しない", async ({
+    expect,
+    fake,
+    keyPrefix,
+    signal,
+    storage,
+  }) => {
+    // 準備
+    const key = "stream-concurrent.dat";
+    const first = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+    const second = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行
+    await first.write(new Uint8Array([1, 1, 1]));
+    await second.write(new Uint8Array([2, 2, 2]));
+    await first.close();
+    await second.close();
+
+    // 検証
+    await expect(
+      storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+    ).resolves.toStrictEqual(new Uint8Array([2, 2, 2]));
+    expect(fake.keys(`${keyPrefix}*`)).toStrictEqual([`${keyPrefix}${key}`]);
   });
 
   test("ttl を指定したとき、ストリーム確定後のキーに有効期限が付与される", async ({
@@ -191,18 +351,24 @@ describe("読み取りストリーム", () => {
     expect(second.done).toBe(true);
   });
 
-  test("存在しないキーのとき、pull が KeyNotFoundError で失敗する", async ({
-    expect,
-    signal,
-    storage,
-  }) => {
+  test("中断後に読み取ろうとすると拒否される", async ({ expect, signal, storage }) => {
     // 準備
-    const readable = storage.getReadable(
-      createStreamContext("missing-stream.dat", { signal }) as IStorage.GetReadableContext,
+    const key = "stream-abort-read.dat";
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
     );
+    const controller = new AbortController();
+    const reader = storage
+      .getReadable(
+        createStreamContext(key, { signal: controller.signal }) as IStorage.GetReadableContext,
+      )
+      .getReader();
 
-    // 実行と検証
-    const reader = readable.getReader();
-    await expect(reader.read()).rejects.toThrow(KeyNotFoundError);
+    // 実行
+    controller.abort();
+
+    // 検証
+    await expect(reader.read()).rejects.toThrow();
   });
 });

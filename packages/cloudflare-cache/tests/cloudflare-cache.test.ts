@@ -111,6 +111,30 @@ describe("初期化と接続管理", () => {
     }
   });
 
+  test("cache オプションは caches.default より優先される", async ({ expect }) => {
+    // 準備
+    const injected = createFakeCache();
+    const fallback = createFakeCache();
+    const original = (globalThis as { caches?: unknown }).caches;
+    (globalThis as { caches?: unknown }).caches = { default: fallback };
+
+    try {
+      const storage = new CloudflareCache({ cache: injected });
+
+      // 実行
+      await storage.write(
+        createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+
+      // 検証
+      expect(injected.store.size).toBe(1);
+      expect(fallback.store.size).toBe(0);
+    } finally {
+      (globalThis as { caches?: unknown }).caches = original;
+    }
+  });
+
   test("中断済みシグナルでの open は中断例外を投げる", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache() });
@@ -180,24 +204,6 @@ describe("基本操作（CRUD）", () => {
 
     // 検証
     expect(result).toStrictEqual(data);
-  });
-
-  test("0x00 と 0xff を含む値を保存したとき、そのまま取得できる", async ({ expect }) => {
-    // 準備
-    const storage = new CloudflareCache({ cache: createFakeCache() });
-
-    // 実行
-    await storage.write(
-      createSetContext("edge", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
-      new Uint8Array([0x00, 0xff, 0x00, 0xff]),
-    );
-
-    // 検証
-    expect(
-      await storage.read(
-        createGetContext("edge", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
-      ),
-    ).toStrictEqual(new Uint8Array([0x00, 0xff, 0x00, 0xff]));
   });
 
   test("既存のキーに書き込んだとき、長さが変わっても値が更新される", async ({ expect }) => {
@@ -357,6 +363,49 @@ describe("基本操作（CRUD）", () => {
     ).toBe(false);
   });
 
+  test("1 つのキーを削除しても他のキーは残る", async ({ expect }) => {
+    // 準備
+    const storage = new CloudflareCache({ cache: createFakeCache() });
+    await storage.write(
+      createSetContext("keep-a", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("remove", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
+    await storage.write(
+      createSetContext("keep-b", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([3]),
+    );
+
+    // 実行
+    await storage.delete(
+      createDeleteContext("remove", {
+        signal: AbortSignal.timeout(5_000),
+      }) as IStorage.DeleteContext,
+    );
+
+    // 検証
+    expect(
+      await storage.read(
+        createGetContext("keep-a", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
+    ).toStrictEqual(new Uint8Array([1]));
+    expect(
+      await storage.exists(
+        createHasContext("remove", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.ExistsContext,
+      ),
+    ).toBe(false);
+    expect(
+      await storage.read(
+        createGetContext("keep-b", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
+    ).toStrictEqual(new Uint8Array([3]));
+  });
+
   test("中断済みシグナルでの write は中断例外を投げる", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache() });
@@ -476,6 +525,31 @@ describe("キーと origin の対応", () => {
     expect(cache.calls[0]?.url).toBe("https://unikvs.cloudflare-cache/a%2Fb%20c%2Bd%2Ee");
   });
 
+  test("パーセント表記を含むキーは生の文字列と区別される", async ({ expect }) => {
+    // 準備
+    const storage = new CloudflareCache({ cache: createFakeCache() });
+    const keys = ["a b", "a%20b", "a/b", "a%2Fb", "a.b", "a%2Eb"];
+
+    // 実行
+    for (const [index, key] of keys.entries()) {
+      await storage.write(
+        createSetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        new Uint8Array([index]),
+      );
+    }
+
+    // 検証
+    for (const [index, key] of keys.entries()) {
+      expect(
+        await storage.read(
+          createGetContext(key, {
+            signal: AbortSignal.timeout(5_000),
+          }) as IStorage.ReadContext,
+        ),
+      ).toStrictEqual(new Uint8Array([index]));
+    }
+  });
+
   test("符号化できないキーは InvalidKeyError を投げる", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache() });
@@ -541,9 +615,12 @@ describe("失敗と制約", () => {
     expect(error).toBeInstanceOf(ClearNotSupportedError);
   });
 
-  test("put の失敗は CacheOperationError になる", async ({ expect }) => {
+  test("put の失敗は CacheOperationError になり原因を保持する", async ({ expect }) => {
     // 準備
-    const storage = new CloudflareCache({ cache: createFakeCache({ failOn: "put" }) });
+    const cause = new Error("cache down");
+    const storage = new CloudflareCache({
+      cache: createFakeCache({ failOn: "put", error: cause }),
+    });
 
     // 実行
     const error = await captureRejection(
@@ -556,6 +633,7 @@ describe("失敗と制約", () => {
     // 検証
     expect(error).toBeInstanceOf(CacheOperationError);
     expect((error as CacheOperationError).meta).toStrictEqual({ operation: "put", key: "k1" });
+    expect((error as CacheOperationError).cause).toBe(cause);
   });
 
   test("match の失敗（read）は CacheOperationError になる", async ({ expect }) => {
@@ -612,7 +690,7 @@ describe("失敗と制約", () => {
 
     // 実行
     const error = await captureRejection(
-      storage.getReadable?.(
+      storage.getReadable(
         createStreamContext("k1", {
           signal: AbortSignal.timeout(5_000),
         }) as IStorage.GetReadableContext,
@@ -621,24 +699,26 @@ describe("失敗と制約", () => {
 
     // 検証
     expect(error).toBeInstanceOf(CacheOperationError);
+    expect((error as CacheOperationError).meta).toStrictEqual({ operation: "match", key: "k1" });
   });
 
   test("getWritable の close 時の put 失敗は CacheOperationError になる", async ({ expect }) => {
     // 準備
     const storage = new CloudflareCache({ cache: createFakeCache({ failOn: "put" }) });
     const writer = storage
-      .getWritable?.(
+      .getWritable(
         createSetContext("k1", {
           signal: AbortSignal.timeout(5_000),
         }) as IStorage.GetWritableContext,
       )
-      ?.getWriter();
+      .getWriter();
 
     // 実行
-    await writer?.write(new Uint8Array([1]));
-    const error = await captureRejection(writer?.close() ?? Promise.resolve());
+    await writer.write(new Uint8Array([1]));
+    const error = await captureRejection(writer.close());
 
     // 検証
     expect(error).toBeInstanceOf(CacheOperationError);
+    expect((error as CacheOperationError).meta).toStrictEqual({ operation: "put", key: "k1" });
   });
 });

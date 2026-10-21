@@ -9,7 +9,7 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { describe, test, vi } from "vitest";
 
 import {
   RetryExhaustedError,
@@ -139,6 +139,7 @@ describe("初期化と基本属性", () => {
   test("指定値を保持する", ({ expect }) => {
     // 準備
     const inner = new FlakyStorage();
+    const retryable = (): boolean => true;
     const onRetry = (): void => {};
 
     // 実行
@@ -148,7 +149,7 @@ describe("初期化と基本属性", () => {
       maxDelayMs: 50,
       factor: 3,
       jitter: false,
-      retryable: () => true,
+      retryable,
       onRetry,
     });
 
@@ -159,7 +160,7 @@ describe("初期化と基本属性", () => {
     expect(retry.maxDelayMs).toBe(50);
     expect(retry.factor).toBe(3);
     expect(retry.jitter).toBe(false);
-    expect(retry.retryable).toBeTypeOf("function");
+    expect(retry.retryable).toBe(retryable);
     expect(retry.onRetry).toBe(onRetry);
   });
 
@@ -346,7 +347,15 @@ describe("枯渇", () => {
     const lastError = new Error("boom");
     const inner = new FlakyStorage();
     inner.fail("write:k1", 5, lastError);
-    const retry = new Retry(inner, { maxRetries: 2, initialDelayMs: 1, jitter: false });
+    const retriedAttempts: number[] = [];
+    const retry = new Retry(inner, {
+      maxRetries: 2,
+      initialDelayMs: 1,
+      jitter: false,
+      onRetry: (info) => {
+        retriedAttempts.push(info.attempt);
+      },
+    });
 
     // 実行
     const error = await retry
@@ -360,6 +369,7 @@ describe("枯渇", () => {
       attempts: 3,
     });
     expect((error as RetryExhaustedError).cause).toBe(lastError);
+    expect(retriedAttempts).toStrictEqual([1, 2]);
     expect(inner.calls).toStrictEqual(["write:k1", "write:k1", "write:k1"]);
   });
 
@@ -445,20 +455,29 @@ describe("中断", () => {
 
   test("待機中の中断は待機を打ち切る", async ({ expect }) => {
     // 準備
-    const controller = new AbortController();
-    const reason = new Error("stop");
-    const inner = new FlakyStorage();
-    inner.fail("read:k1", 5);
-    const retry = new Retry(inner, { initialDelayMs: 10_000, jitter: false });
-    setTimeout(() => {
-      controller.abort(reason);
-    }, 5);
+    vi.useFakeTimers();
 
-    // 実行と検証
-    await expect(
-      retry.read(createGetContext("k1", { signal: controller.signal }) as IStorage.ReadContext),
-    ).rejects.toBe(reason);
-    expect(inner.calls).toStrictEqual(["read:k1"]);
+    try {
+      const controller = new AbortController();
+      const reason = new Error("stop");
+      const inner = new FlakyStorage();
+      inner.fail("read:k1", 5);
+      const retry = new Retry(inner, { initialDelayMs: 10_000, jitter: false });
+
+      // 実行
+      const pending = retry.read(
+        createGetContext("k1", { signal: controller.signal }) as IStorage.ReadContext,
+      );
+      expect(vi.getTimerCount()).toBe(1);
+      controller.abort(reason);
+
+      // 検証
+      await expect(pending).rejects.toBe(reason);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(inner.calls).toStrictEqual(["read:k1"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -484,6 +503,69 @@ describe("バックオフ", () => {
     // 検証
     expect(delays).toStrictEqual([10, 20, 25]);
     expect(inner.calls).toStrictEqual(["write:k1", "write:k1", "write:k1", "write:k1"]);
+  });
+
+  test("ジッターは上限の半分から上限までの範囲で待機時間を揺らす", async ({ expect }) => {
+    // 準備
+    vi.useFakeTimers();
+
+    try {
+      const inner = new FlakyStorage();
+      inner.fail("write:k1", 2);
+      const delays: number[] = [];
+      const random = vi.spyOn(Math, "random");
+      random.mockReturnValueOnce(0).mockReturnValueOnce(1);
+      const retry = new Retry(inner, {
+        initialDelayMs: 100,
+        maxDelayMs: 100,
+        factor: 2,
+        jitter: true,
+        onRetry: (info) => {
+          delays.push(info.nextDelayMs);
+        },
+      });
+
+      // 実行
+      const pending = retry.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+      await vi.runAllTimersAsync();
+      await pending;
+
+      // 検証
+      expect(delays).toStrictEqual([50, 100]);
+      expect(random).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  test("待機時間が 0 のときはタイマーを経由せずに再試行する", async ({ expect }) => {
+    // 準備
+    vi.useFakeTimers();
+
+    try {
+      const inner = new FlakyStorage();
+      inner.fail("read:k1", 1);
+      const delays: number[] = [];
+      const retry = new Retry(inner, {
+        initialDelayMs: 0,
+        jitter: false,
+        onRetry: (info) => {
+          delays.push(info.nextDelayMs);
+        },
+      });
+
+      // 実行
+      const value = await retry.read(createGetContext("k1") as IStorage.ReadContext);
+
+      // 検証
+      expect(value).toBe("ok");
+      expect(delays).toStrictEqual([0]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(inner.calls).toStrictEqual(["read:k1", "read:k1"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("onRetry に試行情報が通知される", async ({ expect }) => {
@@ -568,10 +650,17 @@ describe("再試行しない委譲", () => {
     } as unknown as IStorage;
     const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行と検証
-    await expect(
-      retry.getWritable(createSetContext("k1") as IStorage.GetWritableContext),
-    ).rejects.toThrow(RetryUnsupportedOperationError);
+    // 実行
+    const error = await retry
+      .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
+      .catch((error: unknown) => error);
+
+    // 検証
+    expect(error).toBeInstanceOf(RetryUnsupportedOperationError);
+    expect((error as RetryUnsupportedOperationError).meta).toStrictEqual({
+      operation: "getWritable",
+      storage: "Bare",
+    });
   });
 
   test("getReadable を持たない inner では RetryUnsupportedOperationError で失敗する", async ({

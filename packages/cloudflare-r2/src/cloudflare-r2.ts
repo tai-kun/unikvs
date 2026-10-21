@@ -1,4 +1,5 @@
 import { KeyNotFoundError, StorageAbortedError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import { InvalidChunkTypeError } from "./errors.js";
 
@@ -210,12 +211,12 @@ export default class CloudflareR2 implements IStorage {
   }
 
   public open(c: IStorage.OpenContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     this.#open = true;
   }
 
   public close(c: IStorage.CloseContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     this.#open = false;
   }
 
@@ -225,52 +226,63 @@ export default class CloudflareR2 implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
-    await this.#bucket.put(this.#resolveKey(c.key), data);
+    // 呼び出し側がビューを再利用しても保存値が変わらないよう、複製して渡します。
+    await this.#bucket.put(this.#resolveKey(c.key), data.slice());
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const object = await this.#bucket.get(this.#resolveKey(c.key));
+    const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
     if (object === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    return new Uint8Array(await object.arrayBuffer());
+    const buffer = await Promise.race([object.arrayBuffer(), abortPromise]);
+
+    return new Uint8Array(buffer);
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    return (await this.#bucket.head(this.#resolveKey(c.key))) !== null;
+    return (
+      (await Promise.race([this.#bucket.head(this.#resolveKey(c.key)), abortPromise])) !== null
+    );
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     await this.#bucket.delete(this.#resolveKey(c.key));
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     let cursor: string | undefined = undefined;
     do {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
 
-      const page = await this.#bucket.list({
-        prefix: this.#keyPrefix,
-        cursor,
-        limit: CLEAR_BATCH_SIZE,
-      });
+      const page: R2ObjectsLike = await Promise.race([
+        this.#bucket.list({
+          prefix: this.#keyPrefix,
+          cursor,
+          limit: CLEAR_BATCH_SIZE,
+        }),
+        abortPromise,
+      ]);
       // バインディングが `prefix` を無視する場合に備えて手元でも絞り込みます。
       const keys = page.objects
         .map((object) => object.key)
         .filter((key) => key.startsWith(this.#keyPrefix));
       for (let start = 0; start < keys.length; start += CLEAR_BATCH_SIZE) {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
 
         const batch = keys.slice(start, start + CLEAR_BATCH_SIZE);
         if (batch.length > 0) {
@@ -295,6 +307,8 @@ export default class CloudflareR2 implements IStorage {
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       write(chunk) {
+        throwIfAborted(c.signal);
+
         if (!(chunk instanceof Uint8Array)) {
           throw new InvalidChunkTypeError({ key, chunk });
         }
@@ -302,7 +316,7 @@ export default class CloudflareR2 implements IStorage {
         chunks.push(chunk.slice());
       },
       close: async () => {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
 
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
@@ -323,15 +337,17 @@ export default class CloudflareR2 implements IStorage {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const object = await this.#bucket.get(this.#resolveKey(c.key));
+    const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
     if (object === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
     // R2 のボディは `arrayBuffer` で実体化してから単一チャンクのストリームで送出します。
-    const data = new Uint8Array(await object.arrayBuffer());
+    const buffer = await Promise.race([object.arrayBuffer(), abortPromise]);
+    const data = new Uint8Array(buffer);
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       start(controller) {

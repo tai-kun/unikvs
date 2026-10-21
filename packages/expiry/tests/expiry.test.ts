@@ -336,6 +336,31 @@ describe("復号", () => {
   });
 });
 
+describe("ExpiryInvalidExpiresAtError", () => {
+  test("キー付きのエラーは実際値とキーを英語メッセージに含める", ({ expect }) => {
+    // 準備
+    const error = new ExpiryInvalidExpiresAtError({ key: "k1", actual: "not-a-date" });
+
+    // 実行と検証
+    expect(error.name).toBe("ExpiryInvalidExpiresAtError");
+    expect(error.message).toBe(
+      'Invalid expiresAt "not-a-date" for key "k1". Expected a Date, epoch milliseconds, or an ISO 8601 string.',
+    );
+    expect(error.meta).toStrictEqual({ key: "k1", actual: "not-a-date" });
+  });
+
+  test("キーなしのエラーはキー部分を省略する", ({ expect }) => {
+    // 準備
+    const error = new ExpiryInvalidExpiresAtError({ actual: 0 });
+
+    // 実行と検証
+    expect(error.message).toBe(
+      "Invalid expiresAt 0. Expected a Date, epoch milliseconds, or an ISO 8601 string.",
+    );
+    expect(error.meta).toStrictEqual({ key: undefined, actual: 0 });
+  });
+});
+
 describe("ストリーム", () => {
   test("encodeStream は各チャンクを包む", async ({ expect }) => {
     // 準備

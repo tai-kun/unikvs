@@ -17,7 +17,7 @@ import Etcd, {
   type NativeEtcdClientLike,
   wrapNativeEtcdClient,
 } from "../src/etcd.js";
-import { closeStorage, createStorage } from "./_helpers.js";
+import { closeStorage, createStorage, FakeEtcdClient } from "./_helpers.js";
 
 const { Etcd3: MockedEtcd3, instances } = vi.hoisted(() => {
   const instances: { options: unknown; closed: boolean }[] = [];
@@ -174,6 +174,11 @@ describe("値の正規化", () => {
       await expect(
         storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
       ).resolves.toBe(false);
+      await expect(
+        collectBytes(
+          storage.getReadable(createStreamContext("k", { signal }) as IStorage.GetReadableContext),
+        ),
+      ).rejects.toThrow(KeyNotFoundError);
     } finally {
       await closeStorage(storage);
     }
@@ -191,14 +196,7 @@ describe("getAll の形状差吸収", () => {
       delete: async (key: string) => {
         backing.delete(key);
       },
-      getAll: async () => {
-        const out = new Map<string, Buffer>();
-        for (const [key, value] of backing) {
-          out.set(key, value);
-        }
-
-        return out;
-      },
+      getAll: async () => [...backing].map(([key, value]) => [key, Buffer.from(value)] as const),
     };
     const storage = new Etcd({ client, keyPrefix: "p:" });
     await storage.open(createOpenContext() as IStorage.OpenContext);
@@ -259,28 +257,6 @@ describe("getAll の形状差吸収", () => {
 
       expect(backing.has("p:inside")).toBe(false);
       expect(backing.get("outside")).toStrictEqual(Buffer.from([9]));
-    } finally {
-      await closeStorage(storage);
-    }
-  });
-
-  test("存在しないキーの getReadable は KeyNotFoundError になる (undefined)", async () => {
-    const client: EtcdClientLike = {
-      get: async () => undefined,
-      put: async () => {},
-      delete: async () => {},
-      getAll: async () => ({}),
-    };
-    const storage = new Etcd({ client });
-    await storage.open(createOpenContext() as IStorage.OpenContext);
-    try {
-      const signal = new AbortController().signal;
-
-      await expect(
-        collectBytes(
-          storage.getReadable(createStreamContext("k", { signal }) as IStorage.GetReadableContext),
-        ),
-      ).rejects.toThrow(KeyNotFoundError);
     } finally {
       await closeStorage(storage);
     }
@@ -506,6 +482,40 @@ describe("open の接続先解決", () => {
       const latest = instances[instances.length - 1];
 
       expect(latest?.options).toStrictEqual({ hosts: ["http://etcd:2379"] });
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
+  });
+
+  test("配列の endpoints をそのままホスト一覧として渡す", async () => {
+    const endpoints = ["http://a:2379", "http://b:2379"] as const;
+    const storage = new Etcd({ endpoints });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+    try {
+      const latest = instances[instances.length - 1];
+
+      expect(latest?.options).toStrictEqual({ hosts: [...endpoints] });
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
+  });
+
+  test("client を指定したときは Etcd3 を構築しない", async () => {
+    const constructed = instances.length;
+    const client = new FakeEtcdClient();
+    // endpoints は使われないため、到達不能な値を渡しても接続しない。
+    const storage = new Etcd({ client, endpoints: "http://ignored.invalid:2379" });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+    try {
+      await storage.write(
+        createSetContext("injected.bin", {
+          signal: new AbortController().signal,
+        }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+
+      expect(instances).toHaveLength(constructed);
+      expect(client.puts).toHaveLength(1);
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
     }

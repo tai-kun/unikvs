@@ -1,5 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import { PassThrough } from "@unikvs/passthrough";
+import { throwIfAborted } from "abort-signal-utils";
 
 import { RateLimitExceededError, RateLimitInvalidOptionError } from "./errors.js";
 
@@ -220,7 +221,7 @@ export default class RateLimit extends PassThrough implements IMiddleware {
   }
 
   async #acquire(signal: AbortSignal): Promise<void> {
-    signal.throwIfAborted();
+    throwIfAborted(signal);
 
     let release!: () => void;
     const previous = this.#tail;
@@ -231,7 +232,7 @@ export default class RateLimit extends PassThrough implements IMiddleware {
 
     try {
       for (;;) {
-        signal.throwIfAborted();
+        throwIfAborted(signal);
         this.#refill();
 
         if (this.#tokens >= 1) {

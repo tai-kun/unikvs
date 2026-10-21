@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import {
   Redis as Ioredis,
   type ClusterNode,
@@ -287,11 +288,16 @@ export default class Valkey implements IStorage {
   }
 
   async #clearPattern(client: ValkeyClient, pattern: string, signal: AbortSignal): Promise<void> {
+    using abortPromise = toAbortPromise(signal);
+
     let cursor = "0";
     do {
-      signal.throwIfAborted();
+      throwIfAborted(signal);
 
-      const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
+      const [nextCursor, keys] = await Promise.race([
+        client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT),
+        abortPromise,
+      ]);
       if (keys.length > 0) {
         await client.del(...keys);
       }
@@ -303,7 +309,7 @@ export default class Valkey implements IStorage {
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     if (this.#ttl === undefined) {
       await client.set(this.#toKey(c.key), Buffer.from(data));
@@ -315,9 +321,10 @@ export default class Valkey implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const data = await client.getBuffer(this.#toKey(c.key));
+    const data = await Promise.race([client.getBuffer(this.#toKey(c.key)), abortPromise]);
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -328,15 +335,16 @@ export default class Valkey implements IStorage {
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    return (await client.exists(this.#toKey(c.key))) > 0;
+    return (await Promise.race([client.exists(this.#toKey(c.key)), abortPromise])) > 0;
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     await client.del(this.#toKey(c.key));
   }
@@ -344,7 +352,7 @@ export default class Valkey implements IStorage {
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
     const pattern = `${this.#keyPrefix}*`;
@@ -355,7 +363,7 @@ export default class Valkey implements IStorage {
     const { client } = this.#con!;
     const ttl = this.#ttl;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const dest = this.#toKey(c.key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時キーが衝突しません。
@@ -388,7 +396,7 @@ export default class Valkey implements IStorage {
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async start() {
         try {
-          c.signal.throwIfAborted();
+          throwIfAborted(c.signal);
           // 0 バイトの書き込みでも close 時の RENAME が成功するよう、空の文字列で一時キーを作ります。
           await client.set(tmp, "");
         } catch (ex) {
@@ -397,7 +405,7 @@ export default class Valkey implements IStorage {
         }
       },
       async write(chunk) {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
         try {
           await client.append(tmp, Buffer.from(chunk));
         } catch (ex) {
@@ -406,7 +414,7 @@ export default class Valkey implements IStorage {
         }
       },
       async close() {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
         try {
           // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
           await client.rename(tmp, dest);
@@ -430,7 +438,7 @@ export default class Valkey implements IStorage {
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const dest = this.#toKey(c.key);
     let sent = false;
@@ -444,9 +452,10 @@ export default class Valkey implements IStorage {
         }
 
         sent = true;
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
+        using abortPromise = toAbortPromise(c.signal);
 
-        const data = await client.getBuffer(dest);
+        const data = await Promise.race([client.getBuffer(dest), abortPromise]);
         if (data === null) {
           throw new KeyNotFoundError({ key: c.key });
         }

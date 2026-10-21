@@ -153,18 +153,30 @@ describe("転送と集計", () => {
     expect(exported.map((record) => record.action)).toStrictEqual(["set", "get"]);
   });
 
-  test("sink が投げても操作を壊さない", async ({ expect }) => {
+  test("onRecord が投げても操作を壊さない", async ({ expect }) => {
     // 準備
     const metrics = new Metrics({
       onRecord: () => {
-        throw new Error("sink failure");
+        throw new Error("onRecord failure");
       },
+    });
+
+    // 実行
+    await metrics.use(createSetContext("key") as IMiddleware.UseContext, createNext());
+
+    // 検証
+    expect(metrics.getMetrics().total).toBe(1);
+  });
+
+  test("exporter が投げても操作を壊さない", async ({ expect }) => {
+    // 準備
+    const metrics = new Metrics({
       exporter: () => {
         throw new Error("exporter failure");
       },
     });
 
-    // 実行 (記録側の例外で use が失敗しないこと)
+    // 実行
     await metrics.use(createSetContext("key") as IMiddleware.UseContext, createNext());
 
     // 検証

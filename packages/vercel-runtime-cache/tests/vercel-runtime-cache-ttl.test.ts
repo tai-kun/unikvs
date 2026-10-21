@@ -1,6 +1,5 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
   createDeleteContext,
   createGetContext,
   createHasContext,
@@ -10,6 +9,7 @@ import { describe, test } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import VercelRuntimeCache from "../src/vercel-runtime-cache.js";
+import { createFakeRuntimeCache } from "./_helpers.js";
 
 describe("TTL による遅延失効", () => {
   test("TTL を過ぎた read は KeyNotFoundError を投げる", async ({ expect }) => {
@@ -77,18 +77,9 @@ describe("TTL による遅延失効", () => {
     expect(storage.size).toBe(0);
   });
 
-  test("バックエンド側でも TTL 失効する", async ({ expect }) => {
+  test("バックエンド側でも TTL 失効し、期限切れエントリは削除される", async ({ expect }) => {
     let now = 0;
-    const map = new Map<string, unknown>();
-    const backend = {
-      get: (key: string) => map.get(key),
-      set: (key: string, value: unknown) => {
-        map.set(key, value);
-      },
-      delete: (key: string) => {
-        map.delete(key);
-      },
-    };
+    const backend = createFakeRuntimeCache();
     const storage = new VercelRuntimeCache({ ttlSeconds: 10, backend, now: () => now });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     now += 11_000;
@@ -96,9 +87,9 @@ describe("TTL による遅延失効", () => {
     await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
       false,
     );
+    expect(backend.store.has("k1")).toBe(false);
     await expect(
       storage.read(createGetContext("k1") as IStorage.ReadContext),
     ).rejects.toBeInstanceOf(KeyNotFoundError);
-    await storage.clear(createClearContext() as IStorage.ClearContext);
   });
 });

@@ -1,6 +1,5 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  abortedSignal,
   captureRejection,
   createClearContext,
   createDeleteContext,
@@ -129,12 +128,43 @@ describe("トークンの解決", () => {
     // 検証
     expect(error).toBeInstanceOf(InvalidTokenError);
   });
+
+  test("token を渡したとき、delete と clear にも伝搬する", async ({ expect }) => {
+    // 準備
+    const client = createFakeClient();
+    const { fetch } = createFakeDownload(client.store);
+    const storage = new VercelBlob({ client, fetch, token: "secret" });
+    await storage.write(
+      createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    await storage.write(
+      createSetContext("k2", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      new Uint8Array([2]),
+    );
+
+    // 実行
+    await storage.delete(
+      createDeleteContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
+    );
+    await storage.clear(
+      createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+    );
+
+    // 検証
+    const delCalls = client.calls.filter((call) => call.operation === "del");
+    expect(delCalls.map((call) => call.token)).toStrictEqual(["secret", "secret"]);
+    const listCalls = client.calls.filter((call) => call.operation === "list");
+    expect(listCalls).toHaveLength(1);
+    expect(listCalls[0]).toMatchObject({ operation: "list", prefix: "", token: "secret" });
+  });
 });
 
 describe("クライアント失敗の包み直し", () => {
-  test("put の失敗は BlobOperationError になる", async ({ expect }) => {
+  test("put の失敗は原因を保持した BlobOperationError になる", async ({ expect }) => {
     // 準備
-    const client = createFakeClient({ failOn: "put" });
+    const failure = new Error("fake put failure");
+    const client = createFakeClient({ failOn: "put", error: failure });
     const { fetch } = createFakeDownload(client.store);
     const storage = new VercelBlob({ client, fetch });
 
@@ -149,6 +179,7 @@ describe("クライアント失敗の包み直し", () => {
     // 検証
     expect(error).toBeInstanceOf(BlobOperationError);
     expect((error as BlobOperationError).meta).toStrictEqual({ operation: "put", key: "k" });
+    expect((error as BlobOperationError).cause).toBe(failure);
   });
 
   test("read 時の head の失敗は BlobOperationError になる", async ({ expect }) => {
@@ -261,35 +292,17 @@ describe("クライアント失敗の包み直し", () => {
     expect(error).toBeInstanceOf(BlobOperationError);
     expect((error as BlobOperationError).meta).toStrictEqual({ operation: "del", key: undefined });
   });
-
-  test("中断済みシグナルでの失敗は中断例外を投げる", async ({ expect }) => {
-    // 準備
-    const client = createFakeClient({ failOn: "put" });
-    const { fetch } = createFakeDownload(client.store);
-    const storage = new VercelBlob({ client, fetch });
-
-    // 実行
-    const error = await captureRejection(
-      storage.write(
-        createSetContext("k", { signal: abortedSignal() }) as IStorage.WriteContext,
-        new Uint8Array([1]),
-      ),
-    );
-
-    // 検証
-    expect(error).toBeInstanceOf(DOMException);
-    expect((error as DOMException).name).toBe("AbortError");
-  });
 });
 
 describe("ダウンロード失敗の包み直し", () => {
-  test("要求自体の失敗は BlobNetworkError になる", async ({ expect }) => {
+  test("要求自体の失敗は原因を保持した BlobNetworkError になる", async ({ expect }) => {
     // 準備
+    const failure = new TypeError("fetch failed");
     const client = createFakeClient();
     const { store } = client;
     store.set("k", new Uint8Array([1]));
     const failingFetch: IFetch = async () => {
-      throw new TypeError("fetch failed");
+      throw failure;
     };
     const storage = new VercelBlob({ client, fetch: failingFetch });
 
@@ -303,6 +316,40 @@ describe("ダウンロード失敗の包み直し", () => {
     // 検証
     expect(error).toBeInstanceOf(BlobNetworkError);
     expect((error as BlobNetworkError).meta.key).toBe("k");
+    expect((error as BlobNetworkError).cause).toBe(failure);
+  });
+
+  test("ダウンロード中の中断は BlobNetworkError にせず中断例外を投げる", async ({ expect }) => {
+    // 準備
+    const controller = new AbortController();
+    const client = createFakeClient();
+    client.store.set("k", new Uint8Array([1]));
+    let notifyDownloadStarted = (): void => {};
+    const downloadStarted = new Promise<void>((resolve) => {
+      notifyDownloadStarted = () => resolve();
+    });
+    const pendingFetch: IFetch = (request) => {
+      notifyDownloadStarted();
+
+      return new Promise<Response>((_resolve, reject) => {
+        request.signal.addEventListener("abort", () => reject(request.signal.reason), {
+          once: true,
+        });
+      });
+    };
+    const storage = new VercelBlob({ client, fetch: pendingFetch });
+
+    // 実行
+    const pending = captureRejection(
+      storage.read(createGetContext("k", { signal: controller.signal }) as IStorage.ReadContext),
+    );
+    await downloadStarted;
+    controller.abort();
+
+    // 検証
+    const error = await pending;
+    expect(error).toBeInstanceOf(DOMException);
+    expect((error as DOMException).name).toBe("AbortError");
   });
 
   test("失敗応答は BlobResponseError になる", async ({ expect }) => {

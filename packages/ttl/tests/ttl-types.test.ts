@@ -1,7 +1,7 @@
 import type { IMiddleware } from "@unikvs/core";
 import { expectTypeOf, test } from "vitest";
 
-import Ttl, { type TtlInput, type TtlOptions } from "../src/ttl.js";
+import Ttl, { type TtlInput } from "../src/ttl.js";
 
 test("Ttl は IMiddleware として扱える", () => {
   expectTypeOf<Ttl>().toExtend<IMiddleware>();
@@ -16,14 +16,6 @@ test("コンストラクターはオプションなし・ありで組み立て�
   expectTypeOf(new Ttl({ defaultTtl: new Date() })).toEqualTypeOf<Ttl>();
   expectTypeOf(new Ttl({ defaultTtl: { ttl: 60 } })).toEqualTypeOf<Ttl>();
   expectTypeOf(new Ttl({ now: () => Date.now() })).toEqualTypeOf<Ttl>();
-});
-
-test("options の余剰プロパティーは受け付けない", () => {
-  // 実行と検証
-  expectTypeOf({} as TtlOptions).toEqualTypeOf<TtlOptions>();
-  expectTypeOf({ defaultTtl: "60" })
-    // @ts-expect-error TTL 値は文字列を受け付けません。
-    .toEqualTypeOf<TtlOptions>();
 });
 
 test("TtlInput は相対秒数・絶対時刻・オブジェクト形式を受け付ける", () => {

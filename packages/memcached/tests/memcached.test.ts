@@ -43,6 +43,32 @@ describe("初期化と接続管理", () => {
     expect(storage.isOpen).toBe(false);
     expect(client.quitCalls).toBe(0);
   });
+
+  test("keyPrefix を省略したとき、既定の接頭辞 unikvs: が使われる", async ({
+    expect,
+    client,
+    signal,
+  }) => {
+    // 準備
+    const storage = new Memcached(undefined, { client });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      // 実行
+      await storage.write(
+        createSetContext("default-prefix.bin", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+
+      // 検証
+      // 保存キーに既定の接頭辞が付き、値が Base64 で渡ることを確認する。
+      expect(client.setCalls).toStrictEqual([
+        { key: "unikvs:default-prefix.bin", value: "AQ==", expires: 0 },
+      ]);
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
+  });
 });
 
 describe("基本操作 (CRUD)", () => {

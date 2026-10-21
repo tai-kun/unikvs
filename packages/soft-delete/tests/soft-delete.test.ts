@@ -35,6 +35,12 @@ async function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * 削除墓標の台帳を下層ストレージに保存するときの予約キーです。
+ * 予約キーを直接操作する検証に使用します。
+ */
+const REGISTRY_KEY = "__unikvs_soft_delete_registry__";
+
+/**
  * 最小の手書きストレージです。
  * ストリーム非対応の下層を引き渡したときの振る舞いの検証に使います。
  */
@@ -292,7 +298,7 @@ describe("use の透過", () => {
 });
 
 describe("下層ストレージへの委譲", () => {
-  test("読み書きと存在確認と削除を下層へ委譲する", async ({ expect }) => {
+  test("write・read・exists が連動し、delete の後は存在しなくなる", async ({ expect }) => {
     // 準備
     const softDelete = new SoftDelete(new Memory());
 
@@ -429,36 +435,34 @@ describe("墓標の直接操作", () => {
   });
 
   test("台帳自体の削除は墓標化せず委譲する", async ({ expect }) => {
-    // 準備: 台帳の予約キーは src の REGISTRY_KEY と同じ値を使う
-    const registryKey = "__unikvs_soft_delete_registry__";
+    // 準備
     const inner = new Memory();
     const softDelete = new SoftDelete(inner);
-    inner.write(createSetContext(registryKey) as IStorage.WriteContext, { live: true });
+    inner.write(createSetContext(REGISTRY_KEY) as IStorage.WriteContext, { live: true });
 
     // 実行
-    await softDelete.delete(createDeleteContext(registryKey) as IStorage.DeleteContext);
+    await softDelete.delete(createDeleteContext(REGISTRY_KEY) as IStorage.DeleteContext);
 
     // 検証: 墓標化されず、そのまま消える
-    expect(inner.exists(createHasContext(registryKey) as IStorage.ExistsContext)).toBe(false);
+    expect(inner.exists(createHasContext(REGISTRY_KEY) as IStorage.ExistsContext)).toBe(false);
     expect(await softDelete.listTombstones()).toStrictEqual([]);
   });
 
   test("台帳が壊れているときは空の一覧として扱う", async ({ expect }) => {
     // 準備
-    const registryKey = "__unikvs_soft_delete_registry__";
     const inner = new Memory();
     const softDelete = new SoftDelete(inner);
 
     // 実行と検証: 文字列の台帳
-    inner.write(createSetContext(registryKey) as IStorage.WriteContext, "garbage");
+    inner.write(createSetContext(REGISTRY_KEY) as IStorage.WriteContext, "garbage");
     expect(await softDelete.listTombstones()).toStrictEqual([]);
 
     // 実行と検証: 配列の台帳
-    inner.write(createSetContext(registryKey) as IStorage.WriteContext, []);
+    inner.write(createSetContext(REGISTRY_KEY) as IStorage.WriteContext, []);
     expect(await softDelete.listTombstones()).toStrictEqual([]);
   });
 
-  test("手書きの墓標への上書きは復活し、台帳に残らない", async ({ expect }) => {
+  test("下層に残った墓標への write は通常値として復活させる", async ({ expect }) => {
     // 準備
     const inner = new Memory();
     const softDelete = new SoftDelete(inner);
@@ -496,21 +500,28 @@ describe("墓標の直接操作", () => {
     expect((error as TombstoneNotFoundError).meta).toStrictEqual({ key: "k1" });
   });
 
-  test("deletedAt が同じ墓標はキー順に並ぶ", async ({ expect }) => {
+  test("deletedAt が同じ墓標は削除順に関係なくキー順に並ぶ", async ({ expect }) => {
     // 準備
-    const softDelete = new SoftDelete(new Memory());
     const now = vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
     try {
-      await softDelete.write(createSetContext("b") as IStorage.WriteContext, "vb");
-      await softDelete.write(createSetContext("a") as IStorage.WriteContext, "va");
-      await softDelete.delete(createDeleteContext("b") as IStorage.DeleteContext);
-      await softDelete.delete(createDeleteContext("a") as IStorage.DeleteContext);
+      // 実行と検証: 削除順が逆でも結果は同じになる
+      for (const order of [
+        ["a", "b"],
+        ["b", "a"],
+      ] as const) {
+        const target = new SoftDelete(new Memory());
+        for (const key of order) {
+          await target.write(createSetContext(key) as IStorage.WriteContext, `v-${key}`);
+        }
+        for (const key of order) {
+          await target.delete(createDeleteContext(key) as IStorage.DeleteContext);
+        }
 
-      // 実行と検証
-      expect(await softDelete.listTombstones()).toStrictEqual([
-        { key: "a", deletedAt: 1_700_000_000_000 },
-        { key: "b", deletedAt: 1_700_000_000_000 },
-      ]);
+        expect(await target.listTombstones()).toStrictEqual([
+          { key: "a", deletedAt: 1_700_000_000_000 },
+          { key: "b", deletedAt: 1_700_000_000_000 },
+        ]);
+      }
     } finally {
       now.mockRestore();
     }
@@ -584,7 +595,6 @@ describe("読み出しの競合と下層の失敗", () => {
     }
     const inner = new FailingStorage();
     const softDelete = new SoftDelete(inner);
-    const guard = new SoftDelete(new Memory());
 
     // 実行と検証: exists、delete、restore、一覧のいずれでも想定外の失敗は握り潰さない
     // exists は存在確認まで進めるため、下層へ直接有効値を入れておく
@@ -614,9 +624,6 @@ describe("読み出しの競合と下層の失敗", () => {
       sweeping.read(createGetContext("k1") as IStorage.ReadContext),
     );
     expect(error).toBeInstanceOf(KeyNotFoundError);
-
-    // 参照: 失敗しない下層では同じ操作が成功する
-    expect(guard).toBeDefined();
   });
 
   test("削除中の想定外の失敗はそのまま伝わる", async ({ expect }) => {
@@ -694,7 +701,7 @@ describe("ストリームの直接操作", () => {
     expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "s1" });
   });
 
-  test("getWritable の中断は墓標を残す", async ({ expect }) => {
+  test("getWritable の中断はチャンクを確定させず、墓標を残す", async ({ expect }) => {
     // 準備
     const inner = new Memory();
     const softDelete = new SoftDelete(inner);
@@ -702,21 +709,46 @@ describe("ストリームの直接操作", () => {
     await softDelete.delete(createDeleteContext("s1") as IStorage.DeleteContext);
     expect(await softDelete.listTombstones()).toHaveLength(1);
 
-    // 実行: 書き込みを開始してから中断する
-    const writable = await softDelete.getWritable?.(
+    // 実行: チャンクを書き込んでから中断する
+    const writable = await softDelete.getWritable!(
       createSetContext("s1") as IStorage.GetWritableContext,
     );
-    await writable!.abort(new Error("cancelled"));
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array([1, 2]));
+    await writer.abort(new Error("cancelled"));
 
-    // 検証: 確定しなかった書き込みでは墓標が残る
+    // 検証: 中断した書き込みは確定せず、墓標が残る
+    expect(await inner.read(createGetContext("s1") as IStorage.ReadContext)).toMatchObject({
+      __tombstone: true,
+    });
     expect(await softDelete.listTombstones()).toHaveLength(1);
     const error = await captureRejection(
       softDelete.read(createGetContext("s1") as IStorage.ReadContext),
     );
     expect(error).toBeInstanceOf(KeyNotFoundError);
+  });
 
-    // 後片付け
-    expect(inner).toBeDefined();
+  test("getWritable の close は墓標を復活させる", async ({ expect }) => {
+    // 準備
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("s1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("s1") as IStorage.DeleteContext);
+    expect(await softDelete.listTombstones()).toHaveLength(1);
+
+    // 実行: 墓標をストリームの書き込みで上書きする
+    const writable = await softDelete.getWritable!(
+      createSetContext("s1") as IStorage.GetWritableContext,
+    );
+    const writer = writable.getWriter();
+    await writer.write(new Uint8Array([3, 4]));
+    await writer.close();
+
+    // 検証: 通常値として読め、墓標の一覧から外れる
+    expect(await softDelete.read(createGetContext("s1") as IStorage.ReadContext)).toStrictEqual(
+      new Uint8Array([3, 4]),
+    );
+    expect(await softDelete.exists(createHasContext("s1") as IStorage.ExistsContext)).toBe(true);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
   });
 });
 
@@ -736,6 +768,23 @@ describe("保持期限の直接操作", () => {
 
     // 検証: 期限切れは掃除され、下層からも消える
     expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect(inner.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+  });
+
+  test("期限切れの墓標の exists は掃除して false を返す", async ({ expect }) => {
+    // 準備
+    const inner = new Memory();
+    const softDelete = new SoftDelete(inner, { retentionMs: 20 });
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+    await sleep(50);
+
+    // 実行
+    const exists = await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext);
+
+    // 検証: 期限切れは掃除され、下層からも消える
+    expect(exists).toBe(false);
     expect(inner.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
     expect(await softDelete.listTombstones()).toStrictEqual([]);
   });

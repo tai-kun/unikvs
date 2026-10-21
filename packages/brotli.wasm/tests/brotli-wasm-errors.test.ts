@@ -261,7 +261,9 @@ describe("範囲外レベルのコンストラクター", () => {
     expect(() => new BrotliWasm({ level: 11 })).not.toThrow();
   });
 
-  test("無効値は BrotliWasmInvalidLevelError で拒否する", ({ expect }) => {
+  test("無効値は BrotliWasmInvalidLevelError で拒否し指定値を meta.actual に保持する", ({
+    expect,
+  }) => {
     // 準備
     // 本ループは拒否区分のみを扱う。有効区分は往復群とオプション節で検証する。
     // null は既定値に吸収されず無効値として拒否される。
@@ -280,28 +282,6 @@ describe("範囲外レベルのコンストラクター", () => {
 
     // 実行と検証
     for (const value of invalidValues) {
-      expect(
-        () => new BrotliWasm({ level: value as unknown as BrotliWasmOptions["level"] }),
-        `${String(value)}`,
-      ).toThrow(BrotliWasmInvalidLevelError);
-    }
-  });
-
-  test("meta.actual に指定値をそのまま保持する", ({ expect }) => {
-    // 実行と検証
-    // 拒否区分の全 10 値で指定値そのまま保持の契約を検証する。
-    for (const value of [
-      -1,
-      -7,
-      12,
-      22,
-      1.5,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      "3",
-      true,
-      null,
-    ]) {
       let thrown: unknown;
 
       try {
@@ -310,8 +290,10 @@ describe("範囲外レベルのコンストラクター", () => {
         thrown = error;
       }
 
-      expect(thrown).toBeInstanceOf(BrotliWasmInvalidLevelError);
-      expect((thrown as BrotliWasmInvalidLevelError).meta).toStrictEqual({ actual: value });
+      expect(thrown, `${String(value)}`).toBeInstanceOf(BrotliWasmInvalidLevelError);
+      expect((thrown as BrotliWasmInvalidLevelError).meta, `${String(value)}`).toStrictEqual({
+        actual: value,
+      });
     }
   });
 });

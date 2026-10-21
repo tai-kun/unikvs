@@ -4,6 +4,7 @@ import {
   type IStorage,
   type IWritableStream,
 } from "@unikvs/core";
+import { getAbortReason, throwIfAborted } from "abort-signal-utils";
 
 import {
   RetryExhaustedError,
@@ -148,22 +149,6 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 /**
- * 中断理由を取り出します。
- */
-function toAbortError(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException("The operation was aborted.", "AbortError");
-}
-
-/**
- * 中断済みなら即座に失敗します。
- */
-function throwIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) {
-    throw toAbortError(signal);
-  }
-}
-
-/**
  * 中断に対応した待機です。
  */
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -175,7 +160,7 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
-      reject(toAbortError(signal));
+      reject(getAbortReason(signal));
 
       return;
     }
@@ -187,7 +172,7 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
     const onAbort = (): void => {
       clearTimeout(timer);
-      reject(toAbortError(signal));
+      reject(getAbortReason(signal));
     };
 
     signal.addEventListener("abort", onAbort, { once: true });

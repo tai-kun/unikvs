@@ -95,8 +95,12 @@ describe("書き込みと読み出し", () => {
     const { kvs } = await createExpiryKvs();
 
     // 実行と検証: Date を指定する。
-    await kvs.set("report", "hello", { vars: { [EXPIRES_AT_VAR]: new Date(FUTURE) } });
-    expect(await kvs.get("report")).toBe("hello");
+    await kvs.set("report", "date", { vars: { [EXPIRES_AT_VAR]: new Date(FUTURE) } });
+    expect(await kvs.get("report")).toBe("date");
+
+    // 実行と検証: エポックミリ秒を指定する。
+    await kvs.set("report", "number", { vars: { [EXPIRES_AT_VAR]: FUTURE } });
+    expect(await kvs.get("report")).toBe("number");
 
     // 後片付け
     await kvs.close();

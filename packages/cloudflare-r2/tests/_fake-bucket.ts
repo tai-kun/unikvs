@@ -51,8 +51,11 @@ export function createFakeBucket(): R2BucketLike & {
 
     async list(options = {}): Promise<R2ObjectsLike> {
       const { prefix = "", cursor, limit = 1000 } = options;
+      // 実 R2 の `limit` は最大 1000 件です。
+      const pageSize = Math.min(limit, 1000);
       const keys = [...store.keys()].filter((key) => key.startsWith(prefix)).sort();
-      // 実 R2 と同様にキー基準のカーソルで再開します。削除しながら列挙してもずれません。
+      // 実 R2 のカーソルは不透明ですが、列挙は前ページの最後のキーより後ろから再開します。
+      // キー基準のカーソルでその意味論を再現し、削除しながらの列挙でもずれないようにします。
       const start =
         cursor === undefined
           ? 0
@@ -61,7 +64,7 @@ export function createFakeBucket(): R2BucketLike & {
 
               return index === -1 ? keys.length : index;
             })();
-      const page = keys.slice(start, start + limit);
+      const page = keys.slice(start, start + pageSize);
       const truncated = start + page.length < keys.length;
 
       return {

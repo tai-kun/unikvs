@@ -3,6 +3,7 @@ import {
   abortedSignal,
   captureRejection,
   createGetContext,
+  createHasContext,
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
@@ -143,7 +144,36 @@ describe("getWritable", () => {
     // 検証
     expect(
       await storage.exists(
-        createGetContext("s1", {
+        createHasContext("s1", {
+          signal: AbortSignal.timeout(5_000),
+        }) as IStorage.ExistsContext,
+      ),
+    ).toBe(false);
+  });
+
+  test("蓄積後に中断した close は中断例外を投げ、何も保存しない", async ({ expect }) => {
+    // 準備
+    const { storage } = setup();
+    const controller = new AbortController();
+    const writer = storage
+      .getWritable(
+        createSetContext("s1", {
+          signal: controller.signal,
+        }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+    await writer.write(new Uint8Array([1, 2, 3]));
+
+    // 実行
+    controller.abort();
+    const error = await captureRejection(writer.close());
+
+    // 検証
+    expect(error).toBeInstanceOf(DOMException);
+    expect((error as DOMException).name).toBe("AbortError");
+    expect(
+      await storage.exists(
+        createHasContext("s1", {
           signal: AbortSignal.timeout(5_000),
         }) as IStorage.ExistsContext,
       ),

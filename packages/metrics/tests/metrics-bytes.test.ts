@@ -70,6 +70,29 @@ describe("encode/decode の透過とバイト数", () => {
     });
   });
 
+  test("操作ごとにバイト数と経過時間を合算する", async ({ expect }) => {
+    // 準備
+    let now = 0;
+    const metrics = new Metrics({ clock: () => now });
+
+    // 実行
+    await metrics.encode(createEncodeContext("ab", "a") as IMiddleware.EncodeContext, async () => {
+      now += 3;
+    });
+    await metrics.encode(createEncodeContext("abc", "b") as IMiddleware.EncodeContext, async () => {
+      now += 7;
+    });
+
+    // 検証
+    expect(metrics.getMetrics().byAction["set"]).toMatchObject({
+      count: 2,
+      success: 2,
+      error: 0,
+      totalBytes: 5,
+      totalDurationMs: 10,
+    });
+  });
+
   test("encode の失敗を error として記録し再送出する", async ({ expect }) => {
     // 準備
     const metrics = new Metrics();

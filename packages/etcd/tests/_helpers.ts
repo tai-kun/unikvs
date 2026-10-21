@@ -13,6 +13,8 @@ export type RecordedPut = {
  * `EtcdClientLike` を満たすインメモリーフェイクです。
  *
  * 実サーバーなしで CRUD・TTL 付与・接頭辞削除の振る舞いを検証します。
+ * リースの失効は etcd 側の責務のため再現しません。実装は `etcd3` の
+ * `autoKeepAlive` (既定で有効) を使うため、開いている間はキーが残ります。
  */
 export class FakeEtcdClient implements EtcdClientLike {
   readonly store = new Map<string, Buffer>();
@@ -22,6 +24,8 @@ export class FakeEtcdClient implements EtcdClientLike {
   readonly deletedPrefixes: string[] = [];
 
   public deletePrefix?: (prefix: string) => Promise<void>;
+
+  public closeCalls = 0;
 
   public constructor(supportsDeletePrefix = true) {
     if (supportsDeletePrefix) {
@@ -61,11 +65,16 @@ export class FakeEtcdClient implements EtcdClientLike {
     const out = new Map<string, Buffer>();
     for (const [key, value] of this.store) {
       if (key.startsWith(prefix)) {
-        out.set(key, value);
+        // 呼び出し側の変更が保存値へ波及しないよう複写して返す。
+        out.set(key, Buffer.from(value));
       }
     }
 
     return out;
+  }
+
+  public close(): void {
+    this.closeCalls += 1;
   }
 }
 
@@ -78,9 +87,14 @@ export type StorageFixture = {
 
 /**
  * テストごとに独立したキー空間を持つ open 済みストレージを作ります。
+ *
+ * `client` を渡すと複数のストレージで同じバックエンドを共有できます。
+ * その場合のキー空間は `keyPrefix` と `namespace` で分離してください。
+ * `client` を渡したときは `supportsDeletePrefix` は使われません。
  */
 export async function createStorage(
   init: {
+    readonly client?: FakeEtcdClient | undefined;
     readonly keyPrefix?: string | undefined;
     readonly namespace?: string | undefined;
     readonly leaseTtlSeconds?: number | undefined;
@@ -88,12 +102,13 @@ export async function createStorage(
   } = {},
 ): Promise<StorageFixture> {
   const {
+    client: injected,
     keyPrefix = `unikvs-test-${crypto.randomUUID()}:`,
     namespace,
     leaseTtlSeconds,
     supportsDeletePrefix = true,
   } = init;
-  const client = new FakeEtcdClient(supportsDeletePrefix);
+  const client = injected ?? new FakeEtcdClient(supportsDeletePrefix);
   const storage = new Etcd({ client, keyPrefix, namespace, leaseTtlSeconds });
   await storage.open(createOpenContext() as IStorage.OpenContext);
 

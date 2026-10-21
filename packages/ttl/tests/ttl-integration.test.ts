@@ -10,7 +10,7 @@ import Ttl, { type TtlOptions } from "../src/ttl.js";
  * 固定時刻で動作する Ttl 付きクライアントを作成します。
  * 時刻は返却される `clock` で進められます。
  */
-async function createTtlKvs(options?: TtlOptions, mutate?: (ttl: Ttl) => void) {
+async function createTtlKvs(options?: TtlOptions) {
   let now = 1_000_000;
   const clock = {
     get now() {
@@ -21,12 +21,11 @@ async function createTtlKvs(options?: TtlOptions, mutate?: (ttl: Ttl) => void) {
     },
   };
   const ttl = new Ttl({ ...options, now: () => now });
-  mutate?.(ttl);
   const storage = new Memory();
   const kvs = UniKvs.config().use(ttl).persist(storage).create();
   await kvs.open();
 
-  return { kvs, storage, clock };
+  return { kvs, clock };
 }
 
 /**
@@ -108,7 +107,8 @@ describe("透過と有効期限", () => {
   });
 
   test("書き込みごとの expiresAt 変数で絶対時刻を指定できる", async ({ expect }) => {
-    const { kvs, clock } = await createTtlKvs();
+    // defaultTtl より書き込みごとの絶対時刻が優先されることも兼ねて確認します。
+    const { kvs, clock } = await createTtlKvs({ defaultTtl: 60 });
     await kvs.set("report", "hello", { vars: { expiresAt: clock.now + 5_000 } });
     clock.advance(4_999);
 
@@ -226,6 +226,8 @@ describe("再起動後の振る舞い", () => {
       .create();
     await second.open();
 
+    // エンベロープだけで失効を判定できるのはプレーン値の get です。
+    // has と stream は操作中の記録に依存するため、再起動後は失効を検出できません (既知の制約)。
     await expect(second.get("report")).rejects.toThrowError(KeyNotFoundError);
 
     await second.close();

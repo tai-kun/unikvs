@@ -1,27 +1,40 @@
-import type { IStorage } from "@unikvs/core";
+import type { IStorage, IKeyedActionContext } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
-  CacheStorageNotAvailableError,
-  InvalidChunkTypeError,
   KeyNotFoundError,
+  InvalidChunkTypeError,
+  CacheStorageNotAvailableError,
 } from "./errors.js";
 
 // DOM の `CacheStorage` とクラス名が衝突するため、型参照用の別名を用意します。
 type NativeCacheStorage = typeof globalThis.caches;
 
-// キーを `Request` の URL に変換するときの基底 URL です。
-// `encodeURIComponent` で符号化するため、任意のキーと 1 対 1 に対応します。
-const BASE_URL = "https://unikvs.local/";
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+ */
+export interface IToRequest {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   */
+  (key: string): RequestInfo | URL;
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
  */
 export type CacheStorageOptions = {
   /**
-   * 注入する `CacheStorage` です。
-   *
-   * 未指定のときは `globalThis.caches` を使います。
-   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   */
+  readonly cacheName: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   */
+  readonly toRequest: IToRequest;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
    */
   readonly caches?: NativeCacheStorage | undefined;
@@ -31,6 +44,8 @@ export type CacheStorageOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
  */
 export default class CacheStorage implements IStorage {
+  public readonly name: string = "CacheStorage";
+
   /**
    * 開いている `Cache` インスタンスを保持します。
    *
@@ -43,57 +58,25 @@ export default class CacheStorage implements IStorage {
    */
   readonly #cacheName: string;
 
-  // 注入された `CacheStorage` です。
-  // 未指定の場合は `globalThis.caches` を使います。
+  /**
+   * 論理キーを `Request` に変換する関数です。
+   */
+  readonly #toRequest: IToRequest;
+
+  /**
+   * 注入された `NativeCacheStorage` です。
+   */
   readonly #injectedCaches: NativeCacheStorage | undefined;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
    */
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
-   */
-  public constructor(cacheName: string = "unikvs", options: CacheStorageOptions = {}) {
-    const { caches } = options;
-    this.name = "CacheStorage";
+  public constructor(options: CacheStorageOptions) {
+    const { caches, cacheName, toRequest } = options;
     this.#cache = null;
     this.#cacheName = cacheName;
+    this.#toRequest = toRequest;
     this.#injectedCaches = caches;
-  }
-
-  // 使用する `CacheStorage` を解決します。
-  // 実行時の意味は `#injectedCaches ?? globalThis.caches` です。
-  #backend(): NativeCacheStorage {
-    const backend =
-      this.#injectedCaches ?? (globalThis as { caches?: NativeCacheStorage | undefined }).caches;
-
-    if (!backend) {
-      throw new CacheStorageNotAvailableError();
-    }
-
-    return backend;
-  }
-
-  // 論理キーを `Request` に変換します。
-  #toRequest(key: string): Request {
-    return new Request(BASE_URL + encodeURIComponent(key));
-  }
-
-  // 開いている `Cache` を返します。
-  // 未オープンのときは backend の有無に応じてエラーを投げ分けます。
-  #openedCache(): Cache {
-    const cache = this.#cache;
-
-    if (cache) {
-      return cache;
-    }
-
-    // backend 不在は利用不可として報告し、backend がある場合は未オープンの誤用として報告します。
-    this.#backend();
-
-    throw new TypeError("CacheStorage is not open. Call open() before use.");
   }
 
   public get isOpen(): boolean {
@@ -101,122 +84,113 @@ export default class CacheStorage implements IStorage {
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
-    c.signal.throwIfAborted();
+    using abortPromise = toAbortPromise(c.signal);
 
-    if (this.#cache) {
-      return;
+    const caches: NativeCacheStorage | null =
+      this.#injectedCaches ||
+      globalThis.caches ||
+      (typeof window !== "undefined" ? window.caches : null) ||
+      (typeof self !== "undefined" ? self.caches : null);
+    if (!caches) {
+      throw new CacheStorageNotAvailableError();
     }
 
-    const cache = await this.#backend().open(this.#cacheName);
-    c.signal.throwIfAborted();
-
-    // 中断時は開いたハンドルを公開せず、未オープン状態へ戻します。
-    this.#cache = cache;
+    this.#cache = await Promise.race([caches.open(this.#cacheName), abortPromise]);
   }
 
-  public async close(c: IStorage.CloseContext): Promise<void> {
-    c.signal.throwIfAborted();
-
+  public async close(): Promise<void> {
     this.#cache = null;
   }
 
-  public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    c.signal.throwIfAborted();
-
-    // 後から入力を書き換えても保存値が変わらないよう、バイト列を複製します。
-    const body = data instanceof Uint8Array ? data.slice() : data;
-    c.signal.throwIfAborted();
-    await this.#openedCache().put(
-      this.#toRequest(c.key),
-      new Response(body as BodyInit, {
-        headers: { "Content-Type": "application/octet-stream" },
-      }),
-    );
+  public async write(c: IStorage.WriteContext, response: Response): Promise<void> {
+    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const request = this.#toRequest(c.key);
+    await cache.put(request, response);
   }
 
-  public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
+  async #read(c: IKeyedActionContext): Promise<Response> {
+    using abortPromise = toAbortPromise(c.signal);
 
-    const response = await this.#openedCache().match(this.#toRequest(c.key));
-    c.signal.throwIfAborted();
-
-    if (response === undefined) {
+    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const request = this.#toRequest(c.key);
+    const response = await Promise.race([cache.match(request), abortPromise]);
+    if (!response) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
-    const buff = await response.arrayBuffer();
+    return response;
+  }
 
-    return new Uint8Array(buff);
+  public async read(c: IStorage.ReadContext): Promise<Response> {
+    return this.#read(c);
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    c.signal.throwIfAborted();
+    using abortPromise = toAbortPromise(c.signal);
 
-    const response = await this.#openedCache().match(this.#toRequest(c.key));
+    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const request = this.#toRequest(c.key);
+    const response = await Promise.race([cache.match(request), abortPromise]);
 
     return response !== undefined;
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    c.signal.throwIfAborted();
-
-    const deleted = await this.#openedCache().delete(this.#toRequest(c.key));
-
+    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const request = this.#toRequest(c.key);
+    const deleted = await cache.delete(request);
     if (!deleted) {
       throw new KeyNotFoundError({ key: c.key });
     }
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    c.signal.throwIfAborted();
+    using abortPromise = toAbortPromise(c.signal);
 
-    // このインスタンスは専用の `Cache` を使うため、列挙した要求をすべて削除します。
-    const cache = this.#openedCache();
-    const requests = await cache.keys();
-
+    // cache インスタンスは専用の `Cache` を使うため、列挙した要求をすべて削除します。
+    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const requests = await Promise.race([cache.keys(), abortPromise]);
     for (const request of requests) {
-      c.signal.throwIfAborted();
       await cache.delete(request);
+      throwIfAborted(c.signal);
     }
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
-    this.#openedCache();
-
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       write: (chunk) => {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
 
         if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
         }
 
         // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
         chunks.push(chunk.slice());
       },
       close: async () => {
-        // 保存は close のときだけ行うため、中断時はここまでのチャンクを破棄できます。
-        c.signal.throwIfAborted();
-
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        const result = new Uint8Array(totalLength);
-        let offset = 0;
+        const data = new Uint8Array(totalLength);
 
+        let offset = 0;
         for (const chunk of chunks) {
-          result.set(chunk, offset);
+          data.set(chunk, offset);
           offset += chunk.length;
         }
 
-        c.signal.throwIfAborted();
-        await this.#openedCache().put(
-          this.#toRequest(c.key),
-          new Response(result, {
-            headers: { "Content-Type": "application/octet-stream" },
-          }),
-        );
+        const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+        const request = this.#toRequest(c.key);
+        const response = new Response(data, {
+          headers: {
+            "Content-Type": "application/octet-stream",
+          },
+        });
+        await cache.put(request, response);
       },
       abort: () => {
         chunks.length = 0;
@@ -225,17 +199,14 @@ export default class CacheStorage implements IStorage {
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    c.signal.throwIfAborted();
-    this.#openedCache();
-
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: async (controller) => {
         try {
-          c.signal.throwIfAborted();
-          const data = await this.read(c as unknown as IStorage.ReadContext);
-          c.signal.throwIfAborted();
+          const response = await this.#read(c);
           // 読み手がチャンクを書き換えても保存値が変わらないよう、複製して送出します。
-          controller.enqueue(new Uint8Array(data));
+          const buff = await response.arrayBuffer();
+          const view = new Uint8Array(buff.slice());
+          controller.enqueue(view);
           controller.close();
         } catch (ex) {
           controller.error(ex);

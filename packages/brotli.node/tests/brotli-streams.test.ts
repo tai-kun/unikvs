@@ -12,7 +12,7 @@ import {
 } from "@unikvs/testing";
 import { describe, test } from "vitest";
 
-import Brotli from "../src/brotli.js";
+import Brotli, { type BrotliOptions } from "../src/brotli.js";
 
 type ByteEncodeStream = IMiddleware.EncodeStreamContext<
   Uint8Array<ArrayBuffer>,
@@ -26,8 +26,8 @@ type ByteDecodeStream = IMiddleware.DecodeStreamContext<
 /**
  * 開済みのターゲットを作成します。
  */
-async function createOpenedTarget(signal: AbortSignal): Promise<Brotli> {
-  const target = new Brotli();
+async function createOpenedTarget(signal: AbortSignal, options?: BrotliOptions): Promise<Brotli> {
+  const target = new Brotli(options);
   await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
 
   return target;
@@ -60,15 +60,6 @@ async function pumpDecode(
 }
 
 describe("ストリームによる変換", () => {
-  test("encodeStream と decodeStream を持つ", ({ expect }) => {
-    // 準備
-    const target = new Brotli();
-
-    // 実行と検証
-    expect(typeof target.encodeStream).toBe("function");
-    expect(typeof target.decodeStream).toBe("function");
-  });
-
   test("open 前に呼ぶと TypeError で拒否される", async ({ expect }) => {
     // 準備
     // 実装は open() で解決した実行環境を必須とするため、未 open の使用は TypeError になる。
@@ -84,6 +75,18 @@ describe("ストリームによる変換", () => {
     await expect(
       target.decodeStream(decodeContext as ByteDecodeStream, createNext()),
     ).rejects.toThrow(TypeError);
+  });
+
+  test("空のストリームを往復すると空のデータに戻る", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+
+    // 実行
+    const encoded = await pumpEncode(target, []);
+    const decoded = await pumpDecode(target, [encoded]);
+
+    // 検証
+    expect(decoded).toStrictEqual(new Uint8Array(0));
   });
 
   test("分割書き込みしてもストリームで往復できる", async ({ expect, signal }) => {
@@ -146,7 +149,7 @@ describe("ストリームによる変換", () => {
     expect(decoded).toStrictEqual(input);
   });
 
-  test("ストリームの出力チャンクは所有化されている", async ({ expect, signal }) => {
+  test("encodeStream の出力チャンクは所有化されている", async ({ expect, signal }) => {
     // 準備
     const target = await createOpenedTarget(signal);
     const input = createPseudoRandomBytes(256, 24);
@@ -164,5 +167,91 @@ describe("ストリームによる変換", () => {
       expect(output.byteOffset).toBe(0);
       expect(output.byteLength).toBe(output.buffer.byteLength);
     }
+  });
+
+  test("decodeStream の出力チャンクは所有化されている", async ({ expect, signal }) => {
+    // 準備
+    const target = await createOpenedTarget(signal);
+    const input = createPseudoRandomBytes(256, 25);
+    const encoded = await pumpEncode(target, [input]);
+    const c = createDecodeStreamContext(sourceFrom([encoded]));
+    await target.decodeStream(c as ByteDecodeStream, createNext());
+
+    // 実行
+    const outputs = await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>);
+
+    // 検証
+    expect(outputs.length).toBeGreaterThan(0);
+
+    for (const output of outputs) {
+      expect(output.buffer).toBeInstanceOf(ArrayBuffer);
+      expect(output.byteOffset).toBe(0);
+      expect(output.byteLength).toBe(output.buffer.byteLength);
+    }
+
+    expect(concatBytes(outputs)).toStrictEqual(input);
+  });
+
+  test("level が高いほどストリームの圧縮結果が小さくなる", async ({ expect, signal }) => {
+    // 準備
+    const input = new TextEncoder().encode(
+      "Repeat this text multiple times to ensure compression efficiency. ".repeat(100),
+    );
+    const low = await createOpenedTarget(signal, { level: 0 });
+    const high = await createOpenedTarget(signal, { level: 11 });
+
+    // 実行
+    const lowEncoded = await pumpEncode(low, [input]);
+    const highEncoded = await pumpEncode(high, [input]);
+
+    // 検証
+    expect(highEncoded.byteLength).toBeLessThan(lowEncoded.byteLength);
+  });
+
+  describe("ミドルウェア連鎖", () => {
+    test("encodeStream と decodeStream は変換結果を設定してから next を1回呼ぶ", async ({
+      expect,
+      signal,
+    }) => {
+      // 準備
+      const target = await createOpenedTarget(signal);
+      const input = createPseudoRandomBytes(128, 26);
+      const encodeContext = createEncodeStreamContext(sourceFrom([input]));
+      let encodeNextCalls = 0;
+      let encodedAtNext: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
+
+      // 実行
+      await target.encodeStream(encodeContext as ByteEncodeStream, async () => {
+        encodeNextCalls += 1;
+        encodedAtNext = encodeContext.destination;
+      });
+
+      // 検証
+      expect(encodeNextCalls).toBe(1);
+      expect(encodedAtNext).toBeInstanceOf(ReadableStream);
+
+      // 準備
+      const encoded = concatBytes(
+        await readAll(encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+      );
+      const decodeContext = createDecodeStreamContext(sourceFrom([encoded]));
+      let decodeNextCalls = 0;
+      let decodedAtNext: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
+
+      // 実行
+      await target.decodeStream(decodeContext as ByteDecodeStream, async () => {
+        decodeNextCalls += 1;
+        decodedAtNext = decodeContext.destination;
+      });
+
+      // 検証
+      expect(decodeNextCalls).toBe(1);
+      expect(decodedAtNext).toBeInstanceOf(ReadableStream);
+      expect(
+        concatBytes(
+          await readAll(decodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+        ),
+      ).toStrictEqual(input);
+    });
   });
 });

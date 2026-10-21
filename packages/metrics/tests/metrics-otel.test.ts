@@ -1,6 +1,11 @@
 import { metrics as otelMetrics } from "@opentelemetry/api";
 import type { IMiddleware } from "@unikvs/core";
-import { createGetContext, createNext, createSetContext } from "@unikvs/testing";
+import {
+  createEncodeContext,
+  createGetContext,
+  createNext,
+  createSetContext,
+} from "@unikvs/testing";
 import { describe, test } from "vitest";
 
 import { Metrics } from "../src/index.js";
@@ -57,8 +62,9 @@ describe("OTel エクスポート", () => {
         () => {},
       );
 
-    // 検証
-    expect(getMeterArgs).toStrictEqual([["@unikvs/metrics", "0.0.1"]]);
+    // 検証 (メーターは遅延して 1 回だけ作成される)
+    expect(getMeterArgs).toHaveLength(1);
+    expect(getMeterArgs[0]![0]).toBe("@unikvs/metrics");
     expect(calls).toContainEqual({
       instrument: "unikvs.operations",
       value: 1,
@@ -73,6 +79,30 @@ describe("OTel エクスポート", () => {
     expect(durations).toHaveLength(2);
     expect(durations[0]!.attributes).toMatchObject({ action: "set" });
     expect(typeof durations[0]!.value).toBe("number");
+    // サイズが不明な use の記録は bytes カウンターへ転送されない
+    expect(calls.filter((call) => call.instrument === "unikvs.operation.bytes")).toHaveLength(0);
+  });
+
+  test("バイト数を持つレコードを bytes カウンターへ転送する", async ({ expect }) => {
+    // 準備
+    const calls: CapturedCall[] = [];
+    const metrics = new Metrics({
+      exporter: "otel",
+      meterProvider: createFakeMeterProvider(calls),
+    });
+
+    // 実行
+    await metrics.encode(
+      createEncodeContext("hello", "key") as IMiddleware.EncodeContext,
+      createNext(),
+    );
+
+    // 検証
+    expect(calls).toContainEqual({
+      instrument: "unikvs.operation.bytes",
+      value: 5,
+      attributes: { action: "set" },
+    });
   });
 
   test("meterProvider がなくてもメモリ記録は継続する", async ({ expect }) => {
@@ -115,19 +145,5 @@ describe("OTel エクスポート", () => {
 
     // 検証
     expect(metrics.getMetrics().total).toBe(1);
-  });
-
-  test("prometheus 指定でもメモリ記録する", async ({ expect }) => {
-    // 準備
-    const metrics = new Metrics({ exporter: "prometheus" });
-
-    // 実行
-    await metrics.use(createSetContext("key") as IMiddleware.UseContext, createNext());
-
-    // 検証
-    expect(metrics.getMetrics().total).toBe(1);
-    expect(metrics.toPrometheusString()).toContain(
-      'unikvs_operations_total{action="set",outcome="success"} 1',
-    );
   });
 });

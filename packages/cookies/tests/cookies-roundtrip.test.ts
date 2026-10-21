@@ -49,15 +49,31 @@ describe("文字列の往復", () => {
     expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe("v2");
   });
 
+  test("文字列値は s: マーカーと URL エンコードを付けて保存する", ({ expect }) => {
+    // 準備
+    const store = createFakeCookieStore();
+    const storage = new Cookies({ store });
+    const value = "x;y=z %あ";
+
+    // 実行
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, value);
+
+    // 検証
+    expect(store.setCalls[0]?.value).toBe(encodeURIComponent(`s:${value}`));
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(value);
+  });
+
   test("区切り文字を含むキーを符号化して扱える", ({ expect }) => {
     // 準備
-    const storage = new Cookies({ store: createFakeCookieStore() });
+    const store = createFakeCookieStore();
+    const storage = new Cookies({ store });
     const key = "a b;=c";
 
     // 実行
     storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v");
 
     // 検証
+    expect(store.setCalls[0]?.name).toBe(encodeURIComponent(key));
     expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe("v");
     expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(true);
   });
@@ -84,6 +100,20 @@ describe("文字列の往復", () => {
 });
 
 describe("バイト列の往復", () => {
+  test("バイト列は b: マーカーと Base64 を付けて保存する", ({ expect }) => {
+    // 準備
+    const store = createFakeCookieStore();
+    const storage = new Cookies({ store });
+    const data = new Uint8Array([0, 1, 2, 255]);
+
+    // 実行
+    storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, data);
+
+    // 検証
+    expect(store.setCalls[0]?.value).toBe(encodeURIComponent("b:AAEC/w=="));
+    expect(storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toEqual(data);
+  });
+
   test("書き込んだ Uint8Array を読み戻せる", ({ expect, storage }) => {
     // 準備
     const data = new Uint8Array([0, 1, 2, 255, 128]);

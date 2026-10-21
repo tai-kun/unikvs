@@ -103,14 +103,8 @@ describe("clear", () => {
     // 検証
     expect(client.store.size).toBe(0);
     const listCalls = client.calls.filter((call) => call.operation === "list");
-    expect(listCalls.map((call) => call.operation)).toStrictEqual(["list", "list", "list"]);
-    const delCalls = client.calls.filter((call) => call.operation === "del");
-
-    if (delCalls[0]?.operation !== "del") {
-      throw new Error("del の呼び出し記録がありません");
-    }
-
-    const deleted = delCalls.flatMap((call) =>
+    expect(listCalls).toHaveLength(3);
+    const deleted = client.calls.flatMap((call) =>
       call.operation === "del" ? [...call.pathnames] : [],
     );
     expect(deleted.sort()).toStrictEqual(["k0", "k1", "k2", "k3", "k4"]);

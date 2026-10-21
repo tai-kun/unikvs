@@ -129,17 +129,18 @@ describe("バイナリーの往復", () => {
     ).toStrictEqual(new Uint8Array([9]));
   });
 
-  test("書き込み後に元の配列を変更しても保存値は変わらない", async ({ expect }) => {
+  test("書き込み中に元の配列を変更しても保存値は変わらない", async ({ expect }) => {
     // 準備
     const { storage } = setup();
     const data = new Uint8Array([1, 2, 3]);
 
     // 実行
-    await storage.write(
+    const pending = storage.write(
       createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
       data,
     );
     data[0] = 99;
+    await pending;
 
     // 検証
     expect(
@@ -253,24 +254,41 @@ describe("欠番の読み取り", () => {
   });
 });
 
-describe("削除の冪等性", () => {
-  test("削除済みのキーを再度削除しても成功する", async ({ expect }) => {
+describe("キー空間の分離", () => {
+  test("keyPrefix を指定したとき、write した値を read・exists・delete できる", async ({
+    expect,
+  }) => {
     // 準備
-    const { storage } = setup();
+    const client = createFakeClient();
+    const { fetch } = createFakeDownload(client.store);
+    const storage = new VercelBlob({ client, fetch, keyPrefix: "app/" });
+
+    // 実行
     await storage.write(
       createSetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
-      new Uint8Array([1]),
+      new Uint8Array([1, 2, 3]),
     );
+
+    // 検証
+    expect([...client.store.keys()]).toStrictEqual(["app/k1"]);
+    expect(
+      await storage.read(
+        createGetContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+      ),
+    ).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(
+      await storage.exists(
+        createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      ),
+    ).toBe(true);
+
+    // 実行
     await storage.delete(
       createDeleteContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
     );
 
-    // 実行と検証
-    await expect(
-      storage.delete(
-        createDeleteContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
-      ),
-    ).resolves.toBeUndefined();
+    // 検証
+    expect([...client.store.keys()]).toStrictEqual([]);
     expect(
       await storage.exists(
         createHasContext("k1", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,

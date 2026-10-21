@@ -19,9 +19,16 @@ export type PutRecord = {
 export class FakeKVNamespace implements KVNamespaceLike {
   readonly store = new Map<string, ArrayBuffer>();
 
+  readonly gets: string[] = [];
+
   readonly puts: PutRecord[] = [];
 
   readonly deletes: string[] = [];
+
+  readonly lists: {
+    readonly prefix?: string | undefined;
+    readonly cursor?: string | undefined;
+  }[] = [];
 
   public pageSize = 1_000;
 
@@ -29,6 +36,8 @@ export class FakeKVNamespace implements KVNamespaceLike {
     key: string,
     _type: "arrayBuffer" | { readonly type: "arrayBuffer" },
   ): Promise<ArrayBuffer | null> {
+    this.gets.push(key);
+
     const found = this.store.get(key);
 
     if (found === undefined) {
@@ -56,6 +65,8 @@ export class FakeKVNamespace implements KVNamespaceLike {
     readonly prefix?: string | undefined;
     readonly cursor?: string | undefined;
   }): Promise<KVNamespaceListResult> {
+    this.lists.push({ ...options });
+
     const prefix = options?.prefix ?? "";
     const names = [...this.store.keys()].filter((name) => name.startsWith(prefix)).sort();
     const start = options?.cursor === undefined ? 0 : Number(options.cursor);

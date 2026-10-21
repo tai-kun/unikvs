@@ -3,6 +3,7 @@ import {
   createClearContext,
   createDeleteContext,
   createGetContext,
+  createHasContext,
   createSetContext,
 } from "@unikvs/testing";
 import { describe, test } from "vitest";
@@ -28,7 +29,7 @@ describe.skipIf(!token)("Vercel Blob 実体との往復", () => {
       // 検証
       expect(
         await storage.exists(
-          createGetContext("live", {
+          createHasContext("live", {
             signal: AbortSignal.timeout(30_000),
           }) as IStorage.ExistsContext,
         ),
@@ -70,7 +71,7 @@ describe.skipIf(!token)("Vercel Blob 実体との往復", () => {
     // 検証
     expect(
       await storage.exists(
-        createGetContext("a", {
+        createHasContext("a", {
           signal: AbortSignal.timeout(30_000),
         }) as IStorage.ExistsContext,
       ),

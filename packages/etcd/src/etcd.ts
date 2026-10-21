@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { Etcd3 } from "etcd3";
 
 import { InvalidEndpointsError, InvalidLeaseTtlError } from "./errors.js";
@@ -362,7 +363,7 @@ export default class Etcd implements IStorage {
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // etcd の値はバイト列で扱い、`Buffer` 経由で透過させます (redis 方式)。
     await client.put(this.#toKey(c.key), Buffer.from(data), this.#putOptions());
@@ -371,9 +372,10 @@ export default class Etcd implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const data = await client.get(this.#toKey(c.key));
+    const data = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
     if (data === null || data === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -384,9 +386,10 @@ export default class Etcd implements IStorage {
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
-    const data = await client.get(this.#toKey(c.key));
+    const data = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
 
     return data !== null && data !== undefined;
   }
@@ -394,7 +397,7 @@ export default class Etcd implements IStorage {
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     // 存在しないキーの削除は成功扱いです (redis の `del` と同じ)。
     await client.delete(this.#toKey(c.key));
@@ -403,7 +406,8 @@ export default class Etcd implements IStorage {
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
 
     // 接頭辞配下だけを削除し、名前空間外には触れません。
     if (client.deletePrefix !== undefined) {
@@ -411,9 +415,9 @@ export default class Etcd implements IStorage {
       return;
     }
 
-    const keys = collectKeys(await client.getAll(this.#prefix));
+    const keys = collectKeys(await Promise.race([client.getAll(this.#prefix), abortPromise]));
     for (const key of keys) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
 
       // `getAll` の実装差で範囲外が混ざっても、接頭辞外は削除しません。
       if (key.startsWith(this.#prefix)) {
@@ -425,7 +429,7 @@ export default class Etcd implements IStorage {
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const dest = this.#toKey(c.key);
     const options = this.#putOptions();
@@ -434,11 +438,12 @@ export default class Etcd implements IStorage {
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       write(chunk) {
-        c.signal.throwIfAborted();
-        chunks.push(chunk);
+        throwIfAborted(c.signal);
+        // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
+        chunks.push(chunk.slice());
       },
       async close() {
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
 
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
@@ -460,7 +465,7 @@ export default class Etcd implements IStorage {
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#con!;
 
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const dest = this.#toKey(c.key);
     const key = c.key;
@@ -475,9 +480,10 @@ export default class Etcd implements IStorage {
         }
 
         sent = true;
-        c.signal.throwIfAborted();
+        throwIfAborted(c.signal);
+        using abortPromise = toAbortPromise(c.signal);
 
-        const data = await client.get(dest);
+        const data = await Promise.race([client.get(dest), abortPromise]);
         if (data === null || data === undefined) {
           throw new KeyNotFoundError({ key });
         }

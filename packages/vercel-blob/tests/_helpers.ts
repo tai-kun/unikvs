@@ -93,6 +93,9 @@ export function createFakeClient(options: FakeBlobClientOptions = {}): FakeBlobC
         throw error;
       }
 
+      // 実際のアップロードと同様に、本文の複製を非同期に行います。
+      // 呼び出し元が送信中の配列を変更しても、保存値に影響しないことを検証できます。
+      await Promise.resolve();
       store.set(pathname, body.slice());
 
       return { url: toFakeUrl(pathname), pathname };
@@ -120,17 +123,9 @@ export function createFakeClient(options: FakeBlobClientOptions = {}): FakeBlobC
         throw error;
       }
 
-      let deleted = 0;
-
+      // 実 API の del は存在しない pathname でも成功するため、単に無視します。
       for (const target of pathnames) {
-        if (store.delete(target)) {
-          deleted += 1;
-        }
-      }
-
-      // 削除は冪等とし存在しない pathname のみは欠番扱いにします。
-      if (deleted === 0 && pathnames.length > 0) {
-        throw createBlobNotFoundError();
+        store.delete(target);
       }
     },
     list: async (listOptions): Promise<BlobListResult> => {

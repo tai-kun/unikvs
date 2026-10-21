@@ -1,4 +1,5 @@
 import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { throwIfAborted } from "abort-signal-utils";
 
 import { CookieNotAvailableError, CookieTooLargeError } from "./errors.js";
 
@@ -286,16 +287,16 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   }
 
   public open(c: IStorage.OpenContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
     this.#backend();
   }
 
   public close(c: IStorage.CloseContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
   }
 
   public write(c: IStorage.WriteContext, data: string | Uint8Array): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const { payload, rawSize } = this.#encode(data);
 
@@ -311,7 +312,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   }
 
   public read(c: IStorage.ReadContext): string | Uint8Array {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const found = this.#backend().get(this.#toRealKey(c.key));
 
@@ -323,13 +324,13 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   }
 
   public exists(c: IStorage.ExistsContext): boolean {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     return this.#backend().get(this.#toRealKey(c.key)) !== undefined;
   }
 
   public delete(c: IStorage.DeleteContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const backend = this.#backend();
     const realKey = this.#toRealKey(c.key);
@@ -342,13 +343,13 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   }
 
   public clear(c: IStorage.ClearContext): void {
-    c.signal.throwIfAborted();
+    throwIfAborted(c.signal);
 
     const backend = this.#backend();
     const targets = [...backend.keys()];
 
     for (const target of targets) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       backend.delete(target, this.#cookieAttributes);
     }
   }

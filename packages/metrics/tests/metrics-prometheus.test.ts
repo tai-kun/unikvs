@@ -24,6 +24,22 @@ describe("Prometheus 形式", () => {
     expect(text).not.toContain("unikvs_operations_total{");
   });
 
+  test("exporter に prometheus を指定すると記録を公開用テキストへ出力できる", async ({
+    expect,
+  }) => {
+    // 準備
+    const metrics = new Metrics({ exporter: "prometheus" });
+
+    // 実行
+    await metrics.use(createSetContext("key") as IMiddleware.UseContext, createNext());
+
+    // 検証
+    expect(metrics.getMetrics().total).toBe(1);
+    expect(metrics.toPrometheusString()).toContain(
+      'unikvs_operations_total{action="set",outcome="success"} 1',
+    );
+  });
+
   test("操作数と成否を action/outcome 別に出力する", async ({ expect }) => {
     // 準備
     const metrics = new Metrics();

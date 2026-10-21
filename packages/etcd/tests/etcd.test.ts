@@ -13,7 +13,7 @@ import {
   createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import Etcd from "../src/etcd.js";
@@ -24,6 +24,24 @@ describe("初期化と接続管理", () => {
     const { storage } = await createStorage();
     try {
       expect(storage.name).toBe("Etcd");
+    } finally {
+      await closeStorage(storage);
+    }
+  });
+
+  test("既定の keyPrefix は unikvs: である", async () => {
+    const client = new FakeEtcdClient();
+    const storage = new Etcd({ client });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+    try {
+      await storage.write(
+        createSetContext("default-prefix.bin", {
+          signal: new AbortController().signal,
+        }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+
+      expect([...client.store.keys()]).toStrictEqual(["unikvs:default-prefix.bin"]);
     } finally {
       await closeStorage(storage);
     }
@@ -50,6 +68,15 @@ describe("初期化と接続管理", () => {
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
     expect(storage.isOpen).toBe(false);
+  });
+
+  test("注入したクライアントは close しても破棄されない", async () => {
+    const { client, storage } = await createStorage();
+
+    await storage.close(createCloseContext() as IStorage.CloseContext);
+
+    expect(storage.isOpen).toBe(false);
+    expect(client.closeCalls).toBe(0);
   });
 
   test("close を 2 回呼び出すと 2 回目は TypeError で拒否される", async () => {
@@ -139,8 +166,10 @@ describe("初期化と接続管理", () => {
   });
 
   test("プレフィックスが異なるインスタンスは同じキーを共有しない", async () => {
-    const first = await createStorage();
-    const second = await createStorage();
+    // 同じバックエンドを共有し、キー空間の分離だけを検証する。
+    const client = new FakeEtcdClient();
+    const first = await createStorage({ client });
+    const second = await createStorage({ client });
     try {
       await first.storage.write(
         createSetContext("isolated.bin", { signal: first.signal }) as IStorage.WriteContext,
@@ -152,6 +181,11 @@ describe("初期化と接続管理", () => {
           createHasContext("isolated.bin", { signal: second.signal }) as IStorage.ExistsContext,
         ),
       ).resolves.toBe(false);
+      await expect(
+        first.storage.exists(
+          createHasContext("isolated.bin", { signal: first.signal }) as IStorage.ExistsContext,
+        ),
+      ).resolves.toBe(true);
     } finally {
       await closeStorage(first.storage);
       await closeStorage(second.storage);
@@ -159,15 +193,19 @@ describe("初期化と接続管理", () => {
   });
 
   test("namespace が異なると同じ keyPrefix でも分離される", async () => {
+    // 同じバックエンドを共有し、namespace と keyPrefix の連結結果を検証する。
+    const client = new FakeEtcdClient();
     const keyPrefix = `unikvs-test-${crypto.randomUUID()}:`;
-    const first = await createStorage({ keyPrefix, namespace: "tenant-a/" });
-    const second = await createStorage({ keyPrefix, namespace: "tenant-b/" });
+    const first = await createStorage({ client, keyPrefix, namespace: "tenant-a/" });
+    const second = await createStorage({ client, keyPrefix, namespace: "tenant-b/" });
     try {
       await first.storage.write(
         createSetContext("config.json", { signal: first.signal }) as IStorage.WriteContext,
         new Uint8Array([1]),
       );
 
+      expect(client.store.has(`tenant-a/${keyPrefix}config.json`)).toBe(true);
+      expect(client.store.has(`tenant-b/${keyPrefix}config.json`)).toBe(false);
       await expect(
         second.storage.exists(
           createHasContext("config.json", { signal: second.signal }) as IStorage.ExistsContext,
@@ -266,6 +304,23 @@ describe("基本操作 (CRUD)", () => {
     }
   });
 
+  test("クライアントの取得エラーは KeyNotFoundError に変換されずに伝播する", async () => {
+    const { client, signal, storage } = await createStorage();
+    const failure = new Error("etcd unavailable");
+    const spy = vi.spyOn(client, "get").mockRejectedValue(failure);
+    try {
+      await expect(
+        storage.read(createGetContext("unavailable.bin", { signal }) as IStorage.ReadContext),
+      ).rejects.toBe(failure);
+      await expect(
+        storage.exists(createHasContext("unavailable.bin", { signal }) as IStorage.ExistsContext),
+      ).rejects.toBe(failure);
+    } finally {
+      spy.mockRestore();
+      await closeStorage(storage);
+    }
+  });
+
   test("削除を 2 回行っても 2 回目はエラーにならない", async () => {
     const { signal, storage } = await createStorage();
     try {
@@ -339,19 +394,40 @@ describe("基本操作 (CRUD)", () => {
     }
   });
 
-  test("clear は deletePrefix を使って接頭辞削除する", async () => {
-    const { client, signal, storage } = await createStorage();
+  test("clear は名前空間を含む接頭辞だけを deletePrefix に渡す", async () => {
+    // 同じバックエンドを共有し、clear が他の名前空間へ波及しないことを検証する。
+    const client = new FakeEtcdClient();
+    const keyPrefix = "unikvs-test:";
+    const first = await createStorage({ client, keyPrefix, namespace: "tenant-a/" });
+    const second = await createStorage({ client, keyPrefix, namespace: "tenant-b/" });
     try {
-      await storage.write(
-        createSetContext("a.bin", { signal }) as IStorage.WriteContext,
+      await first.storage.write(
+        createSetContext("a.bin", { signal: first.signal }) as IStorage.WriteContext,
         new Uint8Array([1]),
       );
+      await second.storage.write(
+        createSetContext("b.bin", { signal: second.signal }) as IStorage.WriteContext,
+        new Uint8Array([2]),
+      );
 
-      await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+      await first.storage.clear(
+        createClearContext("", { signal: first.signal }) as IStorage.ClearContext,
+      );
 
-      expect(client.deletedPrefixes).toHaveLength(1);
+      expect(client.deletedPrefixes).toStrictEqual([`tenant-a/${keyPrefix}`]);
+      await expect(
+        first.storage.exists(
+          createHasContext("a.bin", { signal: first.signal }) as IStorage.ExistsContext,
+        ),
+      ).resolves.toBe(false);
+      await expect(
+        second.storage.read(
+          createGetContext("b.bin", { signal: second.signal }) as IStorage.ReadContext,
+        ),
+      ).resolves.toStrictEqual(new Uint8Array([2]));
     } finally {
-      await closeStorage(storage);
+      await closeStorage(first.storage);
+      await closeStorage(second.storage);
     }
   });
 
@@ -380,26 +456,13 @@ describe("基本操作 (CRUD)", () => {
         ),
       ).resolves.toBe(false);
       await expect(
+        storage.exists(
+          createHasContext("before-clear-2.bin", { signal }) as IStorage.ExistsContext,
+        ),
+      ).resolves.toBe(false);
+      await expect(
         storage.read(createGetContext("after-clear.bin", { signal }) as IStorage.ReadContext),
       ).resolves.toStrictEqual(new Uint8Array([3]));
-    } finally {
-      await closeStorage(storage);
-    }
-  });
-
-  test("clear の後に同じキー空間を引き続き使用できる", async () => {
-    const { signal, storage } = await createStorage({ supportsDeletePrefix: false });
-    try {
-      await storage.write(
-        createSetContext("before.bin", { signal }) as IStorage.WriteContext,
-        new Uint8Array([1]),
-      );
-
-      await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
-
-      await expect(
-        storage.exists(createHasContext("before.bin", { signal }) as IStorage.ExistsContext),
-      ).resolves.toBe(false);
     } finally {
       await closeStorage(storage);
     }
@@ -509,6 +572,28 @@ describe("ストリーム操作", () => {
           createHasContext("aborted-stream.bin", { signal }) as IStorage.ExistsContext,
         ),
       ).resolves.toBe(false);
+    } finally {
+      await closeStorage(storage);
+    }
+  });
+
+  test("getWritable は close 前の中断では put しない", async () => {
+    const { client, storage } = await createStorage();
+    const controller = new AbortController();
+    const reason = new Error("close 前の中断");
+    try {
+      const writable = storage.getWritable(
+        createSetContext("aborted-before-close.bin", {
+          signal: controller.signal,
+        }) as IStorage.GetWritableContext,
+      );
+      const writer = writable.getWriter();
+      await writer.write(new Uint8Array([1, 2, 3]));
+
+      controller.abort(reason);
+
+      await expect(writer.close()).rejects.toBe(reason);
+      expect(client.puts).toHaveLength(0);
     } finally {
       await closeStorage(storage);
     }

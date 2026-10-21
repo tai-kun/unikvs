@@ -98,6 +98,54 @@ describe("ストリーム API の提供", () => {
     ).rejects.toThrow(TypeError);
   });
 
+  describe("ミドルウェア連鎖", () => {
+    test("encodeStream と decodeStream は変換結果を設定してから next を1回呼ぶ", async ({
+      expect,
+      signal,
+    }) => {
+      // 準備
+      const target = new BrotliBun();
+      await openTarget(target, signal);
+      const input = createPseudoRandomBytes(128, 61);
+      const encodeContext = createEncodeStreamContext(sourceFrom([input]));
+      let encodeNextCalls = 0;
+      let encodedAtNext: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
+
+      // 実行
+      await target.encodeStream(encodeContext as ByteEncodeStream, async () => {
+        encodeNextCalls += 1;
+        encodedAtNext = encodeContext.destination;
+      });
+
+      // 検証
+      expect(encodeNextCalls).toBe(1);
+      expect(encodedAtNext).toBeInstanceOf(ReadableStream);
+
+      // 準備
+      const encoded = concatBytes(
+        await readAll(encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+      );
+      const decodeContext = createDecodeStreamContext(sourceFrom([encoded]));
+      let decodeNextCalls = 0;
+      let decodedAtNext: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
+
+      // 実行
+      await target.decodeStream(decodeContext as ByteDecodeStream, async () => {
+        decodeNextCalls += 1;
+        decodedAtNext = decodeContext.destination;
+      });
+
+      // 検証
+      expect(decodeNextCalls).toBe(1);
+      expect(decodedAtNext).toBeInstanceOf(ReadableStream);
+      expect(
+        concatBytes(
+          await readAll(decodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>),
+        ),
+      ).toStrictEqual(input);
+    });
+  });
+
   test("分割書き込みしてもストリームで往復できる", async ({ expect, signal }) => {
     // 準備
     const target = new BrotliBun();
@@ -168,7 +216,7 @@ describe("ストリーム API の提供", () => {
     expect(decoded).toStrictEqual(input);
   });
 
-  test("ストリームの出力チャンクは所有化されている", async ({ expect, signal }) => {
+  test("encodeStream の出力チャンクは所有化されている", async ({ expect, signal }) => {
     // 準備
     const target = new BrotliBun();
     await openTarget(target, signal);
@@ -187,6 +235,30 @@ describe("ストリーム API の提供", () => {
       expect(output.byteOffset).toBe(0);
       expect(output.byteLength).toBe(output.buffer.byteLength);
     }
+  });
+
+  test("decodeStream の出力チャンクは所有化されている", async ({ expect, signal }) => {
+    // 準備
+    const target = new BrotliBun();
+    await openTarget(target, signal);
+    const input = createPseudoRandomBytes(256, 37);
+    const encoded = await pumpEncode(target, [input]);
+    const c = createDecodeStreamContext(sourceFrom([encoded]));
+    await target.decodeStream(c as ByteDecodeStream, createNext());
+
+    // 実行
+    const outputs = await readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>);
+
+    // 検証
+    expect(outputs.length).toBeGreaterThan(0);
+
+    for (const output of outputs) {
+      expect(output.buffer).toBeInstanceOf(ArrayBuffer);
+      expect(output.byteOffset).toBe(0);
+      expect(output.byteLength).toBe(output.buffer.byteLength);
+    }
+
+    expect(concatBytes(outputs)).toStrictEqual(input);
   });
 
   test("1 MiB を細切れに書き込んでもストリームで往復できる", async ({ expect, signal }) => {
@@ -220,14 +292,37 @@ describe("ストリーム API の提供", () => {
     expect(decodedHigh).toStrictEqual(input);
   });
 
+  test("level が高いほどストリームの圧縮結果が小さくなる", async ({ expect, signal }) => {
+    // 準備
+    const input = new TextEncoder().encode(
+      "Repeat this text multiple times to ensure compression efficiency. ".repeat(100),
+    );
+    const low = new BrotliBun({ level: 0 });
+    const high = new BrotliBun({ level: 11 });
+    await openTarget(low, signal);
+    await openTarget(high, signal);
+
+    // 実行
+    const lowEncoded = await pumpEncode(low, [input]);
+    const highEncoded = await pumpEncode(high, [input]);
+
+    // 検証
+    expect(highEncoded.byteLength).toBeLessThan(lowEncoded.byteLength);
+  });
+
   test("壊れたデータを流すと decodeStream 側の読み取りで拒否される", async ({ expect, signal }) => {
     // 準備
     const target = new BrotliBun();
     await openTarget(target, signal);
     const garbage = createPseudoRandomBytes(64, 42);
+    const c = createDecodeStreamContext(sourceFrom([garbage]));
 
-    // 実行と検証
-    // 実装は展開失敗を専用エラーで包まず上流エラーをそのまま伝搬するため、汎用エラーを検証する。
-    await expect(pumpDecode(target, [garbage])).rejects.toThrow(Error);
+    // 実行
+    await target.decodeStream(c as ByteDecodeStream, createNext());
+    const reading = readAll(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>);
+
+    // 検証
+    // 実装は変換の設定時ではなく読み取り時に上流エラーをそのまま伝搬するため、汎用エラーを検証する。
+    await expect(reading).rejects.toThrow(Error);
   });
 });

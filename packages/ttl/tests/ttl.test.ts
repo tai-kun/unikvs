@@ -8,7 +8,6 @@ import {
   createEncodeStreamContext,
   createGetContext,
   createHasContext,
-  createMapKeyContext,
   createNext,
   createSetContext,
   createStreamContext,
@@ -115,6 +114,18 @@ describe("encode の透過と付与", () => {
     });
   });
 
+  test("defaultTtl の相対秒数は書き込み時点から数える", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: () => now, defaultTtl: 60 });
+    now += 5_000;
+
+    expect(await encode(ttl, "hello", "k")).toStrictEqual({
+      "@unikvs/ttl": 1,
+      expiresAt: NOW + 65_000,
+      data: "hello",
+    });
+  });
+
   test("書き込みごとの ttl 変数が defaultTtl に優先する", async ({ expect }) => {
     const ttl = createTtl(() => NOW, 60);
     const destination = await encode(ttl, "hello", "k", [["ttl", 10]]);
@@ -149,6 +160,14 @@ describe("encode の透過と付与", () => {
       data: "v",
     });
     expect(await encode(ttl, "v", "b", [["@unikvs/ttl:expiresAt", new Date(at)]])).toStrictEqual({
+      "@unikvs/ttl": 1,
+      expiresAt: at,
+      data: "v",
+    });
+    // 書き込みごとの絶対時刻は defaultTtl より優先されます。
+    const withDefault = createTtl(() => NOW, 60);
+
+    expect(await encode(withDefault, "v", "c", [["expiresAt", at]])).toStrictEqual({
       "@unikvs/ttl": 1,
       expiresAt: at,
       data: "v",
@@ -262,14 +281,20 @@ describe("encode の透過と付与", () => {
     expect((circularError as Error).message).toContain("Invalid TTL value [object Object]");
   });
 
-  test("TTL なしの上書きではエンベロープを付けない", async ({ expect }) => {
-    const ttl = createTtl(() => NOW, 60);
-    await encode(ttl, "old", "k");
-    const plain = new Ttl();
+  test("TTL なしの上書きでは記録を消して透過する", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: () => now });
+    await encode(ttl, "old", "k", [["ttl", 60]]);
+
     const c = createEncodeContext("new", "k");
-    await plain.encode(c as IMiddleware.EncodeContext, createNext());
+    await ttl.encode(c as IMiddleware.EncodeContext, createNext());
 
     expect(c.destination).toBe("new");
+
+    // 以前の期限を引き継ぐと、この読み取りは KeyNotFoundError になります。
+    now = NOW + 120_000;
+
+    expect(await decode(ttl, "new", "k")).toBe("new");
   });
 });
 
@@ -328,21 +353,33 @@ describe("decode の透過と失効", () => {
     await expect(decode(createTtl(), stored, "k")).rejects.toThrowError(KeyNotFoundError);
   });
 
-  test("期限切れ後は記録が消え、再書き込みなしでは透過する", async ({ expect }) => {
-    const ttl = createTtl(() => NOW, 60);
+  test("期限切れの decode は記録を破棄する", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: () => now, defaultTtl: 60 });
     const stored = await encode(ttl, "v", "k");
-    const expired = createTtl(() => NOW + 61_000);
+    now = NOW + 61_000;
 
-    await expect(decode(expired, stored, "k")).rejects.toThrowError(KeyNotFoundError);
+    await expect(decode(ttl, stored, "k")).rejects.toThrowError(KeyNotFoundError);
     // 記録は消えているため、生データは透過する (ストレージ直書きの復旧経路)。
-    expect(await decode(expired, "raw", "k")).toBe("raw");
+    expect(await decode(ttl, "raw", "k")).toBe("raw");
   });
 
   test("エンベロープに似た利用者データは透過する", async ({ expect }) => {
     const ttl = createTtl();
-    const lookalike = { "@unikvs/ttl": 1, expiresAt: NOW };
+    const lookalikes = [
+      // data がない。
+      { "@unikvs/ttl": 1, expiresAt: NOW },
+      // 版数が異なる。
+      { "@unikvs/ttl": 2, expiresAt: NOW, data: "x" },
+      // expiresAt が数値でない。
+      { "@unikvs/ttl": 1, expiresAt: "later", data: "x" },
+      // 余分なプロパティーがある。
+      { "@unikvs/ttl": 1, expiresAt: NOW, data: "x", extra: true },
+    ];
 
-    expect(await decode(ttl, lookalike, "k")).toBe(lookalike);
+    for (const lookalike of lookalikes) {
+      expect(await decode(ttl, lookalike, "k")).toBe(lookalike);
+    }
   });
 });
 
@@ -451,55 +488,75 @@ describe("ストリームの付与と失効", () => {
 });
 
 describe("use と mapKey による失効の先取り", () => {
-  test("has/get/stream では期限切れのときに失効フラグを立てる", async ({ expect }) => {
+  test("期限内の has/get/stream は元のキーへ写像する", async ({ expect }) => {
+    const ttl = new Ttl({ now: () => NOW, defaultTtl: 60 });
+    await encode(ttl, "v", "k");
+
+    for (const c of [createHasContext("k"), createGetContext("k"), createStreamContext("k")]) {
+      await ttl.use(c as IMiddleware.UseContext, createNext());
+      expect(ttl.mapKey(c as IMiddleware.MapKeyContext)).toBe("k");
+    }
+  });
+
+  test("期限切れの has/get/stream は実在しないキーへ写像する", async ({ expect }) => {
     let now = NOW;
     const ttl = new Ttl({ now: () => now, defaultTtl: 60 });
     await encode(ttl, "v", "k");
-
-    // 有効期限内では何もしない。
-    for (const c of [createHasContext("k"), createGetContext("k"), createStreamContext("k")]) {
-      await ttl.use(c as IMiddleware.UseContext, createNext());
-      expect(c.get("@unikvs/ttl:expired")).toBeUndefined();
-    }
-
-    // 期限切れでは写像の不発に使う変数を立てる。
     now = NOW + 61_000;
 
     for (const c of [createHasContext("k"), createGetContext("k"), createStreamContext("k")]) {
       await ttl.use(c as IMiddleware.UseContext, createNext());
-      expect(c.get("@unikvs/ttl:expired")).toBe(true);
+      expect(ttl.mapKey(c as IMiddleware.MapKeyContext)).not.toBe("k");
     }
   });
 
-  test("set/delete/clear の use ではフラグを立てない", async ({ expect }) => {
+  test("set/delete/clear の use は期限切れでも元のキーへ写像する", async ({ expect }) => {
     let now = NOW;
     const ttl = new Ttl({ now: () => now, defaultTtl: 60 });
     await encode(ttl, "v", "k");
+    // clear のコンテキストはキーが空なので、そのキーにも期限付きの記録を作っておきます。
+    await encode(ttl, "v", "");
     now = NOW + 61_000;
 
     for (const c of [createSetContext("k"), createDeleteContext("k"), createClearContext()]) {
       await ttl.use(c as IMiddleware.UseContext, createNext());
-      expect(c.get("@unikvs/ttl:expired")).toBeUndefined();
+      expect(ttl.mapKey(c as IMiddleware.MapKeyContext)).toBe(c.key);
     }
   });
 
-  test("失効フラグがあるとき mapKey は実在しないキーへ写像する", ({ expect }) => {
-    const ttl = createTtl();
-    const flagged = createMapKeyContext("key1", { values: [["@unikvs/ttl:expired", true]] });
-
-    expect(ttl.mapKey(flagged as IMiddleware.MapKeyContext)).not.toBe("key1");
-
-    const plain = createMapKeyContext("key1");
-
-    expect(ttl.mapKey(plain as IMiddleware.MapKeyContext)).toBe("key1");
-  });
-
-  test("未知のキーでは何もしない", async ({ expect }) => {
-    const ttl = createTtl();
+  test("記録のないキーは元のキーへ写像する", async ({ expect }) => {
+    const ttl = new Ttl({ now: () => NOW + 61_000 });
 
     for (const c of [createHasContext("missing"), createGetContext("missing")]) {
       await ttl.use(c as IMiddleware.UseContext, createNext());
-      expect(c.get("@unikvs/ttl:expired")).toBeUndefined();
+      expect(ttl.mapKey(c as IMiddleware.MapKeyContext)).toBe("missing");
     }
+  });
+});
+
+describe("ミドルウェア連鎖", () => {
+  test("各フックは次へ処理を渡す", async ({ expect }) => {
+    let calls = 0;
+    const next = async () => {
+      calls += 1;
+    };
+    // 期限切れの use も下流へ処理を渡します (失効の判定は mapKey に委ねます)。
+    let now = NOW;
+    const expired = new Ttl({ now: () => now, defaultTtl: 60 });
+    await encode(expired, "v", "k");
+    now = NOW + 61_000;
+    await expired.use(createGetContext("k") as IMiddleware.UseContext, next);
+
+    const ttl = new Ttl({ now: () => NOW, defaultTtl: 60 });
+    const encoded = createEncodeContext("v", "k");
+    await ttl.encode(encoded as IMiddleware.EncodeContext, next);
+    const decoded = createDecodeContext(encoded.destination, "k");
+    await ttl.decode(decoded as IMiddleware.DecodeContext, next);
+    const encodedStream = createEncodeStreamContext(sourceFrom(["a"]), "k");
+    await ttl.encodeStream(encodedStream as IMiddleware.EncodeStreamContext, next);
+    const decodedStream = createDecodeStreamContext(encodedStream.destination, "k");
+    await ttl.decodeStream(decodedStream as IMiddleware.DecodeStreamContext, next);
+
+    expect(calls).toBe(5);
   });
 });
