@@ -15,7 +15,7 @@ import type {
   PipelineLeaf,
   PipelineNode,
 } from "./_pipeline-graph.types.js";
-import { isReadableStream } from "./_streams.js";
+import { ReadableStreamSchema } from "./_streams.schemas.js";
 import * as v from "./_valibot.js";
 import { MiddlewareDestinationFrozenError, MiddlewareDestinationMissingError } from "./errors.js";
 
@@ -98,14 +98,6 @@ export function requireDestination(
     operation,
   });
 }
-
-/**
- * `ReadableStream` のインターフェースを満たすかを検証するためのスキーマです。
- */
-const ReadableStreamSchema = v.custom<IReadableStream>(
-  isReadableStream,
-  "Expected a ReadableStream",
-);
 
 /**
  * 変換後のストリームが設定されていることを検証し、型を検証したストリームを返します。

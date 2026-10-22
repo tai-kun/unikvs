@@ -21,6 +21,8 @@ export const VariablesInitSchema = v.pipe(
   }),
 );
 
+export const VariablesArgsSchema = v.tuple([VariablesInitSchema]);
+
 export const OpenOptionsSchema = v.object({
   /**
    * 処理の中断を通知するためのシグナルです。

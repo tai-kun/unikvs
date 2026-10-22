@@ -22,7 +22,7 @@ import type { PipelineLeaf, ResolvedLeaf, StreamEncodeTarget } from "./_pipeline
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
 import {
-  VariablesInitSchema,
+  VariablesArgsSchema,
   OpenArgsSchema,
   CloseArgsSchema,
   SetArgsSchema,
@@ -230,7 +230,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public setVars(vars: VariablesInit): this;
 
   public setVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     this.#baseVars = vars;
 
@@ -243,7 +243,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public assignVars(vars: VariablesInit): this;
 
   public assignVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const map = new Map(this.#baseVars);
     for (const [name, value] of vars) {
@@ -261,7 +261,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public defaultsVars(vars: VariablesInit): this;
 
   public defaultsVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(v.tuple([VariablesInitSchema]), args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const map = new Map(vars);
     for (const [name, value] of this.#baseVars) {

@@ -64,3 +64,25 @@ export function getBranchDestinationsForFork(branch: IUniKvsBranch): BranchDesti
     middlewares: [...dest.middlewares],
   }));
 }
+
+/**
+ * 分岐先を親の接頭辞付きで追加します。
+ *
+ * @param destinations 追加先の分岐先列です。
+ * @param prefix 親のミドルウェア列です。
+ * @param branch 追加する分岐です。
+ */
+export function appendForkDestinations(
+  destinations: BranchDestination[],
+  prefix: readonly UniKvsMiddleware[],
+  branch: IUniKvsBranch,
+): void {
+  const prefixSnapshot = [...prefix];
+  for (const dest of getBranchDestinationsForFork(branch)) {
+    destinations.push({
+      storage: dest.storage,
+      // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのミドルウェアを結合します。
+      middlewares: [...prefixSnapshot, ...dest.middlewares],
+    });
+  }
+}

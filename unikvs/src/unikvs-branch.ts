@@ -21,7 +21,7 @@ import type {
   $InferDecodeChunkOutput,
   $InferEncodeChunkOutput,
 } from "./_types.js";
-import { branchStates, getBranchDestinationsForFork } from "./_unikvs-branch.js";
+import { appendForkDestinations, branchStates } from "./_unikvs-branch.js";
 import type { Value } from "./value-schemas.js";
 
 /**
@@ -224,15 +224,7 @@ export default class UniKvsBranch {
 
   public fork(branch: IUniKvsBranch): this {
     const state = branchStates.get(this)!;
-    const prefix = [...state.middlewares];
-    const destinations = getBranchDestinationsForFork(branch);
-    for (const dest of destinations) {
-      state.destinations.push({
-        storage: dest.storage,
-        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのミドルウェアを結合します。
-        middlewares: [...prefix, ...dest.middlewares],
-      });
-    }
+    appendForkDestinations(state.destinations, state.middlewares, branch);
 
     return this;
   }

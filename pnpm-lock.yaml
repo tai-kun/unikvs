@@ -2833,6 +2833,9 @@ importers:
       call-fn-once:
         specifier: ^0.0.11
         version: 0.0.11(@logtape/logtape@2.3.11)(typescript@7.0.2)
+      maypromise:
+        specifier: ^0.0.4
+        version: 0.0.4
       try-capture-stack-trace:
         specifier: ^0.0.3
         version: 0.0.3

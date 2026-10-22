@@ -1,6 +1,6 @@
 import type { IMiddleware, IStorage } from "@unikvs/core";
 
-import type { VariablesInit, VariablesEntry } from "./_contexts.js";
+import type { VariablesInit } from "./_contexts.js";
 import UniKvsMiddleware from "./_middleware.js";
 import { PipelineGraph } from "./_pipeline-graph.js";
 import UniKvsStorage from "./_storage.js";
@@ -17,7 +17,8 @@ import type {
   $InferEncodeDataOutput,
   $InferEncodeChunkOutput,
 } from "./_types.js";
-import { getBranchDestinationsForFork } from "./_unikvs-branch.js";
+import { appendForkDestinations } from "./_unikvs-branch.js";
+import { VariablesArgsSchema, VariablesInitSchema } from "./_unikvs.schemas.js";
 import * as v from "./_valibot.js";
 import {
   type $InferPlainValueData,
@@ -390,28 +391,6 @@ function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
   );
 }
 
-const VariablesKeySchema = v.string();
-
-const VariablesInitSchema = v.pipe(
-  v.union([
-    v.custom<Iterable<VariablesEntry>>(
-      // TODO(tai-kun): 各アイテムも要検証です。
-      (input) => typeof input === "object" && !!input && Symbol.iterator in input,
-      "Expected a Iterable object",
-    ),
-    v.record(VariablesKeySchema, v.unknown()),
-  ]),
-  v.transform((input): readonly VariablesEntry[] => {
-    if (Symbol.iterator in input) {
-      return [...input];
-    }
-
-    return Object.entries(input);
-  }),
-);
-
-const UniKvsVarsArgsSchema = v.tuple([VariablesInitSchema]);
-
 const UniKvsConfigOptionsSchema = v.object({
   /**
    * キーと値のスキーマ定義です。
@@ -498,15 +477,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   public fork(branch: IUniKvsBranch): this {
-    const prefix = [...this.#middlewares];
-    const destinations = getBranchDestinationsForFork(branch);
-    for (const dest of destinations) {
-      this.#destinations.push({
-        storage: dest.storage,
-        // fork 時点の親チェーンを接頭辞として各分岐先の先頭に付け、ブランチのミドルウェアを結合します。
-        middlewares: [...prefix, ...dest.middlewares],
-      });
-    }
+    appendForkDestinations(this.#destinations, this.#middlewares, branch);
 
     return this;
   }
@@ -530,7 +501,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public setVars(vars: VariablesInit): this;
 
   public setVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     this.#vars.clear();
     for (const [name, value] of vars) {
@@ -543,7 +514,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public assignVars(vars: VariablesInit): this;
 
   public assignVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const target = this.#vars;
     const source = vars;
@@ -557,7 +528,7 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   public defaultsVars(vars: VariablesInit): this;
 
   public defaultsVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(UniKvsVarsArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const target = new Map(vars);
     const source = this.#vars;

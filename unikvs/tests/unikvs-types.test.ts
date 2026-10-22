@@ -5,12 +5,12 @@ import { describe, expectTypeOf, test } from "vitest";
 
 import type { IValueStream as ValueStream } from "../src/types.js";
 import UniKvsConfig, { type IUniKvsConfigBuilder } from "../src/unikvs-config.js";
+import UniKvs from "../src/unikvs.js";
 import type {
   KeyofKeyValueMappingHasPlainValue,
   KeyofKeyValueMappingHasStreamValue,
   SetValue,
-} from "../src/unikvs.js";
-import UniKvs from "../src/unikvs.js";
+} from "../src/unikvs.types.js";
 import { PlainValue, StreamValue, type Value } from "../src/value-schemas.js";
 
 type Bytes = Uint8Array<ArrayBuffer>;
