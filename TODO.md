@@ -18,6 +18,5 @@
 - [ ] @unikvs/ttl
 - [ ] @unikvs/valkey
 - [ ] @unikvs/vercel-blob
-- [ ] @unikvs/vercel-kv
 - [ ] @unikvs/vercel-runtime-cache
 - [ ] @unikvs/zstd.bun

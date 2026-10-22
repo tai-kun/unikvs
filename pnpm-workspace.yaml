@@ -50,7 +50,6 @@ packages:
     "packages/v8-serde",
     "packages/valkey",
     "packages/vercel-blob",
-    "packages/vercel-kv",
     "packages/vercel-runtime-cache",
     "packages/writeonly",
     "packages/zstd.bun",

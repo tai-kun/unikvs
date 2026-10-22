@@ -86,8 +86,6 @@ jobs:
             directory: "packages/cloudflare-cache"
           - name: "vercel-blob"
             directory: "packages/vercel-blob"
-          - name: "vercel-kv"
-            directory: "packages/vercel-kv"
           - name: "vercel-runtime-cache"
             directory: "packages/vercel-runtime-cache"
           - name: "opfs"

@@ -140,10 +140,6 @@
       "path": "packages/vercel-blob",
     },
     {
-      "name": "@unikvs/vercel-kv",
-      "path": "packages/vercel-kv",
-    },
-    {
       "name": "@unikvs/vercel-runtime-cache",
       "path": "packages/vercel-runtime-cache",
     },
