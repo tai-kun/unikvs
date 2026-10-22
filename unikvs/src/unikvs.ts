@@ -17,23 +17,29 @@ import {
   createVariablesStore,
 } from "./_contexts.js";
 import { logger, repairLogger } from "./_logger.js";
-import {
-  type PipelineLeaf,
-  type ResolvedLeaf,
-  type StreamEncodeTarget,
-  PipelineGraph,
-} from "./_pipeline-graph.js";
+import { PipelineGraph } from "./_pipeline-graph.js";
+import type { PipelineLeaf, ResolvedLeaf, StreamEncodeTarget } from "./_pipeline-graph.types.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
 import toValueStream from "./_to-value-stream.js";
-import type { ValueOf } from "./_types.js";
+import {
+  VariablesInitSchema,
+  OpenArgsSchema,
+  CloseArgsSchema,
+  SetArgsSchema,
+  GetArgsSchema,
+  StreamArgsSchema,
+  HasArgsSchema,
+  DeleteArgsSchema,
+  ClearArgsSchema,
+} from "./_unikvs.schemas.js";
 import * as v from "./_valibot.js";
 import type {
   ValueSchemaInfo,
   $InferPlainValueData,
   IValueSchemaResolver,
-  $InferPlainValueInput,
   $InferStreamValueChunkData,
 } from "./_value-schemas.js";
+import { parseSetValue } from "./_value-validation.js";
 import {
   type KeyNotFoundErrorArgs,
   KeyNotFoundError,
@@ -51,18 +57,21 @@ import UniKvsConfig, {
   type UniKvsConfigOptions,
   type IUniKvsConfigBuilder,
 } from "./unikvs-config.js";
-import type { Value, PlainValue, StreamValue } from "./value-schemas.js";
-
-// -------------------------------------------------------------------------------------------------
-//
-// ユーティリテー
-//
-// -------------------------------------------------------------------------------------------------
-
-type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
-  keyof TKeyValueMapping,
-  string
->;
+import type {
+  SetValue,
+  KeyofKeyValueMappingHasPlainValue,
+  KeyofKeyValueMappingHasStreamValue,
+  OpenOptions,
+  CloseOptions,
+  SetOptions,
+  GetOptions,
+  StreamOptions,
+  HasOptions,
+  DeleteOptions,
+  ClearOptions,
+  KeyofKeyValueMapping,
+} from "./unikvs.types.js";
+import type { Value } from "./value-schemas.js";
 
 /**
  * スキーマ定義からキーと値のマッピング型を推論します。
@@ -77,388 +86,6 @@ type $InferKeyValueMapping<TSchema extends UniKvsSchema> = TSchema extends reado
   : TSchema extends { readonly [key: string]: Value }
     ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
     : never;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type SetValue<TValue extends Value> =
-  | $InferPlainValueInput<TValue>
-  | (TValue extends StreamValue<any, infer TChunkInput> ? ReadableStream<TChunkInput> : never);
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type KeyofKeyValueMappingHasPlainValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
-  [TKey in KeyofKVMap<TKeyValueMapping>]: PlainValue extends TKeyValueMapping[TKey] ? TKey : never;
-}>;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
- */
-export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValueMapping> = ValueOf<{
-  [TKey in KeyofKVMap<TKeyValueMapping>]: StreamValue extends TKeyValueMapping[TKey] ? TKey : never;
-}>;
-
-// -------------------------------------------------------------------------------------------------
-//
-// 値の検証
-//
-// -------------------------------------------------------------------------------------------------
-
-/**
- * プレーン値専用のスキーマに ReadableStream が渡されたことを報告するためのスキーマです。
- */
-const PlainValueInputSchema = v.pipe(
-  v.unknown(),
-  v.check(
-    (input) => !isReadableStream(input),
-    "Expected a plain value, but received a ReadableStream",
-  ),
-);
-
-/**
- * ストリーム専用のスキーマにプレーン値が渡されたことを報告するためのスキーマです。
- */
-const StreamValueInputSchema = v.pipe(
-  v.unknown(),
-  v.check(isReadableStream, "Expected a ReadableStream, but received a plain value"),
-);
-
-/**
- * スキーマ情報に基づいて `set` の入力値を検証します。
- *
- * プレーン値はその場で検証し、ストリームはチャンクごとに検証するストリームに変換します。
- *
- * @param info キーに対応するスキーマ情報です。
- * @param value 検証する入力値です。
- * @returns 検証済みの入力値を返します。
- */
-function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
-  if (isReadableStream(value)) {
-    if (info.kind === "plain") {
-      // 必ず検証に失敗するため、InvalidInputError が投げられます。
-      v.parseInput(PlainValueInputSchema, value);
-    }
-
-    // 入力チャンクを検証し、変換後の値を後続のパイプラインへ流します。
-    return value.pipeThrough(
-      new TransformStream({
-        transform(chunk, controller) {
-          controller.enqueue(v.parseInput(info.schema, chunk));
-        },
-      }),
-    );
-  }
-
-  if (info.kind === "stream") {
-    // 必ず検証に失敗するため、InvalidInputError が投げられます。
-    v.parseInput(StreamValueInputSchema, value);
-  }
-
-  return v.parseInput(info.schema, value);
-}
-
-// -------------------------------------------------------------------------------------------------
-//
-// スキーマ
-//
-// -------------------------------------------------------------------------------------------------
-
-const VariablesKeySchema = v.string();
-
-const VariablesInitSchema = v.pipe(
-  v.union([
-    v.custom<Iterable<VariablesEntry>>(
-      // TODO(tai-kun): 各アイテムも要検証です。
-      (input) => typeof input === "object" && !!input && Symbol.iterator in input,
-      "Expected a Iterable object",
-    ),
-    v.record(VariablesKeySchema, v.unknown()),
-  ]),
-  v.transform((input): readonly VariablesEntry[] => {
-    if (Symbol.iterator in input) {
-      return [...input];
-    }
-
-    return Object.entries(input);
-  }),
-);
-
-const OpenOptionsSchema = v.object({
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  signal: v.optional(v.instance(AbortSignal)),
-
-  /**
-   * 実行時の変数です。
-   */
-  vars: v.optional(VariablesInitSchema),
-});
-
-const OpenArgsSchema = v.tuple([v.optional(OpenOptionsSchema)]);
-
-const CloseOptionsSchema = v.object({
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  signal: v.optional(v.instance(AbortSignal)),
-
-  /**
-   * 実行時の変数です。
-   */
-  vars: v.optional(VariablesInitSchema),
-});
-
-const CloseArgsSchema = v.tuple([v.optional(CloseOptionsSchema)]);
-
-const SetOptionsSchema = v.object({
-  key: v.string(),
-  value: v.unknown(),
-  signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesInitSchema),
-});
-
-const SetArgsSchema = v.union([
-  v.tuple([SetOptionsSchema]),
-  v.pipe(
-    v.tuple([
-      SetOptionsSchema.entries.key,
-      SetOptionsSchema.entries.value,
-      v.optional(v.omit(SetOptionsSchema, ["key", "value"])),
-    ]),
-    v.transform(([key, value, options]) => [{ ...options, key, value }]),
-  ),
-]);
-
-const GetOptionsSchema = v.object({
-  key: v.string(),
-  repair: v.optional(v.boolean()),
-  throwOnRepairDenied: v.optional(v.boolean()),
-  signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesInitSchema),
-});
-
-const GetArgsSchema = v.union([
-  v.tuple([GetOptionsSchema]),
-  v.pipe(
-    v.tuple([GetOptionsSchema.entries.key, v.optional(v.omit(GetOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const StreamOptionsSchema = v.object({
-  key: v.string(),
-  repair: v.optional(v.boolean()),
-  throwOnRepairDenied: v.optional(v.boolean()),
-  signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesInitSchema),
-});
-
-const StreamArgsSchema = v.union([
-  v.tuple([StreamOptionsSchema]),
-  v.pipe(
-    v.tuple([StreamOptionsSchema.entries.key, v.optional(v.omit(StreamOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const HasOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesInitSchema),
-});
-
-const HasArgsSchema = v.union([
-  v.tuple([HasOptionsSchema]),
-  v.pipe(
-    v.tuple([HasOptionsSchema.entries.key, v.optional(v.omit(HasOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const DeleteOptionsSchema = v.object({
-  key: v.string(),
-  signal: v.optional(v.instance(AbortSignal)),
-  vars: v.optional(VariablesInitSchema),
-});
-
-const DeleteArgsSchema = v.union([
-  v.tuple([DeleteOptionsSchema]),
-  v.pipe(
-    v.tuple([DeleteOptionsSchema.entries.key, v.optional(v.omit(DeleteOptionsSchema, ["key"]))]),
-    v.transform(([key, options]) => [{ ...options, key }]),
-  ),
-]);
-
-const ClearOptionsSchema = v.object({
-  /**
-   * 処理の中断を通知するためのシグナルです。
-   */
-  signal: v.optional(v.instance(AbortSignal)),
-
-  /**
-   * 実行時の変数です。
-   */
-  vars: v.optional(VariablesInitSchema),
-});
-
-const ClearArgsSchema = v.tuple([v.optional(ClearOptionsSchema)]);
-
-// -------------------------------------------------------------------------------------------------
-//
-// 型定義
-//
-// -------------------------------------------------------------------------------------------------
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type OpenOptions = v.InferInput<typeof OpenOptionsSchema>;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type SetOptions<
-  TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
-  TKey extends KeyofKVMap<TKeyValueMapping> = KeyofKVMap<TKeyValueMapping>,
-> = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly key: TKey;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly value: SetValue<TKeyValueMapping[TKey]>;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly vars?: VariablesInit | undefined;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type GetOptions<TKey = string> = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly key: TKey;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly repair?: boolean | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly throwOnRepairDenied?: boolean | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly vars?: VariablesInit | undefined;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
- */
-export type StreamOptions<TKey = string> = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
-   */
-  readonly key: TKey;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
-   */
-  readonly repair?: boolean | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-stream)
-   */
-  readonly throwOnRepairDenied?: boolean | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly vars?: VariablesInit | undefined;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type HasOptions<TKey = string> = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly key: TKey;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly vars?: VariablesInit | undefined;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type DeleteOptions<TKey = string> = {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
-   */
-  readonly key: TKey;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly signal?: AbortSignal | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
-   */
-  readonly vars?: VariablesInit | undefined;
-};
-
-/**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
- */
-export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
-
-// -------------------------------------------------------------------------------------------------
-//
-// UniKvs
-//
-// -------------------------------------------------------------------------------------------------
 
 /**
  * ストリームの読み取りロックを自動解放するための FinalizationRegistry です。
@@ -1308,11 +935,11 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     await this.#finishWrites(tree.targets, store, failed, errors, signal);
   }
 
-  public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
+  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
     options: SetOptions<TKeyValueMapping, TKey>,
   ): Promise<void>;
 
-  public set<const TKey extends KeyofKVMap<TKeyValueMapping>>(
+  public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
     key: TKey,
     value: SetValue<TKeyValueMapping[TKey]>,
     options?: Omit<SetOptions, "key" | "value">,
@@ -1863,10 +1490,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  public has(options: HasOptions<KeyofKVMap<TKeyValueMapping>>): Promise<boolean>;
+  public has(options: HasOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<boolean>;
 
   public has(
-    key: KeyofKVMap<TKeyValueMapping>,
+    key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<HasOptions, "key">,
   ): Promise<boolean>;
 
@@ -1937,10 +1564,10 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     return false;
   }
 
-  public delete(options: DeleteOptions<KeyofKVMap<TKeyValueMapping>>): Promise<void>;
+  public delete(options: DeleteOptions<KeyofKeyValueMapping<TKeyValueMapping>>): Promise<void>;
 
   public delete(
-    key: KeyofKVMap<TKeyValueMapping>,
+    key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<DeleteOptions, "key">,
   ): Promise<void>;
 

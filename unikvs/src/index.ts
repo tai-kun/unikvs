@@ -67,4 +67,6 @@ export { default as UniKvsConfig } from "./unikvs-config.js";
 export type * from "./unikvs.js";
 export { default as UniKvs } from "./unikvs.js";
 
+export type * from "./unikvs.types.js";
+
 export * from "./value-schemas.js";

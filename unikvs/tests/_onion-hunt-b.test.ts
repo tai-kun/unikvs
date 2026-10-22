@@ -525,7 +525,7 @@ describe("UniKvs - repair のオニオン", () => {
   });
 
   // バグ回帰: 拒否された部分木の tee 分岐の cancel を await すると、unlocked の兄弟分岐が
-  // 消費されるまで buildEncodeTree が停止する (_pipeline-graph.ts:1504 付近)。
+  // 消費されるまで buildEncodeTree が停止する (walk 内の skip 分岐付近)。
   test("stream repair の next 前拒否は active な兄弟分岐があっても完了する", async ({ expect }) => {
     // 準備: cache1 と拒否される cache2 が同じ節の兄弟で、両方 missing。server がヒットする。
     using warnSpy = vi.spyOn(repairLogger, "warn");
@@ -569,7 +569,7 @@ describe("UniKvs - repair のオニオン", () => {
   });
 
   // バグ回帰: destination を source のままにする節の mapKey 拒否では、walk の catch が
-  // abandoned.cancel を await して兄弟分岐待ちで停止する (_pipeline-graph.ts:1589 付近)。
+  // abandoned.cancel を await して兄弟分岐待ちで停止する (walk の catch 付近)。
   test("stream repair の mapKey 拒否は source を素通しする節でも完了する", async ({ expect }) => {
     // 準備: destination を source のままにして mapKey で拒否する (pipeThrough でロックしない)
     class DenyMapKeyIdentityMiddleware extends FakeStreamMiddleware<Uint8Array> {
@@ -659,7 +659,7 @@ describe("UniKvs - repair のオニオン", () => {
   });
 
   // バグ回帰: 根直下の部分木を skip するとき、tee 分岐の cancel を await すると、まだ消費されて
-  // いない読み取り側の分岐が解放されるまで buildEncodeTree が停止する (_pipeline-graph.ts:1655 付近)。
+  // いない読み取り側の分岐が解放されるまで buildEncodeTree が停止する (根直下の skip 分岐付近)。
   test("stream repair の根直下の next 前拒否は読み取りを完了してロックを解放する", async ({
     expect,
   }) => {

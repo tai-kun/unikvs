@@ -105,7 +105,7 @@ describe("PipelineGraph - 構造の不変条件", () => {
 
 describe("PipelineGraph - ストリーム木の構築", () => {
   // バグ回帰: 根直下の節の失敗を onNodeError が引き受けたとき、tee 分岐の cancel を await すると、
-  // まだ消費されていない兄弟分岐の解放まで buildEncodeTree が停止する (_pipeline-graph.ts:1665 付近)。
+  // まだ消費されていない兄弟分岐の解放まで buildEncodeTree が停止する (根直下の catch 付近)。
   test("根直下の失敗を引き受けると、その分岐を解放して後続の根直下の分岐を構築する", async ({
     expect,
   }) => {
