@@ -16,7 +16,7 @@ import {
  *
  * Blob URL からのダウンロードに使います。未指定のときは `globalThis.fetch` を使います。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface IFetch {
   (request: Request): Promise<Response>;
@@ -25,14 +25,14 @@ export interface IFetch {
 /**
  * Blob の公開範囲です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export type BlobAccess = "public" | "private";
 
 /**
  * クライアントへ渡す操作の共通項目です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobRequestOptions {
   /**
@@ -40,14 +40,14 @@ export interface BlobRequestOptions {
    *
    * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly token?: string | undefined;
 
   /**
    * 操作の中断に使うシグナルです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly abortSignal?: AbortSignal | undefined;
 }
@@ -55,20 +55,20 @@ export interface BlobRequestOptions {
 /**
  * `put` へ渡す項目です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobPutRequestOptions extends BlobRequestOptions {
   /**
    * Blob の公開範囲です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly access: BlobAccess;
 
   /**
    * Blob の内容形式です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly contentType?: string | undefined;
 }
@@ -76,20 +76,20 @@ export interface BlobPutRequestOptions extends BlobRequestOptions {
 /**
  * `list` へ渡す項目です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListRequestOptions extends BlobRequestOptions {
   /**
    * 一致する pathname の接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly prefix?: string | undefined;
 
   /**
    * 取得の再開位置です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly cursor?: string | undefined;
 }
@@ -97,20 +97,20 @@ export interface BlobListRequestOptions extends BlobRequestOptions {
 /**
  * `put` の結果の最小形状です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobPutResult {
   /**
    * 保存した Blob の URL です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
    * 保存した Blob の pathname です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
@@ -118,20 +118,20 @@ export interface BlobPutResult {
 /**
  * `head` の結果の最小形状です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobHeadResult {
   /**
    * Blob の URL です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
    * Blob の pathname です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
@@ -139,20 +139,20 @@ export interface BlobHeadResult {
 /**
  * `list` の項目の最小形状です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListItem {
   /**
    * Blob の URL です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
    * Blob の pathname です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
@@ -162,27 +162,27 @@ export interface BlobListItem {
  *
  * `hasMore` が `true` のときは次の頁を取得する `cursor` を返します。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListResult {
   /**
    * 取得した Blob の一覧です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly blobs: readonly BlobListItem[];
 
   /**
    * 次の頁の再開位置です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly cursor?: string | undefined;
 
   /**
    * 残りの頁があるかどうかです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly hasMore: boolean;
 }
@@ -193,7 +193,7 @@ export interface BlobListResult {
  * `@vercel/blob` の `put` / `head` / `del` / `list` はこの形状を満たすため、そのまま渡せます。
  * テストではネットワークを使わない疑似実装を渡します。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobClientLike {
   /**
@@ -224,7 +224,7 @@ export interface BlobClientLike {
 /**
  * `VercelBlob` のコンストラクターオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export type VercelBlobOptions = {
   /**
@@ -233,7 +233,7 @@ export type VercelBlobOptions = {
    * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
    * コンテキスト変数 `@unikvs/vercel-blob:token` / `@unikvs/fetch:token` が優先されます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-token)
    */
   readonly token?: string | undefined;
 
@@ -243,21 +243,21 @@ export type VercelBlobOptions = {
    * 未指定のときは `@vercel/blob` の関数を使います。
    * テストではネットワークを使わない疑似実装を渡します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-client)
    */
   readonly client?: BlobClientLike | undefined;
 
   /**
    * すべてのキーに付与する接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
    * 保存する Blob の公開範囲です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-access)
    */
   readonly access?: BlobAccess | undefined;
 
@@ -266,7 +266,7 @@ export type VercelBlobOptions = {
    *
    * 未指定のときは `globalThis.fetch` を使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-fetch)
    */
   readonly fetch?: IFetch | undefined;
 };
@@ -365,11 +365,11 @@ function isBlobNotFound(ex: unknown): boolean {
  * キーを `${keyPrefix}${key}` の pathname に変換し、`put` / `head` / `del` / `list` します。
  * 読み取りは `head` で解決した URL を `fetch` でダウンロードします。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   public readonly name: string;
 
@@ -391,7 +391,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   /**
    * Vercel Blob にバイト列を保存するストレージです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   public constructor(options: VercelBlobOptions = {}) {
     const { fetch: fetchImpl, token, access, client, keyPrefix = "" } = options;

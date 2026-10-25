@@ -50,7 +50,7 @@ function parseLine(line: string, controller: TransformStreamDefaultController<un
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#usage)
  */
 export default class Superjson implements IMiddleware {
   public readonly name: string = "Superjson";

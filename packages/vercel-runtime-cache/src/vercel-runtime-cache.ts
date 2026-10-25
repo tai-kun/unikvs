@@ -13,7 +13,7 @@ import {
  *
  * `get` / `set` / `delete` を実装していれば、テスト用の疑似実装も注入できます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
  */
 export type VercelRuntimeCacheBackend = {
   get(key: string): unknown;
@@ -25,20 +25,20 @@ export type VercelRuntimeCacheBackend = {
 /**
  * `VercelRuntimeCache` のコンストラクターオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
  */
 export type VercelRuntimeCacheOptions = {
   /**
    * エントリの有効期限 (秒) です。既定値は 60 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-ttl-seconds)
    */
   readonly ttlSeconds?: number | undefined;
 
   /**
    * 保持するエントリの最大数です。未指定なら無制限です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-max-entries)
    */
   readonly maxEntries?: number | undefined;
 
@@ -47,14 +47,14 @@ export type VercelRuntimeCacheOptions = {
    *
    * 複数のストレージで同じバックエンドを共有するときに使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-namespace)
    */
   readonly namespace?: string | undefined;
 
   /**
    * 値の複製に使用する関数です。既定では `structuredClone` を使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-clone)
    */
   readonly clone?: (<T>(value: T) => T) | undefined;
 
@@ -63,14 +63,14 @@ export type VercelRuntimeCacheOptions = {
    *
    * 未指定のときは Vercel のランタイムキャッシュを自動検出し、見つからなければプロセス内の `Map` にフォールバックします。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-backend)
    */
   readonly backend?: VercelRuntimeCacheBackend | undefined;
 
   /**
    * 現在時刻を返す関数です。テストで時刻を固定するときに使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache-now)
    */
   readonly now?: (() => number) | undefined;
 };
@@ -78,7 +78,7 @@ export type VercelRuntimeCacheOptions = {
 /**
  * 既定の有効期限 (秒) です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
  */
 export const DEFAULT_TTL_SECONDS = 60;
 
@@ -120,32 +120,32 @@ function detectVercelRuntimeCache(): VercelRuntimeCacheBackend | undefined {
  * Vercel のランタイムキャッシュが検出できればそれを使い、見つからなければプロセス内の `Map` にフォールバックします。
  * どちらの場合も TTL と最大件数による追い出しを行います。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
  */
 export default class VercelRuntimeCache implements IStorage {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public readonly name: string;
 
   /**
    * エントリの有効期限 (秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public readonly ttlSeconds: number;
 
   /**
    * 保持するエントリの最大数です。未指定なら無制限です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public readonly maxEntries: number | undefined;
 
   /**
    * バックエンドのキーに付与する名前空間です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public readonly namespace: string;
 
@@ -162,7 +162,7 @@ export default class VercelRuntimeCache implements IStorage {
   /**
    * Vercel Runtime Cache ストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public constructor(options: VercelRuntimeCacheOptions = {}) {
     const {
@@ -202,7 +202,7 @@ export default class VercelRuntimeCache implements IStorage {
   /**
    * 使用中のバックエンドです。検出できなかった場合は `undefined` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public get backend(): VercelRuntimeCacheBackend | undefined {
     return this.#backend;
@@ -211,7 +211,7 @@ export default class VercelRuntimeCache implements IStorage {
   /**
    * フォールバックの `Map` が保持している有効なエントリ数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
    */
   public get size(): number {
     this.#purgeExpiredFallback();

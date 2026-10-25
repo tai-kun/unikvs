@@ -1,27 +1,27 @@
 import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#error-key-prefix-clear-denied)
  */
 export type KeyPrefixClearDeniedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-clear-denied-prefix)
    */
   readonly prefix: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-clear-denied-allow-clear)
    */
   readonly allowClear: boolean;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#error-key-prefix-clear-denied)
  */
 export type KeyPrefixClearDeniedErrorArgs = ErrorOptions & KeyPrefixClearDeniedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#error-key-prefix-clear-denied)
  */
 export class KeyPrefixClearDeniedError extends InvalidUsageErrorBase<KeyPrefixClearDeniedErrorMeta> {
   static {
@@ -29,7 +29,7 @@ export class KeyPrefixClearDeniedError extends InvalidUsageErrorBase<KeyPrefixCl
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#error-key-prefix-clear-denied)
    */
   public constructor(args: KeyPrefixClearDeniedErrorArgs) {
     const { prefix, allowClear, ...options } = args;

@@ -1,6 +1,8 @@
 /**
  * 投げた非同期エラーを拒否理由として返します。
  * 実際に投げられたエラーの種類とメタ情報を検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#capture-rejection)
  */
 export async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
   try {
@@ -15,6 +17,8 @@ export async function captureRejection(promise: Promise<unknown>): Promise<unkno
 /**
  * 投げた同期エラーを例外として返します。
  * 実際に投げられたエラーの種類とメタ情報を検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#capture-thrown)
  */
 export function captureThrown(fn: () => unknown): unknown {
   try {
@@ -29,6 +33,8 @@ export function captureThrown(fn: () => unknown): unknown {
 /**
  * 常に中断済みのシグナルを返します。
  * 入口の中断検証の検証に使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#aborted-signal)
  */
 export function abortedSignal(reason?: unknown): AbortSignal {
   const controller = new AbortController();

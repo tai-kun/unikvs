@@ -1,0 +1,232 @@
+---
+title: "@unikvs/redis.node"
+description: "Node.js から Redis にバイト列を保存する @unikvs/redis.node の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/redis.node` は Redis にバイト列を保存するストレージプラグインです。<Badge variant="warning">Node.js 専用</Badge> 複数ノードで共有するキャッシュや一時データの保存に使います。
+
+- `name` は `"Redis"` で、`isOpen` で開閉状態を確認します。
+- `open()` で接続し、使い終わったら `close()` で切断します。
+- このストレージは、キーに既定で `"unikvs:"` の接頭辞を付与し、`clear()` の削除範囲を限定します。
+- 接続先 URL を省略した場合は、`REDIS_URL`（なければ `VALKEY_URL`）環境変数を使います。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/redis.node
+```
+
+別途 Redis サーバーが必要です。
+
+## 使い方 [#usage]
+
+Redis は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+```
+
+### Redis [#redis]
+
+Redis に保存するストレージです。利用者は `open()` で開き、使い終わったら `close()` で閉じます。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    url: {
+      type: "[#redis-url] string | undefined",
+      description:
+        "接続先 URL (`redis://` / `rediss://` 形式) です。省略時は環境変数から解決します。",
+    },
+    options: {
+      type: "[#redis-options] RedisStorageOptions",
+      description: "クライアントと本パッケージの動作を設定するオプションです。",
+    },
+  }}
+/>
+
+### RedisStorageOptions [#redisstorageoptions]
+
+`ioredis` の `RedisOptions` に本パッケージ固有の項目を加えた設定型です。`ioredis` の項目はそのまま透過します。
+
+<TypeTable
+  type={{
+    keyPrefix: {
+      type: "[#redisstorageoptions-keyprefix] string",
+      description: 'すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。',
+    },
+    cluster: {
+      type: "[#redisstorageoptions-cluster] RedisClusterSpec",
+      description: "クラスターの接続先です。v1 では未対応のため、指定するとエラーになります。",
+    },
+    closeTimeout: {
+      type: "[#redisstorageoptions-closetimeout] number",
+      description: "`close()` 時の切断待ち時間 (ミリ秒) です。既定値は `5000` です。",
+    },
+  }}
+/>
+
+### RedisClusterSpec [#redisclusterspec]
+
+クラスターの接続先を指定する型です。v1 では未対応のため、指定するとエラーになります。
+
+<TypeTable
+  type={{
+    nodes: {
+      type: "[#redisclusterspec-nodes] readonly ClusterNode[]",
+      required: true,
+      description: "接続先のクラスターノードです。",
+    },
+    options: {
+      type: "[#redisclusterspec-options] ClusterOptions",
+      description: "`ioredis` の `Cluster` に渡すオプションです。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+  .persist(new Redis("redis://127.0.0.1:6379"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型          |
+| --------------------------------------- | ------------------------- |
+| `write`・`read`                         | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` にはバイト列 (`Uint8Array<ArrayBuffer>`) を使います。
+- ストリームの読み書きに対応し、チャンクは `Uint8Array<ArrayBuffer>` です。
+- 書き込みストリームは一時キーへ追記し、完了時にリネームで原子的に置き換えます。
+- 読み取りストリームは取得したバイト列を単一のチャンクとして送出します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### ClusterNotSupportedError [#error-cluster-not-supported]
+
+コンストラクターの `cluster` オプションが指定されたときに投げます。
+
+#### 意味
+
+v1 はスタンドアロンモードのみに対応し、`cluster` オプションはサポートされていません。
+
+#### 対処方法
+
+`cluster` オプションを指定せず、スタンドアロンの Redis に接続してください。
+
+### InvalidCloseTimeoutError [#error-invalid-close-timeout]
+
+コンストラクターの `closeTimeout` が有限の正数ではないときに投げます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-close-timeout-actual] unknown",
+      required: true,
+      description: "受け取った `closeTimeout` の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`closeTimeout` に有限の正数 (ミリ秒) 以外が指定されました。
+
+#### 対処方法
+
+`closeTimeout` に有限の正数 (ミリ秒) を指定してください。
+
+### ConnectTimeoutError [#error-connect-timeout]
+
+`open()` 時の接続がタイムアウトしたときに投げます。
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#connect-timeout-timeoutms] number",
+      required: true,
+      description: "タイムアウトまでの時間 (ミリ秒) です。",
+    },
+  }}
+/>
+
+#### 意味
+
+Redis への接続が `connectTimeout` (既定値は `5000` ミリ秒) を超えても確立しませんでした。
+
+#### 対処方法
+
+サーバーの起動状態と接続先 URL を確認し、必要に応じて `connectTimeout` を延ばしてください。
+
+### CloseTimeoutError [#error-close-timeout]
+
+`close()` 時の切断がタイムアウトしたときに投げます。
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#close-timeout-timeoutms] number",
+      required: true,
+      description: "タイムアウトまでの時間 (ミリ秒) です。",
+    },
+  }}
+/>
+
+#### 意味
+
+Redis からの切断処理が `closeTimeout` を超えても終わりませんでした。接続は切断して掃除します。
+
+#### 対処方法
+
+サーバーの状態を確認し、繰り返す場合は `closeTimeout` を延ばしてください。
+
+### KeyNotFoundError [#error-key-not-found]
+
+`@unikvs/core` の共通エラーです。存在しないキーを読み取ったときに投げます。
+
+#### 意味
+
+指定したキーが存在しません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/redis.node";
+
+try {
+  const data = await kvs.get("missing");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

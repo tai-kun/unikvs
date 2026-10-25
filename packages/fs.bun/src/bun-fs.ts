@@ -29,12 +29,12 @@ type Connection = {
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfsoptions)
  */
 export type BunFsOptions = {};
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfs)
  */
 export default class BunFs implements IStorage {
   /**
@@ -52,7 +52,7 @@ export default class BunFs implements IStorage {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfs)
    */
   public constructor(root = ".unikvs", _options: BunFsOptions = {}) {
     this.name = "BunFs";

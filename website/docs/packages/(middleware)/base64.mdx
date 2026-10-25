@@ -1,0 +1,119 @@
+---
+title: "@unikvs/base64"
+description: "バイト列を base64 化するミドルウェア @unikvs/base64 の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+バイト列を base64 文字列化して返すミドルウェアです。<Badge>Middleware</Badge>
+
+このミドルウェアはパディングありとなしの両形式に対応し、デコード時はどちらも受け付けます。
+
+- `name` は `"Base64"` です。
+- `isOpen` はつねに `true` です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/base64
+```
+
+## 使い方 [#usage]
+
+Base64 は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Base64 } from "@unikvs/base64";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    encoder: {
+      type: "[#base64-encoder] FastUtf8",
+      description: "文字列のバイト列化に使う実体です。省略時は既定値を使います。",
+    },
+    decoder: {
+      type: "[#base64-decoder] FastUtf8",
+      description: "バイト列の文字列化に使う実体です。省略時は既定値を使います。",
+    },
+    padding: {
+      type: "[#base64-padding] boolean",
+      description: "エンコード時に `=` を付与するかどうかです。省略時は `true` です。",
+    },
+  }}
+/>
+
+以下は、バイト列を base64 化して保存し、読み取り時に元のバイト列へ戻す例です。
+
+```ts
+import { Base64 } from "@unikvs/base64";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+  .use(new Base64())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0x01, 0x02, 0x03]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` はバイト列を base64 文字列に変換し、UTF-8 でバイト列化します。
+- `decode` は base64 化されたバイト列を元のバイト列に戻します。
+- デコード時はパディングありとなしのどちらの形式も受け付けます。
+- `encodeStream` は 3 バイト単位で区切り、チャンクをまたいだ余りを次回に持ち越します。
+- エンコード時の余りはストリームの終了時に確定します。
+- `decodeStream` は 4 文字単位で復元し、余りを次回に持ち越します。
+- パディングを含む末尾はストリームの終了時に検証して復元します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `Base64DecodeError` [#error-base64-decode]
+
+#### 意味
+
+このミドルウェアは入力を base64 として解釈できないときに、このエラーを投げます。不正な文字や誤った `=` の配置、長さの余りが 1 になる入力が対象です。
+
+#### 対処方法
+
+入力が正しい base64 か確認してください。
+
+なお、ストリーム終端で UTF-8 の途中バイトが残った場合は、`TypeError` がそのまま伝播します。
+
+### `Base64InvalidPaddingError` [#error-base64-invalid-padding]
+
+`padding` オプションに真偽値以外を指定すると、このエラーが投げられます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#base64-invalid-padding-actual] unknown",
+      required: true,
+      description: "指定された `padding` の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+使い方の誤りのため、`InvalidUsageErrorBase` を継承します。`meta.actual` に指定値をそのまま保持します。
+
+#### 対処方法
+
+`padding` に `true` か `false` を指定してください。省略時は `true` です。

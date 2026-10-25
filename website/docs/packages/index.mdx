@@ -11,7 +11,7 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
 
 <CardGroup cols={2}>
   <Card title="UniKVS" href="./unikvs" icon="package">
-    設定ビルダーと KVS クライアント本体です。
+    設定ビルダーと KVS クライアントの本体です。
   </Card>
 </CardGroup>
 
@@ -21,10 +21,13 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
 
 <CardGroup cols={2}>
   <Card title="@unikvs/core" href="./core" icon="cpu">
-    全パッケージ共有の型とエラー基盤です。
+    全パッケージで共有する型とエラーの基盤です。
   </Card>
   <Card title="@unikvs/utils" href="./utils" icon="wrench">
     プラグイン実装者向けの共有関数群です。
+  </Card>
+  <Card title="@unikvs/testing" href="./testing" icon="flask-conical">
+    プラグインのテスト用コンテキストとヘルパーです。
   </Card>
 </CardGroup>
 
@@ -73,7 +76,43 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
     Bun で S3 互換のオブジェクトストレージに保存します。
   </Card>
   <Card title="@unikvs/redis.bun" href="./redis-bun" icon="database">
-    Bun の Redis クライアントで Redis に保存します。
+    Bun の Redis クライアントを使って Redis に保存します。
+  </Card>
+  <Card title="@unikvs/valkey" href="./valkey" icon="database">
+    Valkey に保存します。
+  </Card>
+  <Card title="@unikvs/memcached" href="./memcached" icon="database">
+    Memcached に保存します。
+  </Card>
+  <Card title="@unikvs/etcd" href="./etcd" icon="database">
+    etcd に保存します。
+  </Card>
+  <Card title="@unikvs/cache-storage" href="./cache-storage" icon="archive">
+    ブラウザーの Cache Storage に保存します。
+  </Card>
+  <Card title="@unikvs/cookies" href="./cookies" icon="cookie">
+    Cookie を保存先として扱います。
+  </Card>
+  <Card title="@unikvs/cloudflare-kv" href="./cloudflare-kv" icon="cloud">
+    Cloudflare KV に保存します。
+  </Card>
+  <Card title="@unikvs/cloudflare-r2" href="./cloudflare-r2" icon="cloud">
+    Cloudflare R2 に保存します。
+  </Card>
+  <Card title="@unikvs/cloudflare-cache" href="./cloudflare-cache" icon="cloud">
+    Cloudflare Cache API に保存します。
+  </Card>
+  <Card title="@unikvs/vercel-blob" href="./vercel-blob" icon="cloud">
+    Vercel Blob に保存します。
+  </Card>
+  <Card title="@unikvs/vercel-runtime-cache" href="./vercel-runtime-cache" icon="zap">
+    Vercel ランタイムのキャッシュに保存します。
+  </Card>
+  <Card title="@unikvs/retry" href="./retry" icon="rotate-cw">
+    一時的な失敗を再試行するラッパーです。
+  </Card>
+  <Card title="@unikvs/soft-delete" href="./soft-delete" icon="trash">
+    削除操作を論理削除として扱うラッパーです。
   </Card>
 </CardGroup>
 
@@ -115,6 +154,18 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
   <Card title="@unikvs/zstd.node" href="./zstd-node" icon="archive">
     Node.js の zstd による圧縮と展開を行います。
   </Card>
+  <Card title="@unikvs/zstd.bun" href="./zstd-bun" icon="archive">
+    Bun の zstd による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/brotli.node" href="./brotli-node" icon="archive">
+    Node.js の Brotli による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/brotli.bun" href="./brotli-bun" icon="archive">
+    Bun の Brotli による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/brotli.wasm" href="./brotli-wasm" icon="archive">
+    WASM 版 Brotli による圧縮と展開を行います。
+  </Card>
 </CardGroup>
 
 ## 開発支援 [#dev]
@@ -123,7 +174,7 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
 
 <CardGroup cols={2}>
   <Card title="@unikvs/debug" href="./debug" icon="bug">
-    読み書きされる操作とデータのデバッグ情報をログに記録します。
+    読み書きの操作とデータのデバッグ情報をログに記録します。
   </Card>
   <Card title="@unikvs/passthrough" href="./passthrough" icon="arrow-right-left">
     データを何も変換せずそのまま透過させます。
@@ -136,5 +187,23 @@ UniKVS は本体パッケージと、プラグインと補助のパッケージ�
   </Card>
   <Card title="@unikvs/writeonly" href="./writeonly" icon="lock">
     既存のストレージを書き込み専用にします。
+  </Card>
+  <Card title="@unikvs/readonly" href="./readonly" icon="lock">
+    既存のストレージを読み取り専用にします。
+  </Card>
+  <Card title="@unikvs/expiry" href="./expiry" icon="clock">
+    有効期限が付いた値が期限内かを検証します。
+  </Card>
+  <Card title="@unikvs/ttl" href="./ttl" icon="timer">
+    値に有効期限を付与して管理します。
+  </Card>
+  <Card title="@unikvs/rate-limit" href="./rate-limit" icon="gauge">
+    操作の実行頻度を制限します。
+  </Card>
+  <Card title="@unikvs/metrics" href="./metrics" icon="chart-line">
+    操作のメトリクスを収集します。
+  </Card>
+  <Card title="@unikvs/tracing" href="./tracing" icon="activity">
+    操作のトレースを記録します。
   </Card>
 </CardGroup>

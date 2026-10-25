@@ -36,58 +36,58 @@ const GB = 1000 * MB;
 const MAX_CHUNK_SIZE = 4 * GB;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihasher)
  */
 export interface IHasher {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihasher-update)
    */
   update(data: Uint8Array<ArrayBuffer>): void;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihasher-digest)
    */
   digest(): Uint8Array;
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihash)
  */
 export interface IHash {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihash)
    */
   (data: Uint8Array<ArrayBuffer>): Uint8Array;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#ihash-create)
    */
   create(): IHasher;
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
  */
 export type ChecksumOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-required)
    */
   readonly required?: boolean | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
  */
 export default abstract class Checksum implements IMiddleware {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
    */
   public static readonly CHECKSUM_VAR_NAME: string;
 
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#classes)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-required)
    */
   public readonly required: boolean;
 
@@ -97,7 +97,7 @@ export default abstract class Checksum implements IMiddleware {
   readonly #hash: IHash;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
    */
   public constructor(name: string, hash: IHash, options: ChecksumOptions = {}) {
     const { required = false } = options;

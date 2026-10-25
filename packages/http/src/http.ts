@@ -13,7 +13,7 @@ import {
 } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#fetch)
  */
 export interface IFetch {
   (request: Request): Promise<Response>;
@@ -24,27 +24,27 @@ export interface IFetch {
  */
 export type HttpOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#allow-clear-without-prefix)
    */
   readonly allowClearWithoutPrefix?: boolean | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#fetch)
    */
   readonly fetch?: IFetch | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#headers)
    */
   readonly headers?: Record<string, string> | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#token)
    */
   readonly token?: string | undefined;
 };
@@ -90,7 +90,7 @@ export default class Http implements IStorage {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#allow-clear-without-prefix)
    */
   public readonly allowClearWithoutPrefix: boolean;
 

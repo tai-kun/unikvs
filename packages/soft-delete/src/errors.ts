@@ -4,22 +4,22 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-tombstone-not-found)
  */
 export type TombstoneNotFoundErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-tombstone-not-found)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-tombstone-not-found)
  */
 export type TombstoneNotFoundErrorArgs = ErrorOptions & TombstoneNotFoundErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-tombstone-not-found)
  */
 export class TombstoneNotFoundError extends ErrorBase<TombstoneNotFoundErrorMeta> {
   static {
@@ -27,7 +27,7 @@ export class TombstoneNotFoundError extends ErrorBase<TombstoneNotFoundErrorMeta
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-tombstone-not-found)
    */
   public constructor(args: TombstoneNotFoundErrorArgs) {
     const { key, ...options } = args;
@@ -43,23 +43,23 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-soft-delete-invalid-retention)
  */
 export type SoftDeleteInvalidRetentionErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-soft-delete-invalid-retention)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-soft-delete-invalid-retention)
  */
 export type SoftDeleteInvalidRetentionErrorArgs = ErrorOptions &
   SoftDeleteInvalidRetentionErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-soft-delete-invalid-retention)
  */
 export class SoftDeleteInvalidRetentionError extends InvalidUsageErrorBase<SoftDeleteInvalidRetentionErrorMeta> {
   static {
@@ -67,7 +67,7 @@ export class SoftDeleteInvalidRetentionError extends InvalidUsageErrorBase<SoftD
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#error-soft-delete-invalid-retention)
    */
   public constructor(args: SoftDeleteInvalidRetentionErrorArgs) {
     const { actual, ...options } = args;

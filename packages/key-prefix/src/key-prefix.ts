@@ -4,33 +4,33 @@ import { PassThrough } from "@unikvs/passthrough";
 import { KeyPrefixClearDeniedError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-options)
  */
 export type KeyPrefixOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-allow-clear)
    */
   readonly allowClear?: boolean | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix)
  */
 export default class KeyPrefix extends PassThrough implements IMiddleware {
   public override readonly name: string = "KeyPrefix";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-prefix)
    */
   public readonly prefix: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix-allow-clear)
    */
   public readonly allowClear: boolean;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/key-prefix#key-prefix)
    */
   public constructor(prefix: string, options: KeyPrefixOptions = {}) {
     super();

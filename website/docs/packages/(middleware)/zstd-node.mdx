@@ -1,0 +1,120 @@
+---
+title: "@unikvs/zstd.node"
+description: "Node.js の node:zlib で Zstandard 圧縮と展開を行うミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/zstd.node` はバイト列を Zstandard で圧縮して保存し、読み取り時に展開するプラグインです。<Badge>Middleware</Badge> <Badge variant="warning">Node.js 専用</Badge>
+
+`node:zlib` の Zstandard 機能へ委譲するため、このミドルウェアは Node.js ランタイム専用です。書き込んだ値を小さく保ちつつ高速に処理したい場合に使います。
+
+- `name` は `ZstdNode` です。
+- `isOpen` は `open()` 後に `true` になります。初期状態では `false` です。
+- Node.js ランタイム専用です。このミドルウェアは `open()` で `node:util` と `node:zlib` と `node:stream` を遅延解決します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/zstd.node @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+`ZstdNode` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { ZstdNode } from "@unikvs/zstd.node";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "圧縮レベルです。1 から 22 までの整数を指定します。値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。省略した場合は 3 になります。",
+    },
+  }}
+/>
+
+以下は、書き込んだ値を Zstandard で圧縮して保存し、読み取り時に展開する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { ZstdNode } from "@unikvs/zstd.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .use(new ZstdNode({ level: 3 }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // 展開されたバイト列になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` では入力バイト列を Zstandard で圧縮します。
+- `decode` では入力バイト列を Zstandard で展開します。
+- `encodeStream` では入力ストリームを Zstandard 圧縮ストリームへ接続します。
+- `decodeStream` では入力ストリームを Zstandard 展開ストリームへ接続します。
+- `node:zlib` のストリームが生成したチャンクをそのまま出力し、1 チャンクにはまとめません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `ZstdNodeInvalidLevelError` [#error-zstd-node-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#zstd-node-invalid-level-actual] unknown",
+      required: true,
+      description: "指定された圧縮レベルです。",
+    },
+  }}
+/>
+
+#### 意味
+
+コンストラクターは `level` が 1 から 22 までの整数ではないときに、このエラーを投げます。
+
+#### 対処方法
+
+1 から 22 までの整数を指定してください。省略した場合は 3 になります。
+
+#### 例
+
+以下は、`ZstdNodeInvalidLevelError` を捕捉する例です。
+
+```ts
+import { ZstdNode, ZstdNodeInvalidLevelError } from "@unikvs/zstd.node";
+
+try {
+  new ZstdNode({ level: 0 });
+} catch (ex) {
+  if (ex instanceof ZstdNodeInvalidLevelError) {
+    console.log(ex.meta); // { actual: 0 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+このミドルウェアは `open()` で実行環境の解決に失敗した場合は [`UnsupportedRuntimeError`](/packages/core/errors#error-unsupported-runtime) を投げます。`open()` 前に `encode` などを呼ぶと `TypeError` を投げます。展開に失敗した場合は上流のエラーをそのまま伝播します。

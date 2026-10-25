@@ -1,0 +1,135 @@
+---
+title: "@unikvs/ttl"
+description: "相対秒数や絶対時刻で TTL を付与し、期限切れを欠落として扱うミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`Ttl` は書き込んだ値に相対秒数や絶対時刻の有効期限を付与し、期限切れの読み取りを欠落として扱います。<Badge>Middleware</Badge>
+
+短命なキャッシュやセッション的なデータの保持に使います。プレーン値とストリームで失効の管理方式が異なります。
+
+- `name` は `Ttl` です。
+- `isOpen` は常に `true` です。
+- 期限の指定は操作ごとの変数 `@unikvs/ttl:ttl`・`@unikvs/ttl:expiresAt` (非名前空間名 `ttl`・`expiresAt` も後方互換で受付) と、既定値 `defaultTtl` で行います。
+- 期限切れの `get`・`has`・`stream` は `KeyNotFoundError` 相当として扱います。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/ttl
+```
+
+## 使い方 [#usage]
+
+Ttl は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Ttl } from "@unikvs/ttl";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    defaultTtl: {
+      type: "[#ttl-options-default-ttl] TtlInput",
+      description:
+        "書き込みごとの指定がないときに使う既定の TTL です。相対秒数、絶対時刻、オブジェクト形式のいずれも指定できます。",
+    },
+    now: {
+      type: "[#ttl-options-now] () => number",
+      default: "Date.now",
+      description: "現在時刻 (epoch ミリ秒) を返す関数です。テストで時刻を固定するときに使います。",
+    },
+  }}
+/>
+
+以下は、既定の TTL を 60 秒に設定し、書き込みごとに上書きする例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Ttl } from "@unikvs/ttl";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ report: PlainValue<string> }>()
+  .use(new Ttl({ defaultTtl: 60 }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("report", "hello");
+await kvs.set("short", "bye", { vars: { "@unikvs/ttl:ttl": 10 } });
+console.log(await kvs.get("report")); // "hello"
+await kvs.close();
+```
+
+### `Ttl` [#ttl]
+
+有効期限エンベロープと操作内記録で失効を管理するミドルウェアです。読み取り前に失効を判定し、存在確認では存在しないものとして扱います。
+
+### `TtlOptions` [#ttl-options]
+
+`Ttl` のコンストラクターが受け取るオプションです。既定の TTL と時刻取得を指定します。
+
+### `TtlInput` [#ttl-input]
+
+書き込みごとに指定できる TTL 値です。`number` は相対秒数 (小数も可、0 以下は即時失効)、`Date` は絶対失効時刻、オブジェクト形式では `ttl` に相対秒数、`expiresAt` に epoch ミリ秒または `Date` を指定します。
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                 | 出力                       |
+| -------------- | -------------------- | -------------------------- |
+| `encode`       | `unknown`            | エンベロープか透過         |
+| `decode`       | エンベロープか任意値 | `unknown`                  |
+| `encodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+| `decodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+
+- `encode` は TTL があるときに `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` の形に包み、操作内記録にも失効時刻を保存します。TTL がない上書きでは記録を消し、データを透過させます。
+- `decode` は期限内であれば包みを剥がして元の値を返し、期限切れでは `KeyNotFoundError` を投げます。再起動後などで記録が欠けているときはエンベロープから記録を復元します。
+- ストリームはチャンクの型制約に合わせるため帯域内に期限を埋め込まず、記録だけで管理します。`encodeStream` と `decodeStream` はデータを透過します。
+- TTL の解決は `ttl` 変数を優先し、次に `expiresAt` 変数、最後に `defaultTtl` を使います。名前空間付き変数が非名前空間名より優先されます。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### TtlInvalidValueError [#error-ttl-invalid-value]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#ttl-invalid-value-actual] unknown",
+      required: true,
+      description: "指定された TTL の値です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-ttl-invalid-value-meaning]
+
+TTL 値が相対秒数・絶対時刻・オブジェクト形式のいずれとしても解釈できないときに、このエラーが投げられます。コンストラクターの `defaultTtl` と書き込みごとの変数の両方が検証対象です。
+
+#### 対処方法 [#error-ttl-invalid-value-howto]
+
+有限の数値 (相対秒数)、`Date`、または `{ ttl }` や `{ expiresAt }` の形のオブジェクトを指定してください。文字列や非有限値は受け付けません。
+
+#### 例 [#error-ttl-invalid-value-example]
+
+以下は、`TtlInvalidValueError` を捕捉する例です。
+
+```ts
+import { TtlInvalidValueError } from "@unikvs/ttl";
+
+try {
+  await kvs.set("report", "hello", { vars: { ttl: "60" } });
+} catch (ex) {
+  if (ex instanceof TtlInvalidValueError) {
+    console.log(ex.meta); // { actual: "60" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+期限切れの読み取りは `@unikvs/core` の `KeyNotFoundError` として失敗します。詳細は[エラー](/packages/core/errors#error-key-not-found)を参照してください。

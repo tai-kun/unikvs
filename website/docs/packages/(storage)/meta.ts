@@ -1,0 +1,33 @@
+import { defineMeta } from "blume";
+
+export default defineMeta({
+  pages: [
+    "memory",
+    "null",
+    "lru-cache",
+    "http",
+    "cache-storage",
+    "localstorage",
+    "session-storage",
+    "indexeddb",
+    "opfs",
+    "cookies",
+    "fs-node",
+    "fs-bun",
+    "s3-node",
+    "s3-bun",
+    "redis-node",
+    "redis-bun",
+    "valkey",
+    "memcached",
+    "etcd",
+    "cloudflare-cache",
+    "cloudflare-kv",
+    "cloudflare-r2",
+    "vercel-blob",
+    "vercel-runtime-cache",
+    "retry",
+    "soft-delete",
+  ],
+  title: "ストレージ",
+});

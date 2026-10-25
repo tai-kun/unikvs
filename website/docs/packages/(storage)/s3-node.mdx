@@ -1,0 +1,137 @@
+---
+title: "@unikvs/s3.node"
+description: "S3 互換のオブジェクトストレージにバイト列を保存する @unikvs/s3.node の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/s3.node` は S3 互換のオブジェクトストレージにバイト列を保存するストレージプラグインです。<Badge variant="warning">Node.js 専用</Badge> クラウドや S3 互換ストレージへの永続化に使います。
+
+- `name` は `"S3"` で、`isOpen` で開閉状態を確認します。
+- `open()` でクライアントを作成し、`close()` で破棄します。
+- このストレージは、コンストラクターで指定したバケットに対してすべての操作を行い、キーをオブジェクトキーとしてそのまま使います。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/s3.node
+```
+
+別途 S3 互換のオブジェクトストレージが必要です。
+
+## 使い方 [#usage]
+
+S3 は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+```
+
+### S3 [#s3]
+
+S3 互換ストレージに保存するストレージです。利用者は `open()` で開き、使い終わったら `close()` で閉じます。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "[#s3-bucket] string",
+      required: true,
+      description: "データを保存するバケット名です。",
+    },
+    config: {
+      type: "[#s3-config] S3ClientConfig",
+      description:
+        "AWS SDK の `S3Client` に渡す設定です。リージョンやエンドポイントなどを指定します。",
+    },
+    options: {
+      type: "[#s3-options] S3StorageOptions",
+      description: "将来の拡張用のオプションです。現在は空のオブジェクトです。",
+    },
+  }}
+/>
+
+### S3StorageOptions [#s3storageoptions]
+
+将来の拡張用のオプション型です。現在は空のオブジェクトで、指定できる項目はありません。
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { S3 } from "@unikvs/s3.node";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+  .persist(new S3("my-bucket", { region: "us-east-1" }))
+  .create();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型          |
+| --------------------------------------- | ------------------------- |
+| `write`・`read`                         | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` にはバイト列 (`Uint8Array<ArrayBuffer>`) を使います。
+- ストリームの読み書きに対応し、チャンクは `Uint8Array<ArrayBuffer>` です。
+- 書き込みストリームはマルチパートアップロードを使い、パートサイズは実行時変数の `@unikvs/s3.node:partSize` (なければ `@unikvs/s3:partSize`) で変えられます。
+- `clear()` はバケット内のオブジェクトを列挙してすべて削除します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidPartSizeError [#error-invalid-part-size]
+
+`@unikvs/core` の共通エラーです。書き込みストリームのパートサイズが非整数または非正数のときに投げます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-part-size-actual] unknown",
+      required: true,
+      description: "指定されたパートサイズの値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+実行時変数のパートサイズ (`@unikvs/s3.node:partSize` または `@unikvs/s3:partSize`) が正の整数ではありません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+パートサイズに正の整数 (バイト単位) を指定してください。
+
+### StorageAbortedError [#error-storage-aborted]
+
+`@unikvs/core` の共通エラーです。書き込みストリームの取得前にシグナルが中断済みのときに投げます。
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#storage-aborted-key] string",
+      required: true,
+      description: "アップロードしようとしたキーです。",
+    },
+  }}
+/>
+
+#### 意味
+
+`getWritable()` の呼び出し時点で `AbortSignal` が既に中断されています。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+中断されていないシグナルを渡すか、要求前にシグナルの状態を確認してください。

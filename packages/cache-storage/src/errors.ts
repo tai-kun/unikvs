@@ -5,7 +5,7 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#cache-storage-not-available-error)
  */
 export class CacheStorageNotAvailableError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -13,7 +13,7 @@ export class CacheStorageNotAvailableError extends InvalidUsageErrorBase<undefin
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#cache-storage-not-available-error)
    */
   public constructor(options?: ErrorOptions) {
     super(
@@ -30,32 +30,32 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-chunk)
    */
   readonly chunk: unknown;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-error)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -63,7 +63,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#invalid-chunk-type-error)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;

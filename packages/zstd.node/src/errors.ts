@@ -5,22 +5,22 @@ export type { UnsupportedRuntimeErrorArgs, UnsupportedRuntimeErrorMeta } from "@
 export { UnsupportedRuntimeError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#error-zstd-node-invalid-level)
  */
 export type ZstdNodeInvalidLevelErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#zstd-node-invalid-level-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#error-zstd-node-invalid-level)
  */
 export type ZstdNodeInvalidLevelErrorArgs = ErrorOptions & ZstdNodeInvalidLevelErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#error-zstd-node-invalid-level)
  */
 export class ZstdNodeInvalidLevelError extends InvalidUsageErrorBase<ZstdNodeInvalidLevelErrorMeta> {
   static {
@@ -28,7 +28,7 @@ export class ZstdNodeInvalidLevelError extends InvalidUsageErrorBase<ZstdNodeInv
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#error-zstd-node-invalid-level)
    */
   public constructor(args: ZstdNodeInvalidLevelErrorArgs) {
     const { actual, ...options } = args;

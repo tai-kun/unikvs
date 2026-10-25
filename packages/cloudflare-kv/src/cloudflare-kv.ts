@@ -6,7 +6,7 @@ import { InvalidBindingError, InvalidKeyPrefixError, InvalidTtlSecondsError } fr
 /**
  * `KVNamespace.list` が返すキーの最小形状です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceListKey {
   readonly name: string;
@@ -15,7 +15,7 @@ export interface KVNamespaceListKey {
 /**
  * `KVNamespace.list` が返すページの最小形状です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceListResult {
   readonly keys: readonly KVNamespaceListKey[];
@@ -29,7 +29,7 @@ export interface KVNamespaceListResult {
  * `wrangler` への依存を避けるため、必要な `get` / `put` / `delete` / `list` だけを定義します。
  * 実物の binding はこの形状を満たすため、そのまま渡せます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceLike {
   get(
@@ -51,20 +51,20 @@ export interface KVNamespaceLike {
 /**
  * `CloudflareKv` の構築引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export type CloudflareKvOptions = {
   /**
    * 注入する KV binding です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-binding)
    */
   readonly binding: KVNamespaceLike;
 
   /**
    * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
@@ -72,7 +72,7 @@ export type CloudflareKvOptions = {
    * 書き込み時に付与する有効期限 (秒) です。未指定なら無期限です。
    * `put` の `expirationTtl` としてそのまま渡します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-ttl-seconds)
    */
   readonly ttlSeconds?: number | undefined;
 };
@@ -87,11 +87,11 @@ export type CloudflareKvOptions = {
  *
  * 値はバイナリーセーフな `ArrayBuffer` としてそのまま `put` / `get` します。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export default class CloudflareKv implements IStorage {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
    */
   public readonly name: string;
 
@@ -113,7 +113,7 @@ export default class CloudflareKv implements IStorage {
    * 同一コロケーション内からの読み取りは強い一貫性が保たれます。
    * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、厳密な一貫性が必要な用途には使わないでください。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
    */
   public constructor(options: CloudflareKvOptions) {
     if (options === null || typeof options !== "object") {

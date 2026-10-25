@@ -4,22 +4,22 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#error-ttl-invalid-value)
  */
 export type TtlInvalidValueErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl-invalid-value-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#error-ttl-invalid-value)
  */
 export type TtlInvalidValueErrorArgs = ErrorOptions & TtlInvalidValueErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#error-ttl-invalid-value)
  */
 export class TtlInvalidValueError extends InvalidUsageErrorBase<TtlInvalidValueErrorMeta> {
   static {
@@ -27,7 +27,7 @@ export class TtlInvalidValueError extends InvalidUsageErrorBase<TtlInvalidValueE
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#error-ttl-invalid-value)
    */
   public constructor(args: TtlInvalidValueErrorArgs) {
     const { actual, ...options } = args;

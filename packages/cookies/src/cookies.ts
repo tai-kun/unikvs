@@ -6,48 +6,48 @@ import { CookieTooLargeError, CookieNotAvailableError } from "./errors.js";
 /**
  * Cookie の `SameSite` 属性です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
  */
 export type CookieSameSite = "Strict" | "Lax" | "None";
 
 /**
  * 書き込む Cookie に付与する属性です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
  */
 export type CookieAttributes = {
   /**
    * Cookie を送信するパスです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   readonly path?: string | undefined;
 
   /**
    * Cookie を送信するドメインです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   readonly domain?: string | undefined;
 
   /**
    * HTTPS 接続時のみ Cookie を送信するかどうかです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   readonly secure?: boolean | undefined;
 
   /**
    * クロスサイト送信時の `SameSite` 属性です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   readonly sameSite?: CookieSameSite | undefined;
 
   /**
    * Cookie の有効期限 (秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   readonly maxAge?: number | undefined;
 };
@@ -57,7 +57,7 @@ export type CookieAttributes = {
  *
  * 既定では `document.cookie` を使いますが、この形を満たす実装を `store` オプションに渡して差し替えることもできます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
  */
 export interface CookieStoreLike {
   get(name: string): string | undefined;
@@ -72,20 +72,20 @@ export interface CookieStoreLike {
 /**
  * `Cookies` のコンストラクターオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
  */
 export type CookiesOptions = {
   /**
    * すべての Cookie に付与する属性です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies-cookie-attributes)
    */
   readonly cookieAttributes?: CookieAttributes | undefined;
 
   /**
    * 1 つの値の最大サイズ (バイト) です。既定値は 4096 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies-size-limit-bytes)
    */
   readonly sizeLimitBytes?: number | undefined;
 
@@ -94,7 +94,7 @@ export type CookiesOptions = {
    *
    * 未指定のときは `document.cookie` を使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies-store)
    */
   readonly store?: CookieStoreLike | undefined;
 };
@@ -214,18 +214,18 @@ class DocumentCookieStore implements CookieStoreLike {
  * バイト列は Base64、キーと値は URL エンコードして保存します。
  * `document.cookie` が使えない環境では `store` オプションでストアを注入してください。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
  */
 export default class Cookies implements IStorage<string | Uint8Array, string | Uint8Array> {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   public readonly name: string;
 
   /**
    * 1 つの値の最大サイズ (バイト) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   public readonly sizeLimitBytes: number;
 
@@ -236,7 +236,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   /**
    * Cookie をバックエンドに使うストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#cookies)
    */
   public constructor(options: CookiesOptions = {}) {
     const { store, sizeLimitBytes = DEFAULT_SIZE_LIMIT_BYTES, cookieAttributes = {} } = options;

@@ -2,7 +2,7 @@ import type { IMiddleware } from "@unikvs/core";
 import { toReadableStream } from "@unikvs/utils";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#formats)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#compression-format)
  */
 export type CompressionFormat = Extract<
   ConstructorParameters<typeof CompressionStream>[0],

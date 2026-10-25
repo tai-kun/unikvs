@@ -1,0 +1,77 @@
+---
+title: "@unikvs/opfs"
+description: "@unikvs/opfs の Opfs。OPFS にバイト列を保存するストレージの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/opfs` <Badge variant="warning">ブラウザー専用</Badge> は Origin Private File System にバイト列を保存するストレージです。ブラウザーにファイルを永続化したい場合に使います。
+
+- `name` は `Opfs` です。
+- `open` が必要です。`close` はありません。
+- 保存先のルートディレクトリーはコンストラクターで指定します。
+- このストレージはキーをファイル名として検証します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/opfs
+```
+
+## 使い方 [#usage]
+
+Opfs は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    root: {
+      type: "[#root] string | FileSystemDirectoryHandle",
+      default: '".unikvs"',
+      description:
+        "データを保存するルートディレクトリーです。名前を文字列で指定するか、ディレクトリーハンドルを直接渡します。",
+    },
+  }}
+/>
+
+以下は、バイト列を保存して読み戻す例です。
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  image: Value<Uint8Array>;
+}>()
+  .persist(new Opfs())
+  .create();
+
+await kvs.open();
+await kvs.set("image", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("image");
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型          |
+| --------------------------------------- | ------------------------- |
+| `write`・`read`                         | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- バイト列のみを保存します。
+- このストレージはキーをファイル名として検証します。不正なキーの場合は `InvalidFilenameError` を投げます。
+- `getWritable` で取得したストリームは、OPFS の書き込みストリームに直接書き込みます。
+- `getReadable` で取得したストリームは、ファイルの読み取りストリームを返します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。不正なキーは `@unikvs/utils` の `InvalidFilenameError` を投げます。見つからないキーの読み取りは `NotFoundError` の `DOMException` を投げます。未オープン時の操作は `TypeError` を投げます。

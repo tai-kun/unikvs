@@ -2,13 +2,15 @@ import { type IStorage, KeyNotFoundError, UnsupportedRuntimeError } from "@unikv
 import type { RedisClient, RedisOptions } from "bun";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redisstorageoptions)
  */
 export type RedisStorageOptions = RedisOptions & {
   /**
    * すべてのキーの先頭に付与するプレフィックスです。
    *
    * キーを名前空間で分離し、`clear()` が削除する範囲を限定します。空文字を指定するとキーをそのまま使います。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redisstorageoptions-keyprefix)
    */
   readonly keyPrefix?: string;
 };
@@ -30,7 +32,7 @@ type Connection = {
 const SCAN_COUNT = 1000;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redis)
  */
 export default class Redis implements IStorage {
   /**
@@ -59,6 +61,9 @@ export default class Redis implements IStorage {
 
   public readonly name: string;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redis)
+   */
   public constructor(url?: string, options: RedisStorageOptions = {}) {
     const { keyPrefix = "unikvs:", ...redisOptions } = options;
 

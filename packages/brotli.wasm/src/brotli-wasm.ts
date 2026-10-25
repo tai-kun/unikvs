@@ -15,7 +15,7 @@ export type BrotliWasmOptions = {
    * 値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。
    * 省略した場合は既定値である 11 を使用します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#level)
    */
   readonly level?: number | undefined;
 };

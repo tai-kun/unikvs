@@ -1,0 +1,80 @@
+---
+title: "@unikvs/compression"
+description: "バイト列を指定形式で圧縮・展開するミドルウェア @unikvs/compression の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+バイト列を指定した形式で圧縮・展開するミドルウェアです。<Badge>Middleware</Badge>
+
+このミドルウェアは単発の読み書きとストリームのどちらも透過的に変換し、呼び出し側の型を変えません。
+
+- `name` は `"Compression"` です。
+- `isOpen` はつねに `true` です。
+- 使える形式は実行環境の `CompressionStream` と `DecompressionStream` に依存します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/compression
+```
+
+## 使い方 [#usage]
+
+Compression は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Compression } from "@unikvs/compression";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    format: {
+      type: "[#compression-format] CompressionFormat",
+      required: true,
+      description:
+        "使用する圧縮形式です。`CompressionStream` と `DecompressionStream` の両方で使える形式を指定します。",
+    },
+  }}
+/>
+
+以下は、バイト列を gzip で圧縮して保存し、読み取り時に展開して戻す例です。
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+  .use(new Compression("gzip"))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0x01, 0x02, 0x03]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` はバイト列を指定形式で圧縮します。
+- `decode` は圧縮されたバイト列を指定形式で展開します。
+- `encodeStream` はストリームを `CompressionStream` にそのまま通します。
+- `decodeStream` はストリームを `DecompressionStream` にそのまま通します。
+- チャンクの区切りは圧縮器と展開器に任せます。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+対応しない形式を指定した場合や、破損したデータを展開した場合は、実行環境のネイティブエラーがそのまま伝播します。

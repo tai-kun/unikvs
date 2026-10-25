@@ -1,0 +1,192 @@
+---
+title: "@unikvs/vercel-blob"
+description: "Vercel Blob にバイト列を保存する @unikvs/vercel-blob の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/vercel-blob` は Vercel Blob にバイト列を保存するストレージです。
+
+このストレージはキーを `${keyPrefix}${key}` の pathname に変換し、`put`・`head`・`del`・`list` で処理します。読み取り時は、`head` で解決した URL から `fetch` でダウンロードします。
+
+- `name` は `VercelBlob` です。
+- `isOpen` は常に `true` です。`open()`・`close()` は中断の確認のみ行います。
+- `delete` は冪等で、存在しないキーも成功扱いにします。
+- トークンは実行時変数 `@unikvs/vercel-blob:token`・`@unikvs/fetch:token`、コンストラクターの `token`、環境変数の順で解決されます。
+- ストリームの読み書きに対応しています。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/vercel-blob
+```
+
+## 使い方 [#usage]
+
+VercelBlob は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { VercelBlob } from "@unikvs/vercel-blob";
+```
+
+### `VercelBlob` [#vercel-blob]
+
+Vercel Blob にバイト列を保存するストレージです。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    token: {
+      type: "[#vercel-blob-token] string",
+      description:
+        "操作に使うトークンです。未指定のときは BLOB_READ_WRITE_TOKEN などの環境変数を使います。",
+    },
+    client: {
+      type: "[#vercel-blob-client] BlobClientLike",
+      description:
+        "使用する Vercel Blob クライアントです。未指定のときは @vercel/blob の関数を使います。",
+    },
+    keyPrefix: {
+      type: "[#vercel-blob-key-prefix] string",
+      default: '""',
+      description: "すべてのキーに付与する接頭辞です。",
+    },
+    access: {
+      type: "[#vercel-blob-access] BlobAccess",
+      default: '"private"',
+      description: "保存する Blob の公開範囲です。public か private を指定します。",
+    },
+    fetch: {
+      type: "[#vercel-blob-fetch] IFetch",
+      description:
+        "Blob URL からのダウンロードに使う fetch 実装です。未指定のときは globalThis.fetch を使います。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { VercelBlob } from "@unikvs/vercel-blob";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .persist(new VercelBlob())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                     |
+| --------------------------------------- | ------------------------------------ |
+| `write`・`read`                         | バイト列 (`Uint8Array<ArrayBuffer>`) |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>`            |
+
+- バイト列のみを保存できます。文字列やオブジェクトはミドルウェアで変換してから渡してください。
+- 保存時には内容形式 `application/octet-stream` を付与します。
+- `getWritable` で取得したストリームは、チャンクを蓄積し、`close` 時に一括して保存します。
+- `getReadable` で取得したストリームは、ダウンロード応答のボディーを返します。
+- `clear` は接頭辞配下の pathname をすべて集めてから削除します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidTokenError [#error-invalid-token]
+
+#### 意味
+
+`token` が空でない文字列ではないときに投げます。コンストラクターと実行時変数のどちらの値も検証します。
+
+#### 対処方法
+
+空でない文字列のトークンを指定します。未指定のときは環境変数を使います。
+
+### InvalidAccessError [#error-invalid-access]
+
+#### 意味
+
+`access` が `public` でも `private` でもないときに、構築時に投げます。
+
+#### 対処方法
+
+`access` には `public` か `private` を指定します。
+
+### BlobOperationError [#error-blob-operation]
+
+#### 意味
+
+Vercel Blob クライアントの `put`・`head`・`del`・`list` が失敗したときに投げます。
+
+#### 対処方法
+
+`meta.operation` で失敗した操作を確認し、`cause` で原因を調べます。
+
+### BlobNetworkError [#error-blob-network]
+
+#### 意味
+
+Blob のダウンロード要求自体に失敗したときに投げます。
+
+#### 対処方法
+
+ネットワークの状態と Blob URL の有効性を確認し、`cause` で原因を調べます。
+
+### BlobResponseError [#error-blob-response]
+
+#### 意味
+
+Blob のダウンロード応答が失敗ステータスのときに投げます。存在しないことを示す 404・410 は `KeyNotFoundError` に変えます。
+
+#### 対処方法
+
+`meta.status` でステータスを確認し、応答側の問題を解消します。
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### 意味
+
+`getWritable` で取得したストリームに `Uint8Array<ArrayBuffer>` 以外のチャンクを書き込んだときに投げます。
+
+#### 対処方法
+
+チャンクには `Uint8Array<ArrayBuffer>` を渡します。
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### 意味
+
+指定したキーが存在しないときに `read`・`getReadable` が投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出します。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/vercel-blob";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

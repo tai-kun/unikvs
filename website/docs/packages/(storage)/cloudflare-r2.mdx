@@ -1,0 +1,136 @@
+---
+title: "@unikvs/cloudflare-r2"
+description: "Cloudflare R2 binding にバイト列を保存する @unikvs/cloudflare-r2 の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/cloudflare-r2` は Cloudflare Workers の R2 binding にバイト列を保存するストレージです。
+
+論理キーに接頭辞を付与した実キーで `put`・`get`・`head`・`delete`・`list` します。利用者は `wrangler` への依存なしに実バインディングをそのまま渡せます。
+
+- `name` は `CloudflareR2` です。
+- `isOpen` は `open()` で `true` になり、`close()` で `false` に戻ります。
+- `delete` は冪等で、存在しないキーも成功扱いにします。
+- ストリームの読み書きに対応しています。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/cloudflare-r2
+```
+
+## 使い方 [#usage]
+
+CloudflareR2 は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { CloudflareR2 } from "@unikvs/cloudflare-r2";
+```
+
+### `CloudflareR2` [#cloudflare-r2]
+
+Workers の R2 バインディングにバイト列を保存するストレージです。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "[#cloudflare-r2-bucket] R2BucketLike",
+      required: true,
+      description: "使用する R2 バケットのバインディングです。",
+    },
+    keyPrefix: {
+      type: "[#cloudflare-r2-key-prefix] string",
+      default: '""',
+      description: "すべてのキーに付与する接頭辞です。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { CloudflareR2 } from "@unikvs/cloudflare-r2";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .persist(new CloudflareR2({ bucket }))
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                     |
+| --------------------------------------- | ------------------------------------ |
+| `write`・`read`                         | バイト列 (`Uint8Array<ArrayBuffer>`) |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>`            |
+
+- バイト列のみを保存できます。文字列やオブジェクトはミドルウェアで変換してから渡してください。
+- 呼び出し側がビューを再利用しても保存値が変わらないよう、書き込み時に複製します。
+- `getWritable` で取得したストリームは、チャンクを蓄積し、`close` 時に一括して保存します。
+- `getReadable` で取得したストリームは、保存値を実体化して単一チャンクで送出します。
+- `clear` は接頭辞配下のオブジェクトを列挙し、1000 件ずつまとめて削除します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### 意味
+
+`getWritable` で取得したストリームに `Uint8Array<ArrayBuffer>` 以外のチャンクを書き込んだときに投げます。
+
+#### 対処方法
+
+チャンクには `Uint8Array<ArrayBuffer>` を渡します。
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### 意味
+
+指定したキーが存在しないときに `read`・`getReadable` が投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出します。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cloudflare-r2";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### StorageAbortedError [#error-storage-aborted]
+
+#### 意味
+
+`getWritable` の呼び出し時点でシグナルが既に中断済みのため、取得前に拒否されたときに投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+中断されていないシグナルを渡すか、要求前にシグナルの状態を確認します。

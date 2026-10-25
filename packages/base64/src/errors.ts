@@ -1,7 +1,7 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-decode)
  */
 export class Base64DecodeError extends ErrorBase<undefined> {
   static {
@@ -9,7 +9,7 @@ export class Base64DecodeError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-decode)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to decode the base64 data", options);
@@ -19,22 +19,22 @@ export class Base64DecodeError extends ErrorBase<undefined> {
 setErrorMessage(Base64DecodeError, "base64 データのデコードに失敗しました", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-invalid-padding)
  */
 export type Base64InvalidPaddingErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#base64-invalid-padding-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-invalid-padding)
  */
 export type Base64InvalidPaddingErrorArgs = ErrorOptions & Base64InvalidPaddingErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-invalid-padding)
  */
 export class Base64InvalidPaddingError extends InvalidUsageErrorBase<Base64InvalidPaddingErrorMeta> {
   static {
@@ -42,7 +42,7 @@ export class Base64InvalidPaddingError extends InvalidUsageErrorBase<Base64Inval
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#error-base64-invalid-padding)
    */
   public constructor(args: Base64InvalidPaddingErrorArgs) {
     const { actual, ...options } = args;

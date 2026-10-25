@@ -1,0 +1,33 @@
+import { defineMeta } from "blume";
+
+export default defineMeta({
+  pages: [
+    "json",
+    "superjson",
+    "cbor",
+    "v8-serde",
+    "base64",
+    "base64url",
+    "hex",
+    "compression",
+    "brotli-node",
+    "brotli-bun",
+    "brotli-wasm",
+    "zstd-node",
+    "zstd-bun",
+    "zstd-wasm",
+    "checksum",
+    "debug",
+    "passthrough",
+    "allow-repair",
+    "key-prefix",
+    "writeonly",
+    "readonly",
+    "expiry",
+    "ttl",
+    "rate-limit",
+    "metrics",
+    "tracing",
+  ],
+  title: "ミドルウェア",
+});

@@ -1,0 +1,78 @@
+---
+title: "@unikvs/allow-repair"
+description: "読み取り時の書き戻しの可否を制御するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/allow-repair` は読み取り時の書き戻しを許可または拒否するプラグインです。<Badge>Middleware</Badge>
+
+このミドルウェアは `PassThrough` を継承し、データ変換は行わず、そのまま通します。複数ストレージで前段への書き戻しを一時的に止めたい場合に使います。
+
+- `name` は `AllowRepair` です。
+- `isOpen` は常に `true` です。`open()` は不要です。
+- 初期状態では書き戻しを許可します。`disable()` で拒否に切り替わります。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/allow-repair
+```
+
+## 使い方 [#usage]
+
+`AllowRepair` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+```
+
+以下は、書き戻しを拒否した状態で読み取り、許可してから読み直す例です。
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const gate = new AllowRepair();
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().use(gate).persist(new Memory()).create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+gate.disable();
+
+try {
+  await kvs.get("foo", { repair: true });
+} catch {
+  console.log("書き戻しが拒否されました");
+}
+
+gate.enable();
+
+const bytes = await kvs.get("foo", { repair: true });
+console.log(bytes); // Uint8Array(3) [0, 1, 2] になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力     | 出力     |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` では入力データをそのまま出力します。
+- `decode` では入力データをそのまま出力します。
+- `encodeStream` では入力ストリームをそのまま出力します。
+- `decodeStream` では入力ストリームをそのまま出力します。
+- `use` では `get` と `stream` の書き戻し可否だけを判定し、データ自体は変えません。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+`use()` は書き戻しが拒否されたときに [`RepairNotAllowedError`](/packages/core/errors#error-repair-not-allowed) を投げます。`enabled` が `true` の場合や `repair` が無効な読み取りでは、このエラーを投げません。

@@ -56,12 +56,12 @@ function hexToBytesStrict(text: string): Uint8Array<ArrayBuffer> {
  */
 export type HexOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#hex-encoder)
    */
   readonly encoder?: FastUtf8 | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#hex-decoder)
    */
   readonly decoder?: FastUtf8 | undefined;
 };

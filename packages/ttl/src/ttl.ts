@@ -9,7 +9,7 @@ import { TtlInvalidValueError } from "./errors.js";
  * - `Date` は絶対失効時刻です。
  * - オブジェクト形式では `ttl` に相対秒数、`expiresAt` に epoch ミリ秒または `Date` を指定します。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl-input)
  */
 export type TtlInput =
   | number
@@ -20,20 +20,20 @@ export type TtlInput =
     };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl-options)
  */
 export type TtlOptions = {
   /**
    * 書き込みごとの指定がないときに使う既定の TTL です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl-options-default-ttl)
    */
   readonly defaultTtl?: TtlInput | undefined;
 
   /**
    * 現在時刻 (epoch ミリ秒) を返す関数です。テストで時刻を固定するときに使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl-options-now)
    */
   readonly now?: (() => number) | undefined;
 };
@@ -68,7 +68,7 @@ type TtlEnvelope = {
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
  */
 export default class Ttl implements IMiddleware {
   /**
@@ -77,7 +77,7 @@ export default class Ttl implements IMiddleware {
    * `kvs.set(key, value, { vars: { "@unikvs/ttl:ttl": 60 } })` のように使います。
    * 非名前空間名 `"ttl"` も後方互換として受け付けますが、名前空間付きが優先されます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public static readonly TTL_VAR_NAME: string = "@unikvs/ttl:ttl";
 
@@ -87,17 +87,17 @@ export default class Ttl implements IMiddleware {
    * `kvs.set(key, value, { vars: { "@unikvs/ttl:expiresAt": Date.now() + 1000 } })` のように使います。
    * 非名前空間名 `"expiresAt"` も後方互換として受け付けますが、名前空間付きが優先されます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public static readonly EXPIRES_AT_VAR_NAME: string = "@unikvs/ttl:expiresAt";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public readonly name: string = "Ttl";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public readonly defaultTtl: TtlInput | undefined;
 
@@ -115,7 +115,7 @@ export default class Ttl implements IMiddleware {
   readonly #expiry: Map<string, number>;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public constructor(options: TtlOptions = {}) {
     const { now = Date.now, defaultTtl } = options;
@@ -141,7 +141,7 @@ export default class Ttl implements IMiddleware {
   /**
    * 失効済みのキーを実在しないキーへ写像します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public mapKey(c: IMiddleware.MapKeyContext): string {
     // 失効済みの読み取り・存在確認は実在しないキーへ写像し、読み取りを不発にします。

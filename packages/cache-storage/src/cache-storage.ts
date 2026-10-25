@@ -11,11 +11,11 @@ import {
 type NativeCacheStorage = typeof globalThis.caches;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#to-request)
  */
 export interface IToRequest {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#to-request)
    */
   (key: string): RequestInfo | URL;
 }
@@ -25,17 +25,17 @@ export interface IToRequest {
  */
 export type CacheStorageOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#cache-name)
    */
   readonly cacheName: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#to-request)
    */
   readonly toRequest: IToRequest;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cache-storage#caches)
    */
   readonly caches?: NativeCacheStorage | undefined;
 };

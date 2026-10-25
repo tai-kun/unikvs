@@ -13,12 +13,12 @@ import { Upload } from "@aws-sdk/lib-storage";
 import { type IStorage, StorageAbortedError, InvalidPartSizeError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3storageoptions)
  */
 export type S3StorageOptions = {};
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
  */
 export default class S3 implements IStorage {
   /**
@@ -42,6 +42,9 @@ export default class S3 implements IStorage {
 
   public readonly name: string;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
+   */
   public constructor(bucket: string, config: S3ClientConfig = {}, _options: S3StorageOptions = {}) {
     this.name = "S3";
     this.#client = null;

@@ -2,7 +2,7 @@ import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } 
 import { inspect } from "inspect-lite";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-init)
  */
 export class BrotliWasmInitError extends ErrorBase<undefined> {
   static {
@@ -10,7 +10,7 @@ export class BrotliWasmInitError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-init)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to initialize the brotli module", options);
@@ -20,22 +20,22 @@ export class BrotliWasmInitError extends ErrorBase<undefined> {
 setErrorMessage(BrotliWasmInitError, "brotli モジュールの初期化に失敗しました", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-invalid-level)
  */
 export type BrotliWasmInvalidLevelErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#brotli-wasm-invalid-level-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-invalid-level)
  */
 export type BrotliWasmInvalidLevelErrorArgs = ErrorOptions & BrotliWasmInvalidLevelErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-invalid-level)
  */
 export class BrotliWasmInvalidLevelError extends InvalidUsageErrorBase<BrotliWasmInvalidLevelErrorMeta> {
   static {
@@ -43,7 +43,7 @@ export class BrotliWasmInvalidLevelError extends InvalidUsageErrorBase<BrotliWas
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#error-brotli-wasm-invalid-level)
    */
   public constructor(args: BrotliWasmInvalidLevelErrorArgs) {
     const { actual, ...options } = args;

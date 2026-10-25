@@ -7,7 +7,7 @@ import { InvalidChunkTypeError } from "./errors.js";
  */
 export type MemoryOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#clone)
    */
   readonly clone?: (<T>(value: T) => T) | undefined;
 };

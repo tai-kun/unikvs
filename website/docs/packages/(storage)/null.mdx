@@ -1,0 +1,63 @@
+---
+title: "@unikvs/null"
+description: "@unikvs/null の Null。書き込みを破棄するテスト用ストレージの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/null` はすべての書き込みを破棄し、読み取りを常に失敗させるテスト用ストレージです。パイプラインの動作確認や、保存を一時的に無効化したい場合に使います。
+
+- `name` は `Null` です。
+- `isOpen` は常に `true` です。
+- `open`・`close` はありません。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/null
+```
+
+## 使い方 [#usage]
+
+Null は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Null } from "@unikvs/null";
+```
+
+以下は、書き込みが破棄されることを確認する例です。
+
+```ts
+import { Null } from "@unikvs/null";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: PlainValue<string>;
+}>()
+  .persist(new Null())
+  .create();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+console.log(await kvs.has("greeting")); // false
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型         |
+| --------------------------------------- | ------------------------ |
+| `write`・`read`                         | 任意の値（保存しません） |
+| `getWritable`・`getReadable` のチャンク | 任意の値（保存しません） |
+
+- 書き込んだ値はすべて破棄します。
+- `read`・`delete`・`getReadable` は常に `KeyNotFoundError` を投げます。
+- `exists` は常に `false` を返します。
+- `clear` は何も行いません。
+- `getWritable` は書き込まれたチャンクをすべて破棄します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。読み取りが失敗したときは、`@unikvs/core` の共通エラーである `KeyNotFoundError` を投げます。

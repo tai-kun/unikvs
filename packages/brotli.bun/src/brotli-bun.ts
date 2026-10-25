@@ -15,7 +15,7 @@ export type BrotliBunOptions = {
   /**
    * brotli の圧縮レベルです。0 から 11 の整数を指定します。既定値は 11 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#level)
    */
   readonly level?: number | undefined;
 };

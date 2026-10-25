@@ -10,14 +10,14 @@ import { RateLimitExceededError, RateLimitInvalidOptionError } from "./errors.js
  * - `"wait"` はトークンが補充されるまで待機します。
  * - `"throw"` は直ちにエラーを投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-strategy)
  */
 export type RateLimitStrategy = "wait" | "throw";
 
 /**
  * 待機処理の実装です。テストで時刻を制御するときに差し替えます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#irate-limit-sleep)
  */
 export interface IRateLimitSleep {
   (ms: number, signal: AbortSignal): Promise<void>;
@@ -26,55 +26,55 @@ export interface IRateLimitSleep {
 /**
  * RateLimit ミドルウェアのオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options)
  */
 export type RateLimitOptions = {
   /**
    * 1 インターバルあたりに補充されるトークン数です。既定値は `1` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-tokens-per-interval)
    */
   readonly tokensPerInterval?: number | undefined;
 
   /**
    * トークンを補充する間隔 (ミリ秒) です。既定値は `1000` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-interval-ms)
    */
   readonly intervalMs?: number | undefined;
 
   /**
    * 保持できるトークンの上限です。既定値は `tokensPerInterval` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-max-tokens)
    */
   readonly maxTokens?: number | undefined;
 
   /**
    * `maxTokens` の別名です。両方を指定した場合は `maxTokens` が優先されます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-burst)
    */
   readonly burst?: number | undefined;
 
   /**
    * レート制限を超えたときの挙動です。既定値は `"wait"` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-strategy)
    */
   readonly strategy?: RateLimitStrategy | undefined;
 
   /**
    * 現在時刻 (epoch ミリ秒) を返す関数です。既定値は `Date.now` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-now)
    */
   readonly now?: (() => number) | undefined;
 
   /**
    * 待機処理です。既定では `setTimeout` を使用します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-options-sleep)
    */
   readonly sleep?: IRateLimitSleep | undefined;
 };
@@ -111,39 +111,39 @@ function assertPositiveNumber(name: string, value: number): void {
 /**
  * トークンバケットで操作頻度を制限するミドルウェアです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
  */
 export default class RateLimit extends PassThrough implements IMiddleware {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public override readonly name: string = "RateLimit";
 
   /**
    * 1 インターバルあたりに補充されるトークン数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public readonly tokensPerInterval: number;
 
   /**
    * トークンを補充する間隔 (ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public readonly intervalMs: number;
 
   /**
    * 保持できるトークンの上限です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public readonly maxTokens: number;
 
   /**
    * レート制限を超えたときの挙動です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public readonly strategy: RateLimitStrategy;
 
@@ -161,7 +161,7 @@ export default class RateLimit extends PassThrough implements IMiddleware {
    * RateLimit ミドルウェアを作成します。
    *
    * @param options トークン数と補充間隔などの設定です。
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public constructor(options: RateLimitOptions = {}) {
     super();
@@ -216,7 +216,7 @@ export default class RateLimit extends PassThrough implements IMiddleware {
   /**
    * 現在保持しているトークン数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit)
    */
   public get availableTokens(): number {
     this.#refill();

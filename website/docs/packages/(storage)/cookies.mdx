@@ -1,0 +1,139 @@
+---
+title: "@unikvs/cookies"
+description: "HTTP Cookie に文字列とバイト列を保存する @unikvs/cookies の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/cookies` は HTTP Cookie をバックエンドに使うストレージです。
+
+このストレージは文字列とバイト列を Cookie に保存できる形へ変換します。バイト列は Base64 化し、キーと値は URL エンコードして保存します。
+
+- `name` は `Cookies` です。
+- `isOpen` は常に `true` です。`open()` は Cookie ストアの利用可否を確認します。
+- すべての操作は同期実装です。
+- `delete` は存在しないキーを指定した場合は `KeyNotFoundError` を投げます。
+- ストリームの読み書きには対応していません。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/cookies
+```
+
+## 使い方 [#usage]
+
+Cookies は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Cookies } from "@unikvs/cookies";
+```
+
+### `Cookies` [#cookies]
+
+Cookie をバックエンドに使うストレージです。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    cookieAttributes: {
+      type: "[#cookies-cookie-attributes] CookieAttributes",
+      description:
+        "すべての Cookie に付与する属性です。path・domain・secure・sameSite・maxAge を指定します。",
+    },
+    sizeLimitBytes: {
+      type: "[#cookies-size-limit-bytes] number",
+      default: "4096",
+      description: "1 つの値の最大サイズ (バイト) です。",
+    },
+    store: {
+      type: "[#cookies-store] CookieStoreLike",
+      description: "Cookie の読み書きに使うストアです。未指定のときは document.cookie を使います。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Cookies } from "@unikvs/cookies";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<string>;
+}>()
+  .persist(new Cookies())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", "hello");
+
+const data = await kvs.get("foo");
+console.log(data); // "hello"
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作            | 対応するデータ型                           |
+| --------------- | ------------------------------------------ |
+| `write`・`read` | 文字列・バイト列（`string \| Uint8Array`） |
+
+- 文字列とバイト列を保存できます。文字列には `s:`、バイト列には Base64 化した値に `b:` の接頭辞を付けて保存します。
+- 値の生サイズ (文字列は UTF-8 バイト数、バイト列はバイト数) が `sizeLimitBytes` を超えると保存できません。
+- `document.cookie` が使えない環境では `store` に `CookieStoreLike` を注入します。
+- ストリームの読み書きには対応していません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### CookieTooLargeError [#error-cookie-too-large]
+
+#### 意味
+
+Cookie 値の生サイズが `sizeLimitBytes` を超えたときに `write` が投げます。
+
+#### 対処方法
+
+値を小さくするか、`sizeLimitBytes` を大きくしてください。Cookie にはブラウザーごとの上限もあるため、大きな値は別のストレージに保存してください。
+
+### CookieNotAvailableError [#error-cookie-not-available]
+
+#### 意味
+
+`document.cookie` が使えず `store` の注入もないときに投げます。
+
+#### 対処方法
+
+`store` に `CookieStoreLike` を満たす実装を渡します。
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### 意味
+
+指定したキーが存在しないときに `read`・`delete` が投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出すか削除します。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cookies";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

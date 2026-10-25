@@ -1,0 +1,163 @@
+---
+title: "@unikvs/expiry"
+description: "絶対時刻で有効期限を付与し、期限切れの読み取りを欠落として扱うミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`Expiry` は書き込んだ値に絶対時刻の有効期限を付与し、期限切れの読み取りを欠落として扱います。<Badge>Middleware</Badge>
+
+期限付きのキャッシュや一時的なデータの保持に使います。期限切れの検出時には通知を受け取れます。
+
+- `name` は `Expiry` です。
+- `isOpen` は常に `true` です。
+- 期限の指定は操作ごとの変数 `@unikvs/expiry:expiresAt` と、既定値 `defaultExpiresAt` で行います。
+- 期限切れの `get` とストリーム読み取りは `KeyNotFoundError` として失敗します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/expiry
+```
+
+## 使い方 [#usage]
+
+Expiry は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Expiry } from "@unikvs/expiry";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    defaultExpiresAt: {
+      type: "[#expiry-options-default-expires-at] Date | number | string",
+      description:
+        "書き込みごとの指定がないときに使う既定の有効期限です。Date は絶対時刻、number は epoch ミリ秒、string は ISO 8601 形式です。",
+    },
+    now: {
+      type: "[#expiry-options-now] () => number",
+      default: "Date.now",
+      description: "現在時刻 (epoch ミリ秒) を返す関数です。テストで時刻を固定するときに使います。",
+    },
+    onExpire: {
+      type: "[#expiry-options-on-expire] (info: ExpiryExpiredInfo) => void",
+      description: "期限切れを検出したときに呼び出される通知です。",
+    },
+  }}
+/>
+
+以下は、書き込みごとに有効期限を指定し、期限切れの読み取りを欠落として扱う例です。
+
+```ts
+import { Expiry } from "@unikvs/expiry";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ report: PlainValue<string> }>()
+  .use(new Expiry())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("report", "hello", {
+  vars: { "@unikvs/expiry:expiresAt": Date.now() + 60_000 },
+});
+console.log(await kvs.get("report")); // "hello"
+await kvs.close();
+```
+
+### `Expiry` [#expiry]
+
+有効期限付きのエンベロープで値を包み、読み出し時に期限切れを判定するミドルウェアです。
+
+### `ExpiryOptions` [#expiry-options]
+
+`Expiry` のコンストラクターが受け取るオプションです。既定値と時刻取得、通知を指定できます。
+
+### `ExpiresAtInput` [#expires-at-input]
+
+有効期限として指定できる値です。`Date` は絶対失効時刻、`number` は epoch ミリ秒、`string` は ISO 8601 形式の絶対失効時刻です。
+
+### `ExpiryExpiredInfo` [#expiry-expired-info]
+
+期限切れを検出したときに通知される情報です。
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#expiry-expired-info-key] string",
+      required: true,
+      description: "期限切れだったキーです。",
+    },
+    expiresAt: {
+      type: "[#expiry-expired-info-expires-at] number",
+      required: true,
+      description: "失効時刻 (epoch ミリ秒) です。",
+    },
+  }}
+/>
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                            | 出力                    |
+| -------------- | ------------------------------- | ----------------------- |
+| `encode`       | `unknown`                       | エンベロープ            |
+| `decode`       | エンベロープか任意値            | `unknown`               |
+| `encodeStream` | `unknown` (チャンク)            | エンベロープ (チャンク) |
+| `decodeStream` | エンベロープか任意値 (チャンク) | `unknown` (チャンク)    |
+
+- `encode` は入力を `{ "@unikvs/expiry": 1, expiresAt: number | null, data: unknown }` の形に包みます。指定も既定値もないときは `expiresAt` を `null` にします。
+- `decode` はエンベロープを剥がして元の値を返し、包まれていない値はそのまま返します。
+- `decode` と `decodeStream` は `expiresAt` が現在時刻以下のときに `KeyNotFoundError` を投げ、`onExpire` を呼び出します。
+- ストリームではチャンクごとに 1 対 1 で包みと剥がしを行い、順序を保ちます。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### ExpiryInvalidExpiresAtError [#error-expiry-invalid-expires-at]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#expiry-invalid-expires-at-key] string",
+      description: "対象のキーです。コンストラクターの既定値では undefined です。",
+    },
+    actual: {
+      type: "[#expiry-invalid-expires-at-actual] unknown",
+      required: true,
+      description: "受け取った expiresAt の値です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-expiry-invalid-expires-at-meaning]
+
+`expiresAt` が `Date`・エポックミリ秒・ISO 8601 文字列のいずれでもないときに、このエラーが投げられます。コンストラクターの `defaultExpiresAt` と書き込みごとの変数の両方が検証対象です。
+
+#### 対処方法 [#error-expiry-invalid-expires-at-howto]
+
+`Date`、有限の数値 (epoch ミリ秒)、または `Date.parse` で解釈できる ISO 8601 文字列を指定してください。`NaN` や無限大、`true` などの値は受け付けません。
+
+#### 例 [#error-expiry-invalid-expires-at-example]
+
+以下は、`ExpiryInvalidExpiresAtError` を捕捉する例です。
+
+```ts
+import { ExpiryInvalidExpiresAtError } from "@unikvs/expiry";
+
+try {
+  await kvs.set("report", "hello", { vars: { "@unikvs/expiry:expiresAt": "not-a-date" } });
+} catch (ex) {
+  if (ex instanceof ExpiryInvalidExpiresAtError) {
+    console.log(ex.meta); // { key: "report", actual: "not-a-date" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+期限切れの読み取りは `@unikvs/core` の `KeyNotFoundError` として失敗します。詳細は[エラー](/packages/core/errors#error-key-not-found)を参照してください。

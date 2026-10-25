@@ -3,6 +3,8 @@ import { concatBytes } from "./bytes.js";
 /**
  * 指定したチャンク列を順に流して閉じる ReadableStream を作成します。
  * 任意の分割でストリームにデータを流し込むために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#source-from)
  */
 export function sourceFrom<T>(chunks: readonly T[]): ReadableStream<T> {
   return new ReadableStream<T>({
@@ -19,12 +21,16 @@ export function sourceFrom<T>(chunks: readonly T[]): ReadableStream<T> {
 /**
  * 指定した値の列を順に流して閉じる ReadableStream を作成します。
  * 任意の値の並びをストリームへ流し込むために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#source-from-values)
  */
 export const sourceFromValues: typeof sourceFrom = sourceFrom;
 
 /**
  * ストリームを最後まで読み取り、出力チャンクを返します。
  * ストリームの出力順序や内容を検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#read-all)
  */
 export async function readAll<T>(stream: ReadableStream<T>): Promise<T[]> {
   const reader = stream.getReader();
@@ -46,6 +52,8 @@ export async function readAll<T>(stream: ReadableStream<T>): Promise<T[]> {
 /**
  * ストリームを最後まで読み取り、全チャンクを連結したバイト列を返します。
  * ストリーム経由の読み取りと通常の read の一致を検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#collect-bytes)
  */
 export async function collectBytes(
   stream: ReadableStream<Uint8Array<ArrayBuffer>>,
@@ -56,6 +64,8 @@ export async function collectBytes(
 /**
  * 指定したチャンク列を上流から TransformStream へ流し、出力されたチャンクを順に返します。
  * チャンクの参照・順序・境界が保存されることの検証に使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#collect-chunks)
  */
 export async function collectChunks<T>(
   stream: TransformStream<T, T>,
@@ -67,12 +77,16 @@ export async function collectChunks<T>(
 /**
  * 変換ストリームにチャンクを順に流し込み、出力されたチャンクを返します。
  * ストリームが入力をそのまま透過することを検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#pipe-chunks)
  */
 export const pipeChunks: typeof collectChunks = collectChunks;
 
 /**
  * 変換ストリームへチャンク列を書き込みながら並行して読み取ります。
  * バックプレッシャーによるデッドロックを避けつつ、書き込み・読み取り時のエラーを握り潰さずに観測するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#pump-through)
  */
 export async function pumpThrough<TInput, TOutput>(
   transform: TransformStream<TInput, TOutput>,
@@ -127,6 +141,8 @@ export async function pumpThrough<TInput, TOutput>(
  * 変換ストリームにチャンクを順に書き込み、読み取れるデータをすべて読み取ります。
  * バックプレッシャーによるデッドロックを避けるため、書き込みと読み取りを並行して行います。
  * 書き込み・読み取り・クローズのどこで発生した失敗も closeError として返します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#run-transform)
  */
 export async function runTransform(
   stream: TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,

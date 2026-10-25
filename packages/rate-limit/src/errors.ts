@@ -1,22 +1,22 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-exceeded)
  */
 export type RateLimitExceededErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-exceeded-retry-after-ms)
    */
   readonly retryAfterMs: number;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-exceeded)
  */
 export type RateLimitExceededErrorArgs = ErrorOptions & RateLimitExceededErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-exceeded)
  */
 export class RateLimitExceededError extends ErrorBase<RateLimitExceededErrorMeta> {
   static {
@@ -24,7 +24,7 @@ export class RateLimitExceededError extends ErrorBase<RateLimitExceededErrorMeta
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-exceeded)
    */
   public constructor(args: RateLimitExceededErrorArgs) {
     const { retryAfterMs, ...options } = args;
@@ -46,33 +46,33 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-invalid-option)
  */
 export type RateLimitInvalidOptionErrorMeta = {
   /**
    * 不正だったオプション名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-invalid-option-name)
    */
   readonly name: string;
 
   /**
    * 指定された値です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-invalid-option-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-invalid-option)
  */
 export type RateLimitInvalidOptionErrorArgs = ErrorOptions & RateLimitInvalidOptionErrorMeta;
 
 /**
  * コンストラクターに不正なオプションが渡されたときのエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-invalid-option)
  */
 export class RateLimitInvalidOptionError extends InvalidUsageErrorBase<RateLimitInvalidOptionErrorMeta> {
   static {
@@ -80,7 +80,7 @@ export class RateLimitInvalidOptionError extends InvalidUsageErrorBase<RateLimit
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-invalid-option)
    */
   public constructor(args: RateLimitInvalidOptionErrorArgs) {
     const { name, actual, ...options } = args;

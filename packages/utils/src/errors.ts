@@ -5,7 +5,7 @@ import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
  */
 export type InvalidFilenameErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-filename)
    */
   readonly filename: string;
 };
@@ -48,7 +48,7 @@ setErrorMessage(
  */
 export type InvalidDirnameErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-dirname)
    */
   readonly dirname: string;
 };

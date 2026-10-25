@@ -9,27 +9,27 @@ import { ExpiryInvalidExpiresAtError } from "./errors.js";
  * - `number` は epoch ミリ秒です。
  * - `string` は ISO 8601 形式の絶対失効時刻です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expires-at-input)
  */
 export type ExpiresAtInput = Date | number | string;
 
 /**
  * 期限切れを検出したときに通知される情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-expired-info)
  */
 export type ExpiryExpiredInfo = {
   /**
    * 期限切れだったキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-expired-info-key)
    */
   readonly key: string;
 
   /**
    * 失効時刻 (epoch ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-expired-info-expires-at)
    */
   readonly expiresAt: number;
 };
@@ -37,27 +37,27 @@ export type ExpiryExpiredInfo = {
 /**
  * Expiry ミドルウェアのオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-options)
  */
 export type ExpiryOptions = {
   /**
    * 書き込みごとの指定がないときに使う既定の有効期限です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-options-default-expires-at)
    */
   readonly defaultExpiresAt?: ExpiresAtInput | undefined;
 
   /**
    * 現在時刻 (epoch ミリ秒) を返す関数です。既定値は `Date.now` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-options-now)
    */
   readonly now?: (() => number) | undefined;
 
   /**
    * 期限切れを検出したときに呼び出される通知です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-options-on-expire)
    */
   readonly onExpire?: ((info: ExpiryExpiredInfo) => void) | undefined;
 };
@@ -156,18 +156,18 @@ function asEnvelope(value: unknown): ExpiryEnvelope | undefined {
 /**
  * 有効期限付きのエンベロープで値を包み、読み出し時に期限切れを判定するミドルウェアです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry)
  */
 export default class Expiry implements IMiddleware {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry)
    */
   public readonly name: string = "Expiry";
 
   /**
    * コンストラクターに指定された既定の有効期限です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry)
    */
   public readonly defaultExpiresAt: ExpiresAtInput | undefined;
 
@@ -181,7 +181,7 @@ export default class Expiry implements IMiddleware {
    * Expiry ミドルウェアを作成します。
    *
    * @param options 既定の有効期限と時刻の取得方法です。
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry)
    */
   public constructor(options: ExpiryOptions = {}) {
     const { now = Date.now, onExpire, defaultExpiresAt } = options;

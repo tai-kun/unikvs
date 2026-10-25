@@ -16,7 +16,7 @@ import {
  * `workers-types` への依存を避けるため、`put` / `match` / `delete` のみを定義します。
  * 標準の `Cache` はこの形状を満たすため、そのまま渡せます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export interface CacheLike {
   /**
@@ -38,7 +38,7 @@ export interface CacheLike {
 /**
  * `CloudflareCache` のコンストラクターオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export type CloudflareCacheOptions = {
   /**
@@ -46,7 +46,7 @@ export type CloudflareCacheOptions = {
    *
    * 未指定のときは `caches.default` を使います。どちらも存在しないときは構築時に拒否します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache-cache)
    */
   readonly cache?: CacheLike | undefined;
 
@@ -55,7 +55,7 @@ export type CloudflareCacheOptions = {
    *
    * クエリー・フラグメントなしの絶対 URL を指定します。末尾の `/` は除去して正規化します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache-origin)
    */
   readonly origin?: string | undefined;
 };
@@ -113,11 +113,11 @@ function resolveDefaultCache(): CacheLike {
  *
  * キーを `${origin}/<符号化キー>` の `Request` URL に変換し、バイナリーボディを持つ `Response` として `put` / `match` / `delete` します。Cache API にキー列挙がないため `clear` は未対応です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>> {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
    */
   public readonly name: string;
 
@@ -130,7 +130,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   /**
    * Workers Cache API binding にバイト列を保存するストレージです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
    */
   public constructor(options: CloudflareCacheOptions = {}) {
     const { cache = resolveDefaultCache(), origin = DEFAULT_ORIGIN } = options;

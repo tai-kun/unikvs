@@ -5,32 +5,32 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-chunk)
    */
   readonly chunk: unknown;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-error)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -38,7 +38,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#invalid-chunk-type-error)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;

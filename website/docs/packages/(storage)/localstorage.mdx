@@ -1,0 +1,130 @@
+---
+title: "@unikvs/localstorage"
+description: "@unikvs/localstorage の LocalStorage。localStorage に文字列を保存するストレージの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/localstorage` <Badge variant="warning">ブラウザー専用</Badge> は `localStorage` に文字列を保存するストレージです。タブを閉じても残したい小さな設定値などの保存に使います。
+
+- `name` は `LocalStorage` です。
+- `isOpen` は常に `true` です。`open` は利用可否を確認し、`close` は何も行いません。
+- 論理キーには `keyPrefix` を付けて保存します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/localstorage
+```
+
+## 使い方 [#usage]
+
+LocalStorage は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    keyPrefix: {
+      type: "[#key-prefix] string | undefined",
+      default: '"unikvs:"',
+      description: "すべてのキーに付ける接頭辞です。",
+    },
+    allowClearWithoutPrefix: {
+      type: "[#allow-clear-without-prefix] boolean | undefined",
+      default: "false",
+      description: "空の接頭辞での clear を許可するかどうかです。",
+    },
+    storage: {
+      type: "[#storage] Storage | undefined",
+      description: "使う Storage です。省略した場合は globalThis.localStorage を使います。",
+    },
+  }}
+/>
+
+以下は、文字列を保存して読み戻す例です。
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: PlainValue<string>;
+}>()
+  .persist(new LocalStorage())
+  .create();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作            | 対応するデータ型 |
+| --------------- | ---------------- |
+| `write`・`read` | 文字列           |
+
+- 文字列のみを保存します。
+- オブジェクトなどを保存する場合は、文字列に変換してから渡してください。
+- ストリーム（`getWritable`・`getReadable`）には対応していません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### 意味
+
+指定したキーが存在しない場合に投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/localstorage";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### ClearWithoutPrefixNotAllowedError [#clear-without-prefix-not-allowed-error]
+
+#### 意味
+
+`keyPrefix` が空で `allowClearWithoutPrefix` が `false` のまま `clear` を呼んだ場合に投げます。この制限は `localStorage` 全体の削除を防ぎます。
+
+#### 対処方法
+
+空でない `keyPrefix` を設定するか、`allowClearWithoutPrefix: true` を指定してください。
+
+### LocalStorageNotAvailableError [#local-storage-not-available-error]
+
+#### 意味
+
+`localStorage` が使えない環境で操作した場合に投げます。注入された `storage` がなく、実行環境にも `localStorage` がありません。
+
+#### 対処方法
+
+`options.storage` に `Storage` を注入するか、対応するブラウザーで使ってください。

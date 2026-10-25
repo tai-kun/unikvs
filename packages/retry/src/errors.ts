@@ -3,20 +3,20 @@ import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } 
 /**
  * リトライが枯渇したときのエラーのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-exhausted)
  */
 export type RetryExhaustedErrorMeta = {
   /**
    * 失敗した操作名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-exhausted-operation)
    */
   readonly operation: string;
 
   /**
    * 実行した試行回数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-exhausted-attempts)
    */
   readonly attempts: number;
 };
@@ -24,7 +24,7 @@ export type RetryExhaustedErrorMeta = {
 /**
  * リトライが枯渇したときのエラーのコンストラクター引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-exhausted)
  */
 export type RetryExhaustedErrorArgs = ErrorOptions & RetryExhaustedErrorMeta;
 
@@ -33,7 +33,7 @@ export type RetryExhaustedErrorArgs = ErrorOptions & RetryExhaustedErrorMeta;
  *
  * 最後に発生したエラーは `cause` に保持されます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-exhausted)
  */
 export class RetryExhaustedError extends ErrorBase<RetryExhaustedErrorMeta> {
   static {
@@ -43,7 +43,7 @@ export class RetryExhaustedError extends ErrorBase<RetryExhaustedErrorMeta> {
   /**
    * エラーを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-exhausted)
    */
   public constructor(args: RetryExhaustedErrorArgs) {
     const { attempts, operation, ...options } = args;
@@ -70,33 +70,33 @@ setErrorMessage(
 /**
  * 不正なオプションのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-invalid-option)
  */
 export type RetryInvalidOptionErrorMeta = {
   /**
    * 不正だったオプション名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-invalid-option-name)
    */
   readonly name: string;
 
   /**
    * 指定された値です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-invalid-option-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-invalid-option)
  */
 export type RetryInvalidOptionErrorArgs = ErrorOptions & RetryInvalidOptionErrorMeta;
 
 /**
  * コンストラクターに不正なオプションが渡されたときのエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-invalid-option)
  */
 export class RetryInvalidOptionError extends InvalidUsageErrorBase<RetryInvalidOptionErrorMeta> {
   static {
@@ -104,7 +104,7 @@ export class RetryInvalidOptionError extends InvalidUsageErrorBase<RetryInvalidO
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-invalid-option)
    */
   public constructor(args: RetryInvalidOptionErrorArgs) {
     const { name, actual, ...options } = args;
@@ -130,33 +130,33 @@ setErrorMessage(
 /**
  * 委譲先のストレージが操作を実装していないときのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-unsupported-operation)
  */
 export type RetryUnsupportedOperationErrorMeta = {
   /**
    * 実装されていない操作名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-unsupported-operation-operation)
    */
   readonly operation: string;
 
   /**
    * 委譲先のストレージ名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-unsupported-operation-storage)
    */
   readonly storage: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-unsupported-operation)
  */
 export type RetryUnsupportedOperationErrorArgs = ErrorOptions & RetryUnsupportedOperationErrorMeta;
 
 /**
  * 委譲先のストレージが操作を実装していないときのエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-unsupported-operation)
  */
 export class RetryUnsupportedOperationError extends InvalidUsageErrorBase<RetryUnsupportedOperationErrorMeta> {
   static {
@@ -164,7 +164,7 @@ export class RetryUnsupportedOperationError extends InvalidUsageErrorBase<RetryU
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#error-retry-unsupported-operation)
    */
   public constructor(args: RetryUnsupportedOperationErrorArgs) {
     const { storage, operation, ...options } = args;

@@ -7,13 +7,13 @@ export { KeyNotFoundError } from "@unikvs/core";
 /**
  * `origin` オプションの値の形式です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-origin)
  */
 export type InvalidOriginErrorMeta = {
   /**
    * 受け取った `origin` の値です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-origin)
    */
   readonly actual: unknown;
 };
@@ -21,14 +21,14 @@ export type InvalidOriginErrorMeta = {
 /**
  * `origin` オプションの値の引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-origin)
  */
 export type InvalidOriginErrorArgs = ErrorOptions & InvalidOriginErrorMeta;
 
 /**
  * `origin` がクエリー・フラグメントなしの絶対 URL ではないときに投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-origin)
  */
 export class InvalidOriginError extends InvalidUsageErrorBase<InvalidOriginErrorMeta> {
   static {
@@ -38,7 +38,7 @@ export class InvalidOriginError extends InvalidUsageErrorBase<InvalidOriginError
   /**
    * `origin` がクエリー・フラグメントなしの絶対 URL ではないときに投げます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-origin)
    */
   public constructor(args: InvalidOriginErrorArgs) {
     const { actual, ...options } = args;
@@ -62,13 +62,13 @@ setErrorMessage(
 /**
  * キーの符号化に失敗したときのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-key)
  */
 export type InvalidKeyErrorMeta = {
   /**
    * 符号化に失敗したキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-key)
    */
   readonly key: string;
 };
@@ -76,14 +76,14 @@ export type InvalidKeyErrorMeta = {
 /**
  * キーの符号化に失敗したときの引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-key)
  */
 export type InvalidKeyErrorArgs = ErrorOptions & InvalidKeyErrorMeta;
 
 /**
  * キーを URL パスセグメントとして符号化できないときに投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-key)
  */
 export class InvalidKeyError extends InvalidUsageErrorBase<InvalidKeyErrorMeta> {
   static {
@@ -93,7 +93,7 @@ export class InvalidKeyError extends InvalidUsageErrorBase<InvalidKeyErrorMeta> 
   /**
    * キーを URL パスセグメントとして符号化できないときに投げます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-key)
    */
   public constructor(args: InvalidKeyErrorArgs) {
     const { key, ...options } = args;
@@ -117,13 +117,13 @@ setErrorMessage(
 /**
  * Cache binding が見つからないときのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-binding-not-found)
  */
 export type CacheBindingNotFoundErrorMeta = {
   /**
    * 参照を試みたプロパティの名前です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-binding-not-found)
    */
   readonly property: string;
 };
@@ -131,14 +131,14 @@ export type CacheBindingNotFoundErrorMeta = {
 /**
  * Cache binding が見つからないときの引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-binding-not-found)
  */
 export type CacheBindingNotFoundErrorArgs = ErrorOptions & CacheBindingNotFoundErrorMeta;
 
 /**
  * `cache` オプションがなく `caches.default` も存在しないときに投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-binding-not-found)
  */
 export class CacheBindingNotFoundError extends InvalidUsageErrorBase<CacheBindingNotFoundErrorMeta> {
   static {
@@ -148,7 +148,7 @@ export class CacheBindingNotFoundError extends InvalidUsageErrorBase<CacheBindin
   /**
    * `cache` オプションがなく `caches.default` も存在しないときに投げます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-binding-not-found)
    */
   public constructor(args: CacheBindingNotFoundErrorArgs) {
     const { property, ...options } = args;
@@ -172,20 +172,20 @@ setErrorMessage(
 /**
  * Cache 操作に失敗したときのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
  */
 export type CacheOperationErrorMeta = {
   /**
    * 失敗した操作名 (`put` / `match` / `delete`) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
    */
   readonly operation: string;
 
   /**
    * 操作対象のキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
    */
   readonly key: string | undefined;
 };
@@ -193,14 +193,14 @@ export type CacheOperationErrorMeta = {
 /**
  * Cache 操作に失敗したときの引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
  */
 export type CacheOperationErrorArgs = ErrorOptions & CacheOperationErrorMeta;
 
 /**
  * `put` / `match` / `delete` が拒否したときに投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
  */
 export class CacheOperationError extends ErrorBase<CacheOperationErrorMeta> {
   static {
@@ -210,7 +210,7 @@ export class CacheOperationError extends ErrorBase<CacheOperationErrorMeta> {
   /**
    * `put` / `match` / `delete` が拒否したときに投げます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-cache-operation)
    */
   public constructor(args: CacheOperationErrorArgs) {
     const { key, operation, ...options } = args;
@@ -237,7 +237,7 @@ setErrorMessage(
 /**
  * `clear` が未対応であることを表すエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-clear-not-supported)
  */
 export class ClearNotSupportedError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -247,7 +247,7 @@ export class ClearNotSupportedError extends InvalidUsageErrorBase<undefined> {
   /**
    * `clear` が未対応であることを表すエラーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-clear-not-supported)
    */
   public constructor(options?: ErrorOptions) {
     super(
@@ -266,27 +266,27 @@ setErrorMessage(
 /**
  * チャンクの型が不正なときのメタ情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
    * 書き込み対象のキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
    */
   readonly key: string;
 
   /**
    * 受け取ったチャンクです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
    */
   readonly chunk: unknown;
 
   /**
    * 受け取ったチャンクの型名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
    */
   readonly chunkType: string;
 };
@@ -294,14 +294,14 @@ export type InvalidChunkTypeErrorMeta = {
 /**
  * チャンクの型が不正なときの引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
  * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -311,7 +311,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   /**
    * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#error-invalid-chunk-type)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;

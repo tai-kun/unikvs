@@ -8,7 +8,7 @@ export type { UnsupportedRuntimeErrorArgs, UnsupportedRuntimeErrorMeta } from "@
 export { UnsupportedRuntimeError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#error-storage-not-open)
  */
 export class StorageNotOpenError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -16,7 +16,7 @@ export class StorageNotOpenError extends InvalidUsageErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#error-storage-not-open)
    */
   public constructor(options?: ErrorOptions) {
     super("The S3 client is not open. Call open() before close().", options);

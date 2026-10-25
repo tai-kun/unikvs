@@ -1,7 +1,7 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-decode)
  */
 export class Base64UrlDecodeError extends ErrorBase<undefined> {
   static {
@@ -9,7 +9,7 @@ export class Base64UrlDecodeError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-decode)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to decode the base64url data", options);
@@ -19,22 +19,22 @@ export class Base64UrlDecodeError extends ErrorBase<undefined> {
 setErrorMessage(Base64UrlDecodeError, "base64url データのデコードに失敗しました", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-invalid-padding)
  */
 export type Base64UrlInvalidPaddingErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#base64url-invalid-padding-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-invalid-padding)
  */
 export type Base64UrlInvalidPaddingErrorArgs = ErrorOptions & Base64UrlInvalidPaddingErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-invalid-padding)
  */
 export class Base64UrlInvalidPaddingError extends InvalidUsageErrorBase<Base64UrlInvalidPaddingErrorMeta> {
   static {
@@ -42,7 +42,7 @@ export class Base64UrlInvalidPaddingError extends InvalidUsageErrorBase<Base64Ur
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#error-base64url-invalid-padding)
    */
   public constructor(args: Base64UrlInvalidPaddingErrorArgs) {
     const { actual, ...options } = args;

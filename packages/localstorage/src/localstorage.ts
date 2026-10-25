@@ -7,17 +7,17 @@ import { LocalStorageNotAvailableError, ClearWithoutPrefixNotAllowedError } from
  */
 export type LocalStorageOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#allow-clear-without-prefix)
    */
   readonly allowClearWithoutPrefix?: boolean | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#storage)
    */
   readonly storage?: Storage | undefined;
 };
@@ -29,7 +29,7 @@ export default class LocalStorage implements IStorage<string> {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/localstorage#allow-clear-without-prefix)
    */
   public readonly allowClearWithoutPrefix: boolean;
 

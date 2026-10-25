@@ -13,14 +13,14 @@ import {
  * `memjs` は `{ value: Buffer | null, flags }` を返します。
  * 欠落キーは `null`/`undefined` または `value` が空の形で表されます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedgetresultvalue)
  */
 export type MemcachedGetResultValue = Uint8Array | string | null | undefined;
 
 /**
  * `get` の戻り値として受け付ける形です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedgetresult)
  */
 export type MemcachedGetResult =
   | {
@@ -33,7 +33,7 @@ export type MemcachedGetResult =
  * 注入できる Memcached クライアントの最小形です。
  * `memjs` の `Client` はこの形を満たします。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedclientlike)
  */
 export type MemcachedClientLike = {
   readonly get: (key: string) => Promise<MemcachedGetResult>;
@@ -52,14 +52,14 @@ export type MemcachedClientLike = {
  * `servers` 引数として受け付ける形です。
  * 文字列 (`"host:port,host:port"`) またはその配列です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedservers)
  */
 export type MemcachedServers = string | readonly string[];
 
 /**
  * `Memcached` のコンストラクターオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions)
  */
 export type MemcachedStorageOptions = {
   /**
@@ -67,28 +67,28 @@ export type MemcachedStorageOptions = {
    * 指定時は `servers`/`host`/`port` による接続作成を行いません。
    * `close()` は注入クライアントも解放 (`quit`/`close`/`end`) します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-client)
    */
   readonly client?: MemcachedClientLike | undefined;
 
   /**
    * 接続先サーバーです。コンストラクターの第 1 引数が優先されます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-servers)
    */
   readonly servers?: MemcachedServers | undefined;
 
   /**
    * `servers` の代わりにホストを直接指定します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-host)
    */
   readonly host?: string | undefined;
 
   /**
    * `servers` の代わりにポートを直接指定します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-port)
    */
   readonly port?: number | undefined;
 
@@ -96,21 +96,21 @@ export type MemcachedStorageOptions = {
    * 書き込んだ値の有効期限 (秒) です。
    * `0` は無期限を表します。30 日を超える値は UNIX 時刻として扱われます (memcached 仕様)。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-ttlseconds)
    */
   readonly ttlSeconds?: number | undefined;
 
   /**
    * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
    * `open` 時の接続確認が打ち切られるまでの時間 (ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-connecttimeout)
    */
   readonly connectTimeout?: number | undefined;
 };
@@ -208,7 +208,7 @@ function normalizeGetResult(result: unknown): Uint8Array<ArrayBuffer> | null {
  * 値は Base64 でエンコードした文字列として保存します。
  * memcached にはキー列挙の手段がないため、`clear` はサーバー上の全キーを削除します。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
  */
 export default class Memcached implements IStorage {
   #con: { readonly client: MemcachedClientLike } | null = null;
@@ -224,14 +224,14 @@ export default class Memcached implements IStorage {
   readonly #keyPrefix: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
    */
   public readonly name = "Memcached";
 
   /**
    * Memcached ストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
    */
   public constructor(servers?: MemcachedServers, options: MemcachedStorageOptions = {}) {
     const {

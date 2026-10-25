@@ -3,6 +3,8 @@ import { NinjaPromise } from "ninja-promise";
 
 /**
  * 入出力変換を挟んだストリームです。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#iproxied-transform-stream)
  */
 export interface IProxiedTransformStream<TInput = any, TOutput = any> extends ITransformStream<
   TInput,
@@ -10,6 +12,8 @@ export interface IProxiedTransformStream<TInput = any, TOutput = any> extends IT
 > {
   /**
    * 入力からソースへの接続が終わると解決します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#iproxied-transform-stream-closepromise)
    */
   closePromise: NinjaPromise<void>;
 }

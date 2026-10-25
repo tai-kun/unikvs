@@ -2,7 +2,7 @@ import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } 
 import { inspect } from "inspect-lite";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-init)
  */
 export class ZstdWasmInitError extends ErrorBase<undefined> {
   static {
@@ -10,7 +10,7 @@ export class ZstdWasmInitError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-init)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to initialize the zstd module", options);
@@ -20,22 +20,22 @@ export class ZstdWasmInitError extends ErrorBase<undefined> {
 setErrorMessage(ZstdWasmInitError, "zstd モジュールの初期化に失敗しました", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-invalid-level)
  */
 export type ZstdWasmInvalidLevelErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#zstd-wasm-invalid-level-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-invalid-level)
  */
 export type ZstdWasmInvalidLevelErrorArgs = ErrorOptions & ZstdWasmInvalidLevelErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-invalid-level)
  */
 export class ZstdWasmInvalidLevelError extends InvalidUsageErrorBase<ZstdWasmInvalidLevelErrorMeta> {
   static {
@@ -43,7 +43,7 @@ export class ZstdWasmInvalidLevelError extends InvalidUsageErrorBase<ZstdWasmInv
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#error-zstd-wasm-invalid-level)
    */
   public constructor(args: ZstdWasmInvalidLevelErrorArgs) {
     const { actual, ...options } = args;

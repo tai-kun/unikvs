@@ -1,0 +1,158 @@
+---
+title: "@unikvs/soft-delete"
+description: "削除を復元可能な墓標として保持する @unikvs/soft-delete の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/soft-delete` は削除されたデータを復元可能な墓標 (tombstone) として保持するラッパーです。
+
+このラッパーは `delete` を物理削除ではなく同じキーへの墓標書き込みとして処理し、`restore` で値を戻せるようにします。墓標と台帳は委譲先のストレージに保存されるため、複製先にも複製されます。
+
+- `name` は `SoftDelete` です。
+- `isOpen` は委譲先のストレージに従います。
+- `retentionMs` を指定すると、保持期限を過ぎた墓標は掃除されます。
+- ストリームの対応有無とチャンク型は委譲先のストレージに従います。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/soft-delete
+```
+
+## 使い方 [#usage]
+
+SoftDelete は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { SoftDelete } from "@unikvs/soft-delete";
+```
+
+### `SoftDelete` [#soft-delete]
+
+削除されたデータを復元可能な墓標として保持するラッパーです。
+
+コンストラクターの引数は次のとおりです。委譲先の `storage` を第一引数に渡します。
+
+<TypeTable
+  type={{
+    storage: {
+      type: "[#soft-delete-storage] IStorage",
+      required: true,
+      description: "削除墓標の実体を保持する委譲先のストレージです。",
+    },
+    retentionMs: {
+      type: "[#soft-delete-retention-ms] number",
+      description: "削除墓標を保持する期間 (ミリ秒) です。未指定なら保持し続けます。",
+    },
+  }}
+/>
+
+以下は、削除した値を復元する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { SoftDelete } from "@unikvs/soft-delete";
+import { UniKvs, type Value } from "unikvs";
+
+const softDelete = new SoftDelete(new Memory());
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .persist(softDelete)
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+await kvs.delete("foo"); // 墓標として残ります
+console.log(await kvs.has("foo")); // false
+
+await softDelete.restore("foo");
+console.log(await kvs.has("foo")); // true
+
+await kvs.close();
+```
+
+ミドルウェアとしても使えます。`use()` に渡すと、このミドルウェアは墓標が読み出し経路へ紛れ込んだときは存在しないキーとして扱います。
+
+以下は、ミドルウェアとして使う例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { SoftDelete } from "@unikvs/soft-delete";
+import { UniKvs, type Value } from "unikvs";
+
+const inner = new Memory();
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .use(new SoftDelete(inner))
+  .persist(inner)
+  .create();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                     |
+| --------------------------------------- | ------------------------------------ |
+| `write`・`read`                         | 任意の値（文字列・オブジェクトなど） |
+| `getWritable`・`getReadable` のチャンク | 委譲先のストレージに従います         |
+
+- 任意の値を保存できます。墓標は内部形式のレコードとして同じキーに保存します。
+- 墓標と台帳は委譲先のストレージに保存されます。台帳には予約キー `__unikvs_soft_delete_registry__` を使います。
+- ストリームの対応有無とチャンク型は委譲先のストレージに従います。対応しないときは取得関数が未定義のままです。
+- ミドルウェアとしては透過します。墓標が読み出し経路へ紛れ込んだときは、このミドルウェアは `KeyNotFoundError` を投げます。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### TombstoneNotFoundError [#error-tombstone-not-found]
+
+#### 意味
+
+復元や完全削除の対象に墓標がないとき、または墓標が保持期限を過ぎているときに `restore`・`purge` が投げます。
+
+#### 対処方法
+
+`listTombstones` で墓標の一覧を確認してから操作します。
+
+### SoftDeleteInvalidRetentionError [#error-soft-delete-invalid-retention]
+
+#### 意味
+
+`retentionMs` が 0 以上の有限数ではないときに、構築時に投げます。
+
+#### 対処方法
+
+`retentionMs` には 0 以上の有限数 (ミリ秒) を指定するか、未指定にします。
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### 意味
+
+墓標だけが残るキーや存在しないキーを読み出したときに投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出します。削除済みの値が必要なときは `restore` を使います。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/soft-delete";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

@@ -15,7 +15,7 @@ import {
 /**
  * リトライ対象の操作名です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-operation)
  */
 export type RetryOperation =
   | "write"
@@ -29,41 +29,41 @@ export type RetryOperation =
 /**
  * エラーがリトライ可能かどうかを判定する述語です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retryable-predicate)
  */
 export type RetryablePredicate = (error: unknown) => boolean;
 
 /**
  * リトライが発生したときに通知される試行情報です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-attempt-info)
  */
 export type RetryAttemptInfo = {
   /**
    * 失敗した操作名です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-attempt-info-operation)
    */
   readonly operation: RetryOperation;
 
   /**
    * 失敗した試行回数 (1 始まり) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-attempt-info-attempt)
    */
   readonly attempt: number;
 
   /**
    * 発生したエラーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-attempt-info-error)
    */
   readonly error: unknown;
 
   /**
    * 次の試行までの待機時間 (ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-attempt-info-next-delay-ms)
    */
   readonly nextDelayMs: number;
 };
@@ -71,41 +71,41 @@ export type RetryAttemptInfo = {
 /**
  * リトライの動作を調整する設定です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options)
  */
 export type RetryOptions = {
   /**
    * 初回試行の後の再試行回数です。既定値は 3 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-max-retries)
    */
   readonly maxRetries?: number | undefined;
 
   /**
    * 初回の待機時間 (ミリ秒) です。既定値は 100 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-initial-delay-ms)
    */
   readonly initialDelayMs?: number | undefined;
 
   /**
    * 待機時間の上限 (ミリ秒) です。既定値は 5000 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-max-delay-ms)
    */
   readonly maxDelayMs?: number | undefined;
 
   /**
    * 待機時間の増加係数です。既定値は 2 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-factor)
    */
   readonly factor?: number | undefined;
 
   /**
    * 待機時間にジッターを加えるかどうかです。既定値は true です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-jitter)
    */
   readonly jitter?: boolean | undefined;
 
@@ -113,14 +113,14 @@ export type RetryOptions = {
    * エラーがリトライ可能かどうかを判定する述語です。
    * 既定では `isRetryableError` を使用します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-retryable)
    */
   readonly retryable?: RetryablePredicate | undefined;
 
   /**
    * 再試行の直前に呼び出される通知です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-options-on-retry)
    */
   readonly onRetry?: ((info: RetryAttemptInfo) => void) | undefined;
 };
@@ -130,7 +130,7 @@ export type RetryOptions = {
  *
  * 存在しないキーなどの恒久的な失敗と、中断による失敗はリトライしません。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#is-retryable-error)
  */
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof KeyNotFoundError) {
@@ -181,7 +181,7 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
 /**
  * 一時的な失敗を指数バックオフで再試行するストレージラッパーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
  */
 export default class Retry<
   TWriteData = any,
@@ -190,63 +190,63 @@ export default class Retry<
   TReadChunk = TWriteChunk,
 > implements IStorage<TWriteData, TReadData, TWriteChunk, TReadChunk> {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly name: string = "Retry";
 
   /**
    * 委譲先のストレージです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry-inner)
    */
   public readonly inner: IStorage<TWriteData, TReadData, TWriteChunk, TReadChunk>;
 
   /**
    * 初回試行の後の再試行回数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly maxRetries: number;
 
   /**
    * 初回の待機時間 (ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly initialDelayMs: number;
 
   /**
    * 待機時間の上限 (ミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly maxDelayMs: number;
 
   /**
    * 待機時間の増加係数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly factor: number;
 
   /**
    * 待機時間にジッターを加えるかどうかです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly jitter: boolean;
 
   /**
    * エラーがリトライ可能かどうかを判定する述語です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly retryable: RetryablePredicate;
 
   /**
    * 再試行の直前に呼び出される通知です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public readonly onRetry: ((info: RetryAttemptInfo) => void) | undefined;
 
@@ -255,7 +255,7 @@ export default class Retry<
    *
    * @param inner 委譲先のストレージです。
    * @param options 再試行回数と待機時間の設定です。
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#retry)
    */
   public constructor(
     inner: IStorage<TWriteData, TReadData, TWriteChunk, TReadChunk>,

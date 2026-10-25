@@ -7,11 +7,11 @@ import { type IEnv, api } from "./_core.js";
 import { UnsupportedRuntimeError, ZstdNodeInvalidLevelError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#usage)
  */
 export type ZstdNodeOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#level)
    */
   readonly level?: number | undefined;
 };
@@ -41,7 +41,7 @@ function toOwnedBytesTransformStream(
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#usage)
  */
 export default class ZstdNode implements IMiddleware {
   /**
@@ -62,7 +62,7 @@ export default class ZstdNode implements IMiddleware {
   readonly #level: number;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.node#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-node#usage)
    */
   public constructor(options: ZstdNodeOptions = {}) {
     const { level = 3 } = options;

@@ -1,0 +1,120 @@
+---
+title: "@unikvs/zstd.bun"
+description: "Bun の Zstandard 機能で圧縮と展開を行い、node:zlib へフォールバックするミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/zstd.bun` はバイト列を Zstandard で圧縮して保存し、読み取り時に展開するプラグインです。<Badge>Middleware</Badge>
+
+このミドルウェアは Bun ランタイムでは `Bun.zstdCompressSync` と `Bun.zstdDecompressSync` を使い、利用できない環境では `node:zlib` の Zstandard 機能へフォールバックします。Bun を中心に Node.js 互換環境でも動かしたい場合に使います。
+
+- `name` は `ZstdBun` です。
+- `isOpen` は `open()` 後に `true` になります。初期状態では `false` です。
+- `open()` で実行環境を遅延解決し、結果を複数インスタンスで共有します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/zstd.bun @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+`ZstdBun` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { ZstdBun } from "@unikvs/zstd.bun";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "圧縮レベルです。1 から 22 までの整数を指定します。値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。省略した場合は 3 になります。",
+    },
+  }}
+/>
+
+以下は、書き込んだ値を Zstandard で圧縮して保存し、読み取り時に展開する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+import { ZstdBun } from "@unikvs/zstd.bun";
+
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .use(new ZstdBun({ level: 3 }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // 展開されたバイト列になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` では入力バイト列を Zstandard で圧縮します。
+- `decode` では入力バイト列を Zstandard で展開します。
+- `encodeStream` では入力チャンクを蓄積し、`flush` 時に一括で圧縮して 1 チャンクとして出力します。
+- `decodeStream` では入力チャンクを蓄積し、`flush` 時に一括で展開して 1 チャンクとして出力します。
+- ストリーム用の Zstandard 機能がないため、ストリーム処理はチャンク単位の逐次変換ではなく一括変換になります。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `ZstdBunInvalidLevelError` [#error-zstd-bun-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#zstd-bun-invalid-level-actual] unknown",
+      required: true,
+      description: "指定された圧縮レベルです。",
+    },
+  }}
+/>
+
+#### 意味
+
+コンストラクターは `level` が 1 から 22 までの整数ではないときに、このエラーを投げます。
+
+#### 対処方法
+
+1 から 22 までの整数を指定してください。省略した場合は 3 になります。
+
+#### 例
+
+以下は、`ZstdBunInvalidLevelError` を捕捉する例です。
+
+```ts
+import { ZstdBun, ZstdBunInvalidLevelError } from "@unikvs/zstd.bun";
+
+try {
+  new ZstdBun({ level: 23 });
+} catch (ex) {
+  if (ex instanceof ZstdBunInvalidLevelError) {
+    console.log(ex.meta); // { actual: 23 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+このミドルウェアは `open()` で実行環境の解決に失敗した場合は [`UnsupportedRuntimeError`](/packages/core/errors#error-unsupported-runtime) を投げます。`open()` 前に `encode` などを呼ぶと `TypeError` を投げます。展開に失敗した場合は上流のエラーをそのまま伝播します。

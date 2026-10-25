@@ -1,0 +1,136 @@
+---
+title: "@unikvs/key-prefix"
+description: "すべてのキーに固定文字列を付与し、テナント分離を実現するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`KeyPrefix` はすべてのキーに固定文字列を付与し、テナント分離を実現します。<Badge>Middleware</Badge>
+
+複数のテナントで 1 つのストレージを共有するときに、キーの衝突を防ぐ目的で使います。物理キーにプレフィックスを付けることで、このミドルウェアは論理キーを分離します。
+
+- `name` は `KeyPrefix` です。
+- `isOpen` は常に `true` です。
+- `mapKey` でキーにプレフィックスを付与し、`use` で範囲限定削除を保証できない `clear` を拒否します。
+- `encode`・`decode`・`encodeStream`・`decodeStream` はデータを透過します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/key-prefix
+```
+
+## 使い方 [#usage]
+
+KeyPrefix は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { KeyPrefix } from "@unikvs/key-prefix";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#key-prefix-prefix] string",
+      required: true,
+      description: "すべてのキーに付与する固定文字列です。空文字ではキーをそのまま通します。",
+    },
+    allowClear: {
+      type: "[#key-prefix-allow-clear] boolean",
+      default: "false",
+      description:
+        "プレフィックスが非空のときに clear を拒否するかどうかです。true では拒否し、false (既定) では透過します。",
+    },
+  }}
+/>
+
+以下は、テナントごとにキーを分離する例です。
+
+```ts
+import { KeyPrefix } from "@unikvs/key-prefix";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ k1: PlainValue<string> }>()
+  .use(new KeyPrefix("tenant-a:"))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+// 下流には tenant-a:k1 として保存されます
+await kvs.close();
+```
+
+### `KeyPrefix` [#key-prefix]
+
+キーに固定のプレフィックスを付与するミドルウェアです。このミドルウェアは `PassThrough` を継承し、データ変換は行いません。
+
+### `KeyPrefixOptions` [#key-prefix-options]
+
+`KeyPrefix` のコンストラクターが受け取るオプションです。`allowClear` の既定値は `false` です。
+
+## データ型 [#data-types]
+
+| メソッド       | 入力  | 出力  |
+| -------------- | ----- | ----- |
+| `encode`       | `any` | `any` |
+| `decode`       | `any` | `any` |
+| `encodeStream` | `any` | `any` |
+| `decodeStream` | `any` | `any` |
+
+- `encode` と `decode` は入力を同じ参照のまま出力し、変換を行いません。
+- `encodeStream` と `decodeStream` はチャンクをそのまま通し、順序と参照を保ちます。
+- キーの変換は `mapKey` で行い、`${prefix}${key}` を返します。プレフィックスが空文字のときはキーをそのまま返します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyPrefixClearDeniedError [#error-key-prefix-clear-denied]
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#key-prefix-clear-denied-prefix] string",
+      required: true,
+      description: "拒否時点のプレフィックスです。",
+    },
+    allowClear: {
+      type: "[#key-prefix-clear-denied-allow-clear] boolean",
+      required: true,
+      description: "拒否時点の allowClear の値です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-key-prefix-clear-denied-meaning]
+
+プレフィックスが非空で `allowClear` が `true` のときに `clear` が呼ばれると、このエラーが投げられます。プレフィックス付きの `clear` は範囲限定削除を保証できず、他テナントのデータまで削除する恐れがあるため拒否します。
+
+#### 対処方法 [#error-key-prefix-clear-denied-howto]
+
+共有環境では `clear` を呼ばず、キーごとに `delete` を使ってください。単一テナントで占有が保証できる場合や、全体削除を意図している場合は `allowClear` を `false` (既定) にして透過させてください。
+
+#### 例 [#error-key-prefix-clear-denied-example]
+
+以下は、`KeyPrefixClearDeniedError` を捕捉する例です。
+
+```ts
+import { KeyPrefix, KeyPrefixClearDeniedError } from "@unikvs/key-prefix";
+
+const prefix = new KeyPrefix("tenant-a:", { allowClear: true });
+
+try {
+  await kvs.clear();
+} catch (ex) {
+  if (ex instanceof KeyPrefixClearDeniedError) {
+    console.log(ex.meta); // { prefix: "tenant-a:", allowClear: true }
+  } else {
+    throw ex;
+  }
+}
+```

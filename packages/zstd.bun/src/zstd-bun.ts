@@ -15,7 +15,7 @@ export type ZstdBunOptions = {
   /**
    * zstd の圧縮レベルです。1 から 22 の整数を指定します。既定値は 3 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#level)
    */
   readonly level?: number | undefined;
 };

@@ -1,7 +1,7 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#error-hex-decode)
  */
 export class HexDecodeError extends ErrorBase<undefined> {
   static {
@@ -9,7 +9,7 @@ export class HexDecodeError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#error-hex-decode)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to decode the hex data", options);

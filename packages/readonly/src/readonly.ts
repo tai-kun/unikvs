@@ -7,31 +7,31 @@ import {
 } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly)
  */
 export type ReadOnlyOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly-allow-delete)
    */
   readonly allowDelete?: boolean | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly)
  */
 export default class ReadOnly implements IMiddleware {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly)
    */
   public readonly name: string = "ReadOnly";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly)
    */
   public readonly allowDelete: boolean;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#readonly)
    */
   public constructor(options?: ReadOnlyOptions) {
     this.allowDelete = Boolean(options?.allowDelete);

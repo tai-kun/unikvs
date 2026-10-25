@@ -1,7 +1,7 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#error-v8-serde-encode)
  */
 export class V8SerdeEncodeError extends ErrorBase<undefined> {
   static {
@@ -9,7 +9,7 @@ export class V8SerdeEncodeError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#error-v8-serde-encode)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to encode a value with v8.serialize", options);
@@ -19,7 +19,7 @@ export class V8SerdeEncodeError extends ErrorBase<undefined> {
 setErrorMessage(V8SerdeEncodeError, "値の v8.serialize エンコードに失敗しました", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#error-v8-serde-decode)
  */
 export class V8SerdeDecodeError extends ErrorBase<undefined> {
   static {
@@ -27,7 +27,7 @@ export class V8SerdeDecodeError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#error-v8-serde-decode)
    */
   public constructor(options?: ErrorOptions) {
     super("Failed to decode the data with v8.deserialize", options);

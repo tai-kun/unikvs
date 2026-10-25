@@ -3,28 +3,31 @@ import { type IMiddleware, KeyNotFoundError } from "@unikvs/core";
 import { WriteOnlyClearNotAllowedError, WriteOnlyDeleteNotAllowedError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly)
  */
 export type WriteOnlyOptions = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly-allow-delete)
+   */
   readonly allowDelete?: boolean | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly)
  */
 export default class WriteOnly implements IMiddleware {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly)
    */
   public readonly name: string = "WriteOnly";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly)
    */
   public readonly allowDelete: boolean;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/writeonly#writeonly)
    */
   public constructor(options?: WriteOnlyOptions) {
     this.allowDelete = Boolean(options?.allowDelete);

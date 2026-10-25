@@ -7,13 +7,13 @@ import { InvalidLeaseTtlError, InvalidEndpointsError } from "./errors.js";
 /**
  * `put` に渡せる etcd 固有のオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdputoptions)
  */
 export type EtcdPutOptions = {
   /**
    * キーに付与するリースの TTL (秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdputoptions-leasettlseconds)
    */
   readonly leaseTtlSeconds?: number | undefined;
 };
@@ -21,7 +21,7 @@ export type EtcdPutOptions = {
 /**
  * `getAll` が返すキーと値の組の形式です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdgetallresult)
  */
 export type EtcdGetAllResult =
   | Record<string, Uint8Array | string | Buffer>
@@ -33,7 +33,7 @@ export type EtcdGetAllResult =
  *
  * テストではこのインターフェースを満たすフェイクを注入し、実環境では `endpoints` から組み立てた etcd3 クライアントを使います。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdclientlike)
  */
 export type EtcdClientLike = {
   get(key: string): Promise<Uint8Array | string | Buffer | null | undefined>;
@@ -52,7 +52,7 @@ export type EtcdClientLike = {
 /**
  * etcd3 パッケージのクライアントのうち、本パッケージが使う最小部分です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#nativeetcdclientlike)
  */
 export type NativeEtcdClientLike = {
   get(key: string | Buffer): { buffer(): Promise<Buffer | null> };
@@ -82,7 +82,7 @@ export type NativeEtcdClientLike = {
  * `leaseTtlSeconds` が指定されているとき、書き込みはリース付きで行われます。
  * リースは遅延生成して使い回し、`close` で解放します (キーは TTL で自然消滅します)。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#wrapnativeetcdclient)
  */
 export function wrapNativeEtcdClient(
   raw: NativeEtcdClientLike,
@@ -176,7 +176,7 @@ function toBytes(data: Uint8Array | string | Buffer): Uint8Array<ArrayBuffer> {
 /**
  * etcd ストレージのオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions)
  */
 export type EtcdStorageOptions = {
   /**
@@ -185,7 +185,7 @@ export type EtcdStorageOptions = {
    * 指定したときは `endpoints` を使った接続は行われず、`open` / `close` でこのクライアントを開閉したことになります。
    * 所有権は呼び出し側に残るため、`close` しても破棄されません。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-client)
    */
   readonly client?: EtcdClientLike | undefined;
 
@@ -195,14 +195,14 @@ export type EtcdStorageOptions = {
    * `client` を指定したときは使われません。
    * 未指定のときは `ETCD_ENDPOINTS` 環境変数 (カンマ区切り)、さらに未指定のときは `http://127.0.0.1:2379` を使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-endpoints)
    */
   readonly endpoints?: string | readonly string[] | undefined;
 
   /**
    * すべてのキーに付与する接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
@@ -211,7 +211,7 @@ export type EtcdStorageOptions = {
    *
    * サービスディスカバリーや分散ロックなど、自動失効させたい用途に使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-leasettlseconds)
    */
   readonly leaseTtlSeconds?: number | undefined;
 
@@ -220,7 +220,7 @@ export type EtcdStorageOptions = {
    *
    * 複数のテナントや用途で etcd クラスターを共有するときに使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-namespace)
    */
   readonly namespace?: string | undefined;
 };
@@ -249,7 +249,7 @@ type Connection = {
  * 値はバイト列として保存し、キーには `namespace` と `keyPrefix` を付与します。
  * 注入した `client` は呼び出し側が所有し、`close` しても破棄されません。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
  */
 export default class Etcd implements IStorage {
   #con: Connection | null;
@@ -263,14 +263,14 @@ export default class Etcd implements IStorage {
   readonly #leaseTtlSeconds: number | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
    */
   public readonly name: string;
 
   /**
    * etcd ストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
    */
   public constructor(options: EtcdStorageOptions = {}) {
     const {

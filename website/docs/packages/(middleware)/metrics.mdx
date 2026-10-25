@@ -1,0 +1,217 @@
+---
+title: "@unikvs/metrics"
+description: "操作の件数やバイト数、遅延を記録し、OTel や Prometheus へ転送できるミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`Metrics` はすべての操作の件数やバイト数、遅延を記録し、集計と外部転送を行います。<Badge>Middleware</Badge>
+
+性能の可視化や運用監視に使います。測定値はメモリーに保持され、必要に応じて OTel の計器やカスタム出力先へ転送されます。
+
+- `name` は `Metrics` です。
+- `isOpen` は常に `true` です。
+- `use` ですべての操作を測定し、`encode`・`decode`・ストリームではバイト数も記録します。
+- 記録処理は決して例外を投げず、出力先の失敗は無視します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/metrics @opentelemetry/api
+```
+
+`@opentelemetry/api` は `exporter` に `"otel"` を指定するときのみ必要です。Prometheus 形式の出力 (`toPrometheusString()`) やメモリー集計のみでは不要です。
+
+## 使い方 [#usage]
+
+Metrics は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Metrics } from "@unikvs/metrics";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    exporter: {
+      type: "[#metrics-options-exporter] MetricsExporterKind | MetricsExporter",
+      description:
+        "測定値の転送先です。組み込みのエクスポーター名かカスタム出力関数を指定します。この設定にかかわらず、測定値は常にメモリーに保持されます。",
+    },
+    meterProvider: {
+      type: "[#metrics-options-meter-provider] MetricsMeterProvider",
+      description: 'exporter が "otel" のときに使う OTel の MeterProvider です。',
+    },
+    registry: {
+      type: "[#metrics-options-registry] unknown",
+      description:
+        "外部の Prometheus 連携のために保持する、不透明なレジストリーハンドルです。Prometheus の公開用テキストは toPrometheusString() から取得できます。",
+    },
+    onRecord: {
+      type: "[#metrics-options-on-record] (record: MetricRecord) => void",
+      description: "測定値を記録するたびに呼び出されるコールバックです。",
+    },
+    clock: {
+      type: "[#metrics-options-clock] () => number",
+      description: "ミリ秒を返す時計です。既定では performance.now() を使います。",
+    },
+  }}
+/>
+
+以下は、操作を測定し、集計を取得する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Metrics } from "@unikvs/metrics";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const metrics = new Metrics();
+const kvs = UniKvs.config<{ k1: PlainValue<string> }>().use(metrics).persist(new Memory()).create();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(metrics.getMetrics().total); // 記録件数
+console.log(metrics.toPrometheusString()); // Prometheus 形式
+await kvs.close();
+```
+
+### `Metrics` [#metrics]
+
+操作のメトリクスを記録するミドルウェアです。測定値はメモリーに保持され、`getMetrics()` と `toPrometheusString()` で取得できます。
+
+### `MetricsOptions` [#metrics-options]
+
+`Metrics` のコンストラクターが受け取るオプションです。エクスポーターや時計を指定できます。
+
+### `MetricsAction` [#metrics-action]
+
+メトリクスミドルウェアが観測する操作名です。`IMiddleware.UseContext["action"]` と等価です。
+
+### `MetricsOutcome` [#metrics-outcome]
+
+観測した操作が成功したか失敗したかを表します。`"success"` か `"error"` です。
+
+### `MetricsExporterKind` [#metrics-exporter-kind]
+
+名前で選択する組み込みのエクスポーターです。`"otel"` は計器への転送を指し、`"prometheus"` はメモリー保持とテキスト出力を指します。
+
+### `MetricsExporter` [#metrics-exporter]
+
+記録されたすべての測定値を受け取るカスタム出力先です。
+
+### `MetricRecord` [#metric-record]
+
+1 回の操作で観測した測定値です。
+
+<TypeTable
+  type={{
+    action: {
+      type: "[#metric-record-action] MetricsAction",
+      required: true,
+      description: "観測した操作です。",
+    },
+    outcome: {
+      type: "[#metric-record-outcome] MetricsOutcome",
+      required: true,
+      description: "操作が成功したか失敗したかです。",
+    },
+    durationMs: {
+      type: "[#metric-record-duration-ms] number",
+      required: true,
+      description: "実時間での経過時間 (ミリ秒) です。",
+    },
+    bytes: {
+      type: "[#metric-record-bytes] number | undefined",
+      description: "観測したバイト数です。不明な場合は undefined です。",
+    },
+    key: {
+      type: "[#metric-record-key] string | undefined",
+      required: true,
+      description: "操作対象のキーです。キーを持たない clear では undefined です。",
+    },
+  }}
+/>
+
+### `MetricsActionSummary` [#metrics-action-summary]
+
+操作名ごとに集計したカウンターです。
+
+<TypeTable
+  type={{
+    action: {
+      type: "[#metrics-action-summary-action] string",
+      required: true,
+      description: "操作名です。",
+    },
+    count: {
+      type: "[#metrics-action-summary-count] number",
+      required: true,
+      description: "記録した操作の総数です。",
+    },
+    success: {
+      type: "[#metrics-action-summary-success] number",
+      required: true,
+      description: "成功した操作の数です。",
+    },
+    error: {
+      type: "[#metrics-action-summary-error] number",
+      required: true,
+      description: "失敗した操作の数です。",
+    },
+    totalBytes: {
+      type: "[#metrics-action-summary-total-bytes] number",
+      required: true,
+      description: "観測したバイト数の合計です。",
+    },
+    totalDurationMs: {
+      type: "[#metrics-action-summary-total-duration-ms] number",
+      required: true,
+      description: "観測した経過時間の合計 (ミリ秒) です。",
+    },
+  }}
+/>
+
+### `MetricsSnapshot` [#metrics-snapshot]
+
+これまでに記録したすべての測定値のスナップショットです。
+
+<TypeTable
+  type={{
+    total: {
+      type: "[#metrics-snapshot-total] number",
+      required: true,
+      description: "記録した測定値の総数です。",
+    },
+    byAction: {
+      type: "[#metrics-snapshot-by-action] Record<string, MetricsActionSummary>",
+      required: true,
+      description: "操作名をキーにした集計結果です。",
+    },
+    records: {
+      type: "[#metrics-snapshot-records] readonly MetricRecord[]",
+      required: true,
+      description: "記録したすべての測定値です (記録順)。",
+    },
+  }}
+/>
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                 | 出力                       |
+| -------------- | -------------------- | -------------------------- |
+| `encode`       | `unknown`            | `unknown` (透過)           |
+| `decode`       | `unknown`            | `unknown` (透過)           |
+| `encodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+| `decodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+
+- `use` はすべての操作の遅延と成否を測定し、バイト数は `undefined` で記録します。
+- `encode` と `decode` はデータをそのまま通し、文字列や `ArrayBuffer`、`ArrayBufferView` ではバイト数も記録します。不明な型では `undefined` です。
+- ストリームではチャンクをそのまま通し、確定時に合計チャンクサイズを 1 件として記録します。取り消しや失敗では `error` として記録します。
+- このミドルウェアはキーラベルを意図的に省略し、`toPrometheusString()` のカーディナリティーが増えないようにしています。キーごとの詳細は `getMetrics()` と `onRecord` から取得できます。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+記録処理は例外を投げず、出力先の失敗は無視するため、メトリクスが操作のパイプラインを壊すことはありません。元の操作が失敗したときは記録後にそのエラーを再送出します。

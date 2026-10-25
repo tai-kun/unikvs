@@ -1,0 +1,66 @@
+---
+title: "@unikvs/passthrough"
+description: "データを変換せずそのまま透過させるミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/passthrough` はデータを何も変換せず、そのまま通すプラグインです。<Badge>Middleware</Badge>
+
+パイプラインの空き枠や自作ミドルウェアの土台に向いています。単体では保存内容を変えません。
+
+- `name` は `PassThrough` です。
+- `isOpen` は常に `true` です。`open()` は不要です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/passthrough @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+`PassThrough` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { PassThrough } from "@unikvs/passthrough";
+```
+
+以下は、透過処理を挟んで値を保存し、そのまま読み戻す例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { PassThrough } from "@unikvs/passthrough";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .use(new PassThrough())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // Uint8Array(3) [0, 1, 2] になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力     | 出力     |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` では入力データをそのまま出力します。
+- `decode` では入力データをそのまま出力します。
+- `encodeStream` では入力ストリームをそのまま出力します。
+- `decodeStream` では入力ストリームをそのまま出力します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。

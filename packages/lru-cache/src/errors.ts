@@ -5,32 +5,32 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-chunk)
    */
   readonly chunk: unknown;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-error)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -38,7 +38,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-chunk-type-error)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
@@ -64,22 +64,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-entries-error)
  */
 export type InvalidMaxEntriesErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-entries-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-entries-error)
  */
 export type InvalidMaxEntriesErrorArgs = ErrorOptions & InvalidMaxEntriesErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-entries-error)
  */
 export class InvalidMaxEntriesError extends ErrorBase<InvalidMaxEntriesErrorMeta> {
   static {
@@ -87,7 +87,7 @@ export class InvalidMaxEntriesError extends ErrorBase<InvalidMaxEntriesErrorMeta
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-entries-error)
    */
   public constructor(args: InvalidMaxEntriesErrorArgs) {
     const { actual, ...options } = args;
@@ -109,22 +109,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-bytes-error)
  */
 export type InvalidMaxBytesErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-bytes-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-bytes-error)
  */
 export type InvalidMaxBytesErrorArgs = ErrorOptions & InvalidMaxBytesErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-bytes-error)
  */
 export class InvalidMaxBytesError extends ErrorBase<InvalidMaxBytesErrorMeta> {
   static {
@@ -132,7 +132,7 @@ export class InvalidMaxBytesError extends ErrorBase<InvalidMaxBytesErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-max-bytes-error)
    */
   public constructor(args: InvalidMaxBytesErrorArgs) {
     const { actual, ...options } = args;
@@ -154,27 +154,27 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-error)
  */
 export type InvalidSizeOfResultErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-error)
  */
 export type InvalidSizeOfResultErrorArgs = ErrorOptions & InvalidSizeOfResultErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-error)
  */
 export class InvalidSizeOfResultError extends ErrorBase<InvalidSizeOfResultErrorMeta> {
   static {
@@ -182,7 +182,7 @@ export class InvalidSizeOfResultError extends ErrorBase<InvalidSizeOfResultError
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#invalid-size-of-result-error)
    */
   public constructor(args: InvalidSizeOfResultErrorArgs) {
     const { key, actual, ...options } = args;

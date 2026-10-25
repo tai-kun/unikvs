@@ -12,22 +12,22 @@ import {
  */
 export type LruCacheOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#clone)
    */
   readonly clone?: (<T>(value: T) => T) | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-entries)
    */
   readonly maxEntries?: number | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-bytes)
    */
   readonly maxBytes?: number | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#size-of)
    */
   readonly sizeOf?: ((value: any, key: string) => number) | undefined;
 };
@@ -70,12 +70,12 @@ export default class LruCache implements IStorage {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-entries)
    */
   public readonly maxEntries: number | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-bytes)
    */
   public readonly maxBytes: number | undefined;
 

@@ -1,0 +1,205 @@
+---
+title: "@unikvs/rate-limit"
+description: "トークンバケットで操作頻度を制限するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`RateLimit` はトークンバケットで操作頻度を制限し、過剰な読み書きからストレージを保護します。<Badge>Middleware</Badge>
+
+バーストを許容しつつ平均速度を抑えたいときに使います。制限超過時は待機か即時エラーを選べます。
+
+- `name` は `RateLimit` です。
+- `isOpen` は常に `true` です。
+- バケットはキーごとではなくミドルウェアインスタンスで共有され、すべての操作 (`set`・`get`・`stream`・`has`・`delete`・`clear`) で 1 トークンを消費します。
+- `encode`・`decode`・`encodeStream`・`decodeStream` はデータを透過します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/rate-limit
+```
+
+## 使い方 [#usage]
+
+RateLimit は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { RateLimit } from "@unikvs/rate-limit";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    tokensPerInterval: {
+      type: "[#rate-limit-options-tokens-per-interval] number",
+      default: "1",
+      description: "1 インターバルあたりに補充されるトークン数です。",
+    },
+    intervalMs: {
+      type: "[#rate-limit-options-interval-ms] number",
+      default: "1000",
+      description: "トークンを補充する間隔 (ミリ秒) です。",
+    },
+    maxTokens: {
+      type: "[#rate-limit-options-max-tokens] number",
+      description: "保持できるトークンの上限です。既定値は tokensPerInterval です。",
+    },
+    burst: {
+      type: "[#rate-limit-options-burst] number",
+      description: "maxTokens の別名です。両方を指定した場合は maxTokens が優先されます。",
+    },
+    strategy: {
+      type: "[#rate-limit-options-strategy] RateLimitStrategy",
+      default: '"wait"',
+      description:
+        'レート制限を超えたときの挙動です。"wait" は補充まで待機し、"throw" は直ちにエラーを投げます。',
+    },
+    now: {
+      type: "[#rate-limit-options-now] () => number",
+      default: "Date.now",
+      description: "現在時刻 (epoch ミリ秒) を返す関数です。既定値は Date.now です。",
+    },
+    sleep: {
+      type: "[#rate-limit-options-sleep] IRateLimitSleep",
+      description:
+        "待機処理です。既定では setTimeout を使います。テストで時刻を制御するときに差し替えることができます。",
+    },
+  }}
+/>
+
+以下は、1 秒あたり 5 操作までに制限し、超過時は待機する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { RateLimit } from "@unikvs/rate-limit";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ k1: PlainValue<string> }>()
+  .use(new RateLimit({ tokensPerInterval: 5, intervalMs: 1000 }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `RateLimit` [#rate-limit]
+
+トークンバケットで操作頻度を制限するミドルウェアです。このミドルウェアは `PassThrough` を継承し、データ変換は行いません。
+
+### `RateLimitOptions` [#rate-limit-options]
+
+`RateLimit` のコンストラクターが受け取るオプションです。トークン数と補充間隔、超過時の挙動を指定できます。
+
+### `RateLimitStrategy` [#rate-limit-strategy]
+
+レート制限を超えたときの挙動です。`"wait"` ではトークンが補充されるまで待機し、`"throw"` では直ちにエラーを投げます。
+
+### `IRateLimitSleep` [#irate-limit-sleep]
+
+待機処理の実装です。テストで時刻を制御するときに差し替えることができます。
+
+## データ型 [#data-types]
+
+| メソッド       | 入力  | 出力  |
+| -------------- | ----- | ----- |
+| `encode`       | `any` | `any` |
+| `decode`       | `any` | `any` |
+| `encodeStream` | `any` | `any` |
+| `decodeStream` | `any` | `any` |
+
+- `use` は操作ごとに 1 トークンを消費し、データ内容には触れません。
+- `encode`・`decode`・`encodeStream`・`decodeStream` は入力をそのまま通し、変換を行いません。
+- トークンは経過時間に応じて補充され、上限を超えて増えることはありません。時計が戻ってもトークンは増えません。
+- `wait` 戦略では回復まで待機し、要求は先着順に実行されます。このミドルウェアは中断シグナルでは待機を打ち切ります。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### RateLimitExceededError [#error-rate-limit-exceeded]
+
+<TypeTable
+  type={{
+    retryAfterMs: {
+      type: "[#rate-limit-exceeded-retry-after-ms] number",
+      required: true,
+      description: "再試行までに待つべき時間 (ミリ秒) です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-rate-limit-exceeded-meaning]
+
+`strategy` が `"throw"` のときにトークンが不足したまま操作が呼ばれると、このエラーが投げられます。`next` は呼ばれず、操作は実行されません。
+
+#### 対処方法 [#error-rate-limit-exceeded-howto]
+
+`meta.retryAfterMs` の時間だけ待って再試行するか、`strategy` を `"wait"` にして自動待機を使ってください。頻発する場合は `tokensPerInterval` や `maxTokens` を見直してください。
+
+#### 例 [#error-rate-limit-exceeded-example]
+
+以下は、`RateLimitExceededError` を捕捉する例です。
+
+```ts
+import { RateLimitExceededError } from "@unikvs/rate-limit";
+
+try {
+  await kvs.set("k1", "hello");
+} catch (ex) {
+  if (ex instanceof RateLimitExceededError) {
+    console.log(ex.meta); // { retryAfterMs: 500 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RateLimitInvalidOptionError [#error-rate-limit-invalid-option]
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#rate-limit-invalid-option-name] string",
+      required: true,
+      description: "不正だったオプション名です。",
+    },
+    actual: {
+      type: "[#rate-limit-invalid-option-actual] unknown",
+      required: true,
+      description: "指定された値です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-rate-limit-invalid-option-meaning]
+
+コンストラクターに不正なオプションが渡されると、このエラーが投げられます。正で有限の数値ではない値や `"wait"`・`"throw"` 以外の `strategy`、関数でない `now`・`sleep` が対象です。
+
+#### 対処方法 [#error-rate-limit-invalid-option-howto]
+
+`meta.name` のオプションを確認し、正の有限数や正しい列挙値、関数を指定してください。`maxTokens` と `burst` の両指定では `maxTokens` が優先されます。
+
+#### 例 [#error-rate-limit-invalid-option-example]
+
+以下は、`RateLimitInvalidOptionError` を捕捉する例です。
+
+```ts
+import { RateLimit, RateLimitInvalidOptionError } from "@unikvs/rate-limit";
+
+try {
+  const limiter = new RateLimit({ intervalMs: 0 });
+} catch (ex) {
+  if (ex instanceof RateLimitInvalidOptionError) {
+    console.log(ex.meta); // { name: "intervalMs", actual: 0 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+中断シグナルによる `AbortError` はそのまま伝播し、このミドルウェアはトークンを消費しません。

@@ -8,13 +8,13 @@ import { InvalidChunkTypeError } from "./errors.js";
  *
  * wrangler への依存なしに実バインディングを受け取れるようにします。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectLike {
   /**
    * オブジェクトのキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly key: string;
 }
@@ -24,7 +24,7 @@ export interface R2ObjectLike {
  *
  * `get` が `null` ではなくボディ付きで返る点が S3 互換 API との差分です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectBodyLike extends R2ObjectLike {
   /**
@@ -36,27 +36,27 @@ export interface R2ObjectBodyLike extends R2ObjectLike {
 /**
  * `list` のオプションに対応する最小の構造です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ListOptions {
   /**
    * 列挙するキーの接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly prefix?: string | undefined;
 
   /**
    * 前ページの継続カーソルです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly cursor?: string | undefined;
 
   /**
    * 1 ページあたりの最大件数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly limit?: number | undefined;
 }
@@ -64,27 +64,27 @@ export interface R2ListOptions {
 /**
  * Workers の `R2Objects` に対応する最小の構造です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectsLike {
   /**
    * 列挙されたオブジェクトの一覧です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly objects: readonly R2ObjectLike[];
 
   /**
    * 続きのページが存在するかどうかです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly truncated: boolean;
 
   /**
    * 続きのページを取得するためのカーソルです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly cursor?: string | undefined;
 }
@@ -95,7 +95,7 @@ export interface R2ObjectsLike {
  * wrangler への依存なしに実バインディングを受け取れるようにします。
  * 実バインディングはこの構造の部分型であるため、そのまま渡せます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2BucketLike {
   /**
@@ -127,20 +127,20 @@ export interface R2BucketLike {
 /**
  * `CloudflareR2` のオプションです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export type CloudflareR2Options = {
   /**
    * 使用する R2 バケットのバインディングです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2-bucket)
    */
   readonly bucket: R2BucketLike;
 
   /**
    * すべてのキーに付与する接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 };
@@ -155,11 +155,11 @@ const CLEAR_BATCH_SIZE = 1000;
 /**
  * Workers の R2 バインディングにバイト列を保存するストレージです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export default class CloudflareR2 implements IStorage {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public readonly name: string;
 
@@ -178,7 +178,7 @@ export default class CloudflareR2 implements IStorage {
   /**
    * Cloudflare R2 ストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public constructor(options: CloudflareR2Options) {
     const { bucket, keyPrefix = "" } = options;
@@ -192,7 +192,7 @@ export default class CloudflareR2 implements IStorage {
   /**
    * 使用する R2 バケットのバインディングです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public get bucket(): R2BucketLike {
     return this.#bucket;
@@ -201,7 +201,7 @@ export default class CloudflareR2 implements IStorage {
   /**
    * すべてのキーに付与する接頭辞です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public get keyPrefix(): string {
     return this.#keyPrefix;

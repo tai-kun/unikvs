@@ -1,0 +1,276 @@
+---
+title: "@unikvs/utils"
+description: "プラグイン実装者向けの共有関数群。ファイル名の検証、バイト列操作、ストリーム補助と 2 種類のエラーを説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/utils` <Badge>共有</Badge> はプラグインの実装で共通に使う小さな関数群です。ファイル名とディレクトリー名の検証、バイト列の 16 進変換と分割、共有の UTF-8 インスタンス、所有権のあるバイト列の複写、`ReadableStream` の組み立て補助、変換を挟んだストリームの委譲、そして検証失敗時の 2 種類のエラーを提供します。
+
+公開される関数は次のとおりです。
+
+| 関数                     | 説明                                           | 詳しい説明                         |
+| ------------------------ | ---------------------------------------------- | ---------------------------------- |
+| `assertValidFilename`    | ファイル名を検証し、不正なら投げます           | [詳細](#assert-valid-filename)     |
+| `assertValidDirname`     | ディレクトリー名を検証し、不正なら投げます     | [詳細](#assert-valid-dirname)      |
+| `isValidFilename`        | ファイル名として正しいかを返します             | [詳細](#is-valid-filename)         |
+| `isValidDirname`         | ディレクトリー名として正しいかを返します       | [詳細](#is-valid-dirname)          |
+| `bytesToHex`             | バイト列を小文字の 16 進文字列に変換します     | [詳細](#bytes-to-hex)              |
+| `chunks`                 | バイナリーデータを指定サイズで区切ります       | [詳細](#chunks)                    |
+| `defaultUtf8Encoder`     | 共有の UTF-8 エンコーダーです                  | [詳細](#default-utf8)              |
+| `defaultUtf8Decoder`     | 共有の UTF-8 デコーダーです                    | [詳細](#default-utf8)              |
+| `toOwnedBytes`           | 所有権のあるバイト列にして返します             | [詳細](#to-owned-bytes)            |
+| `toReadableStream`       | 反復可能オブジェクトをストリームに変換します   | [詳細](#to-readable-stream)        |
+| `withReadableStreamFrom` | `ReadableStream.from` を一時的に補って使います | [詳細](#with-readable-stream-from) |
+| `proxyTransformStream`   | 入出力変換を挟んだストリームを作ります         | [詳細](#proxy-transform-stream)    |
+
+検証失敗時のエラーは [`InvalidFilenameError`](#invalid-filename-error) と [`InvalidDirnameError`](#invalid-dirname-error) の 2 種類です。いずれも [`@unikvs/core`](/packages/core) の `ErrorBase` を継承し、日本語のメッセージが登録されています。
+
+## インストール [#installation]
+
+```package-install
+npm install @unikvs/utils
+```
+
+ESM 専用 (`sideEffects: false`) です。依存は `@unikvs/core`・`fast-utf8`・`filename-reserved-regex`・`ninja-promise`・`try-capture-stack-trace` で、ログ出力のために `@logtape/logtape` がピア依存です。
+
+## 使い方 [#usage]
+
+ファイル名の検証では、真偽値を返す関数と例外を投げる関数を使い分けます。
+
+```ts
+import { assertValidFilename, InvalidFilenameError, isValidFilename } from "@unikvs/utils";
+
+if (!isValidFilename(name)) {
+  console.log(`${name} は使えません`);
+}
+
+try {
+  assertValidFilename(name);
+} catch (ex) {
+  if (ex instanceof InvalidFilenameError) {
+    console.log(ex.meta); // { filename: name }
+  } else {
+    throw ex;
+  }
+}
+```
+
+バイト列の変換と分割では、16 進文字列への変換とビューによる区切りを組み合わせます。
+
+```ts
+import { bytesToHex, chunks } from "@unikvs/utils";
+
+const bytes = new Uint8Array([0, 171, 255]);
+console.log(bytesToHex(bytes)); // "00abff"
+
+for (const view of chunks(bytes, 2)) {
+  // view は元のバイト列のビューで、複写しません
+  console.log(bytesToHex(view));
+}
+```
+
+ストリームの組み立てでは、反復可能オブジェクトからの変換と、変換を挟んだ委譲を使います。
+
+```ts
+import { proxyTransformStream, toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+
+const proxied = proxyTransformStream(
+  source,
+  (chunk, controller) => controller.enqueue(encode(chunk)),
+  (chunk, controller) => controller.enqueue(decode(chunk)),
+);
+await proxied.writable.getWriter().close();
+await proxied.closePromise;
+```
+
+## エラー [#errors]
+
+検証失敗時の 2 種類のエラーはいずれも `meta` に対応する値を保持します。`instanceof` で判別し、`meta` から不正だった名前を取り出します。
+
+### `InvalidFilenameError` [#invalid-filename-error]
+
+不正なファイル名のときに使います。[`assertValidFilename`](#assert-valid-filename) が投げます。
+
+<TypeTable
+  type={{
+    filename: {
+      type: "[#invalid-filename-filename] string",
+      required: true,
+      description: "不正だったファイル名です。",
+    },
+  }}
+/>
+
+- 継承: `ErrorBase` ([`@unikvs/core`](/packages/core/errors#errors-base) のエラー基盤)
+- `name`: `UniKvsInvalidFilenameError`
+- 英語: `Invalid file name: foo/bar`
+- 日本語: `無効なファイル名: foo/bar`
+
+### `InvalidDirnameError` [#invalid-dirname-error]
+
+不正なディレクトリー名のときに使います。[`assertValidDirname`](#assert-valid-dirname) が投げます。
+
+<TypeTable
+  type={{
+    dirname: {
+      type: "[#invalid-dirname-dirname] string",
+      required: true,
+      description: "不正だったディレクトリー名です。",
+    },
+  }}
+/>
+
+- 継承: `ErrorBase` ([`@unikvs/core`](/packages/core/errors#errors-base) のエラー基盤)
+- `name`: `UniKvsInvalidDirnameError`
+- 英語: `Invalid directory name: foo/bar`
+- 日本語: `無効なディレクトリー名: foo/bar`
+
+## API リファレンス [#api]
+
+関数ごとのリファレンスです。エラーは[エラー](#errors)を参照してください。
+
+### `assertValidFilename()` [#assert-valid-filename]
+
+ファイル名を検証し、不正な場合は [`InvalidFilenameError`](#invalid-filename-error) を投げます。正しい場合は何も返しません。スタックトレースはこの関数自身を除外して取得するため、投げられた場所ではなく呼び出し元を指します。
+
+```ts
+import { assertValidFilename } from "@unikvs/utils";
+
+assertValidFilename("photo.png"); // 成功
+assertValidFilename("a/b"); // InvalidFilenameError を投げます
+```
+
+### `assertValidDirname()` [#assert-valid-dirname]
+
+ディレクトリー名を検証し、不正な場合は [`InvalidDirnameError`](#invalid-dirname-error) を投げます。正しい場合は何も返しません。スタックトレースはこの関数自身を除外して取得するため、投げられた場所ではなく呼び出し元を指します。
+
+```ts
+import { assertValidDirname } from "@unikvs/utils";
+
+assertValidDirname("photos"); // 成功
+assertValidDirname(".."); // InvalidDirnameError を投げます
+```
+
+### `isValidFilename()` [#is-valid-filename]
+
+文字列がファイル名として正しいかを真偽値で返します。判定規則は次のとおりです。
+
+- 空文字、`"."`、`".."` を拒否します。
+- UTF-8 の符号化で 255 バイトを超えるものを拒否します。
+- 符号化と復号の往復で元に戻らない文字列 (BOM を含むなど) を拒否します。
+- NFC 正規化と一致しない文字列を拒否します。
+- 予約文字や Windows の予約名を含むものを拒否します。
+- `":"` を明示的に拒否します。
+
+```ts
+import { isValidFilename } from "@unikvs/utils";
+
+isValidFilename("photo.png"); // true
+isValidFilename(""); // false
+isValidFilename("a/b"); // false
+```
+
+### `isValidDirname()` [#is-valid-dirname]
+
+文字列がディレクトリー名として正しいかを真偽値で返します。判定は [`isValidFilename`](#is-valid-filename) に委譲するため、規則は同じです。
+
+```ts
+import { isValidDirname } from "@unikvs/utils";
+
+isValidDirname("photos"); // true
+isValidDirname(".."); // false
+```
+
+### `bytesToHex()` [#bytes-to-hex]
+
+バイト列を小文字の 16 進文字列に変換します。実行環境に `Uint8Array.prototype.toHex` がある場合はそれを使い、ない場合は内蔵の 256 要素の変換表で変換します。疎な配列の空き要素などの不正なバイト値が混ざっていると `RangeError` を投げます。
+
+```ts
+import { bytesToHex } from "@unikvs/utils";
+
+bytesToHex(new Uint8Array([0, 171, 255])); // "00abff"
+```
+
+### `chunks()` [#chunks]
+
+バイナリーデータを指定サイズで区切ったビューを順に生成します。`DataView` と型付き配列のどちらも受け取ります。生成される値は入力と同じ型のビューで、複写はしません。`DataView` を渡した場合はバッファー範囲で切り出した新しい `DataView` を返し、型付き配列を渡した場合は `subarray` によるビューを返します。区切りサイズは小数点以下を切り捨て、最低でも 1 として扱います。空のデータでは何も生成しません。
+
+```ts
+import { chunks } from "@unikvs/utils";
+
+for (const view of chunks(new Uint8Array([1, 2, 3]), 2)) {
+  console.log(view); // Uint8Array(2) [1, 2]、Uint8Array(1) [3]
+}
+```
+
+### 共有 UTF-8 インスタンス [#default-utf8]
+
+注入がない場合の既定値として使う共有の UTF-8 インスタンスです。`defaultUtf8Encoder` は ASCII 入力を想定した非 strict (`strict: false`) のエンコーダーで、`defaultUtf8Decoder` は不正な入力に `TypeError` を投げる strict (`strict: true`) のデコーダーです。`TextDecoder` の fatal 相当の挙動が必要な一括デコードに使います。
+
+```ts
+import { defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
+
+const bytes = defaultUtf8Encoder.encode("hello");
+console.log(defaultUtf8Decoder.decode(bytes)); // "hello"
+```
+
+### `toOwnedBytes()` [#to-owned-bytes]
+
+ビューを所有権のある `Uint8Array<ArrayBuffer>` にして返します。基盤が `ArrayBuffer` で全体を覆い、コンストラクターが `Uint8Array` そのものの場合は複写せずにそのまま返します。サブクラスのビューが全体を覆う場合は同じバッファーを `Uint8Array` に包み直します。それ以外 (範囲ビューや共有バッファー起点など) は新しい配列に複写します。
+
+```ts
+import { toOwnedBytes } from "@unikvs/utils";
+
+const owned: Uint8Array<ArrayBuffer> = toOwnedBytes(view);
+```
+
+### `toReadableStream()` [#to-readable-stream]
+
+`Iterable` または `AsyncIterable` を `ReadableStream` に変換します。文字列を直接渡すと反復時にプリミティブが出て WebKit のネイティブ `from` が受け付けないため、文字の配列に変換してから渡します。変換には [`withReadableStreamFrom`](#with-readable-stream-from) を使います。
+
+```ts
+import { toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+```
+
+### `withReadableStreamFrom()` [#with-readable-stream-from]
+
+`ReadableStream.from` が実行環境にあるかどうかにかかわらず、コールバックに `from` 付きの `ReadableStream` を渡して実行します。`from` が既にある場合はそのまま実行し、ない場合は一時的にポリフィルを定義して実行後に必ず削除します。同期値を返すコールバックでは戻り値をそのまま返します。`PromiseLike` を返す非同期コールバックを受け取る多重定義の戻り値の型は `never` のため、ポリフィル適用中に作ったストリームを外に持ち出す使い方は型付けされません。[`toReadableStream`](#to-readable-stream) のように同期コールバックでストリームを組み立てる用途に使います。反復子の終了処理に失敗した場合は Logtape のロガーに記録します。
+
+```ts
+import { withReadableStreamFrom } from "@unikvs/utils";
+
+const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1, 2, 3]));
+```
+
+### `proxyTransformStream()` [#proxy-transform-stream]
+
+ソースの前後に入出力変換を挟んだ新しいストリームを作ります。書き込まれた値は `proxyInput` で変換してソースへ送り、ソースの出力は `proxyOutput` で変換して読み取ります。`proxyInput` と `proxyOutput` には変換コールバックまたは `Transformer` オブジェクトを指定できます。返される `closePromise` は入力からソースへの接続が終わると解決し、途中の失敗は読み取りと `closePromise` へ伝わります。
+
+```ts
+import { proxyTransformStream } from "@unikvs/utils";
+
+const proxied = proxyTransformStream(
+  source,
+  (chunk, controller) => controller.enqueue(encode(chunk)),
+  (chunk, controller) => controller.enqueue(decode(chunk)),
+);
+```
+
+### `IProxiedTransformStream` [#iproxied-transform-stream]
+
+[`proxyTransformStream`](#proxy-transform-stream) が返す、入出力変換を挟んだストリームです。[`@unikvs/core`](/packages/core/stream) の `ITransformStream` を継承します。
+
+<TypeTable
+  type={{
+    closePromise: {
+      type: "[#iproxied-transform-stream-closepromise] NinjaPromise<void>",
+      required: true,
+      description: "入力からソースへの接続が終わると解決します。",
+    },
+  }}
+/>

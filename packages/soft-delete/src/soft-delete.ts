@@ -10,13 +10,13 @@ import { PassThrough } from "@unikvs/passthrough";
 import { TombstoneNotFoundError, SoftDeleteInvalidRetentionError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
  */
 export type SoftDeleteOptions = {
   /**
    * 削除墓標を保持する期間 (ミリ秒) です。未指定なら保持し続けます。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete-retention-ms)
    */
   readonly retentionMs?: number | undefined;
 };
@@ -24,20 +24,20 @@ export type SoftDeleteOptions = {
 /**
  * `listTombstones` が返す削除墓標の 1 件分です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
  */
 export type TombstoneEntry = {
   /**
    * 削除されたキーです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   readonly key: string;
 
   /**
    * 削除された時刻 (UNIX エポックからのミリ秒) です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   readonly deletedAt: number;
 };
@@ -129,13 +129,13 @@ function createStandaloneScope(): ContextScope {
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
  */
 export default class SoftDelete extends PassThrough implements IMiddleware, IStorage {
   public override readonly name: string = "SoftDelete";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public readonly retentionMs: number | undefined;
 
@@ -147,19 +147,19 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   /**
    * 下層ストレージが対応している場合の読み取りストリーム取得関数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public getReadable?: (c: IStorage.GetReadableContext) => Promise<IReadableStream>;
 
   /**
    * 下層ストレージが対応している場合の書き込みストリーム取得関数です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public getWritable?: (c: IStorage.GetWritableContext) => Promise<IWritableStream>;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public constructor(storage: IStorage, options: SoftDeleteOptions = {}) {
     super();
@@ -350,7 +350,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public async restore(key: string): Promise<unknown> {
     const scope = createStandaloneScope();
@@ -378,12 +378,12 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public async purge(): Promise<number>;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public async purge(key: string): Promise<boolean>;
   public async purge(key?: string): Promise<number | boolean> {
@@ -414,7 +414,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public async listTombstones(): Promise<readonly TombstoneEntry[]> {
     const scope = createStandaloneScope();

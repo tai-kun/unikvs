@@ -7,17 +7,17 @@ import { SessionStorageNotAvailableError, ClearWithoutPrefixNotAllowedError } fr
  */
 export type SessionStorageOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#allow-clear-without-prefix)
    */
   readonly allowClearWithoutPrefix?: boolean | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#storage)
    */
   readonly storage?: Storage | undefined;
 };
@@ -29,7 +29,7 @@ export default class SessionStorage implements IStorage<string> {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#allow-clear-without-prefix)
    */
   public readonly allowClearWithoutPrefix: boolean;
 

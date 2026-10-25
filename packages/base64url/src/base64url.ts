@@ -172,17 +172,17 @@ function decodeChecked(text: string): Uint8Array<ArrayBuffer> {
  */
 export type Base64UrlOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#base64url-encoder)
    */
   readonly encoder?: FastUtf8 | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#base64url-decoder)
    */
   readonly decoder?: FastUtf8 | undefined;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#base64url-padding)
    */
   readonly padding?: boolean | undefined;
 };

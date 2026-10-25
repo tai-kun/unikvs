@@ -1,0 +1,289 @@
+---
+title: "@unikvs/retry"
+description: "一時的な失敗を指数バックオフで再試行するストレージラッパーです。"
+---
+
+## 概要 [#overview]
+
+`Retry` は委譲先ストレージの一時的な失敗を指数バックオフで再試行し、読み書きが成功しやすくします。
+
+不安定な回線や一時的な過負荷で失敗する操作の再試行に使います。再試行の可否判定と待機時間は調整できます。
+
+- `name` は `Retry` です。
+- `isOpen` は委譲先の `inner.isOpen` を返します。
+- `write`・`read`・`exists`・`delete`・`clear`・`getWritable`・`getReadable` を再試行し、`open`・`close`・`onOtherWriteError` は委譲のみ行います。
+- データとチャンクの変換は行わず、委譲先の型をそのまま保ちます。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/retry
+```
+
+## 使い方 [#usage]
+
+Retry は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Retry } from "@unikvs/retry";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    inner: {
+      type: "[#retry-inner] IStorage",
+      required: true,
+      description: "委譲先のストレージです。",
+    },
+    maxRetries: {
+      type: "[#retry-options-max-retries] number",
+      default: "3",
+      description: "初回試行の後の再試行回数です。0 では再試行しません。",
+    },
+    initialDelayMs: {
+      type: "[#retry-options-initial-delay-ms] number",
+      default: "100",
+      description: "初回の待機時間 (ミリ秒) です。",
+    },
+    maxDelayMs: {
+      type: "[#retry-options-max-delay-ms] number",
+      default: "5000",
+      description: "待機時間の上限 (ミリ秒) です。",
+    },
+    factor: {
+      type: "[#retry-options-factor] number",
+      default: "2",
+      description: "待機時間の増加係数です。",
+    },
+    jitter: {
+      type: "[#retry-options-jitter] boolean",
+      default: "true",
+      description: "待機時間にジッターを加えるかどうかです。",
+    },
+    retryable: {
+      type: "[#retry-options-retryable] RetryablePredicate",
+      description:
+        "エラーがリトライ可能かどうかを判定する述語です。既定では isRetryableError を使用します。",
+    },
+    onRetry: {
+      type: "[#retry-options-on-retry] (info: RetryAttemptInfo) => void",
+      description: "再試行の直前に呼び出される通知です。",
+    },
+  }}
+/>
+
+以下は、委譲先の一時的な失敗を再試行する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Retry } from "@unikvs/retry";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ k1: PlainValue<string> }>()
+  .persist(new Retry(new Memory(), { maxRetries: 3 }))
+  .create();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `Retry` [#retry]
+
+一時的な失敗を指数バックオフで再試行するストレージラッパーです。待機時間は `initialDelayMs * factor^(attempt-1)` で増加し、`maxDelayMs` が上限になります。
+
+### `RetryOptions` [#retry-options]
+
+`Retry` のコンストラクターが受け取るオプションです。再試行回数と待機時間、判定述語を指定します。
+
+### `RetryOperation` [#retry-operation]
+
+リトライ対象の操作名です。`"write"`・`"read"`・`"exists"`・`"delete"`・`"clear"`・`"getWritable"`・`"getReadable"` のいずれかです。
+
+### `RetryablePredicate` [#retryable-predicate]
+
+エラーがリトライ可能かどうかを判定する述語です。
+
+### `RetryAttemptInfo` [#retry-attempt-info]
+
+リトライが発生したときに通知される試行情報です。
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-attempt-info-operation] RetryOperation",
+      required: true,
+      description: "失敗した操作名です。",
+    },
+    attempt: {
+      type: "[#retry-attempt-info-attempt] number",
+      required: true,
+      description: "失敗した試行回数 (1 始まり) です。",
+    },
+    error: {
+      type: "[#retry-attempt-info-error] unknown",
+      required: true,
+      description: "発生したエラーです。",
+    },
+    nextDelayMs: {
+      type: "[#retry-attempt-info-next-delay-ms] number",
+      required: true,
+      description: "次の試行までの待機時間 (ミリ秒) です。",
+    },
+  }}
+/>
+
+### `isRetryableError` [#is-retryable-error]
+
+既定のリトライ可否判定です。この判定では、存在しないキーなどの恒久的な失敗と、中断による失敗はリトライしません。
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                 |
+| --------------------------------------- | -------------------------------- |
+| `write`・`read`                         | 委譲先のデータ型をそのまま保つ   |
+| `getWritable`・`getReadable` のチャンク | 委譲先のチャンク型をそのまま保つ |
+
+- すべての操作は委譲先の型をそのまま保ち、データとチャンクの変換を行いません。
+- 再試行対象は読み書きと存在確認、削除、全削除、ストリーム取得です。
+- `open` と `close` の失敗は再試行せず、そのまま伝播します。
+- 待機時間は指数関数的に増加して上限で抑えられ、`jitter` が `true` の場合は上限の半分から上限までの範囲で変動します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### RetryExhaustedError [#error-retry-exhausted]
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-exhausted-operation] string",
+      required: true,
+      description: "失敗した操作名です。",
+    },
+    attempts: {
+      type: "[#retry-exhausted-attempts] number",
+      required: true,
+      description: "実行した試行回数です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-retry-exhausted-meaning]
+
+最大試行回数を超えても操作が成功しなかったときに投げます。最後に発生したエラーは `cause` に保持されます。
+
+#### 対処方法 [#error-retry-exhausted-howto]
+
+`cause` から元の失敗原因を確認し、一時的な障害かどうかを切り分けてください。頻発する場合は `maxRetries` や待機時間、`retryable` の判定を見直してください。
+
+#### 例 [#error-retry-exhausted-example]
+
+以下は、`RetryExhaustedError` を捕捉する例です。
+
+```ts
+import { RetryExhaustedError } from "@unikvs/retry";
+
+try {
+  await kvs.set("k1", "hello");
+} catch (ex) {
+  if (ex instanceof RetryExhaustedError) {
+    console.log(ex.meta); // { operation: "write", attempts: 4 }
+    console.log(ex.cause); // 最後のエラー
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RetryInvalidOptionError [#error-retry-invalid-option]
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#retry-invalid-option-name] string",
+      required: true,
+      description: "不正だったオプション名です。",
+    },
+    actual: {
+      type: "[#retry-invalid-option-actual] unknown",
+      required: true,
+      description: "指定された値です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-retry-invalid-option-meaning]
+
+コンストラクターに不正なオプションが渡されたときに投げます。負の再試行回数や非整数、負の待機時間、1 未満の係数で投げます。
+
+#### 対処方法 [#error-retry-invalid-option-howto]
+
+`meta.name` のオプションを確認し、`maxRetries` は 0 以上の整数、`initialDelayMs` と `maxDelayMs` は 0 以上の有限数、`factor` は 1 以上の有限数を指定してください。
+
+#### 例 [#error-retry-invalid-option-example]
+
+以下は、`RetryInvalidOptionError` を捕捉する例です。
+
+```ts
+import { RetryInvalidOptionError } from "@unikvs/retry";
+
+try {
+  const retry = new Retry(inner, { maxRetries: -1 });
+} catch (ex) {
+  if (ex instanceof RetryInvalidOptionError) {
+    console.log(ex.meta); // { name: "maxRetries", actual: -1 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RetryUnsupportedOperationError [#error-retry-unsupported-operation]
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-unsupported-operation-operation] string",
+      required: true,
+      description: "実装されていない操作名です。",
+    },
+    storage: {
+      type: "[#retry-unsupported-operation-storage] string",
+      required: true,
+      description: "委譲先のストレージ名です。",
+    },
+  }}
+/>
+
+#### 意味 [#error-retry-unsupported-operation-meaning]
+
+委譲先のストレージが `getWritable` や `getReadable` を実装していないときに投げます。
+
+#### 対処方法 [#error-retry-unsupported-operation-howto]
+
+委譲先がストリーム操作に対応しているか確認し、未対応の場合はプレーンな読み書きを使ってください。
+
+#### 例 [#error-retry-unsupported-operation-example]
+
+以下は、`RetryUnsupportedOperationError` を捕捉する例です。
+
+```ts
+import { RetryUnsupportedOperationError } from "@unikvs/retry";
+
+try {
+  await kvs.stream("logs");
+} catch (ex) {
+  if (ex instanceof RetryUnsupportedOperationError) {
+    console.log(ex.meta); // { operation: "getReadable", storage: "Bare" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+`KeyNotFoundError` と中断による `AbortError` は既定では再試行せず、そのまま伝播します。

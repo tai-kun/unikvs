@@ -1,0 +1,133 @@
+---
+title: "@unikvs/tracing"
+description: "操作ごとにトレーススパンを発行するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`Tracing` は読み書きや変換の操作ごとにトレーススパンを発行し、処理時間と成否を記録します。<Badge>Middleware</Badge>
+
+分散トレーシングや性能分析に使います。OpenTelemetry と構造的に互換性のあるトレーサーを渡して使います。
+
+- `name` は `Tracing` です。
+- `isOpen` は常に `true` です。
+- スパンには `key`・`action`・`success`・`durationMs` を属性として含めます。
+- `encode`・`decode`・ストリームはデータを透過し、スパンの発行のみ行います。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/tracing
+```
+
+## 使い方 [#usage]
+
+Tracing は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Tracing } from "@unikvs/tracing";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    tracer: {
+      type: "[#tracing-options-tracer] TracerLike",
+      description: "スパンを発行するトレーサーです。省略した場合は何も記録しません。",
+    },
+    spanNamePrefix: {
+      type: "[#tracing-options-span-name-prefix] string",
+      default: '"unikvs."',
+      description: "スパン名の先頭に付ける接頭辞です。",
+    },
+  }}
+/>
+
+以下は、カスタムトレーサーで操作を記録する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Tracing, type TracerLike } from "@unikvs/tracing";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const tracer: TracerLike = {
+  startSpan: (name) => ({
+    setAttribute: () => {},
+    setStatus: () => {},
+    end: () => {},
+  }),
+};
+
+const kvs = UniKvs.config<{ k1: PlainValue<string> }>()
+  .use(new Tracing({ tracer }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `Tracing` [#tracing]
+
+操作ごとにトレーススパンを発行するミドルウェアです。`use` では操作ごとのスパン、`encode`・`decode`・ストリームでは変換ごとのスパンを発行します。
+
+### `TracingOptions` [#tracing-options]
+
+`Tracing` のコンストラクターが受け取るオプションです。トレーサーとスパン名の接頭辞を指定できます。
+
+### `SpanStatusCode` [#span-status-code]
+
+スパンの状態コードです。`"unset"`・`"ok"`・`"error"` のいずれかです。
+
+### `SpanStatus` [#span-status]
+
+スパンに設定する状態です。
+
+<TypeTable
+  type={{
+    code: {
+      type: "[#span-status-code-prop] SpanStatusCode",
+      required: true,
+      description: "スパンの状態コードです。",
+    },
+    message: {
+      type: "[#span-status-message] string",
+      description: "状態に付与するメッセージです。",
+    },
+  }}
+/>
+
+### `SpanAttributeValue` [#span-attribute-value]
+
+スパン属性に設定できる値の型です。`string`・`number`・`boolean` のいずれかです。
+
+### `SpanLike` [#span-like]
+
+トレーサーから発行されるスパンの最小インターフェースです。OpenTelemetry の Span と構造的に互換性があります。
+
+### `TracerLike` [#tracer-like]
+
+スパンを発行するトレーサーの最小インターフェースです。OpenTelemetry の Tracer と構造的に互換性があります。
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                 | 出力                       |
+| -------------- | -------------------- | -------------------------- |
+| `encode`       | `unknown`            | `unknown` (透過)           |
+| `decode`       | `unknown`            | `unknown` (透過)           |
+| `encodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+| `decodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
+
+- `use` は `unikvs.use.<action>` のスパンで操作を包み、`encode` は `unikvs.encode`、`decode` は `unikvs.decode` のスパンで包みます。
+- ストリームは `unikvs.encodeStream`・`unikvs.decodeStream` のスパンで包み、読み切り・エラー・取り消しのいずれかで終了します。
+- チャンクはそのまま通し、順序と参照を保ちます。
+- 成功時は `success` に `true` と状態 `ok` を設定し、失敗時は `success` に `false` と状態 `error`、メッセージを設定します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+スパンの発行自体は例外を投げず、操作が失敗したときは、このミドルウェアは状態を `error` にして元のエラーを再送出します。トレーサーを省略した場合は何も記録せず、操作はそのまま通ります。

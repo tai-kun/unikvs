@@ -1,0 +1,134 @@
+---
+title: "@unikvs/memory"
+description: "@unikvs/memory の Memory。メモリーに任意の値を保存するストレージの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/memory` はプロセス内の `Map` に任意の値を保持するインメモリーストレージです。テストや一時的な値の保存に使います。
+
+- `name` は `Memory` です。
+- `isOpen` は常に `true` です。
+- `open`・`close` はありません。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/memory
+```
+
+## 使い方 [#usage]
+
+Memory は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    clone: {
+      type: "[#clone] (<T>(value: T) => T) | undefined",
+      default: "structuredClone",
+      description: "データの複製に使う関数です。省略した場合は structuredClone を使います。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{
+  greeting: PlainValue<string>;
+}>()
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型                     |
+| --------------------------------------- | ------------------------------------ |
+| `write`・`read`                         | 任意の値（文字列・オブジェクトなど） |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>`            |
+
+- 任意の値を保存できます。文字列やオブジェクトなど、`structuredClone` で複製できる値を扱います。
+- 読み書きする値は既定では `structuredClone` で複製します。複製方法はコンストラクターの `clone` で変更できます。
+- ストリームのチャンクは `Uint8Array<ArrayBuffer>` のみに対応します。
+- `getWritable` で取得したストリームは、書き込まれたチャンクを結合し、`close` 時に保存します。
+- `getReadable` で取得したストリームは、保存値を単一チャンクとして送出します。保存値が `Uint8Array` でない場合は `InvalidChunkTypeError` を投げます。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### 意味
+
+指定したキーが存在しない場合に投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/memory";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "操作対象のキーです。",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "受け取ったチャンクの値です。",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "受け取ったチャンクの型名です。",
+    },
+  }}
+/>
+
+#### 意味
+
+ストリームに `Uint8Array<ArrayBuffer>` 以外のチャンクを書き込んだ場合や、保存値が `Uint8Array` でないのに `getReadable` を呼んだ場合に投げます。
+
+#### 対処方法
+
+ストリームには `Uint8Array` のチャンクを書き込んでください。`getReadable` を使う値はバイト列で保存してください。

@@ -10,7 +10,7 @@ import type { S3Client, S3Options } from "bun";
 import { StorageNotOpenError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3storageoptions)
  */
 export type S3StorageOptions = Omit<S3Options, "bucket">;
 
@@ -43,7 +43,7 @@ function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
  */
 export default class S3 implements IStorage {
   /**
@@ -67,6 +67,9 @@ export default class S3 implements IStorage {
 
   public readonly name: string;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
+   */
   public constructor(bucket: string, options: S3StorageOptions = {}) {
     this.name = "S3";
     this.#client = null;

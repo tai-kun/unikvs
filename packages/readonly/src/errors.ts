@@ -1,22 +1,22 @@
 import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-set-not-allowed)
  */
 export type ReadOnlySetNotAllowedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-set-not-allowed)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-set-not-allowed)
  */
 export type ReadOnlySetNotAllowedErrorArgs = ErrorOptions & ReadOnlySetNotAllowedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-set-not-allowed)
  */
 export class ReadOnlySetNotAllowedError extends InvalidUsageErrorBase<ReadOnlySetNotAllowedErrorMeta> {
   static {
@@ -24,7 +24,7 @@ export class ReadOnlySetNotAllowedError extends InvalidUsageErrorBase<ReadOnlySe
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-set-not-allowed)
    */
   public constructor(args: ReadOnlySetNotAllowedErrorArgs) {
     const { key, ...options } = args;
@@ -44,22 +44,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-delete-not-allowed)
  */
 export type ReadOnlyDeleteNotAllowedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-delete-not-allowed)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-delete-not-allowed)
  */
 export type ReadOnlyDeleteNotAllowedErrorArgs = ErrorOptions & ReadOnlyDeleteNotAllowedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-delete-not-allowed)
  */
 export class ReadOnlyDeleteNotAllowedError extends InvalidUsageErrorBase<ReadOnlyDeleteNotAllowedErrorMeta> {
   static {
@@ -67,7 +67,7 @@ export class ReadOnlyDeleteNotAllowedError extends InvalidUsageErrorBase<ReadOnl
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-delete-not-allowed)
    */
   public constructor(args: ReadOnlyDeleteNotAllowedErrorArgs) {
     const { key, ...options } = args;
@@ -89,7 +89,7 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-clear-not-allowed)
  */
 export class ReadOnlyClearNotAllowedError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -97,7 +97,7 @@ export class ReadOnlyClearNotAllowedError extends InvalidUsageErrorBase<undefine
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#error-read-only-clear-not-allowed)
    */
   public constructor(options?: ErrorOptions) {
     super("ReadOnly.clear with allowDelete false cannot delete all data.", options);

@@ -2,27 +2,27 @@ import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } 
 import { inspect } from "inspect-lite";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-mismatch)
  */
 export type ChecksumMismatchErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-mismatch-actual)
    */
   readonly actual: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-mismatch-expected)
    */
   readonly expected: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-mismatch)
  */
 export type ChecksumMismatchErrorArgs = ErrorOptions & ChecksumMismatchErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-mismatch)
  */
 export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> {
   static {
@@ -30,7 +30,7 @@ export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-mismatch)
    */
   public constructor(args: ChecksumMismatchErrorArgs) {
     const { actual, expected, ...options } = args;
@@ -54,22 +54,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-var-name)
  */
 export type ChecksumInvalidVarNameErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-invalid-var-name-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-var-name)
  */
 export type ChecksumInvalidVarNameErrorArgs = ErrorOptions & ChecksumInvalidVarNameErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-var-name)
  */
 export class ChecksumInvalidVarNameError extends InvalidUsageErrorBase<ChecksumInvalidVarNameErrorMeta> {
   static {
@@ -77,7 +77,7 @@ export class ChecksumInvalidVarNameError extends InvalidUsageErrorBase<ChecksumI
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-var-name)
    */
   public constructor(args: ChecksumInvalidVarNameErrorArgs) {
     const { actual, ...options } = args;
@@ -93,7 +93,7 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-required)
  */
 export class ChecksumRequiredError extends ErrorBase<undefined> {
   static {
@@ -101,7 +101,7 @@ export class ChecksumRequiredError extends ErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-required)
    */
   public constructor(options?: ErrorOptions) {
     super("Checksum is required", options);
@@ -111,22 +111,22 @@ export class ChecksumRequiredError extends ErrorBase<undefined> {
 setErrorMessage(ChecksumRequiredError, "チェックサムは必須です", "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-required)
  */
 export type ChecksumInvalidRequiredErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-invalid-required-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-required)
  */
 export type ChecksumInvalidRequiredErrorArgs = ErrorOptions & ChecksumInvalidRequiredErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-required)
  */
 export class ChecksumInvalidRequiredError extends InvalidUsageErrorBase<ChecksumInvalidRequiredErrorMeta> {
   static {
@@ -134,7 +134,7 @@ export class ChecksumInvalidRequiredError extends InvalidUsageErrorBase<Checksum
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-required)
    */
   public constructor(args: ChecksumInvalidRequiredErrorArgs) {
     const { actual, ...options } = args;

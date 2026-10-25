@@ -1,0 +1,120 @@
+---
+title: "@unikvs/brotli.node"
+description: "Node.js の node:zlib で Brotli 圧縮と展開を行うミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/brotli.node` はバイト列を Brotli で圧縮して保存し、読み取り時に展開するプラグインです。<Badge>Middleware</Badge> <Badge variant="warning">Node.js 専用</Badge>
+
+Web の `CompressionStream` には Brotli 形式がないため、圧縮処理は常に `node:zlib` へ委譲します。書き込んだ値を小さく保ちたい場合に使います。
+
+- `name` は `Brotli` です。
+- `isOpen` は `open()` 後に `true` になります。初期状態では `false` です。
+- Node.js ランタイム専用です。このミドルウェアは `open()` で `node:util` と `node:zlib` と `node:stream` を遅延解決します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/brotli.node @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+`Brotli` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Brotli } from "@unikvs/brotli.node";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "圧縮レベルです。0 から 11 までの整数を指定します。値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。省略した場合は 11 になります。",
+    },
+  }}
+/>
+
+以下は、書き込んだ値を Brotli で圧縮して保存し、読み取り時に展開する例です。
+
+```ts
+import { Brotli } from "@unikvs/brotli.node";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+  .use(new Brotli({ level: 11 }))
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // 展開されたバイト列になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` では入力バイト列を Brotli で圧縮します。
+- `decode` では入力バイト列を Brotli で展開します。
+- `encodeStream` では入力ストリームを Brotli 圧縮ストリームへ接続します。
+- `decodeStream` では入力ストリームを Brotli 展開ストリームへ接続します。
+- `node:zlib` のストリームが生成したチャンクをそのまま出力し、1 チャンクにはまとめません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `BrotliInvalidLevelError` [#error-brotli-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#brotli-invalid-level-actual] unknown",
+      required: true,
+      description: "指定された圧縮レベルです。",
+    },
+  }}
+/>
+
+#### 意味
+
+コンストラクターは `level` が 0 から 11 までの整数ではないときに、このエラーを投げます。
+
+#### 対処方法
+
+0 から 11 までの整数を指定してください。省略した場合は 11 になります。
+
+#### 例
+
+以下は、`BrotliInvalidLevelError` を捕捉する例です。
+
+```ts
+import { Brotli, BrotliInvalidLevelError } from "@unikvs/brotli.node";
+
+try {
+  new Brotli({ level: 12 });
+} catch (ex) {
+  if (ex instanceof BrotliInvalidLevelError) {
+    console.log(ex.meta); // { actual: 12 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+このミドルウェアは `open()` で実行環境の解決に失敗した場合は [`UnsupportedRuntimeError`](/packages/core/errors#error-unsupported-runtime) を投げます。`open()` 前に `encode` などを呼ぶと `TypeError` を投げます。展開に失敗した場合は上流のエラーをそのまま伝播します。

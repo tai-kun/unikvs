@@ -7,6 +7,8 @@ import {
 
 /**
  * コンテキストの初期値に使える変数マップの形式です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-values)
  */
 export type TestContextValues =
   | Readonly<Record<string, unknown>>
@@ -16,25 +18,35 @@ export type TestContextValues =
  * テスト用の書き戻し要求の形状です。
  *
  * IGetContext と IStreamContext の repair と同じ形状です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-repair)
  */
 export type TestContextRepair = IGetContext["repair"];
 
 /**
  * TestContext のコンストラクター引数です。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init)
  */
 export type TestContextInit = {
   /**
    * 操作の中断に使うシグナルです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-signal)
    */
   readonly signal?: AbortSignal | undefined;
 
   /**
    * 実行する操作の種類です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-action)
    */
   readonly action?: IActionContext["action"] | undefined;
 
   /**
    * 操作対象の論理キーです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-key)
    */
   readonly key?: string | undefined;
 
@@ -42,21 +54,29 @@ export type TestContextInit = {
    * 読み取りに付随する書き戻し要求です。
    *
    * get と stream のコンテキストでのみ意味を持ちます。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-repair)
    */
   readonly repair?: TestContextRepair | undefined;
 
   /**
    * 変換前の入力値です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-source)
    */
   readonly source?: unknown;
 
   /**
    * 変換後の出力値です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-destination)
    */
   readonly destination?: unknown;
 
   /**
    * get/set で扱う初期値です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-values)
    */
   readonly values?: TestContextValues | undefined;
 };
@@ -66,35 +86,49 @@ export type TestContextInit = {
  *
  * signal/action/key/repair/source/destination を保持し、get/set/setReadonly で変数を扱います。
  * IOpenContext や ISetContext などの各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context)
  */
 export class TestContext<TTypes extends object = {}> implements IPipelineContext<TTypes> {
   /**
    * 操作の中断に使うシグナルです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-signal)
    */
   public readonly signal: AbortSignal;
 
   /**
    * 実行する操作の種類です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-action)
    */
   public readonly action: "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear";
 
   /**
    * 操作対象の論理キーです。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-key)
    */
   public readonly key: string;
 
   /**
    * 読み取りに付随する書き戻し要求です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-repair)
    */
   public readonly repair: TestContextRepair;
 
   /**
    * 変換前の入力値です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-source)
    */
   public readonly source: any;
 
   /**
    * 変換後の出力値です。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-destination)
    */
   public destination: any;
 
@@ -104,6 +138,8 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
 
   /**
    * テスト用のコンテキストを作成します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context)
    */
   public constructor(init: TestContextInit = {}) {
     const {
@@ -146,6 +182,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    * @param name 取得する変数名です。
    *
    * @returns 変数の値を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-get)
    */
   public get(name: string): any {
     return this.data.get(name);
@@ -158,6 +195,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    * @param value 設定する値です。
    *
    * @returns 自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-set)
    */
   public set(name: string, value: any): this {
     if (this.readonlyKeys.has(name)) {
@@ -176,6 +214,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    * @param value 設定する値です。
    *
    * @returns 自身を返します。
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-setreadonly)
    */
   public setReadonly(name: string, value: any): this {
     if (this.readonlyKeys.has(name)) {
@@ -193,6 +232,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
  * ミドルウェアの next として使う何もしない関数を作成します。
  *
  * @returns 解決済みの Promise を返す関数です。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-next)
  */
 export function createNext(): () => Promise<void> {
   return async () => {};
@@ -204,6 +244,7 @@ export function createNext(): () => Promise<void> {
  * @param init 初期値です。
  *
  * @returns open アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-open-context)
  */
 export function createOpenContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
   return new TestContext({
@@ -218,6 +259,7 @@ export function createOpenContext(init: Omit<TestContextInit, "action"> = {}): T
  * @param init 初期値です。
  *
  * @returns close アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-close-context)
  */
 export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
   return new TestContext({
@@ -233,6 +275,7 @@ export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): 
  * @param init 初期値です。
  *
  * @returns set アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-set-context)
  */
 export function createSetContext(
   key: string,
@@ -255,6 +298,7 @@ export function createSetContext(
  * @param init 初期値です。
  *
  * @returns 書き戻し要求を持つ get アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-repair-context)
  */
 export function createRepairContext(
   key: string,
@@ -279,6 +323,7 @@ export function createRepairContext(
  * @param init 初期値です。
  *
  * @returns get アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-get-context)
  */
 export function createGetContext(
   key: string,
@@ -298,6 +343,7 @@ export function createGetContext(
  * @param init 初期値です。
  *
  * @returns stream アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-stream-context)
  */
 export function createStreamContext(
   key: string,
@@ -317,6 +363,7 @@ export function createStreamContext(
  * @param init 初期値です。
  *
  * @returns has アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-has-context)
  */
 export function createHasContext(
   key: string,
@@ -336,6 +383,7 @@ export function createHasContext(
  * @param init 初期値です。
  *
  * @returns delete アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-delete-context)
  */
 export function createDeleteContext(
   key: string,
@@ -355,6 +403,7 @@ export function createDeleteContext(
  * @param init 初期値です。
  *
  * @returns clear アクションのコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-clear-context)
  */
 export function createClearContext(
   key = "",
@@ -374,6 +423,7 @@ export function createClearContext(
  * @param init 初期値です。
  *
  * @returns キー変換用のコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-map-key-context)
  */
 export function createMapKeyContext(
   key: string,
@@ -393,6 +443,7 @@ export function createMapKeyContext(
  * @param init 初期値です。
  *
  * @returns encode 用のコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-encode-context)
  */
 export function createEncodeContext(
   source: unknown,
@@ -415,6 +466,7 @@ export function createEncodeContext(
  * @param init 初期値です。
  *
  * @returns decode 用のコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-decode-context)
  */
 export function createDecodeContext(
   source: unknown,
@@ -437,6 +489,7 @@ export function createDecodeContext(
  * @param init 初期値です。
  *
  * @returns encodeStream 用のコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-encode-stream-context)
  */
 export function createEncodeStreamContext(
   source: ReadableStream,
@@ -459,6 +512,7 @@ export function createEncodeStreamContext(
  * @param init 初期値です。
  *
  * @returns decodeStream 用のコンテキストを返します。
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-decode-stream-context)
  */
 export function createDecodeStreamContext(
   source: ReadableStream,

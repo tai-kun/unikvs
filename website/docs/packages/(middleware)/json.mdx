@@ -1,0 +1,89 @@
+---
+title: "@unikvs/json"
+description: "値を JSON（ストリームでは JSON Lines）でシリアライズするミドルウェア @unikvs/json の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+値を JSON でシリアライズするミドルウェアです。<Badge>Middleware</Badge>
+
+単発の読み書きでは値をそのまま JSON 文字列に変換し、ストリームでは 1 件ずつ JSON Lines 形式の行に区切って変換します。
+
+- `name` は `"Json"` です。
+- `isOpen` はつねに `true` です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/json
+```
+
+## 使い方 [#usage]
+
+Json は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Json } from "@unikvs/json";
+```
+
+以下は、オブジェクトを JSON 化して保存し、読み取り時に元の形へ戻す例です。
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ greeting: Value<{ readonly text: string }> }>()
+  .use(new Json())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("greeting", { text: "hello" });
+const greeting = await kvs.get("greeting");
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` は値を JSON 文字列に変換し、UTF-8 でバイト列化します。
+- `decode` はバイト列を UTF-8 文字列に戻し、JSON として解析します。
+- `encodeStream` は入力 1 件ごとに 1 行 (`<JSON>\n`) を出力し、JSON Lines 形式に変換します。
+- `decodeStream` は受信したバイト列を文字列バッファーにため、改行がそろった行から順に解析します。
+- 行末の CR は 1 つ取り除き、空行は読み飛ばします。
+- 末尾に改行がない場合は、残りのバッファーを最後の 1 行として処理します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `JsonUnsupportedValueError` [#error-json-unsupported-value]
+
+`JSON.stringify` が `undefined` を返す値は JSON で表現できないため、このミドルウェアはエンコードできません。
+
+<TypeTable
+  type={{
+    type: {
+      type: "[#json-unsupported-value-type] string",
+      required: true,
+      description: "変換しようとした値の `typeof` です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`undefined`・関数・シンボルなどをルートに渡すと、このエラーが投げられます。`meta.type` に対象の `typeof` が入ります。
+
+#### 対処方法
+
+オブジェクト・配列・文字列・数値・真偽値・`null` など、JSON で表現できる値を渡してください。
+
+なお、デコード時に不正な JSON や UTF-8 を受け取った場合は、`SyntaxError` などのネイティブエラーがそのまま伝播します。

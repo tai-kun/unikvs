@@ -17,7 +17,7 @@ export type BrotliOptions = {
    * 値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。
    * 省略した場合は Node.js の既定値である 11 を使用します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#level)
    */
   readonly level?: number | undefined;
 };

@@ -7,11 +7,11 @@ import { type IEnv, api } from "./_core.js";
 import { ZstdWasmInitError, ZstdWasmInvalidLevelError } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#usage)
  */
 export type ZstdWasmOptions = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#level)
    */
   readonly level?: number | undefined;
 };
@@ -20,7 +20,7 @@ export type ZstdWasmOptions = {
 // テストでも非提供が契約として検証されています。
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#usage)
  */
 export default class ZstdWasm implements IMiddleware {
   /**
@@ -41,7 +41,7 @@ export default class ZstdWasm implements IMiddleware {
   readonly #level: number;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd.wasm#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-wasm#usage)
    */
   public constructor(options: ZstdWasmOptions = {}) {
     const { level = 3 } = options;

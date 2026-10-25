@@ -1,0 +1,90 @@
+---
+title: "@unikvs/superjson"
+description: "値を SuperJSON でシリアライズするミドルウェア @unikvs/superjson の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+値を SuperJSON でシリアライズするミドルウェアです。<Badge>Middleware</Badge>
+
+このミドルウェアは `Date`・`Map`・`Set`・`BigInt`・`undefined` など、JSON では失われる型情報を保持したまま変換します。ストリームでは 1 件ずつ JSON Lines 形式の行に区切って変換します。
+
+- `name` は `"Superjson"` です。
+- `isOpen` はつねに `true` です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/superjson
+```
+
+## 使い方 [#usage]
+
+Superjson は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+```
+
+以下は、日付を持つオブジェクトを型情報を保ったまま保存し、読み取り時に `Date` として戻す例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Superjson } from "@unikvs/superjson";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ event: Value<{ readonly at: Date }> }>()
+  .use(new Superjson())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("event", { at: new Date("2026-01-01T00:00:00Z") });
+const event = await kvs.get("event");
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` は値を SuperJSON 文字列に変換し、UTF-8 でバイト列化します。
+- `decode` はバイト列を UTF-8 文字列に戻し、SuperJSON として解析します。
+- `encodeStream` は入力 1 件ごとに 1 行 (`<SuperJSON>\n`) を出力し、JSON Lines 形式に変換します。
+- `decodeStream` は受信したバイト列を文字列バッファーにため、改行がそろった行から順に解析します。
+- 行末の CR は 1 つ取り除き、空行は読み飛ばします。
+- 末尾に改行がない場合は、残りのバッファーを最後の 1 行として処理します。
+- 関数とシンボルは SuperJSON が `"{}"` に変換してしまうため、事前に拒否します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `SuperjsonUnsupportedValueError` [#error-superjson-unsupported-value]
+
+SuperJSON で扱えない型の値を渡すと、このエラーが投げられます。
+
+<TypeTable
+  type={{
+    type: {
+      type: "[#superjson-unsupported-value-type] string",
+      required: true,
+      description: "変換しようとした値の `typeof` です。",
+    },
+  }}
+/>
+
+#### 意味
+
+関数とシンボルは SuperJSON がエラーを出さず `"{}"` に変換するため、データの消失を防ぐために事前に拒否します。`meta.type` に対象の `typeof` が入ります。
+
+#### 対処方法
+
+関数とシンボルを値に含めないでください。
+
+なお、デコード時に不正な SuperJSON や UTF-8 を受け取った場合は、ネイティブエラーがそのまま伝播します。

@@ -1,22 +1,22 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/json#error-json-unsupported-value)
  */
 export type JsonUnsupportedValueErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#json-unsupported-value-type)
    */
   readonly type: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/json#error-json-unsupported-value)
  */
 export type JsonUnsupportedValueErrorArgs = ErrorOptions & JsonUnsupportedValueErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/json#error-json-unsupported-value)
  */
 export class JsonUnsupportedValueError extends ErrorBase<JsonUnsupportedValueErrorMeta> {
   static {
@@ -24,7 +24,7 @@ export class JsonUnsupportedValueError extends ErrorBase<JsonUnsupportedValueErr
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#error-json-unsupported-value)
    */
   public constructor(args: JsonUnsupportedValueErrorArgs) {
     const { type, ...options } = args;

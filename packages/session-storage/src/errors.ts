@@ -4,7 +4,7 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#clear-without-prefix-not-allowed-error)
  */
 export class ClearWithoutPrefixNotAllowedError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -12,7 +12,7 @@ export class ClearWithoutPrefixNotAllowedError extends InvalidUsageErrorBase<und
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#clear-without-prefix-not-allowed-error)
    */
   public constructor(options?: ErrorOptions) {
     super(
@@ -29,7 +29,7 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#session-storage-not-available-error)
  */
 export class SessionStorageNotAvailableError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -37,7 +37,7 @@ export class SessionStorageNotAvailableError extends InvalidUsageErrorBase<undef
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#session-storage-not-available-error)
    */
   public constructor(options?: ErrorOptions) {
     super(

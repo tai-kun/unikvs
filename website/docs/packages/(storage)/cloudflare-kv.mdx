@@ -1,0 +1,156 @@
+---
+title: "@unikvs/cloudflare-kv"
+description: "Cloudflare KV binding にバイト列を保存する @unikvs/cloudflare-kv の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/cloudflare-kv` は Cloudflare Workers の KV binding にバイト列を保存するストレージです。
+
+このストレージは、すべてのキーに接頭辞を付与し、値をバイナリーセーフな `ArrayBuffer` としてそのまま `put`・`get` します。
+
+- `name` は `CloudflareKv` です。
+- `isOpen` は常に `true` です。`open()`・`close()` は中断の確認のみ行います。
+- `delete` は冪等で、存在しないキーも成功扱いにします。
+- ストリームの読み書きには対応していません。
+
+:::warning[結果整合性に注意します]
+
+Cloudflare KV は結果整合性 (eventual consistency) のストレージです。書き込みや削除の直後に別ロケーションから読むと古い値が見えることがあります。厳密な一貫性が必要な用途には使わないでください。
+
+:::
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/cloudflare-kv
+```
+
+## 使い方 [#usage]
+
+CloudflareKv は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { CloudflareKv } from "@unikvs/cloudflare-kv";
+```
+
+### `CloudflareKv` [#cloudflare-kv]
+
+Cloudflare KV binding 上で動作するストレージです。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    binding: {
+      type: "[#cloudflare-kv-binding] KVNamespaceLike",
+      required: true,
+      description:
+        "注入する KV binding です。get・put・delete・list を持つオブジェクトを渡します。",
+    },
+    keyPrefix: {
+      type: "[#cloudflare-kv-key-prefix] string",
+      default: '"unikvs:"',
+      description: "すべてのキーに付与する接頭辞です。",
+    },
+    ttlSeconds: {
+      type: "[#cloudflare-kv-ttl-seconds] number",
+      description:
+        "書き込み時に付与する有効期限 (秒) です。未指定なら無期限です。put の expirationTtl としてそのまま渡します。",
+    },
+  }}
+/>
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { CloudflareKv } from "@unikvs/cloudflare-kv";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .persist(new CloudflareKv({ binding }))
+  .create();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作            | 対応するデータ型                     |
+| --------------- | ------------------------------------ |
+| `write`・`read` | バイト列 (`Uint8Array<ArrayBuffer>`) |
+
+- バイト列のみを保存できます。文字列やオブジェクトはミドルウェアで変換してから渡してください。
+- 値は `ArrayBuffer` としてそのまま保存され、ビューの `byteOffset` は持ち越しません。
+- `clear` は接頭辞配下のキーを `list` で列挙してから削除します。
+- ストリームの読み書きには対応していません。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidBindingError [#error-invalid-binding]
+
+#### 意味
+
+`binding` が `get`・`put`・`delete`・`list` を持つオブジェクトではないときに、構築時に投げます。
+
+#### 対処方法
+
+KVNamespace binding か、同等の 4 メソッドを持つオブジェクトを渡します。
+
+### InvalidKeyPrefixError [#error-invalid-key-prefix]
+
+#### 意味
+
+`keyPrefix` が文字列ではないときに、構築時に投げます。
+
+#### 対処方法
+
+`keyPrefix` には文字列を指定します。
+
+### InvalidTtlSecondsError [#error-invalid-ttl-seconds]
+
+#### 意味
+
+`ttlSeconds` が正の整数でも `undefined` でもないときに、構築時に投げます。
+
+#### 対処方法
+
+`ttlSeconds` には正の整数を指定するか、未指定にします。
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### 意味
+
+指定したキーが存在しないときに `read` が投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出します。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cloudflare-kv";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

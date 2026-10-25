@@ -1,0 +1,345 @@
+---
+title: "@unikvs/http"
+description: "@unikvs/http の Http。HTTP サーバーにバイト列を保存するストレージの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/http` は HTTP サーバーとバイト列をやり取りするストレージです。`PUT`・`GET`・`HEAD`・`DELETE` に対応したサーバーと組み合わせて使います。
+
+- `name` は `Http` です。
+- `isOpen` は常に `true` です。`open`・`close` は初期化や後始末を行いません。
+- このストレージは、キーに `keyPrefix` を付けて URL 符号化し、`baseUrl` の配下に配置します。
+- ヘッダーとトークンはコンストラクターのほか、実行時変数でも上書きできます。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/http
+```
+
+## 使い方 [#usage]
+
+Http は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Http } from "@unikvs/http";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    baseUrl: {
+      type: "[#base-url] string",
+      required: true,
+      description: "ベース URL です。クエリーとフラグメントを含まない絶対 URL を指定します。",
+    },
+    keyPrefix: {
+      type: "[#key-prefix] string | undefined",
+      default: '"unikvs:"',
+      description: "すべてのキーに付ける接頭辞です。",
+    },
+    allowClearWithoutPrefix: {
+      type: "[#allow-clear-without-prefix] boolean | undefined",
+      default: "false",
+      description: "空の接頭辞での clear を許可するかどうかです。",
+    },
+    fetch: {
+      type: "[#fetch] IFetch | undefined",
+      description:
+        "使う fetch 実装です。Request を受けて Response を返す関数を渡します。省略した場合は globalThis.fetch を使います。",
+    },
+    headers: {
+      type: "[#headers] Record<string, string> | undefined",
+      description: "既定のリクエストヘッダーです。実行時変数でも上書きできます。",
+    },
+    token: {
+      type: "[#token] string | undefined",
+      description:
+        "既定のベアラートークンです。空でない文字列を指定します。実行時変数でも上書きできます。",
+    },
+  }}
+/>
+
+以下は、バイト列を保存して読み戻す例です。
+
+```ts
+import { Http } from "@unikvs/http";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{
+  image: Value<Uint8Array>;
+}>()
+  .persist(new Http("https://example.com/kvs"))
+  .create();
+
+await kvs.open();
+await kvs.set("image", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("image");
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作                                    | 対応するデータ型          |
+| --------------------------------------- | ------------------------- |
+| `write`・`read`                         | `Uint8Array<ArrayBuffer>` |
+| `getWritable`・`getReadable` のチャンク | `Uint8Array<ArrayBuffer>` |
+
+- バイト列のみを保存します。文字列などを保存する場合は、バイト列に変換してから渡してください。
+- このストレージは、`write` を `PUT` で、`read` を `GET` で、`exists` を `HEAD`（未対応時は `GET`）で処理します。
+- `delete` は存在しないキーでも成功します。
+- `clear` は接頭辞配下の削除を `DELETE` で要求します。サーバーが未対応の場合は `ClearNotSupportedError` を投げます。
+- `getWritable` はチャンクを蓄積し、`close` 時に `PUT` で一括送信します。
+- `getReadable` は `GET` の応答ボディをそのまま返します。ボディがない場合は空のストリームを返します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### 意味
+
+指定したキーが存在しない場合に投げます。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/http";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### InvalidBaseUrlError [#invalid-base-url-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-base-url-actual] unknown",
+      required: true,
+      description: "受け取った baseUrl の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+コンストラクターの `baseUrl` が絶対 URL でない場合に投げます。前後の空白・空文字・相対 URL・クエリーやフラグメント付きは受け付けません。
+
+#### 対処方法
+
+クエリーとフラグメントを含まない絶対 URL を指定してください。
+
+### InvalidHeadersError [#invalid-headers-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-headers-actual] unknown",
+      required: true,
+      description: "受け取ったヘッダーの値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+ヘッダーが文字列を値に持つオブジェクトでない場合に投げます。コンストラクターの `headers` と実行時変数のヘッダーが検証対象です。
+
+#### 対処方法
+
+ヘッダーの値をすべて文字列にしてください。
+
+### InvalidTokenError [#invalid-token-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-token-actual] unknown",
+      required: true,
+      description: "受け取ったトークンの値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+トークンが空でない文字列でない場合に投げます。コンストラクターの `token` と実行時変数のトークンが検証対象です。
+
+#### 対処方法
+
+トークンに空でない文字列を指定してください。
+
+### InvalidKeyError [#invalid-key-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-key-key] string",
+      required: true,
+      description: "符号化できなかったキーです。",
+    },
+  }}
+/>
+
+#### 意味
+
+キーを URL パスセグメントとして符号化できなかった場合に投げます。
+
+#### 対処方法
+
+符号化できるキーを使ってください。
+
+### ClearWithoutPrefixNotAllowedError [#clear-without-prefix-not-allowed-error]
+
+#### 意味
+
+`keyPrefix` が空で `allowClearWithoutPrefix` が `false` のまま `clear` を呼んだ場合に投げます。
+
+#### 対処方法
+
+空でない `keyPrefix` を設定するか、`allowClearWithoutPrefix: true` を指定してください。
+
+### ClearNotSupportedError [#clear-not-supported-error]
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#clear-not-supported-prefix] string",
+      required: true,
+      description: "削除しようとした接頭辞です。",
+    },
+    status: {
+      type: "[#clear-not-supported-status] number",
+      required: true,
+      description: "サーバーが返したステータスです。",
+    },
+  }}
+/>
+
+#### 意味
+
+`clear` に対するサーバーの応答が `404`・`405`・`501` の場合に投げます。サーバーが接頭辞削除に対応していません。
+
+#### 対処方法
+
+サーバー側で接頭辞削除を実装するか、`clear` の呼び出しを止めてください。
+
+### HttpNetworkError [#http-network-error]
+
+<TypeTable
+  type={{
+    method: {
+      type: "[#http-network-method] string",
+      required: true,
+      description: "失敗したリクエストのメソッドです。",
+    },
+    url: {
+      type: "[#http-network-url] string",
+      required: true,
+      description: "失敗したリクエストの URL です。",
+    },
+    key: {
+      type: "[#http-network-key] string | undefined",
+      required: true,
+      description: "操作対象のキーです。clear の失敗時は undefined です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`fetch` 自体が失敗した場合に投げます。中断による失敗は含みません。
+
+#### 対処方法
+
+ネットワークとサーバーの状態を確認し、必要に応じて再試行してください。
+
+### HttpResponseError [#http-response-error]
+
+<TypeTable
+  type={{
+    method: {
+      type: "[#http-response-method] string",
+      required: true,
+      description: "失敗したリクエストのメソッドです。",
+    },
+    url: {
+      type: "[#http-response-url] string",
+      required: true,
+      description: "失敗したリクエストの URL です。",
+    },
+    status: {
+      type: "[#http-response-status] number",
+      required: true,
+      description: "サーバーが返したステータスです。",
+    },
+    statusText: {
+      type: "[#http-response-status-text] string",
+      required: true,
+      description: "サーバーが返したステータステキストです。",
+    },
+    key: {
+      type: "[#http-response-key] string | undefined",
+      required: true,
+      description: "操作対象のキーです。clear の失敗時は undefined です。",
+    },
+  }}
+/>
+
+#### 意味
+
+応答のステータスが想定外の場合に投げます。`read` と `getReadable` の `404`・`410` は `KeyNotFoundError` に、`delete` の `404`・`410` は成功に、`clear` の `404`・`405`・`501` は `ClearNotSupportedError` になります。
+
+#### 対処方法
+
+`meta` の `status` と `statusText` で応答を確認してください。
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "操作対象のキーです。",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "受け取ったチャンクの値です。",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "受け取ったチャンクの型名です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`getWritable` に `Uint8Array<ArrayBuffer>` 以外のチャンクを書き込んだ場合に投げます。
+
+#### 対処方法
+
+ストリームには `Uint8Array` のチャンクを書き込んでください。

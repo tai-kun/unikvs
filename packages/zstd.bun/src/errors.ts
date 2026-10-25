@@ -7,13 +7,13 @@ export { UnsupportedRuntimeError } from "@unikvs/core";
 /**
  * 無効な zstd 圧縮レベルが指定されたときに投げられるエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#error-zstd-bun-invalid-level)
  */
 export type ZstdBunInvalidLevelErrorMeta = {
   /**
    * 指定された圧縮レベルです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#zstd-bun-invalid-level-actual)
    */
   readonly actual: unknown;
 };
@@ -21,14 +21,14 @@ export type ZstdBunInvalidLevelErrorMeta = {
 /**
  * 無効な zstd 圧縮レベルが指定されたときに投げられるエラーの引数です。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#error-zstd-bun-invalid-level)
  */
 export type ZstdBunInvalidLevelErrorArgs = ErrorOptions & ZstdBunInvalidLevelErrorMeta;
 
 /**
  * 無効な zstd 圧縮レベルが指定されたときに投げられるエラーです。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#error-zstd-bun-invalid-level)
  */
 export class ZstdBunInvalidLevelError extends InvalidUsageErrorBase<ZstdBunInvalidLevelErrorMeta> {
   static {
@@ -37,7 +37,7 @@ export class ZstdBunInvalidLevelError extends InvalidUsageErrorBase<ZstdBunInval
 
   /**
    * @param args エラーの引数です。
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#error-zstd-bun-invalid-level)
    */
   public constructor(args: ZstdBunInvalidLevelErrorArgs) {
     const { actual, ...options } = args;

@@ -1,6 +1,8 @@
 /**
  * チャンク列を 1 つのバイト列に連結します。
  * ストリームの分割結果を単体のバイト列と比較するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#concat-bytes)
  */
 export function concatBytes(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
   const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
@@ -18,12 +20,16 @@ export function concatBytes(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuff
 /**
  * concatBytes の別名です。
  * チャンク列を連結する処理がストリーム文脈で呼ばれる場合に使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#concat-chunks)
  */
 export const concatChunks: typeof concatBytes = concatBytes;
 
 /**
  * 2 つのバイト列が同じ長さで各バイトが一致するかを比較します。
  * 数 MiB のデータを toStrictEqual で比較するコストを避けるために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#bytes-equal)
  */
 export function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
@@ -42,6 +48,8 @@ export function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
 /**
  * 0 から 255 までを巡る決定的なバイト列を生成します。
  * 全バイト値を含むデータの往復検証に使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-all-byte-values)
  */
 export function createAllByteValues(size: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(size);
@@ -56,6 +64,8 @@ export function createAllByteValues(size: number): Uint8Array<ArrayBuffer> {
 /**
  * 線形合同法による決定的な擬似乱数バイト列を生成します。
  * 偏りのない任意バイナリを大容量で用意するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-pseudo-random-bytes)
  */
 export function createPseudoRandomBytes(
   size: number,
@@ -75,6 +85,8 @@ export function createPseudoRandomBytes(
 /**
  * バイト列を小文字の 16 進文字列に変換します。
  * 実装側の変換を経由せずに期待値を組み立てるために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#to-hex)
  */
 export function toHex(bytes: Uint8Array): string {
   let hex = "";
@@ -89,6 +101,8 @@ export function toHex(bytes: Uint8Array): string {
 /**
  * バイト列のチャンク列を UTF-8 の文字列へ変換します。
  * エンコード結果を文字列として比較するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#to-text)
  */
 export function toText(chunks: readonly Uint8Array[]): string {
   return new TextDecoder().decode(concatBytes(chunks));
@@ -97,6 +111,8 @@ export function toText(chunks: readonly Uint8Array[]): string {
 /**
  * バイト列を指定したサイズ以下のチャンクへ分割します。
  * 任意の境界で分割しても処理できることを検証するために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#split-into-chunks)
  */
 export function splitIntoChunks(
   bytes: Uint8Array<ArrayBuffer>,
@@ -114,6 +130,8 @@ export function splitIntoChunks(
 /**
  * バイト列を指定した長さで順に切り出します。
  * 任意の境界で分割されたチャンク列を作るために使用します。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#split-by-sizes)
  */
 export function splitBySizes(
   data: Uint8Array<ArrayBuffer>,

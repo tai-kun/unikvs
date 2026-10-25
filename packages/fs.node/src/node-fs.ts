@@ -7,12 +7,12 @@ import type { IStorage } from "@unikvs/core";
 import { assertValidFilename } from "@unikvs/utils";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefsoptions)
  */
 export type NodeFsOptions = {};
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefs)
  */
 export default class NodeFs implements IStorage {
   /**
@@ -30,7 +30,7 @@ export default class NodeFs implements IStorage {
   public readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefs)
    */
   public constructor(root = ".unikvs", _options: NodeFsOptions = {}) {
     this.name = "NodeFs";

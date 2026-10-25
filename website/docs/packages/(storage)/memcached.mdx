@@ -1,0 +1,234 @@
+---
+title: "@unikvs/memcached"
+description: "Node.js から Memcached にバイト列を保存する @unikvs/memcached の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/memcached` は Memcached にバイト列を保存するストレージプラグインです。<Badge variant="warning">Node.js 専用</Badge> 複数ノードで共有するキャッシュの保存に使います。
+
+- `name` は `"Memcached"` で、`isOpen` で開閉状態を確認します。
+- `open()` で接続を確認し、使い終わったら `close()` で解放します。
+- このストレージは、キーに既定で `"unikvs:"` の接頭辞を付与します。
+- 接続先を省略した場合は、`MEMCACHED_SERVERS`（なければ `MEMCACHIER_SERVERS`、`MEMCACHE_SERVERS`）環境変数を使い、未設定のときは `"127.0.0.1:11211"` に接続します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/memcached
+```
+
+別途 Memcached サーバーが必要です。
+
+## 使い方 [#usage]
+
+Memcached は IStorage を実装しています。UniKvs には persist() で渡します。
+
+```ts
+import { Memcached } from "@unikvs/memcached";
+```
+
+### Memcached [#memcached]
+
+Memcached に保存するストレージです。利用者は `open()` で開き、使い終わったら `close()` で閉じます。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    servers: {
+      type: "[#memcached-servers] MemcachedServers",
+      description:
+        "接続先サーバーです。`options.servers` より優先されます。省略時はオプションと環境変数から解決します。",
+    },
+    options: {
+      type: "[#memcached-options] MemcachedStorageOptions",
+      description: "クライアントと本パッケージの動作を設定するオプションです。",
+    },
+  }}
+/>
+
+### MemcachedStorageOptions [#memcachedstorageoptions]
+
+`Memcached` のコンストラクターオプションです。
+
+<TypeTable
+  type={{
+    client: {
+      type: "[#memcachedstorageoptions-client] MemcachedClientLike",
+      description: "既存のクライアントを注入します。指定時は接続作成を行いません。",
+    },
+    servers: {
+      type: "[#memcachedstorageoptions-servers] MemcachedServers",
+      description: "接続先サーバーです。コンストラクターの第 1 引数が優先されます。",
+    },
+    host: {
+      type: "[#memcachedstorageoptions-host] string",
+      description: "`servers` の代わりにホストを直接指定します。",
+    },
+    port: {
+      type: "[#memcachedstorageoptions-port] number",
+      description: "`servers` の代わりにポートを直接指定します。",
+    },
+    ttlSeconds: {
+      type: "[#memcachedstorageoptions-ttlseconds] number",
+      description: "書き込んだ値の有効期限 (秒) です。`0` は無期限を表します。既定値は `0` です。",
+    },
+    keyPrefix: {
+      type: "[#memcachedstorageoptions-keyprefix] string",
+      description: 'すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。',
+    },
+    connectTimeout: {
+      type: "[#memcachedstorageoptions-connecttimeout] number",
+      description:
+        "`open()` 時の接続確認が打ち切られるまでの時間 (ミリ秒) です。既定値は `5000` です。",
+    },
+  }}
+/>
+
+### MemcachedClientLike [#memcachedclientlike]
+
+注入できる Memcached クライアントの最小形状です。`memjs` の `Client` はこの形状を満たします。
+
+### MemcachedServers [#memcachedservers]
+
+`servers` 引数として受け付ける形状です。文字列 (`"host:port,host:port"`) またはその配列です。
+
+### MemcachedGetResult [#memcachedgetresult]
+
+`get` の戻り値として受け付ける形状です。
+
+### MemcachedGetResultValue [#memcachedgetresultvalue]
+
+`get` の戻り値として受け付ける値の形状です。`memjs` は `{ value: Buffer | null, flags }` を返します。
+
+以下は、値を保存して読み戻す例です。
+
+```ts
+import { Memcached } from "@unikvs/memcached";
+import { UniKvs, type PlainValue } from "unikvs";
+
+const kvs = UniKvs.config<{ file: PlainValue<Uint8Array> }>()
+  .persist(new Memcached("127.0.0.1:11211"))
+  .create();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| 操作            | 対応するデータ型          |
+| --------------- | ------------------------- |
+| `write`・`read` | `Uint8Array<ArrayBuffer>` |
+
+- `write`・`read` にはバイト列 (`Uint8Array<ArrayBuffer>`) を使います。
+- 値は Base64 でエンコードした文字列として保存します。
+- ストリームの読み書きには対応していません。
+- `clear()` はキー列挙の手段がないため、サーバー上の全キーを削除します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidTtlSecondsError [#error-invalid-ttl-seconds]
+
+コンストラクターの `ttlSeconds` が 0 以上の有限数ではないときに投げます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-ttl-seconds-actual] unknown",
+      required: true,
+      description: "受け取った `ttlSeconds` の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`ttlSeconds` に 0 以上の有限数以外が指定されました。
+
+#### 対処方法
+
+`ttlSeconds` に 0 以上の有限数 (秒) を指定してください。
+
+### InvalidConnectTimeoutError [#error-invalid-connect-timeout]
+
+コンストラクターの `connectTimeout` が有限の正数ではないときに投げます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-connect-timeout-actual] unknown",
+      required: true,
+      description: "受け取った `connectTimeout` の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`connectTimeout` に有限の正数 (ミリ秒) 以外が指定されました。
+
+#### 対処方法
+
+`connectTimeout` に有限の正数 (ミリ秒) を指定してください。
+
+### ConnectTimeoutError [#error-connect-timeout]
+
+`open()` 時の接続確認がタイムアウトしたときに投げます。
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#connect-timeout-timeoutms] number",
+      required: true,
+      description: "タイムアウトまでの時間 (ミリ秒) です。",
+    },
+  }}
+/>
+
+#### 意味
+
+Memcached への接続確認が `connectTimeout` (既定値は `5000` ミリ秒) を超えても終わりませんでした。
+
+#### 対処方法
+
+サーバーの起動状態と接続先を確認し、必要に応じて `connectTimeout` を延ばしてください。
+
+### KeyNotFoundError [#error-key-not-found]
+
+`@unikvs/core` の共通エラーです。存在しないキーを読み取ったときに投げます。
+
+#### 意味
+
+指定したキーが存在しません。`@unikvs/core` の共通エラーです。
+
+#### 対処方法
+
+`exists` で確認してから読み出してください。
+
+#### 例
+
+以下は、`KeyNotFoundError` を捕捉する例です。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/memcached";
+
+try {
+  const data = await kvs.get("missing");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```

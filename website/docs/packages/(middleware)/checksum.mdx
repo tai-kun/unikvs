@@ -1,0 +1,226 @@
+---
+title: "@unikvs/checksum"
+description: "バイト列のハッシュを計算して期待値と照合するミドルウェア @unikvs/checksum の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+バイト列のハッシュを計算し、期待値と照合するミドルウェアです。<Badge>Middleware</Badge>
+
+このミドルウェアはデータを変更せずに透過させ、チェックサム変数に期待ハッシュがある場合のみ検証します。MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の 6 種類があります。
+
+- 具象クラスの `name` はクラス名と同じです (例: `"ChecksumSha256"`)。
+- `isOpen` はつねに `true` です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/checksum @noble/hashes@2.0.0
+```
+
+## 使い方 [#usage]
+
+ChecksumSha256 は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+```
+
+他の 5 種類も同様に使います。コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    required: {
+      type: "[#checksum-required] boolean",
+      description:
+        "チェックサム変数がない場合にエラーを投げるかどうかです。省略時は `false` です。",
+    },
+  }}
+/>
+
+以下は、SHA-256 の期待ハッシュを指定して保存し、読み取り時に照合する例です。
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+  .use(new ChecksumSha256())
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+
+const data = new TextEncoder().encode("abc");
+const sha256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+await kvs.set("file", data, {
+  vars: { "@unikvs/checksum:sha256": sha256 },
+});
+const file = await kvs.get("file", {
+  vars: { "@unikvs/checksum:sha256": sha256 },
+});
+await kvs.close();
+```
+
+### `Checksum` [#checksum]
+
+6 種類の抽象基底クラスです。直接は使わず、具象クラスを経由して使います。
+
+### `ChecksumMd5` [#checksum-md5]
+
+MD5 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:md5"` です。
+
+### `ChecksumSha1` [#checksum-sha1]
+
+SHA-1 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:sha1"` です。
+
+### `ChecksumSha224` [#checksum-sha224]
+
+SHA-224 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:sha224"` です。
+
+### `ChecksumSha256` [#checksum-sha256]
+
+SHA-256 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:sha256"` です。
+
+### `ChecksumSha384` [#checksum-sha384]
+
+SHA-384 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:sha384"` です。
+
+### `ChecksumSha512` [#checksum-sha512]
+
+SHA-512 で検証するミドルウェアです。チェックサム変数は `"@unikvs/checksum:sha512"` です。
+
+### `IHasher` [#ihasher]
+
+逐次ハッシュ計算のインターフェースです。`@noble/hashes` のハッシャーに対応します。
+
+<TypeTable
+  type={{
+    update: {
+      type: "[#ihasher-update] (data: Uint8Array<ArrayBuffer>) => void",
+      required: true,
+      description: "データをハッシュ計算へ追加します。",
+    },
+    digest: {
+      type: "[#ihasher-digest] () => Uint8Array",
+      required: true,
+      description: "計算結果のハッシュを返します。",
+    },
+  }}
+/>
+
+### `IHash` [#ihash]
+
+一括ハッシュ計算の関数と、ハッシャー生成の `create` を持つインターフェースです。
+
+<TypeTable
+  type={{
+    create: {
+      type: "[#ihash-create] () => IHasher",
+      required: true,
+      description: "逐次計算用のハッシャーを作ります。",
+    },
+  }}
+/>
+
+## データ型 [#data-types]
+
+| メソッド       | 入力                      | 出力                      |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` と `decode` はデータを変更せず、そのまま通します。
+- このミドルウェアは対応するチェックサム変数に文字列がある場合のみ、ハッシュ (16 進小文字) を計算して照合します。
+- 期待値と一致しない場合はエラーを投げます。
+- チェックサム変数がなく `required` が `true` の場合はエラーを投げます。
+- `encodeStream` と `decodeStream` はチャンクをそのまま下流へ流しながらハッシュを更新し、終了時に照合します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### `ChecksumMismatchError` [#error-checksum-mismatch]
+
+計算したハッシュと期待値が一致しないときに、このエラーが投げられます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-mismatch-actual] string",
+      required: true,
+      description: "計算したハッシュ (16 進小文字) です。",
+    },
+    expected: {
+      type: "[#checksum-mismatch-expected] string",
+      required: true,
+      description: "チェックサム変数で指定された期待ハッシュです。",
+    },
+  }}
+/>
+
+#### 意味
+
+データか期待値のどちらかが正しくありません。
+
+#### 対処方法
+
+データと期待ハッシュのどちらが正しいか確認してください。
+
+### `ChecksumRequiredError` [#error-checksum-required]
+
+#### 意味
+
+`required` が `true` なのにチェックサム変数が指定されなかったときに、このエラーが投げられます。
+
+#### 対処方法
+
+対応するチェックサム変数に期待ハッシュを指定するか、`required` を `false` にしてください。
+
+### `ChecksumInvalidVarNameError` [#error-checksum-invalid-var-name]
+
+チェックサム変数の名前が文字列でないときに、このエラーが投げられます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-invalid-var-name-actual] unknown",
+      required: true,
+      description: "指定された変数名の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+使い方の誤りのため、`InvalidUsageErrorBase` を継承します。`meta.actual` に指定値をそのまま保持します。
+
+#### 対処方法
+
+公開されている具象クラスをそのまま使う場合は発生しません。自作のサブクラスでは `CHECKSUM_VAR_NAME` に文字列を設定してください。
+
+### `ChecksumInvalidRequiredError` [#error-checksum-invalid-required]
+
+`required` オプションに真偽値以外を指定すると、このエラーが投げられます。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-invalid-required-actual] unknown",
+      required: true,
+      description: "指定された `required` の値です。",
+    },
+  }}
+/>
+
+#### 意味
+
+使い方の誤りのため、`InvalidUsageErrorBase` を継承します。`meta.actual` に指定値をそのまま保持します。
+
+#### 対処方法
+
+`required` に `true` か `false` を指定してください。省略時は `false` です。

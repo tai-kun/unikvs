@@ -23,7 +23,7 @@ import {
  * Valkey は Redis プロトコルと互換性があるため、`ioredis` の `Redis` クライアントをそのまま使えます。
  * テストではこの形状を満たすフェイクを `client` オプションに渡せます。
  *
- * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclient)
  */
 export interface ValkeyClient {
   connect(): Promise<unknown>;
@@ -46,32 +46,32 @@ export interface ValkeyClient {
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclusterspec)
  */
 export type ValkeyClusterSpec = {
   /**
    * 接続先のクラスターノードです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclusterspec-nodes)
    */
   readonly nodes: readonly ClusterNode[];
 
   /**
    * `ioredis` の `Cluster` に渡すオプションです。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclusterspec-options)
    */
   readonly options?: ClusterOptions | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions)
  */
 export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"> & {
   /**
    * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
@@ -80,14 +80,14 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
    *
    * v1 では未対応のため、指定するとエラーになります。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-cluster)
    */
   readonly cluster?: ValkeyClusterSpec | undefined;
 
   /**
    * `close` 時の切断待ち時間 (ミリ秒) です。既定値は 5000 です。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-closetimeout)
    */
   readonly closeTimeout?: number | undefined;
 
@@ -97,7 +97,7 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
    * 指定したときは `open()` での接続確立も `close()` での切断も行わず、呼び出し側が所有します。
    * テスト用のフェイクや共有接続の持ち込みに使います。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-client)
    */
   readonly client?: ValkeyClient | undefined;
 
@@ -106,7 +106,7 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
    *
    * 未指定のときはキーは失効しません。単発書き込みは `SET ... PX` で、ストリーム書き込みは確定 (`RENAME`) 後の `PEXPIRE` で付与します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-ttl)
    */
   readonly ttl?: number | undefined;
 };
@@ -121,7 +121,7 @@ type Connection = {
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
  */
 export default class Valkey implements IStorage {
   #con: Connection | null;
@@ -146,14 +146,14 @@ export default class Valkey implements IStorage {
   readonly #keyPrefix: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
    */
   public readonly name: string;
 
   /**
    * Valkey ストレージを作成します。
    *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
    */
   public constructor(url?: string, options: ValkeyStorageOptions = {}) {
     const {

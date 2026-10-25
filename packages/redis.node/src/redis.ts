@@ -16,22 +16,37 @@ import {
 } from "./errors.js";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisclusterspec)
  */
 export type RedisClusterSpec = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisclusterspec-nodes)
+   */
   readonly nodes: readonly ClusterNode[];
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisclusterspec-options)
+   */
   readonly options?: ClusterOptions | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisstorageoptions)
  */
 export type RedisStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"> & {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisstorageoptions-keyprefix)
+   */
   readonly keyPrefix?: string | undefined;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisstorageoptions-cluster)
+   */
   readonly cluster?: RedisClusterSpec | undefined;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redisstorageoptions-closetimeout)
+   */
   readonly closeTimeout?: number | undefined;
 };
 
@@ -42,7 +57,7 @@ const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 type Connection = { readonly client: Ioredis };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
  */
 export default class Redis implements IStorage {
   #con: Connection | null;
@@ -61,6 +76,9 @@ export default class Redis implements IStorage {
 
   public readonly name: string;
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
+   */
   public constructor(url?: string, options: RedisStorageOptions = {}) {
     const {
       cluster,

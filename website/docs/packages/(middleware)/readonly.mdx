@@ -1,0 +1,141 @@
+---
+title: "@unikvs/readonly"
+description: "書き込みを拒否して読み取り専用にする @unikvs/readonly の使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/readonly` <Badge>Middleware</Badge> は書き込みを拒否して読み取り専用にするミドルウェアです。
+
+このミドルウェアは書き込み方向の操作 (`set`・`encode`) を拒否し、読み取りはそのまま透過させます。`allowDelete` が `false` のときは削除も拒否します。
+
+- `name` は `ReadOnly` です。
+- `isOpen` は常に `true` です。
+- `allowDelete` の既定値は `false` です。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/readonly
+```
+
+## 使い方 [#usage]
+
+ReadOnly は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { ReadOnly } from "@unikvs/readonly";
+```
+
+### `ReadOnly` [#readonly]
+
+書き込みを拒否して読み取り専用にするミドルウェアです。
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    allowDelete: {
+      type: "[#readonly-allow-delete] boolean",
+      default: "false",
+      description: "削除操作を許可するかどうかです。false のときは delete・clear を拒否します。",
+    },
+  }}
+/>
+
+以下は、保存済みの値を読み戻す例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { ReadOnly } from "@unikvs/readonly";
+import { UniKvs, type Value } from "unikvs";
+
+const storage = new Memory();
+const writer = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .persist(storage)
+  .create();
+
+await writer.open();
+await writer.set("foo", new Uint8Array([0, 1, 2]));
+await writer.close();
+
+const kvs = UniKvs.config<{
+  foo: Value<Uint8Array>;
+}>()
+  .use(new ReadOnly())
+  .persist(storage)
+  .create();
+
+await kvs.open();
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力             | 出力                                         |
+| -------------- | ---------------- | -------------------------------------------- |
+| `encode`       | 書き込み値       | 常に `ReadOnlySetNotAllowedError` を投げます |
+| `decode`       | 読み取り値       | 読み取り値（そのまま透過します）             |
+| `getEncodable` | 書き込みチャンク | 常に `ReadOnlySetNotAllowedError` を投げます |
+| `getDecodable` | 読み取りチャンク | 読み取りチャンク（そのまま透過します）       |
+
+- 書き込み方向は常に拒否し、読み取り方向の変換は行わず透過させます。
+- 削除の可否は `use()` で制御し、`allowDelete` が `false` のときは `delete`・`clear` を拒否します。
+
+## エラー [#errors]
+
+このパッケージが投げるエラーは次のとおりです。
+
+### ReadOnlySetNotAllowedError [#error-read-only-set-not-allowed]
+
+#### 意味
+
+書き込み方向の操作 (`set`・`encode`) が呼ばれたときに、このエラーが投げられます。
+
+#### 対処方法
+
+書き込みが必要なときはこのミドルウェアを使わないでください。
+
+#### 例
+
+以下は、`ReadOnlySetNotAllowedError` を捕捉する例です。
+
+```ts
+import { ReadOnlySetNotAllowedError } from "@unikvs/readonly";
+
+try {
+  await kvs.set("foo", new Uint8Array([0, 1, 2]));
+} catch (ex) {
+  if (ex instanceof ReadOnlySetNotAllowedError) {
+    console.log("書き込みは許可されていません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### ReadOnlyDeleteNotAllowedError [#error-read-only-delete-not-allowed]
+
+#### 意味
+
+`allowDelete` が `false` のときに `delete` が呼ばれると、このエラーが投げられます。
+
+#### 対処方法
+
+削除が必要なときは `allowDelete: true` を指定してください。
+
+### ReadOnlyClearNotAllowedError [#error-read-only-clear-not-allowed]
+
+#### 意味
+
+`allowDelete` が `false` のときに `clear` が呼ばれると、このエラーが投げられます。
+
+#### 対処方法
+
+全件削除が必要なときは `allowDelete: true` を指定してください。

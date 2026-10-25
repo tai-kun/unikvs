@@ -1,22 +1,22 @@
 import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#error-superjson-unsupported-value)
  */
 export type SuperjsonUnsupportedValueErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#superjson-unsupported-value-type)
    */
   readonly type: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#error-superjson-unsupported-value)
  */
 export type SuperjsonUnsupportedValueErrorArgs = ErrorOptions & SuperjsonUnsupportedValueErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#error-superjson-unsupported-value)
  */
 export class SuperjsonUnsupportedValueError extends ErrorBase<SuperjsonUnsupportedValueErrorMeta> {
   static {
@@ -24,7 +24,7 @@ export class SuperjsonUnsupportedValueError extends ErrorBase<SuperjsonUnsupport
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson#error-superjson-unsupported-value)
    */
   public constructor(args: SuperjsonUnsupportedValueErrorArgs) {
     const { type, ...options } = args;

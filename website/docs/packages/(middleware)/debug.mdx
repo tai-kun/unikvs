@@ -1,0 +1,108 @@
+---
+title: "@unikvs/debug"
+description: "読み書きされる操作とデータのデバッグ情報をログに記録するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/debug` は読み書きされるデータの種類や大きさをログに記録するプラグインです。<Badge>Middleware</Badge>
+
+このミドルウェアはデータを変換せず、そのまま通しながら操作名とキーと方向を記録します。保存内容の流れを観察したい場合に使います。
+
+- `name` は `Debug` です。
+- `isOpen` は常に `true` です。`open()` は不要です。
+- ログの出力には `@logtape/logtape` を使います。記録するかどうかは `keyFilter` と `actionFilter` で制御できます。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/debug @logtape/logtape
+```
+
+## 使い方 [#usage]
+
+`Debug` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Debug } from "@unikvs/debug";
+```
+
+### `DebugOptions` [#options]
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    keyFilter: {
+      type: "[#key-filter] IDebugKeyFilter | undefined",
+      description:
+        "記録対象のキーを判定する関数です。`true` を返したキーのみ記録します。省略した場合はすべてのキーを記録します。",
+    },
+    actionFilter: {
+      type: "[#action-filter] IDebugActionFilter | undefined",
+      description:
+        "記録対象の操作を判定する関数です。`true` を返した操作のみ記録します。省略した場合はすべての操作を記録します。",
+    },
+    getDebugInfo: {
+      type: "[#debug-info] IDebugInfoCallback | undefined",
+      description: "データから記録する情報を作る関数です。省略した場合は型名と大きさを記録します。",
+    },
+  }}
+/>
+
+### `DebugDirection` [#records]
+
+`DebugDirection` はデータの向きを表し、`write` と `read` のどちらかになります。書き込み時の `encode` では `write` になり、読み取り時の `decode` では `read` になります。
+
+以下は、特定のキーの書き込みと読み取りを記録する例です。
+
+```ts
+import { configureSync } from "@logtape/logtape";
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import { UniKvs, type Value } from "unikvs";
+
+configureSync({
+  sinks: { console: (record) => console.log(record.message) },
+  loggers: [{ category: ["@unikvs/debug"], sinks: ["console"], lowestLevel: "debug" }],
+});
+
+const kvs = UniKvs.config<{ foo: Value<string> }>()
+  .use(
+    new Debug({
+      keyFilter: (key) => key.startsWith("foo"),
+      actionFilter: (action) => action === "set" || action === "get",
+    }),
+  )
+  .persist(new Memory())
+  .create();
+
+await kvs.open();
+await kvs.set("foo", "hello");
+
+const value = await kvs.get("foo");
+console.log(value); // "hello" になります
+
+await kvs.close();
+```
+
+## データ型 [#data-types]
+
+| メソッド       | 入力     | 出力     |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` では入力データをそのまま出力し、書き込みとしてログに記録します。
+- `decode` では入力データをそのまま出力し、読み取りとしてログに記録します。
+- `encodeStream` では各チャンクをそのまま出力し、書き込みとして 1 件ずつログに記録します。
+- `decodeStream` では各チャンクをそのまま出力し、読み取りとして 1 件ずつログに記録します。
+- フィルターに拒否された操作はログに記録しません。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+`getDebugInfo` が投げたエラーはそのまま伝播します。

@@ -5,22 +5,22 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-base-url-error)
  */
 export type InvalidBaseUrlErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-base-url-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-base-url-error)
  */
 export type InvalidBaseUrlErrorArgs = ErrorOptions & InvalidBaseUrlErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-base-url-error)
  */
 export class InvalidBaseUrlError extends ErrorBase<InvalidBaseUrlErrorMeta> {
   static {
@@ -28,7 +28,7 @@ export class InvalidBaseUrlError extends ErrorBase<InvalidBaseUrlErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-base-url-error)
    */
   public constructor(args: InvalidBaseUrlErrorArgs) {
     const { actual, ...options } = args;
@@ -50,22 +50,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-headers-error)
  */
 export type InvalidHeadersErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-headers-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-headers-error)
  */
 export type InvalidHeadersErrorArgs = ErrorOptions & InvalidHeadersErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-headers-error)
  */
 export class InvalidHeadersError extends ErrorBase<InvalidHeadersErrorMeta> {
   static {
@@ -73,7 +73,7 @@ export class InvalidHeadersError extends ErrorBase<InvalidHeadersErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-headers-error)
    */
   public constructor(args: InvalidHeadersErrorArgs) {
     const { actual, ...options } = args;
@@ -95,22 +95,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-token-error)
  */
 export type InvalidTokenErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-token-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-token-error)
  */
 export type InvalidTokenErrorArgs = ErrorOptions & InvalidTokenErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-token-error)
  */
 export class InvalidTokenError extends ErrorBase<InvalidTokenErrorMeta> {
   static {
@@ -118,7 +118,7 @@ export class InvalidTokenError extends ErrorBase<InvalidTokenErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-token-error)
    */
   public constructor(args: InvalidTokenErrorArgs) {
     const { actual, ...options } = args;
@@ -139,22 +139,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-key-error)
  */
 export type InvalidKeyErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-key-key)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-key-error)
  */
 export type InvalidKeyErrorArgs = ErrorOptions & InvalidKeyErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-key-error)
  */
 export class InvalidKeyError extends ErrorBase<InvalidKeyErrorMeta> {
   static {
@@ -162,7 +162,7 @@ export class InvalidKeyError extends ErrorBase<InvalidKeyErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-key-error)
    */
   public constructor(args: InvalidKeyErrorArgs) {
     const { key, ...options } = args;
@@ -183,7 +183,7 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-without-prefix-not-allowed-error)
  */
 export class ClearWithoutPrefixNotAllowedError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -191,7 +191,7 @@ export class ClearWithoutPrefixNotAllowedError extends InvalidUsageErrorBase<und
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-without-prefix-not-allowed-error)
    */
   public constructor(options?: ErrorOptions) {
     super(
@@ -208,27 +208,27 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-error)
  */
 export type ClearNotSupportedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-prefix)
    */
   readonly prefix: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-status)
    */
   readonly status: number;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-error)
  */
 export type ClearNotSupportedErrorArgs = ErrorOptions & ClearNotSupportedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-error)
  */
 export class ClearNotSupportedError extends InvalidUsageErrorBase<ClearNotSupportedErrorMeta> {
   static {
@@ -236,7 +236,7 @@ export class ClearNotSupportedError extends InvalidUsageErrorBase<ClearNotSuppor
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#clear-not-supported-error)
    */
   public constructor(args: ClearNotSupportedErrorArgs) {
     const { prefix, status, ...options } = args;
@@ -261,32 +261,32 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-error)
  */
 export type HttpNetworkErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-method)
    */
   readonly method: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-url)
    */
   readonly url: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-key)
    */
   readonly key: string | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-error)
  */
 export type HttpNetworkErrorArgs = ErrorOptions & HttpNetworkErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-error)
  */
 export class HttpNetworkError extends ErrorBase<HttpNetworkErrorMeta> {
   static {
@@ -294,7 +294,7 @@ export class HttpNetworkError extends ErrorBase<HttpNetworkErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-network-error)
    */
   public constructor(args: HttpNetworkErrorArgs) {
     const { key, url, method, ...options } = args;
@@ -318,42 +318,42 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-error)
  */
 export type HttpResponseErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-method)
    */
   readonly method: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-url)
    */
   readonly url: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-status)
    */
   readonly status: number;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-status-text)
    */
   readonly statusText: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-key)
    */
   readonly key: string | undefined;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-error)
  */
 export type HttpResponseErrorArgs = ErrorOptions & HttpResponseErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-error)
  */
 export class HttpResponseError extends ErrorBase<HttpResponseErrorMeta> {
   static {
@@ -361,7 +361,7 @@ export class HttpResponseError extends ErrorBase<HttpResponseErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#http-response-error)
    */
   public constructor(args: HttpResponseErrorArgs) {
     const { key, url, method, status, statusText, ...options } = args;
@@ -394,32 +394,32 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-chunk)
    */
   readonly chunk: unknown;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-error)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-error)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
   static {
@@ -427,7 +427,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#invalid-chunk-type-error)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;

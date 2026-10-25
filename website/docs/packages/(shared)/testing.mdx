@@ -1,0 +1,632 @@
+---
+title: "@unikvs/testing"
+description: "UniKvs パッケージの単体テストで使う共有ヘルパー。中断の検証、バイト列、テスト用コンテキスト、決定的な乱数、ストリーム操作を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/testing` <Badge>共有</Badge> は UniKvs パッケージの単体テストで使う共有ヘルパーです。テストランナーに依存しない純粋な関数群で、中断シグナルの検証、投げられた例外の捕捉、バイト列の組み立てと比較、ストレージとミドルウェアの単体テストでそのまま使えるコンテキスト、固定 seed から再現可能な乱数、ストリームの駆動と検証、そして Node.js での結合テスト支援を提供します。
+
+提供領域は次のとおりです。
+
+| 領域                                  | 内容                                       | 詳しい説明       |
+| ------------------------------------- | ------------------------------------------ | ---------------- |
+| 中断と例外の捕捉                      | 中断済みシグナル・例外と拒否の捕捉         | [詳細](#abort)   |
+| バイト列                              | 連結・比較・決定的な生成・分割             | [詳細](#bytes)   |
+| テスト用コンテキスト                  | `TestContext` と操作ごとの生成関数         | [詳細](#context) |
+| 決定的な乱数                          | 固定 seed の擬似乱数と繰り返し実行         | [詳細](#random)  |
+| ストリーム                            | 供給・読み取り・変換ストリームの駆動       | [詳細](#streams) |
+| Node.js 支援 (`@unikvs/testing/node`) | 空きポートの取得・待機・一時ファイルの一覧 | [詳細](#node)    |
+
+## インストール [#installation]
+
+```package-install
+npm install @unikvs/testing
+```
+
+:::note[現在は非公開パッケージです]
+`package.json` では `private: true` のため、npm レジストリーには公開されず、ワークスペース内のパッケージが開発依存として使っています。
+:::
+
+ESM 専用 (`sideEffects: false`) です。実行時の依存は `@unikvs/core` のみで、`./node` サブパスは Node.js 専用 (`node:fs/promises`・`node:net` を使います) です。
+
+## 使い方 [#usage]
+
+投げられたエラーの種類とメタ情報は、捕捉してから検証します。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+import { captureRejection, captureThrown } from "@unikvs/testing";
+
+const rejection = await captureRejection(promise);
+console.log(rejection instanceof KeyNotFoundError); // true
+
+const thrown = captureThrown(() => fn());
+console.log(thrown instanceof Error); // true
+```
+
+ストレージとミドルウェアの単体テストでは、操作ごとの生成関数でコンテキストを組み立てます。
+
+```ts
+import { createNext, createSetContext } from "@unikvs/testing";
+
+const ctx = createSetContext("key", { source: data });
+await middleware.set?.(ctx, data, createNext());
+```
+
+乱数に依存するテストでは、固定 seed から再現可能な入力を組み立てます。
+
+```ts
+import { forCases } from "@unikvs/testing";
+
+forCases(1234, 100, (random, index) => {
+  const key = random.string(16);
+  // 同じ seed と回数では常に同じ入力になります
+});
+```
+
+ストリームのテストでは、チャンク列の供給と読み取りを組み合わせます。
+
+```ts
+import { collectBytes, sourceFrom } from "@unikvs/testing";
+
+const bytes = await collectBytes(sourceFrom(chunks));
+```
+
+## 中断と例外の捕捉 [#abort]
+
+入口の中断検証と、投げられたエラーの種類・メタ情報の検証に使います。[`abortedSignal`](#aborted-signal) は常に中断済みのシグナルを返し、[`captureRejection`](#capture-rejection) と [`captureThrown`](#capture-thrown) は投げられた値をそのまま返すため、`instanceof` と `meta` で検証できます。どちらも何も投げられない場合は素の `Error` を投げます。詳しくは[失敗の扱い](#failures)を参照してください。
+
+```ts
+import { abortedSignal } from "@unikvs/testing";
+
+const signal = abortedSignal(new Error("stop"));
+console.log(signal.aborted); // true
+```
+
+## バイト列の組み立てと比較 [#bytes]
+
+期待値の組み立てと比較に使います。[`concatBytes`](#concat-bytes) とその別名 [`concatChunks`](#concat-chunks) はチャンク列を 1 つのバイト列に連結し、[`bytesEqual`](#bytes-equal) は長さと各バイトを比較します。[`createAllByteValues`](#create-all-byte-values) は 0 から 255 までを巡る決定的なバイト列を、[`createPseudoRandomBytes`](#create-pseudo-random-bytes) は線形合同法による決定的な擬似乱数バイト列を生成します。[`toHex`](#to-hex) と [`toText`](#to-text) は期待値の組み立て用で、実装側の変換を経由しません。[`splitIntoChunks`](#split-into-chunks) と [`splitBySizes`](#split-by-sizes) は任意の境界で分割されたチャンク列を作ります。分割位置に依存しない処理の検証に使います。
+
+```ts
+import { bytesEqual, concatBytes, createAllByteValues, splitIntoChunks } from "@unikvs/testing";
+
+const bytes = createAllByteValues(600);
+const chunks = splitIntoChunks(bytes, 256); // 256・256・88 の 3 分割
+console.log(bytesEqual(concatBytes(chunks), bytes)); // true
+```
+
+:::note[数 MiB の比較に向きます]
+`bytesEqual` は長さと各バイトを順に比較するため、大きなバイト列を `toStrictEqual` で比較するコストを避けられます。
+:::
+
+## テスト用コンテキスト [#context]
+
+[`TestContext`](#test-context) はテスト用の `IPipelineContext` の具象クラスです。`signal`・`action`・`key`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly` で変数を扱います。各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。[`TestContextInit`](#test-context-init) で初期値を渡します。[`TestContextValues`](#test-context-values) は `values` の形式 (`Record` またはエントリーの反復可能オブジェクト) を表します。
+
+操作ごとの生成関数は次のとおりです。
+
+| 生成関数                    | `action`   | 用途                   | 詳しい説明                            |
+| --------------------------- | ---------- | ---------------------- | ------------------------------------- |
+| `createNext`                | —          | ミドルウェアの `next`  | [詳細](#create-next)                  |
+| `createOpenContext`         | `"open"`   | 初期化                 | [詳細](#create-open-context)          |
+| `createCloseContext`        | `"close"`  | 終了処理               | [詳細](#create-close-context)         |
+| `createSetContext`          | `"set"`    | 書き込み               | [詳細](#create-set-context)           |
+| `createGetContext`          | `"get"`    | 読み取り               | [詳細](#create-get-context)           |
+| `createStreamContext`       | `"stream"` | ストリーム読み取り     | [詳細](#create-stream-context)        |
+| `createHasContext`          | `"has"`    | 存在確認               | [詳細](#create-has-context)           |
+| `createDeleteContext`       | `"delete"` | 削除                   | [詳細](#create-delete-context)        |
+| `createClearContext`        | `"clear"`  | 全削除                 | [詳細](#create-clear-context)         |
+| `createRepairContext`       | `"get"`    | 書き戻し付きの読み取り | [詳細](#create-repair-context)        |
+| `createMapKeyContext`       | `"set"`    | キー変換               | [詳細](#create-map-key-context)       |
+| `createEncodeContext`       | `"set"`    | エンコード             | [詳細](#create-encode-context)        |
+| `createDecodeContext`       | `"get"`    | デコード               | [詳細](#create-decode-context)        |
+| `createEncodeStreamContext` | `"set"`    | ストリームのエンコード | [詳細](#create-encode-stream-context) |
+| `createDecodeStreamContext` | `"stream"` | ストリームのデコード   | [詳細](#create-decode-stream-context) |
+
+```ts
+import { createGetContext, createRepairContext } from "@unikvs/testing";
+
+const ctx = createGetContext("key", { values: { "test:count": 1 } });
+console.log(ctx.get("test:count")); // 1
+
+const repair = createRepairContext("key", ["Memory"]);
+console.log(repair.repair); // { enabled: true, targets: ["Memory"] }
+```
+
+:::warning[読み取り専用に注意]
+`setReadonly()` で固定した変数への書き込みは [`ReadonlyVariableError`](/packages/core/errors#error-readonly-variable) を投げます。
+:::
+
+## 決定的な乱数 [#random]
+
+[`Random`](#random) は固定 seed から再現可能な入力を組み立てるための操作一式です。[`createRandom`](#create-random) は mulberry32 による生成器を作り、同じ seed と同じ呼び出し順では常に同じ値を返します。[`forCases`](#for-cases) と [`forCasesAsync`](#for-cases-async) は seed とケース番号から派生した seed で指定回数だけ本体を実行します。失敗したケースの seed と番号をメッセージに含め、元の例外を `cause` に保持します。
+
+```ts
+import { createRandom, forCasesAsync } from "@unikvs/testing";
+
+const random = createRandom(42);
+console.log(random.string(8)); // 常に同じ文字列
+
+await forCasesAsync(42, 50, async (random, index) => {
+  // 非同期処理を含むケースも番号付きで報告されます
+});
+```
+
+範囲外の指定 (`int` の非整数や逆転した範囲、`uint` の負の最大値、空の配列や文字集合からの選択など) では `RangeError` を投げます。
+
+## ストリームの駆動と検証 [#streams]
+
+ストリームへの供給と読み取りに使います。[`sourceFrom`](#source-from) とその別名 [`sourceFromValues`](#source-from-values) はチャンク列を順に流して閉じる `ReadableStream` を作ります。[`readAll`](#read-all) は最後まで読み取って出力チャンクを返し、[`collectBytes`](#collect-bytes) は全チャンクを連結したバイト列を返します。[`collectChunks`](#collect-chunks) とその別名 [`pipeChunks`](#pipe-chunks) は変換ストリームにチャンク列を流した出力を返します。[`pumpThrough`](#pump-through) と [`runTransform`](#run-transform) は書き込みと読み取りを並行して行い、バックプレッシャーによるデッドロックを避けつつ、書き込み・読み取り・クローズの失敗を握り潰さずに返します。
+
+```ts
+import { collectChunks, sourceFrom } from "@unikvs/testing";
+
+const output = await collectChunks(new TransformStream(), [1, 2, 3]);
+console.log(output); // [1, 2, 3]
+```
+
+## Node.js 支援 [#node]
+
+`@unikvs/testing/node` サブパスは Node.js での結合テストに使います。[`acquireFreePort`](#acquire-free-port) は OS から空きポートを 1 つ取得し、[`waitForPort`](#wait-for-port) は指定ポートが接続可能になるまで待機します。[`listTemporaryFiles`](#list-temporary-files) はルート直下に残っている一時ファイル (`*.tmp`) の名前を返します。swap-on-close の後始末の検証に使います。
+
+```ts
+import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
+
+const port = await acquireFreePort();
+await waitForPort(port); // 接続可能になるまで待機します
+```
+
+:::warning[Node.js 専用です]
+このサブパスは `node:fs/promises` と `node:net` を使うため、ブラウザーでは動作しません。
+:::
+
+## 失敗の扱い [#failures]
+
+テストヘルパー自体はエラークラスを持ちません。失敗の扱いは次のとおりです。
+
+- [`captureRejection`](#capture-rejection) は解決された場合に `Promise が拒否されませんでした` という素の `Error` を投げます。
+- [`captureThrown`](#capture-thrown) は何も投げられない場合に `例外が投げられませんでした` という素の `Error` を投げます。
+- [`TestContext`](#test-context) の `set` と `setReadonly` は読み取り専用化済みの変数への書き込みで [`ReadonlyVariableError`](/packages/core/errors#error-readonly-variable) を投げます。
+- [`forCases`](#for-cases) と [`forCasesAsync`](#for-cases-async) は失敗を `ケースが失敗しました (seed: ..., index: ...)` という `Error` で包み、元の例外を `cause` に保持します。
+- [`Random`](#random) の範囲外の指定では `RangeError` を投げます (詳しくは[決定的な乱数](#random)を参照してください)。
+- [`acquireFreePort`](#acquire-free-port) と [`waitForPort`](#wait-for-port) は取得や待機に失敗すると素の `Error` を投げます。
+
+## API リファレンス [#api]
+
+シンボルごとのリファレンスです。
+
+### `abortedSignal()` [#aborted-signal]
+
+常に中断済みのシグナルを返します。入口の中断検証に使います。`reason` を渡すと中断理由になります。
+
+```ts
+import { abortedSignal } from "@unikvs/testing";
+
+const signal = abortedSignal(new Error("stop"));
+console.log(signal.aborted); // true
+```
+
+### `captureRejection()` [#capture-rejection]
+
+非同期処理の拒否理由を返します。実際に投げられたエラーの種類とメタ情報を検証するために使います。渡した `Promise` が解決された場合は素の `Error` を投げます。
+
+```ts
+import { captureRejection } from "@unikvs/testing";
+
+const reason = await captureRejection(promise);
+```
+
+### `captureThrown()` [#capture-thrown]
+
+同期処理の例外を返します。実際に投げられたエラーの種類とメタ情報を検証するために使います。何も投げられない場合は素の `Error` を投げます。
+
+```ts
+import { captureThrown } from "@unikvs/testing";
+
+const error = captureThrown(() => fn());
+```
+
+### `concatBytes()` [#concat-bytes]
+
+チャンク列を 1 つのバイト列に連結します。ストリームの分割結果を単一のバイト列と比較するために使います。
+
+```ts
+import { concatBytes } from "@unikvs/testing";
+
+const bytes = concatBytes([new Uint8Array([1]), new Uint8Array([2, 3])]);
+```
+
+### `concatChunks()` [#concat-chunks]
+
+[`concatBytes`](#concat-bytes) の別名です。チャンク列を連結する処理がストリーム文脈で呼ばれる場合に使います。
+
+### `bytesEqual()` [#bytes-equal]
+
+2 つのバイト列が同じ長さで各バイトが一致するかを比較します。数 MiB のデータを `toStrictEqual` で比較するコストを避けるために使います。
+
+```ts
+import { bytesEqual } from "@unikvs/testing";
+
+console.log(bytesEqual(left, right)); // true または false
+```
+
+### `createAllByteValues()` [#create-all-byte-values]
+
+0 から 255 までを巡る決定的なバイト列を生成します。全バイト値を含むデータの往復の検証に使います。`size` バイトの配列を作り、`index % 256` を各位置に入れます。
+
+```ts
+import { createAllByteValues } from "@unikvs/testing";
+
+const bytes = createAllByteValues(600); // 0..255、0..255、0..87
+```
+
+### `createPseudoRandomBytes()` [#create-pseudo-random-bytes]
+
+線形合同法による決定的な擬似乱数バイト列を生成します。偏りのない任意のバイナリを大容量で用意するために使います。`seed` を省略すると `0x12345678` になります。
+
+```ts
+import { createPseudoRandomBytes } from "@unikvs/testing";
+
+const bytes = createPseudoRandomBytes(1024, 42);
+```
+
+### `toHex()` [#to-hex]
+
+バイト列を小文字の 16 進文字列に変換します。実装側の変換を経由せずに期待値を組み立てるために使います。
+
+### `toText()` [#to-text]
+
+バイト列のチャンク列を UTF-8 の文字列へ変換します。エンコード結果を文字列として比較するために使います。
+
+### `splitIntoChunks()` [#split-into-chunks]
+
+バイト列を指定したサイズ以下のチャンクへ分割します。任意の境界で分割しても処理できることを検証するために使います。返されるチャンクは元のバイト列の範囲ビューです。
+
+```ts
+import { splitIntoChunks } from "@unikvs/testing";
+
+const chunks = splitIntoChunks(bytes, 256);
+```
+
+### `splitBySizes()` [#split-by-sizes]
+
+バイト列を指定した長さで順に切り出します。任意の境界で分割されたチャンク列を作るために使います。`sizes` を順に消費し、余りは末尾の 1 チャンクにまとめます。返されるチャンクは元のバイト列の範囲ビューです。
+
+### `TestContextValues` [#test-context-values]
+
+コンテキストの初期値に使える変数マップの形式です。読み取り専用の `Record` またはエントリー (`[key, value]`) の反復可能オブジェクトを受け付けます。
+
+```ts
+import type { TestContextValues } from "@unikvs/testing";
+
+const fromRecord: TestContextValues = { count: 1 };
+const fromEntries: TestContextValues = [["count", 1]];
+```
+
+### `TestContextInit` [#test-context-init]
+
+[`TestContext`](#test-context) のコンストラクター引数です。
+
+<TypeTable
+  type={{
+    signal: {
+      type: "[#test-context-init-signal] AbortSignal",
+      description:
+        "操作の中断に使うシグナルです。省略時は新しい `AbortController` のシグナルになります。",
+    },
+    action: {
+      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      description: '実行する操作の種類です。省略時は `"set"` です。',
+    },
+    key: {
+      type: "[#test-context-init-key] string",
+      description: '操作対象の論理キーです。省略時は `""` です。',
+    },
+    repair: {
+      type: "[#test-context-init-repair] TestContextRepair",
+      description:
+        "読み取りに付随する書き戻し要求です。`get` と `stream` のコンテキストでのみ意味を持ちます。",
+    },
+    source: {
+      type: "[#test-context-init-source] unknown",
+      description: "変換前の入力値です。",
+    },
+    destination: {
+      type: "[#test-context-init-destination] unknown",
+      description: "変換後の出力値です。",
+    },
+    values: {
+      type: "[#test-context-init-values] TestContextValues",
+      description: "`get` と `set` で扱う初期値です。",
+    },
+  }}
+/>
+
+### `TestContext` [#test-context]
+
+テスト用の `IPipelineContext` ([パイプラインコンテキスト](/packages/core/pipeline-context#contexts)) の具象クラスです。`signal`・`action`・`key`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly` で変数を扱います。`repair` の形状は `TestContextRepair` で、[`IGetContext`](/packages/core/pipeline-context#igetcontext) の `repair` と同じ形状です。
+
+<TypeTable
+  type={{
+    signal: {
+      type: "[#test-context-signal] AbortSignal",
+      required: true,
+      description: "操作の中断に使うシグナルです。",
+    },
+    action: {
+      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      required: true,
+      description: "実行する操作の種類です。",
+    },
+    key: {
+      type: "[#test-context-key] string",
+      required: true,
+      description: "操作対象の論理キーです。",
+    },
+    repair: {
+      type: "[#test-context-repair] TestContextRepair",
+      required: true,
+      description: "読み取りに付随する書き戻し要求です。",
+    },
+    source: {
+      type: "[#test-context-source] any",
+      required: true,
+      description: "変換前の入力値です。",
+    },
+    destination: {
+      type: "[#test-context-destination] any",
+      description: "変換後の出力値です。",
+    },
+    get: {
+      type: "[#test-context-get] get(name: string): any",
+      required: true,
+      description: "変数の値を取得します。",
+    },
+    set: {
+      type: "[#test-context-set] set(name: string, value: any): this",
+      required: true,
+      description:
+        "変数の値を設定します。`this` を返します。読み取り専用化済みの変数では `ReadonlyVariableError` を投げます。",
+    },
+    setReadonly: {
+      type: "[#test-context-setreadonly] setReadonly(name: string, value: any): this",
+      required: true,
+      description:
+        "変数の値を読み取り専用として設定します。`this` を返します。読み取り専用化済みの変数では `ReadonlyVariableError` を投げます。",
+    },
+  }}
+/>
+
+### `createNext()` [#create-next]
+
+ミドルウェアの `next` として使う何もしない関数を作成します。解決済みの `Promise` を返す関数を返します。
+
+### `createOpenContext()` [#create-open-context]
+
+`open` 用のコンテキストを作成します。`action` を `"open"` にして [`TestContext`](#test-context) を返します。
+
+### `createCloseContext()` [#create-close-context]
+
+`close` 用のコンテキストを作成します。`action` を `"close"` にして [`TestContext`](#test-context) を返します。
+
+### `createSetContext()` [#create-set-context]
+
+`set` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"set"` にして返します。
+
+```ts
+import { createSetContext } from "@unikvs/testing";
+
+const ctx = createSetContext("key", { source: data });
+```
+
+### `createGetContext()` [#create-get-context]
+
+`get` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"get"` にして返します。
+
+### `createStreamContext()` [#create-stream-context]
+
+`stream` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"stream"` にして返します。
+
+### `createHasContext()` [#create-has-context]
+
+`has` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"has"` にして返します。
+
+### `createDeleteContext()` [#create-delete-context]
+
+`delete` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"delete"` にして返します。
+
+### `createClearContext()` [#create-clear-context]
+
+`clear` 用のコンテキストを作成します。`action` を `"clear"` にして返します。キーを省略すると `""` になります。
+
+### `createRepairContext()` [#create-repair-context]
+
+書き戻し付きの `get` 用コンテキストを作成します。書き戻しの許可・拒否を検証するために使います。第 2 引数の書き戻し対象名一覧は複写され、`repair` は `{ enabled: true, targets }` になります。
+
+```ts
+import { createRepairContext } from "@unikvs/testing";
+
+const ctx = createRepairContext("key", ["Memory"]);
+```
+
+### `createMapKeyContext()` [#create-map-key-context]
+
+`mapKey` 用のコンテキストを作成します。第 1 引数のキーを設定して返します。キー変換自体は `key` のみを使うため、`action` は既定の `"set"` のままです。
+
+### `createEncodeContext()` [#create-encode-context]
+
+`encode` 用のコンテキストを作成します。第 1 引数を変換前の入力値 (`source`) とし、`action` を `"set"` にして返します。
+
+### `createDecodeContext()` [#create-decode-context]
+
+`decode` 用のコンテキストを作成します。第 1 引数を変換前の入力値 (`source`) とし、`action` を `"get"` にして返します。
+
+### `createEncodeStreamContext()` [#create-encode-stream-context]
+
+`encodeStream` 用のコンテキストを作成します。第 1 引数を変換前の入力ストリーム (`source`) とし、`action` を `"set"` にして返します。
+
+### `createDecodeStreamContext()` [#create-decode-stream-context]
+
+`decodeStream` 用のコンテキストを作成します。第 1 引数を変換前の入力ストリーム (`source`) とし、`action` を `"stream"` にして返します。
+
+### `Random` [#random]
+
+決定的な擬似乱数生成器の操作一式です。乱数に依存するテストで固定 seed から再現可能な入力を組み立てるために使います。
+
+<TypeTable
+  type={{
+    next: {
+      type: "[#random-next] next(): number",
+      required: true,
+      description: "0 以上 1 未満の小数を返します。",
+    },
+    int: {
+      type: "[#random-int] int(min: number, max: number): number",
+      required: true,
+      description:
+        "`min` 以上 `max` 以下の整数を返します。非整数や逆転した範囲では `RangeError` を投げます。",
+    },
+    uint: {
+      type: "[#random-uint] uint(max?: number): number",
+      required: true,
+      description:
+        "0 以上 `max` 以下の整数を返します。`max` の既定値は `0xffffffff` です。非整数や負の値では `RangeError` を投げます。",
+    },
+    bool: {
+      type: "[#random-bool] bool(): boolean",
+      required: true,
+      description: "真偽値を返します。",
+    },
+    pick: {
+      type: "[#random-pick] pick<T>(items: readonly T[]): T",
+      required: true,
+      description: "配列から 1 要素を選んで返します。空の配列では `RangeError` を投げます。",
+    },
+    bytes: {
+      type: "[#random-bytes] bytes(length: number): Uint8Array<ArrayBuffer>",
+      required: true,
+      description: "指定した長さのランダムなバイト列を返します。",
+    },
+    string: {
+      type: "[#random-string] string(length: number, alphabet?: string | readonly string[]): string",
+      required: true,
+      description:
+        "指定した長さの文字列を返します。`alphabet` を省略すると英小文字と数字になります。空の文字集合では `RangeError` を投げます。",
+    },
+    array: {
+      type: "[#random-array] array<T>(length: number, generate: (random: Random, index: number) => T): T[]",
+      required: true,
+      description: "`generate` を `length` 回呼び出して作った配列を返します。",
+    },
+    shuffle: {
+      type: "[#random-shuffle] shuffle<T>(items: readonly T[]): T[]",
+      required: true,
+      description: "要素を複製してシャッフルした配列を返します。入力は変更しません。",
+    },
+  }}
+/>
+
+### `createRandom()` [#create-random]
+
+mulberry32 による決定的な擬似乱数生成器を作成します。同じ seed と同じ呼び出し順に対して常に同じ値を返します。失敗を再現可能にするために使います。
+
+```ts
+import { createRandom } from "@unikvs/testing";
+
+const random = createRandom(42);
+console.log(random.string(8)); // 常に同じ文字列
+```
+
+### `forCases()` [#for-cases]
+
+同じ seed から派生した乱数を使い、`count` 回テスト本体を実行します。失敗したケースの seed と番号をメッセージに含め、元の例外を `cause` に保持します。
+
+```ts
+import { forCases } from "@unikvs/testing";
+
+forCases(1234, 100, (random, index) => {
+  const key = random.string(16);
+  // ...
+});
+```
+
+### `forCasesAsync()` [#for-cases-async]
+
+[`forCases`](#for-cases) の非同期版です。非同期処理を含むケースの失敗を seed と番号付きで報告するために使います。
+
+```ts
+import { forCasesAsync } from "@unikvs/testing";
+
+await forCasesAsync(1234, 50, async (random, index) => {
+  // ...
+});
+```
+
+### `sourceFrom()` [#source-from]
+
+指定したチャンク列を順に流して閉じる `ReadableStream` を作成します。任意の分割でストリームにデータを流し込むために使います。
+
+```ts
+import { sourceFrom } from "@unikvs/testing";
+
+const stream = sourceFrom([chunk1, chunk2]);
+```
+
+### `sourceFromValues()` [#source-from-values]
+
+[`sourceFrom`](#source-from) の別名です。任意の値の並びをストリームへ流し込むために使います。
+
+### `readAll()` [#read-all]
+
+ストリームを最後まで読み取り、出力チャンクを返します。ストリームの出力順序や内容を検証するために使います。
+
+### `collectBytes()` [#collect-bytes]
+
+ストリームを最後まで読み取り、全チャンクを連結したバイト列を返します。ストリーム経由の読み取りと通常の読み取りの一致を検証するために使います。
+
+```ts
+import { collectBytes, sourceFrom } from "@unikvs/testing";
+
+const bytes = await collectBytes(sourceFrom(chunks));
+```
+
+### `collectChunks()` [#collect-chunks]
+
+指定したチャンク列を上流から変換ストリームへ流し、出力されたチャンクを順に返します。チャンクの参照・順序・境界が保たれることを検証するために使います。
+
+```ts
+import { collectChunks } from "@unikvs/testing";
+
+const output = await collectChunks(new TransformStream(), [1, 2, 3]);
+```
+
+### `pipeChunks()` [#pipe-chunks]
+
+[`collectChunks`](#collect-chunks) の別名です。ストリームが入力をそのまま透過することを検証するために使います。
+
+### `pumpThrough()` [#pump-through]
+
+変換ストリームへチャンク列を書き込みながら並行して読み取ります。バックプレッシャーによるデッドロックを避けつつ、書き込み・読み取り時のエラーを握り潰さずに観測するために使います。`readError` と `writeError` (成功時はどちらも `undefined` です) と `outputChunks` を返します。
+
+```ts
+import { pumpThrough } from "@unikvs/testing";
+
+const { readError, writeError, outputChunks } = await pumpThrough(new TransformStream(), [1, 2, 3]);
+```
+
+### `runTransform()` [#run-transform]
+
+変換ストリームにチャンクを順に書き込み、読み取れるデータをすべて読み取ります。バックプレッシャーによるデッドロックを避けるため、書き込みと読み取りを並行して行います。書き込み・読み取り・クローズのどこで発生した失敗も `closeError` (成功時は `undefined` です) として返します。出力は `outputChunks` に入ります。バイト列の変換ストリーム専用です。
+
+### `acquireFreePort()` [#acquire-free-port]
+
+OS から空きポートを 1 つ取得します。`127.0.0.1` に一時サーバーを立てて閉じることで番号を確定し、その番号で解決する `Promise` を返します。`@unikvs/testing/node` サブパスで公開されます。
+
+### `waitForPort()` [#wait-for-port]
+
+指定されたポートが接続可能になるまで待機します。250 ミリ秒間隔で `127.0.0.1` への接続を試み、既定で 10 秒 (`timeoutMs` で変更できます) を超えると素の `Error` で拒否します。`@unikvs/testing/node` サブパスで公開されます。
+
+### `listTemporaryFiles()` [#list-temporary-files]
+
+ルート直下に残っている一時ファイル (`*.tmp`) の名前を返します。swap-on-close の後始末が正しいことを検証するために使います。再帰しません。`@unikvs/testing/node` サブパスで公開されます。

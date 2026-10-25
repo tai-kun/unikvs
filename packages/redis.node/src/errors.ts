@@ -4,7 +4,7 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-cluster-not-supported)
  */
 export class ClusterNotSupportedError extends InvalidUsageErrorBase<undefined> {
   static {
@@ -12,7 +12,7 @@ export class ClusterNotSupportedError extends InvalidUsageErrorBase<undefined> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-cluster-not-supported)
    */
   public constructor(options?: ErrorOptions) {
     super(
@@ -29,22 +29,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-invalid-close-timeout)
  */
 export type InvalidCloseTimeoutErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#invalid-close-timeout-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-invalid-close-timeout)
  */
 export type InvalidCloseTimeoutErrorArgs = ErrorOptions & InvalidCloseTimeoutErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-invalid-close-timeout)
  */
 export class InvalidCloseTimeoutError extends ErrorBase<InvalidCloseTimeoutErrorMeta> {
   static {
@@ -52,7 +52,7 @@ export class InvalidCloseTimeoutError extends ErrorBase<InvalidCloseTimeoutError
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-invalid-close-timeout)
    */
   public constructor(args: InvalidCloseTimeoutErrorArgs) {
     const { actual, ...options } = args;
@@ -74,22 +74,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-connect-timeout)
  */
 export type ConnectTimeoutErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#connect-timeout-timeoutms)
    */
   readonly timeoutMs: number;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-connect-timeout)
  */
 export type ConnectTimeoutErrorArgs = ErrorOptions & ConnectTimeoutErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-connect-timeout)
  */
 export class ConnectTimeoutError extends ErrorBase<ConnectTimeoutErrorMeta> {
   static {
@@ -97,7 +97,7 @@ export class ConnectTimeoutError extends ErrorBase<ConnectTimeoutErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-connect-timeout)
    */
   public constructor(args: ConnectTimeoutErrorArgs) {
     const { timeoutMs, ...options } = args;
@@ -118,22 +118,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-close-timeout)
  */
 export type CloseTimeoutErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#close-timeout-timeoutms)
    */
   readonly timeoutMs: number;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-close-timeout)
  */
 export type CloseTimeoutErrorArgs = ErrorOptions & CloseTimeoutErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-close-timeout)
  */
 export class CloseTimeoutError extends ErrorBase<CloseTimeoutErrorMeta> {
   static {
@@ -141,7 +141,7 @@ export class CloseTimeoutError extends ErrorBase<CloseTimeoutErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#error-close-timeout)
    */
   public constructor(args: CloseTimeoutErrorArgs) {
     const { timeoutMs, ...options } = args;
