@@ -1,231 +1,270 @@
 {
   "folders": [
-    { "name": ".", "path": "." },
+    // root
     {
-      "name": "core",
-      "path": "packages/core",
+      "name": ".",
+      "path": ".",
     },
-    {
-      "name": "testing",
-      "path": "packages/testing",
-    },
-    {
-      "name": "utils",
-      "path": "packages/utils",
-    },
-    {
-      "name": "passthrough",
-      "path": "packages/passthrough",
-    },
-    {
-      "name": "memory",
-      "path": "packages/memory",
-    },
-    {
-      "name": "null",
-      "path": "packages/null",
-    },
-    {
-      "name": "allow-repair",
-      "path": "packages/allow-repair",
-    },
-    {
-      "name": "compression",
-      "path": "packages/compression",
-    },
-    {
-      "name": "debug",
-      "path": "packages/debug",
-    },
-    {
-      "name": "localstorage",
-      "path": "packages/localstorage",
-    },
-    {
-      "name": "session-storage",
-      "path": "packages/session-storage",
-    },
-    {
-      "name": "cookies",
-      "path": "packages/cookies",
-    },
-    {
-      "name": "retry",
-      "path": "packages/retry",
-    },
-    {
-      "name": "cache-storage",
-      "path": "packages/cache-storage",
-    },
-    {
-      "name": "indexeddb",
-      "path": "packages/indexeddb",
-    },
-    {
-      "name": "http",
-      "path": "packages/http",
-    },
-    {
-      "name": "opfs",
-      "path": "packages/opfs",
-    },
-    {
-      "name": "lru-cache",
-      "path": "packages/lru-cache",
-    },
-    {
-      "name": "metrics",
-      "path": "packages/metrics",
-    },
-    {
-      "name": "tracing",
-      "path": "packages/tracing",
-    },
-    {
-      "name": "vercel-runtime-cache",
-      "path": "packages/vercel-runtime-cache",
-    },
-    {
-      "name": "rate-limit",
-      "path": "packages/rate-limit",
-    },
-    {
-      "name": "cloudflare-cache",
-      "path": "packages/cloudflare-cache",
-    },
-    {
-      "name": "cloudflare-kv",
-      "path": "packages/cloudflare-kv",
-    },
-    {
-      "name": "cloudflare-r2",
-      "path": "packages/cloudflare-r2",
-    },
-    {
-      "name": "etcd",
-      "path": "packages/etcd",
-    },
-    {
-      "name": "memcached",
-      "path": "packages/memcached",
-    },
-    {
-      "name": "fs.node",
-      "path": "packages/fs.node",
-    },
-    {
-      "name": "redis.node",
-      "path": "packages/redis.node",
-    },
-    {
-      "name": "valkey",
-      "path": "packages/valkey",
-    },
-    {
-      "name": "vercel-blob",
-      "path": "packages/vercel-blob",
-    },
-    {
-      "name": "s3.node",
-      "path": "packages/s3.node",
-    },
-    {
-      "name": "base64",
-      "path": "packages/base64",
-    },
-    {
-      "name": "base64url",
-      "path": "packages/base64url",
-    },
-    {
-      "name": "hex",
-      "path": "packages/hex",
-    },
-    {
-      "name": "json",
-      "path": "packages/json",
-    },
-    {
-      "name": "cbor",
-      "path": "packages/cbor",
-    },
-    {
-      "name": "superjson",
-      "path": "packages/superjson",
-    },
-    {
-      "name": "v8-serde",
-      "path": "packages/v8-serde",
-    },
-    {
-      "name": "brotli.node",
-      "path": "packages/brotli.node",
-    },
-    {
-      "name": "zstd.node",
-      "path": "packages/zstd.node",
-    },
-    {
-      "name": "brotli.wasm",
-      "path": "packages/brotli.wasm",
-    },
-    {
-      "name": "zstd.wasm",
-      "path": "packages/zstd.wasm",
-    },
-    {
-      "name": "checksum",
-      "path": "packages/checksum",
-    },
+
+    // main
     {
       "name": "unikvs",
       "path": "unikvs",
     },
+
+    // shared
     {
-      "name": "expiry",
-      "path": "packages/expiry",
+      "name": "@unikvs/core",
+      "path": "packages/core",
     },
     {
-      "name": "ttl",
-      "path": "packages/ttl",
+      "name": "@unikvs/utils",
+      "path": "packages/utils",
     },
     {
-      "name": "readonly",
-      "path": "packages/readonly",
+      "name": "@unikvs/testing",
+      "path": "packages/testing",
+    },
+
+    // storage
+
+    // general
+    {
+      "name": "@unikvs/memory",
+      "path": "packages/memory",
     },
     {
-      "name": "writeonly",
-      "path": "packages/writeonly",
+      "name": "@unikvs/http",
+      "path": "packages/http",
     },
     {
-      "name": "key-prefix",
-      "path": "packages/key-prefix",
+      "name": "@unikvs/null",
+      "path": "packages/null",
     },
     {
-      "name": "soft-delete",
-      "path": "packages/soft-delete",
+      "name": "@unikvs/lru-cache",
+      "path": "packages/lru-cache",
     },
     {
-      "name": "fs.bun",
+      "name": "@unikvs/cache-storage",
+      "path": "packages/cache-storage",
+    },
+    {
+      "name": "@unikvs/etcd",
+      "path": "packages/etcd",
+    },
+    {
+      "name": "@unikvs/memcached",
+      "path": "packages/memcached",
+    },
+    {
+      "name": "@unikvs/valkey",
+      "path": "packages/valkey",
+    },
+    {
+      "name": "@unikvs/retry",
+      "path": "packages/retry",
+    },
+    {
+      "name": "@unikvs/rate-limit",
+      "path": "packages/rate-limit",
+    },
+
+    // browser
+    {
+      "name": "@unikvs/opfs",
+      "path": "packages/opfs",
+    },
+    {
+      "name": "@unikvs/indexeddb",
+      "path": "packages/indexeddb",
+    },
+    {
+      "name": "@unikvs/localstorage",
+      "path": "packages/localstorage",
+    },
+    {
+      "name": "@unikvs/session-storage",
+      "path": "packages/session-storage",
+    },
+    {
+      "name": "@unikvs/cookies",
+      "path": "packages/cookies",
+    },
+
+    // nodejs
+    {
+      "name": "@unikvs/fs.node",
+      "path": "packages/fs.node",
+    },
+    {
+      "name": "@unikvs/s3.node",
+      "path": "packages/s3.node",
+    },
+    {
+      "name": "@unikvs/redis.node",
+      "path": "packages/redis.node",
+    },
+
+    // bun
+    {
+      "name": "@unikvs/fs.bun",
       "path": "packages/fs.bun",
     },
     {
-      "name": "brotli.bun",
-      "path": "packages/brotli.bun",
-    },
-    {
-      "name": "redis.bun",
-      "path": "packages/redis.bun",
-    },
-    {
-      "name": "s3.bun",
+      "name": "@unikvs/s3.bun",
       "path": "packages/s3.bun",
     },
     {
-      "name": "zstd.bun",
+      "name": "@unikvs/redis.bun",
+      "path": "packages/redis.bun",
+    },
+
+    // cloudflare
+    {
+      "name": "@unikvs/cloudflare-kv",
+      "path": "packages/cloudflare-kv",
+    },
+    {
+      "name": "@unikvs/cloudflare-r2",
+      "path": "packages/cloudflare-r2",
+    },
+    {
+      "name": "@unikvs/cloudflare-cache",
+      "path": "packages/cloudflare-cache",
+    },
+
+    // vercel
+    {
+      "name": "@unikvs/vercel-blob",
+      "path": "packages/vercel-blob",
+    },
+    {
+      "name": "@unikvs/vercel-runtime-cache",
+      "path": "packages/vercel-runtime-cache",
+    },
+
+    // middleware
+
+    // serialization
+    {
+      "name": "@unikvs/json",
+      "path": "packages/json",
+    },
+    {
+      "name": "@unikvs/superjson",
+      "path": "packages/superjson",
+    },
+    {
+      "name": "@unikvs/cbor",
+      "path": "packages/cbor",
+    },
+    {
+      "name": "@unikvs/v8-serde",
+      "path": "packages/v8-serde",
+    },
+
+    // encoding
+    {
+      "name": "@unikvs/base64",
+      "path": "packages/base64",
+    },
+    {
+      "name": "@unikvs/base64url",
+      "path": "packages/base64url",
+    },
+    {
+      "name": "@unikvs/hex",
+      "path": "packages/hex",
+    },
+
+    // integrity
+    {
+      "name": "@unikvs/compression",
+      "path": "packages/compression",
+    },
+    {
+      "name": "@unikvs/checksum",
+      "path": "packages/checksum",
+    },
+    {
+      "name": "@unikvs/zstd.wasm",
+      "path": "packages/zstd.wasm",
+    },
+    {
+      "name": "@unikvs/zstd.node",
+      "path": "packages/zstd.node",
+    },
+    {
+      "name": "@unikvs/zstd.bun",
       "path": "packages/zstd.bun",
     },
-    { "name": "website", "path": "website" },
+    {
+      "name": "@unikvs/brotli.node",
+      "path": "packages/brotli.node",
+    },
+    {
+      "name": "@unikvs/brotli.wasm",
+      "path": "packages/brotli.wasm",
+    },
+    {
+      "name": "@unikvs/brotli.bun",
+      "path": "packages/brotli.bun",
+    },
+
+    // lifecycle
+    {
+      "name": "@unikvs/ttl",
+      "path": "packages/ttl",
+    },
+    {
+      "name": "@unikvs/expiry",
+      "path": "packages/expiry",
+    },
+    {
+      "name": "@unikvs/soft-delete",
+      "path": "packages/soft-delete",
+    },
+
+    // dev
+    {
+      "name": "@unikvs/debug",
+      "path": "packages/debug",
+    },
+    {
+      "name": "@unikvs/passthrough",
+      "path": "packages/passthrough",
+    },
+    {
+      "name": "@unikvs/allow-repair",
+      "path": "packages/allow-repair",
+    },
+    {
+      "name": "@unikvs/key-prefix",
+      "path": "packages/key-prefix",
+    },
+    {
+      "name": "@unikvs/writeonly",
+      "path": "packages/writeonly",
+    },
+    {
+      "name": "@unikvs/readonly",
+      "path": "packages/readonly",
+    },
+    {
+      "name": "@unikvs/metrics",
+      "path": "packages/metrics",
+    },
+    {
+      "name": "@unikvs/tracing",
+      "path": "packages/tracing",
+    },
+
+    // docs
+    {
+      "name": "website",
+      "path": "website",
+    },
   ],
   "settings": {
     // 一般

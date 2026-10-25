@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
-    "@vercel/blob": "2.8.1",
+    "@vercel/blob": "2.8.2",
     "abort-signal-utils": "^0.0.6",
     "type-name": "^2.0.2"
   },

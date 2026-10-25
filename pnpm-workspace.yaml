@@ -1,6 +1,5 @@
 packages:
   [
-    "packages/brotli.bun",
     "packages/core",
     "packages/cache-storage",
     "packages/cloudflare-cache",
@@ -38,6 +37,7 @@ packages:
     "packages/utils",
     "packages/base64",
     "packages/base64url",
+    "packages/brotli.bun",
     "packages/brotli.node",
     "packages/brotli.wasm",
     "packages/cbor",
@@ -88,7 +88,9 @@ trustPolicyExclude:
 strictDepBuilds: true
 onlyBuiltDependencies: []
 allowBuilds:
+  cbor-extract: true
   esbuild: true
+  protobufjs: true
 
 update:
   ignoreDeps:
