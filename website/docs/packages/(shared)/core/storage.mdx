@@ -1,0 +1,288 @@
+---
+title: "ストレージ"
+description: "@unikvs/core の IStorage。保存先プラグインが実装するインターフェース、型引数、必須と任意のメンバー、実装例を説明します。"
+---
+
+## 概要 [#overview]
+
+`IStorage` は保存先プラグインが実装するインターフェースです。`name` と `isOpen`、CRUD 操作を持ち、ライフサイクルやストリーム取得は任意です。4 つの型引数でデータとチャンクの型を調整します。
+
+```ts
+import type { IStorage } from "@unikvs/core";
+
+type BinaryStorage = IStorage<Uint8Array>;
+type ObjectStorage = IStorage<{ readonly id: number }>;
+type FullStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
+```
+
+## 型引数 [#type-params]
+
+| 型引数        | 既定値        | 対応する操作                |
+| ------------- | ------------- | --------------------------- |
+| `TWriteData`  | `any`         | `write(c, data)` の `data`  |
+| `TReadData`   | `TWriteData`  | `read(c)` の戻り値          |
+| `TWriteChunk` | `any`         | `getWritable(c)` のチャンク |
+| `TReadChunk`  | `TWriteChunk` | `getReadable(c)` のチャンク |
+
+`TReadData` の既定値は `TWriteData`、`TReadChunk` の既定値は `TWriteChunk` です。読み書きで型が変わらない場合はデータの型引数 (`TWriteData`) のみを指定し、ストリームを使わない場合はチャンクの型引数を省略できます。
+
+```ts
+// 読み取りは文字列、書き込みはバイト列
+type TextReadStorage = IStorage<Uint8Array, string>;
+
+// チャンクまで個別に指定
+type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
+```
+
+チャンク型とストリーム型の関係は[ストリーム](./stream#chunks)を参照してください。
+
+## 基本プロパティー [#identity]
+
+| メンバー | 必須 | 説明               |
+| -------- | ---- | ------------------ |
+| `name`   | 必須 | プラグイン名       |
+| `isOpen` | 必須 | 初期化済みかどうか |
+
+`open(c)` と `close(c)` は任意です。必要な初期化や後始末がある場合のみ実装します。呼び出し側は `isOpen` で状態を確認します。
+
+## CRUD [#crud]
+
+| メンバー | 必須 | シグネチャ                                                  | 説明                     |
+| -------- | ---- | ----------------------------------------------------------- | ------------------------ |
+| `write`  | 必須 | `(c: WriteContext, data: TWriteData) => MaybePromise<void>` | データを保存する         |
+| `read`   | 必須 | `(c: ReadContext) => MaybePromise<TReadData>`               | データを取得する         |
+| `exists` | 必須 | `(c: ExistsContext) => MaybePromise<boolean>`               | キーの有無を返す         |
+| `delete` | 必須 | `(c: DeleteContext) => MaybePromise<void>`                  | キーを削除する           |
+| `clear`  | 必須 | `(c: ClearContext) => MaybePromise<void>`                   | すべてのデータを削除する |
+
+すべてのメソッドは `MaybePromise` (`T | PromiseLike<T>`) を返すため、同期実装も非同期実装も可能です。
+
+:::warning[見つからないキーはエラーを投げます]
+`read` はキーがない場合に [`KeyNotFoundError`](./errors#error-key-not-found) を投げます。`undefined` を返したり `exists` 相当の判定を埋め込んだりせず、見つからない場合の後処理 (読み取り時の書き戻しなど) は呼び出し側に任せます。
+:::
+
+## ストリーム取得 [#streams]
+
+| メンバー      | 必須 | シグネチャ                                                              | 説明                           |
+| ------------- | ---- | ----------------------------------------------------------------------- | ------------------------------ |
+| `getWritable` | 任意 | `(c: GetWritableContext) => MaybePromise<IWritableStream<TWriteChunk>>` | 書き込み用ストリームを取得する |
+| `getReadable` | 任意 | `(c: GetReadableContext) => MaybePromise<IReadableStream<TReadChunk>>`  | 読み取り用ストリームを取得する |
+
+ストリームに対応しないストレージは実装を省略します。対応宣言は型ではなく実行時の有無で判定されるため、未対応の操作が呼ばれた場合は各プラグインが適切なエラーを投げます。
+
+`getWritable` のコンテキストは `ISetContext` と同じ形状で、`getReadable` のコンテキストは `IStreamContext` と同じ形状です ([コンテキストの別名](#contexts))。開始前に中断済みのシグナルで呼ばれた場合は [`StorageAbortedError`](./errors#error-storage-aborted) で即座に拒否します。
+
+## 他ストレージの失敗 [#other-write-error]
+
+複数のストレージへ並列に書き込む際、他の保存先で失敗があっても各ストレージに通知されます。
+
+| メンバー            | 必須 | 説明                                                   |
+| ------------------- | ---- | ------------------------------------------------------ |
+| `onOtherWriteError` | 任意 | 複数ストレージ書き込み時に他ストレージの失敗を受け取る |
+
+引数は `(c: OtherWriteErrorHandlerContext, errors: readonly IOtherWriteError[])` です。`OtherWriteErrorHandlerContext` は `WriteContext | GetWritableContext` で、書き込み系のどちらの経路で失敗したかを示します。
+
+`IOtherWriteError` の形状は次のとおりです。
+
+<TypeTable
+  type={{
+    plugin: {
+      type: '[#iotherwriteerror-plugin] "storage"',
+      required: true,
+      description: "固定値です。",
+    },
+    errors: {
+      type: '[#iotherwriteerror-errors] readonly { plugin: "storage", reason: unknown }[]',
+      required: true,
+      description: "他ストレージごとの失敗理由です。",
+    },
+  }}
+/>
+
+## コンテキストの別名 [#contexts]
+
+`IStorage` 名前空間は [パイプラインコンテキスト](./pipeline-context#contexts) の別名を提供します。プラグイン側は `IStorage.*` を使うと意図が明確になります。
+
+| 別名                                     | 実体                                                  | 用途                |
+| ---------------------------------------- | ----------------------------------------------------- | ------------------- |
+| `IStorage.OpenContext`                   | [`IOpenContext`](./pipeline-context#iopencontext)     | `open`              |
+| `IStorage.CloseContext`                  | [`ICloseContext`](./pipeline-context#iclosecontext)   | `close`             |
+| `IStorage.WriteContext`                  | [`ISetContext`](./pipeline-context#isetcontext)       | `write`             |
+| `IStorage.GetWritableContext`            | [`ISetContext`](./pipeline-context#isetcontext)       | `getWritable`       |
+| `IStorage.ReadContext`                   | [`IGetContext`](./pipeline-context#igetcontext)       | `read`              |
+| `IStorage.GetReadableContext`            | [`IStreamContext`](./pipeline-context#istreamcontext) | `getReadable`       |
+| `IStorage.ExistsContext`                 | [`IHasContext`](./pipeline-context#ihascontext)       | `exists`            |
+| `IStorage.DeleteContext`                 | [`IDeleteContext`](./pipeline-context#ideletecontext) | `delete`            |
+| `IStorage.ClearContext`                  | [`IClearContext`](./pipeline-context#iclearcontext)   | `clear`             |
+| `IStorage.OtherWriteErrorHandlerContext` | `WriteContext \| GetWritableContext`                  | `onOtherWriteError` |
+
+## 実装例 [#example]
+
+<Tabs>
+  <Tab title="同期実装">
+    ```ts
+    import {
+      KeyNotFoundError,
+      type IStorage,
+    } from "@unikvs/core";
+
+    export class Memory implements IStorage<string> {
+      public readonly name = "Memory";
+      public isOpen = false;
+      private readonly data = new Map<string, string>();
+
+      public open(): void {
+        this.isOpen = true;
+      }
+
+      public close(): void {
+        this.isOpen = false;
+      }
+
+      public write(c: IStorage.WriteContext, value: string): void {
+        this.data.set(c.key, value);
+      }
+
+      public read(c: IStorage.ReadContext): string {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        return value;
+      }
+
+      public exists(c: IStorage.ExistsContext): boolean {
+        return this.data.has(c.key);
+      }
+
+      public delete(c: IStorage.DeleteContext): void {
+        this.data.delete(c.key);
+      }
+
+      public clear(): void {
+        this.data.clear();
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab title="非同期実装">
+    ```ts
+    import {
+      KeyNotFoundError,
+      type IStorage,
+    } from "@unikvs/core";
+
+    export class AsyncMemory implements IStorage<string> {
+      public readonly name = "AsyncMemory";
+      public isOpen = false;
+      private readonly data = new Map<string, string>();
+
+      public async open(): Promise<void> {
+        this.isOpen = true;
+      }
+
+      public async close(): Promise<void> {
+        this.isOpen = false;
+      }
+
+      public async write(c: IStorage.WriteContext, value: string): Promise<void> {
+        this.data.set(c.key, value);
+      }
+
+      public async read(c: IStorage.ReadContext): Promise<string> {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        return value;
+      }
+
+      public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+        return this.data.has(c.key);
+      }
+
+      public async delete(c: IStorage.DeleteContext): Promise<void> {
+        this.data.delete(c.key);
+      }
+
+      public async clear(): Promise<void> {
+        this.data.clear();
+      }
+    }
+    ```
+
+  </Tab>
+</Tabs>
+
+実装時の要点は次のとおりです。
+
+<Steps>
+  <Step title="型引数を決める">
+    保存する値の型を `IStorage<T>` に指定します。読み書きで型が変わる場合やストリームを使う場合は、4 つすべてを指定します。
+  </Step>
+  <Step title="必須メンバーを実装する">
+    `name`・`isOpen` と CRUD の 5 メソッドは必須です。`read` では見つからないキーに `KeyNotFoundError` を投げます。
+  </Step>
+  <Step title="任意メンバーを足す">
+    初期化が必要なら `open`・`close`、ストリーム対応なら `getWritable`・`getReadable`、他ストレージの失敗通知が要れば `onOtherWriteError` を実装します。
+  </Step>
+</Steps>
+
+## API リファレンス [#api]
+
+### `IStorage` [#istorage]
+
+保存先プラグインが実装するインターフェースです。4 つの型引数でデータとチャンクの型を調整します。
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#istorage-name] string",
+      required: true,
+      description: "プラグイン名です。",
+    },
+    isOpen: {
+      type: "[#istorage-isopen] boolean",
+      required: true,
+      description: "初期化済みかどうかを示します。",
+    },
+    open: {
+      type: "[#istorage-open] (c: IStorage.OpenContext) => MaybePromise<void>",
+      description: "初期化処理を行います。",
+    },
+    close: {
+      type: "[#istorage-close] (c: IStorage.CloseContext) => MaybePromise<void>",
+      description: "終了処理を行います。",
+    },
+    write: {
+      type: "[#istorage-write] (c: IStorage.WriteContext, data: TWriteData) => MaybePromise<void>",
+      required: true,
+      description: "データを保存します。",
+    },
+    read: {
+      type: "[#istorage-read] (c: IStorage.ReadContext) => MaybePromise<TReadData>",
+      required: true,
+      description: "データを取得します。なければ `KeyNotFoundError` を投げます。",
+    },
+    exists: {
+      type: "[#istorage-exists] (c: IStorage.ExistsContext) => MaybePromise<boolean>",
+      required: true,
+      description: "キーの有無を返します。",
+    },
+    delete: {
+      type: "[#istorage-delete] (c: IStorage.DeleteContext) => MaybePromise<void>",
+      required: true,
+      description: "キーを削除します。",
+    },
+    clear: {
+      type: "[#istorage-clear] (c: IStorage.ClearContext) => MaybePromise<void>",
+      required: true,
+      description: "すべてのデータを削除します。",
+    },
+    onOtherWriteError: {
+      type: "[#istorage-onotherwriteerror] (c: IStorage.OtherWriteErrorHandlerContext, errors: readonly IStorage.IOtherWriteError[]) => MaybePromise<void>",
+      description: "他ストレージの失敗を受け取ります。",
+    },
+  }}
+/>

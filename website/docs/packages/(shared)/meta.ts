@@ -1,7 +1,6 @@
 import { defineMeta } from "blume";
 
 export default defineMeta({
-  icon: "rocket",
-  pages: [],
-  title: "はじめに",
+  pages: ["core"],
+  title: "共有",
 });

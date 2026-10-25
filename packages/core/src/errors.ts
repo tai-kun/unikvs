@@ -3,36 +3,36 @@ import { type ErrorMeta, type ErrorOptions, I18nErrorBase, setErrorMessage } fro
 export { type ErrorMeta, type ErrorOptions, setErrorMessage };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-base)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#errors-base)
  */
 export class ErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends I18nErrorBase<TMeta> {}
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-invalid-usage)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#errors-base)
  */
 export class InvalidUsageErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends ErrorBase<TMeta> {}
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-key-not-found)
  */
 export type KeyNotFoundErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#key-not-found-key)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-key-not-found)
  */
 export type KeyNotFoundErrorArgs = ErrorOptions & KeyNotFoundErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-key-not-found)
  */
 export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   static {
@@ -40,7 +40,7 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-key-not-found)
    */
   public constructor(args: KeyNotFoundErrorArgs) {
     const { key, ...options } = args;
@@ -52,27 +52,27 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
 setErrorMessage(KeyNotFoundError, ({ key }) => `キー ${key} が見つかりません`, "ja");
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-unsupported-runtime)
  */
 export type UnsupportedRuntimeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#unsupported-runtime-name)
    */
   readonly name: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#unsupported-runtime-runtime)
    */
   readonly runtime: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-unsupported-runtime)
  */
 export type UnsupportedRuntimeErrorArgs = ErrorOptions & UnsupportedRuntimeErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-unsupported-runtime)
  */
 export class UnsupportedRuntimeError extends InvalidUsageErrorBase<UnsupportedRuntimeErrorMeta> {
   static {
@@ -80,7 +80,7 @@ export class UnsupportedRuntimeError extends InvalidUsageErrorBase<UnsupportedRu
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-unsupported-runtime)
    */
   public constructor(args: UnsupportedRuntimeErrorArgs) {
     const { name, runtime, ...options } = args;
@@ -104,22 +104,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-invalid-part-size)
  */
 export type InvalidPartSizeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#invalid-part-size-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-invalid-part-size)
  */
 export type InvalidPartSizeErrorArgs = ErrorOptions & InvalidPartSizeErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-invalid-part-size)
  */
 export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
   static {
@@ -127,7 +127,7 @@ export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-invalid-part-size)
    */
   public constructor(args: InvalidPartSizeErrorArgs) {
     const { actual, ...options } = args;
@@ -149,22 +149,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-storage-aborted)
  */
 export type StorageAbortedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#storage-aborted-key)
    */
   readonly key: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-storage-aborted)
  */
 export type StorageAbortedErrorArgs = ErrorOptions & StorageAbortedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-storage-aborted)
  */
 export class StorageAbortedError extends ErrorBase<StorageAbortedErrorMeta> {
   static {
@@ -172,7 +172,7 @@ export class StorageAbortedError extends ErrorBase<StorageAbortedErrorMeta> {
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-storage-aborted)
    */
   public constructor(args: StorageAbortedErrorArgs) {
     const { key, ...options } = args;
@@ -200,22 +200,22 @@ setErrorMessage(
 // -------------------------------------------------------------------------------------------------。
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-repair-not-allowed)
  */
 export type RepairNotAllowedErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#repair-not-allowed-names)
    */
   readonly names: readonly string[];
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-repair-not-allowed)
  */
 export type RepairNotAllowedErrorArgs = ErrorOptions & RepairNotAllowedErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-repair-not-allowed)
  */
 export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> {
   static {
@@ -223,7 +223,7 @@ export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> 
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-repair-not-allowed)
    */
   public constructor(args: RepairNotAllowedErrorArgs) {
     const { names, ...options } = args;
@@ -252,22 +252,22 @@ setErrorMessage(
 );
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-readonly-variable)
  */
 export type ReadonlyVariableErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#readonly-variable-name)
    */
   readonly name: string;
 };
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-readonly-variable)
  */
 export type ReadonlyVariableErrorArgs = ErrorOptions & ReadonlyVariableErrorMeta;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-readonly-variable)
  */
 export class ReadonlyVariableError extends InvalidUsageErrorBase<ReadonlyVariableErrorMeta> {
   static {
@@ -275,7 +275,7 @@ export class ReadonlyVariableError extends InvalidUsageErrorBase<ReadonlyVariabl
   }
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/errors#error-readonly-variable)
    */
   public constructor(args: ReadonlyVariableErrorArgs) {
     const { name, ...options } = args;

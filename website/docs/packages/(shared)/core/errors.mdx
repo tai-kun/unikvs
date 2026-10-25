@@ -1,0 +1,311 @@
+---
+title: "エラー"
+description: "@unikvs/core のエラー基盤。ErrorBase・setErrorMessage・言語切り替えと 6 種類の共通エラーの使い方を説明します。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/core` のエラーは `i18n-error-base` の仕組みを使っています。すべての共通エラーは `ErrorBase` から派生し、`meta` に対応する値を保持します。メッセージは既定の英語に加えて、日本語 (`ja`) が登録済みです。
+
+共通エラーは次の 6 種類です。
+
+| エラークラス              | 継承                    | `name`                          | 詳しい説明                         |
+| ------------------------- | ----------------------- | ------------------------------- | ---------------------------------- |
+| `KeyNotFoundError`        | `ErrorBase`             | `UniKvsKeyNotFoundError`        | [詳細](#error-key-not-found)       |
+| `UnsupportedRuntimeError` | `InvalidUsageErrorBase` | `UniKvsUnsupportedRuntimeError` | [詳細](#error-unsupported-runtime) |
+| `InvalidPartSizeError`    | `ErrorBase`             | `UniKvsInvalidPartSizeError`    | [詳細](#error-invalid-part-size)   |
+| `StorageAbortedError`     | `ErrorBase`             | `UniKvsStorageAbortedError`     | [詳細](#error-storage-aborted)     |
+| `RepairNotAllowedError`   | `ErrorBase`             | `UniKvsRepairNotAllowedError`   | [詳細](#error-repair-not-allowed)  |
+| `ReadonlyVariableError`   | `InvalidUsageErrorBase` | `UniKvsReadonlyVariableError`   | [詳細](#error-readonly-variable)   |
+
+`InvalidUsageErrorBase` を継承する 2 種類 (`UnsupportedRuntimeError`・`ReadonlyVariableError`) は呼び出し側の修正が必要です。それ以外は実行時の状態 (キーの有無、中断、設定値、権限) に応じて対処します。
+
+## エラー基盤 [#errors-base]
+
+| 型・値                         | 説明                                                   |
+| ------------------------------ | ------------------------------------------------------ |
+| `ErrorMeta`                    | `Readonly<Record<string, unknown>>`。`meta` の形状     |
+| `ErrorOptions`                 | `cause` を保持できるオプション (`{ cause?: unknown }`) |
+| `ErrorBase<TMeta>`             | 基底クラス。`meta` とメッセージ生成関数を受け取る      |
+| `InvalidUsageErrorBase<TMeta>` | 使い方の誤り用。`ErrorBase` を継承                     |
+| `setErrorMessage`              | クラスと言語ごとのメッセージを登録する                 |
+
+### コンストラクター [#errors-base-constructor]
+
+`ErrorBase` は `meta` とメッセージ (文字列または生成関数) を受け取ります。`meta` が `undefined` の型では、メッセージのみの形式も使えます。
+
+```ts
+import { ErrorBase } from "@unikvs/core";
+
+// meta あり: 参照をそのまま保持します
+const error = new ErrorBase({ key: "foo" }, ({ key }) => `Key not found: ${key}`);
+
+console.log(error.meta); // { key: "foo" }
+console.log(error.message); // "Key not found: foo"
+console.log(error.toString()); // "Error: Key not found: foo" (name 未設定時)
+
+// meta なし
+const plain = new ErrorBase(undefined, "boom");
+console.log(plain.meta); // undefined
+```
+
+:::note[型引数の推論]
+`new ErrorBase({ code: 1 }, "message")` のように呼ぶと、型引数は `{ code: number }` に推論されます。明示も可能で、`new ErrorBase<{ readonly code: number }>({ code: 1 }, "message")` と書けます。既定の型引数は `ErrorMeta | undefined` です。
+:::
+
+### `name` と `prefix` [#errors-base-name]
+
+`name` はプロトタイプに設定します。設定しなければ `Error` を継承した名前 (`"Error"`) になります。共通エラーはすべて `UniKvs*Error` 形式の名前を持ちます。
+
+```ts
+class KeyNotFoundError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "KeyNotFoundError";
+  }
+}
+```
+
+`prefix` を設定すると、翻訳後のメッセージを含めた全体の先頭に付加されます。
+
+```ts
+class PrefixedError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "PrefixedError";
+  }
+
+  public constructor(args: { readonly key: string }) {
+    super(args, ({ key }) => `Missing: ${key}`);
+  }
+}
+
+PrefixedError.prefix = "[test] ";
+console.log(new PrefixedError({ key: "foo" }).message); // "[test] Missing: foo"
+```
+
+### `cause` [#errors-base-cause]
+
+`cause` の扱いは標準の `Error` と同じです。`options` を省略すると `cause` プロパティー自体が存在せず、明示的に渡すと参照をそのまま保持します。`Error` 以外の値も渡せます。
+
+```ts
+const withCause = new KeyNotFoundError({ key: "foo" }, { cause: { reason: "disk full" } });
+console.log("cause" in withCause); // true
+
+const withoutOptions = new KeyNotFoundError({ key: "foo" });
+console.log("cause" in withoutOptions); // false
+```
+
+## 言語切り替え [#i18n]
+
+メッセージの言語は Valibot のグローバル設定で切り替えます。`valibot` はピア依存のため、使う側でインストールします。
+
+```ts
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
+import { KeyNotFoundError } from "@unikvs/core";
+
+console.log(new KeyNotFoundError({ key: "k1" }).message);
+// "Key not found: k1"
+
+setGlobalConfig({ lang: "ja" });
+console.log(new KeyNotFoundError({ key: "k1" }).message);
+// "キー k1 が見つかりません"
+
+deleteGlobalConfig(); // 既定の英語に戻る
+```
+
+共通エラーには英語の既定メッセージと日本語のメッセージが登録済みです。未登録の言語では既定の英語メッセージが使われます。
+
+## メッセージの登録 [#set-error-message]
+
+自作エラーにも `setErrorMessage` で言語ごとのメッセージを登録できます。文字列または `meta` を受け取る関数を、言語タグ (単体または `Set` などの反復可能オブジェクト) とともに渡します。
+
+```ts
+import { ErrorBase, setErrorMessage } from "@unikvs/core";
+
+class MyError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "MyError";
+  }
+
+  public constructor(args: { readonly key: string }) {
+    super(args, ({ key }) => `Missing: ${key}`);
+  }
+}
+
+setErrorMessage(MyError, ({ key }) => `キー ${key} がありません`, "ja");
+setErrorMessage(MyError, "not found", new Set(["ja", "fr"])); // 複数言語へ一括登録も可能
+```
+
+登録には次の規則があります。
+
+- クラス単位で解決され、親クラスへの登録は子クラスへ継承されません。
+- 同じ言語へ再登録すると新しいメッセージで上書きされます。
+- 空文字列を登録してもフォールバックしません。空文字列がそのままメッセージになります。
+- 登録したメッセージ関数は `meta` を参照として受け取ります。
+- `I18nErrorBase` を継承していないクラスへは登録できません。
+
+## 共通エラー [#errors]
+
+6 種類の具体的なエラーはいずれも `meta` に対応する値を保持します。`instanceof` で判別し、`meta` から復旧に必要な情報を取り出します。
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+
+try {
+  throw new KeyNotFoundError({ key: "missing-key" });
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log(ex.meta); // { key: "missing-key" }
+    console.log(ex.message); // "Key not found: missing-key"
+  } else {
+    throw ex;
+  }
+}
+```
+
+### `KeyNotFoundError` [#error-key-not-found]
+
+どのストレージにもキーがないときに使います。`get` の失敗時に投げられます。
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#key-not-found-key] string",
+      required: true,
+      description: "見つからなかったキーです。",
+    },
+  }}
+/>
+
+- 継承: `ErrorBase`
+- `name`: `UniKvsKeyNotFoundError`
+- 英語: `Key not found: k1`
+- 日本語: `キー k1 が見つかりません`
+
+### `UnsupportedRuntimeError` [#error-unsupported-runtime]
+
+対応ランタイム外でプラグインを使ったときに使います。使い方の誤りのため `InvalidUsageErrorBase` を継承します。
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#unsupported-runtime-name] string",
+      required: true,
+      description: "プラグインの表示名です。",
+    },
+    runtime: {
+      type: "[#unsupported-runtime-runtime] string",
+      required: true,
+      description: "対応するランタイム名です。",
+    },
+  }}
+/>
+
+```ts
+throw new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+// "Redis can only be used in the Bun runtime"
+// (ja) "Redis は Bun ランタイムでのみ使用できます"
+```
+
+- 継承: `InvalidUsageErrorBase`
+- `name`: `UniKvsUnsupportedRuntimeError`
+
+### `InvalidPartSizeError` [#error-invalid-part-size]
+
+`vars` のパートサイズが非整数または非正数のときに使います。`actual` に指定値をそのまま保持します。
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-part-size-actual] unknown",
+      required: true,
+      description: "指定されたパートサイズの値です。",
+    },
+  }}
+/>
+
+```ts
+throw new InvalidPartSizeError({ actual: 0 });
+// "Invalid part size 0 was specified in the vars. ... Specify a positive integer in bytes such as 5242880."
+// (ja) "変数に無効なパートサイズ 0 が指定されました。..."
+```
+
+- 継承: `ErrorBase`
+- `name`: `UniKvsInvalidPartSizeError`
+
+:::note[メッセージの内容]
+メッセージ本文では、非整数・非正数の値はマルチパートアップロードのパートサイズに使えず、予測できない挙動を引き起こすとしています。あわせて、正の整数 (バイト単位、例: `5242880`) を指定すべきだとしています。
+:::
+
+### `StorageAbortedError` [#error-storage-aborted]
+
+渡された `AbortSignal` が既に中断済みのため、書き込みストリームの取得前に拒否されたときに使います。開始前に中断が確定している要求は成功しないため、即座に失敗させます。
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#storage-aborted-key] string",
+      required: true,
+      description: "アップロードしようとしたキーです。",
+    },
+  }}
+/>
+
+- 継承: `ErrorBase`
+- `name`: `UniKvsStorageAbortedError`
+- 英語: `"k1"` を含む中断理由の説明 (`The upload for key "k1" was aborted before it started ...`)
+- 日本語: `"k1"` を含む同様の説明
+
+対処は中断されていないシグナルを渡すか、要求前にシグナルの状態を確認します。
+
+### `RepairNotAllowedError` [#error-repair-not-allowed]
+
+`repair: true` の読み取りで、前段ストレージへの書き戻しが拒否されたときに使います。`names` は書き戻し先の表示名で、凍結された配列として保持されます。
+
+<TypeTable
+  type={{
+    names: {
+      type: "[#repair-not-allowed-names] readonly string[]",
+      required: true,
+      description: "書き戻し先の表示名の一覧です。",
+    },
+  }}
+/>
+
+```ts
+new RepairNotAllowedError({ names: ["Memory"] }).message;
+// 'Repair writes via "Memory" are not allowed'
+// (ja) '"Memory" への書き戻しは許可されていません'
+
+new RepairNotAllowedError({ names: [] }).message;
+// 'Repair writes via "(unknown)" are not allowed' (空配列は不明名で組み立て)
+```
+
+- 継承: `ErrorBase`
+- `name`: `UniKvsRepairNotAllowedError`
+
+書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御し、拒否時の `meta.names` に書き戻し先の表示名が入ります。
+
+### `ReadonlyVariableError` [#error-readonly-variable]
+
+`setReadonly()` で固定された変数への書き込みがあったときに使います。使い方の誤りのため `InvalidUsageErrorBase` を継承します。
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#readonly-variable-name] string",
+      required: true,
+      description: "変更しようとした変数名です。",
+    },
+  }}
+/>
+
+```ts
+new ReadonlyVariableError({ name: "x" }).message;
+// 'Cannot modify readonly variable: "x"'
+// (ja) '読み取り専用の変数 "x" は変更できません'
+```
+
+- 継承: `InvalidUsageErrorBase`
+- `name`: `UniKvsReadonlyVariableError`
+
+詳しくは[パイプラインコンテキスト › 変数の読み書き](./pipeline-context#variables)を参照してください。

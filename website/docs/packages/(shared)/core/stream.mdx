@@ -1,0 +1,132 @@
+---
+title: "ストリーム"
+description: "@unikvs/core のストリーム型。Web 標準ストリームのエイリアスとチャンク型の扱い、変換との関係を説明します。"
+---
+
+## 概要 [#overview]
+
+ストリーム型は Web 標準のエイリアスです。独自の実装は持ちません。`IStorage` のストリーム取得や、変換系コンテキストの `source`・`destination` で使われます。
+
+| 型                            | 実体                     | 説明                                                                       |
+| ----------------------------- | ------------------------ | -------------------------------------------------------------------------- |
+| `IReadableStream<T>`          | `ReadableStream<T>`      | 読み取り用ストリーム                                                       |
+| `IWritableStream<T>`          | `WritableStream<T>`      | 書き込み用ストリーム                                                       |
+| `ITransformStream<TIn, TOut>` | `{ readable, writable }` | `readable: IReadableStream<TOut>` と `writable: IWritableStream<TIn>` の組 |
+
+```ts
+import type { IReadableStream, IWritableStream, ITransformStream } from "@unikvs/core";
+
+declare const readable: IReadableStream<Uint8Array>;
+declare const writable: IWritableStream<Uint8Array>;
+declare const transform: ITransformStream<ArrayBuffer, number>;
+
+const out: IReadableStream<number> = transform.readable;
+const input: IWritableStream<ArrayBuffer> = transform.writable;
+```
+
+## チャンクの型 [#chunks]
+
+チャンク型は使う側の型引数で決まります。読み書きのデータ型と混同しないよう、型引数の位置を確認します。
+
+| 使う側                                                              | チャンクを決める型引数         | 既定値               |
+| ------------------------------------------------------------------- | ------------------------------ | -------------------- |
+| `IStorage<TWriteData, TReadData, TWriteChunk, TReadChunk>`          | `TWriteChunk`・`TReadChunk`    | `any`・`TWriteChunk` |
+| `IMiddleware<TEncodeData, TDecodeData, TEncodeChunk, TDecodeChunk>` | `TEncodeChunk`・`TDecodeChunk` | `any`                |
+
+```ts
+import type { IStorage } from "@unikvs/core";
+
+// 書き込みチャンクは ArrayBuffer、読み取りチャンクは number
+type Foursome = IStorage<Uint8Array, string, ArrayBuffer, number>;
+
+// getWritable は IWritableStream<ArrayBuffer> を返し、
+// getReadable は IReadableStream<number> を返す
+```
+
+`TReadChunk` を省略すると `TWriteChunk` が使われます。チャンクを使わないストレージやミドルウェアでは、チャンクの型引数を省略して `any` のままにします。
+
+## 変換との関係 [#transform]
+
+変換系のコンテキストでは、データ変換とストリーム変換で `source`・`destination` の中身が変わります。
+
+| 変換の種類     | コンテキスト                                   | `source`・`destination` の中身 |
+| -------------- | ---------------------------------------------- | ------------------------------ |
+| データ変換     | `IEncodeContext`・`IDecodeContext`             | 値そのもの                     |
+| ストリーム変換 | `IEncodeStreamContext`・`IDecodeStreamContext` | `IReadableStream`              |
+
+```ts
+import type { IEncodeContext, IEncodeStreamContext, IReadableStream } from "@unikvs/core";
+
+declare const dataCtx: IEncodeContext<string, number>;
+const srcValue: string = dataCtx.source; // 値
+const destValue: number | undefined = dataCtx.destination;
+
+declare const streamCtx: IEncodeStreamContext<ArrayBuffer, number>;
+const srcStream: IReadableStream<ArrayBuffer> = streamCtx.source; // ストリーム
+const destStream: IReadableStream<number> | undefined = streamCtx.destination;
+```
+
+ストリーム変換では、チャンクではなくストリーム全体を差し替える点に注意します。チャンク単位の変換は、ストリームの中身として `TransformStream` などを組み立てて `destination` に代入します。
+
+## 使用例 [#example]
+
+ストレージ側でストリーム取得を実装する例です。`getReadable` は読み取り用のストリームを、`getWritable` は書き込み用のストリームを返します。
+
+```ts
+import type { IReadableStream, IStorage, IWritableStream } from "@unikvs/core";
+
+export class ChunkedMemory implements IStorage<Uint8Array, Uint8Array, Uint8Array> {
+  public readonly name = "ChunkedMemory";
+  public isOpen = false;
+  private readonly data = new Map<string, Uint8Array[]>();
+
+  public getWritable(c: IStorage.GetWritableContext): IWritableStream<Uint8Array> {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream<Uint8Array>({
+      write: (chunk) => {
+        chunks.push(chunk);
+      },
+      close: () => {
+        this.data.set(c.key, chunks);
+      },
+    });
+  }
+
+  public getReadable(c: IStorage.GetReadableContext): IReadableStream<Uint8Array> {
+    const chunks = this.data.get(c.key) ?? [];
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      },
+    });
+  }
+}
+```
+
+:::note[開始前の中断に注意]
+開始前に中断済みのシグナルで呼ばれた場合は [`StorageAbortedError`](./errors#error-storage-aborted) で即座に拒否します。詳しくは[ストレージ › ストリーム取得](./storage#streams)を参照してください。
+:::
+
+## API リファレンス [#api]
+
+### `ITransformStream` [#itransformstream]
+
+読み取り用と書き込み用のストリームの組です。
+
+<TypeTable
+  type={{
+    readable: {
+      type: "[#itransformstream-readable] IReadableStream<TOut>",
+      required: true,
+      description: "読み取り用ストリームです。",
+    },
+    writable: {
+      type: "[#itransformstream-writable] IWritableStream<TIn>",
+      required: true,
+      description: "書き込み用ストリームです。",
+    },
+  }}
+/>

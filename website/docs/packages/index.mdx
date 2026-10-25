@@ -1,0 +1,140 @@
+---
+title: "パッケージリファレンス"
+description: "UniKVS のパッケージの一覧と案内です。"
+---
+
+UniKVS は本体パッケージと、プラグインと補助のパッケージから構成されます。本体の `unikvs` 以外は、目的に合わせてインストールします。
+
+インストール方法は[はじめに › インストール](/start/installation)を、保存先の選び方は[ストレージ比較](/reference/comparison)を参照してください。
+
+## 本体 [#core]
+
+<CardGroup cols={2}>
+  <Card title="UniKVS" href="./unikvs" icon="package">
+    設定ビルダーと KVS クライアント本体です。
+  </Card>
+</CardGroup>
+
+## 共有 [#shared]
+
+すべてのパッケージで共有される基盤です。
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/core" href="./core" icon="cpu">
+    全パッケージ共有の型とエラー基盤です。
+  </Card>
+  <Card title="@unikvs/utils" href="./utils" icon="wrench">
+    プラグイン実装者向けの共有関数群です。
+  </Card>
+</CardGroup>
+
+## ストレージ [#storage]
+
+データの保存先を提供します。動作環境ごとに分かれています。
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/memory" href="./memory" icon="zap">
+    メモリー上に任意のデータを保存します。
+  </Card>
+  <Card title="@unikvs/http" href="./http" icon="globe">
+    HTTP サーバーを保存先として扱います。
+  </Card>
+  <Card title="@unikvs/null" href="./null" icon="circle-off">
+    何も保存しない送り先として使います。
+  </Card>
+  <Card title="@unikvs/lru-cache" href="./lru-cache" icon="list">
+    件数や容量の上限付きでデータをメモリーに保存します。
+  </Card>
+  <Card title="@unikvs/opfs" href="./opfs" icon="folder">
+    ブラウザーの OPFS に保存します。
+  </Card>
+  <Card title="@unikvs/indexeddb" href="./indexeddb" icon="table">
+    ブラウザーの IndexedDB に保存します。
+  </Card>
+  <Card title="@unikvs/localstorage" href="./localstorage" icon="database">
+    ブラウザーの Local Storage に保存します。
+  </Card>
+  <Card title="@unikvs/session-storage" href="./session-storage" icon="database">
+    ブラウザーの sessionStorage に文字列を保存します。
+  </Card>
+  <Card title="@unikvs/fs.node" href="./fs-node" icon="hard-drive">
+    Node.js のローカルファイルシステムに保存します。
+  </Card>
+  <Card title="@unikvs/s3.node" href="./s3-node" icon="cloud">
+    S3 互換のオブジェクトストレージに保存します。
+  </Card>
+  <Card title="@unikvs/redis.node" href="./redis-node" icon="database">
+    Redis に保存します。
+  </Card>
+  <Card title="@unikvs/fs.bun" href="./fs-bun" icon="hard-drive">
+    Bun のローカルファイルシステムに保存します。
+  </Card>
+  <Card title="@unikvs/s3.bun" href="./s3-bun" icon="cloud">
+    Bun で S3 互換のオブジェクトストレージに保存します。
+  </Card>
+  <Card title="@unikvs/redis.bun" href="./redis-bun" icon="database">
+    Bun の Redis クライアントで Redis に保存します。
+  </Card>
+</CardGroup>
+
+## ミドルウェア [#middleware]
+
+値を透過的に変換します。変換内容ごとに分かれています。
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/json" href="./json" icon="braces">
+    値を JSON に、ストリームでは JSON Lines に変換します。
+  </Card>
+  <Card title="@unikvs/superjson" href="./superjson" icon="boxes">
+    Date・Map・Set・BigInt・undefined を保持したまま SuperJSON で変換します。
+  </Card>
+  <Card title="@unikvs/cbor" href="./cbor" icon="binary">
+    値を CBOR に、ストリームでは CBOR シーケンスに変換します。
+  </Card>
+  <Card title="@unikvs/v8-serde" href="./v8-serde" icon="binary">
+    Node.js の v8.serialize で値を高速にシリアライズします。
+  </Card>
+  <Card title="@unikvs/base64" href="./base64" icon="file-code">
+    バイト列を Base64 のテキストに変換します。
+  </Card>
+  <Card title="@unikvs/base64url" href="./base64url" icon="file-code">
+    バイト列を URL セーフな Base64url に変換します。
+  </Card>
+  <Card title="@unikvs/hex" href="./hex" icon="file-code">
+    バイト列を 16 進数文字列 (Hex) に変換します。
+  </Card>
+  <Card title="@unikvs/compression" href="./compression" icon="archive">
+    gzip・deflate・deflate-raw による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/checksum" href="./checksum" icon="shield-check">
+    MD5・SHA-1・SHA-224・SHA-256・SHA-384・SHA-512 の検証を行います。
+  </Card>
+  <Card title="@unikvs/zstd.wasm" href="./zstd-wasm" icon="archive">
+    WASM 版 zstd による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/zstd.node" href="./zstd-node" icon="archive">
+    Node.js の zstd による圧縮と展開を行います。
+  </Card>
+</CardGroup>
+
+## 開発支援 [#dev]
+
+挙動の観測と制御に寄るパッケージです。
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/debug" href="./debug" icon="bug">
+    読み書きされる操作とデータのデバッグ情報をログに記録します。
+  </Card>
+  <Card title="@unikvs/passthrough" href="./passthrough" icon="arrow-right-left">
+    データを何も変換せずそのまま透過させます。
+  </Card>
+  <Card title="@unikvs/allow-repair" href="./allow-repair" icon="wrench">
+    read-repair の書き戻しの可否を制御します。
+  </Card>
+  <Card title="@unikvs/key-prefix" href="./key-prefix" icon="hash">
+    すべてのキーに固定文字列を付与します。
+  </Card>
+  <Card title="@unikvs/writeonly" href="./writeonly" icon="lock">
+    既存のストレージを書き込み専用にします。
+  </Card>
+</CardGroup>

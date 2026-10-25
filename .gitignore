@@ -227,6 +227,7 @@ $RECYCLE.BIN/
 .vitest-attachments/
 __screenshots__/
 skills/
+!.opencode/skills/
 .temp-*
 .tmp-*
 .vitest/
