@@ -25,7 +25,6 @@ beforeEach(async (): Promise<void> => {
   // テストごとにクリーンな状態を保証するため、データベースを削除または初期化します。
   const indexedDB = globalThis.indexedDB;
 
-  // oxlint-disable-next-line typescript/strict-boolean-expressions, vitest/no-conditional-in-test
   if (indexedDB !== undefined) {
     await new Promise<void>((resolve) => {
       const request = indexedDB.deleteDatabase(DB_NAME);
@@ -201,7 +200,7 @@ describe("ストリーム操作", () => {
         break;
       }
 
-      // oxlint-disable-next-line typescript/strict-boolean-expressions, vitest/no-conditional-in-test
+      // oxlint-disable-next-line vitest/no-conditional-in-test
       if (value !== undefined) {
         chunks.push(...value);
       }

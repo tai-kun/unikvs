@@ -223,7 +223,6 @@ describe("中断の透過", () => {
   test("進行中の中断は HttpNetworkError に包まず再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -244,7 +243,6 @@ describe("中断の透過", () => {
   test("exists の HEAD 失敗時も中断は再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -268,7 +266,6 @@ describe("中断の透過", () => {
     // 準備：
     const controller = new AbortController();
     let calls = 0;
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const flakyFetch: IFetch = async (request: Request) => {
       calls += 1;
 
@@ -301,7 +298,6 @@ describe("中断の透過", () => {
   test("delete の失敗時も中断は再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -324,7 +320,6 @@ describe("中断の透過", () => {
   test("clear の失敗時も中断は再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -345,7 +340,6 @@ describe("中断の透過", () => {
   test("getReadable の失敗時も中断は再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -368,7 +362,6 @@ describe("中断の透過", () => {
   test("getWritable の close 失敗時も中断は再送出する", async ({ expect }) => {
     // 準備：
     const controller = new AbortController();
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -438,7 +431,6 @@ describe("中断の透過", () => {
   test("中断済みシグナルでは fetch を呼ばず中断例外を投げる", async ({ expect }) => {
     // 準備：
     let called = 0;
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const countingFetch: IFetch = async () => {
       called += 1;
 
@@ -484,7 +476,6 @@ describe("exists のフォールバック", () => {
   test("HEAD 501 では GET にフォールバックする", async ({ expect }) => {
     // 準備：
     let headCalls = 0;
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -541,7 +532,6 @@ describe("exists のフォールバック", () => {
   test("フォールバック GET の 404 と 410 は false を返す", async ({ expect }) => {
     // 準備と実行と検証。
     for (const status of [404, 410]) {
-      // oxlint-disable-next-line unicorn/consistent-function-scoping
       const fetch: IFetch = async (request: Request) => {
         // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
         if (request.method === "HEAD") {
@@ -564,7 +554,6 @@ describe("exists のフォールバック", () => {
   test("HEAD 403 ではフォールバックせず HttpResponseError を投げる", async ({ expect }) => {
     // 準備：
     let getCalls = 0;
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -627,7 +616,6 @@ describe("exists のフォールバック", () => {
   test("フォールバックではボディを破棄してから判定する", async ({ expect }) => {
     // 準備：
     let canceled = false;
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -681,7 +669,6 @@ describe("exists のフォールバック", () => {
   test("cancel が拒否したとき、そのエラーをそのまま伝播する", async ({ expect }) => {
     // 準備：
     const cause = new Error("cancel failed");
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -709,7 +696,6 @@ describe("exists のフォールバック", () => {
   test("非 2xx 送出前の cancel 失敗は cancel 由来エラーを投げる", async ({ expect }) => {
     // 準備：
     const cause = new Error("cancel failed");
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -737,7 +723,6 @@ describe("exists のフォールバック", () => {
   test("404 判定前の cancel 失敗も cancel 由来エラーを投げる", async ({ expect }) => {
     // 準備：
     const cause = new Error("cancel failed");
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
@@ -765,7 +750,6 @@ describe("exists のフォールバック", () => {
   test("HEAD の 404 と 410 は false を返す", async ({ expect }) => {
     // 準備と実行と検証。
     for (const status of [404, 410]) {
-      // oxlint-disable-next-line unicorn/consistent-function-scoping
       const fetch: IFetch = async () =>
         new Response(null, {
           status,

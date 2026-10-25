@@ -1,4 +1,3 @@
-// oxlint-disable tai-kun/overload-signatures-adjacent
 import { logger } from "./_logger.js";
 
 /**

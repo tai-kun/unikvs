@@ -27,7 +27,6 @@ beforeEach(async (): Promise<void> => {
 });
 afterEach(async (): Promise<void> => {
   // テスト終了後のクリーンアップをします。
-  // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
   if (storage.isOpen) {
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
   }

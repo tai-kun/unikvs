@@ -175,7 +175,6 @@ export default class Indexeddb implements IStorage {
     this.#db = null;
   }
 
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     c.signal.throwIfAborted();
 

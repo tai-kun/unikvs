@@ -17,7 +17,6 @@ export default class Null implements IStorage {
     return true;
   }
 
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(_c: IStorage.WriteContext, _data: any): void {}
 
   public read(c: IStorage.ReadContext): never {

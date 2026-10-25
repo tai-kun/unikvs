@@ -173,7 +173,6 @@ export default class LruCache implements IStorage {
     }
   }
 
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(c: IStorage.WriteContext, data: any): void {
     c.signal.throwIfAborted();
     this.#assertOpen();

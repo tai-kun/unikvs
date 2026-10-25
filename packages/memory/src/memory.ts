@@ -43,7 +43,6 @@ export default class Memory implements IStorage {
     return true;
   }
 
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(c: IStorage.WriteContext, data: any): void {
     this.#map.set(c.key, this.#clone(data));
   }

@@ -129,7 +129,6 @@ describe("withReadableStreamFrom", () => {
 
     let closed = false;
 
-    // oxlint-disable-next-line unicorn/consistent-function-scoping
     function* gen(): Generator<unknown, void, unknown> {
       try {
         yield 1;

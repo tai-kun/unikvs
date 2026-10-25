@@ -298,7 +298,6 @@ export default class VercelRuntimeCache implements IStorage {
     return this.#clone(entry.value);
   }
 
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     throwIfAborted(c.signal);
     const storedValue = this.#clone(data);

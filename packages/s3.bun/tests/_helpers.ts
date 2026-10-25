@@ -63,7 +63,6 @@ function createBucket(bucket: string): void {
  * bucket と endpoint は別インスタンスの接続や再 open の検証にも使用します。
  * unauthorizedStorage は権限のない認証情報を持つストレージを提供します。
  */
-// oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 export const test = vitest.extend<{
   bucket: string;
   storage: S3;

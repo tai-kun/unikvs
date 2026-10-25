@@ -310,7 +310,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   public open(options?: OpenOptions): Promise<void>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async open(...args: any): Promise<void> {
     if (this.#con !== null) {
       throw new UniKvsIsOpenError();
@@ -574,7 +573,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   public close(options?: CloseOptions): Promise<void>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public close(...args: any): Promise<void> {
     try {
       const [options = {}] = parseInput(CloseArgsSchema, args);
@@ -970,7 +968,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     value: SetValue<TKeyValueMapping[TKey]>,
     options?: Omit<SetOptions, "key" | "value">,
   ): Promise<void>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async set(...args: any): Promise<void> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
@@ -1093,7 +1090,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: TKey,
     options?: Omit<GetOptions, "key">,
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async get(...args: any): Promise<unknown> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
@@ -1247,7 +1243,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: TKey,
     options?: Omit<StreamOptions, "key">,
   ): Promise<IValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async stream(...args: any): Promise<IValueStream> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
@@ -1617,7 +1612,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<HasOptions, "key">,
   ): Promise<boolean>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async has(...args: any): Promise<boolean> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
@@ -1705,7 +1699,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: KeyofKeyValueMapping<TKeyValueMapping>,
     options?: Omit<DeleteOptions, "key">,
   ): Promise<void>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async delete(...args: any): Promise<void> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();
@@ -1787,7 +1780,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   public async clear(options?: ClearOptions): Promise<void>;
-  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async clear(...args: any): Promise<void> {
     if (this.#con === null) {
       throw new UniKvsIsNotOpenError();

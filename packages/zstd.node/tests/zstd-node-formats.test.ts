@@ -173,7 +173,6 @@ describe("他形式との非互換", () => {
     );
 
     // 実行：
-    // oxlint-disable-next-line promise/prefer-await-to-then
     const writeError = await writer.write(encoded).then(
       () =>
         writer.close().then(

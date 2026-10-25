@@ -29,17 +29,13 @@ export interface ValkeyClient {
   connect(): Promise<unknown>;
   quit(): Promise<unknown>;
   disconnect(): void;
-  // oxlint-disable-next-line no-explicit-any
   on(event: string, listener: (...args: any[]) => void): unknown;
   // `value` と末尾引数はそのままクライアントへ透過するため `any` とします。
-  // oxlint-disable-next-line no-explicit-any
   set(key: string, value: any, ...args: any[]): Promise<unknown>;
   getBuffer(key: string): Promise<Buffer | null>;
   exists(key: string): Promise<number>;
   del(...keys: string[]): Promise<unknown>;
-  // oxlint-disable-next-line no-explicit-any
   scan(cursor: string, ...args: any[]): Promise<[string, string[]]>;
-  // oxlint-disable-next-line no-explicit-any
   append(key: string, value: any): Promise<unknown>;
   rename(src: string, dest: string): Promise<unknown>;
   pexpire(key: string, ms: number): Promise<unknown>;
