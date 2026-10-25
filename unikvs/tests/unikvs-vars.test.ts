@@ -1,6 +1,6 @@
 import { test, describe } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -20,12 +20,12 @@ describe("UniKvs - vars の伝播", () => {
   test("set/get/has/delete/stream の操作種別とキーはコンテキストで伝わる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStreamStorage();
-    await using kvs = UniKvs.config<{
+    await using kvs = new Builder<{
       foo: PlainValue<string>;
       logs: StreamValue<Uint8Array>;
     }>()
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -54,7 +54,7 @@ describe("UniKvs - vars の伝播", () => {
   test("clear の操作種別はコンテキストで伝わる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).build();
     await kvs.open();
 
     // 実行：
@@ -68,7 +68,7 @@ describe("UniKvs - vars の伝播", () => {
   test("操作ごとの vars はストレージへ渡される", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).build();
     await kvs.open();
 
     // 実行：
@@ -81,7 +81,7 @@ describe("UniKvs - vars の伝播", () => {
   test("操作ごとの vars をエントリー配列形式でも指定できる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).build();
     await kvs.open();
 
     // 実行：
@@ -94,7 +94,7 @@ describe("UniKvs - vars の伝播", () => {
   test("操作ごとの vars に Map を指定できる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).build();
     await kvs.open();
 
     // 実行：
@@ -107,7 +107,7 @@ describe("UniKvs - vars の伝播", () => {
   test("open と close にも操作ごとの vars を渡せる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage).create();
+    const kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).build();
 
     // 実行：
     await kvs.open({ vars: { phase: "open" } });
@@ -122,10 +122,10 @@ describe("UniKvs - vars の伝播", () => {
     // 準備：
     const storage = new FakeStorage();
     const middleware = new FakeMiddleware("probe");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -165,7 +165,7 @@ describe("UniKvs - vars の伝播", () => {
       await origOpenA(c);
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(a).persist(b).build();
 
     // 実行 : open を並列開始し、b が先に進んでも a の変異が見えないことを確認する。
     const openPromise = kvs.open();

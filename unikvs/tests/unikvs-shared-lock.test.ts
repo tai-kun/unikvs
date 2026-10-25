@@ -1,7 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import { withTimeout } from "./_helpers.js";
 
 /**
@@ -85,7 +85,7 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備：
     const storage = new GatedExistsStorage();
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -118,7 +118,7 @@ describe("UniKvs - 共有ロック", () => {
   test("stream のセットアップが保留中でも別キーの has を完了できる", async ({ expect }) => {
     // 準備：
     const storage = new GatedExistsStorage();
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
     storage.map.set("a", [Uint8Array.from([1])]);
 
@@ -168,7 +168,7 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの set は完了できる", async ({ expect }) => {
     // 準備：
     const storage = new GatedExistsStorage();
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -204,7 +204,7 @@ describe("UniKvs - 共有ロック", () => {
   }) => {
     // 準備：
     const storage = new GatedExistsStorage();
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
@@ -243,7 +243,7 @@ describe("UniKvs - 共有ロック", () => {
     const storage = new GatedExistsStorage();
     storage.map.set("a", [Uint8Array.from([1])]);
 
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
 
     const vs = await kvs.stream("a");
@@ -275,7 +275,7 @@ describe("UniKvs - 共有ロック", () => {
     const storage = new GatedExistsStorage();
     storage.map.set("a", "value");
 
-    await using kvs = UniKvs.config().persist(storage).create();
+    await using kvs = new Builder().persist(storage).build();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();

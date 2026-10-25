@@ -55,9 +55,11 @@ Bun の `S3Options` から `bucket` を除いた設定型です。バケット�
 
 ```ts
 import { S3 } from "@unikvs/s3.bun";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ file: Value<Uint8Array> }>().persist(new S3("my-bucket")).create();
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new S3("my-bucket"))
+  .build();
 
 await kvs.open();
 

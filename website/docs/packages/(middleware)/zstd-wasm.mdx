@@ -43,13 +43,13 @@ import { ZstdWasm } from "@unikvs/zstd.wasm";
 
 ```ts
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 import { ZstdWasm } from "@unikvs/zstd.wasm";
 
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
   .use(new ZstdWasm({ level: 3 }))
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("foo", new Uint8Array([0, 1, 2]));
@@ -91,13 +91,13 @@ await kvs.close();
 
 ```ts
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 import { ZstdWasm, ZstdWasmInitError } from "@unikvs/zstd.wasm";
 
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>()
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
   .use(new ZstdWasm())
   .persist(new Memory())
-  .create();
+  .build();
 
 try {
   await kvs.open();

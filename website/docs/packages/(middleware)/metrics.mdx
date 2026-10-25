@@ -64,10 +64,13 @@ import { Metrics } from "@unikvs/metrics";
 ```ts
 import { Memory } from "@unikvs/memory";
 import { Metrics } from "@unikvs/metrics";
-import { UniKvs, type PlainValue } from "unikvs";
+import * as unikvs from "unikvs";
 
 const metrics = new Metrics();
-const kvs = UniKvs.config<{ k1: PlainValue<string> }>().use(metrics).persist(new Memory()).create();
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(metrics)
+  .persist(new Memory())
+  .build();
 
 await kvs.open();
 await kvs.set("k1", "hello");

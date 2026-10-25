@@ -53,9 +53,11 @@ import { BunFs } from "@unikvs/fs.bun";
 
 ```ts
 import { BunFs } from "@unikvs/fs.bun";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ file: Value<Uint8Array> }>().persist(new BunFs("./data")).create();
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new BunFs("./data"))
+  .build();
 
 await kvs.open();
 

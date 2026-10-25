@@ -1,6 +1,7 @@
 import { Memory } from "@unikvs/memory";
 import { readAll } from "@unikvs/testing";
-import { UniKvs } from "unikvs";
+import type { UniKvs } from "unikvs";
+import { Builder } from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError, TtlInvalidValueError } from "../src/errors.js";
@@ -34,7 +35,7 @@ async function createTtlKvs(options?: TtlOptions): Promise<{
     now: (): number => now,
   });
   const storage = new Memory();
-  const kvs = UniKvs.config().use(ttl).persist(storage).create();
+  const kvs = new Builder().use(ttl).persist(storage).build();
   await kvs.open();
 
   return {
@@ -198,7 +199,7 @@ describe("再起動後の振る舞い", () => {
   test("エンベロープはストレージに残り、別インスタンスでも期限切れになる", async ({ expect }) => {
     let now = 1_000_000;
     const storage = new Memory();
-    const first = UniKvs.config()
+    const first = new Builder()
       .use(
         new Ttl({
           now: (): number => now,
@@ -206,16 +207,16 @@ describe("再起動後の振る舞い", () => {
         }),
       )
       .persist(storage)
-      .create();
+      .build();
     await first.open();
     await first.set("report", "hello");
     await first.close();
     now += 61_000;
 
-    const second = UniKvs.config()
+    const second = new Builder()
       .use(new Ttl({ now: (): number => now }))
       .persist(storage)
-      .create();
+      .build();
     await second.open();
 
     // エンベロープだけで失効を判定できるのはプレーン値の get です。

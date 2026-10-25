@@ -31,12 +31,12 @@ import { Cbor } from "@unikvs/cbor";
 ```ts
 import { Cbor } from "@unikvs/cbor";
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ item: Value<{ readonly id: number }> }>()
+const kvs = new unikvs.Builder<{ item: unikvs.Value<{ readonly id: number }> }>()
   .use(new Cbor())
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("item", { id: 1 });

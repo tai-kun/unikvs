@@ -32,10 +32,13 @@ import { AllowRepair } from "@unikvs/allow-repair";
 ```ts
 import { AllowRepair } from "@unikvs/allow-repair";
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
 const gate = new AllowRepair();
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().use(gate).persist(new Memory()).create();
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(gate)
+  .persist(new Memory())
+  .build();
 
 await kvs.open();
 await kvs.set("foo", new Uint8Array([0, 1, 2]));

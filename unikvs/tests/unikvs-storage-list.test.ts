@@ -1,6 +1,6 @@
 import { test, describe } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Branch, Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import { streamOf, FakeStorage, FakeMiddleware, FakeStreamStorage } from "./_helpers.js";
 
@@ -15,11 +15,11 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
     const probe = new FakeMiddleware("probe");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(probe)
       .persist(a)
       .persist(b)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -43,11 +43,11 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     const cache = new FakeStorage("cache");
     const server = new FakeStorage("server");
     const probe = new FakeMiddleware("probe");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(probe)
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.map.set("foo", "value");
 
@@ -68,7 +68,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     a.map.set("foo", "value");
     b.map.set("foo", "value");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(a).persist(b).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(a).persist(b).build();
     await kvs.open();
 
     // 実行と検証 : has。
@@ -90,7 +90,7 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
   test("stream の set/get はストリームで往復する", async ({ expect }) => {
     // 準備：
     const storage = new FakeStreamStorage("s");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>().persist(storage).build();
     await kvs.open();
 
     // 実行 : 書き込み。
@@ -115,10 +115,10 @@ describe("UniKvs - 変数の伝播とルーティング", () => {
     // 準備：
     const mainStorage = new FakeStorage("main");
     const branchStorage = new FakeStorage("branch");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(mainStorage)
-      .fork(UniKvs.branch().persist(branchStorage))
-      .create();
+      .fork(new Branch().persist(branchStorage))
+      .build();
     await kvs.open();
 
     // 実行：

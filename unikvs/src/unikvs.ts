@@ -33,7 +33,6 @@ import {
   StreamArgsSchema,
   VariablesArgsSchema,
 } from "./_unikvs.schemas.js";
-import type { GenericSchema } from "./_valibot.js";
 import { parseInput, parseOutput } from "./_valibot.js";
 import type {
   ValueSchemaInfo,
@@ -53,12 +52,7 @@ import {
   MiddlewareNextCalledMultipleTimesError,
 } from "./errors.js";
 import type { IValueStream } from "./types.js";
-import UniKvsBranch, { type IUniKvsBranch, type KeyValueMapping } from "./unikvs-branch.js";
-import UniKvsConfig, {
-  type UniKvsSchema,
-  type UniKvsConfigOptions,
-  type IUniKvsConfigBuilder,
-} from "./unikvs-config.js";
+import type { KeyValueMapping } from "./unikvs-branch.js";
 import type {
   SetValue,
   GetOptions,
@@ -73,21 +67,6 @@ import type {
   KeyofKeyValueMappingHasPlainValue,
   KeyofKeyValueMappingHasStreamValue,
 } from "./unikvs.types.js";
-import type { Value } from "./value-schemas.js";
-
-/**
- * スキーマ定義からキーと値のマッピング型を推論します。
- *
- * @template TSchema 対象となるスキーマ定義の型です。
- */
-type $InferKeyValueMapping<TSchema extends UniKvsSchema> = TSchema extends readonly (readonly [
-  GenericSchema,
-  infer TValue extends Value,
-])[]
-  ? Readonly<Record<string, TValue>>
-  : TSchema extends Readonly<Record<string, Value>>
-    ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
-    : never;
 
 /**
  * ストリームの読み取りロックを自動解放するための FinalizationRegistry です。
@@ -196,34 +175,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     this.#baseVars = vars;
     this.#pipeline = pipeline;
     this.#valueSchemaResolver = valueSchemaResolver;
-  }
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public static config<TKeyValueMapping extends KeyValueMapping>(
-    options?: Omit<UniKvsConfigOptions, "schema">,
-  ): IUniKvsConfigBuilder<TKeyValueMapping>;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public static config<const TSchema extends UniKvsSchema>(
-    options: Omit<UniKvsConfigOptions, "schema"> & {
-      readonly schema: TSchema;
-    },
-  ): IUniKvsConfigBuilder<$InferKeyValueMapping<TSchema>>;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
-   */
-  public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder;
-  public static config(options?: UniKvsConfigOptions): IUniKvsConfigBuilder<any> {
-    return new UniKvsConfig(this, options);
-  }
-
-  public static branch(): IUniKvsBranch {
-    return new UniKvsBranch();
   }
 
   /**

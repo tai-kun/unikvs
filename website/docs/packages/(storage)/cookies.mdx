@@ -58,13 +58,13 @@ Cookie をバックエンドに使うストレージです。
 
 ```ts
 import { Cookies } from "@unikvs/cookies";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{
-  foo: Value<string>;
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<string>;
 }>()
   .persist(new Cookies())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("foo", "hello");

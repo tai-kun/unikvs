@@ -41,7 +41,7 @@ import {
 } from "./_value-schemas.js";
 import { MissingStorageError } from "./errors.js";
 import type { IUniKvsBranch, KeyValueMapping } from "./unikvs-branch.js";
-import type UniKvs from "./unikvs.js";
+import UniKvs from "./unikvs.js";
 import type { Value } from "./value-schemas.js";
 
 type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Extract<
@@ -50,9 +50,9 @@ type KeyofKVMap<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> = Ex
 >;
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
  */
-export interface IUniKvsConfigBuilder<
+export interface IUniKvsBuilder<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
   TUniKvsDataInput = ValueOf<{
     [TKey in KeyofKVMap<TKeyValueMapping>]: $InferPlainValueData<TKeyValueMapping[TKey]>;
@@ -106,7 +106,7 @@ export interface IUniKvsConfigBuilder<
       (TBranchHasPersist extends true
         ? $CheckForkDecodeChunk<TLastMiddlewareDecodeChunkInput, TBranchHeadDecodeChunkOutput>
         : unknown),
-  ): IUniKvsConfigBuilder<
+  ): IUniKvsBuilder<
     TKeyValueMapping,
     TUniKvsDataInput,
     TUniKvsDataOutput,
@@ -138,7 +138,7 @@ export interface IUniKvsConfigBuilder<
     >,
   >(
     middleware: TMiddleware,
-  ): IUniKvsConfigBuilder<
+  ): IUniKvsBuilder<
     TKeyValueMapping,
     TUniKvsDataInput,
     TUniKvsDataOutput,
@@ -167,7 +167,7 @@ export interface IUniKvsConfigBuilder<
     >,
   >(
     storage: TStorage,
-  ): IUniKvsConfigFinalizer<
+  ): IUniKvsBuilderFinalizer<
     TKeyValueMapping,
     TLastMiddlewareEncodeDataOutput,
     TLastMiddlewareDecodeDataInput,
@@ -204,9 +204,9 @@ export interface IUniKvsConfigBuilder<
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
  */
-export interface IUniKvsConfigFinalizer<
+export interface IUniKvsBuilderFinalizer<
   TKeyValueMapping extends KeyValueMapping = KeyValueMapping,
   TWriteDataInput = any,
   TReadDataOutput = any,
@@ -256,7 +256,7 @@ export interface IUniKvsConfigFinalizer<
       (TBranchHasPersist extends true
         ? $CheckForkDecodeChunk<TLastMiddlewareDecodeChunkInput, TBranchHeadDecodeChunkOutput>
         : unknown),
-  ): IUniKvsConfigFinalizer<
+  ): IUniKvsBuilderFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
@@ -288,7 +288,7 @@ export interface IUniKvsConfigFinalizer<
     >,
   >(
     middleware: TMiddleware,
-  ): IUniKvsConfigFinalizer<
+  ): IUniKvsBuilderFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
@@ -309,7 +309,7 @@ export interface IUniKvsConfigFinalizer<
     >,
   >(
     storage: TStorage,
-  ): IUniKvsConfigFinalizer<
+  ): IUniKvsBuilderFinalizer<
     TKeyValueMapping,
     TWriteDataInput,
     TReadDataOutput,
@@ -344,13 +344,13 @@ export interface IUniKvsConfigFinalizer<
    */
   defaultsVars(vars: VariablesInit): this;
 
-  create(): UniKvs<TKeyValueMapping>;
+  build(): UniKvs<TKeyValueMapping>;
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
  */
-export type UniKvsConfigOptions = {
+export type UniKvsBuilderOptions = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars)
    */
@@ -369,9 +369,21 @@ export type UniKvsSchemaRecord = Readonly<Record<string, Value>>;
 export type UniKvsSchemaEntries = readonly (readonly [GenericSchema, Value])[];
 
 /**
- * `UniKvs.config()` の `schema` オプションに指定できるスキーマ定義です。
+ * `new Builder()` の `schema` オプションに指定できるスキーマ定義です。
  */
 export type UniKvsSchema = UniKvsSchemaRecord | UniKvsSchemaEntries;
+
+/**
+ * スキーマ定義からキーと値のマッピング型を推論します。
+ *
+ * @template TSchema 対象となるスキーマ定義の型です。
+ */
+export type $InferKeyValueMapping<TSchema extends UniKvsSchema> =
+  TSchema extends readonly (readonly [GenericSchema, infer TValue extends Value])[]
+    ? Readonly<Record<string, TValue>>
+    : TSchema extends Readonly<Record<string, Value>>
+      ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
+      : never;
 
 /**
  * 値が Valibot のスキーマであるかどうかを判定します。
@@ -398,7 +410,7 @@ function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
   );
 }
 
-const UniKvsConfigOptionsSchema = object({
+const UniKvsBuilderOptionsSchema = object({
   /**
    * キーと値のスキーマ定義です。
    */
@@ -417,17 +429,37 @@ const UniKvsConfigOptionsSchema = object({
   vars: optional(VariablesInitSchema),
 });
 
-const UniKvsConfigArgsSchema = tuple([optional(UniKvsConfigOptionsSchema)]);
+const UniKvsBuilderArgsSchema = tuple([optional(UniKvsBuilderOptionsSchema)]);
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
  */
-export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfigFinalizer {
-  /**
-   * UniKvs のコンストラクターです。
-   */
-  readonly #UniKvs: typeof UniKvs;
-
+export default class UniKvsBuilder<
+  const TInit extends KeyValueMapping | UniKvsSchema = KeyValueMapping,
+  TKeyValueMapping extends KeyValueMapping = $InferKeyValueMapping<TInit>,
+  TUniKvsDataInput = ValueOf<{
+    [TKey in KeyofKVMap<TKeyValueMapping>]: $InferPlainValueData<TKeyValueMapping[TKey]>;
+  }>,
+  TUniKvsDataOutput = TUniKvsDataInput,
+  TUniKvsChunkInput = ValueOf<{
+    [TKey in KeyofKVMap<TKeyValueMapping>]: $InferStreamValueChunkData<TKeyValueMapping[TKey]>;
+  }>,
+  TUniKvsChunkOutput = TUniKvsChunkInput,
+  TLastMiddlewareDecodeDataInput = TUniKvsDataOutput,
+  TLastMiddlewareEncodeDataOutput = TUniKvsDataInput,
+  TLastMiddlewareDecodeChunkInput = TUniKvsChunkOutput,
+  TLastMiddlewareEncodeChunkOutput = TUniKvsChunkInput,
+> implements IUniKvsBuilder<
+  TKeyValueMapping,
+  TUniKvsDataInput,
+  TUniKvsDataOutput,
+  TUniKvsChunkInput,
+  TUniKvsChunkOutput,
+  TLastMiddlewareDecodeDataInput,
+  TLastMiddlewareEncodeDataOutput,
+  TLastMiddlewareDecodeChunkInput,
+  TLastMiddlewareEncodeChunkOutput
+> {
   /**
    * 登録済みストレージと各登録時点のパイプラインのスナップショットです。
    */
@@ -462,14 +494,11 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    */
   readonly #vars: Map<string, unknown>;
 
-  /**
-   * @internal
-   */
-  public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions);
-  public constructor(UniKvsConstructor: typeof UniKvs, ...args: unknown[]) {
-    const [{ vars, schema } = {}] = parseInput(UniKvsConfigArgsSchema, args);
+  public constructor(options?: Omit<UniKvsBuilderOptions, "schema"> & { readonly schema?: TInit });
+  public constructor(...args: unknown[]) {
+    const [options = {}] = parseInput(UniKvsBuilderArgsSchema, args);
+    const { vars, schema } = options;
 
-    this.#UniKvs = UniKvsConstructor;
     this.#destinations = [];
     this.#middlewares = [];
     this.#valueSchemaResolver = null;
@@ -479,19 +508,136 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     }
   }
 
-  public fork(branch: IUniKvsBranch): this {
+  fork<
+    TBranchChunkInput,
+    TBranchChunkOutput,
+    TBranchHeadEncodeDataInput,
+    TBranchHeadDecodeDataOutput,
+    TBranchHeadEncodeChunkInput,
+    TBranchHeadDecodeChunkOutput,
+    TBranchLastDecodeDataInput,
+    TBranchLastEncodeDataOutput,
+    TBranchLastDecodeChunkInput,
+    TBranchLastEncodeChunkOutput,
+    TBranchHasPersist extends boolean,
+  >(
+    branch: IUniKvsBranch<
+      any,
+      TBranchChunkInput,
+      TBranchChunkOutput,
+      TBranchHeadEncodeDataInput,
+      TBranchHeadDecodeDataOutput,
+      TBranchHeadEncodeChunkInput,
+      TBranchHeadDecodeChunkOutput,
+      TBranchLastDecodeDataInput,
+      TBranchLastEncodeDataOutput,
+      TBranchLastDecodeChunkInput,
+      TBranchLastEncodeChunkOutput,
+      TBranchHasPersist
+    > &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeData<TLastMiddlewareEncodeDataOutput, TBranchHeadEncodeDataInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeData<TLastMiddlewareDecodeDataInput, TBranchHeadDecodeDataOutput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkEncodeChunk<TLastMiddlewareEncodeChunkOutput, TBranchHeadEncodeChunkInput>
+        : unknown) &
+      (TBranchHasPersist extends true
+        ? $CheckForkDecodeChunk<TLastMiddlewareDecodeChunkInput, TBranchHeadDecodeChunkOutput>
+        : unknown),
+  ): IUniKvsBuilder<
+    TKeyValueMapping,
+    TUniKvsDataInput,
+    TUniKvsDataOutput,
+    TBranchHasPersist extends true
+      ? [TUniKvsChunkInput] extends [never]
+        ? never
+        : [TBranchChunkInput] extends [never]
+          ? never
+          : TUniKvsChunkInput
+      : TUniKvsChunkInput,
+    TBranchHasPersist extends true
+      ? [TUniKvsChunkOutput] extends [never]
+        ? never
+        : [TBranchChunkOutput] extends [never]
+          ? never
+          : TUniKvsChunkOutput
+      : TUniKvsChunkOutput,
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
+  >;
+  public fork(branch: IUniKvsBranch): IUniKvsBuilder {
     appendForkDestinations(this.#destinations, this.#middlewares, branch);
 
     return this;
   }
 
-  public use(middleware: IMiddleware): this {
+  use<
+    TMiddleware extends IMiddleware<
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
+      any,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput
+    >,
+  >(
+    middleware: TMiddleware,
+  ): IUniKvsBuilder<
+    TKeyValueMapping,
+    TUniKvsDataInput,
+    TUniKvsDataOutput,
+    [TUniKvsChunkInput] extends [never]
+      ? never
+      : [$InferDecodeChunkInput<TMiddleware>] extends [never]
+        ? never
+        : TUniKvsChunkInput,
+    [TUniKvsChunkOutput] extends [never]
+      ? never
+      : [$InferEncodeChunkOutput<TMiddleware>] extends [never]
+        ? never
+        : TUniKvsChunkOutput,
+    $InferDecodeDataInput<TMiddleware>,
+    $InferEncodeDataOutput<TMiddleware>,
+    $InferDecodeChunkInput<TMiddleware>,
+    $InferEncodeChunkOutput<TMiddleware>
+  >;
+  public use(middleware: IMiddleware): IUniKvsBuilder {
     this.#middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
   }
 
-  public persist(storage: IStorage): this {
+  persist<
+    TStorage extends IStorage<
+      [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
+      [TLastMiddlewareDecodeDataInput] extends [never] ? any : TLastMiddlewareDecodeDataInput,
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
+      [TLastMiddlewareDecodeChunkInput] extends [never] ? any : TLastMiddlewareDecodeChunkInput
+    >,
+  >(
+    storage: TStorage,
+  ): IUniKvsBuilderFinalizer<
+    TKeyValueMapping,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeDataInput,
+    [TLastMiddlewareEncodeChunkOutput] extends [never]
+      ? never
+      : [$InferWriteChunkInput<TStorage>] extends [never]
+        ? never
+        : TLastMiddlewareEncodeChunkOutput,
+    [TLastMiddlewareDecodeChunkInput] extends [never]
+      ? never
+      : [$InferReadChunkOutput<TStorage>] extends [never]
+        ? never
+        : TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareDecodeDataInput,
+    TLastMiddlewareEncodeDataOutput,
+    TLastMiddlewareDecodeChunkInput,
+    TLastMiddlewareEncodeChunkOutput
+  >;
+  public persist(storage: IStorage): IUniKvsBuilder {
     this.#destinations.push({
       storage: UniKvsStorage.from(storage),
       // 登録時点のチェーンをスナップショットして保持するため、以降の use はこの登録に影響しません。
@@ -543,15 +689,15 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
     return this;
   }
 
-  public create(): UniKvs {
+  public build(): UniKvs<TKeyValueMapping> {
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (this.#destinations.length === 0) {
       throw new MissingStorageError();
     }
 
-    return new this.#UniKvs(
+    return new UniKvs(
       [...this.#vars.entries()],
-      // ビルダーを再利用できるよう、create のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
+      // ビルダーを再利用できるよう、build のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
       // 同じミドルウェアインスタンスに対するラッパーは共有します。
       PipelineGraph.compile([...this.#destinations]),
       this.#valueSchemaResolver,

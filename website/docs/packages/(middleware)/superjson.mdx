@@ -31,12 +31,12 @@ import { Superjson } from "@unikvs/superjson";
 ```ts
 import { Memory } from "@unikvs/memory";
 import { Superjson } from "@unikvs/superjson";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ event: Value<{ readonly at: Date }> }>()
+const kvs = new unikvs.Builder<{ event: unikvs.Value<{ readonly at: Date }> }>()
   .use(new Superjson())
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("event", { at: new Date("2026-01-01T00:00:00Z") });

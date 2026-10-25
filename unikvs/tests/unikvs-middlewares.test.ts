@@ -11,7 +11,7 @@ import {
   MiddlewareDestinationFrozenError,
   MiddlewareNextCalledMultipleTimesError,
 } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -29,7 +29,7 @@ describe("UniKvs - ミドルウェアのライフサイクル", () => {
     const middleware = new FakeMiddleware();
     expect(middleware.isOpen).toBe(false);
 
-    const kvs = UniKvs.config().use(middleware).persist(new FakeStorage()).create();
+    const kvs = new Builder().use(middleware).persist(new FakeStorage()).build();
 
     // 実行：
     await kvs.open();
@@ -51,7 +51,7 @@ describe("UniKvs - ミドルウェアのライフサイクル", () => {
     const middleware = new FakeMiddleware();
     middleware.isOpen = true;
 
-    const kvs = UniKvs.config().use(middleware).persist(new FakeStorage()).create();
+    const kvs = new Builder().use(middleware).persist(new FakeStorage()).build();
 
     // 実行：
     await kvs.open();
@@ -71,10 +71,7 @@ describe("UniKvs - ミドルウェアのライフサイクル", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
 
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .use(middleware)
-      .persist(storage)
-      .create();
+    const kvs = new Builder<{ foo: PlainValue<string> }>().use(middleware).persist(storage).build();
     await kvs.open();
 
     middleware.isOpen = false;
@@ -133,12 +130,12 @@ describe("UniKvs - チェーンの順序", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(t1)
       .use(t2)
       .use(t3)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -159,13 +156,13 @@ describe("UniKvs - チェーンの順序", () => {
     const storage3 = new FakeStorage("storage3");
     const t1 = new TagMiddleware("1");
     const t2 = new TagMiddleware("2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(t1)
       .use(t2)
       .persist(storage1)
       .persist(storage2)
       .persist(storage3)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -184,11 +181,11 @@ describe("UniKvs - チェーンの順序", () => {
     const storage = new FakeStorage();
     const t1 = new FakeMiddleware("t1");
     const t2 = new FakeMiddleware("t2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(t1)
       .use(t2)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -208,12 +205,12 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     const storage2 = new FakeStreamStorage("storage2");
     const t1 = new FakeStreamMiddleware("t1");
     const t2 = new FakeStreamMiddleware("t2");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(t1)
       .use(t2)
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -252,12 +249,12 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(t1)
       .use(t2)
       .use(t3)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -275,10 +272,10 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     expect,
   }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new FakeMiddleware())
       .persist(new FakeStreamStorage())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -294,10 +291,10 @@ describe("UniKvs - ストリーム対応ミドルウェア", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new FakeMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -314,10 +311,10 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -332,10 +329,10 @@ describe("UniKvs - ミドルウェアのエラー伝播", () => {
     middleware.errors["encode"] = new Error("encode boom");
 
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -373,10 +370,10 @@ describe("UniKvs - ミドルウェアフック", () => {
       }
     }
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new ExistsMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -410,11 +407,11 @@ describe("UniKvs - ミドルウェアフック", () => {
       }
     }
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new DeleteMiddleware())
       .persist(a)
       .persist(b)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -444,10 +441,10 @@ describe("UniKvs - ミドルウェアフック", () => {
       }
     }
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new DenyExistsMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -494,10 +491,10 @@ describe("UniKvs - ミドルウェアフック", () => {
       }
     }
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new DenyDeleteMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -550,11 +547,11 @@ describe("UniKvs - ミドルウェアフック", () => {
       }
     }
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new BoomDeleteMiddleware("boom1", "first"))
       .use(new BoomDeleteMiddleware("boom2", "second"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -613,10 +610,10 @@ describe("UniKvs - destination の凍結", () => {
     }
 
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new EvilMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -652,10 +649,10 @@ describe("UniKvs - destination の凍結", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new EvilMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -688,10 +685,10 @@ describe("UniKvs - destination の凍結", () => {
 
     const middleware = new ReadAfterNextMiddleware();
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -722,10 +719,10 @@ describe("UniKvs - next の呼び出し規約", () => {
     }
 
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new SilentMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -763,10 +760,10 @@ describe("UniKvs - next の呼び出し規約", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new SilentMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -802,10 +799,10 @@ describe("UniKvs - next の呼び出し規約", () => {
     const storage = new FakeStreamStorage();
     storage.map.set("logs", [new Uint8Array([1])]);
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new SilentMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -841,10 +838,10 @@ describe("UniKvs - next の呼び出し規約", () => {
     }
 
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new TwiceMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -903,11 +900,11 @@ describe("UniKvs - next の呼び出し規約", () => {
     const storage = new FakeStorage();
     const fireAndForget = new FireAndForgetMiddleware();
     const slow = new SlowMiddleware();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(fireAndForget)
       .use(slow)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：

@@ -1,51 +1,51 @@
 ---
 title: "UniKVS"
-description: "設定ビルダーと KVS クライアントを提供するメインパッケージ UniKVS の使い方を説明します。"
+description: "ビルダーと KVS クライアントを提供するメインパッケージ UniKVS の使い方を説明します。"
 ---
 
 ## 概要 [#overview]
 
-`unikvs` はメインクライアントのパッケージです。<Badge>メインクライアント</Badge> 設定ビルダー (`UniKvs.config()` / `UniKvsConfig`) でミドルウェアとストレージを組み立て、生成したクライアント (`UniKvs`) で読み書きします。
+`unikvs` はメインクライアントのパッケージです。<Badge>メインクライアント</Badge> ビルダー (`Builder` / `UniKvsBuilder`) でミドルウェアとストレージを組み立て、生成したクライアント (`UniKvs`) で読み書きします。
 
 ```package-install
 npm i unikvs
 ```
 
-## 設定ビルダー [#config-builder]
+## ビルダー [#builder]
 
-`UniKvs.config()` でビルダーを作ります。型パラメーターでマッピングを直接指定する方法と、`schema` オプションで Valibot スキーマから推論させる方法があります。後者では入出力値の実行時検証も有効になります。
+`new Builder()` でビルダーを作ります。型パラメーターでマッピングを直接指定する方法と、`schema` オプションで Valibot スキーマから推論させる方法があります。後者では入出力値の実行時検証も有効になります。
 
 <Tabs>
   <Tab title="schemaあり">
     `PlainValue()`・`StreamValue()`・`Value()` に Valibot スキーマを渡します。マッピング型は自動推論します。Valibot スキーマを使う場合は `valibot` を別途インストールします。
 
     ```ts
-    import { PlainValue, UniKvs } from "unikvs";
+    import * as unikvs from "unikvs";
     import * as v from "valibot";
 
-    const kvs = UniKvs.config({
+    const kvs = new unikvs.Builder({
       schema: {
-        foo: PlainValue(v.instance(Uint8Array)),
+        foo: unikvs.PlainValue(v.instance(Uint8Array)),
       },
     })
       .persist(storage)
-      .create();
+      .build();
     ```
 
     動的キーには配列形式を使います。キースキーマと値スキーマの組を並べ、最初に一致した定義を採用します。
 
     ```ts
-    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as unikvs from "unikvs";
     import * as v from "valibot";
 
-    const kvs = UniKvs.config({
+    const kvs = new unikvs.Builder({
       schema: [
-        [v.pipe(v.string(), v.regex(/^msg-.+/)), PlainValue(v.string())],
-        [v.pipe(v.string(), v.regex(/^img-.+/)), StreamValue(v.instance(Uint8Array))],
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), unikvs.PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), unikvs.StreamValue(v.instance(Uint8Array))],
       ],
     })
       .persist(storage)
-      .create();
+      .build();
     ```
 
   </Tab>
@@ -53,20 +53,20 @@ npm i unikvs
     `T` はキーから値へのマッピング (`{ [key]: PlainValue | StreamValue | Value }`) で、キーごとに使える操作が型レベルで決まります。実行時の検証は行いません。
 
     ```ts
-    import { UniKvs, type Value } from "unikvs";
+    import * as unikvs from "unikvs";
 
-    const kvs = UniKvs.config<{
-      foo: Value<Uint8Array>;
+    const kvs = new unikvs.Builder<{
+      foo: unikvs.Value<Uint8Array>;
     }>()
       .persist(storage)
-      .create();
+      .build();
     ```
 
   </Tab>
 </Tabs>
 
 :::warning[スキーマ定義が不正な場合]
-`schema` の形式が不正な場合は `config()` の時点で `InvalidInputError` を投げます。
+`schema` の形式が不正な場合はコンストラクターの時点で `InvalidInputError` を投げます。
 :::
 
 設定は以下の順序で行います。
@@ -80,18 +80,37 @@ npm i unikvs
     分岐したパイプラインでストレージを追加します
     (任意)。分岐先での追加は親パイプラインに漏れません。
   </Step>
-  <Step title="`create()`">
+  <Step title="`build()`">
     `UniKvs` クライアントを作ります。ストレージがなければ `MissingStorageError` を投げます。
   </Step>
 </Steps>
 
 :::warning[ストレージ未登録に注意]
-`create()` の前に `persist()` を少なくとも 1 回呼んでください。
+`build()` の前に `persist()` を少なくとも 1 回呼んでください。
 :::
 
 各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを使います。
 
 書き込みはすべてのストレージに並列で行い、読み取りは見つかったストレージの前段を逆順に適用してデコードします。
+
+### 分岐 [#builder-fork]
+
+`fork()` で分岐したパイプラインにストレージを追加できます。分岐は `new Branch()` で作ります。分岐先での追加は親パイプラインに漏れません。
+
+以下は、分岐先と親に別々のストレージを登録する例です。
+
+```ts
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder({
+  vars: {},
+  schema: {},
+})
+  .use(new Middleware())
+  .fork(new unikvs.Branch().use(new Middleware()).persist(new Storage()))
+  .persist(new Storage())
+  .build();
+```
 
 ## クライアント操作 [#client-operations]
 
@@ -137,14 +156,14 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
 <Tabs>
   <Tab title="型で指定">
     ```ts
-    import { UniKvs, type PlainValue, type StreamValue } from "unikvs";
+    import * as unikvs from "unikvs";
 
-    const kvs = UniKvs.config<{
-      message: PlainValue<string>;
-      logs: StreamValue<Uint8Array>;
+    const kvs = new unikvs.Builder<{
+      message: unikvs.PlainValue<string>;
+      logs: unikvs.StreamValue<Uint8Array>;
     }>()
       .persist(storage)
-      .create();
+      .build();
 
     await kvs.open();
 
@@ -159,17 +178,17 @@ const bytes = await kvs.get("foo", { signal: ac.signal });
   </Tab>
   <Tab title="スキーマで指定">
     ```ts
-    import { PlainValue, StreamValue, UniKvs } from "unikvs";
+    import * as unikvs from "unikvs";
     import * as v from "valibot";
 
-    const kvs = UniKvs.config({
+    const kvs = new unikvs.Builder({
       schema: {
-        message: PlainValue(v.string()),
-        logs: StreamValue(v.instance(Uint8Array)),
+        message: unikvs.PlainValue(v.string()),
+        logs: unikvs.StreamValue(v.instance(Uint8Array)),
       },
     })
       .persist(storage)
-      .create();
+      .build();
 
     await kvs.open();
 
@@ -203,16 +222,16 @@ kvs.get("logs");
 | `has`・`delete` | 配列形式の場合のみ、キーを検証します。 | `InvalidInputError`  |
 
 ```ts
-import { PlainValue, UniKvs } from "unikvs";
+import * as unikvs from "unikvs";
 import * as v from "valibot";
 
-const kvs = UniKvs.config({
+const kvs = new unikvs.Builder({
   schema: {
-    message: PlainValue(v.pipe(v.string(), v.minLength(1))),
+    message: unikvs.PlainValue(v.pipe(v.string(), v.minLength(1))),
   },
 })
   .persist(storage)
-  .create();
+  .build();
 
 await kvs.open();
 
@@ -277,7 +296,7 @@ await using (const valueStream = await kvs.stream("logs")) {
 `vars` で操作ごとの設定を渡します。
 
 ```ts
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>().persist(storage).create();
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>().persist(storage).build();
 
 await kvs.open();
 
@@ -303,14 +322,14 @@ await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
 
 ## 基本 vars [#base-vars]
 
-`config({ vars })` で基本 vars を設定します。各操作の `vars` と結合して使われ、操作側のキーが勝ちます。`Record`・`Map`・エントリー配列・`Variables` のいずれでも指定できます。不正な形式は `InvalidInputError` を投げます。
+`new Builder({ vars })` で基本 vars を設定します。各操作の `vars` と結合して使われ、操作側のキーが勝ちます。`Record`・`Map`・エントリー配列・`Variables` のいずれでも指定できます。不正な形式は `InvalidInputError` を投げます。
 
 ```ts
-const kvs = UniKvs.config<{ foo: Value<Uint8Array> }>({
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>({
   vars: { region: "us-east-1" },
 })
   .persist(storage)
-  .create();
+  .build();
 
 await kvs.open();
 
@@ -321,16 +340,16 @@ await kvs.set("foo", new Uint8Array([1]), {
 // 実行時変数は { region: "eu-west-1", traceId: "abc-123" } になります
 ```
 
-`create()` は呼び出し時点の基本 vars をスナップショットします。ビルダーの再利用は可能で、後からビルダーを変更しても作成済みのクライアントには影響しません。
+`build()` は呼び出し時点の基本 vars をスナップショットします。ビルダーの再利用は可能で、後からビルダーを変更しても作成済みのクライアントには影響しません。
 
-ビルダー (`UniKvsConfig`) とクライアント (`UniKvs`) の両方に、基本 vars を変更する同名メソッドがあります。いずれも自身を返すため、メソッドチェーンできます。クライアント側の変更は以降の操作から有効になります。
+ビルダー (`Builder`) とクライアント (`UniKvs`) の両方に、基本 vars を変更する同名メソッドがあります。いずれも自身を返すため、メソッドチェーンできます。クライアント側の変更は以降の操作から有効になります。
 
 ### `setVars` [#base-vars-set-vars]
 
 基本 vars を丸ごと置き換えます。
 
 ```ts
-config.setVars({ region: "us-east-1" });
+builder.setVars({ region: "us-east-1" });
 kvs.setVars({ region: "us-east-1" });
 ```
 
@@ -340,7 +359,7 @@ kvs.setVars({ region: "us-east-1" });
 
 ```ts
 // 基本 vars が { a: 1, b: 2 } のとき
-config.assignVars({ b: 20, c: 3 });
+builder.assignVars({ b: 20, c: 3 });
 // 基本 vars は { a: 1, b: 20, c: 3 } になります
 ```
 
@@ -350,7 +369,7 @@ config.assignVars({ b: 20, c: 3 });
 
 ```ts
 // 基本 vars が { a: 1, b: 2 } のとき
-config.defaultsVars({ b: 20, c: 3 });
+builder.defaultsVars({ b: 20, c: 3 });
 // 基本 vars は { a: 1, b: 2, c: 3 } になります
 ```
 
@@ -364,24 +383,24 @@ const bytes = await kvs.get("foo", { repair: true });
 
 ## エラー [#errors]
 
-| エラークラス                       | 説明                                     |
-| ---------------------------------- | ---------------------------------------- |
-| `KeyNotFoundError`                 | キーがどのストレージにもありません。     |
-| `UniKvsIsNotOpenError`             | 未オープンで操作しました。               |
-| `UniKvsIsOpenError`                | オープン済みで再度 `open()` しました。   |
-| `MissingStorageError`              | ストレージ未登録で `create()` しました。 |
-| `StorageIsNotOpenError`            | ストレージが未オープンです。             |
-| `TransformerIsNotOpenError`        | ミドルウェアが未オープンです。           |
-| `PluginOperationAggregateError`    | 複数プラグイン操作の集約エラーです。     |
-| `InvalidInputError`                | 入力形式が不正です。                     |
-| `InvalidOutputError`               | 出力形式が不正です。                     |
-| `ReadableStreamNotSupportedError`  | 読み取りストリーム未対応です。           |
-| `WritableStreamNotSupportedError`  | 書き込みストリーム未対応です。           |
-| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。       |
-| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。         |
+| エラークラス                       | 説明                                    |
+| ---------------------------------- | --------------------------------------- |
+| `KeyNotFoundError`                 | キーがどのストレージにもありません。    |
+| `UniKvsIsNotOpenError`             | 未オープンで操作しました。              |
+| `UniKvsIsOpenError`                | オープン済みで再度 `open()` しました。  |
+| `MissingStorageError`              | ストレージ未登録で `build()` しました。 |
+| `StorageIsNotOpenError`            | ストレージが未オープンです。            |
+| `TransformerIsNotOpenError`        | ミドルウェアが未オープンです。          |
+| `PluginOperationAggregateError`    | 複数プラグイン操作の集約エラーです。    |
+| `InvalidInputError`                | 入力形式が不正です。                    |
+| `InvalidOutputError`               | 出力形式が不正です。                    |
+| `ReadableStreamNotSupportedError`  | 読み取りストリーム未対応です。          |
+| `WritableStreamNotSupportedError`  | 書き込みストリーム未対応です。          |
+| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。      |
+| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。        |
 
 ```ts
-import { KeyNotFoundError } from "unikvs";
+import * as unikvs from "unikvs";
 
 try {
   const bytes = await kvs.get("missing-key");
@@ -404,13 +423,13 @@ try {
   <Tab title="最小例">
     ```ts
     import { Memory } from "@unikvs/memory";
-    import { UniKvs, type Value } from "unikvs";
+    import * as unikvs from "unikvs";
 
-    const kvs = UniKvs.config<{
-      foo: Value<Uint8Array>;
+    const kvs = new unikvs.Builder<{
+      foo: unikvs.Value<Uint8Array>;
     }>()
       .persist(new Memory())
-      .create();
+      .build();
 
     await kvs.open();
 
@@ -429,16 +448,16 @@ try {
   <Tab title="検証あり">
     ```ts
     import { Memory } from "@unikvs/memory";
-    import { PlainValue, UniKvs } from "unikvs";
+    import * as unikvs from "unikvs";
     import * as v from "valibot";
 
-    const kvs = UniKvs.config({
+    const kvs = new unikvs.Builder({
       schema: {
-        foo: PlainValue(v.instance(Uint8Array)),
+        foo: unikvs.PlainValue(v.instance(Uint8Array)),
       },
     })
       .persist(new Memory())
-      .create();
+      .build();
 
     await kvs.open();
 

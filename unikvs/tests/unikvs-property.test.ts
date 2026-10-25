@@ -5,7 +5,8 @@ import { type Random, forCasesAsync } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
+import type { IUniKvsBuilder } from "../src/unikvs-builder.js";
 import type { Value, PlainValue, StreamValue } from "../src/value-schemas.js";
 import { streamOf, collectBytes, FakeStreamMiddleware } from "./_helpers.js";
 
@@ -51,9 +52,9 @@ describe("UniKvs - 決定的ファズ: CRUD モデル", () => {
   test("ランダムな操作列が Map リファレンスと一致する", async ({ expect }) => {
     // 実行と検証：
     await forCasesAsync(SEED, 40, async (rng) => {
-      await using kvs = UniKvs.config<Record<string, PlainValue<string>>>()
+      await using kvs = new Builder<Record<string, PlainValue<string>>>()
         .persist(new Memory())
-        .create();
+        .build();
       await kvs.open();
 
       const model = new Map<string, string>();
@@ -108,9 +109,9 @@ describe("UniKvs - 決定的ファズ: ストリーム往復", () => {
   test("ランダムなチャンク分割でもバイト列が一致する", async ({ expect }) => {
     // 実行と検証：
     await forCasesAsync(SEED + 1, 40, async (rng) => {
-      await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+      await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
         .persist(new Memory())
-        .create();
+        .build();
       await kvs.open();
 
       const bytes = rng.bytes(rng.int(0, 64));
@@ -147,24 +148,26 @@ describe("UniKvs - 決定的ファズ: ミドルウェア構成", () => {
       const usePassthrough = rng.bool();
       const bytes = rng.bytes(rng.int(0, 128));
 
-      let config = UniKvs.config<{ data: Value<Uint8Array<ArrayBuffer>> }>();
+      let builder: IUniKvsBuilder<{ data: Value<Uint8Array<ArrayBuffer>> }> = new Builder<{
+        data: Value<Uint8Array<ArrayBuffer>>;
+      }>();
 
       // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (useChecksum) {
-        config = config.use(new ChecksumSha256());
+        builder = builder.use(new ChecksumSha256());
       }
 
       // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (compression !== "none") {
-        config = config.use(new Compression(compression));
+        builder = builder.use(new Compression(compression));
       }
 
       // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (usePassthrough) {
-        config = config.use(new FakeStreamMiddleware("pass-through"));
+        builder = builder.use(new FakeStreamMiddleware("pass-through"));
       }
 
-      await using kvs = config.persist(new Memory()).create();
+      await using kvs = builder.persist(new Memory()).build();
       await kvs.open();
       await kvs.set("data", bytes);
       expect([...(await kvs.get("data"))]).toEqual([...bytes]);

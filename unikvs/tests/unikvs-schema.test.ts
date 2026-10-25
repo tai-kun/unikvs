@@ -9,9 +9,9 @@ import {
   InvalidOutputError,
   PluginOperationAggregateError,
 } from "../src/errors.js";
+import { Builder } from "../src/index.js";
 import type { IValueStream as ValueStream } from "../src/types.js";
-import type { UniKvsSchema } from "../src/unikvs-config.js";
-import UniKvs from "../src/unikvs.js";
+import type { UniKvsSchema } from "../src/unikvs-builder.js";
 import { Value, PlainValue, StreamValue } from "../src/value-schemas.js";
 import { mapOf, collect, streamOf } from "./_helpers.js";
 
@@ -37,7 +37,7 @@ function getAggregateReasons(
   return (ex?.meta.errors ?? []).map((error) => error.reason);
 }
 
-describe("UniKvs.config - schema からの型推論", () => {
+describe("new Builder - schema からの型推論", () => {
   test("オブジェクト形式の schema からキーと値のマッピングが推論される", () => {
     // 準備：
     const schema = {
@@ -78,14 +78,14 @@ describe("UniKvs.config - schema からの型推論", () => {
 
   test("推論された型で set・get・stream を呼び出せる", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config({
+    await using kvs = new Builder({
       schema: {
         logs: StreamValue(instance(Uint8Array)),
         message: PlainValue(string()),
       },
     })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -110,11 +110,11 @@ describe("UniKvs.config - schema からの型推論", () => {
 describe("UniKvs - schema による入出力検証", () => {
   test("PlainValue のスキーマが set の入力と get の出力を検証する", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config({
+    await using kvs = new Builder({
       schema: { message: PlainValue(pipe(string(), minLength(1))) },
     })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -130,9 +130,9 @@ describe("UniKvs - schema による入出力検証", () => {
   }) => {
     // 準備：
     const storage = new Memory();
-    await using kvs = UniKvs.config({ schema: { message: PlainValue(string()) } })
+    await using kvs = new Builder({ schema: { message: PlainValue(string()) } })
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
     mapOf(storage).set("message", 42);
 
@@ -143,9 +143,9 @@ describe("UniKvs - schema による入出力検証", () => {
   test("StreamValue のスキーマが書き込みチャンクを検証する", async ({ expect }) => {
     // 準備：
     const storage = new Memory();
-    await using kvs = UniKvs.config({ schema: { logs: StreamValue(instance(Uint8Array)) } })
+    await using kvs = new Builder({ schema: { logs: StreamValue(instance(Uint8Array)) } })
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -166,7 +166,7 @@ describe("UniKvs - schema による入出力検証", () => {
   test("StreamValue のスキーマが読み取りチャンクを検証する", async ({ expect }) => {
     // 準備：
     const storage = new Memory();
-    await using kvs = UniKvs.config({
+    await using kvs = new Builder({
       schema: {
         logs: StreamValue(
           pipe(
@@ -177,7 +177,7 @@ describe("UniKvs - schema による入出力検証", () => {
       },
     })
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
     mapOf(storage).set("logs", new Uint8Array());
 
@@ -192,9 +192,9 @@ describe("UniKvs - schema による入出力検証", () => {
     expect,
   }) => {
     // 準備：
-    await using kvs = UniKvs.config({ schema: { logs: StreamValue(instance(Uint8Array)) } })
+    await using kvs = new Builder({ schema: { logs: StreamValue(instance(Uint8Array)) } })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     const source = streamOf([new Uint8Array([1, 2])]);
@@ -217,9 +217,9 @@ describe("UniKvs - schema による入出力検証", () => {
 
   test("Value のスキーマはプレーン値とストリームのどちらも扱える", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config({ schema: { data: Value(instance(Uint8Array)) } })
+    await using kvs = new Builder({ schema: { data: Value(instance(Uint8Array)) } })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -256,10 +256,10 @@ describe("UniKvs - schema による入出力検証", () => {
     }
 
     const storage = new Memory();
-    await using kvs = UniKvs.config({ schema: { message: PlainValue(string()) } })
+    await using kvs = new Builder({ schema: { message: PlainValue(string()) } })
       .use(new JsonMiddleware())
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -274,9 +274,9 @@ describe("UniKvs - schema による入出力検証", () => {
     expect,
   }) => {
     // 準備：
-    await using kvs = UniKvs.config({ schema: { message: PlainValue(string()) } })
+    await using kvs = new Builder({ schema: { message: PlainValue(string()) } })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -289,14 +289,14 @@ describe("UniKvs - schema による入出力検証", () => {
 
   test("配列形式のスキーマはキーをキースキーマで照合する", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config({
+    await using kvs = new Builder({
       schema: [
         [pipe(string(), regex(/^msg-.+/u)), PlainValue(string())],
         [pipe(string(), regex(/^img-.+/u)), StreamValue(instance(Uint8Array))],
       ],
     })
       .persist(new Memory())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -312,7 +312,7 @@ describe("UniKvs - schema による入出力検証", () => {
 
   test("スキーマ定義が不正なとき InvalidInputError を投げる", ({ expect }) => {
     // 準備と実行と検証。
-    expect(() => UniKvs.config({ schema: { message: "invalid" } } as never)).toThrow(
+    expect(() => new Builder({ schema: { message: "invalid" } } as never)).toThrow(
       InvalidInputError,
     );
   });

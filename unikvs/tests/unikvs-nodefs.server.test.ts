@@ -4,7 +4,7 @@ import { NodeFs } from "@unikvs/fs.node";
 import { test, describe, afterEach } from "vite-plus/test";
 
 import { PluginOperationAggregateError } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { Value } from "../src/value-schemas.js";
 
 const roots: string[] = [];
@@ -33,9 +33,9 @@ describe("UniKvs + NodeFs", () => {
 
   test("通常のキーで set / get / clear / has が動作する", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(new NodeFs(createRoot()))
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -49,9 +49,9 @@ describe("UniKvs + NodeFs", () => {
 
   test("パストラバーサル系のキーは拒否される", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(new NodeFs(createRoot()))
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -69,9 +69,9 @@ describe("UniKvs + NodeFs", () => {
   test("ストリーム書き込み中断時、既存データは無傷で一時ファイルも残らない", async ({ expect }) => {
     // 準備：
     const root = createRoot("-abort");
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(new NodeFs(root))
-      .create();
+      .build();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([1, 1, 1]));
 
@@ -99,9 +99,9 @@ describe("UniKvs + NodeFs", () => {
 
   test("同一キーへの並行書き込みでも破損しない", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(new NodeFs(createRoot("-race")))
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：

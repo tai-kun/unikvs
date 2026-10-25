@@ -1,7 +1,7 @@
 import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { sourceFrom, captureRejection, createGetContext, createHasContext } from "@unikvs/testing";
-import { type Value, type StreamValue, UniKvs } from "unikvs";
+import { type Value, type UniKvs, type StreamValue, Builder } from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import { TombstoneNotFoundError } from "../src/errors.js";
@@ -27,7 +27,7 @@ async function createSoftDeleteKvs(options?: SoftDeleteOptions): Promise<{
 }> {
   const inner = new Memory();
   const softDelete = new SoftDelete(inner, options);
-  const kvs = UniKvs.config<TestMapping>().use(softDelete).persist(softDelete).create();
+  const kvs = new Builder<TestMapping>().use(softDelete).persist(softDelete).build();
   await kvs.open();
 
   return {

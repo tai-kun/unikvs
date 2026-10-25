@@ -3,9 +3,10 @@ import { Memory } from "@unikvs/memory";
 import { pipe, string, instance, transform } from "valibot";
 import { test, describe, expectTypeOf } from "vite-plus/test";
 
+import { Branch, Builder } from "../src/index.js";
 import type { IValueStream as ValueStream } from "../src/types.js";
-import UniKvsConfig, { type IUniKvsConfigBuilder } from "../src/unikvs-config.js";
-import UniKvs from "../src/unikvs.js";
+import { type IUniKvsBuilder } from "../src/unikvs-builder.js";
+import type UniKvs from "../src/unikvs.js";
 import type {
   SetValue,
   KeyofKeyValueMappingHasPlainValue,
@@ -106,12 +107,12 @@ class BytesStorage implements IStorage<Bytes> {
  * `fork` による `never` 伝播の検証に使用します。
  */
 type $BuilderChunkInput<T> =
-  T extends IUniKvsConfigBuilder<any, any, any, infer TChunkInput, any, any, any, any, any>
+  T extends IUniKvsBuilder<any, any, any, infer TChunkInput, any, any, any, any, any>
     ? TChunkInput
     : never;
 
 function createTypedKvs(): UniKvs<Mapping> {
-  return UniKvs.config<Mapping>().persist(new Memory()).create();
+  return new Builder<Mapping>().persist(new Memory()).build();
 }
 
 /**
@@ -126,7 +127,7 @@ function getCustom(ctx: IPipelineContext<{ readonly count: number }>): number {
 }
 
 describe("UniKvs - 型: 基本契約", () => {
-  test("config の型引数が create の戻り値に反映される", () => {
+  test("Builder の型引数が build の戻り値に反映される", () => {
     // 準備：
     const kvs = createTypedKvs();
 
@@ -242,14 +243,14 @@ describe("UniKvs - 型: 不正な組み合わせ", () => {
 describe("UniKvs - 型: schema とミドルウェアの推論", () => {
   test("schema からキーと値の型が推論される", () => {
     // 準備：
-    const kvs = UniKvs.config({
+    const kvs = new Builder({
       schema: {
         logs: StreamValue(instance(Uint8Array)),
         message: PlainValue(string()),
       },
     })
       .persist(new Memory())
-      .create();
+      .build();
 
     // 検証：
     expectTypeOf(typeOf(() => kvs.get("message"))).toEqualTypeOf<Promise<string>>();
@@ -260,11 +261,11 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
 
   test("transform スキーマでは入力型と出力型が区別される", ({ expect }) => {
     // 準備：
-    const kvs = UniKvs.config({
+    const kvs = new Builder({
       schema: { count: PlainValue(pipe(string(), transform(Number))) },
     })
       .persist(new Memory())
-      .create();
+      .build();
 
     // 検証 : get は変換後の number、set は変換前の string を受け付ける。
     expectTypeOf(typeOf(() => kvs.get("count"))).toEqualTypeOf<Promise<number>>();
@@ -277,28 +278,28 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
 
   test("use と persist は接続可能な組み合わせのみを型で受け付ける", ({ expect }) => {
     // 実行と検証 : string を number に変換するチェーンは number ストレージへ接続できる。
-    UniKvs.config<{ foo: PlainValue<string> }>()
+    new Builder<{ foo: PlainValue<string> }>()
       .use(new StringToNumber())
       .persist(new NumberStorage())
-      .create();
+      .build();
 
     // 実行と検証：
     const storage = new NumberStorage();
     // @ts-expect-error 変換なしでは number 専用ストレージへ接続できない
-    const invalidConfig = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage);
-    expect(invalidConfig).toBeInstanceOf(UniKvsConfig);
+    const invalidConfig = new Builder<{ foo: PlainValue<string> }>().persist(storage);
+    expect(invalidConfig).toBeInstanceOf(Builder);
   });
 
-  test("fork のみでは Builder のまま型レベルで create できない", ({ expect }) => {
+  test("fork のみでは Builder のまま型レベルで build できない", ({ expect }) => {
     // 準備：
-    const branch = UniKvs.branch().persist(new Memory());
-    const config = UniKvs.config().fork(branch);
+    const branch = new Branch().persist(new Memory());
+    const builder = new Builder().fork(branch);
 
     // 実行と検証：
-    // @ts-expect-error: Builder には create がありません。
-    expect(typeOf(() => config.create())).toBeUndefined();
-    // @ts-expect-error: Branch には create がありません。
-    expect(typeOf(() => branch.create())).toBeUndefined();
+    // @ts-expect-error: Builder には build がありません。
+    expect(typeOf(() => builder.build())).toBeUndefined();
+    // @ts-expect-error: Branch には build がありません。
+    expect(typeOf(() => branch.build())).toBeUndefined();
   });
 });
 
@@ -307,31 +308,31 @@ describe("UniKvs - 型: fork の互換検査", () => {
     // 準備 : 親は string、分岐先頭は number のため不適合です。
     // 先頭のみを検査します。
     // 中間以降は検査しません。
-    const branch = UniKvs.branch().persist(new NumberStorage());
+    const branch = new Branch().persist(new NumberStorage());
 
     // 実行と検証：
     // @ts-expect-error 親出力 string は分岐入力 number を受容できない
-    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(branch))).toBeUndefined();
+    expect(typeOf(() => new Builder<{ foo: PlainValue<string> }>().fork(branch))).toBeUndefined();
   });
 
   test("persist なし分岐は型エラーにならない", ({ expect }) => {
     // 準備 : 空分岐は no-op のため検査を素通りします。
-    const empty = UniKvs.branch();
+    const empty = new Branch();
 
     // 実行と検証 : 空分岐の fork は型エラーになりません。
-    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
+    expect(typeOf(() => new Builder<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
 
     // 準備 : 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
-    const unused = UniKvs.branch().use(new StringToNumber());
+    const unused = new Branch().use(new StringToNumber());
 
     // 実行と検証 : persist なし分岐の不一致は型エラーになりません。
-    expect(typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused))).toBeUndefined();
+    expect(typeOf(() => new Builder<{ foo: PlainValue<number> }>().fork(unused))).toBeUndefined();
   });
 
   test("分岐内の never は親のチャンク型に伝播する", () => {
     // 準備 : 親はストリーム対応、分岐は非ストリーム対応です。
-    const builder = UniKvs.config<{ data: Value<Bytes> }>().fork(
-      UniKvs.branch().persist(new BytesStorage()),
+    const builder = new Builder<{ data: Value<Bytes> }>().fork(
+      new Branch().persist(new BytesStorage()),
     );
 
     // 検証 : 親チャンク入力は `never` になります。
@@ -340,12 +341,12 @@ describe("UniKvs - 型: fork の互換検査", () => {
 
   test("ストリーム対応の分岐では親のチャンク型を保つ", () => {
     // 準備：
-    const builder = UniKvs.config<{ logs: StreamValue<Bytes> }>()
-      .fork(UniKvs.branch().persist(new Memory()))
+    const builder = new Builder<{ logs: StreamValue<Bytes> }>()
+      .fork(new Branch().persist(new Memory()))
       .persist(new Memory());
 
     // 検証 : fork 後も persist と create が型レベルでつながります。
-    expectTypeOf(typeOf(() => builder.create())).toExtend<UniKvs<{ logs: StreamValue<Bytes> }>>();
+    expectTypeOf(typeOf(() => builder.build())).toExtend<UniKvs<{ logs: StreamValue<Bytes> }>>();
   });
 });
 

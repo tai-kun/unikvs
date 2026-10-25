@@ -20,7 +20,7 @@ type BranchDestination = {
 
 /**
  * `UniKvsBranch` のインスタンスごとの内部状態です。
- * ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、別モジュールの `UniKvsConfig` から内部アクセサー経由で参照できます。
+ * ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、別モジュールの `UniKvsBuilder` から内部アクセサー経由で参照できます。
  * `branchStates` 自体は外部に公開しません。
  */
 export type BranchState = {
@@ -49,7 +49,7 @@ export const branchStates: WeakMap<IUniKvsBranch, BranchState> = /* #__PURE__ */
  * 分岐先のスナップショットを返します。
  *
  * 親の `fork` で接頭辞付加するために使用します。
- * `UniKvs.branch()` で作成された分岐以外の値が渡されたときは例外を投げます。
+ * `new Branch()` で作成された分岐以外の値が渡されたときは例外を投げます。
  * 外部からは使用しません。
  *
  * @param branch スナップショットを取得する分岐です。
@@ -60,7 +60,7 @@ export function getBranchDestinationsForFork(branch: IUniKvsBranch): BranchDesti
   const state = branchStates.get(branch);
 
   if (!state) {
-    throw new TypeError("fork() expects a branch created by UniKvs.branch().");
+    throw new TypeError("fork() expects a branch created by new Branch().");
   }
 
   // コピーを返します。親の fork で接頭辞を付けても、元の分岐は変更されません。

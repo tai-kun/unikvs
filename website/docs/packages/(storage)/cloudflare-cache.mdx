@@ -53,13 +53,13 @@ Workers の Cache API binding にバイト列を保存するストレージで�
 
 ```ts
 import { CloudflareCache } from "@unikvs/cloudflare-cache";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{
-  foo: Value<Uint8Array>;
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
 }>()
   .persist(new CloudflareCache())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("foo", new Uint8Array([0, 1, 2]));

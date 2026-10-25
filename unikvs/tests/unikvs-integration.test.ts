@@ -3,7 +3,7 @@ import { Compression } from "@unikvs/compression";
 import { Memory } from "@unikvs/memory";
 import { test, describe } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { Value } from "../src/value-schemas.js";
 import { mapOf, isGzip, streamOf, sha256Hex, collectBytes } from "./_helpers.js";
 
@@ -11,11 +11,11 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
   test("書き込み時に検証・圧縮され、読み取り時に検証・解凍される", async ({ expect }) => {
     // 準備：
     const memory = new Memory();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("gzip"))
       .persist(memory)
-      .create();
+      .build();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
     const sum = await sha256Hex(data);
     const vars = { "@unikvs/checksum:sha256": sum };
@@ -35,11 +35,11 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
 
   test("チェックサム不一致の読み取りは ChecksumMismatchError になる", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("gzip"))
       .persist(new Memory())
-      .create();
+      .build();
     const data = new Uint8Array([1, 2, 3]);
     const sum = await sha256Hex(data);
     const wrongSum = await sha256Hex(new Uint8Array([9, 9]));
@@ -55,11 +55,11 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
   test("ストリーム書き込みとストリーム読み取りでも圧縮と検証が機能する", async ({ expect }) => {
     // 準備：
     const memory = new Memory();
-    await using kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("gzip"))
       .persist(memory)
-      .create();
+      .build();
     const data = Uint8Array.from({ length: 1024 }, (_, i) => i % 253);
     const sum = await sha256Hex(data);
     const vars = { "@unikvs/checksum:sha256": sum };
@@ -80,11 +80,11 @@ describe("UniKvs - Compression + Checksum + Memory", () => {
 
   test("チェックサム未指定でも既定では検証をスキップして往復できる", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("deflate"))
       .persist(new Memory())
-      .create();
+      .build();
     const data = new Uint8Array([4, 5, 6]);
     await kvs.open();
 
@@ -101,12 +101,12 @@ describe("UniKvs - 複数ミドルウェアと複数ストレージ", () => {
     // 準備：
     const storage1 = new Memory();
     const storage2 = new Memory();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new Compression("gzip"))
       .persist(storage1)
       .use(new Compression("deflate"))
       .persist(storage2)
-      .create();
+      .build();
     const data = Uint8Array.from({ length: 64 }, (_, i) => i);
     await kvs.open();
 

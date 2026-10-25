@@ -7,7 +7,13 @@ import {
   createHasContext,
   createSetContext,
 } from "@unikvs/testing";
-import { type Value, type StreamValue, UniKvs, PluginOperationAggregateError } from "unikvs";
+import {
+  type Value,
+  type UniKvs,
+  type StreamValue,
+  Builder,
+  PluginOperationAggregateError,
+} from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import {
@@ -45,10 +51,10 @@ async function createReadOnlyKvs(
     storage.write(createSetContext(key) as IStorage.WriteContext, value);
   }
 
-  const kvs = UniKvs.config<TestMapping>()
+  const kvs = new Builder<TestMapping>()
     .use(new ReadOnly({ allowDelete }))
     .persist(storage)
-    .create();
+    .build();
   await kvs.open();
 
   return {

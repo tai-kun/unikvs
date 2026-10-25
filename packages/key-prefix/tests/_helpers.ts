@@ -1,5 +1,5 @@
 import { Memory } from "@unikvs/memory";
-import { type PlainValue, type StreamValue, UniKvs } from "unikvs";
+import { type UniKvs, type PlainValue, type StreamValue, Builder } from "unikvs";
 
 import KeyPrefix, { type KeyPrefixOptions } from "../src/key-prefix.js";
 
@@ -41,10 +41,10 @@ export async function createPrefixedKvs(
   storage: Memory;
 }> {
   const storage = new Memory();
-  const kvs = UniKvs.config<TestMapping>()
+  const kvs = new Builder<TestMapping>()
     .use(new KeyPrefix(prefix, options))
     .persist(storage)
-    .create();
+    .build();
   await kvs.open();
 
   return {

@@ -32,12 +32,12 @@ import { V8Serde } from "@unikvs/v8-serde";
 ```ts
 import { V8Serde } from "@unikvs/v8-serde";
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ item: Value<{ readonly id: number }> }>()
+const kvs = new unikvs.Builder<{ item: unikvs.Value<{ readonly id: number }> }>()
   .use(new V8Serde())
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("item", { id: 1 });

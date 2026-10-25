@@ -2,7 +2,8 @@ import { AllowRepair } from "@unikvs/allow-repair";
 import { type IStorage, type IMiddleware, RepairNotAllowedError } from "@unikvs/core";
 import { vi, test, describe } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Branch, Builder } from "../src/index.js";
+import type UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -137,11 +138,11 @@ function createMiddleSharedKvs(
   c2: FakeStorage,
   server: FakeStorage,
 ): UniKvs<{ foo: PlainValue<string> }> {
-  return UniKvs.config<{ foo: PlainValue<string> }>()
+  return new Builder<{ foo: PlainValue<string> }>()
     .use(ar)
-    .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
+    .fork(new Branch().use(a).use(b).persist(c1).use(c).persist(c2))
     .persist(server)
-    .create();
+    .build();
 }
 
 describe("UniKvs - パイプライングラフの中間共有", () => {
@@ -183,11 +184,11 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(ar)
-      .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
+      .fork(new Branch().use(a).use(b).persist(c1).use(c).persist(c2))
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -243,11 +244,11 @@ describe("UniKvs - パイプライングラフの中間共有", () => {
     const c2 = new FakeStreamStorage("c2");
     const server = new FakeStreamStorage("server");
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(ar)
-      .fork(UniKvs.branch().use(a).use(b).persist(c1).use(c).persist(c2))
+      .fork(new Branch().use(a).use(b).persist(c1).use(c).persist(c2))
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.map.set("logs", chunks);
 
@@ -293,12 +294,12 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(ar)
       .persist(c1)
       .persist(c2)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     server.map.set("foo", "value");
@@ -330,12 +331,12 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(c1)
       .use(ar)
       .persist(c2)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     server.map.set("foo", "value");
@@ -370,12 +371,12 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(c1)
       .use(ar)
       .persist(c2)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     server.map.set("foo", "value");
@@ -415,12 +416,12 @@ describe("UniKvs - 書き戻しの並列性", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(ar)
       .persist(c1)
       .persist(c2)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     server.map.set("foo", "value");
@@ -452,11 +453,11 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     // 準備：
     const middleware = new CountingOnClearMiddleware("dup");
     const storage = new FakeStorage("s");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    const kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
 
     // 実行：
     await kvs.open();
@@ -487,11 +488,11 @@ describe("UniKvs - 重複インスタンスのライフサイクル", () => {
     const middleware = new CountingOnClearMiddleware("shared");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    const kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
-      .fork(UniKvs.branch().use(middleware).persist(s1))
+      .fork(new Branch().use(middleware).persist(s1))
       .persist(s2)
-      .create();
+      .build();
 
     // 実行：
     await kvs.open();
@@ -519,11 +520,11 @@ describe("UniKvs - 共有節のキー写像", () => {
     const middleware = new CountingMapKeyMiddleware("shared");
     const a = new FakeStorage("a");
     const b = new FakeStorage("b");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(a)
       .persist(b)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -542,11 +543,11 @@ describe("UniKvs - スキップされた部分木の後始末", () => {
     const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     const cache = new CancelObservableStorage("cache");
     const server = new CancelObservableStorage("server");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(outer)
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.entries.set("logs", [new Uint8Array([1])]);
 
@@ -578,11 +579,11 @@ describe("UniKvs - デコードの後始末", () => {
     const outer = new FakeStreamMiddleware<Uint8Array>("outer");
     inner.errors["decodeStream"] = new Error("decodeStream failed");
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(inner)
       .use(outer)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証 : 失敗は伝播し、構築済みパイプ経由でソースが解放される。
@@ -602,11 +603,11 @@ describe("UniKvs - 書き戻し中の読み取り", () => {
     cache.writeGate = writeGate;
 
     const chunks = [new Uint8Array([1]), new Uint8Array([2, 3])];
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(ar)
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.map.set("logs", chunks);
 

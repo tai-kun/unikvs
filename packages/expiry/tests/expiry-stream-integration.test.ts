@@ -2,7 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { Json } from "@unikvs/json";
 import { Memory } from "@unikvs/memory";
 import { sourceFrom, createStreamContext } from "@unikvs/testing";
-import { type StreamValue, UniKvs } from "unikvs";
+import { type UniKvs, type StreamValue, Builder } from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
@@ -30,7 +30,7 @@ async function createStreamKvs(now: () => number): Promise<{
     expiresAt: number;
   }[] = [];
   const storage = new Memory();
-  const kvs = UniKvs.config<TestMapping>()
+  const kvs = new Builder<TestMapping>()
     .use(
       new Expiry({
         now,
@@ -41,7 +41,7 @@ async function createStreamKvs(now: () => number): Promise<{
     )
     .use(new Json())
     .persist(storage)
-    .create();
+    .build();
   await kvs.open();
 
   return {

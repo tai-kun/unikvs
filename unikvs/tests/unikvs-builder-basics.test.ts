@@ -2,7 +2,7 @@ import type { IMiddleware } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
 import { MissingStorageError } from "../src/errors.js";
-import UniKvsConfig from "../src/unikvs-config.js";
+import { Branch, Builder } from "../src/index.js";
 import UniKvs from "../src/unikvs.js";
 import { FakeStorage } from "./_helpers.js";
 
@@ -25,32 +25,32 @@ class MockMiddleware implements IMiddleware {
   }
 }
 
-describe("UniKvsConfig", () => {
-  test("ストレージを追加して create すると UniKvs インスタンスが生成される", ({ expect }) => {
+describe("Builder", () => {
+  test("ストレージを追加して build すると UniKvs インスタンスが生成される", ({ expect }) => {
     // 準備：
-    const config = new UniKvsConfig(UniKvs);
+    const builder = new Builder();
 
     // 実行：
-    const result = config.persist(new FakeStorage()).create();
+    const result = builder.persist(new FakeStorage()).build();
 
     // 検証：
     expect(result).toBeInstanceOf(UniKvs);
   });
 
-  test("ストレージが未登録のとき create で MissingStorageError を投げる", ({ expect }) => {
+  test("ストレージが未登録のとき build で MissingStorageError を投げる", ({ expect }) => {
     // 準備：
-    const config = new UniKvsConfig(UniKvs);
+    const builder = new Builder();
 
     // 実行と検証：
-    expect(() => config.create()).toThrow(MissingStorageError);
+    expect(() => builder.build()).toThrow(MissingStorageError);
   });
 
   test("ミドルウェアを追加してからストレージを追加できる", ({ expect }) => {
     // 準備：
-    const config = new UniKvsConfig(UniKvs);
+    const builder = new Builder();
 
     // 実行：
-    const result = config.use(new MockMiddleware()).persist(new FakeStorage()).create();
+    const result = builder.use(new MockMiddleware()).persist(new FakeStorage()).build();
 
     // 検証：
     expect(result).toBeInstanceOf(UniKvs);
@@ -58,14 +58,14 @@ describe("UniKvsConfig", () => {
 
   test("ストレージを追加した後でもミドルウェアを追加できる", ({ expect }) => {
     // 準備：
-    const config = new UniKvsConfig(UniKvs);
+    const builder = new Builder();
 
     // 実行：
-    const result = config
+    const result = builder
       .persist(new FakeStorage())
       .use(new MockMiddleware())
       .persist(new FakeStorage())
-      .create();
+      .build();
 
     // 検証：
     expect(result).toBeInstanceOf(UniKvs);
@@ -73,10 +73,10 @@ describe("UniKvsConfig", () => {
 
   test("ミドルウェアとストレージを交互に追加できる", ({ expect }) => {
     // 準備：
-    const config = new UniKvsConfig(UniKvs);
+    const builder = new Builder();
 
     // 実行：
-    const result = config
+    const result = builder
       .use(new MockMiddleware())
       .use(new MockMiddleware())
       .persist(new FakeStorage())
@@ -84,19 +84,20 @@ describe("UniKvsConfig", () => {
       .persist(new FakeStorage())
       .use(new MockMiddleware())
       .persist(new FakeStorage())
-      .create();
+      .build();
 
     // 検証：
     expect(result).toBeInstanceOf(UniKvs);
   });
 
-  test("fork 先で登録したストレージのみでも create できる", async ({ expect }) => {
+  test("fork 先で登録したストレージのみでも build できる", async ({ expect }) => {
     // 準備：
     const storage = new FakeStorage();
 
     // 実行：
-    // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
-    await using kvs = new UniKvsConfig(UniKvs).fork(UniKvs.branch().persist(storage)).create();
+    // new Builder() からは fork のみでは型レベルで build できないため直接構築します。
+    // @ts-expect-error: persist なしでは型レベルで build できないが、実行時は動作します。
+    await using kvs = new Builder().fork(new Branch().persist(storage)).build();
     await kvs.open();
     await kvs.set("foo", "x");
 
@@ -110,11 +111,11 @@ describe("UniKvsConfig", () => {
     // 準備：
     const mainStorage = new FakeStorage();
     const branchStorage = new FakeStorage();
-    // UniKvs.config() からは fork のみでは型レベルで create できないため直接構築します。
-    await using kvs = new UniKvsConfig(UniKvs)
+    // new Builder() からは fork のみでは型レベルで build できないため直接構築します。
+    await using kvs = new Builder()
       .persist(mainStorage)
-      .fork(UniKvs.branch().use(new MockMiddleware()).persist(branchStorage))
-      .create();
+      .fork(new Branch().use(new MockMiddleware()).persist(branchStorage))
+      .build();
     await kvs.open();
 
     // 実行：

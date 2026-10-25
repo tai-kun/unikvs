@@ -91,11 +91,11 @@ Redis に保存するストレージです。利用者は `open()` で開き、�
 
 ```ts
 import { Redis } from "@unikvs/redis.node";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ file: Value<Uint8Array> }>()
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
   .persist(new Redis("redis://127.0.0.1:6379"))
-  .create();
+  .build();
 
 await kvs.open();
 

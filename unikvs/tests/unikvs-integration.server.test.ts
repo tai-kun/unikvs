@@ -8,7 +8,7 @@ import { NodeFs } from "@unikvs/fs.node";
 import { Memory } from "@unikvs/memory";
 import { test, describe, afterEach } from "vite-plus/test";
 
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { Value } from "../src/value-schemas.js";
 import { mapOf, isGzip, streamOf, sha256Hex, collectBytes } from "./_helpers.js";
 
@@ -39,10 +39,10 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備：
     const root = createRoot();
     const memory = new Memory();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -58,10 +58,10 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備：
     const root = createRoot();
     const memory = new Memory();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
-      .create();
+      .build();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([4, 5, 6]));
     mapOf(memory).delete("foo");
@@ -77,13 +77,13 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備：
     const root = createRoot();
     const memory = new Memory();
-    await using kvs = UniKvs.config<{
+    await using kvs = new Builder<{
       bar: Value<Uint8Array<ArrayBuffer>>;
       foo: Value<Uint8Array<ArrayBuffer>>;
     }>()
       .persist(memory)
       .persist(new NodeFs(root))
-      .create();
+      .build();
     await kvs.open();
     await kvs.set("foo", new Uint8Array([1]));
     await kvs.set("bar", new Uint8Array([2]));
@@ -108,10 +108,10 @@ describe("UniKvs + Memory + NodeFs", () => {
     // 準備：
     const root = createRoot();
     const memory = new Memory();
-    await using kvs = UniKvs.config<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ logs: Value<Uint8Array<ArrayBuffer>> }>()
       .persist(memory)
       .persist(new NodeFs(root))
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -139,11 +139,11 @@ describe("UniKvs + Memory + NodeFs", () => {
   test("Compression + Checksum + NodeFs で検証付きの圧縮往復ができる", async ({ expect }) => {
     // 準備：
     const root = createRoot();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("gzip"))
       .persist(new NodeFs(root))
-      .create();
+      .build();
     const data = Uint8Array.from({ length: 256 }, (_, i) => i % 251);
     const sum = await sha256Hex(data);
     const vars = { "@unikvs/checksum:sha256": sum };
@@ -160,11 +160,11 @@ describe("UniKvs + Memory + NodeFs", () => {
   test("チェックサム不一致の読み取りは ChecksumMismatchError になる", async ({ expect }) => {
     // 準備：
     const root = createRoot();
-    await using kvs = UniKvs.config<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
+    await using kvs = new Builder<{ foo: Value<Uint8Array<ArrayBuffer>> }>()
       .use(new ChecksumSha256())
       .use(new Compression("gzip"))
       .persist(new NodeFs(root))
-      .create();
+      .build();
     const data = new Uint8Array([7, 8, 9]);
     const sum = await sha256Hex(data);
     const wrongSum = "0".repeat(64);

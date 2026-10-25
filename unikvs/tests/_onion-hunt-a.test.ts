@@ -8,8 +8,7 @@ import {
   PluginOperationAggregateError,
   MiddlewareNextCalledMultipleTimesError,
 } from "../src/errors.js";
-import UniKvsConfig from "../src/unikvs-config.js";
-import UniKvs from "../src/unikvs.js";
+import { Branch, Builder } from "../src/index.js";
 import type { PlainValue } from "../src/value-schemas.js";
 import { Gate, FakeStorage, withTimeout, FakeMiddleware } from "./_helpers.js";
 
@@ -294,12 +293,12 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const s3 = new FakeStorage("s3");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(s1))
-      .fork(UniKvs.branch().use(c).persist(s2))
+      .fork(new Branch().use(b).persist(s1))
+      .fork(new Branch().use(c).persist(s2))
       .persist(s3)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -328,11 +327,11 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const a = new OrderMiddleware("A", log, "encode");
     const b = new GatedPostEncodeMiddleware("B");
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
       .use(b)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行 : B の post を保留したまま set を開始する。
@@ -359,12 +358,12 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const b = new PreThrowEncodeMiddleware("B", log, "B-pre-boom");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
       .use(b)
       .persist(s1)
       .persist(s2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -389,11 +388,12 @@ describe("UniKvs - プレーン encode のオニオン順序", () => {
     const c = new PostThrowEncodeMiddleware("C", log, "C-post-boom");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    await using kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new Builder()
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(s1))
-      .fork(UniKvs.branch().use(c).persist(s2))
-      .create();
+      .fork(new Branch().use(b).persist(s1))
+      .fork(new Branch().use(c).persist(s2))
+      // @ts-expect-error: persist なしでは型レベルで build できないが、実行時は動作します。
+      .build();
     await kvs.open();
 
     // 実行：
@@ -426,11 +426,12 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     const c = new OrderMiddleware("C", log, "decode");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    await using kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new Builder()
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(s1))
-      .fork(UniKvs.branch().use(c).persist(s2))
-      .create();
+      .fork(new Branch().use(b).persist(s1))
+      .fork(new Branch().use(c).persist(s2))
+      // @ts-expect-error: persist なしでは型レベルで build できないが、実行時は動作します。
+      .build();
     await kvs.open();
     s2.map.set("foo", "value");
 
@@ -454,11 +455,11 @@ describe("UniKvs - プレーン decode のオニオン順序", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
       .use(b)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -484,13 +485,13 @@ describe("UniKvs - プレーン repair のオニオン順序", () => {
     const c1 = new FakeStorage("c1");
     const c2 = new FakeStorage("c2");
     const server = new FakeStorage("server");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new AllowRepair())
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(c1))
-      .fork(UniKvs.branch().use(c).persist(c2))
+      .fork(new Branch().use(b).persist(c1))
+      .fork(new Branch().use(c).persist(c2))
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.map.set("foo", "value");
 
@@ -549,11 +550,11 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
 
     const reader = new Reader("Reader");
     const writer = new Writer("Writer");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(reader)
       .use(writer)
       .persist(new FakeStorage())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -593,11 +594,11 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new RootWriter("RootWriter"))
       .use(leafReader)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -659,11 +660,12 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
     const parent = new ParentMiddleware("Parent");
     const b = new BranchMiddleware("B", "b", "from-b", "c");
     const c = new BranchMiddleware("C", "c", "from-c", "b");
-    await using kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new Builder()
       .use(parent)
-      .fork(UniKvs.branch().use(b).persist(new FakeStorage("s1")))
-      .fork(UniKvs.branch().use(c).persist(new FakeStorage("s2")))
-      .create();
+      .fork(new Branch().use(b).persist(new FakeStorage("s1")))
+      .fork(new Branch().use(c).persist(new FakeStorage("s2")))
+      // @ts-expect-error: persist なしでは型レベルで build できないが、実行時は動作します。
+      .build();
     await kvs.open();
 
     // 実行：
@@ -697,12 +699,12 @@ describe("UniKvs - use のオニオン実行", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
       .use(b)
       .use(c)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -750,11 +752,11 @@ describe("UniKvs - use のオニオン実行", () => {
     }
 
     const reader = new Reader("Reader");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(reader)
       .use(new Writer("Writer"))
       .persist(new FakeStorage())
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -779,11 +781,11 @@ describe("UniKvs - use のオニオン実行", () => {
     }
 
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new FakeMiddleware("A"))
       .use(new PostThrowUse("B"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -825,11 +827,11 @@ describe("UniKvs - use のオニオン実行", () => {
     // 準備 : A が next() を呼ばずに戻る。
     const downstream = new FakeMiddleware("B");
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new NoNextUseMiddleware("A"))
       .use(downstream)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行 : フェイルクローズのため操作は失敗する。
@@ -856,11 +858,11 @@ describe("UniKvs - use のオニオン実行", () => {
     // 準備：
     const downstream = new FakeMiddleware("B");
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(new DoubleNextUseMiddleware("A"))
       .use(downstream)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -889,11 +891,11 @@ describe("UniKvs - use のオニオン実行", () => {
     const fireAndForget = new FireAndForgetUseMiddleware("A");
     const slow = new GatedUseMiddleware("B");
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(fireAndForget)
       .use(slow)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行 : B の use を保留したまま set を開始する。
@@ -936,12 +938,12 @@ describe("UniKvs - mapKey の適用タイミング", () => {
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
     const s3 = new FakeStorage("s3");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(s1))
-      .fork(UniKvs.branch().use(c).persist(s2))
+      .fork(new Branch().use(b).persist(s1))
+      .fork(new Branch().use(c).persist(s2))
       .persist(s3)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -963,11 +965,12 @@ describe("UniKvs - mapKey の適用タイミング", () => {
     const c = new CountingMapKeyMiddleware("C");
     const s1 = new FakeStorage("s1");
     const s2 = new FakeStorage("s2");
-    await using kvs = new UniKvsConfig(UniKvs)
+    await using kvs = new Builder()
       .use(a)
-      .fork(UniKvs.branch().use(b).persist(s1))
-      .fork(UniKvs.branch().use(c).persist(s2))
-      .create();
+      .fork(new Branch().use(b).persist(s1))
+      .fork(new Branch().use(c).persist(s2))
+      // @ts-expect-error: persist なしでは型レベルで build できないが、実行時は動作します。
+      .build();
     await kvs.open();
     s1.map.set("p:p:foo", "value");
 
@@ -1004,10 +1007,10 @@ describe("UniKvs - use 実行中の abort", () => {
       const storage = new FakeStorage(`s-${action}`);
       storage.map.set("foo", "stored");
 
-      await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+      await using kvs = new Builder<{ foo: PlainValue<string> }>()
         .use(use)
         .persist(storage)
-        .create();
+        .build();
       await kvs.open();
 
       const ac = new AbortController();
@@ -1059,10 +1062,7 @@ describe("UniKvs - use 実行中の abort", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "stored");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .use(use)
-      .persist(storage)
-      .create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().use(use).persist(storage).build();
     await kvs.open();
 
     const ac = new AbortController();
@@ -1104,10 +1104,10 @@ describe("UniKvs - プレーン実行の post 中の abort", () => {
 
     const middleware = new PostAbort("PostAbort");
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -1140,10 +1140,10 @@ describe("UniKvs - プレーン実行の post 中の abort", () => {
     const storage = new FakeStorage();
     storage.map.set("foo", "value");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .use(middleware)
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：

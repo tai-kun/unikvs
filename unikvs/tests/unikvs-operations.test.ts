@@ -5,7 +5,8 @@ import {
   InvalidInputError,
   PluginOperationAggregateError,
 } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
+import type UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import { streamOf, FakeStorage } from "./_helpers.js";
 
@@ -16,7 +17,7 @@ function createDynamicKvs(storage = new FakeStorage()): {
   kvs: UniKvs<Record<string, PlainValue<string>>>;
   storage: FakeStorage;
 } {
-  const kvs = UniKvs.config<Record<string, PlainValue<string>>>().persist(storage).create();
+  const kvs = new Builder<Record<string, PlainValue<string>>>().persist(storage).build();
 
   return {
     kvs,
@@ -281,7 +282,7 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>().persist(storage).build();
     await kvs.open();
 
     // 実行と検証 : schema なしでは検証されないが、値はプレーン書き込みとして扱われる。
@@ -294,7 +295,7 @@ describe("UniKvs - stream キーと plain キーの入力の取り違え (schema
   }) => {
     // 準備：
     const storage = new FakeStorage();
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>().persist(storage).build();
     await kvs.open();
 
     // 実行：

@@ -60,14 +60,14 @@ import { Debug } from "@unikvs/debug";
 import { configureSync } from "@logtape/logtape";
 import { Debug } from "@unikvs/debug";
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
 configureSync({
   sinks: { console: (record) => console.log(record.message) },
   loggers: [{ category: ["@unikvs/debug"], sinks: ["console"], lowestLevel: "debug" }],
 });
 
-const kvs = UniKvs.config<{ foo: Value<string> }>()
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<string> }>()
   .use(
     new Debug({
       keyFilter: (key) => key.startsWith("foo"),
@@ -75,7 +75,7 @@ const kvs = UniKvs.config<{ foo: Value<string> }>()
     }),
   )
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("foo", "hello");

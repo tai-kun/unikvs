@@ -59,10 +59,10 @@ export {
 export type * from "./types.js";
 
 export type * from "./unikvs-branch.js";
-export { default as UniKvsBranch } from "./unikvs-branch.js";
+export { default as UniKvsBranch, default as Branch } from "./unikvs-branch.js";
 
-export type * from "./unikvs-config.js";
-export { default as UniKvsConfig } from "./unikvs-config.js";
+export type * from "./unikvs-builder.js";
+export { default as UniKvsBuilder, default as Builder } from "./unikvs-builder.js";
 
 export type * from "./unikvs.js";
 export { default as UniKvs } from "./unikvs.js";

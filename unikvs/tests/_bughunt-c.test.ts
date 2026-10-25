@@ -5,7 +5,7 @@ import { vi, test, describe } from "vite-plus/test";
 
 import { logger, repairLogger } from "../src/_logger.js";
 import { MiddlewareNextNotCalledError, PluginOperationAggregateError } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -38,10 +38,10 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
       }
     };
 
-    const config = UniKvs.config<{ a: PlainValue<string> }>().persist(storage);
-    const a = config.create();
-    const b = config.create();
-    const c = config.create();
+    const builder = new Builder<{ a: PlainValue<string> }>().persist(storage);
+    const a = builder.build();
+    const b = builder.build();
+    const c = builder.build();
     await a.open();
     await b.open();
     await c.open();
@@ -57,7 +57,7 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
     expect(storage.callsOf("open")).toHaveLength(1);
 
     // 検証 : 新しいクライアントは先頭から open し直せる。
-    const d = config.create();
+    const d = builder.build();
     await d.open();
     await d.set("a", "value");
     await expect(d.get("a")).resolves.toBe("value");
@@ -80,10 +80,10 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
       }
     };
 
-    const config = UniKvs.config<{ a: PlainValue<string> }>().persist(storage);
-    const a = config.create();
-    const b = config.create();
-    const c = config.create();
+    const builder = new Builder<{ a: PlainValue<string> }>().persist(storage);
+    const a = builder.build();
+    const b = builder.build();
+    const c = builder.build();
     await a.open();
 
     storage.isOpen = false;
@@ -120,7 +120,7 @@ describe("UniKvs - 3 クライアント以上が共有するプラグインの�
   }) => {
     // 準備：
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
+    const kvs = new Builder<{ a: PlainValue<string> }>().persist(storage).build();
     await kvs.open();
 
     const reason = new Error("close aborted");
@@ -167,10 +167,7 @@ describe("UniKvs - ミドルウェアの close 回復", () => {
       }
     };
 
-    const kvs = UniKvs.config<{ foo: PlainValue<string> }>()
-      .use(middleware)
-      .persist(storage)
-      .create();
+    const kvs = new Builder<{ foo: PlainValue<string> }>().use(middleware).persist(storage).build();
     await kvs.open();
 
     // 実行と検証 : retry も失敗するが、参照は保持されて実体は開いたまま。
@@ -205,7 +202,7 @@ describe("UniKvs - 外部で開かれたプラグインは管理対象外", () =
     const storage = new FakeStorage();
     storage.isOpen = true;
 
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>().persist(storage).create();
+    const kvs = new Builder<{ a: PlainValue<string> }>().persist(storage).build();
 
     // 実行：
     await kvs.open();
@@ -229,10 +226,7 @@ describe("UniKvs - 外部で開かれたプラグインは管理対象外", () =
     middleware.isOpen = true;
 
     const storage = new FakeStorage();
-    const kvs = UniKvs.config<{ a: PlainValue<string> }>()
-      .use(middleware)
-      .persist(storage)
-      .create();
+    const kvs = new Builder<{ a: PlainValue<string> }>().use(middleware).persist(storage).build();
 
     // 実行：
     await kvs.open();
@@ -277,12 +271,12 @@ describe("UniKvs - stream repair の next 後失敗", () => {
 
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new AllowRepair())
       .use(new ThrowAfterNextStreamMiddleware("PostFailStream"))
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
@@ -323,12 +317,12 @@ describe("UniKvs - stream repair の next 後失敗", () => {
 
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new AllowRepair())
       .use(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     const chunks = [new Uint8Array([1]), new Uint8Array([2])];
@@ -363,12 +357,12 @@ describe("UniKvs - stream repair の next 後失敗", () => {
 
     const cache = new FakeStreamStorage("cache");
     const server = new FakeStreamStorage("server");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new AllowRepair())
       .use(new DenyAfterNextStreamMiddleware("DenyAfterNextStream"))
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
     server.map.set("logs", [new Uint8Array([1])]);
 
@@ -391,13 +385,13 @@ describe("UniKvs - stream repair の next 後失敗", () => {
     const broken = new FakeStreamMiddleware<Uint8Array>("broken");
     broken.errors["encodeStream"] = new Error("child setup failed");
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new AllowRepair())
       .use(new FakeStreamMiddleware<Uint8Array>("parent"))
       .use(broken)
       .persist(cache)
       .persist(server)
-      .create();
+      .build();
     await kvs.open();
 
     server.map.set("logs", [new Uint8Array([1])]);
@@ -419,7 +413,7 @@ describe("UniKvs - close とストリーム操作の競合", () => {
   }) => {
     // 準備：
     const storage = new FakeStreamStorage();
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    const kvs = new Builder<{ logs: StreamValue<Uint8Array> }>().persist(storage).build();
     await kvs.open();
     await kvs.set("logs", streamOf([new Uint8Array([1]), new Uint8Array([2])]));
 
@@ -455,7 +449,7 @@ describe("UniKvs - close とストリーム操作の競合", () => {
       entered.resolve();
     };
 
-    const kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>().persist(storage).create();
+    const kvs = new Builder<{ logs: StreamValue<Uint8Array> }>().persist(storage).build();
     await kvs.open();
 
     let cancelCount = 0;
@@ -524,10 +518,10 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
       },
     });
     const storage = new FakeStreamStorage();
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new WrapThenThrowStreamMiddleware("WrapThenThrow"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -573,10 +567,10 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     const storage = new CancelObservableReadStorage("cancelaware");
     storage.map.set("logs", [new Uint8Array([1])]);
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new WrapThenThrowDecodeMiddleware("WrapThenThrowDecode"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -625,10 +619,10 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
     const storage = new CancelObservableReadStorage("cancelaware-abort-after-next");
     storage.map.set("logs", [new Uint8Array([1])]);
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new AbortAfterNextDecodeMiddleware("AbortAfterNextDecode"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -664,10 +658,10 @@ describe("UniKvs - ミドルウェア失敗時のソース解放", () => {
       },
     });
     const storage = new FakeStreamStorage();
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .use(new WrapWithoutNextStreamMiddleware("WrapWithoutNext"))
       .persist(storage)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：

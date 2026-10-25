@@ -2,15 +2,13 @@ import { Memory } from "@unikvs/memory";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { PlainValue } from "../src/value-schemas.js";
 
 describe("UniKvs + Memory", () => {
   test("set した値は複製される (ミューテーションが反映されない)", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: PlainValue<Uint8Array> }>()
-      .persist(new Memory())
-      .create();
+    await using kvs = new Builder<{ foo: PlainValue<Uint8Array> }>().persist(new Memory()).build();
     await kvs.open();
 
     // 実行：
@@ -26,7 +24,7 @@ describe("UniKvs + Memory", () => {
 
   test("存在しないキーへの操作", async ({ expect }) => {
     // 準備：
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>().persist(new Memory()).create();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>().persist(new Memory()).build();
     await kvs.open();
 
     // 実行と検証：

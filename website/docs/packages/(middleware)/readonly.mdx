@@ -48,25 +48,25 @@ import { ReadOnly } from "@unikvs/readonly";
 ```ts
 import { Memory } from "@unikvs/memory";
 import { ReadOnly } from "@unikvs/readonly";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
 const storage = new Memory();
-const writer = UniKvs.config<{
-  foo: Value<Uint8Array>;
+const writer = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
 }>()
   .persist(storage)
-  .create();
+  .build();
 
 await writer.open();
 await writer.set("foo", new Uint8Array([0, 1, 2]));
 await writer.close();
 
-const kvs = UniKvs.config<{
-  foo: Value<Uint8Array>;
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
 }>()
   .use(new ReadOnly())
   .persist(storage)
-  .create();
+  .build();
 
 await kvs.open();
 

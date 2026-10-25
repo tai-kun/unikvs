@@ -49,7 +49,7 @@ import { Tracing } from "@unikvs/tracing";
 ```ts
 import { Memory } from "@unikvs/memory";
 import { Tracing, type TracerLike } from "@unikvs/tracing";
-import { UniKvs, type PlainValue } from "unikvs";
+import * as unikvs from "unikvs";
 
 const tracer: TracerLike = {
   startSpan: (name) => ({
@@ -59,10 +59,10 @@ const tracer: TracerLike = {
   }),
 };
 
-const kvs = UniKvs.config<{ k1: PlainValue<string> }>()
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
   .use(new Tracing({ tracer }))
   .persist(new Memory())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("k1", "hello");

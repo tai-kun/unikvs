@@ -53,9 +53,11 @@ import { NodeFs } from "@unikvs/fs.node";
 
 ```ts
 import { NodeFs } from "@unikvs/fs.node";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{ file: Value<Uint8Array> }>().persist(new NodeFs("./data")).create();
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new NodeFs("./data"))
+  .build();
 
 await kvs.open();
 

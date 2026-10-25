@@ -2,7 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError, PluginOperationAggregateError } from "../src/errors.js";
-import UniKvs from "../src/unikvs.js";
+import { Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -52,10 +52,10 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -94,10 +94,10 @@ describe("UniKvs - 複数ストレージへの並列書き込み", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = new Builder<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -128,10 +128,10 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     storage1.errors["write"] = failure;
 
     const storage2 = new FakeStorage("storage2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -171,10 +171,10 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["write"] = failure;
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -211,11 +211,11 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     storage2.errors["write"] = new Error("write failed 2");
 
     const storage3 = new FakeStorage("storage3");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
       .persist(storage3)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -244,10 +244,10 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.errors["onOtherWriteError"] = new Error("notification failed");
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -268,10 +268,10 @@ describe("UniKvs - 書き込みエラーの集約と通知", () => {
 
     const storage1 = new FailGetWritableStorage("storage1");
     const storage2 = new FakeStreamStorage("storage2");
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -293,10 +293,10 @@ describe("UniKvs - 削除系エラーの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
 
-    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = new Builder<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -319,10 +319,10 @@ describe("UniKvs - 削除系エラーの集約", () => {
     storage2.errors["delete"] = new Error("delete failed 2");
     storage2.map.set("a", "1");
 
-    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = new Builder<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -346,10 +346,10 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     // 準備：
     const storage1 = new ExistsErrorStorage("storage1");
     const storage2 = new ExistsErrorStorage("storage2");
-    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = new Builder<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -386,10 +386,10 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.hook = storage1.hook;
 
-    await using kvs = UniKvs.config<{ logs: StreamValue<Uint8Array> }>()
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：
@@ -410,10 +410,10 @@ describe("UniKvs - 読み取りフォールバックの集約", () => {
     const storage2 = new FakeStorage("storage2");
     storage2.map.set("a", "1");
 
-    await using kvs = UniKvs.config<{ a: PlainValue<string> }>()
+    await using kvs = new Builder<{ a: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行と検証：
@@ -440,10 +440,10 @@ describe("UniKvs - 複数ストレージの中断", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     const controller = new AbortController();
@@ -494,10 +494,10 @@ describe("UniKvs - 複数ストレージの中断", () => {
       }
     };
 
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     const controller = new AbortController();
@@ -528,10 +528,10 @@ describe("UniKvs - ストレージごとの独立したチェーン", () => {
     // 準備：
     const storage1 = new FakeStorage("storage1");
     const storage2 = new FakeStorage("storage2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(storage1)
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
     await kvs.set("foo", "value");
     storage1.map.delete("foo");
@@ -579,10 +579,10 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
     }
 
     const storage2 = new FakeStorage("storage2");
-    await using kvs = UniKvs.config<{ foo: PlainValue<string> }>()
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
       .persist(new BareStorage())
       .persist(storage2)
-      .create();
+      .build();
     await kvs.open();
 
     // 実行：

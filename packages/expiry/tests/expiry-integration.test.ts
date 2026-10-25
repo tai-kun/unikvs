@@ -1,7 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { captureRejection, createGetContext, createHasContext } from "@unikvs/testing";
-import { type PlainValue, UniKvs } from "unikvs";
+import { type UniKvs, type PlainValue, Builder } from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError, ExpiryInvalidExpiresAtError } from "../src/errors.js";
@@ -51,7 +51,7 @@ async function createExpiryKvs(
     expiresAt: number;
   }[] = [];
   const storage = new Memory();
-  const kvs = UniKvs.config<TestMapping>()
+  const kvs = new Builder<TestMapping>()
     .use(
       new Expiry({
         ...options,
@@ -62,7 +62,7 @@ async function createExpiryKvs(
       }),
     )
     .persist(storage)
-    .create();
+    .build();
   await kvs.open();
 
   return {

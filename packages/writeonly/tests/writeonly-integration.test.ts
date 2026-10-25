@@ -1,7 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
 import { captureRejection, createGetContext, createHasContext } from "@unikvs/testing";
-import { type Value, UniKvs, PluginOperationAggregateError } from "unikvs";
+import { type Value, type UniKvs, Builder, PluginOperationAggregateError } from "unikvs";
 import { test, describe } from "vite-plus/test";
 
 import {
@@ -28,7 +28,7 @@ async function createWriteOnlyKvs(options?: WriteOnlyOptions): Promise<{
   storage: Memory;
 }> {
   const storage = new Memory();
-  const kvs = UniKvs.config<TestMapping>().use(new WriteOnly(options)).persist(storage).create();
+  const kvs = new Builder<TestMapping>().use(new WriteOnly(options)).persist(storage).build();
   await kvs.open();
 
   return {

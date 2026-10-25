@@ -71,13 +71,13 @@ Vercel Runtime Cache を使うストレージです。
 
 ```ts
 import { VercelRuntimeCache } from "@unikvs/vercel-runtime-cache";
-import { UniKvs, type Value } from "unikvs";
+import * as unikvs from "unikvs";
 
-const kvs = UniKvs.config<{
-  foo: Value<string>;
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<string>;
 }>()
   .persist(new VercelRuntimeCache())
-  .create();
+  .build();
 
 await kvs.open();
 await kvs.set("foo", "hello");

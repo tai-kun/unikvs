@@ -18,7 +18,8 @@ import {
   WritableStreamNotSupportedError,
 } from "../src/errors.js";
 import * as index from "../src/index.js";
-import UniKvsConfig from "../src/unikvs-config.js";
+import UniKvsBranch from "../src/unikvs-branch.js";
+import UniKvsBuilder from "../src/unikvs-builder.js";
 import UniKvs from "../src/unikvs.js";
 
 describe("index のエクスポート", () => {
@@ -26,8 +27,14 @@ describe("index のエクスポート", () => {
     expect(index.UniKvs).toBe(UniKvs);
   });
 
-  test("UniKvsConfig がエクスポートされている", ({ expect }) => {
-    expect(index.UniKvsConfig).toBe(UniKvsConfig);
+  test("Builder がエクスポートされている", ({ expect }) => {
+    expect(index.Builder).toBe(UniKvsBuilder);
+    expect(index.UniKvsBuilder).toBe(UniKvsBuilder);
+  });
+
+  test("Branch がエクスポートされている", ({ expect }) => {
+    expect(index.Branch).toBe(UniKvsBranch);
+    expect(index.UniKvsBranch).toBe(UniKvsBranch);
   });
 
   test("値のスキーマ定義がエクスポートされている", ({ expect }) => {
