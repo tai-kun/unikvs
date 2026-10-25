@@ -1,18 +1,6 @@
-import { type ErrorMeta, I18nErrorBase, setErrorMessage, type ErrorOptions } from "i18n-error-base";
-
-// -------------------------------------------------------------------------------------------------
-//
-// ユーティリティー
-//
-// -------------------------------------------------------------------------------------------------
+import { type ErrorMeta, type ErrorOptions, I18nErrorBase, setErrorMessage } from "i18n-error-base";
 
 export { type ErrorMeta, type ErrorOptions, setErrorMessage };
-
-// -------------------------------------------------------------------------------------------------
-//
-// 基本
-//
-// -------------------------------------------------------------------------------------------------
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-base)
@@ -21,24 +9,12 @@ export class ErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends I18nErrorBase<TMeta> {}
 
-// -------------------------------------------------------------------------------------------------
-//
-// 境界エラー
-//
-// -------------------------------------------------------------------------------------------------
-
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors-invalid-usage)
  */
 export class InvalidUsageErrorBase<
   TMeta extends ErrorMeta | undefined = ErrorMeta | undefined,
 > extends ErrorBase<TMeta> {}
-
-// -------------------------------------------------------------------------------------------------
-//
-// 共通エラー
-//
-// -------------------------------------------------------------------------------------------------
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
@@ -69,7 +45,7 @@ export class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorMeta> {
   public constructor(args: KeyNotFoundErrorArgs) {
     const { key, ...options } = args;
     const meta: KeyNotFoundErrorMeta = { key };
-    super(meta, ({ key }) => `Key not found: ${key}`, options);
+    super(meta, ({ key: messageKey }) => `Key not found: ${messageKey}`, options);
   }
 }
 
@@ -108,10 +84,14 @@ export class UnsupportedRuntimeError extends InvalidUsageErrorBase<UnsupportedRu
    */
   public constructor(args: UnsupportedRuntimeErrorArgs) {
     const { name, runtime, ...options } = args;
-    const meta: UnsupportedRuntimeErrorMeta = { name, runtime };
+    const meta: UnsupportedRuntimeErrorMeta = {
+      name,
+      runtime,
+    };
     super(
       meta,
-      ({ name, runtime }) => `${name} can only be used in the ${runtime} runtime`,
+      ({ name: errorName, runtime: errorRuntime }) =>
+        `${errorName} can only be used in the ${errorRuntime} runtime`,
       options,
     );
   }
@@ -154,8 +134,8 @@ export class InvalidPartSizeError extends ErrorBase<InvalidPartSizeErrorMeta> {
     const meta: InvalidPartSizeErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `Invalid part size ${String(actual)} was specified in the vars. A non-integer or non-positive value cannot be used as a multipart upload part size, causing unpredictable upload behavior. Specify a positive integer in bytes such as ${5 * 1024 * 1024}.`,
+      ({ actual: actualValue }) =>
+        `Invalid part size ${String(actualValue)} was specified in the vars. A non-integer or non-positive value cannot be used as a multipart upload part size, causing unpredictable upload behavior. Specify a positive integer in bytes such as ${5 * 1024 * 1024}.`,
       options,
     );
   }
@@ -199,8 +179,8 @@ export class StorageAbortedError extends ErrorBase<StorageAbortedErrorMeta> {
     const meta: StorageAbortedErrorMeta = { key };
     super(
       meta,
-      ({ key }) =>
-        `The upload for key ${JSON.stringify(key)} was aborted before it started because the given abort signal was already signaled. Starting an upload with an already aborted signal can never succeed, so it is rejected immediately. Pass a signal that is not aborted, or check the signal state before requesting a writable stream.`,
+      ({ key: abortedKey }) =>
+        `The upload for key ${JSON.stringify(abortedKey)} was aborted before it started because the given abort signal was already signaled. Starting an upload with an already aborted signal can never succeed, so it is rejected immediately. Pass a signal that is not aborted, or check the signal state before requesting a writable stream.`,
       options,
     );
   }
@@ -213,11 +193,11 @@ setErrorMessage(
   "ja",
 );
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// 書き戻しの拒否
+// 書き戻しの拒否。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
@@ -250,7 +230,8 @@ export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> 
     const meta: RepairNotAllowedErrorMeta = { names: Object.freeze([...names]) };
     super(
       meta,
-      ({ names }) => `Repair writes via "${formatRepairNames(names)}" are not allowed`,
+      ({ names: repairNames }) =>
+        `Repair writes via "${formatRepairNames(repairNames)}" are not allowed`,
       options,
     );
   }
@@ -260,6 +241,7 @@ export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> 
 // 空のときは不明名を返します。
 function formatRepairNames(names: readonly string[]): string {
   const joined = names.join(", ");
+
   return joined !== "" ? joined : "(unknown)";
 }
 
@@ -268,12 +250,6 @@ setErrorMessage(
   ({ names }) => `"${formatRepairNames(names)}" への書き戻しは許可されていません`,
   "ja",
 );
-
-// -------------------------------------------------------------------------------------------------
-//
-// 変数の読み取り専用違反
-//
-// -------------------------------------------------------------------------------------------------
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core#errors)
@@ -304,7 +280,12 @@ export class ReadonlyVariableError extends InvalidUsageErrorBase<ReadonlyVariabl
   public constructor(args: ReadonlyVariableErrorArgs) {
     const { name, ...options } = args;
     const meta: ReadonlyVariableErrorMeta = { name };
-    super(meta, ({ name }) => `Cannot modify readonly variable: ${JSON.stringify(name)}`, options);
+    super(
+      meta,
+      ({ name: variableName }) =>
+        `Cannot modify readonly variable: ${JSON.stringify(variableName)}`,
+      options,
+    );
   }
 }
 

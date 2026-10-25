@@ -19,7 +19,7 @@ export function concatBytes(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuff
  * concatBytes の別名です。
  * チャンク列を連結する処理がストリーム文脈で呼ばれる場合に使用します。
  */
-export const concatChunks = concatBytes;
+export const concatChunks: typeof concatBytes = concatBytes;
 
 /**
  * 2 つのバイト列が同じ長さで各バイトが一致するかを比較します。
@@ -57,12 +57,15 @@ export function createAllByteValues(size: number): Uint8Array<ArrayBuffer> {
  * 線形合同法による決定的な擬似乱数バイト列を生成します。
  * 偏りのない任意バイナリを大容量で用意するために使用します。
  */
-export function createPseudoRandomBytes(size: number, seed = 0x12345678): Uint8Array<ArrayBuffer> {
+export function createPseudoRandomBytes(
+  size: number,
+  seed = 0x12_34_56_78,
+): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(size);
   let state = seed >>> 0;
 
   for (let index = 0; index < size; index++) {
-    state = (state * 1664525 + 1013904223) >>> 0;
+    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
     bytes[index] = state >>> 24;
   }
 

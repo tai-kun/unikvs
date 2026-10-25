@@ -1,54 +1,79 @@
 import type { IMiddleware } from "@unikvs/core";
-import { forCasesAsync, type Random } from "@unikvs/testing";
 import {
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
+  type Random,
   readAll,
+  createNext,
   sourceFrom,
+  forCasesAsync,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import PassThrough from "../src/passthrough.js";
 
-const SEED = 20260930;
+const SEED = 20_260_930;
 
 /**
  * 透過対象として任意の型の値を決定的に生成します。
  * 参照同一性の検証に使用するため、値オブジェクトや配列も含めます。
  */
 function generateValue(random: Random): unknown {
+  let value: unknown;
+
   switch (random.int(0, 8)) {
     case 0: {
-      return random.bytes(random.uint(32));
+      value = random.bytes(random.uint(32));
+      break;
     }
+
     case 1: {
-      return random.string(random.uint(32));
+      value = random.string(random.uint(32));
+      break;
     }
+
     case 2: {
-      return random.int(-1000, 1000);
+      value = random.int(-1000, 1000);
+      break;
     }
+
     case 3: {
-      return BigInt(random.int(-1000, 1000));
+      value = BigInt(random.int(-1000, 1000));
+      break;
     }
+
     case 4: {
-      return random.bool();
+      value = random.bool();
+      break;
     }
+
     case 5: {
-      return null;
+      value = null;
+      break;
     }
+
     case 6: {
-      return undefined;
+      value = undefined;
+      break;
     }
+
     case 7: {
-      return random.array(random.uint(8), () => random.int(-1000, 1000));
+      value = random.array(random.uint(8), () => random.int(-1000, 1000));
+      break;
     }
+
     default: {
-      return { id: random.int(0, 100), name: random.string(random.uint(8)) };
+      value = {
+        id: random.int(0, 100),
+        name: random.string(random.uint(8)),
+      };
+      break;
     }
   }
+
+  return value;
 }
 
 /**
@@ -97,60 +122,58 @@ async function decodeChunks(
   return readAll(c.destination);
 }
 
-test("ランダムな値でも encode は同一参照を返す", async ({ expect }) => {
-  // 準備
-  const passthrough = new PassThrough();
+describe("ランダム値の透過", () => {
+  test("ランダムな値でも encode は同一参照を返す", async ({ expect }) => {
+    // 準備：
+    const passthrough = new PassThrough();
 
-  // 実行と検証
-  await forCasesAsync(SEED, 100, async (random) => {
-    const value = generateValue(random);
-
-    expect(await encode(passthrough, value)).toBe(value);
+    // 実行と検証：
+    await forCasesAsync(SEED, 100, async (random) => {
+      const value = generateValue(random);
+      expect(await encode(passthrough, value)).toBe(value);
+    });
   });
-});
 
-test("ランダムな値でも decode は同一参照を返す", async ({ expect }) => {
-  // 準備
-  const passthrough = new PassThrough();
+  test("ランダムな値でも decode は同一参照を返す", async ({ expect }) => {
+    // 準備：
+    const passthrough = new PassThrough();
 
-  // 実行と検証
-  await forCasesAsync(SEED, 100, async (random) => {
-    const value = generateValue(random);
-
-    expect(await decode(passthrough, value)).toBe(value);
+    // 実行と検証：
+    await forCasesAsync(SEED, 100, async (random) => {
+      const value = generateValue(random);
+      expect(await decode(passthrough, value)).toBe(value);
+    });
   });
-});
 
-test("ランダムなチャンク列でも encodeStream は順序と参照を保つ", async ({ expect }) => {
-  // 準備
-  const passthrough = new PassThrough();
+  test("ランダムなチャンク列でも encodeStream は順序と参照を保つ", async ({ expect }) => {
+    // 準備：
+    const passthrough = new PassThrough();
 
-  // 実行と検証
-  await forCasesAsync(SEED, 50, async (random) => {
-    const chunks = random.array(random.uint(50), () => generateValue(random));
-    const output = await encodeChunks(passthrough, chunks);
+    // 実行と検証：
+    await forCasesAsync(SEED, 50, async (random) => {
+      const chunks = random.array(random.uint(50), () => generateValue(random));
+      const output = await encodeChunks(passthrough, chunks);
+      expect(output).toHaveLength(chunks.length);
 
-    expect(output).toHaveLength(chunks.length);
-
-    for (const [index, chunk] of output.entries()) {
-      expect(chunk).toBe(chunks[index]);
-    }
+      for (const [index, chunk] of output.entries()) {
+        expect(chunk).toBe(chunks[index]);
+      }
+    });
   });
-});
 
-test("ランダムなチャンク列でも decodeStream は順序と参照を保つ", async ({ expect }) => {
-  // 準備
-  const passthrough = new PassThrough();
+  test("ランダムなチャンク列でも decodeStream は順序と参照を保つ", async ({ expect }) => {
+    // 準備：
+    const passthrough = new PassThrough();
 
-  // 実行と検証
-  await forCasesAsync(SEED, 50, async (random) => {
-    const chunks = random.array(random.uint(50), () => generateValue(random));
-    const output = await decodeChunks(passthrough, chunks);
+    // 実行と検証：
+    await forCasesAsync(SEED, 50, async (random) => {
+      const chunks = random.array(random.uint(50), () => generateValue(random));
+      const output = await decodeChunks(passthrough, chunks);
+      expect(output).toHaveLength(chunks.length);
 
-    expect(output).toHaveLength(chunks.length);
-
-    for (const [index, chunk] of output.entries()) {
-      expect(chunk).toBe(chunks[index]);
-    }
+      for (const [index, chunk] of output.entries()) {
+        expect(chunk).toBe(chunks[index]);
+      }
+    });
   });
 });

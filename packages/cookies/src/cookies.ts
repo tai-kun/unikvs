@@ -1,7 +1,7 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted } from "abort-signal-utils";
 
-import { CookieNotAvailableError, CookieTooLargeError } from "./errors.js";
+import { CookieTooLargeError, CookieNotAvailableError } from "./errors.js";
 
 /**
  * Cookie の `SameSite` 属性です。
@@ -55,8 +55,7 @@ export type CookieAttributes = {
 /**
  * `Cookies` が使う Cookie ストアの最小インターフェースです。
  *
- * 既定では `document.cookie` を使いますが、この形を満たす実装を
- * `store` オプションに渡して差し替えることもできます。
+ * 既定では `document.cookie` を使いますが、この形を満たす実装を `store` オプションに渡して差し替えることもできます。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
  */
@@ -197,7 +196,10 @@ class DocumentCookieStore implements CookieStoreLike {
   }
 
   public delete(name: string, attributes: CookieAttributes): void {
-    this.#document.cookie = serializeSetCookie(name, "", { ...attributes, maxAge: 0 });
+    this.#document.cookie = serializeSetCookie(name, "", {
+      ...attributes,
+      maxAge: 0,
+    });
   }
 
   public keys(): Iterable<string> {
@@ -237,7 +239,8 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#usage)
    */
   public constructor(options: CookiesOptions = {}) {
-    const { cookieAttributes = {}, sizeLimitBytes = DEFAULT_SIZE_LIMIT_BYTES, store } = options;
+    const { store, sizeLimitBytes = DEFAULT_SIZE_LIMIT_BYTES, cookieAttributes = {} } = options;
+
     this.name = "Cookies";
     this.sizeLimitBytes = sizeLimitBytes;
     this.#injectedStore = store;
@@ -262,12 +265,21 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
     return encodeURIComponent(key);
   }
 
-  #encode(data: string | Uint8Array): { readonly payload: string; readonly rawSize: number } {
+  #encode(data: string | Uint8Array): {
+    readonly payload: string;
+    readonly rawSize: number;
+  } {
     if (typeof data === "string") {
-      return { payload: `${STRING_MARKER}${data}`, rawSize: textEncoder.encode(data).length };
+      return {
+        payload: `${STRING_MARKER}${data}`,
+        rawSize: textEncoder.encode(data).length,
+      };
     }
 
-    return { payload: `${BINARY_MARKER}${encodeBase64(data)}`, rawSize: data.byteLength };
+    return {
+      payload: `${BINARY_MARKER}${encodeBase64(data)}`,
+      rawSize: data.byteLength,
+    };
   }
 
   #decode(payload: string): string | Uint8Array {
@@ -301,7 +313,11 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
     const { payload, rawSize } = this.#encode(data);
 
     if (rawSize > this.sizeLimitBytes) {
-      throw new CookieTooLargeError({ key: c.key, actual: rawSize, limit: this.sizeLimitBytes });
+      throw new CookieTooLargeError({
+        key: c.key,
+        limit: this.sizeLimitBytes,
+        actual: rawSize,
+      });
     }
 
     this.#backend().set(

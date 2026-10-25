@@ -1,12 +1,13 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+// oxlint-disable vitest/require-top-level-describe
+import { type ChildProcess, spawn } from "node:child_process";
+import { rmSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext, createOpenContext } from "@unikvs/testing";
-import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
-import { afterAll, beforeAll, test as vitest } from "vitest";
+import { createOpenContext, createCloseContext } from "@unikvs/testing";
+import { waitForPort, acquireFreePort } from "@unikvs/testing/node";
+import { test as vitest, afterAll, beforeAll } from "vite-plus/test";
 
 import S3, { type S3StorageOptions } from "../src/s3.js";
 
@@ -14,7 +15,6 @@ let bucketId = 0;
 let server: ChildProcess | undefined;
 let volumeDir: string;
 let portNumber = 0;
-
 beforeAll(async () => {
   portNumber = await acquireFreePort();
   volumeDir = mkdtempSync(join(tmpdir(), "unikvs-s3-bun-"));
@@ -25,13 +25,16 @@ beforeAll(async () => {
 
   await waitForPort(portNumber);
 });
-
-afterAll(async () => {
+afterAll(() => {
   if (server && !server.killed) {
     server.kill();
   }
+
   if (volumeDir !== undefined) {
-    rmSync(volumeDir, { recursive: true, force: true });
+    rmSync(volumeDir, {
+      force: true,
+      recursive: true,
+    });
   }
 });
 
@@ -40,8 +43,8 @@ afterAll(async () => {
  */
 export function createClientConfig(endpoint: string): S3StorageOptions {
   return {
-    endpoint,
     region: "ap-northeast-1",
+    endpoint,
     accessKeyId: "rustfsadmin",
     secretAccessKey: "rustfsadmin",
   };
@@ -63,29 +66,26 @@ function createBucket(bucket: string): void {
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 export const test = vitest.extend<{
   bucket: string;
-  endpoint: string;
   storage: S3;
+  endpoint: string;
   unauthorizedStorage: S3;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async bucket({}, use) {
     const bucket = `test-bucket-${bucketId++}`;
     createBucket(bucket);
     await use(bucket);
   },
-  // oxlint-disable-next-line no-empty-pattern
-  async endpoint({}, use) {
-    await use(`http://127.0.0.1:${portNumber}`);
-  },
   async storage({ bucket, endpoint }, use) {
     const storage = new S3(bucket, createClientConfig(endpoint));
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await use(storage);
 
     if (storage.isOpen) {
       storage.close(createCloseContext() as IStorage.CloseContext);
     }
+  },
+  async endpoint({}, use) {
+    await use(`http://127.0.0.1:${portNumber}`);
   },
   async unauthorizedStorage({ endpoint }, use) {
     const bucket = `test-unauthorized-bucket-${bucketId++}`;
@@ -97,7 +97,6 @@ export const test = vitest.extend<{
       secretAccessKey: "unauthorized",
     });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await use(storage);
 
     if (storage.isOpen) {

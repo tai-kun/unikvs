@@ -1,6 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
-import { createDecodeContext, createEncodeContext, createNext } from "@unikvs/testing";
-import { describe } from "vitest";
+import { createNext, createDecodeContext, createEncodeContext } from "@unikvs/testing";
+import { describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
 import { createRecordsTest } from "./_helpers.js";
@@ -32,18 +32,18 @@ describe("ログのメタデータ", () => {
     expect,
     records,
   }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await encode(debug, "hello", "greeting");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
-    expect(records[0]!.level).toBe("debug");
-    expect(records[0]!.properties["direction"]).toBe("write");
-    expect(records[0]!.message).toStrictEqual([
+    expect(records.at(0)?.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
+    expect(records.at(0)?.level).toBe("debug");
+    expect(records.at(0)?.properties["direction"]).toBe("write");
+    expect(records.at(0)?.message).toStrictEqual([
       "Data was written: action=",
       "set",
       ", key=",
@@ -56,18 +56,18 @@ describe("ログのメタデータ", () => {
     expect,
     records,
   }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await decode(debug, "hello", "greeting");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
-    expect(records[0]!.level).toBe("debug");
-    expect(records[0]!.properties["direction"]).toBe("read");
-    expect(records[0]!.message).toStrictEqual([
+    expect(records.at(0)?.category).toStrictEqual(["@unikvs/*", "@unikvs/debug"]);
+    expect(records.at(0)?.level).toBe("debug");
+    expect(records.at(0)?.properties["direction"]).toBe("read");
+    expect(records.at(0)?.message).toStrictEqual([
       "Data was read: action=",
       "get",
       ", key=",

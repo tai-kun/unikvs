@@ -1,12 +1,12 @@
 import type { IStorage } from "@unikvs/core";
 import { Json } from "@unikvs/json";
 import { Memory } from "@unikvs/memory";
-import { createStreamContext, sourceFrom } from "@unikvs/testing";
-import { UniKvs, type StreamValue } from "unikvs";
-import { describe, test } from "vitest";
+import { sourceFrom, createStreamContext } from "@unikvs/testing";
+import { type StreamValue, UniKvs } from "unikvs";
+import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
-import Expiry from "../src/expiry.js";
+import Expiry, { type ExpiryExpiredInfo } from "../src/expiry.js";
 
 const NOW = 1_000_000;
 const FUTURE = NOW + 60_000;
@@ -17,14 +17,24 @@ type TestMapping = {
   logs: StreamValue<string>;
 };
 
-async function createStreamKvs(now: () => number) {
-  const onExpireCalls: { key: string; expiresAt: number }[] = [];
+async function createStreamKvs(now: () => number): Promise<{
+  kvs: UniKvs<TestMapping>;
+  storage: Memory;
+  onExpireCalls: {
+    key: string;
+    expiresAt: number;
+  }[];
+}> {
+  const onExpireCalls: {
+    key: string;
+    expiresAt: number;
+  }[] = [];
   const storage = new Memory();
   const kvs = UniKvs.config<TestMapping>()
     .use(
       new Expiry({
         now,
-        onExpire: (info) => {
+        onExpire: (info: ExpiryExpiredInfo): void => {
           onExpireCalls.push({ ...info });
         },
       }),
@@ -34,7 +44,11 @@ async function createStreamKvs(now: () => number) {
     .create();
   await kvs.open();
 
-  return { kvs, storage, onExpireCalls };
+  return {
+    kvs,
+    storage,
+    onExpireCalls,
+  };
 }
 
 async function collectText(stream: AsyncIterable<string>): Promise<string[]> {
@@ -49,77 +63,87 @@ async function collectText(stream: AsyncIterable<string>): Promise<string[]> {
 
 describe("ストリームの書き込みと読み出し", () => {
   test("期限内はチャンクを順に読み出せる", async ({ expect }) => {
-    // 準備
-    const { kvs, storage } = await createStreamKvs(() => NOW);
+    // 準備：
+    const { kvs, storage } = await createStreamKvs((): number => NOW);
     await kvs.set("logs", sourceFrom(["a", "b", "c"]), {
       vars: { [EXPIRES_AT_VAR]: FUTURE },
     });
 
-    // 実行と検証: 下流には直列化された包みが保存されている。
+    // 実行と検証 : 下流には直列化された包みが保存されている。
     const raw = await new Response(
       storage.getReadable(createStreamContext("logs") as IStorage.GetReadableContext),
     ).text();
     expect(raw).toContain('"expiresAt"');
     expect(raw).toContain('"@unikvs/expiry":1');
 
-    // 実行と検証: 包みは剥がされて読み出せる。
+    // 実行と検証 : 包みは剥がされて読み出せる。
     const vs = await kvs.stream("logs");
+
     try {
       expect(await collectText(vs)).toStrictEqual(["a", "b", "c"]);
     } finally {
       await vs.dispose();
     }
 
-    // 後片付け
+    // 後片付け。
     await kvs.close();
   });
 
   test("期限を過ぎた stream の読み出しは KeyNotFoundError で失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     let now = NOW;
-    const { kvs, onExpireCalls } = await createStreamKvs(() => now);
+    const { kvs, onExpireCalls } = await createStreamKvs((): number => now);
     await kvs.set("logs", sourceFrom(["a", "b", "c"]), {
       vars: { [EXPIRES_AT_VAR]: FUTURE },
     });
     now = FUTURE;
 
-    // 実行
+    // 実行：
     const vs = await kvs.stream("logs");
-    const error = await (async () => {
+    const error: unknown = await (async (): Promise<unknown> => {
+      let captured: unknown = undefined;
+
       try {
         await collectText(vs);
-
-        return undefined;
-      } catch (reason: unknown) {
-        return reason;
+      } catch (e) {
+        captured = e;
       } finally {
         await vs.dispose();
       }
+
+      return captured;
     })();
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(KeyNotFoundError);
     expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "logs" });
-    expect(onExpireCalls).toStrictEqual([{ key: "logs", expiresAt: FUTURE }]);
 
-    // 後片付け
+    expect(onExpireCalls).toStrictEqual([
+      {
+        key: "logs",
+        expiresAt: FUTURE,
+      },
+    ]);
+
+    // 後片付け。
     await kvs.close();
   });
 
   test("期限を指定しないストリームは期限切れにならない", async ({ expect }) => {
-    // 準備
-    const { kvs } = await createStreamKvs(() => NOW + 10 * 365 * 24 * 60 * 60 * 1_000);
+    // 準備：
+    const { kvs } = await createStreamKvs((): number => NOW + 10 * 365 * 24 * 60 * 60 * 1000);
     await kvs.set("logs", sourceFrom(["a"]));
 
-    // 実行と検証
+    // 実行と検証：
     const vs = await kvs.stream("logs");
+
     try {
       expect(await collectText(vs)).toStrictEqual(["a"]);
     } finally {
       await vs.dispose();
     }
 
-    // 後片付け
+    // 後片付け。
     await kvs.close();
   });
 });

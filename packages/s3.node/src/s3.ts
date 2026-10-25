@@ -2,15 +2,15 @@ import {
   type S3ClientConfig,
   type ListObjectsV2CommandOutput,
   S3Client,
-  PutObjectCommand,
   GetObjectCommand,
+  PutObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
-  ListObjectsV2Command,
   DeleteObjectsCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { InvalidPartSizeError, StorageAbortedError, type IStorage } from "@unikvs/core";
+import { type IStorage, StorageAbortedError, InvalidPartSizeError } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#usage)
@@ -50,15 +50,30 @@ export default class S3 implements IStorage {
   }
 
   public get isOpen(): boolean {
-    return !!this.#client;
+    return Boolean(this.#client);
   }
 
   public open(_c: IStorage.OpenContext): void {
+    this.#client?.destroy();
     this.#client = new S3Client(this.#config);
   }
 
+  // 開いているクライアントを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getClient(): S3Client {
+    const client = this.#client;
+
+    if (client === null) {
+      throw new TypeError("S3: AWS client is not open. Call open() first.");
+    }
+
+    return client;
+  }
+
   public close(_c: IStorage.CloseContext): void {
-    this.#client!.destroy();
+    const client = this.#getClient();
+    client.destroy();
+
     this.#client = null;
   }
 
@@ -68,7 +83,7 @@ export default class S3 implements IStorage {
       Body: data,
       Bucket: this.#bucket,
     });
-    await this.#client!.send(command, { abortSignal: c.signal });
+    await this.#getClient().send(command, { abortSignal: c.signal });
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
@@ -76,8 +91,14 @@ export default class S3 implements IStorage {
       Key: c.key,
       Bucket: this.#bucket,
     });
-    const response = await this.#client!.send(command, { abortSignal: c.signal });
-    const byteArray = await response.Body!.transformToByteArray();
+    const response = await this.#getClient().send(command, { abortSignal: c.signal });
+    const body = response.Body;
+
+    if (body === undefined) {
+      throw new TypeError("S3: Missing response body.");
+    }
+
+    const byteArray = await body.transformToByteArray();
 
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
   }
@@ -88,11 +109,15 @@ export default class S3 implements IStorage {
         Key: c.key,
         Bucket: this.#bucket,
       });
-      await this.#client!.send(command, { abortSignal: c.signal });
+      await this.#getClient().send(command, { abortSignal: c.signal });
 
       return true;
     } catch (ex) {
-      const s3Error = ex as { name?: unknown; $metadata?: { httpStatusCode?: unknown } };
+      const s3Error = ex as {
+        name?: unknown;
+        $metadata?: { httpStatusCode?: unknown };
+      };
+
       if (s3Error.name === "NotFound" || s3Error.$metadata?.httpStatusCode === 404) {
         return false;
       }
@@ -106,7 +131,7 @@ export default class S3 implements IStorage {
       Key: c.key,
       Bucket: this.#bucket,
     });
-    await this.#client!.send(command, { abortSignal: c.signal });
+    await this.#getClient().send(command, { abortSignal: c.signal });
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
@@ -114,14 +139,15 @@ export default class S3 implements IStorage {
     let continuationToken: string | undefined = undefined;
 
     while (isTruncated) {
-      const command = new ListObjectsV2Command({
+      const listCommand = new ListObjectsV2Command({
         Bucket: this.#bucket,
         ContinuationToken: continuationToken,
       });
-      const response: ListObjectsV2CommandOutput = await this.#client!.send(command, {
+      const response: ListObjectsV2CommandOutput = await this.#getClient().send(listCommand, {
         abortSignal: c.signal,
       });
       const contents = response.Contents;
+
       if (!contents || contents.length === 0) {
         break;
       }
@@ -130,14 +156,15 @@ export default class S3 implements IStorage {
         .map((item) => item.Key)
         .filter((key) => key !== undefined)
         .map((key) => ({ Key: key }));
+
       if (objectsToDelete.length > 0) {
-        const command = new DeleteObjectsCommand({
+        const deleteCommand = new DeleteObjectsCommand({
           Bucket: this.#bucket,
           Delete: {
             Objects: objectsToDelete,
           },
         });
-        await this.#client!.send(command, { abortSignal: c.signal });
+        await this.#getClient().send(deleteCommand, { abortSignal: c.signal });
       }
 
       isTruncated = response.IsTruncated ?? false;
@@ -155,6 +182,7 @@ export default class S3 implements IStorage {
       c.get("@unikvs/s3.node:partSize") !== undefined
         ? c.get("@unikvs/s3.node:partSize")
         : c.get("@unikvs/s3:partSize");
+
     if (rawPartSize !== undefined) {
       if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
         throw new InvalidPartSizeError({ actual: rawPartSize });
@@ -163,7 +191,7 @@ export default class S3 implements IStorage {
       partSize = rawPartSize;
     }
 
-    const { writable, readable } = new TransformStream<
+    const { readable, writable } = new TransformStream<
       Uint8Array<ArrayBuffer>,
       Uint8Array<ArrayBuffer>
     >();
@@ -174,7 +202,7 @@ export default class S3 implements IStorage {
     c.signal.addEventListener("abort", onAbort, { once: true });
 
     const upload = new Upload({
-      client: this.#client!,
+      client: this.#getClient(),
       params: {
         Key: c.key,
         Body: readable,
@@ -189,27 +217,39 @@ export default class S3 implements IStorage {
     const removeAbortListener = (): void => {
       c.signal.removeEventListener("abort", onAbort);
     };
-    void uploadPromise
-      .catch(async (reason: unknown) => {
+    void (async (): Promise<void> => {
+      try {
+        await uploadPromise;
+      } catch (reason: unknown) {
         try {
           await writer.abort(reason);
-        } catch {}
-      })
-      .finally(removeAbortListener);
+        } catch {
+          // 後始末の失敗は無視します。
+        }
+      } finally {
+        removeAbortListener();
+      }
+    })();
 
     return new WritableStream({
-      async write(chunk) {
-        await writer.write(chunk);
+      async abort(reason) {
+        await writer.abort(reason);
+
+        try {
+          await upload.abort();
+        } catch {
+          // 中断時の失敗は無視します。
+        }
+
+        removeAbortListener();
       },
       async close() {
         await writer.close();
         await uploadPromise;
         removeAbortListener();
       },
-      async abort(reason) {
-        await writer.abort(reason);
-        await upload.abort().catch(() => {});
-        removeAbortListener();
+      async write(chunk) {
+        await writer.write(chunk);
       },
     });
   }
@@ -221,9 +261,13 @@ export default class S3 implements IStorage {
       Key: c.key,
       Bucket: this.#bucket,
     });
-    const response = await this.#client!.send(command, { abortSignal: c.signal });
-    const readableStream = response.Body!.transformToWebStream();
+    const response = await this.#getClient().send(command, { abortSignal: c.signal });
+    const body = response.Body;
 
-    return readableStream;
+    if (body === undefined) {
+      throw new TypeError("S3: Missing response body.");
+    }
+
+    return body.transformToWebStream();
   }
 }

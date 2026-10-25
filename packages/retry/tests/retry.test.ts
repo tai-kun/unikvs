@@ -1,15 +1,16 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import {
+  captureThrown,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, test, vi } from "vitest";
+import { vi, test, describe } from "vite-plus/test";
 
 import {
   RetryExhaustedError,
@@ -27,11 +28,17 @@ class FlakyStorage implements IStorage {
 
   public readonly calls: string[] = [];
 
-  readonly #failures = new Map<string, { remaining: number; error: unknown }>();
+  readonly #failures = new Map<
+    string,
+    {
+      error: unknown;
+      remaining: number;
+    }
+  >();
 
   #value: unknown;
 
-  #open: boolean;
+  readonly #open: boolean;
 
   public constructor(value: unknown = "ok", open = true) {
     this.#value = value;
@@ -46,7 +53,10 @@ class FlakyStorage implements IStorage {
    * 指定操作を指定回数だけ失敗させます。
    */
   public fail(operation: string, times: number, error: unknown = new Error(operation)): void {
-    this.#failures.set(operation, { remaining: times, error });
+    this.#failures.set(operation, {
+      error,
+      remaining: times,
+    });
   }
 
   #maybeFail(operation: string): void {
@@ -122,12 +132,12 @@ class FlakyStorage implements IStorage {
 
 describe("初期化と基本属性", () => {
   test("name は Retry である", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(new Retry(new FlakyStorage()).name).toBe("Retry");
   });
 
   test("設定の既定値", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     const retry = new Retry(new FlakyStorage());
     expect(retry.maxRetries).toBe(3);
     expect(retry.initialDelayMs).toBe(100);
@@ -137,23 +147,25 @@ describe("初期化と基本属性", () => {
   });
 
   test("指定値を保持する", ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const retryable = (): boolean => true;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const onRetry = (): void => {};
 
-    // 実行
+    // 実行：
     const retry = new Retry(inner, {
-      maxRetries: 1,
-      initialDelayMs: 5,
-      maxDelayMs: 50,
       factor: 3,
       jitter: false,
-      retryable,
       onRetry,
+      retryable,
+      maxDelayMs: 50,
+      maxRetries: 1,
+      initialDelayMs: 5,
     });
 
-    // 検証
+    // 検証：
     expect(retry.inner).toBe(inner);
     expect(retry.maxRetries).toBe(1);
     expect(retry.initialDelayMs).toBe(5);
@@ -165,13 +177,13 @@ describe("初期化と基本属性", () => {
   });
 
   test("isOpen は inner に委譲する", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(new Retry(new FlakyStorage("ok", true)).isOpen).toBe(true);
     expect(new Retry(new FlakyStorage("ok", false)).isOpen).toBe(false);
   });
 
   test("不正な設定は RetryInvalidOptionError を投げる", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     const inner = new FlakyStorage();
     expect(() => new Retry(inner, { maxRetries: -1 })).toThrow(RetryInvalidOptionError);
     expect(() => new Retry(inner, { maxRetries: 1.5 })).toThrow(RetryInvalidOptionError);
@@ -181,15 +193,10 @@ describe("初期化と基本属性", () => {
   });
 
   test("不正な設定の名前と値を meta に保持する", ({ expect }) => {
-    // 実行
-    let error: unknown;
-    try {
-      new Retry(new FlakyStorage(), { maxRetries: -1 });
-    } catch (ex) {
-      error = ex;
-    }
+    // 実行：
+    const error = captureThrown(() => new Retry(new FlakyStorage(), { maxRetries: -1 }));
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(RetryInvalidOptionError);
     expect((error as RetryInvalidOptionError).meta).toStrictEqual({
       name: "maxRetries",
@@ -200,94 +207,114 @@ describe("初期化と基本属性", () => {
 
 describe("再試行", () => {
   test("write は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("write:k1", 2);
+
     const attempts: number[] = [];
     const retry = new Retry(inner, {
-      initialDelayMs: 1,
       jitter: false,
-      onRetry: (info) => {
+      onRetry: (info): void => {
         attempts.push(info.attempt);
       },
+      initialDelayMs: 1,
     });
 
-    // 実行
+    // 実行：
     await retry.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["write:k1", "write:k1", "write:k1"]);
     expect(attempts).toStrictEqual([1, 2]);
     expect(inner.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
   });
 
   test("read は一時的な失敗の後に値を返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage("hello");
     inner.fail("read:k1", 2);
+
     const retry = new Retry(inner, { initialDelayMs: 1 });
 
-    // 実行
+    // 実行：
     const value = await retry.read(createGetContext("k1") as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(value).toBe("hello");
+
     expect(inner.calls).toStrictEqual(["read:k1", "read:k1", "read:k1"]);
   });
 
   test("exists は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("exists:k1", 1);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     const result = await retry.exists(createHasContext("k1") as IStorage.ExistsContext);
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
+
     expect(inner.calls).toStrictEqual(["exists:k1", "exists:k1"]);
   });
 
   test("delete は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("delete:k1", 1);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     await retry.delete(createDeleteContext("k1") as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["delete:k1", "delete:k1"]);
   });
 
   test("clear は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("clear:clear", 1);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     await retry.clear(createClearContext() as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["clear:clear", "clear:clear"]);
   });
 
   test("getWritable の取得は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("getWritable:k1", 1);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     const writable = await retry.getWritable(createSetContext("k1") as IStorage.GetWritableContext);
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
     await writer.close();
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["getWritable:k1", "getWritable:k1"]);
     expect(inner.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
       new Uint8Array([1, 2, 3]),
@@ -295,12 +322,16 @@ describe("再試行", () => {
   });
 
   test("getReadable の取得は一時的な失敗の後に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage(new Uint8Array([4, 5]));
     inner.fail("getReadable:k1", 1);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     const readable = await retry.getReadable(
       createStreamContext("k1") as IStorage.GetReadableContext,
     );
@@ -310,143 +341,170 @@ describe("再試行", () => {
     for (;;) {
       const { done, value } = await reader.read();
 
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (done) {
         break;
       }
 
-      chunks.push(value as Uint8Array<ArrayBuffer>);
+      chunks.push(value);
     }
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["getReadable:k1", "getReadable:k1"]);
     expect(chunks).toStrictEqual([new Uint8Array([4, 5])]);
   });
 
   test("カスタム retryable で KeyNotFoundError を再試行できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("read:k1", 1, new KeyNotFoundError({ key: "k1" }));
+
     const retry = new Retry(inner, {
-      initialDelayMs: 1,
       jitter: false,
-      retryable: () => true,
+      retryable: (): boolean => true,
+      initialDelayMs: 1,
     });
 
-    // 実行
+    // 実行：
     const value = await retry.read(createGetContext("k1") as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(value).toBe("ok");
+
     expect(inner.calls).toStrictEqual(["read:k1", "read:k1"]);
   });
 });
 
 describe("枯渇", () => {
   test("上限を超えたら RetryExhaustedError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const lastError = new Error("boom");
     const inner = new FlakyStorage();
     inner.fail("write:k1", 5, lastError);
+
     const retriedAttempts: number[] = [];
     const retry = new Retry(inner, {
-      maxRetries: 2,
-      initialDelayMs: 1,
       jitter: false,
-      onRetry: (info) => {
+      onRetry: (info): void => {
         retriedAttempts.push(info.attempt);
       },
+      maxRetries: 2,
+      initialDelayMs: 1,
     });
 
-    // 実行
+    // 実行：
     const error = await retry
       .write(createSetContext("k1") as IStorage.WriteContext, "v1")
-      .catch((error: unknown) => error);
+      .catch((caught: unknown) => caught);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(RetryExhaustedError);
     expect((error as RetryExhaustedError).meta).toStrictEqual({
-      operation: "write",
       attempts: 3,
+      operation: "write",
     });
     expect((error as RetryExhaustedError).cause).toBe(lastError);
     expect(retriedAttempts).toStrictEqual([1, 2]);
+
     expect(inner.calls).toStrictEqual(["write:k1", "write:k1", "write:k1"]);
   });
 
   test("maxRetries が 0 のときは再試行しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("read:k1", 1);
-    const retry = new Retry(inner, { maxRetries: 0, initialDelayMs: 1, jitter: false });
 
-    // 実行
+    const retry = new Retry(inner, {
+      jitter: false,
+      maxRetries: 0,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
     const error = await retry
       .read(createGetContext("k1") as IStorage.ReadContext)
-      .catch((error: unknown) => error);
+      .catch((caught: unknown) => caught);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(RetryExhaustedError);
     expect((error as RetryExhaustedError).meta.attempts).toBe(1);
+
     expect(inner.calls).toStrictEqual(["read:k1"]);
   });
 });
 
 describe("再試行しない失敗", () => {
   test("KeyNotFoundError は既定で再試行しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const notFound = new KeyNotFoundError({ key: "k1" });
     const inner = new FlakyStorage();
     inner.fail("read:k1", 5, notFound);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行と検証
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行と検証：
     await expect(retry.read(createGetContext("k1") as IStorage.ReadContext)).rejects.toBe(notFound);
+
     expect(inner.calls).toStrictEqual(["read:k1"]);
   });
 
   test("retryable が false を返したら再試行しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const fatal = new Error("fatal");
     const inner = new FlakyStorage();
     inner.fail("delete:k1", 5, fatal);
+
     const retry = new Retry(inner, {
-      initialDelayMs: 1,
       jitter: false,
-      retryable: () => false,
+      retryable: (): boolean => false,
+      initialDelayMs: 1,
     });
 
-    // 実行と検証
+    // 実行と検証：
     await expect(retry.delete(createDeleteContext("k1") as IStorage.DeleteContext)).rejects.toBe(
       fatal,
     );
+
     expect(inner.calls).toStrictEqual(["delete:k1"]);
   });
 
   test("AbortError 名のエラーは既定で再試行しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const aborted = new DOMException("aborted", "AbortError");
     const inner = new FlakyStorage();
     inner.fail("exists:k1", 5, aborted);
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行と検証
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行と検証：
     await expect(retry.exists(createHasContext("k1") as IStorage.ExistsContext)).rejects.toBe(
       aborted,
     );
+
     expect(inner.calls).toStrictEqual(["exists:k1"]);
   });
 });
 
 describe("中断", () => {
   test("開始前に中断されていたら inner を呼ばずに失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     const reason = new Error("stop");
     controller.abort(reason);
-    const inner = new FlakyStorage();
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
 
-    // 実行と検証
+    const inner = new FlakyStorage();
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行と検証：
     await expect(
       retry.read(createGetContext("k1", { signal: controller.signal }) as IStorage.ReadContext),
     ).rejects.toBe(reason);
@@ -454,7 +512,7 @@ describe("中断", () => {
   });
 
   test("待機中の中断は待機を打ち切る", async ({ expect }) => {
-    // 準備
+    // 準備：
     vi.useFakeTimers();
 
     try {
@@ -462,16 +520,21 @@ describe("中断", () => {
       const reason = new Error("stop");
       const inner = new FlakyStorage();
       inner.fail("read:k1", 5);
-      const retry = new Retry(inner, { initialDelayMs: 10_000, jitter: false });
 
-      // 実行
+      const retry = new Retry(inner, {
+        jitter: false,
+        initialDelayMs: 10_000,
+      });
+
+      // 実行：
       const pending = retry.read(
         createGetContext("k1", { signal: controller.signal }) as IStorage.ReadContext,
       );
+
       expect(vi.getTimerCount()).toBe(1);
       controller.abort(reason);
 
-      // 検証
+      // 検証：
       await expect(pending).rejects.toBe(reason);
       expect(vi.getTimerCount()).toBe(0);
       expect(inner.calls).toStrictEqual(["read:k1"]);
@@ -483,54 +546,59 @@ describe("中断", () => {
 
 describe("バックオフ", () => {
   test("待機時間は指数で増加し上限で頭打ちになる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     inner.fail("write:k1", 3);
+
     const delays: number[] = [];
     const retry = new Retry(inner, {
-      initialDelayMs: 10,
-      maxDelayMs: 25,
       factor: 2,
       jitter: false,
-      onRetry: (info) => {
+      onRetry: (info): void => {
         delays.push(info.nextDelayMs);
       },
+      maxDelayMs: 25,
+      initialDelayMs: 10,
     });
 
-    // 実行
+    // 実行：
     await retry.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(delays).toStrictEqual([10, 20, 25]);
+
     expect(inner.calls).toStrictEqual(["write:k1", "write:k1", "write:k1", "write:k1"]);
   });
 
   test("ジッターは上限の半分から上限までの範囲で待機時間を揺らす", async ({ expect }) => {
-    // 準備
+    // 準備：
     vi.useFakeTimers();
 
     try {
       const inner = new FlakyStorage();
       inner.fail("write:k1", 2);
+
       const delays: number[] = [];
       const random = vi.spyOn(Math, "random");
       random.mockReturnValueOnce(0).mockReturnValueOnce(1);
+
       const retry = new Retry(inner, {
-        initialDelayMs: 100,
-        maxDelayMs: 100,
         factor: 2,
         jitter: true,
-        onRetry: (info) => {
+        onRetry: (info): void => {
           delays.push(info.nextDelayMs);
         },
+        maxDelayMs: 100,
+        initialDelayMs: 100,
       });
 
-      // 実行
+      // 実行：
       const pending = retry.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
       await vi.runAllTimersAsync();
       await pending;
 
-      // 検証
+      // 検証：
       expect(delays).toStrictEqual([50, 100]);
       expect(random).toHaveBeenCalledTimes(2);
     } finally {
@@ -540,27 +608,29 @@ describe("バックオフ", () => {
   });
 
   test("待機時間が 0 のときはタイマーを経由せずに再試行する", async ({ expect }) => {
-    // 準備
+    // 準備：
     vi.useFakeTimers();
 
     try {
       const inner = new FlakyStorage();
       inner.fail("read:k1", 1);
+
       const delays: number[] = [];
       const retry = new Retry(inner, {
-        initialDelayMs: 0,
         jitter: false,
-        onRetry: (info) => {
+        onRetry: (info): void => {
           delays.push(info.nextDelayMs);
         },
+        initialDelayMs: 0,
       });
 
-      // 実行
+      // 実行：
       const value = await retry.read(createGetContext("k1") as IStorage.ReadContext);
 
-      // 検証
+      // 検証：
       expect(value).toBe("ok");
       expect(delays).toStrictEqual([0]);
+
       expect(vi.getTimerCount()).toBe(0);
       expect(inner.calls).toStrictEqual(["read:k1", "read:k1"]);
     } finally {
@@ -569,23 +639,29 @@ describe("バックオフ", () => {
   });
 
   test("onRetry に試行情報が通知される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const failure = new Error("transient");
     const inner = new FlakyStorage();
     inner.fail("read:k1", 1, failure);
-    const infos: { operation: string; attempt: number; error: unknown; nextDelayMs: number }[] = [];
+
+    const infos: {
+      error: unknown;
+      attempt: number;
+      operation: string;
+      nextDelayMs: number;
+    }[] = [];
     const retry = new Retry(inner, {
-      initialDelayMs: 1,
       jitter: false,
-      onRetry: (info) => {
+      onRetry: (info): void => {
         infos.push({ ...info });
       },
+      initialDelayMs: 1,
     });
 
-    // 実行
+    // 実行：
     await retry.read(createGetContext("k1") as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(infos).toHaveLength(1);
     expect(infos[0]?.operation).toBe("read");
     expect(infos[0]?.attempt).toBe(1);
@@ -596,89 +672,97 @@ describe("バックオフ", () => {
 
 describe("再試行しない委譲", () => {
   test("open と close は inner に委譲する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     const retry = new Retry(inner);
 
-    // 実行
+    // 実行：
     await retry.open(createOpenContext() as IStorage.OpenContext);
     await retry.close(createCloseContext() as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["open:open", "close:close"]);
   });
 
   test("open の失敗は再試行しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const failure = new Error("open failed");
     const inner = new FlakyStorage();
     inner.fail("open:open", 5, failure);
+
     const retry = new Retry(inner);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(retry.open(createOpenContext() as IStorage.OpenContext)).rejects.toBe(failure);
+
     expect(inner.calls).toStrictEqual(["open:open"]);
   });
 
   test("onOtherWriteError は inner に委譲する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const inner = new FlakyStorage();
     const retry = new Retry(inner);
 
-    // 実行
+    // 実行：
     await retry.onOtherWriteError(
       createSetContext("k1") as IStorage.OtherWriteErrorHandlerContext,
       [],
     );
 
-    // 検証
+    // 検証：
     expect(inner.calls).toStrictEqual(["onOtherWriteError"]);
   });
 
   test("getWritable を持たない inner では RetryUnsupportedOperationError で失敗する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const inner = {
       name: "Bare",
-      isOpen: true,
-      write: (): void => {},
       read: (): unknown => "v",
-      exists: (): boolean => true,
-      delete: (): void => {},
       clear: (): void => {},
+      write: (): void => {},
+      delete: (): void => {},
+      exists: (): boolean => true,
+      isOpen: true,
     } as unknown as IStorage;
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
 
-    // 実行
+    // 実行：
     const error = await retry
       .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
-      .catch((error: unknown) => error);
+      .catch((caught: unknown) => caught);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(RetryUnsupportedOperationError);
     expect((error as RetryUnsupportedOperationError).meta).toStrictEqual({
-      operation: "getWritable",
       storage: "Bare",
+      operation: "getWritable",
     });
   });
 
   test("getReadable を持たない inner では RetryUnsupportedOperationError で失敗する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const inner = {
       name: "Bare",
-      isOpen: true,
-      write: (): void => {},
       read: (): unknown => "v",
-      exists: (): boolean => true,
-      delete: (): void => {},
       clear: (): void => {},
+      write: (): void => {},
+      delete: (): void => {},
+      exists: (): boolean => true,
+      isOpen: true,
     } as unknown as IStorage;
-    const retry = new Retry(inner, { initialDelayMs: 1, jitter: false });
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       retry.getReadable(createStreamContext("k1") as IStorage.GetReadableContext),
     ).rejects.toThrow(RetryUnsupportedOperationError);
@@ -687,7 +771,7 @@ describe("再試行しない委譲", () => {
 
 describe("isRetryableError", () => {
   test("既定の再試行可否を判定する", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(isRetryableError(new Error("boom"))).toBe(true);
     expect(isRetryableError("boom")).toBe(true);
     expect(isRetryableError(new KeyNotFoundError({ key: "k1" }))).toBe(false);

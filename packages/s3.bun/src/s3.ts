@@ -1,9 +1,9 @@
 import {
-  InvalidPartSizeError,
-  StorageAbortedError,
-  UnsupportedRuntimeError,
-  type IPipelineContext,
   type IStorage,
+  type IPipelineContext,
+  StorageAbortedError,
+  InvalidPartSizeError,
+  UnsupportedRuntimeError,
 } from "@unikvs/core";
 import type { S3Client, S3Options } from "bun";
 
@@ -29,16 +29,17 @@ function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
     c.get("@unikvs/s3.bun:partSize") !== undefined
       ? c.get("@unikvs/s3.bun:partSize")
       : c.get("@unikvs/s3:partSize");
+  let partSize: number | undefined = undefined;
 
-  if (rawPartSize === undefined) {
-    return undefined;
+  if (rawPartSize !== undefined) {
+    if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
+      throw new InvalidPartSizeError({ actual: rawPartSize });
+    }
+
+    partSize = rawPartSize;
   }
 
-  if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
-    throw new InvalidPartSizeError({ actual: rawPartSize });
-  }
-
-  return rawPartSize;
+  return partSize;
 }
 
 /**
@@ -74,13 +75,28 @@ export default class S3 implements IStorage {
   }
 
   public get isOpen(): boolean {
-    return !!this.#client;
+    return Boolean(this.#client);
+  }
+
+  // 開いているクライアントを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getClient(): S3Client {
+    const client = this.#client;
+
+    if (client === null) {
+      throw new TypeError("S3: Bun S3 client is not open. Call open() first.");
+    }
+
+    return client;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
-      throw new UnsupportedRuntimeError({ name: this.name, runtime: "Bun" });
+      throw new UnsupportedRuntimeError({
+        name: this.name,
+        runtime: "Bun",
+      });
     }
 
     // オープン済みの場合は既存のクライアントを破棄し、開き直しでリークしないようにします。
@@ -89,7 +105,10 @@ export default class S3 implements IStorage {
     }
 
     const { S3Client: S3ClientImpl } = await import("bun");
-    this.#client = new S3ClientImpl({ ...this.#options, bucket: this.#bucket });
+    this.#client = new S3ClientImpl({
+      ...this.#options,
+      bucket: this.#bucket,
+    });
   }
 
   public close(_c: IStorage.CloseContext): void {
@@ -104,13 +123,13 @@ export default class S3 implements IStorage {
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     c.signal.throwIfAborted();
 
-    await this.#client!.write(c.key, data);
+    await this.#getClient().write(c.key, data);
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
-    const buffer = await this.#client!.file(c.key).arrayBuffer();
+    const buffer = await this.#getClient().file(c.key).arrayBuffer();
 
     return new Uint8Array(buffer);
   }
@@ -118,17 +137,17 @@ export default class S3 implements IStorage {
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
-    return await this.#client!.exists(c.key);
+    return this.#getClient().exists(c.key);
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    await this.#client!.delete(c.key);
+    await this.#getClient().delete(c.key);
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const client = this.#client!;
+    const client = this.#getClient();
 
     c.signal.throwIfAborted();
 
@@ -150,7 +169,8 @@ export default class S3 implements IStorage {
         );
       }
 
-      continuationToken = response.isTruncated ? response.nextContinuationToken : undefined;
+      continuationToken =
+        (response.isTruncated ?? false) ? response.nextContinuationToken : undefined;
     } while (continuationToken !== undefined);
   }
 
@@ -160,20 +180,22 @@ export default class S3 implements IStorage {
     }
 
     const partSize = resolvePartSize(c);
-    const writer = this.#client!.file(c.key).writer(partSize === undefined ? {} : { partSize });
+    const writer = this.#getClient()
+      .file(c.key)
+      .writer(partSize === undefined ? {} : { partSize });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      async write(chunk) {
-        c.signal.throwIfAborted();
-        await writer.write(chunk);
+      async abort() {
+        // Bun の NetworkSink には中断用の API がないため、end を呼ばずに破棄します。
+        // 完了していないマルチパートアップロードはオブジェクトとして公開されません。
       },
       async close() {
         c.signal.throwIfAborted();
         await writer.end();
       },
-      async abort() {
-        // Bun の NetworkSink には中断用の API がないため、end を呼ばずに破棄します。
-        // 完了していないマルチパートアップロードはオブジェクトとして公開されません。
+      async write(chunk) {
+        c.signal.throwIfAborted();
+        await writer.write(chunk);
       },
     });
   }
@@ -181,15 +203,17 @@ export default class S3 implements IStorage {
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
-    const reader = this.#client!.file(c.key).stream().getReader();
+    const reader = this.#getClient().file(c.key).stream().getReader();
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async pull(controller) {
         c.signal.throwIfAborted();
 
         const { done, value } = await reader.read();
+
         if (done) {
           controller.close();
+
           return;
         }
 

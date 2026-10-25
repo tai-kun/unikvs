@@ -1,6 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import { createOpenContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { test as vitest } from "vite-plus/test";
 
 import Opfs from "../src/opfs.js";
 
@@ -20,13 +20,23 @@ export function uniqueRoot(prefix = "unikvs-tests"): string {
  */
 export async function removeRoot(root: string): Promise<void> {
   const dirnames = root.split("/");
-  const basename = dirnames.pop()!;
+  const basename = dirnames.pop();
+
+  if (basename === undefined) {
+    return;
+  }
+
   let handle = await navigator.storage.getDirectory();
+
   for (const dirname of dirnames) {
     handle = await handle.getDirectoryHandle(dirname, { create: true });
   }
 
-  await handle.removeEntry(basename, { recursive: true }).catch(() => {});
+  try {
+    await handle.removeEntry(basename, { recursive: true });
+  } catch {
+    // 後始末の失敗は無視します。
+  }
 }
 
 /**
@@ -37,13 +47,12 @@ export const test = vitest.extend<{
   root: string;
   storage: Opfs;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
-  async root({}, use) {
+  async root({}, use): Promise<void> {
     const root = uniqueRoot();
     await use(root);
     await removeRoot(root);
   },
-  async storage({ root }, use) {
+  async storage({ root }, use): Promise<void> {
     const storage = new Opfs(root);
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     await use(storage);

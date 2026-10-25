@@ -7,6 +7,18 @@ import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 export type OpfsOptions = {};
 
 /**
+ * 失敗しても無視してよい非同期処理の拒否を握りつぶします。
+ * 中断時の後始末など、失敗を呼び出し元へ伝える必要がない場合に使用します。
+ */
+async function ignoreRejection(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+  } catch {
+    // 後始末の失敗は無視します。
+  }
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
  */
 export default class Opfs implements IStorage {
@@ -20,7 +32,13 @@ export default class Opfs implements IStorage {
   /**
    * データを保存する OPFS 内のルートディレクトリー名です。
    */
-  #root: string;
+  readonly #root: string;
+
+  /**
+   * コンストラクターでディレクトリーハンドルを直接受け取ったかどうかです。
+   * ハンドル受け取り時は親ディレクトリーをたどれないため、クリアは列挙削除で行います。
+   */
+  readonly #fromHandle: boolean;
 
   public readonly name: string;
 
@@ -33,16 +51,21 @@ export default class Opfs implements IStorage {
   ) {
     this.name = "Opfs";
     if (typeof root === "string") {
-      if (root === "" || root === "." || root === "/") {
+      this.#fromHandle = false;
+      let normalized = root.replaceAll(/\/+/gu, "/");
+
+      if (normalized.startsWith("/")) {
+        normalized = normalized.slice(1);
+      }
+
+      if (normalized.endsWith("/")) {
+        normalized = normalized.slice(0, -1);
+      }
+
+      if (normalized === "" || normalized === "." || normalized === "/") {
         this.#root = "";
       } else {
-        this.#root = root.replace(/\/+/g, "/");
-        if (this.#root.startsWith("/")) {
-          this.#root = this.#root.slice(1);
-        }
-        if (this.#root.endsWith("/")) {
-          this.#root = this.#root.slice(0, -1);
-        }
+        this.#root = normalized;
 
         for (const dirname of this.#root.split("/")) {
           assertValidDirname(dirname);
@@ -53,11 +76,24 @@ export default class Opfs implements IStorage {
     } else {
       this.#root = root.name;
       this.#rootHandle = root;
+      this.#fromHandle = true;
     }
   }
 
   public get isOpen(): boolean {
     return this.#rootHandle !== null;
+  }
+
+  // 開いているルートディレクトリーハンドルを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getRootHandle(): FileSystemDirectoryHandle {
+    const handle = this.#rootHandle;
+
+    if (handle === null) {
+      throw new TypeError("Opfs is not open. Call open() first.");
+    }
+
+    return handle;
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
@@ -68,6 +104,7 @@ export default class Opfs implements IStorage {
     }
 
     let handle = await navigator.storage.getDirectory();
+
     c.signal.throwIfAborted();
 
     if (this.#root !== "") {
@@ -86,9 +123,11 @@ export default class Opfs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.#rootHandle!.getFileHandle(c.key, { create: true });
+    const fileHandle = await this.#getRootHandle().getFileHandle(c.key, { create: true });
+
     c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
+
     c.signal.throwIfAborted();
 
     try {
@@ -97,7 +136,7 @@ export default class Opfs implements IStorage {
       c.signal.throwIfAborted();
     } catch (ex) {
       // 失敗時に close すると、書き込めた分の内容が既存データを上書きしてコミットされるため abort して変更を破棄します。
-      await writable.abort(ex).catch(() => {});
+      await ignoreRejection(writable.abort(ex));
       throw ex;
     }
 
@@ -108,9 +147,11 @@ export default class Opfs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.#rootHandle!.getFileHandle(c.key);
+    const fileHandle = await this.#getRootHandle().getFileHandle(c.key);
+
     c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
+
     c.signal.throwIfAborted();
     const buff = await file.arrayBuffer();
 
@@ -122,7 +163,8 @@ export default class Opfs implements IStorage {
     c.signal.throwIfAborted();
 
     try {
-      await this.#rootHandle!.getFileHandle(c.key);
+      await this.#getRootHandle().getFileHandle(c.key);
+
       return true;
     } catch (ex) {
       if (ex instanceof DOMException && ex.name === "NotFoundError") {
@@ -137,32 +179,41 @@ export default class Opfs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    await this.#rootHandle!.removeEntry(c.key);
+    await this.#getRootHandle().removeEntry(c.key);
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.#root === "") {
-      // ルートディレクトリー直下を使用している場合は、すべてのエントリーを個別に削除します。
+    if (this.#root === "" || this.#fromHandle) {
+      // ルートディレクトリー直下を使用している場合や、ハンドルを直接受け取った場合は、すべてのエントリーを個別に削除します。
+      const rootHandle = this.#getRootHandle();
 
-      for await (const name of this.#rootHandle!.keys()) {
+      for await (const name of rootHandle.keys()) {
         c.signal.throwIfAborted();
-        await this.#rootHandle!.removeEntry(name, { recursive: true });
+        await rootHandle.removeEntry(name, { recursive: true });
       }
     } else {
       // サブディレクトリーを使用している場合は、ディレクトリーごと削除して再作成します。
-
+      // 先に開いていることを確認し、未オープン時は `TypeError` で拒否します。
+      this.#getRootHandle();
       const dirnames = this.#root.split("/");
       let parentHandle = await navigator.storage.getDirectory();
+
       c.signal.throwIfAborted();
       for (const dirname of dirnames.slice(0, -1)) {
         parentHandle = await parentHandle.getDirectoryHandle(dirname, { create: true });
         c.signal.throwIfAborted();
       }
 
-      const currentDirname = dirnames[dirnames.length - 1]!;
+      const currentDirname = dirnames.at(-1);
+
+      if (currentDirname === undefined) {
+        throw new TypeError("Opfs root is empty. Call open() first.");
+      }
+
       await parentHandle.removeEntry(currentDirname, { recursive: true });
+
       c.signal.throwIfAborted();
       this.#rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
     }
@@ -174,9 +225,11 @@ export default class Opfs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.#rootHandle!.getFileHandle(c.key, { create: true });
+    const fileHandle = await this.#getRootHandle().getFileHandle(c.key, { create: true });
+
     c.signal.throwIfAborted();
     const writable = await fileHandle.createWritable();
+
     c.signal.throwIfAborted();
 
     const writer = writable.getWriter();
@@ -187,11 +240,14 @@ export default class Opfs implements IStorage {
       c.signal.removeEventListener("abort", onAbort);
     };
     const finish = async (reason?: unknown): Promise<void> => {
-      if (finished) return;
+      if (finished) {
+        return;
+      }
+
       finished = true;
       removeAbortListener();
       // 書き込み途中の内容をコミットしないよう、close ではなく abort で破棄します。
-      await writer.abort(reason).catch(() => {});
+      await ignoreRejection(writer.abort(reason));
     };
     const onAbort = (): void => {
       void finish(c.signal.reason);
@@ -199,14 +255,8 @@ export default class Opfs implements IStorage {
     c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      async write(chunk) {
-        c.signal.throwIfAborted();
-        try {
-          await writer.write(chunk);
-        } catch (ex) {
-          await finish(ex);
-          throw ex;
-        }
+      async abort(reason) {
+        await finish(reason);
       },
       async close() {
         c.signal.throwIfAborted();
@@ -220,8 +270,14 @@ export default class Opfs implements IStorage {
         finished = true;
         removeAbortListener();
       },
-      async abort(reason) {
-        await finish(reason);
+      async write(chunk) {
+        c.signal.throwIfAborted();
+        try {
+          await writer.write(chunk);
+        } catch (ex) {
+          await finish(ex);
+          throw ex;
+        }
       },
     });
   }
@@ -232,33 +288,45 @@ export default class Opfs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const fileHandle = await this.#rootHandle!.getFileHandle(c.key);
+    const fileHandle = await this.#getRootHandle().getFileHandle(c.key);
+
     c.signal.throwIfAborted();
     const file = await fileHandle.getFile();
+
     c.signal.throwIfAborted();
 
     const reader = file.stream().getReader();
 
     // 中断時は待機中の読み取りを終わらせ、以降の pull で中断理由を通知できるようにします。
     const onAbort = (): void => {
-      void reader.cancel(c.signal.reason).catch(() => {});
+      void ignoreRejection(reader.cancel(c.signal.reason));
     };
     const removeAbortListener = (): void => {
       c.signal.removeEventListener("abort", onAbort);
     };
     c.signal.addEventListener("abort", onAbort, { once: true });
-    void reader.closed.then(removeAbortListener, removeAbortListener);
+    void (async (): Promise<void> => {
+      try {
+        await reader.closed;
+      } catch {
+        // クローズ時の失敗は無視します。
+      } finally {
+        removeAbortListener();
+      }
+    })();
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       async pull(controller) {
         try {
           c.signal.throwIfAborted();
           const { done, value } = await reader.read();
+
           c.signal.throwIfAborted();
 
           if (done) {
             removeAbortListener();
             controller.close();
+
             return;
           }
 
@@ -270,7 +338,7 @@ export default class Opfs implements IStorage {
       },
       async cancel(reason) {
         removeAbortListener();
-        await reader.cancel(reason).catch(() => {});
+        await ignoreRejection(reader.cancel(reason));
       },
     });
   }

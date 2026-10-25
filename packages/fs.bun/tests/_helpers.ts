@@ -1,10 +1,10 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { rm, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { IStorage } from "@unikvs/core";
 import { createOpenContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { test as vitest } from "vite-plus/test";
 
 import BunFs from "../src/bun-fs.js";
 
@@ -12,14 +12,20 @@ import BunFs from "../src/bun-fs.js";
  * テストごとに独立した一時ルートと、そのルートを open 済みの BunFs を提供します。
  * ファイル状態をテスト間に残さず、並行実行時の干渉を防ぐために使用します。
  */
-export const test = vitest.extend<{ root: string; storage: BunFs }>({
-  // oxlint-disable-next-line no-empty-pattern
+export const test = vitest.extend<{
+  root: string;
+  storage: BunFs;
+}>({
   async root({}, use) {
     const root = await mkdtemp(join(tmpdir(), "unikvs-bun-fs-"));
+
     try {
       await use(root);
     } finally {
-      await rm(root, { recursive: true, force: true }).catch(() => {});
+      await rm(root, {
+        force: true,
+        recursive: true,
+      }).catch(() => {});
     }
   },
   async storage({ root }, use) {

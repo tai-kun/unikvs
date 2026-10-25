@@ -1,4 +1,4 @@
-import { ErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -42,11 +42,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }
@@ -54,8 +58,8 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
 
 setErrorMessage(
   InvalidChunkTypeError,
-  ({ key, chunkType }) =>
-    `キー ${JSON.stringify(key)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
+  ({ key: messageKey, chunkType }) =>
+    `キー ${JSON.stringify(messageKey)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
   "ja",
 );
 
@@ -90,7 +94,8 @@ export class InvalidMaxEntriesError extends ErrorBase<InvalidMaxEntriesErrorMeta
     const meta: InvalidMaxEntriesErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `maxEntries must be an integer >= 0, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `maxEntries must be an integer >= 0, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -98,7 +103,8 @@ export class InvalidMaxEntriesError extends ErrorBase<InvalidMaxEntriesErrorMeta
 
 setErrorMessage(
   InvalidMaxEntriesError,
-  ({ actual }) => `maxEntries は 0 以上の整数でなければなりません。受け取った値: ${String(actual)}`,
+  ({ actual: messageActual }) =>
+    `maxEntries は 0 以上の整数でなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );
 
@@ -133,7 +139,8 @@ export class InvalidMaxBytesError extends ErrorBase<InvalidMaxBytesErrorMeta> {
     const meta: InvalidMaxBytesErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `maxBytes must be a finite number >= 0, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `maxBytes must be a finite number >= 0, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -141,7 +148,8 @@ export class InvalidMaxBytesError extends ErrorBase<InvalidMaxBytesErrorMeta> {
 
 setErrorMessage(
   InvalidMaxBytesError,
-  ({ actual }) => `maxBytes は 0 以上の有限数でなければなりません。受け取った値: ${String(actual)}`,
+  ({ actual: messageActual }) =>
+    `maxBytes は 0 以上の有限数でなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );
 
@@ -178,11 +186,14 @@ export class InvalidSizeOfResultError extends ErrorBase<InvalidSizeOfResultError
    */
   public constructor(args: InvalidSizeOfResultErrorArgs) {
     const { key, actual, ...options } = args;
-    const meta: InvalidSizeOfResultErrorMeta = { key, actual };
+    const meta: InvalidSizeOfResultErrorMeta = {
+      key,
+      actual,
+    };
     super(
       meta,
-      ({ key, actual }) =>
-        `sizeOf must return a finite number >= 0 for key ${JSON.stringify(key)}, but got ${String(actual)}`,
+      ({ key: messageKey, actual: messageActual }) =>
+        `sizeOf must return a finite number >= 0 for key ${JSON.stringify(messageKey)}, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -190,7 +201,7 @@ export class InvalidSizeOfResultError extends ErrorBase<InvalidSizeOfResultError
 
 setErrorMessage(
   InvalidSizeOfResultError,
-  ({ key, actual }) =>
-    `キー ${JSON.stringify(key)} の sizeOf は 0 以上の有限数を返さなければなりません。受け取った値: ${String(actual)}`,
+  ({ key: messageKey, actual: messageActual }) =>
+    `キー ${JSON.stringify(messageKey)} の sizeOf は 0 以上の有限数を返さなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );

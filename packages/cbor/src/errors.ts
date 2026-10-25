@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#errors)

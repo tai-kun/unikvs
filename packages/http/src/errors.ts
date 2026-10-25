@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -35,8 +35,8 @@ export class InvalidBaseUrlError extends ErrorBase<InvalidBaseUrlErrorMeta> {
     const meta: InvalidBaseUrlErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`baseUrl\` must be an absolute URL without query or fragment, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `\`baseUrl\` must be an absolute URL without query or fragment, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -80,8 +80,8 @@ export class InvalidHeadersError extends ErrorBase<InvalidHeadersErrorMeta> {
     const meta: InvalidHeadersErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `Expected headers to be an object with string values, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected headers to be an object with string values, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -125,7 +125,8 @@ export class InvalidTokenError extends ErrorBase<InvalidTokenErrorMeta> {
     const meta: InvalidTokenErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `Expected token to be a non-empty string, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected token to be a non-empty string, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -168,7 +169,8 @@ export class InvalidKeyError extends ErrorBase<InvalidKeyErrorMeta> {
     const meta: InvalidKeyErrorMeta = { key };
     super(
       meta,
-      ({ key }) => `Failed to encode key ${JSON.stringify(key)} as a URL path segment`,
+      ({ key: messageKey }) =>
+        `Failed to encode key ${JSON.stringify(messageKey)} as a URL path segment`,
       options,
     );
   }
@@ -238,11 +240,14 @@ export class ClearNotSupportedError extends InvalidUsageErrorBase<ClearNotSuppor
    */
   public constructor(args: ClearNotSupportedErrorArgs) {
     const { prefix, status, ...options } = args;
-    const meta: ClearNotSupportedErrorMeta = { prefix, status };
+    const meta: ClearNotSupportedErrorMeta = {
+      prefix,
+      status,
+    };
     super(
       meta,
-      ({ prefix, status }) =>
-        `Server does not support DELETE ?prefix= (prefix ${JSON.stringify(prefix)}, status ${status}). Implement prefix deletion on the server or stop calling clear.`,
+      ({ prefix: messagePrefix, status: messageStatus }) =>
+        `Server does not support DELETE ?prefix= (prefix ${JSON.stringify(messagePrefix)}, status ${messageStatus}). Implement prefix deletion on the server or stop calling clear.`,
       options,
     );
   }
@@ -292,15 +297,23 @@ export class HttpNetworkError extends ErrorBase<HttpNetworkErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
    */
   public constructor(args: HttpNetworkErrorArgs) {
-    const { method, url, key, ...options } = args;
-    const meta: HttpNetworkErrorMeta = { method, url, key };
-    super(meta, ({ method, url }) => `Failed to ${method} ${url}`, options);
+    const { key, url, method, ...options } = args;
+    const meta: HttpNetworkErrorMeta = {
+      key,
+      url,
+      method,
+    };
+    super(
+      meta,
+      ({ url: messageUrl, method: messageMethod }) => `Failed to ${messageMethod} ${messageUrl}`,
+      options,
+    );
   }
 }
 
 setErrorMessage(
   HttpNetworkError,
-  ({ method, url }) => `${method} ${url} へのリクエストに失敗しました`,
+  ({ url, method }) => `${method} ${url} へのリクエストに失敗しました`,
   "ja",
 );
 
@@ -351,12 +364,23 @@ export class HttpResponseError extends ErrorBase<HttpResponseErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/http#errors)
    */
   public constructor(args: HttpResponseErrorArgs) {
-    const { method, url, status, statusText, key, ...options } = args;
-    const meta: HttpResponseErrorMeta = { method, url, status, statusText, key };
+    const { key, url, method, status, statusText, ...options } = args;
+    const meta: HttpResponseErrorMeta = {
+      key,
+      url,
+      method,
+      status,
+      statusText,
+    };
     super(
       meta,
-      ({ method, url, status, statusText }) =>
-        `Request ${method} ${url} failed with ${status}${statusText === "" ? "" : ` ${statusText}`}`,
+      ({
+        url: messageUrl,
+        method: messageMethod,
+        status: messageStatus,
+        statusText: messageStatusText,
+      }) =>
+        `Request ${messageMethod} ${messageUrl} failed with ${messageStatus}${messageStatusText === "" ? "" : ` ${messageStatusText}`}`,
       options,
     );
   }
@@ -364,7 +388,7 @@ export class HttpResponseError extends ErrorBase<HttpResponseErrorMeta> {
 
 setErrorMessage(
   HttpResponseError,
-  ({ method, url, status, statusText }) =>
+  ({ url, method, status, statusText }) =>
     `リクエスト ${method} ${url} が ${status}${statusText === "" ? "" : ` ${statusText}`} で失敗しました`,
   "ja",
 );
@@ -407,11 +431,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }

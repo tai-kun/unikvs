@@ -1,5 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext, createOpenContext } from "@unikvs/testing";
+import { createOpenContext, createCloseContext } from "@unikvs/testing";
 
 import Etcd, { type EtcdClientLike, type EtcdPutOptions } from "../src/etcd.js";
 
@@ -13,8 +13,7 @@ export type RecordedPut = {
  * `EtcdClientLike` を満たすインメモリーフェイクです。
  *
  * 実サーバーなしで CRUD・TTL 付与・接頭辞削除の振る舞いを検証します。
- * リースの失効は etcd 側の責務のため再現しません。実装は `etcd3` の
- * `autoKeepAlive` (既定で有効) を使うため、開いている間はキーが残ります。
+ * リースの失効は etcd 側の責務のため再現しません。実装は `etcd3` の `autoKeepAlive` (既定で有効) を使うため、開いている間はキーが残ります。
  */
 export class FakeEtcdClient implements EtcdClientLike {
   readonly store = new Map<string, Buffer>();
@@ -54,7 +53,11 @@ export class FakeEtcdClient implements EtcdClientLike {
   ): Promise<void> {
     const data = typeof value === "string" ? Buffer.from(value, "utf8") : Buffer.from(value);
     this.store.set(key, data);
-    this.puts.push({ key, value: Buffer.from(data), options });
+    this.puts.push({
+      key,
+      value: Buffer.from(data),
+      options,
+    });
   }
 
   public async delete(key: string): Promise<void> {
@@ -63,6 +66,7 @@ export class FakeEtcdClient implements EtcdClientLike {
 
   public async getAll(prefix: string): Promise<Map<string, Buffer>> {
     const out = new Map<string, Buffer>();
+
     for (const [key, value] of this.store) {
       if (key.startsWith(prefix)) {
         // 呼び出し側の変更が保存値へ波及しないよう複写して返す。
@@ -80,9 +84,9 @@ export class FakeEtcdClient implements EtcdClientLike {
 
 export type StorageFixture = {
   readonly client: FakeEtcdClient;
+  readonly signal: AbortSignal;
   readonly storage: Etcd;
   readonly keyPrefix: string;
-  readonly signal: AbortSignal;
 };
 
 /**
@@ -109,10 +113,20 @@ export async function createStorage(
     supportsDeletePrefix = true,
   } = init;
   const client = injected ?? new FakeEtcdClient(supportsDeletePrefix);
-  const storage = new Etcd({ client, keyPrefix, namespace, leaseTtlSeconds });
+  const storage = new Etcd({
+    client,
+    keyPrefix,
+    namespace,
+    leaseTtlSeconds,
+  });
   await storage.open(createOpenContext() as IStorage.OpenContext);
 
-  return { client, storage, keyPrefix, signal: new AbortController().signal };
+  return {
+    client,
+    signal: new AbortController().signal,
+    storage,
+    keyPrefix,
+  };
 }
 
 /**

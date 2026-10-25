@@ -1,19 +1,19 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createNext,
-  forCasesAsync,
-  sourceFrom,
   type Random,
+  createNext,
+  sourceFrom,
+  concatBytes,
+  forCasesAsync,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import Base64 from "../src/base64.js";
 
-const SEED = 20240928;
+const SEED = 20_240_928;
 const CASE_COUNT = 50;
 const STREAM_CASE_COUNT = 30;
 
@@ -79,9 +79,9 @@ async function pumpDecode(
   target: Base64,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
   await target.decodeStream(
@@ -108,19 +108,22 @@ async function pumpDecode(
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
 }
 
 describe("決定的ファズテスト", () => {
   test("ランダムなバイト列を一括で往復すると元の値に戻る", async ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(SEED, CASE_COUNT, async (random) => {
       const base64 = new Base64();
       const input = randomBytes(random);
 
       const encoded = await encode(base64, input);
       const decoded = await decode(base64, encoded);
-
       expect(decoded).toStrictEqual(input);
     });
   });
@@ -128,7 +131,7 @@ describe("決定的ファズテスト", () => {
   test("ランダムなバイト列を encode し任意のチャンクで decode すると元の値に戻る", async ({
     expect,
   }) => {
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(SEED, STREAM_CASE_COUNT, async (random) => {
       const base64 = new Base64();
       const input = randomBytes(random);
@@ -136,7 +139,6 @@ describe("決定的ファズテスト", () => {
       const encoded = await encode(base64, input);
       const chunks = splitRandomly(random, encoded);
       const decoded = await pumpDecode(base64, chunks);
-
       expect(decoded.writeError).toBeUndefined();
       expect(decoded.readError).toBeUndefined();
       expect(concatBytes(decoded.outputChunks)).toStrictEqual(input);

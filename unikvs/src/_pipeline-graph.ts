@@ -1,4 +1,4 @@
-import { type IMiddleware, type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
+import { type IReadableStream, RepairNotAllowedError } from "@unikvs/core";
 
 import {
   DecodeContext,
@@ -9,53 +9,148 @@ import {
 import { logger, repairLogger } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import {
-  activeLeavesOf,
   applyMapKey,
   createEntries,
+  activeLeavesOf,
   freezeDestination,
   requireDestination,
   requireStreamDestination,
 } from "./_pipeline-graph.helpers.js";
 import type {
-  BuildEncodeTreeOptions,
-  EncodeTarget,
   MutableNode,
-  OperationScope,
-  PipelineDestination,
-  PipelineEntry,
+  EncodeTarget,
   PipelineLeaf,
   PipelineNode,
-  StreamEncodeTarget,
+  PipelineEntry,
+  OperationScope,
   StreamEncodeTree,
+  StreamEncodeTarget,
+  PipelineDestination,
+  BuildEncodeTreeOptions,
 } from "./_pipeline-graph.types.js";
 import { LeafResolver } from "./_pipeline-leaf-resolver.js";
 import { cancelStreams } from "./_streams.js";
 import {
+  MiddlewareNextNotCalledError,
+  MiddlewareNextNotAwaitedError,
   MiddlewareDestinationFrozenError,
   MiddlewareDestinationMissingError,
   MiddlewareNextCalledMultipleTimesError,
-  MiddlewareNextNotAwaitedError,
-  MiddlewareNextNotCalledError,
 } from "./errors.js";
+
+/**
+ * 節を前順で列挙するための再帰ヘルパーです。
+ *
+ * @param node 列挙を開始する節です。
+ *
+ * @yields 前順の節です。
+ */
+function* visit(node: PipelineNode): IterableIterator<PipelineNode> {
+  yield node;
+  for (const entry of node.entries) {
+    if (entry.kind === "node") {
+      yield* visit(entry.node);
+    }
+  }
+}
+
+/**
+ * 直通区間をまとめて葉名簿と全葉を確定します。
+ *
+ * @param node 確定する節です。
+ */
+function finalize(node: MutableNode): void {
+  // 直通の節は子の葉名簿と全葉を共有します。
+  if (node.leaves.length === 0 && node.children.length === 1) {
+    const [child] = node.children;
+
+    if (child === undefined) {
+      throw new Error("直通区間の子節が存在しません。");
+    }
+
+    finalize(child);
+    node.entries = [
+      {
+        kind: "node",
+        node: child,
+      },
+    ];
+    node.allLeaves = child.allLeaves;
+    node.leafNames = child.leafNames;
+  } else {
+    const leaves = [...node.leaves];
+
+    for (const child of node.children) {
+      finalize(child);
+      leaves.push(...child.allLeaves);
+    }
+
+    leaves.sort((a, b) => a.index - b.index);
+
+    const [singleLeaf] = leaves;
+
+    node.entries = createEntries(node.leaves, node.children);
+    node.allLeaves = leaves;
+    if (leaves.length === 1 && singleLeaf !== undefined) {
+      node.leafNames = singleLeaf.nameNames;
+    } else {
+      node.leafNames = Object.freeze(leaves.map((leaf) => leaf.name));
+    }
+  }
+}
 
 /**
  * コンパイル済みのパイプライン・グラフです。
  *
  * 宛先の変換チェーンをミドルウェアのインスタンス同一性で共有する根付き木として保持し、操作ごとの走査・エンコード・書き戻し・ストリーム構築を提供します。
  *
- * 不変条件:
+ * 不変条件 :
  * - 葉（`leaves`）と各節の項目（`entries`）は宛先の登録順です。
  * - 名簿（`leafNames` / `nameNames`）は凍結された配列で、直通区間では参照を共有します。
  * - 共有節は 1 操作内で 1 回だけ `encode`/`encodeStream`/`mapKey` を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
  * - 書き戻しの拒否は、走査中と書き込み中の 2 経路で分類します。いずれも即時に確定します。
  */
+
 export class PipelineGraph {
+  /**
+   * 全葉です。
+   * 登録順に保持します。
+   */
+  readonly #leaves: readonly PipelineLeaf[];
+
+  /**
+   * 根直下の葉と節を登録順に列挙した静的な項目列です。
+   */
+  readonly #entries: readonly PipelineEntry[];
+
+  /**
+   * `open`/`close`/`use` の対象となるミドルウェアです。初出順に保持します。
+   */
+  readonly #middlewares: readonly UniKvsMiddleware[];
+
+  /**
+   * 全葉数が 1 件かどうかです。
+   */
+  readonly #isSingleLeaf: boolean;
+
+  private constructor(
+    leaves: readonly PipelineLeaf[],
+    entries: readonly PipelineEntry[],
+    middlewares: readonly UniKvsMiddleware[],
+  ) {
+    this.#leaves = leaves;
+    this.#entries = entries;
+    this.#middlewares = middlewares;
+    this.#isSingleLeaf = leaves.length === 1;
+  }
+
   /**
    * 宛先定義の列を trie にコンパイルします。
    *
    * ミドルウェアはインスタンス同一性で共有します。同一インスタンスが複数の節に現れても、`open`/`close`/`use` の対象には初出の 1 件だけを保持します。
    *
    * @param destinations コンパイルする宛先定義です。
+   *
    * @returns コンパイル済みのパイプライン・グラフを返します。
    */
   public static compile(destinations: readonly PipelineDestination[]): PipelineGraph {
@@ -74,9 +169,11 @@ export class PipelineGraph {
       let canRepair = false;
 
       let siblings = rootChildren;
+
       for (const middleware of dest.middlewares) {
         // 共有はインスタンス同一性だけで判定し、同構造でも別インスタンスは共有しません。
         let node = siblings.find((candidate) => candidate.middleware === middleware);
+
         if (node === undefined) {
           node = {
             leaves: [],
@@ -122,46 +219,20 @@ export class PipelineGraph {
       allLeaves.push(leaf);
     }
 
-    const finalize = (node: MutableNode): void => {
-      // 直通の節は子の葉名簿と全葉を共有します。
-      if (node.leaves.length === 0 && node.children.length === 1) {
-        const child = node.children[0]!;
-        finalize(child);
-        node.entries = [
-          {
-            kind: "node",
-            node: child,
-          },
-        ];
-        node.allLeaves = child.allLeaves;
-        node.leafNames = child.leafNames;
-      } else {
-        const leaves = [...node.leaves];
-        for (const child of node.children) {
-          finalize(child);
-          leaves.push(...child.allLeaves);
-        }
-
-        leaves.sort((a, b) => a.index - b.index);
-
-        node.entries = createEntries(node.leaves, node.children);
-        node.allLeaves = leaves;
-        if (leaves.length === 1) {
-          node.leafNames = leaves[0]!.nameNames;
-        } else {
-          node.leafNames = Object.freeze(leaves.map((leaf) => leaf.name));
-        }
-      }
-    };
-
     for (const child of rootChildren) {
       finalize(child);
     }
 
     let rootEntries: readonly PipelineEntry[];
     let rootAllLeaves: readonly PipelineLeaf[];
+
     if (rootLeaves.length === 0 && rootChildren.length === 1) {
-      const child = rootChildren[0]!;
+      const [child] = rootChildren;
+
+      if (child === undefined) {
+        throw new Error("根直下の子節が存在しません。");
+      }
+
       rootEntries = [
         {
           kind: "node",
@@ -171,6 +242,7 @@ export class PipelineGraph {
       rootAllLeaves = child.allLeaves;
     } else {
       const collected = [...rootLeaves];
+
       for (const child of rootChildren) {
         collected.push(...child.allLeaves);
       }
@@ -180,38 +252,6 @@ export class PipelineGraph {
     }
 
     return new PipelineGraph(rootAllLeaves, rootEntries, middlewares);
-  }
-
-  /**
-   * 全葉です。
-   * 登録順に保持します。
-   */
-  readonly #leaves: readonly PipelineLeaf[];
-
-  /**
-   * 根直下の葉と節を登録順に列挙した静的な項目列です。
-   */
-  readonly #entries: readonly PipelineEntry[];
-
-  /**
-   * `open`/`close`/`use` の対象となるミドルウェアです。初出順に保持します。
-   */
-  readonly #middlewares: readonly UniKvsMiddleware[];
-
-  /**
-   * 全葉数が 1 件かどうかです。
-   */
-  readonly #isSingleLeaf: boolean;
-
-  private constructor(
-    leaves: readonly PipelineLeaf[],
-    entries: readonly PipelineEntry[],
-    middlewares: readonly UniKvsMiddleware[],
-  ) {
-    this.#leaves = leaves;
-    this.#entries = entries;
-    this.#middlewares = middlewares;
-    this.#isSingleLeaf = leaves.length === 1;
   }
 
   /**
@@ -258,15 +298,6 @@ export class PipelineGraph {
    * @yields 前順の節です。
    */
   public *nodes(): IterableIterator<PipelineNode> {
-    function* visit(node: PipelineNode): IterableIterator<PipelineNode> {
-      yield node;
-      for (const entry of node.entries) {
-        if (entry.kind === "node") {
-          yield* visit(entry.node);
-        }
-      }
-    }
-
     for (const entry of this.#entries) {
       if (entry.kind === "node") {
         yield* visit(entry.node);
@@ -281,6 +312,7 @@ export class PipelineGraph {
    *
    * @param key 根のキー (論理キー) です。
    * @param vars 根の実行時変数です。
+   *
    * @returns 葉リゾルバーを返します。
    */
   public createResolver(scope: OperationScope): LeafResolver {
@@ -295,18 +327,23 @@ export class PipelineGraph {
    * @param leaf デコード元の葉です。
    * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param data デコードするデータです。
+   *
    * @returns デコード済みのデータを返します。
    */
   public async decode(leaf: PipelineLeaf, scope: OperationScope, data: unknown): Promise<unknown> {
     // 経路を逆順 (葉→根) にネスト実行し、下流 (根側) の `set` が上流 (葉側) の `await next()` 後に見えるようにします。
     // データは外側から内側へ鎖状に渡し、最終結果を外側へ伝播させます。
     const reversed = leaf.path.toReversed();
+
     async function run(index: number, input: unknown): Promise<unknown> {
-      if (index >= reversed.length) {
+      const maybeNode = reversed[index];
+
+      if (maybeNode === undefined) {
         return input;
       }
 
-      const node = reversed[index]!;
+      const node: PipelineNode = maybeNode;
+
       const ctx = new DecodeContext({
         key: scope.key,
         store: scope.store,
@@ -317,7 +354,8 @@ export class PipelineGraph {
       let hasDownstream = false;
       let nextCalled = false;
       let nextSettled = false;
-      const next: IMiddleware.INext = function next() {
+
+      function next(): Promise<void> {
         if (nextCalled) {
           return Promise.reject(
             new MiddlewareNextCalledMultipleTimesError({
@@ -326,10 +364,12 @@ export class PipelineGraph {
             }),
           );
         }
+
         nextCalled = true;
 
         // next() の実行後、即座に destination の確認と凍結を行います。
         let decoded: unknown;
+
         try {
           decoded = requireDestination(node.middleware, ctx, "decode");
           freezeDestination(ctx);
@@ -345,9 +385,10 @@ export class PipelineGraph {
             nextSettled = true;
           }
         });
-      };
+      }
 
       await node.middleware.decode(ctx, next);
+
       scope.signal.throwIfAborted();
       if (!nextCalled) {
         throw new MiddlewareNextNotCalledError({
@@ -355,16 +396,18 @@ export class PipelineGraph {
           operation: "decode",
         });
       }
+
       if (!nextSettled) {
         throw new MiddlewareNextNotAwaitedError({
           name: node.middleware.name,
           operation: "decode",
         });
       }
+
       const destination = requireDestination(node.middleware, ctx, "decode");
 
       // 下流が実行されたときはその最終結果を返し、そうでなければ自らの出力を返す。
-      // (下流の失敗を握り潰したミドルウェアでは自らの出力が最終となる。)
+      // (下流の失敗を握り潰したミドルウェアでは自らの出力が最終となる。)。
       if (hasDownstream) {
         return downstreamResult;
       }
@@ -381,6 +424,7 @@ export class PipelineGraph {
    * @param leaf デコード元の葉です。
    * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param source 入力ストリームです。
+   *
    * @returns デコード済みのストリームを返します。
    */
   public async decodeStream(
@@ -390,14 +434,19 @@ export class PipelineGraph {
   ): Promise<IReadableStream> {
     // 途中で失敗したときは構築済みのパイプを解放し、ソースストリームがロックされたまま残らないようにします。
     const pipes: IReadableStream[] = [];
+
     try {
       const reversed = leaf.path.toReversed();
+
       async function run(index: number, input: IReadableStream): Promise<IReadableStream> {
-        if (index >= reversed.length) {
+        const maybeNode = reversed[index];
+
+        if (maybeNode === undefined) {
           return input;
         }
 
-        const node = reversed[index]!;
+        const node: PipelineNode = maybeNode;
+
         const ctx = new DecodeStreamContext({
           key: scope.key,
           store: scope.store,
@@ -405,10 +454,10 @@ export class PipelineGraph {
           source: input,
         });
         let downstreamResult: IReadableStream | undefined;
-        let hasDownstream = false;
         let nextCalled = false;
         let nextSettled = false;
-        const next: IMiddleware.INext = function next() {
+
+        function next(): Promise<void> {
           if (nextCalled) {
             return Promise.reject(
               new MiddlewareNextCalledMultipleTimesError({
@@ -417,10 +466,12 @@ export class PipelineGraph {
               }),
             );
           }
+
           nextCalled = true;
 
           // next() の実行後、即座に destination の確認と凍結を行います。
           let decoded: IReadableStream;
+
           try {
             decoded = requireStreamDestination(node.middleware, ctx, "decode");
             freezeDestination(ctx);
@@ -431,12 +482,11 @@ export class PipelineGraph {
           return Promise.try(async () => {
             try {
               downstreamResult = await run(index + 1, decoded);
-              hasDownstream = true;
             } finally {
               nextSettled = true;
             }
           });
-        };
+        }
 
         try {
           await node.middleware.decodeStream(ctx, next);
@@ -447,17 +497,19 @@ export class PipelineGraph {
               operation: "decode",
             });
           }
+
           if (!nextSettled) {
             throw new MiddlewareNextNotAwaitedError({
               name: node.middleware.name,
               operation: "decode",
             });
           }
+
           const output = requireStreamDestination(node.middleware, ctx, "decode");
           pipes.push(output);
 
-          if (hasDownstream) {
-            return downstreamResult!;
+          if (downstreamResult !== undefined) {
+            return downstreamResult;
           }
 
           return output;
@@ -487,6 +539,7 @@ export class PipelineGraph {
    *
    * @param scope 操作共通の実行時情報です。`key` は論理キーです。
    * @param data エンコードするデータです。
+   *
    * @returns 登録順のエンコード結果を返します。
    */
   public async encode(scope: OperationScope, data: unknown): Promise<EncodeTarget[]> {
@@ -508,7 +561,8 @@ export class PipelineGraph {
       let nodeKey = parentKey;
       let nextCalled = false;
       let nextSettled = false;
-      const next: IMiddleware.INext = function next() {
+
+      function next(): Promise<void> {
         if (nextCalled) {
           return Promise.reject(
             new MiddlewareNextCalledMultipleTimesError({
@@ -517,10 +571,12 @@ export class PipelineGraph {
             }),
           );
         }
+
         nextCalled = true;
 
         // next() の実行後、即座に destination の確認と凍結を行います。
         let encoded: unknown;
+
         try {
           encoded = requireDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
@@ -547,9 +603,10 @@ export class PipelineGraph {
             nextSettled = true;
           }
         });
-      };
+      }
 
       await node.middleware.encode(ctx, next);
+
       scope.signal.throwIfAborted();
       if (!nextCalled) {
         throw new MiddlewareNextNotCalledError({
@@ -557,6 +614,7 @@ export class PipelineGraph {
           operation: "encode",
         });
       }
+
       if (!nextSettled) {
         throw new MiddlewareNextNotAwaitedError({
           name: node.middleware.name,
@@ -619,7 +677,7 @@ export class PipelineGraph {
     // 葉書き込みは待機せず開始し、各タスクが自身の失敗を処理して allSettled で確定します。
     const writeLeaf = (leaf: PipelineLeaf, input: unknown, writeKey: string): void => {
       writeTasks.push(
-        (async () => {
+        (async (): Promise<void> => {
           try {
             await write(leaf, writeKey, input);
           } catch (ex) {
@@ -627,11 +685,17 @@ export class PipelineGraph {
             if (scope.signal.aborted) {
               return;
             }
+
             if (ex instanceof RepairNotAllowedError) {
               repairLogger.warn`Failed to repair a storage: ${ex}`;
 
               if (throwOnRepairDenied) {
-                writeDenials.push(new RepairNotAllowedError({ names: [leaf.name], cause: ex }));
+                writeDenials.push(
+                  new RepairNotAllowedError({
+                    cause: ex,
+                    names: [leaf.name],
+                  }),
+                );
                 // 他の書き込みの完了を待たずに拒否を確定させます。resolve は冪等です。
                 writeDenialSignal.resolve();
               }
@@ -664,7 +728,10 @@ export class PipelineGraph {
 
     const walk = async (node: PipelineNode, input: unknown, parentKey: string): Promise<void> => {
       const activeLeaves = activeLeavesOf(node, isTarget);
-      if (activeLeaves.length === 0) {
+
+      const [firstLeaf] = activeLeaves;
+
+      if (firstLeaf === undefined) {
         return;
       }
 
@@ -673,7 +740,7 @@ export class PipelineGraph {
       // 単一対象の節でも許可があれば再エンコードを行います。
       // 許可がなければ書き込みに到達しないため、副作用のないスキップに正規化しています。
       // ミドルウェアを実行せず、下流へそのまま伝播します。
-      if (!(shared || activeLeaves[0]!.canRepair)) {
+      if (!(shared || firstLeaf.canRepair)) {
         scope.signal.throwIfAborted();
 
         for (const entry of node.entries) {
@@ -683,6 +750,7 @@ export class PipelineGraph {
             if (!isTarget(entry.leaf)) {
               continue;
             }
+
             if (!entry.leaf.canRepair) {
               skipDenied(entry.leaf);
               continue;
@@ -709,7 +777,8 @@ export class PipelineGraph {
       let nextCalled = false;
       let nextSettled = false;
       let downstreamStarted = false;
-      const next: IMiddleware.INext = function next() {
+
+      function next(): Promise<void> {
         if (nextCalled) {
           return Promise.reject(
             new MiddlewareNextCalledMultipleTimesError({
@@ -718,10 +787,12 @@ export class PipelineGraph {
             }),
           );
         }
+
         nextCalled = true;
 
         // next() の実行後、即座に destination の確認と凍結を行います。
         let encoded: unknown;
+
         try {
           encoded = requireDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
@@ -744,6 +815,7 @@ export class PipelineGraph {
                 if (!isTarget(entry.leaf)) {
                   continue;
                 }
+
                 if (!entry.leaf.canRepair) {
                   skipDenied(entry.leaf);
                   continue;
@@ -756,7 +828,7 @@ export class PipelineGraph {
             nextSettled = true;
           }
         });
-      };
+      }
 
       try {
         await node.middleware.encode(ctx, next);
@@ -767,6 +839,7 @@ export class PipelineGraph {
             operation: "encode",
           });
         }
+
         if (!nextSettled) {
           throw new MiddlewareNextNotAwaitedError({
             name: node.middleware.name,
@@ -810,13 +883,14 @@ export class PipelineGraph {
 
           return;
         }
+
         if (ex instanceof RepairNotAllowedError) {
           repairLogger.warn`Failed to repair a storage: ${ex}`;
 
           if (throwOnRepairDenied) {
             const denied = new RepairNotAllowedError({
-              names: activeLeaves.map((leaf) => leaf.name),
               cause: ex,
+              names: activeLeaves.map((leaf) => leaf.name),
             });
             // 複数対象が共有する節の拒否は、旧実装同様に書き込み開始前に確定させます。
             if (shared) {
@@ -825,13 +899,9 @@ export class PipelineGraph {
 
             recordTraversalDenial(denied);
           }
-
-          return;
+        } else {
+          logger.error`Failed to repair a storage: ${ex}`;
         }
-
-        logger.error`Failed to repair a storage: ${ex}`;
-
-        return;
       }
     };
 
@@ -842,6 +912,7 @@ export class PipelineGraph {
         if (!isTarget(entry.leaf)) {
           continue;
         }
+
         if (!entry.leaf.canRepair) {
           skipDenied(entry.leaf);
           continue;
@@ -853,14 +924,18 @@ export class PipelineGraph {
 
     // 走査中の拒否は開始済みの書き込みを待たずに投げます。タスクは自身で例外を処理します。
     if (traversalDenial !== null) {
-      throw traversalDenial;
+      const denial: RepairNotAllowedError = traversalDenial;
+
+      throw denial;
     }
 
     // 書き込み中の拒否はシグナルで確定し、拒否がなければ全タスクの終了を待ちます。
     await Promise.race([Promise.allSettled(writeTasks), writeDenialSignal.promise]);
 
-    if (writeDenials.length > 0) {
-      throw writeDenials[0]!;
+    const [firstDenial] = writeDenials;
+
+    if (firstDenial !== undefined) {
+      throw firstDenial;
     }
   }
 
@@ -877,6 +952,7 @@ export class PipelineGraph {
    * @param source 入力ストリームです。
    * @param streams 構築したストリームを収集する集合です。呼び出し側がソースを事前に追加します。
    * @param options 構築オプションです。
+   *
    * @returns 構築結果を返します。
    */
   public async buildEncodeTree(
@@ -897,8 +973,12 @@ export class PipelineGraph {
       node: PipelineNode,
       input: IReadableStream,
       parentKey: string,
-    ): Promise<{ readonly key: string; readonly output: IReadableStream } | null> => {
+    ): Promise<{
+      readonly key: string;
+      readonly output: IReadableStream;
+    } | null> => {
       const activeLeaves = isActive === undefined ? node.allLeaves : activeLeavesOf(node, isActive);
+
       if (activeLeaves.length === 0) {
         return null;
       }
@@ -919,7 +999,8 @@ export class PipelineGraph {
       let downstreamError: unknown;
       let hasDownstreamError = false;
       let emptyBranches = false;
-      const next: IMiddleware.INext = function next() {
+
+      function next(): Promise<void> {
         if (nextCalled) {
           return Promise.reject(
             new MiddlewareNextCalledMultipleTimesError({
@@ -928,10 +1009,12 @@ export class PipelineGraph {
             }),
           );
         }
+
         nextCalled = true;
 
         // next() の実行後、即座に destination の確認と凍結を行います。
         let encoded: IReadableStream;
+
         try {
           encoded = requireStreamDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
@@ -958,15 +1041,19 @@ export class PipelineGraph {
               }
 
               const leaves = entry.node.allLeaves;
+
               return isActive === undefined || leaves.some(isActive);
             });
+
             if (branchEntries.length === 0) {
               emptyBranches = true;
+
               return;
             }
 
             const assigned: IReadableStream[] = [];
             let current = output;
+
             for (let i = 0; i < branchEntries.length; i++) {
               if (i < branchEntries.length - 1) {
                 const [branch, rest] = current.tee();
@@ -980,15 +1067,25 @@ export class PipelineGraph {
             }
 
             for (let i = 0; i < branchEntries.length; i++) {
-              const entry = branchEntries[i]!;
-              const stream = assigned[i]!;
+              const entry = branchEntries[i];
+              const stream = assigned[i];
+
+              if (entry === undefined || stream === undefined) {
+                throw new Error("分岐の項目またはストリームが存在しません。");
+              }
+
               if (entry.kind === "leaf") {
-                targets.push({ leaf: entry.leaf, key: nodeKey, stream });
+                targets.push({
+                  key: nodeKey,
+                  leaf: entry.leaf,
+                  stream,
+                });
               } else {
                 const child = await walk(entry.node, stream, nodeKey);
+
                 if (child === null) {
-                  // スキップされた部分木の分岐は解放します。tee の cancel は兄弟分岐の cancel/drain まで
-                  // 解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
+                  // スキップされた部分木の分岐は解放します。tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
+                  // oxlint-disable-next-line promise/prefer-await-to-then
                   Promise.try(() => stream.cancel(new Error("Skipped branch"))).catch(() => {});
                 }
               }
@@ -1002,7 +1099,7 @@ export class PipelineGraph {
             nextSettled = true;
           }
         });
-      };
+      }
 
       try {
         await node.middleware.encodeStream(ctx, next);
@@ -1013,6 +1110,7 @@ export class PipelineGraph {
             operation: "encode",
           });
         }
+
         if (!nextSettled) {
           throw new MiddlewareNextNotAwaitedError({
             name: node.middleware.name,
@@ -1054,23 +1152,36 @@ export class PipelineGraph {
             if (ex instanceof RepairNotAllowedError) {
               if (onNodeError(ex, activeLeaves)) {
                 // 書き戻しの分岐は既に構築済みのため、そのまま読み取りを続けます。
-                return output === undefined ? null : { key: nodeKey, output };
+                return output === undefined
+                  ? null
+                  : {
+                      key: nodeKey,
+                      output,
+                    };
               }
             }
 
             logger.error`Failed to repair a storage: ${ex}`;
 
-            return output === undefined ? null : { key: nodeKey, output };
+            return output === undefined
+              ? null
+              : {
+                  key: nodeKey,
+                  output,
+                };
           }
 
           throw ex;
         }
-        if (onNodeError?.(ex, activeLeaves)) {
+
+        if (onNodeError !== undefined && onNodeError(ex, activeLeaves)) {
           // 構築済みの出力は親の入力を pipeThrough でロックしており、親側からの解放は失敗するため、出力側からキャンセルを伝播させます。
           // next() 前の失敗で output が未確定のときは、設定済みの destination を直接キャンセルします。
           // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
           const abandoned = output ?? ctx.destination;
+
           if (abandoned !== undefined) {
+            // oxlint-disable-next-line promise/prefer-await-to-then
             Promise.try(() => abandoned.cancel(ex)).catch(() => {});
           }
 
@@ -1084,13 +1195,17 @@ export class PipelineGraph {
         return null;
       }
 
-      return { key: nodeKey, output };
+      return {
+        key: nodeKey,
+        output,
+      };
     };
 
     try {
       // 読み取り側は不変に保ち、書き戻し側だけを木へ通します。
       let rootInput = source;
-      if (options.splitRead) {
+
+      if (options.splitRead === true) {
         const [repairInput, read] = source.tee();
         streams.add(repairInput);
         streams.add(read);
@@ -1100,8 +1215,12 @@ export class PipelineGraph {
 
       // 根直下の分岐を登録順に tee で割り当てます。
       const rootActives = this.#leaves.filter((leaf) => isActive === undefined || isActive(leaf));
+
       if (rootActives.length === 0 && this.#entries.length === 0) {
-        return { targets, readStream };
+        return {
+          targets,
+          readStream,
+        };
       }
 
       const rootBranchEntries = this.#entries.filter((entry) => {
@@ -1115,6 +1234,7 @@ export class PipelineGraph {
       if (rootBranchEntries.length > 0) {
         const assigned: IReadableStream[] = [];
         let current = rootInput;
+
         for (let i = 0; i < rootBranchEntries.length; i++) {
           if (i < rootBranchEntries.length - 1) {
             const [branch, rest] = current.tee();
@@ -1128,18 +1248,28 @@ export class PipelineGraph {
         }
 
         for (let i = 0; i < rootBranchEntries.length; i++) {
-          const entry = rootBranchEntries[i]!;
-          const stream = assigned[i]!;
+          const entry = rootBranchEntries[i];
+          const stream = assigned[i];
+
+          if (entry === undefined || stream === undefined) {
+            throw new Error("分岐の項目またはストリームが存在しません。");
+          }
+
           if (entry.kind === "leaf") {
             if (isActive === undefined || isActive(entry.leaf)) {
-              targets.push({ leaf: entry.leaf, key: scope.key, stream });
+              targets.push({
+                key: scope.key,
+                leaf: entry.leaf,
+                stream,
+              });
             }
           } else {
             try {
               const child = await walk(entry.node, stream, scope.key);
+
               if (child === null) {
-                // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません
-                // (未処理 rejection も残しません)。
+                // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
+                // oxlint-disable-next-line promise/prefer-await-to-then
                 Promise.try(() => stream.cancel(new Error("Skipped branch"))).catch(() => {});
               }
             } catch (ex) {
@@ -1147,9 +1277,10 @@ export class PipelineGraph {
                 const leaves = entry.node.allLeaves.filter(
                   (leaf) => isActive === undefined || isActive(leaf),
                 );
+
                 if (onNodeError(ex, leaves)) {
-                  // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません
-                  // (未処理 rejection も残しません)。
+                  // tee の cancel は兄弟分岐の cancel/drain まで解決しないため、開始だけして構築を止めません (未処理 rejection も残しません)。
+                  // oxlint-disable-next-line promise/prefer-await-to-then
                   Promise.try(() => stream.cancel(ex)).catch(() => {});
                   continue;
                 }

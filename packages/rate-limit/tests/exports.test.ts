@@ -1,4 +1,5 @@
-import { describe, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe } from "vite-plus/test";
 
 import { RateLimitExceededError, RateLimitInvalidOptionError } from "../src/errors.js";
 import * as index from "../src/index.js";

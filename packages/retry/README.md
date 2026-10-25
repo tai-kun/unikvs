@@ -1,3 +1,3 @@
 # @unikvs/retry
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/retry)
+[Document](https://tai-kun.github.io/unikvs/)

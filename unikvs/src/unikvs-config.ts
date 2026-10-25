@@ -1,4 +1,4 @@
-import type { IMiddleware, IStorage } from "@unikvs/core";
+import type { IStorage, IMiddleware } from "@unikvs/core";
 
 import type { VariablesInit } from "./_contexts.js";
 import UniKvsMiddleware from "./_middleware.js";
@@ -19,12 +19,23 @@ import type {
 } from "./_types.js";
 import { appendForkDestinations } from "./_unikvs-branch.js";
 import { VariablesArgsSchema, VariablesInitSchema } from "./_unikvs.schemas.js";
-import * as v from "./_valibot.js";
+import type { GenericSchema } from "./_valibot.js";
 import {
+  array,
+  tuple,
+  union,
+  custom,
+  object,
+  record,
+  string,
+  optional,
+  parseInput,
+} from "./_valibot.js";
+import {
+  type ValueSchemaInfo,
   type $InferPlainValueData,
   type IValueSchemaResolver,
   type $InferStreamValueChunkData,
-  ValueSchemaInfo,
   VALUE_SCHEMA_BRAND,
   createValueSchemaResolver,
 } from "./_value-schemas.js";
@@ -123,8 +134,7 @@ export interface IUniKvsConfigBuilder<
     TMiddleware extends IMiddleware<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
-      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
-      any
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput
     >,
   >(
     middleware: TMiddleware,
@@ -274,8 +284,7 @@ export interface IUniKvsConfigFinalizer<
     TMiddleware extends IMiddleware<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
-      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput,
-      any
+      [TLastMiddlewareEncodeChunkOutput] extends [never] ? any : TLastMiddlewareEncodeChunkOutput
     >,
   >(
     middleware: TMiddleware,
@@ -342,24 +351,22 @@ export interface IUniKvsConfigFinalizer<
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
  */
 export type UniKvsConfigOptions = {
-  readonly schema?: UniKvsSchema | undefined;
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars)
    */
   readonly vars?: VariablesInit | undefined;
+  readonly schema?: UniKvsSchema | undefined;
 };
 
 /**
  * オブジェクト形式のスキーマ定義です。キーをそのままキーとして扱います。
  */
-export type UniKvsSchemaRecord = {
-  readonly [key: string]: Value;
-};
+export type UniKvsSchemaRecord = Readonly<Record<string, Value>>;
 
 /**
  * 配列形式のスキーマ定義です。キーのスキーマと値のスキーマの組を並べます。
  */
-export type UniKvsSchemaEntries = readonly (readonly [v.GenericSchema, Value])[];
+export type UniKvsSchemaEntries = readonly (readonly [GenericSchema, Value])[];
 
 /**
  * `UniKvs.config()` の `schema` オプションに指定できるスキーマ定義です。
@@ -369,11 +376,11 @@ export type UniKvsSchema = UniKvsSchemaRecord | UniKvsSchemaEntries;
 /**
  * 値が Valibot のスキーマであるかどうかを判定します。
  */
-function isGenericSchema(input: unknown): input is v.GenericSchema {
+function isGenericSchema(input: unknown): input is GenericSchema {
   return (
     typeof input === "object" &&
     input !== null &&
-    // v.GenericSchema は関数 "~run" を持ちます。
+    // GenericSchema は関数 "~run" を持ちます。
     "~run" in input &&
     typeof input["~run"] === "function"
   );
@@ -391,29 +398,26 @@ function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
   );
 }
 
-const UniKvsConfigOptionsSchema = v.object({
+const UniKvsConfigOptionsSchema = object({
   /**
    * キーと値のスキーマ定義です。
    */
-  schema: v.optional(
-    v.union([
-      v.array(
-        v.tuple([
-          v.custom<v.GenericSchema>(isGenericSchema),
-          v.custom<ValueSchemaInfo>(isValueSchemaInfo),
-        ]),
+  schema: optional(
+    union([
+      array(
+        tuple([custom<GenericSchema>(isGenericSchema), custom<ValueSchemaInfo>(isValueSchemaInfo)]),
       ),
-      v.record(v.string(), v.custom<ValueSchemaInfo>(isValueSchemaInfo)),
+      record(string(), custom<ValueSchemaInfo>(isValueSchemaInfo)),
     ]),
   ),
 
   /**
    * 基本となる実行時変数です。
    */
-  vars: v.optional(VariablesInitSchema),
+  vars: optional(VariablesInitSchema),
 });
 
-const UniKvsConfigArgsSchema = v.tuple([v.optional(UniKvsConfigOptionsSchema)]);
+const UniKvsConfigArgsSchema = tuple([optional(UniKvsConfigOptionsSchema)]);
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -462,9 +466,8 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
    * @internal
    */
   public constructor(UniKvsConstructor: typeof UniKvs, options?: UniKvsConfigOptions);
-
   public constructor(UniKvsConstructor: typeof UniKvs, ...args: unknown[]) {
-    const [{ vars, schema } = {}] = v.parseInput(UniKvsConfigArgsSchema, args);
+    const [{ vars, schema } = {}] = parseInput(UniKvsConfigArgsSchema, args);
 
     this.#UniKvs = UniKvsConstructor;
     this.#destinations = [];
@@ -499,9 +502,8 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   public setVars(vars: VariablesInit): this;
-
   public setVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(VariablesArgsSchema, args);
+    const [vars] = parseInput(VariablesArgsSchema, args);
 
     this.#vars.clear();
     for (const [name, value] of vars) {
@@ -512,12 +514,12 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   public assignVars(vars: VariablesInit): this;
-
   public assignVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(VariablesArgsSchema, args);
+    const [vars] = parseInput(VariablesArgsSchema, args);
 
     const target = this.#vars;
     const source = vars;
+
     for (const [name, value] of source) {
       target.set(name, value);
     }
@@ -526,12 +528,12 @@ export default class UniKvsConfig implements IUniKvsConfigBuilder, IUniKvsConfig
   }
 
   public defaultsVars(vars: VariablesInit): this;
-
   public defaultsVars(...args: unknown[]): this {
-    const [vars] = v.parseInput(VariablesArgsSchema, args);
+    const [vars] = parseInput(VariablesArgsSchema, args);
 
     const target = new Map(vars);
     const source = this.#vars;
+
     for (const [name, value] of source) {
       target.set(name, value);
     }

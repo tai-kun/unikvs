@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -44,12 +44,15 @@ export class ExpiryInvalidExpiresAtError extends InvalidUsageErrorBase<ExpiryInv
    */
   public constructor(args: ExpiryInvalidExpiresAtErrorArgs) {
     const { key, actual, ...options } = args;
-    const meta: ExpiryInvalidExpiresAtErrorMeta = { key, actual };
+    const meta: ExpiryInvalidExpiresAtErrorMeta = {
+      key,
+      actual,
+    };
     super(
       meta,
-      ({ key, actual }) =>
-        `Invalid expiresAt ${stringify(actual)}${
-          key === undefined ? "" : ` for key ${JSON.stringify(key)}`
+      ({ key: keyValue, actual: actualValue }) =>
+        `Invalid expiresAt ${stringify(actualValue)}${
+          keyValue === undefined ? "" : ` for key ${JSON.stringify(keyValue)}`
         }. Expected a Date, epoch milliseconds, or an ISO 8601 string.`,
       options,
     );
@@ -69,7 +72,7 @@ function stringify(value: unknown): string {
   try {
     const json = JSON.stringify(value);
 
-    return json === undefined ? String(value) : json;
+    return json ?? String(value);
   } catch {
     return String(value);
   }

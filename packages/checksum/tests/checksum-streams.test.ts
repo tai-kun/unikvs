@@ -1,23 +1,23 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatChunks,
-  createDecodeStreamContext,
-  createEncodeStreamContext,
+  type TestContextValues,
+  toHex,
   createNext,
   sourceFrom,
+  concatChunks,
   splitBySizes,
-  toHex,
-  type TestContextValues,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import {
-  Checksum,
   type IHash,
   type IHasher,
-  ChecksumMismatchError,
+  Checksum,
   ChecksumSha256,
+  ChecksumMismatchError,
 } from "../src/index.js";
 
 const VAR_NAME = ChecksumSha256.CHECKSUM_VAR_NAME;
@@ -33,17 +33,18 @@ const EMPTY_DIGEST = toHex(sha256(new Uint8Array(0)));
  */
 function createFailingHash(): IHash {
   let updateCount = 0;
+
   return Object.assign(() => new Uint8Array(), {
     create(): IHasher {
       return {
+        digest() {
+          return new Uint8Array();
+        },
         update() {
           updateCount += 1;
           if (updateCount === 2) {
             throw new globalThis.Error("update failed");
           }
-        },
-        digest() {
-          return new Uint8Array();
         },
       };
     },
@@ -54,7 +55,7 @@ function createFailingHash(): IHash {
  * チャンク処理中のハッシャー失敗を再現するためのサブクラスです。
  */
 class FailingChecksum extends Checksum {
-  public static override CHECKSUM_VAR_NAME: string = "@unikvs/checksum:test-failing";
+  public static override CHECKSUM_VAR_NAME = "@unikvs/checksum:test-failing";
 
   public constructor() {
     super("FailingChecksum", createFailingHash());
@@ -68,7 +69,10 @@ async function runEncodeStream(
   checksum: Checksum,
   inputChunks: readonly Uint8Array<ArrayBuffer>[],
   values?: TestContextValues,
-): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+): Promise<{
+  closeError: unknown;
+  outputChunks: Uint8Array<ArrayBuffer>[];
+}> {
   const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
   await checksum.encodeStream(
     c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
@@ -94,7 +98,10 @@ async function runEncodeStream(
     closeError = error;
   }
 
-  return { outputChunks, closeError };
+  return {
+    closeError,
+    outputChunks,
+  };
 }
 
 /**
@@ -104,7 +111,10 @@ async function runDecodeStream(
   checksum: Checksum,
   inputChunks: readonly Uint8Array<ArrayBuffer>[],
   values?: TestContextValues,
-): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+): Promise<{
+  closeError: unknown;
+  outputChunks: Uint8Array<ArrayBuffer>[];
+}> {
   const c = createDecodeStreamContext(sourceFrom(inputChunks), "", { values });
   await checksum.decodeStream(
     c as IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
@@ -130,96 +140,99 @@ async function runDecodeStream(
     closeError = error;
   }
 
-  return { outputChunks, closeError };
+  return {
+    closeError,
+    outputChunks,
+  };
 }
 
 describe("ストリームの透過", () => {
   test("複数のチャンクを書くと全チャンクがそのまま流れて検証に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const chunks = [DATA.subarray(0, 4), DATA.subarray(4, 20), DATA.subarray(20)];
 
-    // 実行
-    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+    // 実行：
+    const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
       [VAR_NAME]: DIGEST,
     });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual(chunks);
   });
 
   test("チャンクを 1 つも書かなくても空データとして検証に成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
 
-    // 実行
-    const { outputChunks, closeError } = await runEncodeStream(checksum, [], {
+    // 実行：
+    const { closeError, outputChunks } = await runEncodeStream(checksum, [], {
       [VAR_NAME]: EMPTY_DIGEST,
     });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual([]);
   });
 
   test("多数のチャンクを順に処理できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const chunks = Array.from({ length: 100 }, (_, index) =>
-      Uint8Array.from({ length: 7 }, (_, offset) => (index + offset) % 256),
+      Uint8Array.from({ length: 7 }, (__unused, offset) => (index + offset) % 256),
     );
     const expected = toHex(sha256(concatChunks(chunks)));
 
-    // 実行
-    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+    // 実行：
+    const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
       [VAR_NAME]: expected,
     });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual(chunks);
   });
 
   test("ハッシュのブロック境界をまたぐ分割でも一括検証と一致する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const data = Uint8Array.from({ length: 700 }, (_, index) => (index * 7) % 256);
     const chunks = splitBySizes(data, [1, 54, 55, 56, 63, 64, 65, 127, 128, 129]);
 
-    // 実行
-    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
+    // 実行：
+    const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
       [VAR_NAME]: toHex(sha256(data)),
     });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
   });
 
   test("decodeStream でも複数のチャンクがそのまま流れる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const chunks = [DATA.subarray(0, 10), DATA.subarray(10, 20), DATA.subarray(20)];
 
-    // 実行
-    const { outputChunks, closeError } = await runDecodeStream(checksum, chunks, {
+    // 実行：
+    const { closeError, outputChunks } = await runDecodeStream(checksum, chunks, {
       [VAR_NAME]: DIGEST,
     });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual(chunks);
   });
 
   test("チェックサム未指定の decodeStream はハッシュを計算せずに透過する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
 
-    // 実行
-    const { outputChunks, closeError } = await runDecodeStream(checksum, [DATA]);
+    // 実行：
+    const { closeError, outputChunks } = await runDecodeStream(checksum, [DATA]);
 
-    // 検証
+    // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual([DATA]);
   });
@@ -229,14 +242,14 @@ describe("不一致の検出", () => {
   test("不一致のときは ChecksumMismatchError で失敗し meta に actual と expected を保持する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const expected = "0".repeat(DIGEST.length);
 
-    // 実行
+    // 実行：
     const { closeError } = await runEncodeStream(checksum, [DATA], { [VAR_NAME]: expected });
 
-    // 検証
+    // 検証：
     expect(closeError).toBeInstanceOf(ChecksumMismatchError);
     expect((closeError as ChecksumMismatchError).meta).toStrictEqual({
       actual: DIGEST,
@@ -247,7 +260,7 @@ describe("不一致の検出", () => {
   test("不一致のストリームを下流に接続すると ChecksumMismatchError が伝播する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const checksum = new ChecksumSha256();
     const c = createEncodeStreamContext(sourceFrom([DATA]), "", {
       values: { [VAR_NAME]: "0".repeat(DIGEST.length) },
@@ -256,31 +269,36 @@ describe("不一致の検出", () => {
       c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
       createNext(),
     );
+
     const sink = new WritableStream<Uint8Array<ArrayBuffer>>();
 
-    // 実行
-    const pipeResult = (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>)
-      .pipeTo(sink)
-      .catch((error: unknown) => error);
+    // 実行：
+    let pipeError: unknown;
 
-    // 検証
-    expect(await pipeResult).toBeInstanceOf(ChecksumMismatchError);
+    try {
+      await (c.destination as ReadableStream<Uint8Array<ArrayBuffer>>).pipeTo(sink);
+    } catch (error) {
+      pipeError = error;
+    }
+
+    // 検証：
+    expect(pipeError).toBeInstanceOf(ChecksumMismatchError);
   });
 });
 
 describe("処理中のエラー", () => {
   test("ハッシャーの update が失敗するとそのエラーがストリームに伝播する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const checksum = new FailingChecksum();
 
-    // 実行
+    // 実行：
     const { closeError } = await runEncodeStream(
       checksum,
       [new Uint8Array([1]), new Uint8Array([2])],
       { [FailingChecksum.CHECKSUM_VAR_NAME]: "" },
     );
 
-    // 検証
+    // 検証：
     expect(closeError).toBeInstanceOf(globalThis.Error);
     expect((closeError as globalThis.Error).message).toBe("update failed");
   });

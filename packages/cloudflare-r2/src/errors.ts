@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -59,11 +59,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }
@@ -71,7 +75,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
 
 setErrorMessage(
   InvalidChunkTypeError,
-  ({ key, chunkType }) =>
-    `キー ${JSON.stringify(key)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
+  ({ key: messageKey, chunkType }) =>
+    `キー ${JSON.stringify(messageKey)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
   "ja",
 );

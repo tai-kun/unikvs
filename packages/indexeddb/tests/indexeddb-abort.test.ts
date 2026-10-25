@@ -1,32 +1,33 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
-
 describe("AbortSignal による中断", () => {
   test("中断済みの signal はすべてのメソッドを中断理由で拒否する", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const key = "pre-aborted";
+
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "value");
     const controller = new AbortController();
     const reason = new Error("独自の中断理由");
     controller.abort(reason);
+
     const abortedSignal = controller.signal;
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext(key, { signal: abortedSignal }) as IStorage.WriteContext,
@@ -58,61 +59,65 @@ describe("AbortSignal による中断", () => {
         createStreamContext(key, { signal: abortedSignal }) as IStorage.GetReadableContext,
       ),
     ).toThrow(reason);
+
     expect(storage.isOpen).toBe(true);
   });
 
   test("中断済みの signal は open を中断理由で拒否する", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     const reason = new Error("独自の中断理由");
     controller.abort(reason);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.open(createOpenContext({ signal: controller.signal }) as IStorage.OpenContext),
     ).rejects.toBe(reason);
+
     expect(storage.isOpen).toBe(false);
   });
 
   test("実行中に中断された open は未オープンのままにする", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
 
-    // 実行
+    // 実行：
     const opening = storage.open(
       createOpenContext({ signal: controller.signal }) as IStorage.OpenContext,
     );
     controller.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(opening).rejects.toBe(reason);
+
     expect(storage.isOpen).toBe(false);
   });
 
   test("実行中に中断された read は中断理由で拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "aborted-read";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1, 2, 3]),
     );
+
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
 
-    // 実行
+    // 実行：
     const reading = storage.read(
       createGetContext(key, { signal: controller.signal }) as IStorage.ReadContext,
     );
     controller.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(reading).rejects.toBe(reason);
   });
 
   test("書き込みストリームを signal で中断したとき、保存されない", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "aborted-writable";
     const controller = new AbortController();
@@ -124,10 +129,10 @@ describe("AbortSignal による中断", () => {
       .getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
-    // 実行
+    // 実行：
     controller.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(writer.close()).rejects.toBe(reason);
     expect(await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
       false,
@@ -138,13 +143,14 @@ describe("AbortSignal による中断", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const key = "aborted-readable";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1, 2, 3]),
     );
+
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
     const reader = storage
@@ -153,10 +159,10 @@ describe("AbortSignal による中断", () => {
       )
       .getReader();
 
-    // 実行
+    // 実行：
     controller.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(reader.read()).rejects.toBe(reason);
   });
 });

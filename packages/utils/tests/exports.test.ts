@@ -1,5 +1,6 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
+// oxlint-disable import/no-namespace
 import assertValidDirname from "../src/assert-valid-dirname.js";
 import assertValidFilename from "../src/assert-valid-filename.js";
 import bytesToHex from "../src/bytes-to-hex.js";
@@ -16,7 +17,7 @@ import withReadableStreamFrom from "../src/with-readable-stream-from.js";
 
 describe("index のエクスポート", () => {
   test("関数がエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.assertValidDirname).toBe(assertValidDirname);
     expect(index.assertValidFilename).toBe(assertValidFilename);
     expect(index.bytesToHex).toBe(bytesToHex);
@@ -32,7 +33,7 @@ describe("index のエクスポート", () => {
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.InvalidDirnameError).toBe(InvalidDirnameError);
     expect(index.InvalidFilenameError).toBe(InvalidFilenameError);
   });

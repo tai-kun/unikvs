@@ -1,4 +1,4 @@
-import type { SpanAttributeValue, SpanLike, SpanStatus, TracerLike } from "../src/tracing.js";
+import type { SpanLike, SpanStatus, TracerLike, SpanAttributeValue } from "../src/tracing.js";
 
 /**
  * 記録したスパンを検証するためのテスト用スパンです。
@@ -13,7 +13,7 @@ export class RecordingSpan implements SpanLike {
   /**
    * 設定された属性の一覧です。
    */
-  public readonly attributes: Map<string, SpanAttributeValue> = new Map();
+  public readonly attributes = new Map<string, SpanAttributeValue>();
 
   /**
    * 最後に設定された状態です。
@@ -81,6 +81,7 @@ export class RecordingTracer implements TracerLike {
    * 記録用のスパンを発行します。
    *
    * @param name スパン名です。
+   *
    * @returns 記録用のスパンを返します。
    */
   public startSpan(name: string): RecordingSpan {

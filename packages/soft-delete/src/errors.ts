@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -32,7 +32,7 @@ export class TombstoneNotFoundError extends ErrorBase<TombstoneNotFoundErrorMeta
   public constructor(args: TombstoneNotFoundErrorArgs) {
     const { key, ...options } = args;
     const meta: TombstoneNotFoundErrorMeta = { key };
-    super(meta, ({ key }) => `Tombstone not found for key: ${key}`, options);
+    super(meta, ({ key: messageKey }) => `Tombstone not found for key: ${messageKey}`, options);
   }
 }
 
@@ -74,8 +74,8 @@ export class SoftDeleteInvalidRetentionError extends InvalidUsageErrorBase<SoftD
     const meta: SoftDeleteInvalidRetentionErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `Invalid retentionMs ${String(actual)}: retentionMs must be a non-negative finite number of milliseconds.`,
+      ({ actual: messageActual }) =>
+        `Invalid retentionMs ${String(messageActual)}: retentionMs must be a non-negative finite number of milliseconds.`,
       options,
     );
   }

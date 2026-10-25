@@ -1,4 +1,4 @@
-import type { CookieAttributes, CookieStoreLike } from "../src/cookies.js";
+import type { CookieStoreLike, CookieAttributes } from "../src/cookies.js";
 
 export type SetCall = {
   readonly name: string;
@@ -36,12 +36,19 @@ export function createFakeCookieStore(): FakeCookieStore {
     },
 
     set(name: string, value: string, attributes: CookieAttributes): void {
-      setCalls.push({ name, value, attributes });
+      setCalls.push({
+        name,
+        value,
+        attributes,
+      });
       entries.set(name, value);
     },
 
     delete(name: string, attributes: CookieAttributes): void {
-      deleteCalls.push({ name, attributes });
+      deleteCalls.push({
+        name,
+        attributes,
+      });
       entries.delete(name);
     },
 
@@ -58,8 +65,7 @@ export type FakeDocument = {
 /**
  * document.cookie だけを持つフェイクです。
  * 書き込まれた Set-Cookie 文字列を解析し、Max-Age が 0 以下のときの削除を再現します。
- * Path / Domain によるスコープ、Expires、正の Max-Age の期限切れ、Secure / SameSite の
- * 適用は模倣しません。属性は書き込まれた文字列を直接検証してください。
+ * Path / Domain によるスコープ、Expires、正の Max-Age の期限切れ、Secure / SameSite の適用は模倣しません。属性は書き込まれた文字列を直接検証してください。
  */
 export function createFakeDocument(): FakeDocument & { writes: string[] } {
   const jar = new Map<string, string>();
@@ -117,7 +123,6 @@ export function runWithGlobalDocument<T>(document: FakeDocument | undefined, fn:
   const holder = globalThis as Record<string, unknown>;
   const hadOwn = Object.hasOwn(holder, "document");
   const descriptor = Object.getOwnPropertyDescriptor(holder, "document");
-
   Object.defineProperty(holder, "document", {
     value: document,
     writable: true,

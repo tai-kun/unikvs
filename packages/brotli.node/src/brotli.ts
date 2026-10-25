@@ -4,7 +4,7 @@ import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
 
 import { type IEnv, api } from "./_core.js";
-import { UnsupportedRuntimeError, BrotliInvalidLevelError } from "./errors.js";
+import { BrotliInvalidLevelError, UnsupportedRuntimeError } from "./errors.js";
 
 /**
  * Brotli ミドルウェアのオプションです。
@@ -27,13 +27,19 @@ function toOwnedBytesTransformStream(
 ): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
   return proxyTransformStream(
     transform,
-    (chunk: Uint8Array<ArrayBuffer>, controller) => {
+    (
+      chunk: Uint8Array<ArrayBuffer>,
+      controller: TransformStreamDefaultController<Buffer>,
+    ): void => {
       const buffer = Buffer.isBuffer(chunk)
         ? chunk
         : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       controller.enqueue(buffer);
     },
-    (buffer: Buffer, controller) => {
+    (
+      buffer: Buffer,
+      controller: TransformStreamDefaultController<Uint8Array<ArrayBuffer>>,
+    ): void => {
       const chunk = toOwnedBytes(buffer);
       controller.enqueue(chunk);
     },
@@ -70,12 +76,12 @@ export default class Brotli implements IMiddleware {
 
   /**
    * @param options コンストラクターオプションです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
    */
   public constructor(options: BrotliOptions = {}) {
     const { level = 11 } = options;
     const isValidLevel = Number.isInteger(level) && level >= 0 && level <= 11;
+
     if (!isValidLevel) {
       throw new BrotliInvalidLevelError({ actual: level });
     }
@@ -86,6 +92,18 @@ export default class Brotli implements IMiddleware {
 
   public get isOpen(): boolean {
     return this.#env !== null;
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("Brotli is not open. Call open() first.");
+    }
+
+    return env;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
@@ -115,7 +133,8 @@ export default class Brotli implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = await api.compress(env, c.source, { level: this.#level });
     c.destination = toOwnedBytes(buffer);
 
@@ -126,7 +145,8 @@ export default class Brotli implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = await api.decompress(env, c.source);
     c.destination = toOwnedBytes(buffer);
 
@@ -137,7 +157,8 @@ export default class Brotli implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const compress = api.createCompress(env, { level: this.#level });
     const transform = toOwnedBytesTransformStream(compress);
     c.destination = c.source.pipeThrough(transform);
@@ -149,7 +170,8 @@ export default class Brotli implements IMiddleware {
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const decompress = api.createDecompress(env);
     const transform = toOwnedBytesTransformStream(decompress);
     c.destination = c.source.pipeThrough(transform);

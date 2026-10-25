@@ -2,37 +2,37 @@ import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
-  createAllByteValues,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createAllByteValues,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { InvalidPartSizeError } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 const PART_SIZE = 5 * 1024 * 1024;
-
 describe("ストリーム操作", () => {
   test("チャンクを 1 つも書かずに閉じたストリームは 0 バイトのオブジェクトになる", async ({
     expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty-stream.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
       .getWriter();
     await writer.close();
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(true);
@@ -42,12 +42,13 @@ describe("ストリーム操作", () => {
   });
 
   test("空のチャンクを挟んでもデータが欠落しない", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "empty-chunks.bin";
     const expected = new TextEncoder().encode("part-1-part-2");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
       .getWriter();
@@ -57,7 +58,7 @@ describe("ストリーム操作", () => {
     await writer.write(expected.subarray(6));
     await writer.close();
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(expected);
@@ -68,19 +69,20 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "single-chunk.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
       .getWriter();
     await writer.write(data);
     await writer.close();
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(data);
@@ -91,18 +93,21 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "three-way.bin";
     const expected = createAllByteValues(256 * 32);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
       .getWriter();
+
     for (let offset = 0; offset < expected.length; offset += 1000) {
       await writer.write(expected.subarray(offset, offset + 1000));
     }
+
     await writer.close();
     const direct = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     const streamed = await collectBytes(
@@ -111,18 +116,19 @@ describe("ストリーム操作", () => {
       ),
     );
 
-    // 検証
+    // 検証：
     expect(bytesEqual(direct, expected)).toBe(true);
     expect(bytesEqual(streamed, expected)).toBe(true);
   });
 
   test("partSize ちょうど 5 MiB のデータを保存できる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "part-size-exact.bin";
     const data = createAllByteValues(PART_SIZE);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(
         createSetContext(key, {
@@ -133,9 +139,10 @@ describe("ストリーム操作", () => {
       .getWriter();
     await writer.write(data);
     await writer.close();
+
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(bytesEqual(result, data)).toBe(true);
   });
 
@@ -144,12 +151,13 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "part-size-over.bin";
     const data = createAllByteValues(PART_SIZE + 1);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(
         createSetContext(key, {
@@ -160,17 +168,18 @@ describe("ストリーム操作", () => {
       .getWriter();
     await writer.write(data);
     await writer.close();
+
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(bytesEqual(result, data)).toBe(true);
   });
 
   test("@unikvs/s3:partSize がフォールバックとして使用される", ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     // 5 MiB 未満の値が実際に Upload に渡されたことをサーバー側のエラーで確認する。
     expect(() =>
       storage.getWritable(
@@ -179,7 +188,7 @@ describe("ストリーム操作", () => {
           values: { "@unikvs/s3:partSize": 1024 },
         }) as IStorage.GetWritableContext,
       ),
-    ).toThrow(/EntityTooSmall/);
+    ).toThrow(/EntityTooSmall/u);
   });
 
   test("@unikvs/s3.node:partSize は @unikvs/s3:partSize より優先される", ({
@@ -187,17 +196,17 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getWritable(
         createSetContext("precedence.bin", {
           signal,
           values: {
-            "@unikvs/s3.node:partSize": "不正な値",
             "@unikvs/s3:partSize": PART_SIZE,
+            "@unikvs/s3.node:partSize": "不正な値",
           },
         }) as IStorage.GetWritableContext,
       ),
@@ -209,8 +218,9 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "aborted-writer.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writer = storage
       .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
@@ -218,16 +228,16 @@ describe("ストリーム操作", () => {
     // マルチパートアップロードが開始するサイズを書き込む。
     await writer.write(new Uint8Array(6 * 1024 * 1024));
 
-    // 実行
+    // 実行：
     await writer.abort(new Error("中断"));
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
-    ).rejects.toThrow(/NoSuchKey|does not exist/);
+    ).rejects.toThrow(/NoSuchKey|does not exist/u);
     await storage.write(
       createSetContext("after-writer-abort.bin", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
@@ -244,9 +254,10 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "aborted-by-signal.bin";
     const controller = new AbortController();
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writer = storage
       .getWritable(
@@ -255,11 +266,11 @@ describe("ストリーム操作", () => {
       .getWriter();
     await writer.write(new Uint8Array(6 * 1024 * 1024));
 
-    // 実行
+    // 実行：
     controller.abort();
 
-    // 検証
-    await expect(writer.close()).rejects.toThrow(/abort/i);
+    // 検証：
+    await expect(writer.close()).rejects.toThrow(/abort/iu);
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -270,22 +281,23 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty-read.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array(0),
     );
 
-    // 実行
+    // 実行：
     const streamed = await collectBytes(
       await storage.getReadable(
         createStreamContext(key, { signal }) as IStorage.GetReadableContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(streamed).toStrictEqual(new Uint8Array(0));
   });
 
@@ -294,23 +306,26 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "cancelled-reader.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       createAllByteValues(1024 * 1024),
     );
-    const reader = (
-      await storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext)
-    ).getReader();
+    const readable = await storage.getReadable(
+      createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+    );
+    const reader = readable.getReader();
     const first = await reader.read();
 
-    // 実行
+    // 実行：
     await reader.cancel();
 
-    // 検証
+    // 検証：
     expect(first.done).toBe(false);
+
     await storage.write(
       createSetContext("after-cancel.bin", { signal }) as IStorage.WriteContext,
       new Uint8Array([2]),
@@ -325,30 +340,31 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.getReadable(
         createStreamContext("missing-stream.bin", { signal }) as IStorage.GetReadableContext,
       ),
-    ).rejects.toThrow(/NoSuchKey|does not exist/);
+    ).rejects.toThrow(/NoSuchKey|does not exist/u);
   });
 
   test("中断済み signal で getReadable を呼ぶと拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.getReadable(
         createStreamContext("aborted-read.bin", {
           signal: controller.signal,
         }) as IStorage.GetReadableContext,
       ),
-    ).rejects.toThrow(/abort/i);
+    ).rejects.toThrow(/abort/iu);
   });
 });

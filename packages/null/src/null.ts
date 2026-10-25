@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/null#usage)
@@ -17,6 +17,7 @@ export default class Null implements IStorage {
     return true;
   }
 
+  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(_c: IStorage.WriteContext, _data: any): void {}
 
   public read(c: IStorage.ReadContext): never {
@@ -33,7 +34,7 @@ export default class Null implements IStorage {
 
   public clear(_c: IStorage.ClearContext): void {}
 
-  public getWritable(_c: IStorage.GetWritableContext): WritableStream<any> {
+  public getWritable(_c: IStorage.GetWritableContext): WritableStream {
     return new WritableStream({
       write() {},
     });

@@ -1,3 +1,3 @@
 # @unikvs/compression
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/compression)
+[Document](https://tai-kun.github.io/unikvs/)

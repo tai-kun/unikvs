@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -40,8 +40,8 @@ export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSeco
     const meta: InvalidTtlSecondsErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`ttlSeconds\` must be a finite number greater than or equal to 0, but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`ttlSeconds\` must be a finite number greater than or equal to 0, but got ${String(messageActual)}.`,
       options,
     );
   }
@@ -91,8 +91,8 @@ export class InvalidConnectTimeoutError extends InvalidUsageErrorBase<InvalidCon
     const meta: InvalidConnectTimeoutErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`connectTimeout\` must be a finite positive number (ms), but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`connectTimeout\` must be a finite positive number (ms), but got ${String(messageActual)}.`,
       options,
     );
   }
@@ -142,7 +142,8 @@ export class ConnectTimeoutError extends ErrorBase<ConnectTimeoutErrorMeta> {
     const meta: ConnectTimeoutErrorMeta = { timeoutMs };
     super(
       meta,
-      ({ timeoutMs }) => `Timed out connecting to Memcached after ${timeoutMs}ms`,
+      ({ timeoutMs: messageTimeoutMs }) =>
+        `Timed out connecting to Memcached after ${messageTimeoutMs}ms`,
       options,
     );
   }

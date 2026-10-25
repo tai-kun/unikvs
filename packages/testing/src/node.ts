@@ -1,5 +1,5 @@
 import { readdir } from "node:fs/promises";
-import { createServer, Socket } from "node:net";
+import { Socket, createServer } from "node:net";
 
 /**
  * OS から空きポートを 1 つ取得します。
@@ -33,6 +33,7 @@ export async function acquireFreePort(): Promise<number> {
  *
  * @param port 接続先のポート番号です。
  * @param timeoutMs 待機する最大時間 (ミリ秒) です。
+ *
  * @returns ポートが開放された場合に解決する Promise です。
  */
 export async function waitForPort(port: number, timeoutMs = 10e3): Promise<void> {
@@ -56,7 +57,6 @@ export async function waitForPort(port: number, timeoutMs = 10e3): Promise<void>
       });
       socket.connect(port, "127.0.0.1");
     };
-
     tryConnect();
   });
 }

@@ -1,6 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
-import { createEncodeContext, createNext, type TestContextValues } from "@unikvs/testing";
-import { test } from "vitest";
+import { type TestContextValues, createNext, createEncodeContext } from "@unikvs/testing";
+import { test, describe } from "vite-plus/test";
 
 import type Checksum from "../src/checksum.js";
 import { ChecksumMismatchError, ChecksumRequiredError } from "../src/errors.js";
@@ -28,68 +28,70 @@ async function encode(
   return c.destination;
 }
 
-test("CHECKSUM_VAR_NAME が定義されている", ({ expect }) => {
-  // 検証
-  expect(ChecksumSha224.CHECKSUM_VAR_NAME).toBe("@unikvs/checksum:sha224");
-});
-
-test("指定した名前が name プロパティに設定される", ({ expect }) => {
-  // 準備
-  const checksum = new ChecksumSha224();
-
-  // 実行と検証
-  expect(checksum.name).toBe("ChecksumSha224");
-});
-
-test("期待値と一致するチェックサムを指定して encode すると、SHA-224 のハッシュで検証してデータをそのまま返す", async ({
-  expect,
-}) => {
-  // 準備
-  const checksum = new ChecksumSha224();
-
-  // 実行
-  const result = await encode(checksum, TEST_DATA, {
-    [ChecksumSha224.CHECKSUM_VAR_NAME]: VALID_HASH,
+describe("ChecksumSha224", () => {
+  test("CHECKSUM_VAR_NAME が定義されている", ({ expect }) => {
+    // 検証：
+    expect(ChecksumSha224.CHECKSUM_VAR_NAME).toBe("@unikvs/checksum:sha224");
   });
 
-  // 検証
-  expect(result).toStrictEqual(TEST_DATA);
-});
+  test("指定した名前が name プロパティに設定される", ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha224();
 
-test("空のデータを SHA-224 のハッシュ値で検証できる", async ({ expect }) => {
-  // 準備
-  const checksum = new ChecksumSha224();
-  const data = new Uint8Array(0);
+    // 実行と検証：
+    expect(checksum.name).toBe("ChecksumSha224");
+  });
 
-  // 実行
-  const result = await encode(checksum, data, { [ChecksumSha224.CHECKSUM_VAR_NAME]: EMPTY_HASH });
+  test("期待値と一致するチェックサムを指定して encode すると、SHA-224 のハッシュで検証してデータをそのまま返す", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha224();
 
-  // 検証
-  expect(result).toStrictEqual(data);
-});
+    // 実行：
+    const result = await encode(checksum, TEST_DATA, {
+      [ChecksumSha224.CHECKSUM_VAR_NAME]: VALID_HASH,
+    });
 
-test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", async ({
-  expect,
-}) => {
-  // 準備
-  const checksum = new ChecksumSha224();
+    // 検証：
+    expect(result).toStrictEqual(TEST_DATA);
+  });
 
-  // 実行と検証
-  try {
-    await encode(checksum, TEST_DATA, { [ChecksumSha224.CHECKSUM_VAR_NAME]: INVALID_HASH });
-    expect.unreachable();
-  } catch (error) {
-    expect(error).toBeInstanceOf(ChecksumMismatchError);
-    expect((error as ChecksumMismatchError).meta.actual).toBe(VALID_HASH);
-  }
-});
+  test("空のデータを SHA-224 のハッシュ値で検証できる", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha224();
+    const data = new Uint8Array(0);
 
-test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", async ({
-  expect,
-}) => {
-  // 準備
-  const checksum = new ChecksumSha224({ required: true });
+    // 実行：
+    const result = await encode(checksum, data, { [ChecksumSha224.CHECKSUM_VAR_NAME]: EMPTY_HASH });
 
-  // 実行と検証
-  await expect(encode(checksum, TEST_DATA)).rejects.toThrow(ChecksumRequiredError);
+    // 検証：
+    expect(result).toStrictEqual(data);
+  });
+
+  test("期待値と一致しないチェックサムを指定すると、実際のハッシュ値を含む ChecksumMismatchError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha224();
+
+    // 実行と検証：
+    try {
+      await encode(checksum, TEST_DATA, { [ChecksumSha224.CHECKSUM_VAR_NAME]: INVALID_HASH });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ChecksumMismatchError);
+      expect((error as ChecksumMismatchError).meta.actual).toBe(VALID_HASH);
+    }
+  });
+
+  test("検証が必須のときにチェックサムが指定されていなければ ChecksumRequiredError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha224({ required: true });
+
+    // 実行と検証：
+    await expect(encode(checksum, TEST_DATA)).rejects.toThrow(ChecksumRequiredError);
+  });
 });

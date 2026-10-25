@@ -1,9 +1,5 @@
-declare const __DEBUG__: boolean;
-declare const __CLIENT__: boolean;
-declare const __SERVER__: boolean;
-
 // `Array.isArray` の型絞り込み機能を強化します。
-// @ts-ignore
+// @ts-expect-error: 組み込みの ArrayConstructor の定義と互換性がないため。
 // oxlint-disable
 declare module globalThis {
   interface ArrayConstructor {

@@ -1,19 +1,20 @@
-import { describe, expectTypeOf, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
-import { InvalidEndpointsError, InvalidLeaseTtlError, KeyNotFoundError } from "../src/errors.js";
+import { KeyNotFoundError, InvalidLeaseTtlError, InvalidEndpointsError } from "../src/errors.js";
 import Etcd, { wrapNativeEtcdClient } from "../src/etcd.js";
 import type {
   EtcdClientLike,
-  EtcdGetAllResult,
   EtcdPutOptions,
+  EtcdGetAllResult,
   EtcdStorageOptions,
-  InvalidEndpointsErrorArgs,
-  InvalidEndpointsErrorMeta,
-  InvalidLeaseTtlErrorArgs,
-  InvalidLeaseTtlErrorMeta,
   KeyNotFoundErrorArgs,
   KeyNotFoundErrorMeta,
   NativeEtcdClientLike,
+  InvalidLeaseTtlErrorArgs,
+  InvalidLeaseTtlErrorMeta,
+  InvalidEndpointsErrorArgs,
+  InvalidEndpointsErrorMeta,
 } from "../src/index.js";
 import * as index from "../src/index.js";
 

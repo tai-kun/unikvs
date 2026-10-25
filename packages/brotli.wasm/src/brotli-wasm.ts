@@ -20,10 +20,8 @@ export type BrotliWasmOptions = {
   readonly level?: number | undefined;
 };
 
-// 理由: 一括変換 (compress/decompress) のみを提供し、
-// ストリーミング API は提供しません。
-// 上流の CompressStream/DecompressStream は低水準なチャンク API であり、
-// バッファー管理の実装が別途必要になるため対象外とします。
+// 理由 : 一括変換 (compress/decompress) のみを提供し、ストリーミング API は提供しません。
+// 上流の CompressStream/DecompressStream は低水準なチャンク API であり、バッファー管理の実装が別途必要になるため対象外とします。
 // テストでも非提供が契約として検証されています。
 
 /**
@@ -62,6 +60,7 @@ export default class BrotliWasm implements IMiddleware {
   public constructor(options: BrotliWasmOptions = {}) {
     const { level = 11 } = options;
     const isValidLevel = Number.isInteger(level) && level >= 0 && level <= 11;
+
     if (!isValidLevel) {
       throw new BrotliWasmInvalidLevelError({ actual: level });
     }
@@ -72,6 +71,18 @@ export default class BrotliWasm implements IMiddleware {
 
   public get isOpen(): boolean {
     return this.#env !== null;
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("BrotliWasm is not open. Call open() first.");
+    }
+
+    return env;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
@@ -98,7 +109,8 @@ export default class BrotliWasm implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const view = api.compress(env, c.source, {
       level: this.#level,
     });
@@ -111,7 +123,8 @@ export default class BrotliWasm implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const view = api.decompress(env, c.source);
     c.destination = toOwnedBytes(view);
 

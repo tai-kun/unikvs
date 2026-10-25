@@ -1,5 +1,5 @@
 import type { IMiddleware } from "@unikvs/core";
-import SuperjsonCodec from "superjson";
+import { parse, stringify } from "superjson";
 
 import { SuperjsonUnsupportedValueError } from "./errors.js";
 
@@ -27,8 +27,25 @@ const encoder = new TextEncoder();
  */
 function assertSupportedValue(value: unknown): void {
   const type = typeof value;
+
   if (type === "function" || type === "symbol") {
     throw new SuperjsonUnsupportedValueError({ type });
+  }
+}
+
+/**
+ * JSON Lines の 1 行を解析して値を出力します。
+ *
+ * 行末の CR を 1 つ取り除き、空行は読み飛ばします。
+ *
+ * @param line 解析する 1 行です。
+ * @param controller ストリームを制御するためのコントローラーです。
+ */
+function parseLine(line: string, controller: TransformStreamDefaultController<unknown>): void {
+  const text = line.endsWith(CR) ? line.slice(0, -1) : line;
+
+  if (text.length > 0) {
+    controller.enqueue(parse(text));
   }
 }
 
@@ -48,7 +65,7 @@ export default class Superjson implements IMiddleware {
   ): Promise<void> {
     assertSupportedValue(c.source);
 
-    c.destination = encoder.encode(SuperjsonCodec.stringify(c.source));
+    c.destination = encoder.encode(stringify(c.source));
 
     await next();
   }
@@ -58,8 +75,7 @@ export default class Superjson implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const text = new TextDecoder("utf-8", { fatal: true }).decode(c.source);
-
-    c.destination = SuperjsonCodec.parse(text);
+    c.destination = parse(text);
 
     await next();
   }
@@ -70,9 +86,9 @@ export default class Superjson implements IMiddleware {
   ): Promise<void> {
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           assertSupportedValue(chunk);
-          controller.enqueue(encoder.encode(`${SuperjsonCodec.stringify(chunk)}${LF}`));
+          controller.enqueue(encoder.encode(`${stringify(chunk)}${LF}`));
         },
       }),
     );
@@ -86,36 +102,30 @@ export default class Superjson implements IMiddleware {
   ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let buffer = "";
-
-    // 1 行分のテキストを値へ復元して下流へ流します。CRLF の CR を取り除き、空行は無視します。
-    const enqueueLine = (
-      line: string,
-      controller: TransformStreamDefaultController<unknown>,
-    ): void => {
-      const normalized = line.endsWith(CR) ? line.slice(0, -1) : line;
-      if (normalized === "") return;
-
-      controller.enqueue(SuperjsonCodec.parse(normalized));
-    };
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           // マルチバイト文字がチャンク境界で分断されてもよいように、ストリームモードでデコードします。
           buffer += decoder.decode(chunk, { stream: true });
 
           let newlineIndex = buffer.indexOf(LF);
+
           while (newlineIndex !== -1) {
-            enqueueLine(buffer.slice(0, newlineIndex), controller);
+            const line = buffer.slice(0, newlineIndex);
+
             buffer = buffer.slice(newlineIndex + 1);
+            parseLine(line, controller);
             newlineIndex = buffer.indexOf(LF);
           }
         },
 
-        flush(controller) {
+        flush(controller): void {
           // 末尾に改行がない場合は、残ったバッファーを最後の 1 行として処理します。
           buffer += decoder.decode();
-          enqueueLine(buffer, controller);
+
+          if (buffer.length > 0) {
+            parseLine(buffer, controller);
+          }
         },
       }),
     );

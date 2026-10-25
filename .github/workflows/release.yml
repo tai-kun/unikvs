@@ -13,7 +13,7 @@ on:
         type: boolean
         default: false
       skip-checks:
-        description: "format・lint・テストを省略する（CI 済みの場合用）"
+        description: "静的検証・テストを省略する（CI 済みの場合用）"
         required: false
         type: boolean
         default: false
@@ -86,7 +86,7 @@ jobs:
             echo "::endgroup::"
           done <<< "$dirs"
 
-      - name: "format"
+      - name: "静的検証"
         if: inputs.skip-checks != true
         run: |
           dirs="$(jq -r '.workspaces[]' package.json)"
@@ -103,39 +103,12 @@ jobs:
             (
               cd "$dir" || exit 1
 
-              if ! mise tasks --json | jq -e '.[] | select(.name == "test:format")' >/dev/null; then
-                echo "::notice::$dir には test:format タスクがないためスキップします。"
+              if ! mise tasks --json | jq -e '.[] | select(.name == "test:check")' >/dev/null; then
+                echo "::notice::$dir には test:check タスクがないためスキップします。"
                 exit 0
               fi
 
-              mise run test:format
-            )
-            echo "::endgroup::"
-          done <<< "$dirs"
-
-      - name: "lint"
-        if: inputs.skip-checks != true
-        run: |
-          dirs="$(jq -r '.workspaces[]' package.json)"
-          while IFS= read -r dir; do
-            if [ -z "$dir" ] || [ ! -f "$dir/package.json" ]; then
-              continue
-            fi
-
-            if [ "$(jq -r '.private // false' "$dir/package.json")" = "true" ]; then
-              continue
-            fi
-
-            echo "::group::$dir"
-            (
-              cd "$dir" || exit 1
-
-              if ! mise tasks --json | jq -e '.[] | select(.name == "test:lint")' >/dev/null; then
-                echo "::notice::$dir には test:lint タスクがないためスキップします。"
-                exit 0
-              fi
-
-              mise run test:lint
+              mise run test:check
             )
             echo "::endgroup::"
           done <<< "$dirs"
@@ -158,7 +131,7 @@ jobs:
               cd "$dir" || exit 1
 
               if jq -e '((.dependencies // {}) + (.devDependencies // {})) | has("playwright")' package.json >/dev/null; then
-                pnpm exec playwright install --with-deps
+                npx playwright install --with-deps
               fi
 
               if [ -f scripts/pretest.sh ]; then

@@ -1,3 +1,4 @@
+// oxlint-disable unicorn/number-literal-case
 /**
  * 決定的な擬似乱数生成器の操作一式です。
  * 乱数に依存するテストで固定 seed から再現可能な入力を組み立てるために使用します。
@@ -62,11 +63,12 @@ export function createRandom(seed: number): Random {
   let state = seed >>> 0;
 
   const next = (): number => {
-    state = (state + 0x6d2b79f5) >>> 0;
+    state = (state + 0x6d_2b_79_f5) >>> 0;
     let value = state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
   };
 
   const random: Random = {
@@ -80,7 +82,7 @@ export function createRandom(seed: number): Random {
       return min + Math.floor(next() * (max - min + 1));
     },
 
-    uint(max = 0xffffffff) {
+    uint(max = 0xff_ff_ff_ff) {
       if (!Number.isInteger(max) || max < 0) {
         throw new RangeError(`uint の最大値が不正です: ${max}`);
       }
@@ -97,7 +99,13 @@ export function createRandom(seed: number): Random {
         throw new RangeError("空の配列からは選べません");
       }
 
-      return items[Math.floor(next() * items.length)]!;
+      const picked = items[Math.floor(next() * items.length)];
+
+      if (picked === undefined) {
+        throw new RangeError("空の配列からは選べません");
+      }
+
+      return picked;
     },
 
     bytes(length) {
@@ -120,7 +128,13 @@ export function createRandom(seed: number): Random {
       let result = "";
 
       for (let index = 0; index < length; index++) {
-        result += chars[Math.floor(next() * chars.length)]!;
+        const char = chars[Math.floor(next() * chars.length)];
+
+        if (char === undefined) {
+          throw new RangeError("空の文字集合からは文字列を作れません");
+        }
+
+        result += char;
       }
 
       return result;
@@ -135,8 +149,14 @@ export function createRandom(seed: number): Random {
 
       for (let index = result.length - 1; index > 0; index--) {
         const target = Math.floor(next() * (index + 1));
-        const value = result[index]!;
-        result[index] = result[target]!;
+        const value = result[index];
+        const targetValue = result[target];
+
+        if (value === undefined || targetValue === undefined) {
+          throw new RangeError("シャッフル中のインデックスが不正です");
+        }
+
+        result[index] = targetValue;
         result[target] = value;
       }
 
@@ -151,7 +171,7 @@ export function createRandom(seed: number): Random {
  * seed とケース番号から再現可能な派生 seed を作ります。
  */
 function deriveSeed(seed: number, index: number): number {
-  return (seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0;
+  return (seed ^ Math.imul(index + 1, 0x9e_37_79_b9)) >>> 0;
 }
 
 /**

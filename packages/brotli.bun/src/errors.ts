@@ -37,13 +37,16 @@ export class BrotliBunInvalidLevelError extends InvalidUsageErrorBase<BrotliBunI
 
   /**
    * @param args エラーの引数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#errors)
    */
   public constructor(args: BrotliBunInvalidLevelErrorArgs) {
     const { actual, ...options } = args;
     const meta: BrotliBunInvalidLevelErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid brotli compression level: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid brotli compression level: ${inspect(messageActual)}`,
+      options,
+    );
   }
 }
 

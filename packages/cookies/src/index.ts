@@ -1,10 +1,10 @@
 export type {
-  CookieTooLargeErrorArgs,
-  CookieTooLargeErrorMeta,
   KeyNotFoundErrorArgs,
   KeyNotFoundErrorMeta,
+  CookieTooLargeErrorArgs,
+  CookieTooLargeErrorMeta,
 } from "./errors.js";
-export { CookieNotAvailableError, CookieTooLargeError, KeyNotFoundError } from "./errors.js";
+export { KeyNotFoundError, CookieTooLargeError, CookieNotAvailableError } from "./errors.js";
 
 export type * from "./cookies.js";
 export { default as Cookies } from "./cookies.js";

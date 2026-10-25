@@ -80,6 +80,7 @@ export class PluginLifecycle<TOpenContext, TCloseContext> {
       }
 
       await this.#plugin.open(c);
+
       return;
     }
 
@@ -94,6 +95,7 @@ export class PluginLifecycle<TOpenContext, TCloseContext> {
         // 既存の参照を失わずに加算します。close 失敗分の所有権もここで引き継ぎます。
         this.#references += 1;
         this.#closeFailed = false;
+
         return;
       }
 
@@ -101,6 +103,7 @@ export class PluginLifecycle<TOpenContext, TCloseContext> {
       await this.#plugin.open(c);
       this.#references += 1;
       this.#closeFailed = false;
+
       return;
     }
 
@@ -141,6 +144,7 @@ export class PluginLifecycle<TOpenContext, TCloseContext> {
     if (!this.#plugin.isOpen) {
       // 既に外部で閉じられているため、未解放の所有権を解消します。
       this.#closeFailed = false;
+
       return;
     }
 
@@ -168,6 +172,7 @@ export class PluginLifecycle<TOpenContext, TCloseContext> {
     if (!this.#plugin.isOpen) {
       // 既に外部で閉じられているため、未解放の所有権を解消します。
       this.#closeFailed = false;
+
       return;
     }
 

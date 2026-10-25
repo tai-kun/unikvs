@@ -1,5 +1,5 @@
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
 import { HexDecodeError } from "../src/errors.js";
 
@@ -7,12 +7,11 @@ import { HexDecodeError } from "../src/errors.js";
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
  * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
  *
- * valibot は hex の直接依存ではないため、@unikvs/core が使う実体を
+ * valibot は hex の直接依存ではないため、@unikvs/core が使う実体を差し替えます。
  */
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
@@ -20,13 +19,12 @@ const test = vitest.extend<{
     deleteGlobalConfig();
   },
 });
-
 describe("HexDecodeError", () => {
   test("既定では英語メッセージを返す", ({ expect }) => {
-    // 実行
+    // 実行：
     const error = new HexDecodeError();
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(globalThis.Error);
     expect(error.name).toBe("UniKvsHexDecodeError");
     expect(error.meta).toBeUndefined();
@@ -34,24 +32,24 @@ describe("HexDecodeError", () => {
   });
 
   test("cause を保持する", ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("原因");
 
-    // 実行
+    // 実行：
     const error = new HexDecodeError({ cause });
 
-    // 検証
+    // 検証：
     expect(error.cause).toBe(cause);
   });
 
   test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     const error = new HexDecodeError();
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("hex データのデコードに失敗しました");
   });
 });

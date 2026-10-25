@@ -1,28 +1,28 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import CacheStorage from "../src/cache-storage.js";
 import {
-  CacheStorageNotAvailableError,
-  InvalidChunkTypeError,
   KeyNotFoundError,
+  InvalidChunkTypeError,
+  CacheStorageNotAvailableError,
 } from "../src/errors.js";
 import {
+  readBytes,
+  writeBytes,
+  createRequest,
   createCacheName,
   createFakeCaches,
-  createRequest,
-  readBytes,
   runWithGlobalCaches,
-  writeBytes,
 } from "./_helpers.js";
 
 const { signal } = new AbortController();
@@ -37,19 +37,26 @@ function withoutBackend<T>(fn: () => T): T {
 
 describe("Cache API 不在の環境", () => {
   test("コンストラクターは backend 不在でも throw しない", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     withoutBackend(() => {
       expect(
-        () => new CacheStorage({ cacheName: createCacheName(), toRequest: createRequest }),
+        () =>
+          new CacheStorage({
+            cacheName: createCacheName(),
+            toRequest: createRequest,
+          }),
       ).not.toThrow();
     });
   });
 
   test("open は CacheStorageNotAvailableError を投げる", async ({ expect }) => {
-    // 準備
-    const storage = new CacheStorage({ cacheName: createCacheName(), toRequest: createRequest });
+    // 準備：
+    const storage = new CacheStorage({
+      cacheName: createCacheName(),
+      toRequest: createRequest,
+    });
 
-    // 実行と検証
+    // 実行と検証：
     await withoutBackend(() =>
       expect(storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).rejects.toThrow(
         CacheStorageNotAvailableError,
@@ -59,7 +66,7 @@ describe("Cache API 不在の環境", () => {
   });
 
   test("CacheStorageNotAvailableError は利用エラーである", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     const error = new CacheStorageNotAvailableError();
     expect(error).toBeInstanceOf(CacheStorageNotAvailableError);
     expect(error.name).toBe("CacheStorageNotAvailableError");
@@ -67,31 +74,31 @@ describe("Cache API 不在の環境", () => {
   });
 
   test("注入フェイクがあれば backend 不在環境でも CRUD できる", async ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     await withoutBackend(async () => {
       const storage = new CacheStorage({
-        cacheName: createCacheName(),
         caches: createFakeCaches(),
+        cacheName: createCacheName(),
         toRequest: createRequest,
       });
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
       await writeBytes(storage, "k", new Uint8Array([1]));
       expect(await readBytes(storage, "k")).toStrictEqual(new Uint8Array([1]));
-      await storage.close();
+      storage.close();
     });
   });
 });
 
 describe("未オープン時の誤用", () => {
   test("open 前の非ストリーム操作は TypeError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new CacheStorage({
-      cacheName: createCacheName(),
       caches: createFakeCaches(),
+      cacheName: createCacheName(),
       toRequest: createRequest,
     });
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("k", { signal }) as IStorage.WriteContext,
@@ -113,10 +120,10 @@ describe("未オープン時の誤用", () => {
   });
 
   test("open 前のストリーム操作は使用時に TypeError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new CacheStorage({
-      cacheName: createCacheName(),
       caches: createFakeCaches(),
+      cacheName: createCacheName(),
       toRequest: createRequest,
     });
     const writer = storage
@@ -126,7 +133,7 @@ describe("未オープン時の誤用", () => {
       .getReadable(createStreamContext("k", { signal }) as IStorage.GetReadableContext)
       .getReader();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(writer.close()).rejects.toThrow(TypeError);
     await expect(reader.read()).rejects.toThrow(TypeError);
   });
@@ -134,10 +141,13 @@ describe("未オープン時の誤用", () => {
 
 describe("エラーの形状", () => {
   test("InvalidChunkTypeError はキーとチャンク型を持つ", ({ expect }) => {
-    // 実行
-    const error = new InvalidChunkTypeError({ key: "k1", chunk: "abc" });
+    // 実行：
+    const error = new InvalidChunkTypeError({
+      key: "k1",
+      chunk: "abc",
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidChunkTypeError);
     expect(error.name).toBe("CacheStorageInvalidChunkTypeError");
     expect(error.message).toContain("k1");
@@ -145,7 +155,7 @@ describe("エラーの形状", () => {
   });
 
   test("KeyNotFoundError が再エクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(new KeyNotFoundError({ key: "k" })).toBeInstanceOf(KeyNotFoundError);
   });
 });

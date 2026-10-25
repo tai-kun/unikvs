@@ -6,18 +6,18 @@
 import type { CacheLike } from "../src/cloudflare-cache.js";
 
 export type RecordedCall = {
-  readonly operation: "put" | "match" | "delete";
   readonly url: string;
+  readonly operation: "put" | "match" | "delete";
 };
 
 export type FakeCacheOptions = {
-  readonly failOn?: "put" | "match" | "delete" | undefined;
   readonly error?: unknown;
+  readonly failOn?: "put" | "match" | "delete" | undefined;
 };
 
 export type FakeCache = CacheLike & {
-  readonly store: Map<string, Uint8Array>;
   readonly calls: RecordedCall[];
+  readonly store: Map<string, Uint8Array>;
 };
 
 /**
@@ -25,15 +25,16 @@ export type FakeCache = CacheLike & {
  * 応答ボディは `arrayBuffer` で複製して保持します。
  */
 export function createFakeCache(options: FakeCacheOptions = {}): FakeCache {
-  const { failOn, error = new Error("fake cache failure") } = options;
+  const { error = new Error("fake cache failure"), failOn } = options;
   const store = new Map<string, Uint8Array>();
   const calls: RecordedCall[] = [];
 
   return {
-    store,
-    calls,
     put: async (request: Request, response: Response): Promise<void> => {
-      calls.push({ operation: "put", url: request.url });
+      calls.push({
+        url: request.url,
+        operation: "put",
+      });
 
       if (failOn === "put") {
         throw error;
@@ -41,26 +42,37 @@ export function createFakeCache(options: FakeCacheOptions = {}): FakeCache {
 
       store.set(request.url, new Uint8Array(await response.arrayBuffer()));
     },
+    calls,
     match: async (request: Request): Promise<Response | undefined> => {
-      calls.push({ operation: "match", url: request.url });
+      calls.push({
+        url: request.url,
+        operation: "match",
+      });
 
       if (failOn === "match") {
         throw error;
       }
 
       const found = store.get(request.url);
+      let response: Response | undefined;
 
       if (found === undefined) {
-        return undefined;
+        response = undefined;
+      } else {
+        response = new Response(found.slice(), {
+          status: 200,
+          headers: { "Content-Type": "application/octet-stream" },
+        });
       }
 
-      return new Response(found.slice(), {
-        status: 200,
-        headers: { "Content-Type": "application/octet-stream" },
-      });
+      return response;
     },
+    store,
     delete: async (request: Request): Promise<boolean> => {
-      calls.push({ operation: "delete", url: request.url });
+      calls.push({
+        url: request.url,
+        operation: "delete",
+      });
 
       if (failOn === "delete") {
         throw error;

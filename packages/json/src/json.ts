@@ -8,6 +8,7 @@ import { JsonUnsupportedValueError } from "./errors.js";
  * JSON.stringify が undefined を返す値は JSON で表現できないため、JsonUnsupportedValueError を投げます。
  *
  * @param value 変換する値です。
+ *
  * @returns JSON 文字列を返します。
  */
 function stringify(value: unknown): string {
@@ -60,7 +61,6 @@ export default class Json implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
-
     c.destination = JSON.parse(decoder.decode(c.source));
 
     await next();
@@ -71,10 +71,9 @@ export default class Json implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const encoder = new TextEncoder();
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           controller.enqueue(encoder.encode(`${stringify(chunk)}\n`));
         },
       }),
@@ -89,22 +88,23 @@ export default class Json implements IMiddleware {
   ): Promise<void> {
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let buffer = "";
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           buffer += decoder.decode(chunk, { stream: true });
 
           let newlineIndex = buffer.indexOf("\n");
+
           while (newlineIndex !== -1) {
             const line = buffer.slice(0, newlineIndex);
+
             buffer = buffer.slice(newlineIndex + 1);
             parseLine(line, controller);
             newlineIndex = buffer.indexOf("\n");
           }
         },
 
-        flush(controller) {
+        flush(controller): void {
           buffer += decoder.decode();
 
           if (buffer.length > 0) {

@@ -1,4 +1,4 @@
-import { KeyNotFoundError, UnsupportedRuntimeError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError, UnsupportedRuntimeError } from "@unikvs/core";
 import type { RedisClient, RedisOptions } from "bun";
 
 /**
@@ -61,6 +61,7 @@ export default class Redis implements IStorage {
 
   public constructor(url?: string, options: RedisStorageOptions = {}) {
     const { keyPrefix = "unikvs:", ...redisOptions } = options;
+
     this.name = "Redis";
     this.#con = null;
     this.#url = url;
@@ -69,13 +70,26 @@ export default class Redis implements IStorage {
   }
 
   public get isOpen(): boolean {
-    return !!this.#con;
+    return this.#con !== null;
+  }
+
+  // オープン済みかを確認します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    if (this.#con === null) {
+      throw new TypeError("Redis is not open. Call open() first.");
+    }
+
+    return this.#con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
-      throw new UnsupportedRuntimeError({ name: this.name, runtime: "Bun" });
+      throw new UnsupportedRuntimeError({
+        name: this.name,
+        runtime: "Bun",
+      });
     }
 
     // オープン済みの場合は古い接続を閉じ、開き直しでリークしないようにします。
@@ -85,6 +99,7 @@ export default class Redis implements IStorage {
 
     const { RedisClient: RedisClientImpl } = await import("bun");
     const client = new RedisClientImpl(this.#url, this.#options);
+
     try {
       // 最初のコマンドまで接続しないクライアントのため、open の時点で接続を確立します。
       await client.connect();
@@ -97,7 +112,7 @@ export default class Redis implements IStorage {
   }
 
   public close(_c: IStorage.CloseContext): void {
-    this.#con!.client.close();
+    this.#getConnection().client.close();
     this.#con = null;
   }
 
@@ -109,7 +124,7 @@ export default class Redis implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
@@ -118,11 +133,12 @@ export default class Redis implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
     const data = await client.getBuffer(this.#toKey(c.key));
+
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -132,16 +148,16 @@ export default class Redis implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
     // Bun のクライアントは EXISTS の整数を真偽値に変換して返します。
-    return await client.exists(this.#toKey(c.key));
+    return client.exists(this.#toKey(c.key));
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
@@ -150,7 +166,7 @@ export default class Redis implements IStorage {
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
@@ -158,10 +174,12 @@ export default class Redis implements IStorage {
     const pattern = `${this.#keyPrefix}*`;
 
     let cursor = "0";
+
     do {
       c.signal.throwIfAborted();
 
       const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
+
       if (keys.length > 0) {
         await client.del(...keys);
       }
@@ -171,7 +189,7 @@ export default class Redis implements IStorage {
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
@@ -192,7 +210,10 @@ export default class Redis implements IStorage {
       }
     };
     const finish = async (): Promise<void> => {
-      if (finished) return;
+      if (finished) {
+        return;
+      }
+
       finished = true;
       removeAbortListener();
       await discardTemporary();
@@ -200,10 +221,25 @@ export default class Redis implements IStorage {
     const onAbort = (): void => {
       void finish();
     };
-
     c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
+      async abort() {
+        await finish();
+      },
+      async close() {
+        c.signal.throwIfAborted();
+        try {
+          // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
+          await client.rename(tmp, dest);
+        } catch (ex) {
+          await finish();
+          throw ex;
+        }
+        // rename 後は一時キーが存在しないため、完了済みとして中断時の削除を行いません。
+        finished = true;
+        removeAbortListener();
+      },
       async start() {
         try {
           c.signal.throwIfAborted();
@@ -223,27 +259,11 @@ export default class Redis implements IStorage {
           throw ex;
         }
       },
-      async close() {
-        c.signal.throwIfAborted();
-        try {
-          // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
-          await client.rename(tmp, dest);
-        } catch (ex) {
-          await finish();
-          throw ex;
-        }
-        // rename 後は一時キーが存在しないため、完了済みとして中断時の削除を行いません。
-        finished = true;
-        removeAbortListener();
-      },
-      async abort() {
-        await finish();
-      },
     });
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     c.signal.throwIfAborted();
 
@@ -255,6 +275,7 @@ export default class Redis implements IStorage {
       async pull(controller) {
         if (sent) {
           controller.close();
+
           return;
         }
 
@@ -262,6 +283,7 @@ export default class Redis implements IStorage {
         c.signal.throwIfAborted();
 
         const data = await client.getBuffer(dest);
+
         if (data === null) {
           throw new KeyNotFoundError({ key: c.key });
         }

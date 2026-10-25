@@ -37,13 +37,16 @@ export class ZstdBunInvalidLevelError extends InvalidUsageErrorBase<ZstdBunInval
 
   /**
    * @param args エラーの引数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#errors)
    */
   public constructor(args: ZstdBunInvalidLevelErrorArgs) {
     const { actual, ...options } = args;
     const meta: ZstdBunInvalidLevelErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid zstd compression level: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid zstd compression level: ${inspect(messageActual)}`,
+      options,
+    );
   }
 }
 

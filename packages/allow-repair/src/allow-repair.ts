@@ -52,17 +52,10 @@ export default class AllowRepair extends PassThrough implements IMiddleware {
   }
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
-    switch (c.action) {
-      case "get":
-      case "stream":
-        if (c.repair.enabled && !this.#isEnabled) {
-          throw new RepairNotAllowedError({ names: c.repair.targets });
-        }
-
-        break;
-
-      default:
-        break;
+    if (c.action === "get" || c.action === "stream") {
+      if (c.repair.enabled && !this.#isEnabled) {
+        throw new RepairNotAllowedError({ names: c.repair.targets });
+      }
     }
 
     await next();

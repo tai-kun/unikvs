@@ -1,20 +1,21 @@
-import { describe, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe } from "vite-plus/test";
 
 import {
-  InvalidUsageErrorBase,
-  InvalidInputError,
-  InvalidOutputError,
-  UniKvsIsOpenError,
-  UniKvsIsNotOpenError,
   KeyNotFoundError,
-  StorageIsNotOpenError,
-  WritableStreamNotSupportedError,
-  ReadableStreamNotSupportedError,
-  MiddlewareIsNotOpenError,
-  StreamEncodingNotSupportedError,
-  StreamDecodingNotSupportedError,
-  PluginOperationAggregateError,
+  InvalidInputError,
+  UniKvsIsOpenError,
+  InvalidOutputError,
   MissingStorageError,
+  UniKvsIsNotOpenError,
+  InvalidUsageErrorBase,
+  StorageIsNotOpenError,
+  MiddlewareIsNotOpenError,
+  PluginOperationAggregateError,
+  ReadableStreamNotSupportedError,
+  StreamDecodingNotSupportedError,
+  StreamEncodingNotSupportedError,
+  WritableStreamNotSupportedError,
 } from "../src/errors.js";
 import * as index from "../src/index.js";
 import UniKvsConfig from "../src/unikvs-config.js";

@@ -3,7 +3,7 @@
   "include": ["./**/*"],
   "exclude": ["./global.d.ts"],
   "compilerOptions": {
-    "types": ["node"],
+    "types": ["node", "vite-plus/client"],
     "lib": ["ESNext"],
     "noEmit": true,
     "module": "nodenext",

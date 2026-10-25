@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import isValidFilename from "../src/is-valid-filename.js";
 
@@ -41,7 +41,7 @@ describe("isValidFilename", () => {
     expect(isValidFilename("LPT1")).toBe(false);
     expect(isValidFilename("LPT9")).toBe(false);
     expect(isValidFilename("com1")).toBe(false);
-    // 予約名の範囲外 (COM0 や COM10 など) は有効
+    // 予約名の範囲外 (COM0 や COM10 など) は有効。
     expect(isValidFilename("COM10")).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe("isValidFilename", () => {
   });
 
   test("NFC 正規化されたマルチバイト文字を含むファイル名を受け入れる", ({ expect }) => {
-    expect(isValidFilename("\u00e9")).toBe(true);
+    expect(isValidFilename("\u00E9")).toBe(true);
     expect(isValidFilename("café")).toBe(true);
     expect(isValidFilename("が")).toBe(true);
     expect(isValidFilename("ばいと")).toBe(true);

@@ -1,38 +1,38 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  type Random,
   forCasesAsync,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
-  type Random,
+  createOpenContext,
   createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import LruCache from "../src/lru-cache.js";
 
-const seed = 20260930;
+const seed = 20_260_930;
 const maxEntries = 3;
 
 type Value = string | number | boolean | null | readonly number[];
 
 type WriteOperation = {
-  readonly type: "write";
   readonly key: string;
+  readonly type: "write";
   readonly value: Value;
 };
 
 type ReadOperation = {
-  readonly type: "read";
   readonly key: string;
+  readonly type: "read";
 };
 
 type DeleteOperation = {
-  readonly type: "delete";
   readonly key: string;
+  readonly type: "delete";
 };
 
 type ClearOperation = {
@@ -59,15 +59,19 @@ function nextValue(random: Random): Value {
     case 0: {
       return random.string(random.int(0, 8));
     }
+
     case 1: {
       return random.int(-1000, 1000);
     }
+
     case 2: {
       return random.bool();
     }
+
     case 3: {
       return null;
     }
+
     default: {
       return random.array(random.int(0, 4), () => random.int(-100, 100));
     }
@@ -81,14 +85,27 @@ function nextValue(random: Random): Value {
 function nextOperation(random: Random): Operation {
   switch (random.int(0, 3)) {
     case 0: {
-      return { type: "write", key: nextKey(random), value: nextValue(random) };
+      return {
+        key: nextKey(random),
+        type: "write",
+        value: nextValue(random),
+      };
     }
+
     case 1: {
-      return { type: "read", key: nextKey(random) };
+      return {
+        key: nextKey(random),
+        type: "read",
+      };
     }
+
     case 2: {
-      return { type: "delete", key: nextKey(random) };
+      return {
+        key: nextKey(random),
+        type: "delete",
+      };
     }
+
     default: {
       return { type: "clear" };
     }
@@ -102,6 +119,7 @@ function nextOperation(random: Random): Operation {
  */
 class ReferenceLru {
   private readonly map = new Map<string, Value>();
+
   private readonly limit: number;
 
   public constructor(limit: number) {
@@ -117,12 +135,12 @@ class ReferenceLru {
 
     if (this.limit === 0) {
       this.map.delete(key);
+
       return;
     }
 
     while (this.map.size > this.limit) {
       const oldest = this.map.keys().next().value as string;
-
       this.map.delete(oldest);
     }
   }
@@ -164,14 +182,16 @@ class ReferenceLru {
 describe("LruCache のプロパティー", () => {
   test("ランダムな操作列に対して参照 LRU モデルと同じ状態を保つ", async ({ expect, signal }) => {
     await forCasesAsync(seed, 100, async (random) => {
-      // 準備
+      // 準備：
       const storage = new LruCache({ maxEntries });
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
       const model = new ReferenceLru(maxEntries);
       const operations = random.array(random.int(0, 30), () => nextOperation(random));
 
-      // 実行
+      // 実行：
       for (const operation of operations) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         switch (operation.type) {
           case "write": {
             storage.write(
@@ -181,7 +201,9 @@ describe("LruCache のプロパティー", () => {
             model.write(operation.key, operation.value);
             break;
           }
+
           case "read": {
+            // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
             if (model.has(operation.key)) {
               expect(
                 storage.read(createGetContext(operation.key) as IStorage.ReadContext),
@@ -191,19 +213,24 @@ describe("LruCache のプロパティー", () => {
                 storage.read(createGetContext(operation.key) as IStorage.ReadContext),
               ).toThrow(KeyNotFoundError);
             }
+
             break;
           }
+
           case "delete": {
+            // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
             if (model.has(operation.key)) {
               storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext);
               model.delete(operation.key);
             } else {
-              expect(() =>
-                storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext),
-              ).toThrow(KeyNotFoundError);
+              expect(() => {
+                storage.delete(createDeleteContext(operation.key) as IStorage.DeleteContext);
+              }).toThrow(KeyNotFoundError);
             }
+
             break;
           }
+
           case "clear": {
             storage.clear(createClearContext() as IStorage.ClearContext);
             model.clear();
@@ -212,14 +239,18 @@ describe("LruCache のプロパティー", () => {
         }
       }
 
-      // 検証
+      // 検証：
       const touchedKeys = new Set<string>();
+
       for (const operation of operations) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (operation.type !== "clear") {
           touchedKeys.add(operation.key);
         }
       }
+
       for (const key of touchedKeys) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (model.has(key)) {
           expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
           expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(
@@ -232,22 +263,25 @@ describe("LruCache のプロパティー", () => {
           );
         }
       }
+
       expect(storage.size).toBe([...touchedKeys].filter((key) => model.has(key)).length);
     });
   });
 
   test("ランダムなバイト列を byte-for-byte で往復できる", async ({ expect, signal }) => {
     await forCasesAsync(seed + 1, 100, async (random) => {
-      // 準備
+      // 準備：
       const storage = new LruCache();
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
       const bytes = random.bytes(random.int(0, 512));
 
-      // 実行
+      // 実行：
       storage.write(createSetContext("k1") as IStorage.WriteContext, bytes);
+
       const result = storage.read(createGetContext("k1") as IStorage.ReadContext) as Uint8Array;
 
-      // 検証
+      // 検証：
       expect(result).toStrictEqual(bytes);
       expect(result).not.toBe(bytes);
     });
@@ -258,27 +292,31 @@ describe("LruCache のプロパティー", () => {
     signal,
   }) => {
     await forCasesAsync(seed + 2, 50, async (random) => {
-      // 準備
+      // 準備：
       const storage = new LruCache();
       await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
       const chunks = random.array(random.int(0, 8), () => random.bytes(random.int(0, 64)));
       const writer = storage
         .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
         .getWriter();
 
-      // 実行
+      // 実行：
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
+
       await writer.close();
 
-      // 検証
+      // 検証：
       const expected = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0));
       let offset = 0;
+
       for (const chunk of chunks) {
         expected.set(chunk, offset);
         offset += chunk.byteLength;
       }
+
       expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(expected);
     });
   });

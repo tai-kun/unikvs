@@ -1,14 +1,14 @@
 import type { IStorage } from "@unikvs/core";
 import { createGetContext, createOpenContext } from "@unikvs/testing";
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
 import {
-  InvalidChunkTypeError,
+  KeyNotFoundError,
   InvalidMaxBytesError,
+  InvalidChunkTypeError,
   InvalidMaxEntriesError,
   InvalidSizeOfResultError,
-  KeyNotFoundError,
 } from "../src/errors.js";
 import LruCache from "../src/lru-cache.js";
 
@@ -16,28 +16,28 @@ import LruCache from "../src/lru-cache.js";
  * 言語設定をテスト内でのみ変更するフィクスチャーです。
  * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
  */
-const test = vitest.extend<{ storage: LruCache; setLang: (lang: string) => void }>({
-  // oxlint-disable-next-line no-empty-pattern
-  async storage({}, use) {
-    const storage = new LruCache();
-    await storage.open(createOpenContext() as IStorage.OpenContext);
-    await use(storage);
-  },
-  // oxlint-disable-next-line no-empty-pattern
+const test = vitest.extend<{
+  setLang: (lang: string) => void;
+  storage: LruCache;
+}>({
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
     });
     deleteGlobalConfig();
   },
+  async storage({}, use) {
+    const storage = new LruCache();
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+    await use(storage);
+  },
 });
-
 describe("エラーメッセージ（日本語）", () => {
   test("KeyNotFoundError は日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行と検証
+    // 実行と検証：
     expect(new KeyNotFoundError({ key: "foo" }).message).toBe("キー foo が見つかりません");
   });
 
@@ -46,23 +46,26 @@ describe("エラーメッセージ（日本語）", () => {
     setLang,
     storage,
   }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => storage.read(createGetContext("foo") as IStorage.ReadContext)).toThrow(
       "キー foo が見つかりません",
     );
   });
 
   test("InvalidChunkTypeError は日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行
-    const error = new InvalidChunkTypeError({ key: "foo", chunk: "bar" });
+    // 実行：
+    const error = new InvalidChunkTypeError({
+      key: "foo",
+      chunk: "bar",
+    });
 
-    // 検証
+    // 検証：
     expect(error.meta.chunkType).toBe("string");
     expect(error.message).toBe(
       'キー "foo" のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、string を得ました',
@@ -70,32 +73,35 @@ describe("エラーメッセージ（日本語）", () => {
   });
 
   test("InvalidMaxEntriesError は日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行と検証
+    // 実行と検証：
     expect(new InvalidMaxEntriesError({ actual: -1 }).message).toBe(
       "maxEntries は 0 以上の整数でなければなりません。受け取った値: -1",
     );
   });
 
   test("InvalidMaxBytesError は日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行と検証
+    // 実行と検証：
     expect(new InvalidMaxBytesError({ actual: -1 }).message).toBe(
       "maxBytes は 0 以上の有限数でなければなりません。受け取った値: -1",
     );
   });
 
   test("InvalidSizeOfResultError は日本語メッセージを返す", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     setLang("ja");
 
-    // 実行と検証
-    expect(new InvalidSizeOfResultError({ key: "foo", actual: -1 }).message).toBe(
-      'キー "foo" の sizeOf は 0 以上の有限数を返さなければなりません。受け取った値: -1',
-    );
+    // 実行と検証：
+    expect(
+      new InvalidSizeOfResultError({
+        key: "foo",
+        actual: -1,
+      }).message,
+    ).toBe('キー "foo" の sizeOf は 0 以上の有限数を返さなければなりません。受け取った値: -1');
   });
 });

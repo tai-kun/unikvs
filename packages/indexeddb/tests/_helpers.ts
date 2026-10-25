@@ -1,6 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import { createCloseContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { test as vitest } from "vite-plus/test";
 
 import IndexeddbStorage from "../src/indexeddb.js";
 
@@ -20,6 +20,7 @@ let databaseSequence = 0;
  */
 export function createDatabaseName(): string {
   databaseSequence += 1;
+
   return `unikvs-test-${globalThis.crypto.randomUUID()}-${databaseSequence}`;
 }
 
@@ -30,9 +31,15 @@ export function createDatabaseName(): string {
 export async function deleteDatabase(name: string): Promise<void> {
   await new Promise<void>((resolve) => {
     const request = globalThis.indexedDB.deleteDatabase(name);
-    request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
+    request.addEventListener("success", (): void => {
+      resolve();
+    });
+    request.addEventListener("error", (): void => {
+      resolve();
+    });
+    request.addEventListener("blocked", (): void => {
+      resolve();
+    });
   });
 }
 
@@ -43,12 +50,14 @@ export async function deleteDatabase(name: string): Promise<void> {
 export async function createEmptyDatabase(name: string, version: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = globalThis.indexedDB.open(name, version);
-    request.onupgradeneeded = () => {};
-    request.onsuccess = () => {
+    request.addEventListener("upgradeneeded", (): void => {});
+    request.addEventListener("success", (): void => {
       request.result.close();
       resolve();
-    };
-    request.onerror = () => reject(request.error);
+    });
+    request.addEventListener("error", (): void => {
+      reject(new Error("Failed to open database.", { cause: request.error }));
+    });
   });
 }
 
@@ -56,16 +65,19 @@ export async function createEmptyDatabase(name: string, version: number): Promis
  * テストごとに一意なデータベースを用意し、後始末で削除するテストを提供します。
  * IndexedDB はブラウザー全体で共有されるため、テスト同士の汚染を防ぐために使用します。
  */
-export const test = vitest.extend<{ dbName: string; storage: IndexeddbStorage }>({
-  // oxlint-disable-next-line no-empty-pattern
-  async dbName({}, use) {
+export const test = vitest.extend<{
+  dbName: string;
+  storage: IndexeddbStorage;
+}>({
+  async dbName({}, use): Promise<void> {
     const name = createDatabaseName();
     await use(name);
     await deleteDatabase(name);
   },
-  async storage({ dbName }, use) {
+  async storage({ dbName }, use): Promise<void> {
     const storage = new IndexeddbStorage(dbName, STORE_NAME);
     await use(storage);
+
     if (storage.isOpen) {
       await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }

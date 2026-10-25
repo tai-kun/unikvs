@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -45,8 +45,8 @@ export class InvalidOriginError extends InvalidUsageErrorBase<InvalidOriginError
     const meta: InvalidOriginErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`origin\` must be an absolute URL without query or fragment, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `\`origin\` must be an absolute URL without query or fragment, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -54,8 +54,8 @@ export class InvalidOriginError extends InvalidUsageErrorBase<InvalidOriginError
 
 setErrorMessage(
   InvalidOriginError,
-  ({ actual }) =>
-    `\`origin\` はクエリー・フラグメントなしの絶対 URL でなければなりません。受け取った値: ${String(actual)}`,
+  ({ actual: messageActual }) =>
+    `\`origin\` はクエリー・フラグメントなしの絶対 URL でなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );
 
@@ -100,7 +100,8 @@ export class InvalidKeyError extends InvalidUsageErrorBase<InvalidKeyErrorMeta> 
     const meta: InvalidKeyErrorMeta = { key };
     super(
       meta,
-      ({ key }) => `Failed to encode key ${JSON.stringify(key)} as a URL path segment`,
+      ({ key: messageKey }) =>
+        `Failed to encode key ${JSON.stringify(messageKey)} as a URL path segment`,
       options,
     );
   }
@@ -108,7 +109,8 @@ export class InvalidKeyError extends InvalidUsageErrorBase<InvalidKeyErrorMeta> 
 
 setErrorMessage(
   InvalidKeyError,
-  ({ key }) => `キー ${JSON.stringify(key)} を URL パスセグメントとして符号化できませんでした`,
+  ({ key: messageKey }) =>
+    `キー ${JSON.stringify(messageKey)} を URL パスセグメントとして符号化できませんでした`,
   "ja",
 );
 
@@ -153,8 +155,8 @@ export class CacheBindingNotFoundError extends InvalidUsageErrorBase<CacheBindin
     const meta: CacheBindingNotFoundErrorMeta = { property };
     super(
       meta,
-      ({ property }) =>
-        `No Cache binding is available. Pass a \`cache\` option or run on a runtime with ${property}.`,
+      ({ property: messageProperty }) =>
+        `No Cache binding is available. Pass a \`cache\` option or run on a runtime with ${messageProperty}.`,
       options,
     );
   }
@@ -162,8 +164,8 @@ export class CacheBindingNotFoundError extends InvalidUsageErrorBase<CacheBindin
 
 setErrorMessage(
   CacheBindingNotFoundError,
-  ({ property }) =>
-    `Cache binding が見つかりません。\`cache\` オプションを渡すか、${property} が存在するランタイムで実行してください。`,
+  ({ property: messageProperty }) =>
+    `Cache binding が見つかりません。\`cache\` オプションを渡すか、${messageProperty} が存在するランタイムで実行してください。`,
   "ja",
 );
 
@@ -211,12 +213,15 @@ export class CacheOperationError extends ErrorBase<CacheOperationErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#errors)
    */
   public constructor(args: CacheOperationErrorArgs) {
-    const { operation, key, ...options } = args;
-    const meta: CacheOperationErrorMeta = { operation, key };
+    const { key, operation, ...options } = args;
+    const meta: CacheOperationErrorMeta = {
+      key,
+      operation,
+    };
     super(
       meta,
-      ({ operation, key }) =>
-        `Cache ${operation} failed${key === undefined ? "" : ` for key ${JSON.stringify(key)}`}`,
+      ({ key: messageKey, operation: messageOperation }) =>
+        `Cache ${messageOperation} failed${messageKey === undefined ? "" : ` for key ${JSON.stringify(messageKey)}`}`,
       options,
     );
   }
@@ -224,8 +229,8 @@ export class CacheOperationError extends ErrorBase<CacheOperationErrorMeta> {
 
 setErrorMessage(
   CacheOperationError,
-  ({ operation, key }) =>
-    `Cache の ${operation} に失敗しました${key === undefined ? "" : ` (キー ${JSON.stringify(key)})`}`,
+  ({ key: messageKey, operation: messageOperation }) =>
+    `Cache の ${messageOperation} に失敗しました${messageKey === undefined ? "" : ` (キー ${JSON.stringify(messageKey)})`}`,
   "ja",
 );
 
@@ -310,11 +315,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }
@@ -322,7 +331,7 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
 
 setErrorMessage(
   InvalidChunkTypeError,
-  ({ key, chunkType }) =>
-    `キー ${JSON.stringify(key)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
+  ({ key: messageKey, chunkType }) =>
+    `キー ${JSON.stringify(messageKey)} のチャンク型に Uint8Array<ArrayBuffer> を期待しましたが、${chunkType} を得ました`,
   "ja",
 );

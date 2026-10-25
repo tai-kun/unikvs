@@ -1,4 +1,4 @@
-import type { R2BucketLike, R2ObjectBodyLike, R2ObjectsLike } from "../src/cloudflare-r2.js";
+import type { R2BucketLike, R2ObjectsLike, R2ObjectBodyLike } from "../src/cloudflare-r2.js";
 
 /**
  * テスト用のインメモリ R2 バケットです。
@@ -20,6 +20,7 @@ export function createFakeBucket(): R2BucketLike & {
 
     async get(key): Promise<R2ObjectBodyLike | null> {
       const data = store.get(key);
+
       if (data === undefined) {
         return null;
       }
@@ -44,13 +45,14 @@ export function createFakeBucket(): R2BucketLike & {
 
     async delete(keys) {
       const targets = typeof keys === "string" ? [keys] : keys;
+
       for (const target of targets) {
         store.delete(target);
       }
     },
 
     async list(options = {}): Promise<R2ObjectsLike> {
-      const { prefix = "", cursor, limit = 1000 } = options;
+      const { limit = 1000, cursor, prefix = "" } = options;
       // 実 R2 の `limit` は最大 1000 件です。
       const pageSize = Math.min(limit, 1000);
       const keys = [...store.keys()].filter((key) => key.startsWith(prefix)).sort();
@@ -59,7 +61,7 @@ export function createFakeBucket(): R2BucketLike & {
       const start =
         cursor === undefined
           ? 0
-          : (() => {
+          : ((): number => {
               const index = keys.findIndex((key) => key > cursor);
 
               return index === -1 ? keys.length : index;
@@ -70,7 +72,7 @@ export function createFakeBucket(): R2BucketLike & {
       return {
         objects: page.map((key) => ({ key })),
         truncated,
-        ...(truncated ? { cursor: page[page.length - 1] } : {}),
+        ...(truncated ? { cursor: page.at(-1) } : {}),
       };
     },
   };

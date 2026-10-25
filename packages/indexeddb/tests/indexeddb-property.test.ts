@@ -1,34 +1,35 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  type Random,
   concatChunks,
-  createClearContext,
-  createDeleteContext,
+  forCasesAsync,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { forCasesAsync, type Random } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
 const { signal } = new AbortController();
 
-const seed = 20260930;
+const seed = 20_260_930;
 const caseCount = 30;
 
 type Value = string | number | boolean | null | readonly number[];
 
 type WriteOperation = {
-  readonly type: "write";
   readonly key: string;
+  readonly type: "write";
   readonly value: Value;
 };
 
 type DeleteOperation = {
-  readonly type: "delete";
   readonly key: string;
+  readonly type: "delete";
 };
 
 type ClearOperation = {
@@ -53,16 +54,25 @@ function randomKey(random: Random): string {
  */
 function randomValue(random: Random): Value {
   switch (random.int(0, 4)) {
-    case 0:
+    case 0: {
       return random.string(random.uint(11));
-    case 1:
-      return random.int(-2147483648, 2147483647);
-    case 2:
+    }
+
+    case 1: {
+      return random.int(-2_147_483_648, 2_147_483_647);
+    }
+
+    case 2: {
       return random.bool();
-    case 3:
+    }
+
+    case 3: {
       return null;
-    default:
-      return random.array(random.uint(5), () => random.int(-1000000, 1000000));
+    }
+
+    default: {
+      return random.array(random.uint(5), () => random.int(-1_000_000, 1_000_000));
+    }
   }
 }
 
@@ -72,25 +82,36 @@ function randomValue(random: Random): Value {
  */
 function randomOperation(random: Random): Operation {
   switch (random.int(0, 2)) {
-    case 0:
-      return { type: "write", key: randomKey(random), value: randomValue(random) };
-    case 1:
-      return { type: "delete", key: randomKey(random) };
-    default:
+    case 0: {
+      return {
+        key: randomKey(random),
+        type: "write",
+        value: randomValue(random),
+      };
+    }
+
+    case 1: {
+      return {
+        key: randomKey(random),
+        type: "delete",
+      };
+    }
+
+    default: {
       return { type: "clear" };
+    }
   }
 }
 
 describe("Indexeddb のプロパティー", () => {
   test("任意のキーと structured clone 可能な値の write→read 往復", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed, caseCount, async (random) => {
       const key = randomKey(random);
       const value = randomValue(random);
-
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, value);
       expect(
         await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -99,34 +120,35 @@ describe("Indexeddb のプロパティー", () => {
   });
 
   test("任意のバイト列を byte-for-byte で往復できる", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const bytes = random.bytes(random.uint(257));
-
       await storage.write(createSetContext("bytes", { signal }) as IStorage.WriteContext, bytes);
+
       const result = await storage.read(
         createGetContext("bytes", { signal }) as IStorage.ReadContext,
       );
-
       expect(result).toStrictEqual(bytes);
       expect(result).not.toBe(bytes);
     });
   });
 
   test("ランダムな操作列に対して Map と同じ状態を保つ", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed + 2, caseCount, async (random) => {
       const operations = random.array(random.uint(21), () => randomOperation(random));
+
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
       const model = new Map<string, Value>();
 
       for (const operation of operations) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         switch (operation.type) {
           case "write": {
             await storage.write(
@@ -136,6 +158,7 @@ describe("Indexeddb のプロパティー", () => {
             model.set(operation.key, operation.value);
             break;
           }
+
           case "delete": {
             await storage.delete(
               createDeleteContext(operation.key, { signal }) as IStorage.DeleteContext,
@@ -143,6 +166,7 @@ describe("Indexeddb のプロパティー", () => {
             model.delete(operation.key);
             break;
           }
+
           case "clear": {
             await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
             model.clear();
@@ -152,15 +176,20 @@ describe("Indexeddb のプロパティー", () => {
       }
 
       const touchedKeys = new Set<string>();
+
       for (const operation of operations) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (operation.type !== "clear") {
           touchedKeys.add(operation.key);
         }
       }
+
       for (const key of touchedKeys) {
         expect(
           await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
         ).toBe(model.has(key));
+
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (model.has(key)) {
           expect(
             await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -174,18 +203,20 @@ describe("Indexeddb のプロパティー", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed + 3, caseCount, async (random) => {
       const chunks = random.array(random.uint(9), () => random.bytes(random.uint(65)));
       const writer = storage
         .getWritable(createSetContext("stream", { signal }) as IStorage.GetWritableContext)
         .getWriter();
+
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
+
       await writer.close();
 
       expect(

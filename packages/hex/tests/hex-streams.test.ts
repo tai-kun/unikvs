@@ -1,16 +1,17 @@
+// oxlint-disable unicorn/number-literal-case
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
   readAll,
+  createNext,
   sourceFrom,
+  concatBytes,
   splitIntoChunks,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { HexDecodeError } from "../src/errors.js";
 import Hex from "../src/hex.js";
@@ -23,9 +24,9 @@ const textDecoder = new TextDecoder();
  * ストリームの読み取り時のエラーを検証するために使用します。
  */
 async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
-  outputChunks: T[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: T[];
 }> {
   const outputChunks: T[] = [];
   let readError: unknown;
@@ -45,7 +46,11 @@ async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
 }
 
 /**
@@ -71,9 +76,9 @@ function pumpEncode(
   target: Hex,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createEncodeStreamContext(sourceFrom(chunks));
 
@@ -92,9 +97,9 @@ function pumpDecode(
   target: Hex,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
 
@@ -106,9 +111,20 @@ function pumpDecode(
     .then(() => collectSettled(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>));
 }
 
+/**
+ * ストリーム処理で最初に起きたエラーを返します。
+ * 書き込み側と読み取り側のどちらで失敗したかによらない検証のために使用します。
+ */
+function streamError(result: {
+  readonly readError: unknown;
+  readonly writeError: unknown;
+}): unknown {
+  return result.writeError ?? result.readError;
+}
+
 describe("encodeStream", () => {
   test("各チャンクを独立に hex 化する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const chunks: Uint8Array<ArrayBuffer>[] = [
       Uint8Array.from([0xde, 0xad]),
@@ -116,31 +132,31 @@ describe("encodeStream", () => {
       Uint8Array.from([0x00, 0xff]),
     ];
 
-    // 実行
+    // 実行：
     const result = await pumpEncode(hex, chunks);
     const expected = await encode(hex, concatBytes(chunks));
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(expected);
   });
 
   test("空のストリームは空の出力になる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
 
-    // 実行
+    // 実行：
     const result = await pumpEncode(hex, []);
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(result.outputChunks).toStrictEqual([]);
   });
 
   test("空チャンクは無視される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const chunks: Uint8Array<ArrayBuffer>[] = [
       new Uint8Array(0),
@@ -148,22 +164,24 @@ describe("encodeStream", () => {
       new Uint8Array(0),
     ];
 
-    // 実行
+    // 実行：
     const result = await pumpEncode(hex, chunks);
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(textDecoder.decode(concatBytes(result.outputChunks))).toBe("dead");
   });
 
   test("1 MiB を不揃い分割しても encode できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = new Uint8Array(1024 * 1024);
+
     for (let index = 0; index < input.length; index++) {
       input[index] = index % 251;
     }
+
     const chunks: Uint8Array<ArrayBuffer>[] = [
       input.subarray(0, 13),
       input.subarray(13, 4097),
@@ -171,10 +189,10 @@ describe("encodeStream", () => {
       input.subarray(input.length - 1),
     ];
 
-    // 実行
+    // 実行：
     const result = await pumpEncode(hex, chunks);
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(await encode(hex, input));
@@ -183,14 +201,14 @@ describe("encodeStream", () => {
 
 describe("decodeStream", () => {
   test("複数の値をデコードする", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = textEncoder.encode("deadbeef00ff");
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, [input]);
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(
@@ -199,27 +217,27 @@ describe("decodeStream", () => {
   });
 
   test("1 バイトずつ分割してもデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x23]);
     const encoded = await encode(hex, input);
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, splitIntoChunks(encoded, 1));
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(input);
   });
 
   test("不揃いな境界で分割してもデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45, 0x67]);
     const encoded = await encode(hex, input);
 
-    // 実行と検証
+    // 実行と検証：
     for (const size of [1, 2, 3, 5, 7, 13, 64]) {
       const result = await pumpDecode(hex, splitIntoChunks(encoded, size));
       expect(result.writeError, `size=${size}`).toBeUndefined();
@@ -229,12 +247,12 @@ describe("decodeStream", () => {
   });
 
   test("奇数分割をまたいでデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
     const encoded = await encode(hex, input);
 
-    // 実行
+    // 実行：
     const shifted = await pumpDecode(hex, [
       encoded.subarray(0, 1),
       encoded.subarray(1, 3),
@@ -246,7 +264,7 @@ describe("decodeStream", () => {
       encoded.subarray(4),
     ]);
 
-    // 検証
+    // 検証：
     expect(shifted.writeError).toBeUndefined();
     expect(shifted.readError).toBeUndefined();
     expect(concatBytes(shifted.outputChunks)).toStrictEqual(input);
@@ -256,15 +274,15 @@ describe("decodeStream", () => {
   });
 
   test("大文字と混在をチャンク分割してもデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const expected = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
-    // 実行
+    // 実行：
     const upper = await pumpDecode(hex, splitIntoChunks(textEncoder.encode("DEADBEEF"), 3));
     const mixed = await pumpDecode(hex, splitIntoChunks(textEncoder.encode("DeAdBeEf"), 1));
 
-    // 検証
+    // 検証：
     expect(upper.writeError).toBeUndefined();
     expect(upper.readError).toBeUndefined();
     expect(concatBytes(upper.outputChunks)).toStrictEqual(expected);
@@ -274,14 +292,14 @@ describe("decodeStream", () => {
   });
 
   test("空のストリームは値を出力しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
 
-    // 実行
+    // 実行：
     const empty = await pumpDecode(hex, []);
     const zeroBytes = await pumpDecode(hex, [new Uint8Array(0)]);
 
-    // 検証
+    // 検証：
     expect(empty.writeError).toBeUndefined();
     expect(empty.readError).toBeUndefined();
     expect(empty.outputChunks).toStrictEqual([]);
@@ -291,65 +309,67 @@ describe("decodeStream", () => {
   });
 
   test("奇数長で終わるストリームは HexDecodeError で失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, [textEncoder.encode("abc")]);
 
-    // 検証
-    expect(result.writeError ?? result.readError).toBeInstanceOf(HexDecodeError);
+    // 検証：
+    expect(streamError(result)).toBeInstanceOf(HexDecodeError);
   });
 
   test("不正文字を含むストリームは HexDecodeError で失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, [textEncoder.encode("zz")]);
 
-    // 検証
-    expect(result.writeError ?? result.readError).toBeInstanceOf(HexDecodeError);
+    // 検証：
+    expect(streamError(result)).toBeInstanceOf(HexDecodeError);
   });
 
   test("不正な UTF-8 を流すと TypeError で失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const invalid = Uint8Array.from([0x31, 0x0a, 0xff, 0x0a]);
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, [invalid]);
 
-    // 検証
-    expect(result.writeError ?? result.readError).toBeInstanceOf(TypeError);
+    // 検証：
+    expect(streamError(result)).toBeInstanceOf(TypeError);
   });
 
   test("前半だけで終わるストリームは TypeError で失敗する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const truncated = Uint8Array.from([0xe3]);
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, [truncated]);
 
-    // 検証
-    expect(result.writeError ?? result.readError).toBeInstanceOf(TypeError);
-    expect(result.writeError ?? result.readError).not.toBeInstanceOf(HexDecodeError);
+    // 検証：
+    expect(streamError(result)).toBeInstanceOf(TypeError);
+    expect(streamError(result)).not.toBeInstanceOf(HexDecodeError);
   });
 
   test("大きな値をチャンク境界をまたいでデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = new Uint8Array(256 * 1024);
+
     for (let index = 0; index < input.length; index++) {
       input[index] = index % 251;
     }
+
     const encoded = await encode(hex, input);
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(hex, splitIntoChunks(encoded, 7));
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(input);
@@ -358,7 +378,7 @@ describe("decodeStream", () => {
 
 describe("ストリームの往復", () => {
   test("encodeStream と decodeStream を往復すると元の値に戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const chunks: Uint8Array<ArrayBuffer>[] = [
       Uint8Array.from([0xde, 0xad, 0xbe, 0xef]),
@@ -366,7 +386,7 @@ describe("ストリームの往復", () => {
       Uint8Array.from([0xff]),
     ];
 
-    // 実行
+    // 実行：
     const encodedContext = createEncodeStreamContext(sourceFrom(chunks));
     await hex.encodeStream(
       encodedContext as IMiddleware.EncodeStreamContext<
@@ -375,6 +395,7 @@ describe("ストリームの往復", () => {
       >,
       createNext(),
     );
+
     const decodedContext = createDecodeStreamContext(
       encodedContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
     );
@@ -385,20 +406,21 @@ describe("ストリームの往復", () => {
       >,
       createNext(),
     );
+
     const decoded = await readAll(
       decodedContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
     );
 
-    // 検証
+    // 検証：
     expect(concatBytes(decoded)).toStrictEqual(concatBytes(chunks));
   });
 
   test("出力チャンクの連結を一括 decode すると元の値に戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef, 0x00, 0xff]);
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(hex, [input]);
     const decodeContext = createDecodeContext(concatBytes(encoded.outputChunks));
     await hex.decode(
@@ -406,22 +428,22 @@ describe("ストリームの往復", () => {
       createNext(),
     );
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(decodeContext.destination).toStrictEqual(input);
   });
 
   test("一括 encode した結果を小さなチャンクで decode できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const hex = new Hex();
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45]);
 
-    // 実行
+    // 実行：
     const encoded = await encode(hex, input);
     const result = await pumpDecode(hex, splitIntoChunks(encoded, 3));
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(input);

@@ -2,21 +2,21 @@ import { type IReadableStream, type ITransformContext } from "@unikvs/core";
 
 import {
   type DecodeContext,
-  type DecodeStreamContext,
   type EncodeContext,
+  type DecodeStreamContext,
   type EncodeStreamContext,
   MapKeyContext,
 } from "./_contexts.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import type {
-  IActiveLeafChecker,
-  OperationScope,
-  PipelineEntry,
   PipelineLeaf,
   PipelineNode,
+  PipelineEntry,
+  OperationScope,
+  IActiveLeafChecker,
 } from "./_pipeline-graph.types.js";
 import { ReadableStreamSchema } from "./_streams.schemas.js";
-import * as v from "./_valibot.js";
+import { parseOutput } from "./_valibot.js";
 import { MiddlewareDestinationFrozenError, MiddlewareDestinationMissingError } from "./errors.js";
 
 /**
@@ -26,6 +26,7 @@ import { MiddlewareDestinationFrozenError, MiddlewareDestinationMissingError } f
  *
  * @param node 対象の節です。
  * @param isActive 書き込み対象とする葉を判定します。
+ *
  * @returns 対象の葉を登録順に返します。
  */
 export function activeLeavesOf(
@@ -33,6 +34,7 @@ export function activeLeavesOf(
   isActive: IActiveLeafChecker,
 ): readonly PipelineLeaf[] {
   const active = node.allLeaves.filter(isActive);
+
   if (active.length === node.allLeaves.length) {
     return node.allLeaves;
   }
@@ -48,6 +50,7 @@ export function activeLeavesOf(
  *
  * @param leaves この節で終端する葉です。
  * @param children 子の節です。
+ *
  * @returns 登録順に並べた項目列を返します。
  */
 export function createEntries(
@@ -56,19 +59,27 @@ export function createEntries(
 ): PipelineEntry[] {
   return [
     ...leaves.map((leaf) => ({
-      order: leaf.index,
       entry: {
         kind: "leaf" as const,
         leaf,
       },
+      order: leaf.index,
     })),
-    ...children.map((child) => ({
-      order: child.allLeaves[0]!.index,
-      entry: {
-        kind: "node" as const,
-        node: child,
-      },
-    })),
+    ...children.map((child) => {
+      const [firstLeaf] = child.allLeaves;
+
+      if (firstLeaf === undefined) {
+        throw new Error("子節に葉が存在しません。");
+      }
+
+      return {
+        entry: {
+          kind: "node" as const,
+          node: child,
+        },
+        order: firstLeaf.index,
+      };
+    }),
   ]
     .toSorted((a, b) => a.order - b.order)
     .map((item) => item.entry);
@@ -82,6 +93,7 @@ export function createEntries(
  * @param middleware 対象のミドルウェアです。
  * @param ctx 検証するコンテキストです。
  * @param operation エラーに付与する操作名です。
+ *
  * @returns 変換後のデータを返します。
  */
 export function requireDestination(
@@ -108,6 +120,7 @@ export function requireDestination(
  * @param middleware 対象のミドルウェアです。
  * @param ctx 検証するコンテキストです。
  * @param operation エラーに付与する操作名です。
+ *
  * @returns 変換後のストリームを返します。
  */
 export function requireStreamDestination(
@@ -117,7 +130,7 @@ export function requireStreamDestination(
 ): IReadableStream {
   const destination = requireDestination(middleware, ctx, operation);
 
-  return v.parseOutput(ReadableStreamSchema, destination);
+  return parseOutput(ReadableStreamSchema, destination);
 }
 
 /**
@@ -131,8 +144,6 @@ export function requireStreamDestination(
 export function freezeDestination(ctx: ITransformContext): void {
   const { destination } = ctx;
   Object.defineProperty(ctx, "destination", {
-    configurable: true,
-    enumerable: true,
     get() {
       return destination;
     },
@@ -142,6 +153,8 @@ export function freezeDestination(ctx: ITransformContext): void {
         action: ctx.action,
       });
     },
+    enumerable: true,
+    configurable: true,
   });
 }
 
@@ -153,6 +166,7 @@ export function freezeDestination(ctx: ITransformContext): void {
  * @param middleware 対象のミドルウェアです。
  * @param key 写像前のキーです。
  * @param scope 操作共通の実行時情報です。
+ *
  * @returns 写像後のキーを返します。
  */
 export function applyMapKey(
@@ -160,6 +174,10 @@ export function applyMapKey(
   key: string,
   scope: OperationScope,
 ): string {
-  const c = new MapKeyContext({ key, store: scope.store });
+  const c = new MapKeyContext({
+    key,
+    store: scope.store,
+  });
+
   return middleware.mapKey(c);
 }

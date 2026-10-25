@@ -1,6 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import { PassThrough } from "@unikvs/passthrough";
-import { throwIfAborted } from "abort-signal-utils";
+import { getAbortReason, throwIfAborted } from "abort-signal-utils";
 
 import { RateLimitExceededError, RateLimitInvalidOptionError } from "./errors.js";
 
@@ -82,7 +82,7 @@ export type RateLimitOptions = {
 function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     if (signal.aborted) {
-      reject(signal.reason ?? new DOMException("The operation was aborted.", "AbortError"));
+      reject(getAbortReason(signal));
 
       return;
     }
@@ -93,7 +93,7 @@ function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
     }, ms);
     const onAbort = (): void => {
       clearTimeout(timer);
-      reject(signal.reason ?? new DOMException("The operation was aborted.", "AbortError"));
+      reject(getAbortReason(signal));
     };
     signal.addEventListener("abort", onAbort, { once: true });
   });
@@ -101,7 +101,10 @@ function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
 
 function assertPositiveNumber(name: string, value: number): void {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    throw new RateLimitInvalidOptionError({ name, actual: value });
+    throw new RateLimitInvalidOptionError({
+      name,
+      actual: value,
+    });
   }
 }
 
@@ -158,22 +161,20 @@ export default class RateLimit extends PassThrough implements IMiddleware {
    * RateLimit ミドルウェアを作成します。
    *
    * @param options トークン数と補充間隔などの設定です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#usage)
    */
   public constructor(options: RateLimitOptions = {}) {
     super();
 
     const {
-      tokensPerInterval = 1,
-      intervalMs = 1000,
-      maxTokens,
-      burst,
-      strategy = "wait",
       now = Date.now,
+      burst,
       sleep = defaultSleep,
+      strategy = "wait",
+      maxTokens,
+      intervalMs = 1000,
+      tokensPerInterval = 1,
     } = options;
-
     assertPositiveNumber("tokensPerInterval", tokensPerInterval);
     assertPositiveNumber("intervalMs", intervalMs);
 
@@ -181,15 +182,24 @@ export default class RateLimit extends PassThrough implements IMiddleware {
     assertPositiveNumber("maxTokens", capacity);
 
     if (strategy !== "wait" && strategy !== "throw") {
-      throw new RateLimitInvalidOptionError({ name: "strategy", actual: strategy });
+      throw new RateLimitInvalidOptionError({
+        name: "strategy",
+        actual: strategy,
+      });
     }
 
     if (typeof now !== "function") {
-      throw new RateLimitInvalidOptionError({ name: "now", actual: now });
+      throw new RateLimitInvalidOptionError({
+        name: "now",
+        actual: now,
+      });
     }
 
     if (typeof sleep !== "function") {
-      throw new RateLimitInvalidOptionError({ name: "sleep", actual: sleep });
+      throw new RateLimitInvalidOptionError({
+        name: "sleep",
+        actual: sleep,
+      });
     }
 
     this.tokensPerInterval = tokensPerInterval;

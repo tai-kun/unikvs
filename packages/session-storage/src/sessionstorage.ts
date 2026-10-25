@@ -1,6 +1,6 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 
-import { ClearWithoutPrefixNotAllowedError, SessionStorageNotAvailableError } from "./errors.js";
+import { SessionStorageNotAvailableError, ClearWithoutPrefixNotAllowedError } from "./errors.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
@@ -44,7 +44,8 @@ export default class SessionStorage implements IStorage<string> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
    */
   public constructor(options: SessionStorageOptions = {}) {
-    const { keyPrefix = "unikvs:", allowClearWithoutPrefix = false, storage } = options;
+    const { storage, keyPrefix = "unikvs:", allowClearWithoutPrefix = false } = options;
+
     this.name = "SessionStorage";
     this.allowClearWithoutPrefix = allowClearWithoutPrefix;
     this.#injectedStorage = storage;

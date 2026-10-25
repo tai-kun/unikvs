@@ -1,9 +1,9 @@
 import { applyMapKey } from "./_pipeline-graph.helpers.js";
 import type {
-  OperationScope,
   PipelineLeaf,
   PipelineNode,
   ResolvedLeaf,
+  OperationScope,
 } from "./_pipeline-graph.types.js";
 
 /**
@@ -43,6 +43,7 @@ export class LeafResolver {
    * 葉の写像キーを解決します。
    *
    * @param leaf 解決する葉です。
+   *
    * @returns 解決済みの葉を返します。
    */
   public resolve(leaf: PipelineLeaf): ResolvedLeaf {
@@ -50,6 +51,7 @@ export class LeafResolver {
 
     for (const node of leaf.path) {
       const cached = this.#nodeCache.get(node);
+
       if (cached !== undefined) {
         key = cached;
         continue;
@@ -60,6 +62,9 @@ export class LeafResolver {
       key = mapped;
     }
 
-    return { key, leaf };
+    return {
+      key,
+      leaf,
+    };
   }
 }

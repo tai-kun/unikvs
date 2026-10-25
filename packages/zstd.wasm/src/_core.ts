@@ -50,6 +50,7 @@ export const api = {
    * @param env 使用する実行環境です。
    * @param data 圧縮するバイト列です。
    * @param options オプションです。
+   *
    * @returns 圧縮したバイト列を返します。
    */
   compress(env: IEnv, data: Uint8Array<ArrayBuffer>, options: CompressOptions): Uint8Array {
@@ -65,6 +66,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data 展開するバイト列です。
+   *
    * @returns 展開したバイト列を返します。
    */
   decompress(env: IEnv, data: Uint8Array<ArrayBuffer>): Uint8Array {

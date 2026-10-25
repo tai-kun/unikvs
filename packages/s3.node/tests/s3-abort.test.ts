@@ -1,19 +1,19 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { StorageAbortedError } from "../src/errors.js";
 import S3 from "../src/s3.js";
-import { createClientConfig, createDelayedProxy, test } from "./_helpers.js";
+import { test, createClientConfig, createDelayedProxy } from "./_helpers.js";
 
 /**
  * 転送を遅延させるプロキシーを起動してコールバックを実行し、終了後に確実に閉じます。
@@ -38,7 +38,6 @@ async function withDelayedProxy<T>(
  */
 function abortAfter(ms: number): AbortController {
   const controller = new AbortController();
-
   setTimeout(() => {
     controller.abort();
   }, ms);
@@ -51,13 +50,14 @@ describe("AbortSignal による中断", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
     const controller = new AbortController();
     controller.abort(new Error("独自の中断理由"));
+
     const { signal } = controller;
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("pre-aborted.bin", { signal }) as IStorage.WriteContext,
@@ -95,14 +95,16 @@ describe("AbortSignal による中断", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "pre-aborted-writable.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const controller = new AbortController();
     controller.abort();
+
     let caught: unknown;
 
-    // 実行
+    // 実行：
     try {
       storage.getWritable(
         createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
@@ -111,20 +113,21 @@ describe("AbortSignal による中断", () => {
       caught = error;
     }
 
-    // 検証
+    // 検証：
     expect(caught).toBeInstanceOf(StorageAbortedError);
     expect((caught as StorageAbortedError).meta).toStrictEqual({ key });
   });
 
   test("実行中に中断された単発操作は AbortError で拒否される", async ({
     bucket,
-    endpoint,
     expect,
     signal,
     storage,
+    endpoint,
   }) => {
-    // 準備
+    // 準備：
     const targetKey = "in-flight-target.bin";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext(targetKey, { signal }) as IStorage.WriteContext,
@@ -136,7 +139,7 @@ describe("AbortSignal による中断", () => {
       proxyStorage.open(createOpenContext() as IStorage.OpenContext);
 
       try {
-        // 実行と検証
+        // 実行と検証：
         const cases: ((abortSignal: AbortSignal) => Promise<unknown>)[] = [
           (abortSignal) =>
             proxyStorage.write(
@@ -177,12 +180,12 @@ describe("AbortSignal による中断", () => {
 
   test("実行中に中断しても同じインスタンスで次の操作が成功する", async ({
     bucket,
-    endpoint,
     expect,
     signal,
     storage,
+    endpoint,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
     await withDelayedProxy(endpoint, async (proxyEndpoint) => {
@@ -200,7 +203,7 @@ describe("AbortSignal による中断", () => {
           ),
         ).rejects.toMatchObject({ name: "AbortError" });
 
-        // 実行
+        // 実行：
         await proxyStorage.write(
           createSetContext("second-attempt.bin", { signal }) as IStorage.WriteContext,
           new Uint8Array([2]),
@@ -209,7 +212,7 @@ describe("AbortSignal による中断", () => {
           createGetContext("second-attempt.bin", { signal }) as IStorage.ReadContext,
         );
 
-        // 検証
+        // 検証：
         expect(result).toStrictEqual(new Uint8Array([2]));
       } finally {
         proxyStorage.close(createCloseContext() as IStorage.CloseContext);
@@ -222,20 +225,21 @@ describe("AbortSignal による中断", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "completed.bin";
     const data = new Uint8Array([1, 2, 3]);
     const controller = new AbortController();
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(
       createSetContext(key, { signal: controller.signal }) as IStorage.WriteContext,
       data,
     );
     controller.abort();
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(data);

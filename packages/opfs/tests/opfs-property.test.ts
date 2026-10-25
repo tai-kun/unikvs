@@ -1,17 +1,29 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  type Random,
   collectBytes,
-  createClearContext,
-  createDeleteContext,
+  forCasesAsync,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { type Random, forCasesAsync } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
+
+/**
+ * 値が undefined でないことを表明して取り出します。
+ */
+function unwrap<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error("想定外の undefined です。");
+  }
+
+  return value;
+}
 
 const { signal } = new AbortController();
 
@@ -21,8 +33,15 @@ const CASE_COUNT = 30;
 const KEYS = ["a.bin", "b.bin", "c.bin"] as const;
 
 type Command =
-  | { readonly type: "write"; readonly key: string; readonly data: Uint8Array<ArrayBuffer> }
-  | { readonly type: "read" | "delete" | "exists"; readonly key: string }
+  | {
+      readonly key: string;
+      readonly data: Uint8Array<ArrayBuffer>;
+      readonly type: "write";
+    }
+  | {
+      readonly key: string;
+      readonly type: "read" | "delete" | "exists";
+    }
   | { readonly type: "clear" };
 
 /**
@@ -39,18 +58,19 @@ function randomKey(random: Random): string {
  */
 function randomCommand(random: Random): Command {
   const kind = random.int(0, 2);
+
   if (kind === 0) {
     return {
-      type: "write",
       key: random.pick(KEYS),
       data: random.bytes(random.int(0, 256)),
+      type: "write",
     };
   }
 
   if (kind === 1) {
     return {
-      type: random.pick(["read", "delete", "exists"] as const),
       key: random.pick(KEYS),
+      type: random.pick(["read", "delete", "exists"] as const),
     };
   }
 
@@ -60,15 +80,16 @@ function randomCommand(random: Random): Command {
 describe("決定的ファズテストの振る舞い", () => {
   test("固定シードの任意のキーとバイト列の write→read が往復する", async ({ expect, storage }) => {
     await forCasesAsync(SEED, CASE_COUNT, async (random) => {
-      // 準備
+      // 準備：
       const key = randomKey(random);
       const data = random.bytes(random.int(0, 4096));
 
-      // 実行
+      // 実行：
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
       const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-      // 検証
+      // 検証：
       expect(loaded).toStrictEqual(data);
     });
   });
@@ -78,7 +99,7 @@ describe("決定的ファズテストの振る舞い", () => {
     storage,
   }) => {
     await forCasesAsync(SEED + 1, CASE_COUNT, async (random) => {
-      // 準備
+      // 準備：
       const key = randomKey(random);
       const data = random.bytes(random.int(0, 4096));
       const chunkSizes = random.array(random.int(1, 10), () => random.int(1, 1000));
@@ -87,13 +108,17 @@ describe("決定的ファズテストの振る舞い", () => {
       );
       const writer = writable.getWriter();
 
-      // 実行
+      // 実行：
       let offset = 0;
       let index = 0;
+
       while (offset < data.length) {
-        const size = Math.min(chunkSizes[index % chunkSizes.length]!, data.length - offset);
+        const chunkSize = chunkSizes[index % chunkSizes.length];
+
+        const size = Math.min(unwrap(chunkSize), data.length - offset);
         await writer.write(data.subarray(offset, offset + size));
         offset += size;
+
         index++;
       }
 
@@ -104,7 +129,7 @@ describe("決定的ファズテストの振る舞い", () => {
         ),
       );
 
-      // 検証
+      // 検証：
       expect(loaded).toStrictEqual(data);
     });
   });
@@ -114,13 +139,14 @@ describe("決定的ファズテストの振る舞い", () => {
     storage,
   }) => {
     await forCasesAsync(SEED + 2, CASE_COUNT, async (random) => {
-      // 準備: 実行ごとに独立させるため、前の実行の状態を消去します。
+      // 準備 : 実行ごとに独立させるため、前の実行の状態を消去します。
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
       const model = new Map<string, Uint8Array<ArrayBuffer>>();
       const commands = random.array(random.int(1, 20), () => randomCommand(random));
 
-      // 実行と検証
+      // 実行と検証：
       for (const command of commands) {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         switch (command.type) {
           case "write": {
             await storage.write(
@@ -130,6 +156,7 @@ describe("決定的ファズテストの振る舞い", () => {
             model.set(command.key, command.data);
             break;
           }
+
           case "exists": {
             expect(
               await storage.exists(
@@ -138,7 +165,9 @@ describe("決定的ファズテストの振る舞い", () => {
             ).toBe(model.has(command.key));
             break;
           }
+
           case "delete": {
+            // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
             if (model.has(command.key)) {
               await storage.delete(
                 createDeleteContext(command.key, { signal }) as IStorage.DeleteContext,
@@ -154,7 +183,9 @@ describe("決定的ファズテストの振る舞い", () => {
 
             break;
           }
+
           case "read": {
+            // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
             if (model.has(command.key)) {
               expect(
                 await storage.read(
@@ -171,6 +202,7 @@ describe("決定的ファズテストの振る舞い", () => {
 
             break;
           }
+
           case "clear": {
             await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
             model.clear();
@@ -184,6 +216,7 @@ describe("決定的ファズテストの振る舞い", () => {
         expect(
           await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
         ).toBe(model.has(key));
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (model.has(key)) {
           expect(
             await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),

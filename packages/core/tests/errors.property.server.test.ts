@@ -1,7 +1,8 @@
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
-import { ErrorBase, type ErrorOptions, setErrorMessage } from "../src/errors.js";
+// oxlint-disable unicorn/number-literal-case
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "../src/errors.js";
 
 /**
  * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
@@ -11,7 +12,6 @@ import { ErrorBase, type ErrorOptions, setErrorMessage } from "../src/errors.js"
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
@@ -20,35 +20,36 @@ const test = vitest.extend<{
   },
 });
 
-const seed = 20260930;
+const seed = 20_260_930;
 const cases = 100;
 
 /**
  * mulberry32 による決定的な擬似乱数生成器です。
  */
-function createRandom(seed: number): {
-  string(length: number): string;
+function createRandom(initialSeed: number): {
   uint(max?: number): number;
+  string(length: number): string;
 } {
-  let state = seed >>> 0;
+  let state = initialSeed >>> 0;
   const next = (): number => {
-    state = (state + 0x6d2b79f5) >>> 0;
+    state = (state + 0x6d_2b_79_f5) >>> 0;
     let value = state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
   };
   const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
 
   return {
-    uint(max = 0xffffffff): number {
+    uint(max = 0xff_ff_ff_ff): number {
       return Math.floor(next() * (max + 1));
     },
     string(length: number): string {
       let result = "";
 
       for (let index = 0; index < length; index++) {
-        result += alphabet[Math.floor(next() * alphabet.length)]!;
+        result += alphabet.charAt(Math.floor(next() * alphabet.length));
       }
 
       return result;
@@ -60,13 +61,37 @@ function createRandom(seed: number): {
  * 決定的な乱数で count 回テスト本体を実行します。
  */
 function forCases(
-  seed: number,
+  baseSeed: number,
   count: number,
   run: (random: ReturnType<typeof createRandom>, index: number) => void,
 ): void {
   for (let index = 0; index < count; index++) {
-    run(createRandom((seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0), index);
+    run(createRandom((baseSeed ^ Math.imul(index + 1, 0x9e_37_79_b9)) >>> 0), index);
   }
+}
+
+/**
+ * 決定的な乱数で重複のないランダムなエントリー配列を生成します。
+ */
+function createRandomEntries(
+  random: ReturnType<typeof createRandom>,
+  length: number,
+): [string, string][] {
+  const entries: [string, string][] = [];
+  const keys = new Set<string>();
+
+  for (let attempt = 0; entries.length < length && attempt < length * 4; attempt++) {
+    const entryKey = random.string(random.uint(8));
+
+    if (keys.has(entryKey)) {
+      continue;
+    }
+
+    keys.add(entryKey);
+    entries.push([entryKey, random.string(random.uint(8))]);
+  }
+
+  return entries;
 }
 
 type KeyNotFoundErrorArgs = {
@@ -98,17 +123,16 @@ const keyEdgeCases: string[] = [
 ];
 
 const metaEdgeCases: Record<string, string>[] = [{}, { key: "" }, { "": "" }, { "a/b": "c" }];
-
 describe("ErrorBase のプロパティー", () => {
   test("任意の文字列キーに対して meta と既定の英語メッセージが一致する", ({ expect }) => {
-    // 準備
+    // 準備：
     const assertKey = (key: string): void => {
       const error = new KeyNotFoundError({ key });
       expect(error.meta).toStrictEqual({ key });
       expect(error.message).toBe(`Key not found: ${key}`);
     };
 
-    // 実行と検証
+    // 実行と検証：
     for (const key of keyEdgeCases) {
       assertKey(key);
     }
@@ -119,8 +143,9 @@ describe("ErrorBase のプロパティー", () => {
   });
 
   test("任意の文字列キーに対して登録した日本語メッセージが一致する", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     class LocalizedError extends KeyNotFoundError {}
+
     setErrorMessage(LocalizedError, ({ key }) => `キー ${key} が見つかりません`, "ja");
     setLang("ja");
 
@@ -128,7 +153,7 @@ describe("ErrorBase のプロパティー", () => {
       expect(new LocalizedError({ key }).message).toBe(`キー ${key} が見つかりません`);
     };
 
-    // 実行と検証
+    // 実行と検証：
     for (const key of keyEdgeCases) {
       assertKey(key);
     }
@@ -139,7 +164,7 @@ describe("ErrorBase のプロパティー", () => {
   });
 
   test("任意のメタ情報オブジェクトを参照として保持しメッセージ生成に使う", ({ expect }) => {
-    // 準備
+    // 準備：
     class MetaError extends ErrorBase<Record<string, string>> {
       public constructor(meta: Record<string, string>) {
         super(meta, (value) => Object.keys(value).sort().join("|"));
@@ -152,23 +177,13 @@ describe("ErrorBase のプロパティー", () => {
       expect(error.message).toBe(Object.keys(meta).sort().join("|"));
     };
 
-    // 実行と検証
+    // 実行と検証：
     for (const meta of metaEdgeCases) {
       assertMeta(meta);
     }
 
     forCases(seed + 2, cases, (random) => {
-      const entries: [string, string][] = [];
-      const keys = new Set<string>();
-      const length = random.uint(6);
-      for (let attempt = 0; entries.length < length && attempt < length * 4; attempt++) {
-        const entryKey = random.string(random.uint(8));
-        if (keys.has(entryKey)) {
-          continue;
-        }
-        keys.add(entryKey);
-        entries.push([entryKey, random.string(random.uint(8))]);
-      }
+      const entries = createRandomEntries(random, random.uint(6));
       assertMeta(Object.fromEntries(entries));
     });
   });

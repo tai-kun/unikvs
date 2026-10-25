@@ -1,18 +1,18 @@
 import type { IStorage } from "@unikvs/core";
 import {
   abortedSignal,
-  captureRejection,
   captureThrown,
-  createCloseContext,
-  createDeleteContext,
+  captureRejection,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
-  createStreamContext,
+  createOpenContext,
   createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createStreamContext,
 } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import LruCache from "../src/lru-cache.js";
@@ -22,7 +22,6 @@ import LruCache from "../src/lru-cache.js";
  * トグル型ライフサイクルの振る舞いを検証するために使用します。
  */
 const test = vitest.extend<{ storage: LruCache }>({
-  // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     await use(new LruCache());
   },
@@ -35,29 +34,36 @@ const test = vitest.extend<{ storage: LruCache }>({
  * UniKvs 経由ではラッパーが StorageIsNotOpenError を投げるため、本仕様は直接操作時のみのものです。
  */
 const unopenedOperations: readonly {
-  readonly label: string;
   readonly run: (storage: LruCache) => unknown;
+  readonly label: string;
 }[] = [
   {
+    run: (storage) => {
+      storage.write(createSetContext("k") as IStorage.WriteContext, "v");
+    },
     label: "write",
-    run: (storage) => storage.write(createSetContext("k") as IStorage.WriteContext, "v"),
   },
-  { label: "read", run: (storage) => storage.read(createGetContext("k") as IStorage.ReadContext) },
   {
-    label: "exists",
+    run: (storage) => storage.read(createGetContext("k") as IStorage.ReadContext),
+    label: "read",
+  },
+  {
     run: (storage) => storage.exists(createHasContext("k") as IStorage.ExistsContext),
+    label: "exists",
   },
   {
+    run: (storage) => {
+      storage.delete(createDeleteContext("k") as IStorage.DeleteContext);
+    },
     label: "delete",
-    run: (storage) => storage.delete(createDeleteContext("k") as IStorage.DeleteContext),
   },
   {
-    label: "getWritable",
     run: (storage) => storage.getWritable(createSetContext("k") as IStorage.GetWritableContext),
+    label: "getWritable",
   },
   {
-    label: "getReadable",
     run: (storage) => storage.getReadable(createStreamContext("k") as IStorage.GetReadableContext),
+    label: "getReadable",
   },
 ];
 
@@ -108,61 +114,61 @@ async function closeViaUnikvs(
 
 describe("ライフサイクル", () => {
   test("name は LruCache である", ({ expect, storage }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(storage.name).toBe("LruCache");
   });
 
   test("初期状態のとき、isOpen は false である", ({ expect, storage }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(storage.isOpen).toBe(false);
   });
 
   test("open と close は関数として存在する", ({ expect, storage }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(typeof storage.open).toBe("function");
     expect(typeof storage.close).toBe("function");
   });
 
-  test("open すると isOpen が true になる", async ({ expect, storage, signal }) => {
-    // 実行
+  test("open すると isOpen が true になる", async ({ expect, signal, storage }) => {
+    // 実行：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
-  test("open はデータを消さずにオープン状態へ移す", async ({ expect, storage, signal }) => {
-    // 準備
+  test("open はデータを消さずにオープン状態へ移す", async ({ expect, signal, storage }) => {
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 実行
+    // 実行：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
     expect(storage.isOpen).toBe(true);
   });
 
-  test("open を 2 回呼んでも冪等に成功する", async ({ expect, storage, signal }) => {
-    // 実行
+  test("open を 2 回呼んでも冪等に成功する", async ({ expect, signal, storage }) => {
+    // 実行：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     await expect(storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).resolves.toBe(
       undefined,
     );
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
-  test("open を並行に複数回呼び出してもオープン状態になる", async ({ expect, storage, signal }) => {
-    // 実行
+  test("open を並行に複数回呼び出してもオープン状態になる", async ({ expect, signal, storage }) => {
+    // 実行：
     await Promise.all([
       storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
       storage.open(createOpenContext({ signal }) as IStorage.OpenContext),
     ]);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
@@ -170,26 +176,30 @@ describe("ライフサイクル", () => {
     expect,
     storage,
   }) => {
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.open(createOpenContext({ signal: abortedSignal() }) as IStorage.OpenContext),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
+
     expect(storage.isOpen).toBe(false);
   });
 
   test("close でキャッシュが消えて isOpen が false になる", async ({ expect, signal }) => {
-    // 準備
-    const sized = new LruCache({ maxBytes: 10, sizeOf: () => 3 });
+    // 準備：
+    const sized = new LruCache({
+      sizeOf: (): number => 3,
+      maxBytes: 10,
+    });
     await sized.open(createOpenContext({ signal }) as IStorage.OpenContext);
     sized.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 実行
+    // 実行：
     await sized.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     expect(sized.size).toBe(0);
     expect(sized.bytes).toBe(0);
     expect(() => sized.exists(createHasContext("k1") as IStorage.ExistsContext)).toThrow(TypeError);
@@ -198,90 +208,92 @@ describe("ライフサイクル", () => {
   });
 
   test("close 後の read は TypeError で拒否される", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache();
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 実行
+    // 実行：
     const error = captureThrown(() => storage.read(createGetContext("k1") as IStorage.ReadContext));
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(TypeError);
+
     expect(storage.isOpen).toBe(false);
   });
 
   test("close 後の exists は TypeError で拒否される", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache();
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toThrow(
       TypeError,
     );
   });
 
-  test("二重 close も冪等に成功する", async ({ expect, storage, signal }) => {
-    // 準備
+  test("二重 close も冪等に成功する", async ({ expect, signal, storage }) => {
+    // 準備：
     // 二重 close のクラッシュ前例 (`indexeddb` の `db!.close()`、`redis` の `con!`) には合わせない。
     // close の実体は冪等な clear とフラグの解除だけであり、外部ハンドルを持たないため、冪等な成功を仕様とする。
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 実行
+    // 実行：
     await expect(
       storage.close(createCloseContext({ signal }) as IStorage.CloseContext),
     ).resolves.toBe(undefined);
 
-    // 検証
+    // 検証：
     expect(storage.size).toBe(0);
     expect(storage.isOpen).toBe(false);
   });
 
-  test("open 前の close も冪等に成功する", async ({ expect, storage, signal }) => {
-    // 実行
+  test("open 前の close も冪等に成功する", async ({ expect, signal, storage }) => {
+    // 実行：
     await expect(
       storage.close(createCloseContext({ signal }) as IStorage.CloseContext),
     ).resolves.toBe(undefined);
 
-    // 検証
+    // 検証：
     expect(storage.size).toBe(0);
     expect(storage.isOpen).toBe(false);
   });
 
   test("中断済みシグナルの close は消去せず中断例外を投げる", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache();
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.close(createCloseContext({ signal: abortedSignal() }) as IStorage.CloseContext),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
+
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
     expect(storage.isOpen).toBe(true);
   });
 
-  test("close 後に再 open すると再利用できる", async ({ expect, storage, signal }) => {
-    // 準備
+  test("close 後に再 open すると再利用できる", async ({ expect, signal, storage }) => {
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 実行
+    // 実行：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
     expect(() => storage.read(createGetContext("k1") as IStorage.ReadContext)).toThrow(
       KeyNotFoundError,
@@ -289,70 +301,75 @@ describe("ライフサイクル", () => {
     expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 
-  test("CRUD 操作の後も isOpen は true のままである", async ({ expect, storage, signal }) => {
-    // 準備
+  test("CRUD 操作の後も isOpen は true のままである", async ({ expect, signal, storage }) => {
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     storage.read(createGetContext("k1") as IStorage.ReadContext);
     storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
     storage.clear(createClearContext() as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
-  test("ストリーム操作の後も isOpen は true のままである", async ({ expect, storage, signal }) => {
-    // 準備
+  test("ストリーム操作の後も isOpen は true のままである", async ({ expect, signal, storage }) => {
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, new Uint8Array([1]));
 
-    // 実行
+    // 実行：
     const writer = storage
       .getWritable(createSetContext("k2") as IStorage.GetWritableContext)
       .getWriter();
     await writer.write(new Uint8Array([2]));
     await writer.close();
+
     const reader = storage
       .getReadable(createStreamContext("k2") as IStorage.GetReadableContext)
       .getReader();
     await reader.read();
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
   test("ストレージを close した後に確定するストリームの close は TypeError で拒否される", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const writer = storage
       .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
       .getWriter();
     await writer.write(new Uint8Array([1]));
+
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 実行
+    // 実行：
     const error = await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(TypeError);
+
     expect(storage.isOpen).toBe(false);
   });
 
   test("clear は open 不要で何度でも成功する", ({ expect, storage }) => {
-    // 実行と検証
-    expect(() => storage.clear(createClearContext() as IStorage.ClearContext)).not.toThrow();
+    // 実行と検証：
+    expect(() => {
+      storage.clear(createClearContext() as IStorage.ClearContext);
+    }).not.toThrow();
     expect(storage.size).toBe(0);
     expect(storage.isOpen).toBe(false);
   });
 
   test("size と bytes は open 不要で読める", ({ expect, storage }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(storage.size).toBe(0);
     expect(storage.bytes).toBe(0);
     expect(storage.isOpen).toBe(false);
@@ -362,11 +379,11 @@ describe("ライフサイクル", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache();
     const state: ManagedState = { managed: false };
 
-    // 実行
+    // 実行：
     // 初期 isOpen が false のため UniKvs 経由では open が実際に呼ばれる。
     await openViaUnikvs(storage, signal, state);
     expect(state.managed).toBe(true);
@@ -375,37 +392,37 @@ describe("ライフサイクル", () => {
     // managed が true のため UniKvs 経由では close が実際に呼ばれる。
     await closeViaUnikvs(storage, signal, state);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(false);
     expect(storage.size).toBe(0);
     expect(() => storage.read(createGetContext("k1") as IStorage.ReadContext)).toThrow(TypeError);
   });
 
   test("UniKvs の close 後に再 open すると再利用できる", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache();
     const state: ManagedState = { managed: false };
     await openViaUnikvs(storage, signal, state);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await closeViaUnikvs(storage, signal, state);
 
-    // 実行
+    // 実行：
     await openViaUnikvs(storage, signal, state);
     storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
     expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v2");
   });
 });
 
 describe("open していないとき", () => {
-  for (const { label, run } of unopenedOperations) {
+  for (const { run, label } of unopenedOperations) {
     test(`${label} は TypeError で拒否される`, ({ expect, storage }) => {
-      // 実行
+      // 実行：
       const error = captureThrown(() => run(storage));
 
-      // 検証
+      // 検証：
       expect(error).toBeInstanceOf(TypeError);
     });
   }

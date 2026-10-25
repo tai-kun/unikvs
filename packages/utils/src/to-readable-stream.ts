@@ -6,5 +6,9 @@ import withReadableStreamFrom from "./with-readable-stream-from.js";
 export default function toReadableStream<T>(
   iterable: Iterable<T> | AsyncIterable<T>,
 ): ReadableStream<T> {
-  return withReadableStreamFrom((ReadableStream) => ReadableStream.from(iterable));
+  // WebKit のネイティブ from は文字列などのプリミティブを受け付けないため、配列に変換して渡します。
+  const source: Iterable<T> | AsyncIterable<T> =
+    typeof iterable === "string" ? (Array.from(iterable) as Iterable<T>) : iterable;
+
+  return withReadableStreamFrom((ReadableStream) => ReadableStream.from(source));
 }

@@ -1,23 +1,23 @@
-import { createServer, type Server, type Socket } from "node:net";
+import { type Server, type Socket, createServer } from "node:net";
 
 import type { IStorage } from "@unikvs/core";
 import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
 import { acquireFreePort } from "@unikvs/testing/node";
 import { Redis as Ioredis } from "ioredis";
-import { afterAll, beforeAll, describe, vi } from "vitest";
+import { vi, afterAll, describe, beforeAll } from "vite-plus/test";
 
 import { ConnectTimeoutError } from "../src/errors.js";
 import Valkey from "../src/valkey.js";
-import { createStorage, test } from "./_helpers.js";
+import { test, createStorage } from "./_helpers.js";
 
 describe("ライフサイクル管理", () => {
   test("open を 2 回呼び出しても isOpen は true のままで操作できる", async ({
@@ -25,15 +25,15 @@ describe("ライフサイクル管理", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "double-open.txt";
     const data = new TextEncoder().encode("double open");
 
-    // 実行
+    // 実行：
     await storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -41,32 +41,32 @@ describe("ライフサイクル管理", () => {
   });
 
   test("close を呼び出すと、isOpen が false に戻る", async ({ expect, storage }) => {
-    // 実行
+    // 実行：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(false);
   });
 
   test("close を 2 回呼び出すと 2 回目は TypeError で拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(storage.close(createCloseContext() as IStorage.CloseContext)).rejects.toThrow(
       TypeError,
     );
   });
 
   test("注入されたクライアントは open でも close でも接続・切断されない", async ({
-    expect,
     fake,
+    expect,
     storage,
   }) => {
-    // 実行
+    // 実行：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     // 所有権は呼び出し側にあるため、接続も切断も行わない。
     expect(storage.isOpen).toBe(false);
     expect(fake.connectCalls).toBe(0);
@@ -79,16 +79,16 @@ describe("ライフサイクル管理", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "reopen-same-instance.bin";
     const data = new Uint8Array([9, 8, 7, 6]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     await storage.close(createCloseContext() as IStorage.CloseContext);
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -96,13 +96,13 @@ describe("ライフサイクル管理", () => {
   });
 
   test("別インスタンスから同じプレフィックスのデータを読み取れる", async ({
-    expect,
     fake,
-    keyPrefix,
+    expect,
     signal,
     storage,
+    keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     const key = "shared-prefix.bin";
     const data = new Uint8Array([1, 3, 5, 7]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
@@ -111,10 +111,10 @@ describe("ライフサイクル管理", () => {
     await other.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行
+      // 実行：
       const result = await other.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-      // 検証
+      // 検証：
       expect(result).toStrictEqual(data);
     } finally {
       await other.close(createCloseContext() as IStorage.CloseContext);
@@ -122,12 +122,12 @@ describe("ライフサイクル管理", () => {
   });
 
   test("プレフィックスが異なるインスタンスは同じキーを共有しない", async ({
-    expect,
     fake,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "isolated.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
@@ -138,7 +138,7 @@ describe("ライフサイクル管理", () => {
     await other.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(
         other.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
       ).resolves.toBe(false);
@@ -151,7 +151,7 @@ describe("ライフサイクル管理", () => {
     expect,
     keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     // 即時失敗 (ECONNREFUSED) を検証する。
     const port = await acquireFreePort();
     const unreachable = new Valkey(`redis://127.0.0.1:${port}`, {
@@ -159,7 +159,7 @@ describe("ライフサイクル管理", () => {
       connectTimeout: 1000,
     });
 
-    // 実行と検証
+    // 実行と検証：
     await expect(unreachable.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
     expect(unreachable.isOpen).toBe(false);
   });
@@ -168,25 +168,32 @@ describe("ライフサイクル管理", () => {
     expect,
     keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     // `url` 引数を省略し、到達不能な接続先を環境変数で渡して `VALKEY_URL` が使われることを確認する。
     const port = await acquireFreePort();
     const prevValkeyUrl = process.env["VALKEY_URL"];
     const prevRedisUrl = process.env["REDIS_URL"];
     process.env["VALKEY_URL"] = `redis://127.0.0.1:${port}`;
+
     delete process.env["REDIS_URL"];
-    const fromEnv = new Valkey(undefined, { keyPrefix, connectTimeout: 1000 });
+    const fromEnv = new Valkey(undefined, {
+      keyPrefix,
+      connectTimeout: 1000,
+    });
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(fromEnv.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
       expect(fromEnv.isOpen).toBe(false);
     } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (prevValkeyUrl === undefined) {
         delete process.env["VALKEY_URL"];
       } else {
         process.env["VALKEY_URL"] = prevValkeyUrl;
       }
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (prevRedisUrl === undefined) {
         delete process.env["REDIS_URL"];
       } else {
@@ -199,30 +206,34 @@ describe("ライフサイクル管理", () => {
     expect,
     keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     // `url` を使わず、`RedisOptions` の host / port が ioredis へ透過することを確認する。
     const port = await acquireFreePort();
     const prevValkeyUrl = process.env["VALKEY_URL"];
     const prevRedisUrl = process.env["REDIS_URL"];
+
     delete process.env["VALKEY_URL"];
     delete process.env["REDIS_URL"];
     const byOptions = new Valkey(undefined, {
-      keyPrefix,
       host: "127.0.0.1",
       port,
+      keyPrefix,
       connectTimeout: 1000,
     });
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(byOptions.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow();
       expect(byOptions.isOpen).toBe(false);
     } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (prevValkeyUrl === undefined) {
         delete process.env["VALKEY_URL"];
       } else {
         process.env["VALKEY_URL"] = prevValkeyUrl;
       }
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (prevRedisUrl === undefined) {
         delete process.env["REDIS_URL"];
       } else {
@@ -232,10 +243,10 @@ describe("ライフサイクル管理", () => {
   });
 
   test("close 後の write は TypeError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("after-close.bin", { signal }) as IStorage.WriteContext,
@@ -245,50 +256,50 @@ describe("ライフサイクル管理", () => {
   });
 
   test("close 後の read は TypeError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext("after-close.bin", { signal }) as IStorage.ReadContext),
     ).rejects.toThrow(TypeError);
   });
 
   test("close 後の exists は TypeError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.exists(createHasContext("after-close.bin", { signal }) as IStorage.ExistsContext),
     ).rejects.toThrow(TypeError);
   });
 
   test("close 後の delete は TypeError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.delete(createDeleteContext("after-close.bin", { signal }) as IStorage.DeleteContext),
     ).rejects.toThrow(TypeError);
   });
 
   test("close 後の clear は TypeError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
     ).rejects.toThrow(TypeError);
   });
 
   test("close 後の getWritable は同期エラーになる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getWritable(
         createSetContext("after-close.bin", { signal }) as IStorage.GetWritableContext,
@@ -297,10 +308,10 @@ describe("ライフサイクル管理", () => {
   });
 
   test("close 後の getReadable は同期エラーになる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getReadable(
         createStreamContext("after-close.bin", { signal }) as IStorage.GetReadableContext,
@@ -313,19 +324,20 @@ describe("ライフサイクル管理", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "cleared.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
+
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 実行
+    // 実行：
     await storage.close(createCloseContext() as IStorage.CloseContext);
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -336,7 +348,6 @@ describe("接続タイムアウト", () => {
   let port = 0;
   let server: Server | undefined;
   const sockets = new Set<Socket>();
-
   beforeAll(async () => {
     // 応答しないホストを再現する。接続は受け付けるが何も返さない。
     port = await acquireFreePort();
@@ -349,20 +360,27 @@ describe("接続タイムアウト", () => {
     });
 
     await new Promise<void>((resolve) => {
-      server!.listen(port, "127.0.0.1", resolve);
+      if (server === undefined) {
+        resolve();
+
+        return;
+      }
+
+      server.listen(port, "127.0.0.1", resolve);
     });
   });
-
   afterAll(async () => {
     // 受け付けた接続を残したままでは `close` が完了しないため、先に破棄する。
     for (const socket of sockets) {
       socket.destroy();
     }
+
     sockets.clear();
 
     await new Promise<void>((resolve) => {
       if (server === undefined) {
         resolve();
+
         return;
       }
 
@@ -371,12 +389,11 @@ describe("接続タイムアウト", () => {
       });
     });
   });
-
   test("応答しないホストのとき、open は connectTimeout で打ち切られる", async ({
     expect,
     keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     // タイムアウト発動の場合を検証する。
     // `Promise.race` による打ち切りであることを確認する。
     const silent = new Valkey(`redis://127.0.0.1:${port}`, {
@@ -384,7 +401,7 @@ describe("接続タイムアウト", () => {
       connectTimeout: 500,
     });
 
-    // 実行と検証
+    // 実行と検証：
     const start = Date.now();
     await expect(silent.open(createOpenContext() as IStorage.OpenContext)).rejects.toThrow(
       ConnectTimeoutError,
@@ -399,23 +416,27 @@ describe("切断タイムアウト", () => {
     expect,
     keyPrefix,
   }) => {
-    // 準備
+    // 準備：
     // 接続確立は成功したものとし、`quit` だけをハングさせて打ち切り経路を通す。
-    const connect = vi.spyOn(Ioredis.prototype, "connect").mockResolvedValue(undefined);
+    const connect = vi.spyOn(Ioredis.prototype, "connect").mockResolvedValue();
     const quit = vi
       .spyOn(Ioredis.prototype, "quit")
       .mockImplementation(() => new Promise<never>(() => {}));
     const disconnect = vi.spyOn(Ioredis.prototype, "disconnect");
-    const storage = new Valkey("redis://127.0.0.1:1", { keyPrefix, closeTimeout: 100 });
+    const storage = new Valkey("redis://127.0.0.1:1", {
+      keyPrefix,
+      closeTimeout: 100,
+    });
 
     try {
       await storage.open(createOpenContext() as IStorage.OpenContext);
 
-      // 実行
+      // 実行：
       const start = Date.now();
+
       await storage.close(createCloseContext() as IStorage.CloseContext);
 
-      // 検証
+      // 検証：
       expect(Date.now() - start).toBeLessThan(10e3);
       expect(connect).toHaveBeenCalled();
       expect(quit).toHaveBeenCalled();

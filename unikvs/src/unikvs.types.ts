@@ -2,19 +2,19 @@ import type { VariablesInit } from "./_contexts.js";
 import type { ValueOf } from "./_types.js";
 import type {
   OpenOptionsSchema,
-  CloseOptionsSchema,
   ClearOptionsSchema,
+  CloseOptionsSchema,
 } from "./_unikvs.schemas.js";
-import * as v from "./_valibot.js";
+import type { InferInput } from "./_valibot.js";
 import type { $InferPlainValueInput } from "./_value-schemas.js";
 import type { KeyValueMapping } from "./unikvs-branch.js";
 import type { Value, PlainValue, StreamValue } from "./value-schemas.js";
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// ユーティリティー
+// ユーティリティー。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 export type KeyofKeyValueMapping<TKeyValueMapping extends KeyValueMapping = KeyValueMapping> =
   Extract<keyof TKeyValueMapping, string>;
@@ -44,21 +44,21 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
     : never;
 }>;
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// 型定義
+// 型定義。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type OpenOptions = v.InferInput<typeof OpenOptionsSchema>;
+export type OpenOptions = InferInput<typeof OpenOptionsSchema>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
+export type CloseOptions = InferInput<typeof CloseOptionsSchema>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
@@ -191,4 +191,4 @@ export type DeleteOptions<TKey = string> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;
+export type ClearOptions = InferInput<typeof ClearOptionsSchema>;

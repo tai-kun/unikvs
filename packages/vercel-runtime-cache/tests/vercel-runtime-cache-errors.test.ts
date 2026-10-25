@@ -1,32 +1,40 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import {
   InvalidChunkTypeError,
-  InvalidMaxEntriesError,
   InvalidNamespaceError,
+  InvalidMaxEntriesError,
   InvalidTtlSecondsError,
 } from "../src/errors.js";
 
 describe("InvalidChunkTypeError", () => {
   test("name は VercelRuntimeCacheInvalidChunkTypeError である", ({ expect }) => {
-    expect(new InvalidChunkTypeError({ key: "k1", chunk: "x" }).name).toBe(
-      "VercelRuntimeCacheInvalidChunkTypeError",
-    );
+    expect(
+      new InvalidChunkTypeError({
+        key: "k1",
+        chunk: "x",
+      }).name,
+    ).toBe("VercelRuntimeCacheInvalidChunkTypeError");
   });
 
   test("チャンクと型名を meta に保持する", ({ expect }) => {
     const chunk = { invalid: true };
-    const error = new InvalidChunkTypeError({ key: "k1", chunk });
-
+    const error = new InvalidChunkTypeError({
+      key: "k1",
+      chunk,
+    });
     expect(error.meta.key).toBe("k1");
     expect(error.meta.chunk).toBe(chunk);
     expect(error.meta.chunkType).toBe("Object");
   });
 
   test("既定の英語メッセージを返す", ({ expect }) => {
-    expect(new InvalidChunkTypeError({ key: "k1", chunk: "x" }).message).toBe(
-      'Expected chunk for key "k1" is Uint8Array<ArrayBuffer>, but got string',
-    );
+    expect(
+      new InvalidChunkTypeError({
+        key: "k1",
+        chunk: "x",
+      }).message,
+    ).toBe('Expected chunk for key "k1" is Uint8Array<ArrayBuffer>, but got string');
   });
 });
 

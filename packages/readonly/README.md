@@ -1,3 +1,3 @@
 # @unikvs/readonly
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/readonly)
+[Document](https://tai-kun.github.io/unikvs/)

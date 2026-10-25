@@ -1,13 +1,13 @@
 import { FastUtf8 } from "fast-utf8";
 import filenameReservedRegex, { windowsReservedNameRegex } from "filename-reserved-regex";
 
-const FILENAME_RESERVED_REGEX = /*#__PURE__*/ filenameReservedRegex();
+const FILENAME_RESERVED_REGEX = /* #__PURE__ */ filenameReservedRegex();
 
-const WINDOWS_RESERVED_NAME_REGEX = /*#__PURE__*/ windowsReservedNameRegex();
+const WINDOWS_RESERVED_NAME_REGEX = /* #__PURE__ */ windowsReservedNameRegex();
 
 const MAX_BYTES = 255;
 
-const utf8 = /*#__PURE__*/ new FastUtf8({
+const utf8 = /* #__PURE__ */ new FastUtf8({
   strict: true,
   ignoreBOM: true,
   allocateSize: MAX_BYTES,
@@ -24,6 +24,7 @@ export default function isValidFilename(filename: string): boolean {
 
   // バイト数が MAX_BYTES を超えている場合は不当と判断します。
   const encoded = utf8.encode(filename);
+
   if (encoded.length > MAX_BYTES) {
     return false;
   }
@@ -41,7 +42,7 @@ export default function isValidFilename(filename: string): boolean {
   }
 
   // Unix 系や Windows で使用が禁止されている制御文字や特殊記号を確認します。
-  // 注: filename-reserved-regex は g フラグ付きの正規表現を返すため、lastIndex を明示的にリセットします。
+  // 注 : filename-reserved-regex は g フラグ付きの正規表現を返すため、lastIndex を明示的にリセットします。
   FILENAME_RESERVED_REGEX.lastIndex = 0;
   if (FILENAME_RESERVED_REGEX.test(filename)) {
     return false;
@@ -54,7 +55,7 @@ export default function isValidFilename(filename: string): boolean {
   }
 
   // macOS の Finder などの UI 上では、ファイル名に含まれる「:」が「/」として扱われる、あるいはその逆の変換が発生し、予期せぬ動作を招く恐れがあるため「:」を明示的に拒否します。
-  if (filename.indexOf(":") >= 0) {
+  if (filename.includes(":")) {
     return false;
   }
 

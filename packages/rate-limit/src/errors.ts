@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#errors)
@@ -31,7 +31,8 @@ export class RateLimitExceededError extends ErrorBase<RateLimitExceededErrorMeta
     const meta: RateLimitExceededErrorMeta = { retryAfterMs };
     super(
       meta,
-      ({ retryAfterMs }) => `Rate limit exceeded. Retry after ${String(retryAfterMs)}ms.`,
+      ({ retryAfterMs: messageRetryAfterMs }) =>
+        `Rate limit exceeded. Retry after ${String(messageRetryAfterMs)}ms.`,
       options,
     );
   }
@@ -83,11 +84,14 @@ export class RateLimitInvalidOptionError extends InvalidUsageErrorBase<RateLimit
    */
   public constructor(args: RateLimitInvalidOptionErrorArgs) {
     const { name, actual, ...options } = args;
-    const meta: RateLimitInvalidOptionErrorMeta = { name, actual };
+    const meta: RateLimitInvalidOptionErrorMeta = {
+      name,
+      actual,
+    };
     super(
       meta,
-      ({ name, actual }) =>
-        `Invalid RateLimit option ${JSON.stringify(name)}: ${formatActual(actual)}`,
+      ({ name: messageName, actual: messageActual }) =>
+        `Invalid RateLimit option ${JSON.stringify(messageName)}: ${formatActual(messageActual)}`,
       options,
     );
   }
@@ -104,6 +108,7 @@ setErrorMessage(
  * エラーメッセージに埋め込む実際の値を整形します。
  *
  * @param actual 整形する値です。
+ *
  * @returns 整形した文字列を返します。
  */
 function formatActual(actual: unknown): string {
@@ -111,7 +116,12 @@ function formatActual(actual: unknown): string {
     return JSON.stringify(actual);
   }
 
-  if (typeof actual === "number" || typeof actual === "boolean" || actual == null) {
+  if (
+    typeof actual === "number" ||
+    typeof actual === "boolean" ||
+    actual === null ||
+    actual === undefined
+  ) {
     return String(actual);
   }
 

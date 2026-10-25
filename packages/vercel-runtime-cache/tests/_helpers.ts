@@ -24,32 +24,38 @@ export type FakeRuntimeCacheOptions = {
 /**
  * `VercelRuntimeCacheBackend` の外部境界を模倣する最小のフェイクです。
  *
- * 実際の `getCache()` ではなく、このパッケージが定義する注入インターフェースに合わせて、
- * `VercelRuntimeCache` が実際に発行する操作だけを非同期の Promise として再現します。
- * `set` の `ttlSeconds` は記録しますが期限切れは再現しません。保存値の論理的な期限は
- * ストレージ自身が `expiresAt` で判定するため、ここで失効させるとその検証を隠すからです。
+ * 実際の `getCache()` ではなく、このパッケージが定義する注入インターフェースに合わせて、`VercelRuntimeCache` が実際に発行する操作だけを非同期の Promise として再現します。
+ * `set` の `ttlSeconds` は記録しますが期限切れは再現しません。保存値の論理的な期限はストレージ自身が `expiresAt` で判定するため、ここで失効させるとその検証を隠すからです。
  */
 export function createFakeRuntimeCache(options: FakeRuntimeCacheOptions = {}): FakeRuntimeCache {
   const { supportsClear = true } = options;
   const store = new Map<string, unknown>();
   const setCalls: RecordedSetCall[] = [];
   const backend: FakeRuntimeCache = {
-    store,
-    setCalls,
     async get(key: string): Promise<unknown> {
+      await Promise.resolve();
+
       return store.get(key);
     },
     async set(key: string, value: unknown, setOptions?: { ttlSeconds?: number }): Promise<void> {
+      await Promise.resolve();
       store.set(key, value);
-      setCalls.push({ key, options: setOptions });
+      setCalls.push({
+        key,
+        options: setOptions,
+      });
     },
+    store,
     async delete(key: string): Promise<void> {
+      await Promise.resolve();
       store.delete(key);
     },
+    setCalls,
   };
 
   if (supportsClear) {
     backend.clear = async (): Promise<void> => {
+      await Promise.resolve();
       store.clear();
     };
   }

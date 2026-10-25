@@ -1,13 +1,13 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
-  CacheBindingNotFoundError,
-  CacheOperationError,
-  ClearNotSupportedError,
-  InvalidChunkTypeError,
   InvalidKeyError,
   InvalidOriginError,
+  CacheOperationError,
+  InvalidChunkTypeError,
+  ClearNotSupportedError,
+  CacheBindingNotFoundError,
 } from "./errors.js";
 
 /**
@@ -76,7 +76,7 @@ function normalizeOrigin(origin: unknown): string {
     throw new InvalidOriginError({ actual: origin });
   }
 
-  const normalized = origin.replace(/\/+$/, "");
+  const normalized = origin.replace(/\/+$/u, "");
 
   if (normalized === "") {
     throw new InvalidOriginError({ actual: origin });
@@ -111,9 +111,7 @@ function resolveDefaultCache(): CacheLike {
 /**
  * Workers Cache API binding にバイト列を保存するストレージです。
  *
- * キーを `${origin}/<符号化キー>` の `Request` URL に変換し、バイナリーボディを持つ
- * `Response` として `put` / `match` / `delete` します。Cache API にキー列挙がないため
- * `clear` は未対応です。
+ * キーを `${origin}/<符号化キー>` の `Request` URL に変換し、バイナリーボディを持つ `Response` として `put` / `match` / `delete` します。Cache API にキー列挙がないため `clear` は未対応です。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#usage)
  */
@@ -136,9 +134,18 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
    */
   public constructor(options: CloudflareCacheOptions = {}) {
     const { cache = resolveDefaultCache(), origin = DEFAULT_ORIGIN } = options;
+
     this.name = "CloudflareCache";
     this.#cache = cache;
     this.#origin = normalizeOrigin(origin);
+  }
+
+  // バイト列を保存用の応答に包みます。
+  static #toResponse(data: Uint8Array<ArrayBuffer>): Response {
+    return new Response(data, {
+      status: 200,
+      headers: { "Content-Type": "application/octet-stream" },
+    });
   }
 
   // キーに対応する要求を組み立てます。
@@ -149,18 +156,13 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     try {
       segment = encodeURIComponent(key).replaceAll(".", "%2E");
     } catch (ex) {
-      throw new InvalidKeyError({ key, cause: ex });
+      throw new InvalidKeyError({
+        key,
+        cause: ex,
+      });
     }
 
     return new Request(`${this.#origin}/${segment}`);
-  }
-
-  // バイト列を保存用の応答に包みます。
-  static #toResponse(data: Uint8Array<ArrayBuffer>): Response {
-    return new Response(data, {
-      status: 200,
-      headers: { "Content-Type": "application/octet-stream" },
-    });
   }
 
   public get isOpen(): boolean {
@@ -183,7 +185,11 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     try {
       await this.#cache.put(request, CloudflareCache.#toResponse(data.slice()));
     } catch (ex) {
-      throw new CacheOperationError({ operation: "put", key: c.key, cause: ex });
+      throw new CacheOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "put",
+      });
     }
   }
 
@@ -196,7 +202,11 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     try {
       return await this.#cache.match(request);
     } catch (ex) {
-      throw new CacheOperationError({ operation: "match", key: c.key, cause: ex });
+      throw new CacheOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "match",
+      });
     }
   }
 
@@ -241,7 +251,11 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     try {
       await this.#cache.delete(request);
     } catch (ex) {
-      throw new CacheOperationError({ operation: "delete", key: c.key, cause: ex });
+      throw new CacheOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "delete",
+      });
     }
   }
 
@@ -259,14 +273,8 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     const chunks: Uint8Array[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write(chunk) {
-        throwIfAborted(signal);
-
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(chunk.slice());
+      abort() {
+        chunks.length = 0;
       },
       close: async () => {
         throwIfAborted(signal);
@@ -283,11 +291,24 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
         try {
           await cache.put(request, CloudflareCache.#toResponse(merged));
         } catch (ex) {
-          throw new CacheOperationError({ operation: "put", key: c.key, cause: ex });
+          throw new CacheOperationError({
+            key: c.key,
+            cause: ex,
+            operation: "put",
+          });
         }
       },
-      abort() {
-        chunks.length = 0;
+      write(chunk) {
+        throwIfAborted(signal);
+
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(chunk.slice());
       },
     });
   }

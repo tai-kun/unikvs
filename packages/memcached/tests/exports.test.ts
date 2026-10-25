@@ -1,58 +1,59 @@
-import { describe, expectTypeOf, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
 import {
-  ConnectTimeoutError,
-  InvalidConnectTimeoutError,
-  InvalidTtlSecondsError,
   KeyNotFoundError,
+  ConnectTimeoutError,
+  InvalidTtlSecondsError,
+  InvalidConnectTimeoutError,
 } from "../src/errors.js";
 import type {
-  ConnectTimeoutErrorMeta,
-  ConnectTimeoutErrorArgs,
-  InvalidConnectTimeoutErrorMeta,
-  InvalidConnectTimeoutErrorArgs,
-  InvalidTtlSecondsErrorMeta,
-  InvalidTtlSecondsErrorArgs,
-  MemcachedClientLike,
-  MemcachedGetResultValue,
   MemcachedServers,
+  MemcachedClientLike,
+  ConnectTimeoutErrorArgs,
+  ConnectTimeoutErrorMeta,
+  MemcachedGetResultValue,
   MemcachedStorageOptions,
+  InvalidTtlSecondsErrorArgs,
+  InvalidTtlSecondsErrorMeta,
+  InvalidConnectTimeoutErrorArgs,
+  InvalidConnectTimeoutErrorMeta,
 } from "../src/index.js";
 import * as index from "../src/index.js";
 import Memcached from "../src/memcached.js";
 
 describe("index のエクスポート", () => {
   test("ストレージがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.Memcached).toBe(Memcached);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.KeyNotFoundError).toBe(KeyNotFoundError);
   });
 
   test("UnsupportedRuntimeError は存在しない", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index).not.toHaveProperty("UnsupportedRuntimeError");
   });
 
   test("close 系のエラー型は存在しない", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     // memcached クライアントの解放は同期的でタイムアウトしないため、close 系のエラー型を持たない。
     expect(index).not.toHaveProperty("CloseTimeoutError");
     expect(index).not.toHaveProperty("InvalidCloseTimeoutError");
   });
 
   test("追加のエラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.InvalidTtlSecondsError).toBe(InvalidTtlSecondsError);
     expect(index.InvalidConnectTimeoutError).toBe(InvalidConnectTimeoutError);
     expect(index.ConnectTimeoutError).toBe(ConnectTimeoutError);
   });
 
   test("型がエクスポートされている", () => {
-    // 実行と検証
+    // 実行と検証：
     // `index.js` から型を import できることで、`export type *` による再輸出を確認する。
     expectTypeOf<MemcachedClientLike>().toBeObject();
     expectTypeOf<MemcachedGetResultValue>().toEqualTypeOf<Uint8Array | string | null | undefined>();

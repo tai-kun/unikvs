@@ -1,43 +1,43 @@
-import { access, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { rm, mkdir, access, mkdtemp, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import BunFs from "../src/bun-fs.js";
 import { test } from "./_helpers.js";
 
 describe("初期化と接続管理", () => {
-  test("初期状態のとき、isOpen は false である", ({ expect, root }) => {
-    // 準備
+  test("初期状態のとき、isOpen は false である", ({ root, expect }) => {
+    // 準備：
     const unopened = new BunFs(root);
 
-    // 実行と検証
+    // 実行と検証：
     expect(unopened.isOpen).toBe(false);
   });
 
   test("open を実行したとき、isOpen が true になりディレクトリが作成される", async ({
-    expect,
     root,
+    expect,
   }) => {
-    // 準備
+    // 準備：
     const createdRoot = join(root, "created");
     const unopened = new BunFs(createdRoot);
 
-    // 実行
+    // 実行：
     await unopened.open(createOpenContext() as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     expect(unopened.isOpen).toBe(true);
     await expect(access(createdRoot)).resolves.toBeNull();
   });
@@ -49,30 +49,48 @@ describe("初期化と接続管理", () => {
     const originalCwd = process.cwd();
     let cwdA: string | undefined;
     let cwdB: string | undefined;
+
     try {
-      // 準備
+      // 準備：
       cwdA = await mkdtemp(join(tmpdir(), "unikvs-cwd-a-"));
       cwdB = await mkdtemp(join(tmpdir(), "unikvs-cwd-b-"));
       process.chdir(cwdA);
       const relative = new BunFs("rel-root");
       await relative.open(createOpenContext() as IStorage.OpenContext);
 
-      // 実行
+      // 実行：
       process.chdir(cwdB);
       const key = "test.txt";
       const data = new TextEncoder().encode("Hello World");
       await relative.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-      // 検証
+      // 検証：
       const savedData = await readFile(join(cwdA, "rel-root", key));
       expect(new Uint8Array(savedData)).toStrictEqual(data);
     } finally {
       process.chdir(originalCwd);
-      if (cwdA) {
-        await rm(cwdA, { recursive: true, force: true }).catch(() => {});
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (cwdA !== undefined) {
+        try {
+          await rm(cwdA, {
+            force: true,
+            recursive: true,
+          });
+        } catch {
+          // 後始末の削除に失敗しても無視します。
+        }
       }
-      if (cwdB) {
-        await rm(cwdB, { recursive: true, force: true }).catch(() => {});
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (cwdB !== undefined) {
+        try {
+          await rm(cwdB, {
+            force: true,
+            recursive: true,
+          });
+        } catch {
+          // 後始末の削除に失敗しても無視します。
+        }
       }
     }
   });
@@ -80,19 +98,19 @@ describe("初期化と接続管理", () => {
 
 describe("基本操作 (CRUD)", () => {
   test("データを書き込んだとき、指定された パスにファイルが作成され、内容が一致する", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "test.txt";
     const data = new TextEncoder().encode("Hello World");
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     const filePath = join(root, key);
     const savedData = await readFile(filePath);
     expect(new Uint8Array(savedData)).toStrictEqual(data);
@@ -103,15 +121,15 @@ describe("基本操作 (CRUD)", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "read-test.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(result).toBeInstanceOf(Uint8Array);
     expect(new Uint8Array(result)).toStrictEqual(data);
   });
@@ -121,48 +139,48 @@ describe("基本操作 (CRUD)", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "exists.txt";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([0]),
     );
 
-    // 実行
+    // 実行：
     const result = await storage.exists(createHasContext(key) as IStorage.ExistsContext);
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
   });
 
   test("存在しないファイルのキーで確認したとき、false が返される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const key = "non-existent.txt";
 
-    // 実行
+    // 実行：
     const result = await storage.exists(createHasContext(key) as IStorage.ExistsContext);
 
-    // 検証
+    // 検証：
     expect(result).toBe(false);
   });
 
   test("ファイルを削除したとき、ファイルが消滅し存在確認が false になる", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "delete-me.txt";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([0]),
     );
 
-    // 実行
+    // 実行：
     await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     await expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).resolves.toBe(
       false,
     );
@@ -170,12 +188,12 @@ describe("基本操作 (CRUD)", () => {
   });
 
   test("clear を実行したとき、ルート内の全てのファイルが削除され、空のディレクトリが維持される", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.write(
       createSetContext("file1.txt", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
@@ -185,10 +203,10 @@ describe("基本操作 (CRUD)", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext() as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext("file1.txt") as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -205,45 +223,45 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
-    const writable = await storage.getWritable(
+    const writable = storage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
     );
 
-    // 実行
+    // 実行：
     const writer = writable.getWriter();
     await writer.write(data);
     await writer.close();
 
-    // 検証
+    // 検証：
     const savedData = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(new Uint8Array(savedData)).toStrictEqual(data);
   });
 
   test("ストリームによる書き込みを中断したとき、既存のデータが保たれ一時ファイルも残らない", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "atomic-stream.txt";
     const original = new Uint8Array([1, 2, 3, 4, 5]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
 
     const controller = new AbortController();
-    const writable = await storage.getWritable(
+    const writable = storage.getWritable(
       createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
     );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
 
-    // 実行
+    // 実行：
     controller.abort();
 
-    // 検証
+    // 検証：
     await expect(writer.close()).rejects.toThrow();
 
     const savedData = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
@@ -257,19 +275,19 @@ describe("ストリーム操作", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "atomic-stream-new.txt";
     const controller = new AbortController();
-    const writable = await storage.getWritable(
+    const writable = storage.getWritable(
       createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
     );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x41));
 
-    // 実行
+    // 実行：
     controller.abort();
 
-    // 検証
+    // 検証：
     await expect(writer.close()).rejects.toThrow();
     await expect(storage.exists(createHasContext(key) as IStorage.ExistsContext)).resolves.toBe(
       false,
@@ -277,21 +295,22 @@ describe("ストリーム操作", () => {
   });
 
   test("close 時の rename が失敗したとき、一時ファイルが残らない", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "rename-conflict.txt";
     await mkdir(join(root, key), { recursive: true });
-    const writable = await storage.getWritable(
+
+    const writable = storage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
     );
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
-    // 実行と検証
+    // 実行と検証：
     await expect(writer.close()).rejects.toThrow();
 
     const entries = await readdir(root);
@@ -303,12 +322,12 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "stream-read.txt";
     const data = new TextEncoder().encode("Readable Stream Content");
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const readable = storage.getReadable(
       createStreamContext(key, { signal }) as IStorage.GetReadableContext,
     );
@@ -317,18 +336,28 @@ describe("ストリーム操作", () => {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (done) {
+        break;
+      }
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (value !== undefined) {
+        chunks.push(value);
+      }
     }
 
-    // 検証
+    // 検証：
     const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
     const result = new Uint8Array(totalLength);
     let offset = 0;
+
     for (const chunk of chunks) {
       result.set(chunk, offset);
       offset += chunk.length;
     }
+
     expect(result).toStrictEqual(data);
   });
 });
@@ -339,10 +368,10 @@ describe("境界値・異常系テスト", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "../etc/passwd";
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).rejects.toThrow();
@@ -353,26 +382,26 @@ describe("境界値・異常系テスト", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "missing.txt";
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
-    ).rejects.toThrow(/ENOENT/);
+    ).rejects.toThrow(/ENOENT/u);
   });
 
   test("AbortSignal が中断されているとき、書き込み処理が中断され例外が投げられる", async ({
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "abort.txt";
     const data = new Uint8Array([1, 2, 3]);
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext(key, { signal: controller.signal }) as IStorage.WriteContext,
@@ -385,7 +414,7 @@ describe("境界値・異常系テスト", () => {
     expect,
     storage,
   }) => {
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.open(createOpenContext() as IStorage.OpenContext),
     ).resolves.toBeUndefined();
@@ -396,14 +425,14 @@ describe("境界値・異常系テスト", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty.txt";
     const data = new Uint8Array(0);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(Array.from(result)).toStrictEqual(Array.from(data));
   });

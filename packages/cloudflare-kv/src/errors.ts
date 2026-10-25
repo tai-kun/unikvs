@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -98,7 +98,8 @@ export class InvalidKeyPrefixError extends InvalidUsageErrorBase<InvalidKeyPrefi
     const meta: InvalidKeyPrefixErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `Expected keyPrefix to be a string, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected keyPrefix to be a string, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -106,7 +107,8 @@ export class InvalidKeyPrefixError extends InvalidUsageErrorBase<InvalidKeyPrefi
 
 setErrorMessage(
   InvalidKeyPrefixError,
-  ({ actual }) => `keyPrefix は文字列でなければなりません。受け取った値: ${String(actual)}`,
+  ({ actual: messageActual }) =>
+    `keyPrefix は文字列でなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );
 
@@ -151,8 +153,8 @@ export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSeco
     const meta: InvalidTtlSecondsErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `Expected ttlSeconds to be a positive integer or undefined, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected ttlSeconds to be a positive integer or undefined, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -160,7 +162,7 @@ export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSeco
 
 setErrorMessage(
   InvalidTtlSecondsError,
-  ({ actual }) =>
-    `ttlSeconds は正の整数または undefined でなければなりません。受け取った値: ${String(actual)}`,
+  ({ actual: messageActual }) =>
+    `ttlSeconds は正の整数または undefined でなければなりません。受け取った値: ${String(messageActual)}`,
   "ja",
 );

@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/superjson)
@@ -29,7 +29,7 @@ export class SuperjsonUnsupportedValueError extends ErrorBase<SuperjsonUnsupport
   public constructor(args: SuperjsonUnsupportedValueErrorArgs) {
     const { type, ...options } = args;
     const meta: SuperjsonUnsupportedValueErrorMeta = { type };
-    super(meta, ({ type }) => `Unsupported value type: ${type}`, options);
+    super(meta, ({ type: valueType }) => `Unsupported value type: ${valueType}`, options);
   }
 }
 

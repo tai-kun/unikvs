@@ -1,19 +1,20 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
-  readAll,
-  sourceFrom,
-  sourceFromValues,
-  splitIntoChunks,
   toText,
+  readAll,
+  createNext,
+  sourceFrom,
+  concatBytes,
+  splitIntoChunks,
+  sourceFromValues,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
+// oxlint-disable unicorn/number-literal-case
 import { SuperjsonUnsupportedValueError } from "../src/errors.js";
 import Superjson from "../src/superjson.js";
 
@@ -29,7 +30,10 @@ const VALUES = [
   123n,
   undefined,
   "日本語🎌",
-  { nested: { ok: true }, list: [1, null] },
+  {
+    list: [1, null],
+    nested: { ok: true },
+  },
 ];
 
 /**
@@ -57,9 +61,9 @@ async function decodeValue(codec: Superjson, data: Uint8Array<ArrayBuffer>): Pro
  * ストリームの書き込み・読み取り時のエラーを検証するために使用します。
  */
 async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
-  outputChunks: T[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: T[];
 }> {
   const outputChunks: T[] = [];
   let readError: unknown;
@@ -79,7 +83,21 @@ async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
+}
+
+/**
+ * 書き込み側と読み取り側のどちらかに現れたストリームエラーを返します。
+ */
+function getSettledError(settled: {
+  readonly readError: unknown;
+  readonly writeError: unknown;
+}): unknown {
+  return settled.writeError ?? settled.readError;
 }
 
 /**
@@ -89,9 +107,9 @@ function pumpEncode(
   codec: Superjson,
   values: readonly unknown[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createEncodeStreamContext(sourceFrom(values));
 
@@ -107,9 +125,9 @@ function pumpDecode(
   codec: Superjson,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: unknown[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: unknown[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
 
@@ -144,6 +162,7 @@ function toLines(values: readonly string[], terminator = "\n"): Uint8Array<Array
 async function roundTripStream(codec: Superjson, values: readonly unknown[]): Promise<unknown[]> {
   const encodeContext = createEncodeStreamContext(sourceFromValues(values));
   await codec.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, createNext());
+
   const decodeContext = createDecodeStreamContext(
     encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
   );
@@ -154,50 +173,54 @@ async function roundTripStream(codec: Superjson, values: readonly unknown[]): Pr
 
 describe("Superjson のストリーム", () => {
   test("複数の値を JSONL として往復すると元に戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
 
-    // 実行
+    // 実行：
     const decoded = await roundTripStream(codec, VALUES);
 
-    // 検証
+    // 検証：
     expect(decoded).toStrictEqual(VALUES);
   });
 
   test("encodeStream は 1 行 1 値の JSON Lines を出力する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(codec, [{ a: 1 }, "text"]);
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
+
     const text = toText(encoded.outputChunks);
     expect(text.endsWith("\n")).toBe(true);
+
     const lines = text.slice(0, -1).split("\n");
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0]!)).toStrictEqual({ json: { a: 1 } });
-    expect(JSON.parse(lines[1]!)).toStrictEqual({ json: "text" });
+    expect(lines.map((line) => JSON.parse(line))).toStrictEqual([
+      { json: { a: 1 } },
+      { json: "text" },
+    ]);
   });
 
   test("1 バイトずつのチャンクに分割してもデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const encoded = await encodeValues(codec, VALUES);
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, splitIntoChunks(encoded, 1));
 
-    // 検証
+    // 検証：
     expect(decoded.writeError).toBeUndefined();
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual(VALUES);
   });
 
   test("不揃いなチャンク境界でもデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const encoded = await encodeValues(codec, VALUES);
     const sizes = [3, 1, 4, 1, 5, 9, 2, 6];
@@ -205,32 +228,34 @@ describe("Superjson のストリーム", () => {
 
     let offset = 0;
     let index = 0;
+
     while (offset < encoded.length) {
-      const size = sizes[index % sizes.length]!;
+      const size = sizes[index % sizes.length] as number;
       chunks.push(encoded.subarray(offset, Math.min(offset + size, encoded.length)));
       offset += size;
+
       index += 1;
     }
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, chunks);
 
-    // 検証
+    // 検証：
     expect(decoded.writeError).toBeUndefined();
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual(VALUES);
   });
 
   test("末尾に改行がある場合もない場合もデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const line = toText([await encodeValue(codec, "value")]);
 
-    // 実行
+    // 実行：
     const withNewline = await pumpDecode(codec, [toLines([line])]);
     const withoutNewline = await pumpDecode(codec, [new TextEncoder().encode(line)]);
 
-    // 検証
+    // 検証：
     expect(withNewline.readError).toBeUndefined();
     expect(withoutNewline.readError).toBeUndefined();
     expect(withNewline.outputChunks).toStrictEqual(["value"]);
@@ -238,43 +263,43 @@ describe("Superjson のストリーム", () => {
   });
 
   test("CRLF の改行を受け付ける", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const first = toText([await encodeValue(codec, "first")]);
     const second = toText([await encodeValue(codec, { second: true })]);
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, [toLines([first, second], "\r\n")]);
 
-    // 検証
+    // 検証：
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual(["first", { second: true }]);
   });
 
   test("空行はスキップする", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const first = toText([await encodeValue(codec, 1)]);
     const second = toText([await encodeValue(codec, 2)]);
     const text = `\n${first}\n\n\r\n${second}\n`;
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, [new TextEncoder().encode(text)]);
 
-    // 検証
+    // 検証：
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual([1, 2]);
   });
 
   test("空のストリームは値を 1 つも返さない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(codec, []);
     const decoded = await pumpDecode(codec, []);
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(encoded.outputChunks).toStrictEqual([]);
@@ -284,142 +309,150 @@ describe("Superjson のストリーム", () => {
   });
 
   test("一括 encode の出力をストリームでデコードできる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
-    const value = { date: new Date(0), big: 1n };
+    const value = {
+      big: 1n,
+      date: new Date(0),
+    };
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, [await encodeValue(codec, value)]);
 
-    // 検証
+    // 検証：
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual([value]);
   });
 
   test("ストリーム encode の出力を一括 decode できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const value = { list: [1, 2, 3] };
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(codec, [value]);
     const decoded = await decodeValue(codec, concatBytes(encoded.outputChunks));
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(decoded).toStrictEqual(value);
   });
 
   test("大きな値も往復できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const value = "0123456789".repeat(64 * 1024);
 
-    // 実行
+    // 実行：
     const decoded = await roundTripStream(codec, [value]);
 
-    // 検証
+    // 検証：
     expect(decoded).toStrictEqual([value]);
   });
 
   test("ルートの関数を含むチャンクは SuperjsonUnsupportedValueError で拒否される", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
 
-    // 実行
-    const encoded = await pumpEncode(codec, [{ ok: true }, () => 1]);
+    // 実行：
+    const encoded = await pumpEncode(codec, [{ ok: true }, (): number => 1]);
 
-    // 検証
-    expect(encoded.writeError ?? encoded.readError).toBeInstanceOf(SuperjsonUnsupportedValueError);
+    // 検証：
+    expect(getSettledError(encoded)).toBeInstanceOf(SuperjsonUnsupportedValueError);
   });
 
   test("ルートのシンボルを含むチャンクは SuperjsonUnsupportedValueError で拒否される", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(codec, [Symbol("root")]);
 
-    // 検証
-    expect(encoded.writeError ?? encoded.readError).toBeInstanceOf(SuperjsonUnsupportedValueError);
+    // 検証：
+    expect(getSettledError(encoded)).toBeInstanceOf(SuperjsonUnsupportedValueError);
   });
 
   test("不正な行を含むストリームは SyntaxError で拒否される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const chunks = [new TextEncoder().encode("not json\n")];
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, chunks);
 
-    // 検証
-    expect(decoded.writeError ?? decoded.readError).toBeInstanceOf(SyntaxError);
+    // 検証：
+    expect(getSettledError(decoded)).toBeInstanceOf(SyntaxError);
   });
 
   test("最終行が不正なら SyntaxError で拒否される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const chunks = [new TextEncoder().encode("not json")];
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, chunks);
 
-    // 検証
-    expect(decoded.writeError ?? decoded.readError).toBeInstanceOf(SyntaxError);
+    // 検証：
+    expect(getSettledError(decoded)).toBeInstanceOf(SyntaxError);
   });
 
   test("不正な UTF-8 を含むストリームは TypeError で拒否される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const chunks = [Uint8Array.from([0xff, 0xfe, 0x0a])];
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(codec, chunks);
 
-    // 検証
-    expect(decoded.writeError ?? decoded.readError).toBeInstanceOf(TypeError);
+    // 検証：
+    expect(getSettledError(decoded)).toBeInstanceOf(TypeError);
   });
 
   test("encodeStream は上流のエラーを下流の read に伝える", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     let sourceController!: ReadableStreamDefaultController<unknown>;
     const source = new ReadableStream<unknown>({
-      start(controller) {
+      start(controller): void {
         sourceController = controller;
         controller.enqueue({ first: true });
       },
     });
     const c = createEncodeStreamContext(source);
     await codec.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+
     const reader = (c.destination as ReadableStream<unknown>).getReader();
     await reader.read();
 
-    // 実行
+    // 実行：
     const reason = new Error("abort");
     sourceController.error(reason);
 
-    // 検証
+    // 検証：
     await expect(reader.read()).rejects.toBe(reason);
   });
 
   test("decodeStream は下流の cancel 後に読み取りが終了する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const codec = new Superjson();
     const c = createDecodeStreamContext(sourceFrom([toLines(["{}"])]));
     await codec.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+
     const reader = (c.destination as ReadableStream<unknown>).getReader();
     const reason = new Error("cancel");
 
-    // 実行
+    // 実行：
     await reader.cancel(reason);
 
-    // 検証
-    await expect(reader.read()).resolves.toStrictEqual({ done: true, value: undefined });
+    // 検証：
+    await expect(reader.read()).resolves.toStrictEqual({
+      done: true,
+      value: undefined,
+    });
   });
 });

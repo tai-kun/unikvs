@@ -1,3 +1,3 @@
 # @unikvs/cbor
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/cbor)
+[Document](https://tai-kun.github.io/unikvs/)

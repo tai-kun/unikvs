@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IMiddleware, type IPipelineContext } from "@unikvs/core";
+import { type IMiddleware, type IPipelineContext, KeyNotFoundError } from "@unikvs/core";
 
 import { TtlInvalidValueError } from "./errors.js";
 
@@ -62,9 +62,9 @@ const DEAD_KEY_SUFFIX = "\0@unikvs/ttl:expired";
  * プレーン値に付ける有効期限エンベロープです。
  */
 type TtlEnvelope = {
-  readonly "@unikvs/ttl": 1;
-  readonly expiresAt: number;
   readonly data: unknown;
+  readonly expiresAt: number;
+  readonly "@unikvs/ttl": 1;
 };
 
 /**
@@ -118,7 +118,7 @@ export default class Ttl implements IMiddleware {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#usage)
    */
   public constructor(options: TtlOptions = {}) {
-    const { defaultTtl, now = Date.now } = options;
+    const { now = Date.now, defaultTtl } = options;
 
     if (typeof now !== "function") {
       throw new TtlInvalidValueError({ actual: now });
@@ -167,7 +167,9 @@ export default class Ttl implements IMiddleware {
         break;
       }
 
-      default: {
+      case "set":
+      case "delete":
+      case "clear": {
         break;
       }
     }
@@ -206,7 +208,7 @@ export default class Ttl implements IMiddleware {
       return;
     }
 
-    // 遅延失効: 読み取り時に期限切れを検出し、KeyNotFound 相当として扱います。
+    // 遅延失効 : 読み取り時に期限切れを検出し、KeyNotFound 相当として扱います。
     if (this.#now() >= expiresAt) {
       this.#expiry.delete(c.key);
 
@@ -224,8 +226,7 @@ export default class Ttl implements IMiddleware {
     c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
-    // ストリームは塊の型がストレージごとに制約されるため、帯域内に期限を埋め込まず、
-    // 記録だけで管理します。いかなるストレージでも透過するためです。
+    // ストリームは塊の型がストレージごとに制約されるため、帯域内に期限を埋め込まず、記録だけで管理します。いかなるストレージでも透過するためです。
     const expiresAt = this.#expiresAtFor(c);
 
     if (expiresAt === undefined) {
@@ -261,26 +262,26 @@ export default class Ttl implements IMiddleware {
    * 操作内変数と既定値から失効時刻 (epoch ミリ秒) を解決します。
    *
    * @param c 操作内変数を保持するコンテキストです。
+   *
    * @returns 失効時刻を返します。TTL の指定がないときは `undefined` を返します。
    */
   #expiresAtFor(c: IPipelineContext): number | undefined {
     const ttl = firstDefined(c.get(Ttl.TTL_VAR_NAME), c.get("ttl"));
+    let expiresAt: number | undefined = undefined;
 
     if (ttl !== undefined) {
-      return toExpiresAt(ttl as TtlInput, this.#now());
+      expiresAt = toExpiresAt(ttl as TtlInput, this.#now());
+    } else {
+      const rawExpiresAt = firstDefined(c.get(Ttl.EXPIRES_AT_VAR_NAME), c.get("expiresAt"));
+
+      if (rawExpiresAt !== undefined) {
+        expiresAt = toAbsolute(rawExpiresAt as number | Date);
+      } else if (this.defaultTtl !== undefined) {
+        expiresAt = toExpiresAt(this.defaultTtl, this.#now());
+      }
     }
 
-    const expiresAt = firstDefined(c.get(Ttl.EXPIRES_AT_VAR_NAME), c.get("expiresAt"));
-
-    if (expiresAt !== undefined) {
-      return toAbsolute(expiresAt as number | Date);
-    }
-
-    if (this.defaultTtl !== undefined) {
-      return toExpiresAt(this.defaultTtl, this.#now());
-    }
-
-    return undefined;
+    return expiresAt;
   }
 }
 
@@ -289,10 +290,11 @@ export default class Ttl implements IMiddleware {
  *
  * @param primary 名前空間付き変数の値です。
  * @param fallback 非名前空間名の値です。
+ *
  * @returns 定義されている方の値を返します。
  */
 function firstDefined<A, B>(primary: A | undefined, fallback: B | undefined): A | B | undefined {
-  return primary === undefined ? fallback : primary;
+  return primary ?? fallback;
 }
 
 /**
@@ -300,6 +302,7 @@ function firstDefined<A, B>(primary: A | undefined, fallback: B | undefined): A 
  *
  * @param input 変換する TTL 値です。
  * @param now 現在時刻 (epoch ミリ秒) です。
+ *
  * @returns 失効時刻を返します。
  */
 function toExpiresAt(input: TtlInput, now: number): number {
@@ -350,6 +353,7 @@ function toExpiresAt(input: TtlInput, now: number): number {
  * 絶対失効時刻を epoch ミリ秒に変換します。
  *
  * @param input 変換する値です。
+ *
  * @returns 失効時刻を返します。
  */
 function toAbsolute(input: number | Date): number {
@@ -378,6 +382,7 @@ function toAbsolute(input: number | Date): number {
  * プレーンオブジェクトかどうかを判定します。
  *
  * @param value 判定する値です。
+ *
  * @returns レコードとして扱えるとき `true` を返します。
  */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -388,6 +393,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * プレーン値の有効期限エンベロープかどうかを判定します。
  *
  * @param value 判定する値です。
+ *
  * @returns エンベロープのとき `true` を返します。
  */
 function isEnvelope(value: unknown): value is TtlEnvelope {

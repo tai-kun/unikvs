@@ -8,9 +8,11 @@ import type { IValueStream } from "./types.js";
  * 与えられた `IReadableStream` を `IValueStream` に変換します。
  *
  * @template T ストリームが保持する値の型です。
+ *
  * @param readableStream 変換対象となる `IReadableStream` インスタンスです。
  * @param onAsyncDispose ストリーム破棄時の処理です。
  * @param onBeforeDispose ソースストリームをキャンセルする前に呼ばれる処理です。
+ *
  * @returns 非同期イテレーターが付与された `ValueStream` インスタンスを返します。
  */
 export default function toValueStream<T>(
@@ -37,9 +39,10 @@ export default function toValueStream<T>(
 
   // cancel・エラー・早期 break であっても dispose されるように、readable 側のキャンセルを直接フックしたストリームを返します。
   const valueStream = new ReadableStream<T>({
-    async pull(controller) {
+    async pull(controller): Promise<void> {
       try {
         const { done, value } = await reader.read();
+
         if (done) {
           // ストリームが正常に完了したことも dispose 対象とし、完了を通知する前に破棄を完了させます。
           await disposeValueStream();
@@ -50,14 +53,14 @@ export default function toValueStream<T>(
       } catch (ex) {
         // ソースエラー時も dispose (ロック解放など) を行わないと、ストリームを放棄した consumer に対してキーの I/O ロックがリークします。
         // dispose 自体が失敗しても元の例外の伝播を壊さないように、失敗はログに残すだけにします。
-        await disposeValueStream().catch((ex) => {
-          logger.error`Failed to dispose value stream: ${ex}`;
+        await disposeValueStream().catch((disposeError) => {
+          logger.error`Failed to dispose value stream: ${disposeError}`;
         });
         controller.error(ex);
       }
     },
 
-    async cancel() {
+    async cancel(): Promise<void> {
       await disposeValueStream();
     },
   });
@@ -65,7 +68,7 @@ export default function toValueStream<T>(
   const stream = Object.assign(
     valueStream,
 
-    // AsyncDisposable
+    // AsyncDisposable。
     {
       [Symbol.asyncDispose]: disposeValueStream,
     },
@@ -75,14 +78,16 @@ export default function toValueStream<T>(
       dispose: disposeValueStream,
     },
 
-    // AsyncIterable<T, void, unknown>
+    // AsyncIterable<T, void, unknown>。
     {
       async *[Symbol.asyncIterator](this: ReadableStream<T>) {
         const r = this.getReader();
+
         try {
           // ストリームが終了するまでループを回し、チャンクを読み取ります。
           while (true) {
             const { done, value } = await r.read();
+
             if (done) {
               break;
             }
@@ -93,8 +98,8 @@ export default function toValueStream<T>(
           // エラーが発生した場合は、リーダーのキャンセルを試みます。
           try {
             await r.cancel(ex);
-          } catch (ex) {
-            logger.error`Failed to cancel reader: ${ex}`;
+          } catch (cancelError) {
+            logger.error`Failed to cancel reader: ${cancelError}`;
           }
 
           throw ex;

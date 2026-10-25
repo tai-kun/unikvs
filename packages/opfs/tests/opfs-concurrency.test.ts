@@ -2,35 +2,45 @@ import type { IStorage } from "@unikvs/core";
 import {
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import Opfs from "../src/opfs.js";
 import { test } from "./_helpers.js";
 
-const { signal } = new AbortController();
+/**
+ * 値が undefined でないことを表明して取り出します。
+ */
+function unwrap<T>(value: T | undefined): T {
+  if (value === undefined) {
+    throw new Error("想定外の undefined です。");
+  }
 
+  return value;
+}
+
+const { signal } = new AbortController();
 describe("並行実行の振る舞い", () => {
   test("異なるキーへ並列に書き込んだとき、すべてのデータが正しく保存される", async ({
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const entries = Array.from({ length: 32 }, (_, index) => ({
       key: `parallel-${index}.bin`,
       data: new Uint8Array([index, index + 1, index + 2]),
     }));
 
-    // 実行
+    // 実行：
     await Promise.all(
       entries.map(({ key, data }) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
 
-    // 検証
+    // 検証：
     for (const { key, data } of entries) {
       expect(
         await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -42,7 +52,7 @@ describe("並行実行の振る舞い", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "contended.bin";
     const payloads = [
       new Uint8Array([1]),
@@ -52,15 +62,16 @@ describe("並行実行の振る舞い", () => {
       new Uint8Array(),
     ];
 
-    // 実行
+    // 実行：
     await Promise.all(
       payloads.map((data) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
+
     const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(payloads).toContainEqual(loaded);
   });
 
@@ -68,11 +79,12 @@ describe("並行実行の振る舞い", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const existing = Array.from({ length: 16 }, (_, index) => ({
       key: `existing-${index}.bin`,
       data: new Uint8Array([index]),
     }));
+
     for (const { key, data } of existing) {
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
@@ -82,7 +94,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([index, 255 - index]),
     }));
 
-    // 実行
+    // 実行：
     const [readResults] = await Promise.all([
       Promise.all(
         existing.map(({ key }) =>
@@ -96,9 +108,10 @@ describe("並行実行の振る舞い", () => {
       ),
     ]);
 
-    // 検証
+    // 検証：
     for (const [index, result] of readResults.entries()) {
-      expect(result).toStrictEqual(existing[index]!.data);
+      const entry = existing[index];
+      expect(result).toStrictEqual(unwrap(entry).data);
     }
 
     for (const { key, data } of fresh) {
@@ -109,14 +122,15 @@ describe("並行実行の振る舞い", () => {
   });
 
   test("複数のインスタンスから同時に操作したとき、同じルートを共有できる", async ({
-    expect,
     root,
+    expect,
   }) => {
-    // 準備
+    // 準備：
     const first = new Opfs(root);
     const second = new Opfs(root);
     await first.open(createOpenContext({ signal }) as IStorage.OpenContext);
     await second.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
     const firstEntries = Array.from({ length: 16 }, (_, index) => ({
       key: `first-${index}.bin`,
       data: new Uint8Array([index]),
@@ -126,7 +140,7 @@ describe("並行実行の振る舞い", () => {
       data: new Uint8Array([100 + index]),
     }));
 
-    // 実行
+    // 実行：
     await Promise.all([
       ...firstEntries.map(({ key, data }) =>
         first.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
@@ -136,7 +150,7 @@ describe("並行実行の振る舞い", () => {
       ),
     ]);
 
-    // 検証
+    // 検証：
     for (const { key, data } of firstEntries) {
       expect(
         await second.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -154,16 +168,17 @@ describe("並行実行の振る舞い", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const entries = Array.from({ length: 20 }, (_, index) => ({
       key: `mixed-${index}.bin`,
       data: new Uint8Array([index, index + 1]),
     }));
+
     for (const { key, data } of entries) {
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
-    // 実行
+    // 実行：
     const results = await Promise.all([
       ...entries.map(async ({ key }) => ({
         kind: "exists" as const,
@@ -176,9 +191,11 @@ describe("並行実行の振る舞い", () => {
       })),
     ]);
 
-    // 検証
+    // 検証：
     expect(results).toHaveLength(40);
+
     for (const result of results) {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (result.kind === "exists") {
         expect(result.value).toBe(true);
       } else {

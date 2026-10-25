@@ -1,8 +1,8 @@
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext, createOpenContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { createOpenContext, createCloseContext } from "@unikvs/testing";
+import { test as vitest } from "vite-plus/test";
 
-import Memcached, { type MemcachedClientLike, type MemcachedGetResult } from "../src/memcached.js";
+import Memcached, { type MemcachedGetResult, type MemcachedClientLike } from "../src/memcached.js";
 
 /**
  * `memjs` 互換のインメモリー偽クライアントです。
@@ -10,7 +10,13 @@ import Memcached, { type MemcachedClientLike, type MemcachedGetResult } from "..
  * 時刻は手動進行式で、TTL の検証を確定的にするために使用します。
  */
 export class FakeMemcachedClient implements MemcachedClientLike {
-  readonly #store = new Map<string, { value: string; expiresAt: number | null }>();
+  readonly #store = new Map<
+    string,
+    {
+      value: string;
+      expiresAt: number | null;
+    }
+  >();
 
   #now = 0;
 
@@ -24,7 +30,11 @@ export class FakeMemcachedClient implements MemcachedClientLike {
 
   public flushCalls = 0;
 
-  public readonly setCalls: { key: string; value: string; expires: number | undefined }[] = [];
+  public readonly setCalls: {
+    key: string;
+    value: string;
+    expires: number | undefined;
+  }[] = [];
 
   public get size(): number {
     return this.#store.size;
@@ -51,10 +61,16 @@ export class FakeMemcachedClient implements MemcachedClientLike {
         this.#store.delete(key);
       }
 
-      return { value: null, flags: null };
+      return {
+        flags: null,
+        value: null,
+      };
     }
 
-    return { value: Buffer.from(entry.value, "utf8"), flags: null };
+    return {
+      flags: null,
+      value: Buffer.from(entry.value, "utf8"),
+    };
   }
 
   public async set(
@@ -64,13 +80,22 @@ export class FakeMemcachedClient implements MemcachedClientLike {
   ): Promise<boolean> {
     const text = typeof value === "string" ? value : Buffer.from(value).toString("utf8");
     const expires = options?.expires ?? 0;
-
-    this.setCalls.push({ key, value: text, expires });
+    this.setCalls.push({
+      key,
+      value: text,
+      expires,
+    });
     this.#store.set(
       key,
       expires > 0
-        ? { value: text, expiresAt: this.#now + expires * 1000 }
-        : { value: text, expiresAt: null },
+        ? {
+            value: text,
+            expiresAt: this.#now + expires * 1000,
+          }
+        : {
+            value: text,
+            expiresAt: null,
+          },
     );
 
     return true;
@@ -104,26 +129,26 @@ export class FakeMemcachedClient implements MemcachedClientLike {
  */
 export const test = vitest.extend<{
   client: FakeMemcachedClient;
-  keyPrefix: string;
   storage: Memcached;
+  keyPrefix: string;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async client({}, use) {
     await use(new FakeMemcachedClient());
   },
-  // oxlint-disable-next-line no-empty-pattern
-  async keyPrefix({}, use) {
-    await use(randomKeyPrefix());
-  },
   async storage({ client, keyPrefix }, use) {
-    const storage = new Memcached(undefined, { client, keyPrefix });
+    const storage = new Memcached(undefined, {
+      client,
+      keyPrefix,
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await use(storage);
 
     if (storage.isOpen) {
       await storage.close(createCloseContext() as IStorage.CloseContext);
     }
+  },
+  async keyPrefix({}, use) {
+    await use(randomKeyPrefix());
   },
 });
 
@@ -140,5 +165,8 @@ export function randomKeyPrefix(): string {
  * 別インスタンスからの読み取りや再接続の検証に使用します。
  */
 export function createStorage(client: MemcachedClientLike, keyPrefix: string): Memcached {
-  return new Memcached(undefined, { client, keyPrefix });
+  return new Memcached(undefined, {
+    client,
+    keyPrefix,
+  });
 }

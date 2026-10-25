@@ -1,19 +1,19 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidCloseTimeoutErrorMeta,
-  InvalidCloseTimeoutErrorArgs,
-  ConnectTimeoutErrorMeta,
-  ConnectTimeoutErrorArgs,
-  CloseTimeoutErrorMeta,
+  KeyNotFoundErrorMeta,
   CloseTimeoutErrorArgs,
+  CloseTimeoutErrorMeta,
+  ConnectTimeoutErrorArgs,
+  ConnectTimeoutErrorMeta,
+  InvalidCloseTimeoutErrorArgs,
+  InvalidCloseTimeoutErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
+  CloseTimeoutError,
+  ConnectTimeoutError,
   ClusterNotSupportedError,
   InvalidCloseTimeoutError,
-  ConnectTimeoutError,
-  CloseTimeoutError,
 } from "./errors.js";
 export type * from "./redis.js";
 export { default as Redis } from "./redis.js";

@@ -11,8 +11,8 @@ import {
   type IEncodeContext,
   type IMapKeyContext,
   type IStreamContext,
-  type IPipelineContext,
   type IReadableStream,
+  type IPipelineContext,
   type ILifecycleContext,
   type ITransformContext,
   type IKeyedActionContext,
@@ -33,7 +33,7 @@ export type VariablesEntry = readonly [name: string, value: unknown];
  *
  * レコードまたはエントリーの反復子を受け付けます。
  */
-export type VariablesInit = { readonly [name: string]: unknown } | Iterable<VariablesEntry>;
+export type VariablesInit = Readonly<Record<string, unknown>> | Iterable<VariablesEntry>;
 
 /**
  * 実行時変数の初期値をエントリー列に正規化します。
@@ -42,12 +42,14 @@ export type VariablesInit = { readonly [name: string]: unknown } | Iterable<Vari
  * 反復子はそのまま返します。
  *
  * @param vars 初期値です。
+ *
  * @returns エントリー列を返します。
  */
 function normalizeVariablesInit(vars: VariablesInit | undefined): Iterable<VariablesEntry> {
   if (!vars) {
     return [];
   }
+
   if (Symbol.iterator in vars) {
     return vars;
   }
@@ -77,9 +79,12 @@ export type VariablesStore = {
  * 新しい空の変数ストアを作成します。
  *
  * @param vars 初期値です。
+ *
  * @returns 空ストアを返します。
  */
-export function createVariablesStore(vars: readonly VariablesEntry[] | undefined): VariablesStore {
+export function createVariablesStore(
+  vars: readonly VariablesEntry[] | undefined = [],
+): VariablesStore {
   return {
     data: new Map(vars),
     readonly: new Set(),
@@ -127,6 +132,7 @@ class PipelineContext implements IPipelineContext {
    */
   public constructor(init: PipelineContextInit) {
     const { store } = init;
+
     if (store) {
       // 共有ストアを参照し、下流の変更が上流に見えるようにします。
       this.#data = store.data;
@@ -137,6 +143,7 @@ class PipelineContext implements IPipelineContext {
     }
 
     const vars = normalizeVariablesInit(init.vars);
+
     for (const [name, value] of vars) {
       this.#data.set(name, value);
     }
@@ -146,6 +153,7 @@ class PipelineContext implements IPipelineContext {
    * 変数の値を読み取ります。
    *
    * @param name 変数名です。
+   *
    * @returns 変数の値を返します。
    */
   public get(name: string): unknown {
@@ -157,6 +165,7 @@ class PipelineContext implements IPipelineContext {
    *
    * @param name 変数名です。
    * @param value 設定する値です。
+   *
    * @returns 自身を返します。
    */
   public set(name: string, value: unknown): this {
@@ -174,6 +183,7 @@ class PipelineContext implements IPipelineContext {
    *
    * @param name 変数名です。
    * @param value 設定する値です。
+   *
    * @returns 自身を返します。
    */
   public setReadonly(name: string, value: unknown): this {
@@ -226,9 +236,10 @@ export class MapKeyContext extends PipelineContext implements IMapKeyContext {
    */
   public constructor(init: MapKeyContextInit) {
     const { key, vars, store } = init;
-
-    super({ vars, store });
-
+    super({
+      vars,
+      store,
+    });
     this.key = key;
   }
 }
@@ -284,9 +295,10 @@ class ActionContext<const TAction extends IActionContext["action"]>
    */
   public constructor(init: ActionContextInit<TAction>) {
     const { vars, store, action, signal } = init;
-
-    super({ vars, store });
-
+    super({
+      vars,
+      store,
+    });
     this.action = action;
     this.signal = signal;
   }
@@ -331,7 +343,10 @@ export class OpenContext extends LifecycleContext<"open"> implements IOpenContex
    * @param init 初期値です。
    */
   public constructor(init: OpenContextInit) {
-    super({ ...init, action: "open" });
+    super({
+      ...init,
+      action: "open",
+    });
   }
 }
 
@@ -370,7 +385,10 @@ export class CloseContext extends LifecycleContext<"close"> implements ICloseCon
    * @param init 初期値です。
    */
   public constructor(init: CloseContextInit) {
-    super({ ...init, action: "close" });
+    super({
+      ...init,
+      action: "close",
+    });
   }
 }
 
@@ -425,9 +443,7 @@ class KeyedActionContext<TAction extends IKeyedActionContext["action"]>
    */
   public constructor(init: KeyedActionContextInit<TAction>) {
     const { key, ...superInit } = init;
-
     super(superInit);
-
     this.key = key;
   }
 }
@@ -472,7 +488,10 @@ export class SetContext extends KeyedActionContext<"set"> implements ISetContext
    * @param init 初期値です。
    */
   public constructor(init: SetContextInit) {
-    super({ ...init, action: "set" });
+    super({
+      ...init,
+      action: "set",
+    });
   }
 }
 
@@ -535,9 +554,10 @@ export class GetContext extends KeyedActionContext<"get"> implements IGetContext
       },
       ...superInit
     } = init;
-
-    super({ ...superInit, action: "get" });
-
+    super({
+      ...superInit,
+      action: "get",
+    });
     this.repair = repair;
   }
 }
@@ -601,9 +621,10 @@ export class StreamContext extends KeyedActionContext<"stream"> implements IStre
       },
       ...superInit
     } = init;
-
-    super({ ...superInit, action: "stream" });
-
+    super({
+      ...superInit,
+      action: "stream",
+    });
     this.repair = repair;
   }
 }
@@ -648,7 +669,10 @@ export class HasContext extends KeyedActionContext<"has"> implements IHasContext
    * @param init 初期値です。
    */
   public constructor(init: HasContextInit) {
-    super({ ...init, action: "has" });
+    super({
+      ...init,
+      action: "has",
+    });
   }
 }
 
@@ -692,7 +716,10 @@ export class DeleteContext extends KeyedActionContext<"delete"> implements IDele
    * @param init 初期値です。
    */
   public constructor(init: DeleteContextInit) {
-    super({ ...init, action: "delete" });
+    super({
+      ...init,
+      action: "delete",
+    });
   }
 }
 
@@ -731,7 +758,10 @@ export class ClearContext extends ActionContext<"clear"> implements IClearContex
    * @param init 初期値です。
    */
   public constructor(init: ClearContextInit) {
-    super({ ...init, action: "clear" });
+    super({
+      ...init,
+      action: "clear",
+    });
   }
 }
 
@@ -807,9 +837,7 @@ class TransformContext<
    */
   public constructor(init: TransformContextInit<TAction, TSource>) {
     const { source, ...superInit } = init;
-
     super(superInit);
-
     this.source = source;
   }
 }
@@ -873,7 +901,10 @@ export class EncodeContext<TRawData = any, TEncodedData = TRawData>
    * @param init 初期値です。
    */
   public constructor(init: EncodeContextInit<TRawData>) {
-    super({ ...init, action: "set" });
+    super({
+      ...init,
+      action: "set",
+    });
   }
 }
 
@@ -925,7 +956,10 @@ export class DecodeContext<TRawData = any, TDecodedData = TRawData>
    * @param init 初期値です。
    */
   public constructor(init: DecodeContextInit<TRawData>) {
-    super({ ...init, action: "get" });
+    super({
+      ...init,
+      action: "get",
+    });
   }
 }
 
@@ -992,7 +1026,10 @@ export class EncodeStreamContext<TRawChunk = any, TEncodedChunk = TRawChunk>
    * @param init 初期値です。
    */
   public constructor(init: EncodeStreamContextInit<TRawChunk>) {
-    super({ ...init, action: "set" });
+    super({
+      ...init,
+      action: "set",
+    });
   }
 }
 
@@ -1044,6 +1081,9 @@ export class DecodeStreamContext<TRawChunk = any, TDecodedChunk = TRawChunk>
    * @param init 初期値です。
    */
   public constructor(init: DecodeStreamContextInit<TRawChunk>) {
-    super({ ...init, action: "stream" });
+    super({
+      ...init,
+      action: "stream",
+    });
   }
 }

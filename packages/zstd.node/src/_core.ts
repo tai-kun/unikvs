@@ -71,8 +71,8 @@ export const api = {
     ]);
 
     return {
-      Transform: stream.Transform,
       constants: zlib.constants,
+      Transform: stream.Transform,
       zstdCompress: util.promisify(zlib.zstdCompress),
       zstdDecompress: util.promisify(zlib.zstdDecompress),
       createZstdCompress: zlib.createZstdCompress,
@@ -86,6 +86,7 @@ export const api = {
    * @param env 使用する実行環境です。
    * @param data 圧縮するバイト列です。
    * @param options オプションです。
+   *
    * @returns 圧縮したバイト列を返します。
    */
   async compress(
@@ -95,7 +96,7 @@ export const api = {
   ): Promise<Buffer> {
     const { level } = options;
 
-    return await env.zstdCompress(data, {
+    return env.zstdCompress(data, {
       params: {
         [env.constants.ZSTD_c_compressionLevel]: level,
       },
@@ -107,10 +108,11 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data 展開するバイト列です。
+   *
    * @returns 展開したバイト列を返します。
    */
   async decompress(env: IEnv, data: Uint8Array<ArrayBuffer>): Promise<Buffer> {
-    return await env.zstdDecompress(data);
+    return env.zstdDecompress(data);
   },
 
   /**
@@ -118,6 +120,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param options オプションです。
+   *
    * @returns 圧縮用のストリームを返します。
    */
   createCompress(env: IEnv, options: CompressOptions): ITransformStream<Buffer, Buffer> {
@@ -129,19 +132,20 @@ export const api = {
     });
 
     // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
-    return env.Transform.toWeb(duplex) as ITransformStream;
+    return env.Transform.toWeb(duplex);
   },
 
   /**
    * 展開用の ITransformStream を作成します。
    *
    * @param env 使用する実行環境です。
+   *
    * @returns 展開用のストリームを返します。
    */
   createDecompress(env: IEnv): ITransformStream<Buffer, Buffer> {
     const duplex = env.createZstdDecompress();
 
     // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
-    return env.Transform.toWeb(duplex) as ITransformStream;
+    return env.Transform.toWeb(duplex);
   },
 };

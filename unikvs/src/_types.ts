@@ -1,6 +1,6 @@
 import type {
-  IMiddleware,
   IStorage,
+  IMiddleware,
   IReadableStreamStorage,
   IWritableStreamStorage,
 } from "@unikvs/core";
@@ -13,7 +13,7 @@ export type ValueOf<T> = T[keyof T];
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferEncodeDataInput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<infer TEncodeDataInput, any, any, any> ? TEncodeDataInput : never;
+  TMiddleware extends IMiddleware<infer TEncodeDataInput> ? TEncodeDataInput : never;
 
 /**
  * ミドルウェアから、エンコード時の出力データ (符号化済み) の型を推論するユーティリティー型です。
@@ -21,9 +21,7 @@ export type $InferEncodeDataInput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferEncodeDataOutput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<any, infer TEncodeDataOutput, any, any>
-    ? TEncodeDataOutput
-    : never;
+  TMiddleware extends IMiddleware<any, infer TEncodeDataOutput> ? TEncodeDataOutput : never;
 
 /**
  * ミドルウェアから、デコード時の入力データ (符号化済み) の型を推論するユーティリティー型です。
@@ -32,7 +30,7 @@ export type $InferEncodeDataOutput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferDecodeDataInput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<any, infer TDecodeDataInput, any, any> ? TDecodeDataInput : never;
+  TMiddleware extends IMiddleware<any, infer TDecodeDataInput> ? TDecodeDataInput : never;
 
 /**
  * ミドルウェアから、デコード時の出力データ (生データ) の型を推論するユーティリティー型です。
@@ -41,9 +39,7 @@ export type $InferDecodeDataInput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferDecodeDataOutput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<infer TDecodeDataOutput, any, any, any>
-    ? TDecodeDataOutput
-    : never;
+  TMiddleware extends IMiddleware<infer TDecodeDataOutput> ? TDecodeDataOutput : never;
 
 /**
  * ミドルウェアから、デコードストリームの入力チャンクデータの型を推論するユーティリティー型です。
@@ -72,9 +68,7 @@ export type $InferEncodeChunkOutput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferEncodeChunkInput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<any, any, infer TEncodeChunkInput, any>
-    ? TEncodeChunkInput
-    : never;
+  TMiddleware extends IMiddleware<any, any, infer TEncodeChunkInput> ? TEncodeChunkInput : never;
 
 /**
  * ミドルウェアから、デコードストリームの出力チャンクデータの型を推論するユーティリティー型です。
@@ -83,9 +77,7 @@ export type $InferEncodeChunkInput<TMiddleware extends IMiddleware> =
  * @template TMiddleware 対象となるミドルウェアの型です。
  */
 export type $InferDecodeChunkOutput<TMiddleware extends IMiddleware> =
-  TMiddleware extends IMiddleware<any, any, infer TDecodeChunkOutput, any>
-    ? TDecodeChunkOutput
-    : never;
+  TMiddleware extends IMiddleware<any, any, infer TDecodeChunkOutput> ? TDecodeChunkOutput : never;
 
 /**
  * ストレージから、書き込みデータの入力型を推論するユーティリティー型です。

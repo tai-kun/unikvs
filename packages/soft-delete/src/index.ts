@@ -1,10 +1,10 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  TombstoneNotFoundErrorMeta,
+  KeyNotFoundErrorMeta,
   TombstoneNotFoundErrorArgs,
-  SoftDeleteInvalidRetentionErrorMeta,
+  TombstoneNotFoundErrorMeta,
   SoftDeleteInvalidRetentionErrorArgs,
+  SoftDeleteInvalidRetentionErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,

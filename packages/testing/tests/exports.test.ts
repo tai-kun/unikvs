@@ -1,51 +1,52 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
-import { abortedSignal, captureRejection, captureThrown } from "../src/abort.js";
+// oxlint-disable import/no-namespace
+import { abortedSignal, captureThrown, captureRejection } from "../src/abort.js";
 import {
+  toHex,
+  toText,
   bytesEqual,
   concatBytes,
   concatChunks,
-  createAllByteValues,
-  createPseudoRandomBytes,
   splitBySizes,
   splitIntoChunks,
-  toHex,
-  toText,
+  createAllByteValues,
+  createPseudoRandomBytes,
 } from "../src/bytes.js";
 import {
+  createNext,
   TestContext,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDecodeContext,
-  createDecodeStreamContext,
   createDeleteContext,
   createEncodeContext,
-  createEncodeStreamContext,
-  createGetContext,
-  createHasContext,
   createMapKeyContext,
-  createNext,
-  createOpenContext,
   createRepairContext,
-  createSetContext,
   createStreamContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "../src/context.js";
 import * as index from "../src/index.js";
-import { createRandom, forCases, forCasesAsync } from "../src/random.js";
+import { forCases, createRandom, forCasesAsync } from "../src/random.js";
 import {
-  collectBytes,
-  collectChunks,
-  pipeChunks,
-  pumpThrough,
   readAll,
-  runTransform,
+  pipeChunks,
   sourceFrom,
+  pumpThrough,
+  collectBytes,
+  runTransform,
+  collectChunks,
   sourceFromValues,
 } from "../src/streams.js";
 
 describe("index のエクスポート", () => {
   test("ヘルパーがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.createRandom).toBe(createRandom);
     expect(index.forCases).toBe(forCases);
     expect(index.forCasesAsync).toBe(forCasesAsync);

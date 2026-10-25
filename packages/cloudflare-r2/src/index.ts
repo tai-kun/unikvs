@@ -1,10 +1,10 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  StorageAbortedErrorMeta,
+  KeyNotFoundErrorMeta,
   StorageAbortedErrorArgs,
-  InvalidChunkTypeErrorMeta,
+  StorageAbortedErrorMeta,
   InvalidChunkTypeErrorArgs,
+  InvalidChunkTypeErrorMeta,
 } from "./errors.js";
 export { KeyNotFoundError, StorageAbortedError, InvalidChunkTypeError } from "./errors.js";
 

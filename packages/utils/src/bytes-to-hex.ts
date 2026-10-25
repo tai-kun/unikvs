@@ -11,10 +11,18 @@ export default function bytesToHex(bytes: Uint8Array): string {
 
   byte2hex ||= Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 
-  let i = 0,
-    hex = "";
+  let i = 0;
+  let hex = "";
+
   for (; i < bytes.length; i++) {
-    hex += byte2hex[bytes[i]!];
+    const byte = bytes[i];
+    const cached = byte === undefined ? undefined : byte2hex[byte];
+
+    if (cached === undefined) {
+      throw new RangeError(`不正なバイト値です: ${String(byte)}`);
+    }
+
+    hex += cached;
   }
 
   return hex;

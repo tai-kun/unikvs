@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -59,8 +59,8 @@ export class InvalidCloseTimeoutError extends ErrorBase<InvalidCloseTimeoutError
     const meta: InvalidCloseTimeoutErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`closeTimeout\` must be a finite positive number (ms), but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`closeTimeout\` must be a finite positive number (ms), but got ${String(messageActual)}.`,
       options,
     );
   }
@@ -104,7 +104,8 @@ export class InvalidTtlError extends ErrorBase<InvalidTtlErrorMeta> {
     const meta: InvalidTtlErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `\`ttl\` must be a finite positive number (ms), but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`ttl\` must be a finite positive number (ms), but got ${String(messageActual)}.`,
       options,
     );
   }
@@ -146,7 +147,12 @@ export class ConnectTimeoutError extends ErrorBase<ConnectTimeoutErrorMeta> {
   public constructor(args: ConnectTimeoutErrorArgs) {
     const { timeoutMs, ...options } = args;
     const meta: ConnectTimeoutErrorMeta = { timeoutMs };
-    super(meta, ({ timeoutMs }) => `Timed out connecting to Valkey after ${timeoutMs}ms`, options);
+    super(
+      meta,
+      ({ timeoutMs: messageTimeoutMs }) =>
+        `Timed out connecting to Valkey after ${messageTimeoutMs}ms`,
+      options,
+    );
   }
 }
 
@@ -185,7 +191,11 @@ export class CloseTimeoutError extends ErrorBase<CloseTimeoutErrorMeta> {
   public constructor(args: CloseTimeoutErrorArgs) {
     const { timeoutMs, ...options } = args;
     const meta: CloseTimeoutErrorMeta = { timeoutMs };
-    super(meta, ({ timeoutMs }) => `Timed out closing Valkey after ${timeoutMs}ms`, options);
+    super(
+      meta,
+      ({ timeoutMs: messageTimeoutMs }) => `Timed out closing Valkey after ${messageTimeoutMs}ms`,
+      options,
+    );
   }
 }
 

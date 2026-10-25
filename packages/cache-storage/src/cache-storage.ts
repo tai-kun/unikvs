@@ -73,6 +73,7 @@ export default class CacheStorage implements IStorage {
    */
   public constructor(options: CacheStorageOptions) {
     const { caches, cacheName, toRequest } = options;
+
     this.#cache = null;
     this.#cacheName = cacheName;
     this.#toRequest = toRequest;
@@ -86,49 +87,71 @@ export default class CacheStorage implements IStorage {
   public async open(c: IStorage.OpenContext): Promise<void> {
     using abortPromise = toAbortPromise(c.signal);
 
-    const caches: NativeCacheStorage | null =
-      this.#injectedCaches ||
-      globalThis.caches ||
-      (typeof window !== "undefined" ? window.caches : null) ||
-      (typeof self !== "undefined" ? self.caches : null);
-    if (!caches) {
+    // 注入されたバックエンドを優先します。
+    // 実行環境の `Cache API` は `globalThis` 経由で参照します。
+    const globalCaches = (globalThis as { caches?: NativeCacheStorage | undefined }).caches;
+    const windowCaches = (
+      globalThis as { window?: { caches?: NativeCacheStorage | undefined } | undefined }
+    ).window?.caches;
+    const selfCaches = (
+      globalThis as { self?: { caches?: NativeCacheStorage | undefined } | undefined }
+    ).self?.caches;
+    const caches = this.#injectedCaches ?? globalCaches ?? windowCaches ?? selfCaches;
+
+    if (caches === undefined) {
       throw new CacheStorageNotAvailableError();
     }
 
     this.#cache = await Promise.race([caches.open(this.#cacheName), abortPromise]);
   }
 
-  public async close(): Promise<void> {
+  public close(): void {
     this.#cache = null;
   }
 
   public async write(c: IStorage.WriteContext, response: Response): Promise<void> {
-    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
     const request = this.#toRequest(c.key);
     await cache.put(request, response);
+  }
+
+  // 使用中の `Cache` を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getCache(): Cache {
+    const cache = this.#cache;
+
+    if (cache === null) {
+      throw new TypeError("CacheStorage is not open. Call open() first.");
+    }
+
+    return cache;
   }
 
   async #read(c: IKeyedActionContext): Promise<Response> {
     using abortPromise = toAbortPromise(c.signal);
 
-    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
     const request = this.#toRequest(c.key);
     const response = await Promise.race([cache.match(request), abortPromise]);
-    if (!response) {
+
+    if (response === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
     return response;
   }
 
-  public async read(c: IStorage.ReadContext): Promise<Response> {
+  public read(c: IStorage.ReadContext): Promise<Response> {
     return this.#read(c);
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     using abortPromise = toAbortPromise(c.signal);
 
-    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
     const request = this.#toRequest(c.key);
     const response = await Promise.race([cache.match(request), abortPromise]);
 
@@ -136,9 +159,11 @@ export default class CacheStorage implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
     const request = this.#toRequest(c.key);
     const deleted = await cache.delete(request);
+
     if (!deleted) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -148,8 +173,10 @@ export default class CacheStorage implements IStorage {
     using abortPromise = toAbortPromise(c.signal);
 
     // cache インスタンスは専用の `Cache` を使うため、列挙した要求をすべて削除します。
-    const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
     const requests = await Promise.race([cache.keys(), abortPromise]);
+
     for (const request of requests) {
       await cache.delete(request);
       throwIfAborted(c.signal);
@@ -160,7 +187,31 @@ export default class CacheStorage implements IStorage {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write: (chunk) => {
+      abort: (): void => {
+        chunks.length = 0;
+      },
+      close: async (): Promise<void> => {
+        const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+        const data = new Uint8Array(totalLength);
+
+        let offset = 0;
+
+        for (const chunk of chunks) {
+          data.set(chunk, offset);
+          offset += chunk.length;
+        }
+
+        // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+        const cache = this.#getCache();
+        const request = this.#toRequest(c.key);
+        const response = new Response(data, {
+          headers: {
+            "Content-Type": "application/octet-stream",
+          },
+        });
+        await cache.put(request, response);
+      },
+      write: (chunk: Uint8Array<ArrayBuffer>): void => {
         throwIfAborted(c.signal);
 
         if (!(chunk instanceof Uint8Array)) {
@@ -173,40 +224,22 @@ export default class CacheStorage implements IStorage {
         // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
         chunks.push(chunk.slice());
       },
-      close: async () => {
-        const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        const data = new Uint8Array(totalLength);
-
-        let offset = 0;
-        for (const chunk of chunks) {
-          data.set(chunk, offset);
-          offset += chunk.length;
-        }
-
-        const cache = this.#cache!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
-        const request = this.#toRequest(c.key);
-        const response = new Response(data, {
-          headers: {
-            "Content-Type": "application/octet-stream",
-          },
-        });
-        await cache.put(request, response);
-      },
-      abort: () => {
-        chunks.length = 0;
-      },
     });
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
-      pull: async (controller) => {
+      pull: async (
+        controller: ReadableStreamDefaultController<Uint8Array<ArrayBuffer>>,
+      ): Promise<void> => {
         try {
           const response = await this.#read(c);
+
           // 読み手がチャンクを書き換えても保存値が変わらないよう、複製して送出します。
           const buff = await response.arrayBuffer();
           const view = new Uint8Array(buff.slice());
           controller.enqueue(view);
+
           controller.close();
         } catch (ex) {
           controller.error(ex);

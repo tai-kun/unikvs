@@ -7,8 +7,8 @@
 import type { IFetch } from "../src/http.js";
 
 export type RecordedCall = {
-  readonly method: string;
   readonly url: string;
+  readonly method: string;
   readonly headers: Record<string, string>;
 };
 
@@ -20,9 +20,9 @@ export type MockServerOptions = {
 };
 
 export type MockServer = {
+  readonly calls: RecordedCall[];
   readonly fetch: IFetch;
   readonly store: Map<string, Uint8Array>;
-  readonly calls: RecordedCall[];
   readonly baseUrl: string;
   readonly keyPrefix: string;
 };
@@ -43,13 +43,20 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
     const url = request.url;
     const method = request.method;
     const headers = Object.fromEntries(request.headers.entries());
-    calls.push({ method, url, headers });
+    calls.push({
+      url,
+      method,
+      headers,
+    });
 
     const parsed = new URL(url);
 
     if (method === "DELETE" && parsed.searchParams.has("prefix")) {
       if (clearNotSupported) {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       const prefix = parsed.searchParams.get("prefix") ?? "";
@@ -60,7 +67,10 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
         }
       }
 
-      return new Response(null, { status: 204, statusText: "No Content" });
+      return new Response(null, {
+        status: 204,
+        statusText: "No Content",
+      });
     }
 
     const segment = url.slice(`${baseUrl}/`.length);
@@ -70,39 +80,69 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
       const bytes = new Uint8Array(await request.arrayBuffer());
       store.set(storageKey, bytes);
 
-      return new Response(null, { status: 200, statusText: "OK" });
+      return new Response(null, {
+        status: 200,
+        statusText: "OK",
+      });
     }
 
     if (method === "HEAD") {
       if (headNotSupported) {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return store.has(storageKey)
-        ? new Response(null, { status: 200, statusText: "OK" })
-        : new Response(null, { status: 404, statusText: "Not Found" });
+        ? new Response(null, {
+            status: 200,
+            statusText: "OK",
+          })
+        : new Response(null, {
+            status: 404,
+            statusText: "Not Found",
+          });
     }
 
     if (method === "DELETE") {
       if (storageKey !== "" && store.has(storageKey)) {
         store.delete(storageKey);
 
-        return new Response(null, { status: 204, statusText: "No Content" });
+        return new Response(null, {
+          status: 204,
+          statusText: "No Content",
+        });
       }
 
-      return new Response(null, { status: 404, statusText: "Not Found" });
+      return new Response(null, {
+        status: 404,
+        statusText: "Not Found",
+      });
     }
 
     const found = store.get(storageKey);
 
     if (found === undefined) {
-      return new Response(null, { status: 404, statusText: "Not Found" });
+      return new Response(null, {
+        status: 404,
+        statusText: "Not Found",
+      });
     }
 
-    return new Response(found as Uint8Array<ArrayBuffer>, { status: 200, statusText: "OK" });
+    return new Response(found as Uint8Array<ArrayBuffer>, {
+      status: 200,
+      statusText: "OK",
+    });
   };
 
-  return { fetch, store, calls, baseUrl, keyPrefix };
+  return {
+    calls,
+    fetch,
+    store,
+    baseUrl,
+    keyPrefix,
+  };
 }
 
 /**
@@ -110,7 +150,12 @@ export function createMockServer(options: MockServerOptions = {}): MockServer {
  * `statusText` の空文字分岐の検証に使います。
  */
 export function errorResponse(status: number, statusText: string): Response {
-  return { ok: false, status, statusText, body: null } as unknown as Response;
+  return {
+    ok: false,
+    body: null,
+    status,
+    statusText,
+  } as unknown as Response;
 }
 
 /**
@@ -125,21 +170,23 @@ export function fallbackResponse(
   if (bodyNull) {
     return {
       ok: status >= 200 && status < 300,
+      body: null,
       status,
       statusText: "OK",
-      body: null,
     } as unknown as Response;
   }
 
   return {
     ok: status >= 200 && status < 300,
-    status,
-    statusText: "OK",
     body: {
-      cancel: async (): Promise<void> => {
+      cancel: (): Promise<void> => {
         onCancel?.();
+
+        return Promise.resolve();
       },
     },
+    status,
+    statusText: "OK",
   } as unknown as Response;
 }
 
@@ -150,12 +197,10 @@ export function fallbackResponse(
 export function rejectingFallbackResponse(status: number, error: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
+    body: {
+      cancel: (): Promise<void> => Promise.reject(error),
+    },
     status,
     statusText: "OK",
-    body: {
-      cancel: async (): Promise<void> => {
-        throw error;
-      },
-    },
   } as unknown as Response;
 }

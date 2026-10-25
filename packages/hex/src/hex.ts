@@ -8,6 +8,7 @@ import { HexDecodeError } from "./errors.js";
  * 文字コードからニブル値へ変換します。
  *
  * @param code 変換する文字コードです。
+ *
  * @returns 0 以上 15 以下の値を返します。
  */
 function nibbleOrThrow(code: number): number {
@@ -34,6 +35,7 @@ function nibbleOrThrow(code: number): number {
  * 偶数長の 16 進文字列をバイト列へ変換します。
  *
  * @param text 変換する偶数長の文字列です。
+ *
  * @returns 変換したバイト列を返します。
  */
 function hexToBytesStrict(text: string): Uint8Array<ArrayBuffer> {
@@ -122,10 +124,9 @@ export default class Hex implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const encoder = this.#encoder;
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform: (chunk, controller): void => {
           if (chunk.byteLength === 0) {
             return;
           }
@@ -144,15 +145,15 @@ export default class Hex implements IMiddleware {
   ): Promise<void> {
     // 注入された decoder の設定を clone で引き継いでストリーム毎に新規作成します (ignoreBOM のみ既定に戻します)。
     // 同一実体を使い回すと TextDecoder の途中状態が混ざるため共有しません。
-    // ignoreBOM:true 注入時は引き継がないため BOM単体 [EF BB BF] は一括 HexDecodeError・ストリーム空成功に分岐します。
+    // ignoreBOM:true 注入時は引き継がないため BOM 単体 [EF BB BF] は一括 HexDecodeError・ストリーム空成功に分岐します。
     const utf8 = this.#decoder.clone({ ignoreBOM: false });
     let carry = "";
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform: (chunk, controller): void => {
           const text = utf8.decode(chunk, { stream: true });
           let combined = carry + text;
+
           carry = "";
 
           if (combined.length === 0) {
@@ -172,9 +173,10 @@ export default class Hex implements IMiddleware {
           controller.enqueue(bytes);
         },
 
-        flush() {
+        flush: (): void => {
           // 終端の decode は切り詰めたマルチバイトがあれば TypeError を投げ、そうでなければ空文字を返します。
           const combined = carry + utf8.decode(new Uint8Array(0));
+
           carry = "";
 
           // carry は最大で 1 文字かつ終端 decode は成功時つねに空文字のため偶数確定分の enqueue は到達不能である。

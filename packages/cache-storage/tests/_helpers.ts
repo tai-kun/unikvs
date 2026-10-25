@@ -1,13 +1,12 @@
 /**
  * テスト用のインメモリー `CacheStorage` 実装と共通部品です。
  *
- * 実 `Cache API` がない環境でも `CacheStorage` ストレージを検証できるよう、
- * `Request` / `Response` の意味論に寄せたフェイクを提供します。
+ * 実 `Cache API` がない環境でも `CacheStorage` ストレージを検証できるよう、`Request` / `Response` の意味論に寄せたフェイクを提供します。
  */
 
 import type { IStorage } from "@unikvs/core";
 import { createGetContext, createSetContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { test as vitest } from "vite-plus/test";
 
 import CacheStorage from "../src/cache-storage.js";
 
@@ -88,8 +87,8 @@ function toUrl(request: RequestInfo | URL): string {
 type StoredResponse = {
   readonly body: ArrayBuffer | null;
   readonly status: number;
-  readonly statusText: string;
   readonly headers: Headers;
+  readonly statusText: string;
 };
 
 type FakeCachesOptions = {
@@ -104,11 +103,14 @@ type FakeCachesOptions = {
  * テスト用のインメモリー `CacheStorage` を作ります。
  * `put` 時にボディと応答メタデータを複製し、`match` のたびに新しい `Response` を返します。
  */
+
+// 中断がなければテストがタイムアウトするまで解決しない Promise です。
+function neverResolve<T>(): Promise<T> {
+  return new Promise<T>(() => {});
+}
+
 export function createFakeCaches(options: FakeCachesOptions = {}): NativeCacheStorage {
   const stores = new Map<string, Map<string, StoredResponse>>();
-
-  // 中断がなければテストがタイムアウトするまで解決しない Promise です。
-  const neverResolve = <T>(): Promise<T> => new Promise<T>(() => {});
 
   const getStore = (name: string): Map<string, StoredResponse> => {
     let store = stores.get(name);
@@ -125,7 +127,23 @@ export function createFakeCaches(options: FakeCachesOptions = {}): NativeCacheSt
     const store = getStore(name);
 
     return {
-      async match(request: RequestInfo | URL): Promise<Response | undefined> {
+      async put(request: RequestInfo | URL, response: Response): Promise<void> {
+        const body = response.body === null ? null : await response.arrayBuffer();
+        store.set(toUrl(request), {
+          body,
+          status: response.status,
+          headers: new Headers(response.headers),
+          statusText: response.statusText,
+        });
+      },
+      keys(): Promise<readonly Request[]> {
+        if (options.pending === "keys") {
+          return neverResolve();
+        }
+
+        return Promise.resolve([...store.keys()].map((url) => new Request(url)));
+      },
+      match(request: RequestInfo | URL): Promise<Response | undefined> {
         if (options.pending === "match") {
           return neverResolve();
         }
@@ -133,53 +151,39 @@ export function createFakeCaches(options: FakeCachesOptions = {}): NativeCacheSt
         const found = store.get(toUrl(request));
 
         if (found === undefined) {
-          return undefined;
+          return Promise.resolve(undefined as Response | undefined);
         }
 
-        return new Response(found.body?.slice() ?? null, {
-          status: found.status,
-          statusText: found.statusText,
-          headers: found.headers,
-        });
+        return Promise.resolve(
+          new Response(found.body?.slice() ?? null, {
+            status: found.status,
+            headers: found.headers,
+            statusText: found.statusText,
+          }),
+        );
       },
-      async put(request: RequestInfo | URL, response: Response): Promise<void> {
-        const body = response.body === null ? null : await response.arrayBuffer();
-        store.set(toUrl(request), {
-          body,
-          status: response.status,
-          statusText: response.statusText,
-          headers: new Headers(response.headers),
-        });
-      },
-      async delete(request: RequestInfo | URL): Promise<boolean> {
-        return store.delete(toUrl(request));
-      },
-      async keys(): Promise<readonly Request[]> {
-        if (options.pending === "keys") {
-          return neverResolve();
-        }
-
-        return [...store.keys()].map((url) => new Request(url));
+      delete(request: RequestInfo | URL): Promise<boolean> {
+        return Promise.resolve(store.delete(toUrl(request)));
       },
     } as unknown as Cache;
   };
 
   const backend = {
-    async open(cacheName: string): Promise<Cache> {
+    has(cacheName: string): Promise<boolean> {
+      return Promise.resolve(stores.has(cacheName));
+    },
+    keys(): Promise<string[]> {
+      return Promise.resolve([...stores.keys()]);
+    },
+    open(cacheName: string): Promise<Cache> {
       if (options.pending === "open") {
         return neverResolve();
       }
 
-      return openCache(cacheName);
+      return Promise.resolve(openCache(cacheName));
     },
-    async has(cacheName: string): Promise<boolean> {
-      return stores.has(cacheName);
-    },
-    async delete(cacheName: string): Promise<boolean> {
-      return stores.delete(cacheName);
-    },
-    async keys(): Promise<string[]> {
-      return [...stores.keys()];
+    delete(cacheName: string): Promise<boolean> {
+      return Promise.resolve(stores.delete(cacheName));
     },
   };
 
@@ -195,7 +199,6 @@ export function runWithGlobalCaches<T>(backend: NativeCacheStorage | undefined, 
   const holder = globalThis as Record<string, unknown>;
   const hadOwn = Object.hasOwn(holder, "caches");
   const descriptor = Object.getOwnPropertyDescriptor(holder, "caches");
-
   Object.defineProperty(holder, "caches", {
     value: backend,
     writable: true,
@@ -220,17 +223,21 @@ export function runWithGlobalCaches<T>(backend: NativeCacheStorage | undefined, 
   }
 
   if (result instanceof Promise) {
-    return (result as Promise<unknown>).then(
-      (value) => {
+    const pending = result as Promise<unknown>;
+    const wrapped = (async (): Promise<unknown> => {
+      try {
+        const value = await pending;
+
         restore();
 
         return value;
-      },
-      (ex: unknown) => {
+      } catch (ex) {
         restore();
         throw ex;
-      },
-    ) as T;
+      }
+    })();
+
+    return wrapped as T;
   }
 
   restore();
@@ -256,20 +263,23 @@ export function hasNativeCaches(): boolean {
  * テストごとに一意な `Cache` 名と、フェイクを注入したストレージを用意するフィクスチャーです。
  * 各テストは必要なフィクスチャーだけを受け取ります。
  */
-export const test = vitest.extend<{ cacheName: string; storage: CacheStorage }>({
-  // oxlint-disable-next-line no-empty-pattern
-  async cacheName({}, use) {
-    await use(createCacheName());
-  },
+export const test = vitest.extend<{
+  storage: CacheStorage;
+  cacheName: string;
+}>({
   async storage({ cacheName }, use) {
     const storage = new CacheStorage({
-      cacheName,
       caches: createFakeCaches(),
+      cacheName,
       toRequest: createRequest,
     });
     await use(storage);
+
     if (storage.isOpen) {
-      await storage.close();
+      storage.close();
     }
+  },
+  async cacheName({}, use) {
+    await use(createCacheName());
   },
 });

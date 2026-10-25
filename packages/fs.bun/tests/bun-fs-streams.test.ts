@@ -4,16 +4,16 @@ import { join } from "node:path";
 import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
-  collectBytes,
   concatBytes,
-  createPseudoRandomBytes,
+  collectBytes,
   createGetContext,
   createHasContext,
   createSetContext,
   createStreamContext,
+  createPseudoRandomBytes,
 } from "@unikvs/testing";
 import { listTemporaryFiles } from "@unikvs/testing/node";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
@@ -23,27 +23,28 @@ describe("getWritable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "chunks.bin";
     const chunks = [
       new Uint8Array([1]),
       new Uint8Array([2, 2]),
       new Uint8Array([3, 3, 3]),
       new Uint8Array(1000).fill(4),
-      new Uint8Array(65536).fill(5),
+      new Uint8Array(65_536).fill(5),
     ];
     const expected = concatBytes(chunks);
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
-    // 実行
+    // 実行：
     for (const chunk of chunks) {
       await writer.write(chunk);
     }
+
     await writer.close();
 
-    // 検証
+    // 検証：
     expect(
       bytesEqual(
         new Uint8Array(
@@ -55,51 +56,55 @@ describe("getWritable の詳細", () => {
   });
 
   test("空のストリームを close したとき、0 バイトのファイルが作成される", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty.bin";
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
-    // 実行
+    // 実行：
     await writer.close();
 
-    // 検証
+    // 検証：
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
-    expect((await stat(join(root, key))).size).toBe(0);
+
+    const fileStat = await stat(join(root, key));
+    expect(fileStat.size).toBe(0);
+
     expect(
       await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).toHaveLength(0);
   });
 
   test("close するまで最終ファイルは見えず、close で rename される", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "swap.bin";
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array([1, 2, 3]));
 
-    // 検証 (close 前)
+    // 検証 (close 前)。
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+
     const tmpBeforeClose = await listTemporaryFiles(root);
     expect(tmpBeforeClose).toHaveLength(1);
-    expect(tmpBeforeClose[0]).toMatch(/^swap\.bin\.[0-9a-f-]+\.tmp$/);
+    expect(tmpBeforeClose[0]).toMatch(/^swap\.bin\.[0-9a-f-]+\.tmp$/u);
 
-    // 実行
+    // 実行：
     await writer.close();
 
-    // 検証 (close 後)
+    // 検証 (close 後)。
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
   });
@@ -109,27 +114,28 @@ describe("getWritable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "overwrite-stream.bin";
     const oldData = new Uint8Array([1, 1, 1]);
     const newData = new Uint8Array([2, 2, 2, 2]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, oldData);
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
 
-    // 実行
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行：
     await writer.write(newData);
 
-    // 検証 (close 前)
+    // 検証 (close 前)。
     expect(
       new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
     ).toStrictEqual(oldData);
 
-    // 実行
+    // 実行：
     await writer.close();
 
-    // 検証 (close 後)
+    // 検証 (close 後)。
     expect(
       new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
     ).toStrictEqual(newData);
@@ -140,21 +146,22 @@ describe("getWritable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "large.bin";
     const data = createPseudoRandomBytes(8 * 1024 * 1024);
     const chunkSize = 1024 * 1024;
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
 
-    // 実行
+    // 実行：
     for (let offset = 0; offset < data.length; offset += chunkSize) {
       await writer.write(data.subarray(offset, offset + chunkSize));
     }
+
     await writer.close();
 
-    // 検証
+    // 検証：
     expect(
       bytesEqual(
         new Uint8Array(
@@ -166,26 +173,28 @@ describe("getWritable の詳細", () => {
   });
 
   test("writer.abort したとき、既存データが保たれ一時ファイルも残らない", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "abort-existing.bin";
     const original = new Uint8Array([5, 5, 5]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, original);
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array(1024 * 1024).fill(0x42));
 
-    // 実行
+    // 実行：
     const reason = new Error("中断理由");
     await writer.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(writer.closed).rejects.toBe(reason);
+
     expect(
       new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
     ).toStrictEqual(original);
@@ -193,43 +202,45 @@ describe("getWritable の詳細", () => {
   });
 
   test("writer.abort した新規キーはファイルも一時ファイルも残さない", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "abort-new.bin";
-    const writer = (
-      await storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
-    ).getWriter();
+    const writer = storage
+      .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+      .getWriter();
     await writer.write(new Uint8Array(1024).fill(1));
 
-    // 実行
+    // 実行：
     await writer.abort();
 
-    // 検証
+    // 検証：
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
   });
 
   test("abort 済みの signal を渡したとき、getWritable は失敗しファイルも一時ファイルも作られない", async ({
-    expect,
     root,
+    expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "aborted-signal.bin";
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
-    await expect(
+    // 実行と検証：
+    expect(() =>
       storage.getWritable(
         createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
       ),
-    ).rejects.toThrow();
+    ).toThrow();
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
   });
 });
@@ -240,13 +251,13 @@ describe("getReadable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const reader = storage
       .getReadable(createStreamContext("missing.bin", { signal }) as IStorage.GetReadableContext)
       .getReader();
 
-    // 実行と検証
-    await expect(reader.read()).rejects.toThrow(/ENOENT/);
+    // 実行と検証：
+    await expect(reader.read()).rejects.toThrow(/ENOENT/u);
   });
 
   test("0 バイトファイルの getReadable はチャンクを返さず終了する", async ({
@@ -254,36 +265,37 @@ describe("getReadable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty-stream.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array(0),
     );
 
-    // 実行
+    // 実行：
     const result = await collectBytes(
       storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
     );
 
-    // 検証
+    // 検証：
     expect(result).toHaveLength(0);
   });
 
   test("reader.cancel した後も保存データは変わらない", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "cancel.bin";
     const data = createPseudoRandomBytes(256 * 1024);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
     const reader = storage
       .getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext)
       .getReader();
     await reader.read();
 
-    // 実行
+    // 実行：
     await reader.cancel();
 
-    // 検証
+    // 検証：
     expect(
       bytesEqual(
         new Uint8Array(
@@ -299,28 +311,28 @@ describe("getReadable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "consistent.bin";
     const data = createPseudoRandomBytes(2 * 1024 * 1024);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const streamed = await collectBytes(
       storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
     );
     const direct = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(bytesEqual(streamed, direct)).toBe(true);
     expect(bytesEqual(streamed, data)).toBe(true);
   });
 
   test("中断済みの signal を渡したとき、getReadable は同期エラーになる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getReadable(
         createStreamContext("aborted-read.bin", {
@@ -335,10 +347,11 @@ describe("getReadable の詳細", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "aborted-middle-read.bin";
     const data = createPseudoRandomBytes(256 * 1024);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
     const controller = new AbortController();
     const reason = new Error("テスト用の中断");
     const reader = storage
@@ -347,10 +360,10 @@ describe("getReadable の詳細", () => {
       )
       .getReader();
 
-    // 実行
+    // 実行：
     controller.abort(reason);
 
-    // 検証
+    // 検証：
     await expect(reader.read()).rejects.toBe(reason);
   });
 });

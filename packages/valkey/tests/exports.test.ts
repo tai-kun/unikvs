@@ -1,49 +1,50 @@
+// oxlint-disable import/no-namespace
 import { Redis as Ioredis } from "ioredis";
-import { describe, expectTypeOf, test } from "vitest";
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
 import {
-  CloseTimeoutError,
-  ClusterNotSupportedError,
-  ConnectTimeoutError,
-  InvalidCloseTimeoutError,
   InvalidTtlError,
   KeyNotFoundError,
+  CloseTimeoutError,
+  ConnectTimeoutError,
+  ClusterNotSupportedError,
+  InvalidCloseTimeoutError,
 } from "../src/errors.js";
 import type {
   ValkeyClient,
   ValkeyClusterSpec,
-  ValkeyStorageOptions,
-  InvalidCloseTimeoutErrorMeta,
-  InvalidCloseTimeoutErrorArgs,
-  InvalidTtlErrorMeta,
   InvalidTtlErrorArgs,
-  ConnectTimeoutErrorMeta,
-  ConnectTimeoutErrorArgs,
-  CloseTimeoutErrorMeta,
+  InvalidTtlErrorMeta,
+  ValkeyStorageOptions,
   CloseTimeoutErrorArgs,
+  CloseTimeoutErrorMeta,
+  ConnectTimeoutErrorArgs,
+  ConnectTimeoutErrorMeta,
+  InvalidCloseTimeoutErrorArgs,
+  InvalidCloseTimeoutErrorMeta,
 } from "../src/index.js";
 import * as index from "../src/index.js";
 import Valkey from "../src/valkey.js";
 
 describe("index のエクスポート", () => {
   test("ストレージがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.Valkey).toBe(Valkey);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.KeyNotFoundError).toBe(KeyNotFoundError);
   });
 
   test("UnsupportedRuntimeError は存在しない", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     // Node 専用のため、ランタイムガードのエラー型を持たない。
     expect(index).not.toHaveProperty("UnsupportedRuntimeError");
   });
 
   test("追加のエラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.ClusterNotSupportedError).toBe(ClusterNotSupportedError);
     expect(index.InvalidCloseTimeoutError).toBe(InvalidCloseTimeoutError);
     expect(index.InvalidTtlError).toBe(InvalidTtlError);
@@ -52,7 +53,7 @@ describe("index のエクスポート", () => {
   });
 
   test("型がエクスポートされている", () => {
-    // 実行と検証
+    // 実行と検証：
     // `index.js` から型を import できることで、`export type *` による再輸出を確認する。
     expectTypeOf<ValkeyStorageOptions>().toBeObject();
     expectTypeOf<ValkeyClusterSpec>().toBeObject();
@@ -68,9 +69,9 @@ describe("index のエクスポート", () => {
   });
 
   test("ioredis クライアントは ValkeyClient 形状を満たす", () => {
-    // 実行と検証
+    // 実行と検証：
     // 実クライアントを `client` オプションへ渡せることを型で保証する。
     // `lazyConnect` のため、この構築では接続しません。
-    expectTypeOf(new Ioredis({ lazyConnect: true })).toMatchTypeOf<ValkeyClient>();
+    expectTypeOf(new Ioredis({ lazyConnect: true })).toExtend<ValkeyClient>();
   });
 });

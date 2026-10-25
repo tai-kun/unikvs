@@ -1,14 +1,14 @@
-import { KeyNotFoundError, type IPipelineContext, type IStorage } from "@unikvs/core";
-import { del, head, list, put } from "@vercel/blob";
+import { type IStorage, type IPipelineContext, KeyNotFoundError } from "@unikvs/core";
+import { del, put, head, list } from "@vercel/blob";
 import { throwIfAborted } from "abort-signal-utils";
 
 import {
   BlobNetworkError,
-  BlobOperationError,
   BlobResponseError,
+  InvalidTokenError,
+  BlobOperationError,
   InvalidAccessError,
   InvalidChunkTypeError,
-  InvalidTokenError,
 } from "./errors.js";
 
 /**
@@ -278,8 +278,13 @@ const DEFAULT_ACCESS: BlobAccess = "private";
 // 実クライアントの型が `exactOptionalPropertyTypes` のもとで明示 `undefined` を拒否するためです。
 function createDefaultClient(): BlobClientLike {
   return {
+    del: (pathname, options) =>
+      del(Array.isArray(pathname) ? [...pathname] : pathname, {
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
     put: (pathname, body, options) =>
-      put(pathname, body.buffer as ArrayBuffer, {
+      put(pathname, body.buffer, {
         access: options.access,
         ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
         allowOverwrite: true,
@@ -288,11 +293,6 @@ function createDefaultClient(): BlobClientLike {
       }),
     head: (pathname, options) =>
       head(pathname, {
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
-      }),
-    del: (pathname, options) =>
-      del(Array.isArray(pathname) ? [...pathname] : pathname, {
         ...(options.token !== undefined ? { token: options.token } : null),
         ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
       }),
@@ -308,15 +308,17 @@ function createDefaultClient(): BlobClientLike {
 
 // `token` 値が空でない文字列であることを検証します。
 function assertTokenValue(value: unknown): string | undefined {
-  if (value === undefined) {
-    return undefined;
+  let token: string | undefined = undefined;
+
+  if (value !== undefined) {
+    if (typeof value === "string" && value !== "") {
+      token = value;
+    } else {
+      throw new InvalidTokenError({ actual: value });
+    }
   }
 
-  if (typeof value === "string" && value !== "") {
-    return value;
-  }
-
-  throw new InvalidTokenError({ actual: value });
+  return token;
 }
 
 // `access` 値が公開範囲のどちらかであることを検証します。
@@ -392,7 +394,8 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#usage)
    */
   public constructor(options: VercelBlobOptions = {}) {
-    const { token, client, keyPrefix = "", access, fetch: fetchImpl } = options;
+    const { fetch: fetchImpl, token, access, client, keyPrefix = "" } = options;
+
     this.name = "VercelBlob";
     this.#client = client ?? createDefaultClient();
     this.#keyPrefix = keyPrefix;
@@ -427,7 +430,10 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return new Request(url, { headers, signal });
+    return new Request(url, {
+      signal,
+      headers,
+    });
   }
 
   // URL からバイト列をダウンロードします。
@@ -443,7 +449,11 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       response = await fetchFn(this.#downloadRequest(url, token, c.signal));
     } catch (ex) {
       throwIfAborted(c.signal);
-      throw new BlobNetworkError({ url, key: c.key, cause: ex });
+      throw new BlobNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+      });
     }
 
     if (response.status === 404 || response.status === 410) {
@@ -452,8 +462,8 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
 
     if (!response.ok) {
       throw new BlobResponseError({
-        url,
         key: c.key,
+        url,
         status: response.status,
         statusText: response.statusText,
       });
@@ -481,14 +491,18 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
 
     try {
       await this.#client.put(this.#pathname(c.key), data.slice(), {
-        access: this.#access,
-        contentType: "application/octet-stream",
         token,
+        access: this.#access,
         abortSignal: c.signal,
+        contentType: "application/octet-stream",
       });
     } catch (ex) {
       throwIfAborted(c.signal);
-      throw new BlobOperationError({ operation: "put", key: c.key, cause: ex });
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "put",
+      });
     }
   }
 
@@ -509,7 +523,11 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       }
 
       throwIfAborted(c.signal);
-      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "head",
+      });
     }
 
     const response = await this.#download(c, url, token);
@@ -524,7 +542,10 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     const token = this.#resolveToken(c);
 
     try {
-      await this.#client.head(this.#pathname(c.key), { token, abortSignal: c.signal });
+      await this.#client.head(this.#pathname(c.key), {
+        token,
+        abortSignal: c.signal,
+      });
 
       return true;
     } catch (ex) {
@@ -533,7 +554,11 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       }
 
       throwIfAborted(c.signal);
-      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "head",
+      });
     }
   }
 
@@ -543,7 +568,10 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     const token = this.#resolveToken(c);
 
     try {
-      await this.#client.del(this.#pathname(c.key), { token, abortSignal: c.signal });
+      await this.#client.del(this.#pathname(c.key), {
+        token,
+        abortSignal: c.signal,
+      });
     } catch (ex) {
       // 削除は冪等とし存在しないキーは成功扱いにします。
       if (isBlobNotFound(ex)) {
@@ -551,7 +579,11 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       }
 
       throwIfAborted(c.signal);
-      throw new BlobOperationError({ operation: "del", key: c.key, cause: ex });
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "del",
+      });
     }
   }
 
@@ -568,14 +600,17 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
 
       try {
         page = await this.#client.list({
-          prefix: this.#keyPrefix,
-          cursor,
           token,
+          cursor,
+          prefix: this.#keyPrefix,
           abortSignal: c.signal,
         });
       } catch (ex) {
         throwIfAborted(c.signal);
-        throw new BlobOperationError({ operation: "list", cause: ex });
+        throw new BlobOperationError({
+          cause: ex,
+          operation: "list",
+        });
       }
 
       for (const blob of page.blobs) {
@@ -587,10 +622,16 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
 
     if (pathnames.length > 0) {
       try {
-        await this.#client.del(pathnames, { token, abortSignal: c.signal });
+        await this.#client.del(pathnames, {
+          token,
+          abortSignal: c.signal,
+        });
       } catch (ex) {
         throwIfAborted(c.signal);
-        throw new BlobOperationError({ operation: "del", cause: ex });
+        throw new BlobOperationError({
+          cause: ex,
+          operation: "del",
+        });
       }
     }
   }
@@ -602,12 +643,8 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     const chunks: Uint8Array[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write(chunk) {
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(chunk.slice());
+      abort() {
+        chunks.length = 0;
       },
       close: async () => {
         throwIfAborted(c.signal);
@@ -621,10 +658,17 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
           offset += chunk.byteLength;
         }
 
-        await this.write(c, merged as Uint8Array<ArrayBuffer>);
+        await this.write(c, merged);
       },
-      abort() {
-        chunks.length = 0;
+      write(chunk) {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(chunk.slice());
       },
     });
   }
@@ -648,7 +692,11 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       }
 
       throwIfAborted(c.signal);
-      throw new BlobOperationError({ operation: "head", key: c.key, cause: ex });
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "head",
+      });
     }
 
     const response = await this.#download(c, url, token);

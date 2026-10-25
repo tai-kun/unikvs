@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
  * リトライが枯渇したときのエラーのメタ情報です。
@@ -46,12 +46,15 @@ export class RetryExhaustedError extends ErrorBase<RetryExhaustedErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
    */
   public constructor(args: RetryExhaustedErrorArgs) {
-    const { operation, attempts, ...options } = args;
-    const meta: RetryExhaustedErrorMeta = { operation, attempts };
+    const { attempts, operation, ...options } = args;
+    const meta: RetryExhaustedErrorMeta = {
+      attempts,
+      operation,
+    };
     super(
       meta,
-      ({ operation, attempts }) =>
-        `Retry exhausted after ${attempts} attempt(s) for operation ${JSON.stringify(operation)}.`,
+      ({ attempts: messageAttempts, operation: messageOperation }) =>
+        `Retry exhausted after ${messageAttempts} attempt(s) for operation ${JSON.stringify(messageOperation)}.`,
       options,
     );
   }
@@ -59,7 +62,7 @@ export class RetryExhaustedError extends ErrorBase<RetryExhaustedErrorMeta> {
 
 setErrorMessage(
   RetryExhaustedError,
-  ({ operation, attempts }) =>
+  ({ attempts, operation }) =>
     `操作 ${JSON.stringify(operation)} は ${attempts} 回試行しましたが成功しませんでした。`,
   "ja",
 );
@@ -105,10 +108,14 @@ export class RetryInvalidOptionError extends InvalidUsageErrorBase<RetryInvalidO
    */
   public constructor(args: RetryInvalidOptionErrorArgs) {
     const { name, actual, ...options } = args;
-    const meta: RetryInvalidOptionErrorMeta = { name, actual };
+    const meta: RetryInvalidOptionErrorMeta = {
+      name,
+      actual,
+    };
     super(
       meta,
-      ({ name, actual }) => `Invalid Retry option ${JSON.stringify(name)}: ${formatActual(actual)}`,
+      ({ name: messageName, actual: messageActual }) =>
+        `Invalid Retry option ${JSON.stringify(messageName)}: ${formatActual(messageActual)}`,
       options,
     );
   }
@@ -160,12 +167,15 @@ export class RetryUnsupportedOperationError extends InvalidUsageErrorBase<RetryU
    * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#errors)
    */
   public constructor(args: RetryUnsupportedOperationErrorArgs) {
-    const { operation, storage, ...options } = args;
-    const meta: RetryUnsupportedOperationErrorMeta = { operation, storage };
+    const { storage, operation, ...options } = args;
+    const meta: RetryUnsupportedOperationErrorMeta = {
+      storage,
+      operation,
+    };
     super(
       meta,
-      ({ operation, storage }) =>
-        `Storage ${JSON.stringify(storage)} does not support ${operation}.`,
+      ({ storage: messageStorage, operation: messageOperation }) =>
+        `Storage ${JSON.stringify(messageStorage)} does not support ${messageOperation}.`,
       options,
     );
   }
@@ -173,7 +183,7 @@ export class RetryUnsupportedOperationError extends InvalidUsageErrorBase<RetryU
 
 setErrorMessage(
   RetryUnsupportedOperationError,
-  ({ operation, storage }) =>
+  ({ storage, operation }) =>
     `ストレージ ${JSON.stringify(storage)} は ${operation} をサポートしていません。`,
   "ja",
 );
@@ -182,6 +192,7 @@ setErrorMessage(
  * エラーメッセージに埋め込む実際の値を整形します。
  *
  * @param actual 整形する値です。
+ *
  * @returns 整形した文字列を返します。
  */
 function formatActual(actual: unknown): string {
@@ -189,7 +200,12 @@ function formatActual(actual: unknown): string {
     return JSON.stringify(actual);
   }
 
-  if (typeof actual === "number" || typeof actual === "boolean" || actual == null) {
+  if (
+    typeof actual === "number" ||
+    typeof actual === "boolean" ||
+    actual === null ||
+    actual === undefined
+  ) {
     return String(actual);
   }
 

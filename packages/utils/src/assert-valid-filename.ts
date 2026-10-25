@@ -13,5 +13,6 @@ export default function assertValidFilename(filename: string): void {
 
   const error = new InvalidFilenameError({ filename });
   tryCaptureStackTrace(error, assertValidFilename);
+
   throw error;
 }

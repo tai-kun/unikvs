@@ -218,6 +218,8 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/node,linux,macos,windows
 
 .agents/
+.blume/
+.blume-verify/
 .claude/
 .history/
 .temp/
@@ -227,3 +229,4 @@ __screenshots__/
 skills/
 .temp-*
 .tmp-*
+.vitest/

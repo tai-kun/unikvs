@@ -1,15 +1,16 @@
+// oxlint-disable unicorn/number-literal-case
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
   createNext,
   sourceFrom,
+  concatBytes,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
 import { FastUtf8 } from "fast-utf8";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { HexDecodeError } from "../src/errors.js";
 import Hex, { type HexOptions } from "../src/hex.js";
@@ -53,9 +54,9 @@ async function decode(
  * ストリームの読み取り時のエラーを検証するために使用します。
  */
 async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
-  outputChunks: T[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: T[];
 }> {
   const outputChunks: T[] = [];
   let readError: unknown;
@@ -75,7 +76,11 @@ async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
 }
 
 /**
@@ -85,9 +90,9 @@ function pumpEncode(
   target: Hex,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createEncodeStreamContext(sourceFrom(chunks));
 
@@ -106,9 +111,9 @@ function pumpDecode(
   target: Hex,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
 
@@ -120,57 +125,81 @@ function pumpDecode(
     .then(() => collectSettled(c.destination as ReadableStream<Uint8Array<ArrayBuffer>>));
 }
 
+/**
+ * ストリーム処理で最初に起きたエラーを返します。
+ * 書き込み側と読み取り側のどちらで失敗したかによらない検証のために使用します。
+ */
+function streamError(result: {
+  readonly readError: unknown;
+  readonly writeError: unknown;
+}): unknown {
+  return result.writeError ?? result.readError;
+}
+
 describe("コンストラクター注入", () => {
   test("空のオプションでは既定と等価に往復できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const options: HexOptions = {};
     const target = new Hex(options);
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
-    // 実行
+    // 実行：
     const output = await decode(target, await encode(target, input));
 
-    // 検証
+    // 検証：
     expect(output).toStrictEqual(input);
     expect(target.name).toBe("Hex");
   });
 
   test("注入した encoder で一括 encode できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const target = new Hex({
-      encoder: new FastUtf8({ strict: false, allocateSize: 64, caching: false }),
+      encoder: new FastUtf8({
+        strict: false,
+        caching: false,
+        allocateSize: 64,
+      }),
     });
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
-    // 実行
+    // 実行：
     const encoded = await encode(target, input);
 
-    // 検証
+    // 検証：
     expect(encoded).toStrictEqual(await encode(new Hex(), input));
     expect(await decode(target, encoded)).toStrictEqual(input);
   });
 
   test("注入した encoder はストリームの encode にも使われる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const target = new Hex({
-      encoder: new FastUtf8({ strict: false, allocateSize: 64, caching: false }),
+      encoder: new FastUtf8({
+        strict: false,
+        caching: false,
+        allocateSize: 64,
+      }),
     });
     const input = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
 
-    // 実行
+    // 実行：
     const result = await pumpEncode(target, [input]);
 
-    // 検証
+    // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
     expect(concatBytes(result.outputChunks)).toStrictEqual(await encode(new Hex(), input));
   });
 
   test("注入した decoder で一括 decode できる", async ({ expect }) => {
-    // 準備
-    const target = new Hex({ decoder: new FastUtf8({ strict: true, caching: false }) });
+    // 準備：
+    const target = new Hex({
+      decoder: new FastUtf8({
+        strict: true,
+        caching: false,
+      }),
+    });
 
-    // 実行と検証
+    // 実行と検証：
     expect(await decode(target, textEncoder.encode("deadbeef"))).toStrictEqual(
       Uint8Array.from([0xde, 0xad, 0xbe, 0xef]),
     );
@@ -181,68 +210,72 @@ describe("コンストラクター注入", () => {
   test("非 strict の decoder 注入時は一括の不正 UTF-8 が HexDecodeError になる", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const target = new Hex({ decoder: new FastUtf8({ strict: false }) });
 
-    // 実行
+    // 実行：
     let thrown: unknown;
+
     try {
       await decode(target, Uint8Array.from([0xff]));
     } catch (error) {
       thrown = error;
     }
 
-    // 検証
+    // 検証：
     expect(thrown).toBeInstanceOf(HexDecodeError);
     expect(thrown).not.toBeInstanceOf(TypeError);
   });
 
   test("ストリームは注入した decoder の strict 設定を引き継ぐ", async ({ expect }) => {
-    // 準備
+    // 準備：
     const target = new Hex({ decoder: new FastUtf8({ strict: false }) });
     const invalid = Uint8Array.from([0x31, 0x0a, 0xff, 0x0a]);
 
-    // 実行
+    // 実行：
     const result = await pumpDecode(target, [invalid]);
-    const error = result.writeError ?? result.readError;
+    const error = streamError(result);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HexDecodeError);
     expect(error).not.toBeInstanceOf(TypeError);
   });
 
   test("ストリームは ignoreBOM を引き継がず BOM 単体は空成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const target = new Hex({
-      decoder: new FastUtf8({ strict: true, ignoreBOM: true }),
+      decoder: new FastUtf8({
+        strict: true,
+        ignoreBOM: true,
+      }),
     });
     const bom = Uint8Array.from([0xef, 0xbb, 0xbf]);
 
-    // 実行
+    // 実行：
     const single = await pumpDecode(target, [bom]);
 
-    // 検証
+    // 検証：
     expect(single.writeError).toBeUndefined();
     expect(single.readError).toBeUndefined();
     expect(single.outputChunks).toStrictEqual([]);
   });
 
   test("並行する 2 つのデコードストリームは互いに干渉しない", async ({ expect }) => {
-    // 準備
+    // 準備：
     const target = new Hex({ decoder: new FastUtf8({ strict: true }) });
 
-    // 実行
+    // 実行：
     // A のマルチバイト前半と後半を別チャンクで流し、B の確定分と並行してデコードします。
     const [resultA, resultB] = await Promise.all([
       pumpDecode(target, [new Uint8Array([0xc3]), new Uint8Array([0xa9])]),
       pumpDecode(target, [textEncoder.encode("ab")]),
     ]);
 
-    // 検証
+    // 検証：
     // A は é を再結合して奇数残りになるため HexDecodeError で失敗します。
-    expect(resultA.writeError ?? resultA.readError).toBeInstanceOf(HexDecodeError);
-    expect(resultA.writeError ?? resultA.readError).not.toBeInstanceOf(TypeError);
-    expect(resultB.writeError ?? resultB.readError).toBeUndefined();
+    expect(streamError(resultA)).toBeInstanceOf(HexDecodeError);
+    expect(streamError(resultA)).not.toBeInstanceOf(TypeError);
+    expect(streamError(resultB)).toBeUndefined();
     expect(concatBytes(resultB.outputChunks)).toStrictEqual(Uint8Array.from([0xab]));
     expect(resultA.outputChunks).toStrictEqual([]);
   });

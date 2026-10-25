@@ -1,11 +1,12 @@
-import type { IMiddleware, IPipelineContext, IStorage } from "@unikvs/core";
+// oxlint-disable unicorn/number-literal-case
+import type { IStorage, IMiddleware, IPipelineContext } from "@unikvs/core";
 import type { Memory } from "@unikvs/memory";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
 
 import { CloseContext } from "../src/_contexts.js";
@@ -16,7 +17,9 @@ import { CloseContext } from "../src/_contexts.js";
  */
 export class Gate {
   readonly #promise: Promise<void>;
+
   #resolve: (() => void) | undefined;
+
   #isOpen = false;
 
   public constructor() {
@@ -57,12 +60,12 @@ export type StorageMethod =
   | "onOtherWriteError";
 
 export type StorageCall = {
-  readonly method: StorageMethod;
   readonly key: string | undefined;
   readonly data: unknown;
   readonly vars: IPipelineContext | undefined;
-  readonly signal: AbortSignal | undefined;
   readonly action: string | undefined;
+  readonly method: StorageMethod;
+  readonly signal: AbortSignal | undefined;
 };
 
 /**
@@ -71,8 +74,11 @@ export type StorageCall = {
  */
 export class FakeStorage<TData = any> implements IStorage<TData> {
   public readonly name: string;
+
   public isOpen = false;
+
   public readonly map = new Map<string, TData>();
+
   public readonly calls: StorageCall[] = [];
 
   /**
@@ -85,6 +91,11 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
    */
   public hook: ((call: StorageCall) => void | Promise<void>) | undefined;
 
+  /**
+   * onOtherWriteError で受け取ったエラーの記録です。
+   */
+  public readonly otherWriteErrors: unknown[] = [];
+
   public constructor(name = "FakeStorage") {
     this.name = name;
   }
@@ -93,18 +104,13 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
     return this.calls.filter((call) => call.method === method);
   }
 
-  /**
-   * onOtherWriteError で受け取ったエラーの記録です。
-   */
-  public readonly otherWriteErrors: unknown[] = [];
-
   public async open(c: IStorage.OpenContext): Promise<void> {
-    await this.record("open", c, undefined);
+    await this.record("open", c);
     this.isOpen = true;
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
-    await this.record("close", c, undefined);
+    await this.record("close", c);
     this.isOpen = false;
   }
 
@@ -125,22 +131,24 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
   }
 
   public async read(c: IStorage.ReadContext): Promise<TData> {
-    await this.record("read", c, undefined);
+    await this.record("read", c);
+
     return this.map.get(c.key) as TData;
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    await this.record("exists", c, undefined);
+    await this.record("exists", c);
+
     return this.map.has(c.key);
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    await this.record("delete", c, undefined);
+    await this.record("delete", c);
     this.map.delete(c.key);
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    await this.record("clear", c, undefined);
+    await this.record("clear", c);
     this.map.clear();
   }
 
@@ -155,20 +163,20 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
   protected async record(
     method: StorageMethod,
     c: {
-      readonly key?: string;
-      readonly signal?: AbortSignal;
-      readonly action?: string;
       readonly get?: (name: string) => unknown;
+      readonly key?: string;
+      readonly action?: string;
+      readonly signal?: AbortSignal;
     } & IPipelineContext,
-    data: unknown,
+    data?: unknown,
   ): Promise<void> {
     const call: StorageCall = {
-      method,
       key: c.key,
       data,
-      vars: c as IPipelineContext,
-      signal: c.signal,
+      vars: c,
       action: (c as { readonly action?: string }).action,
+      method,
+      signal: c.signal,
     };
     this.calls.push(call);
     await this.hook?.(call);
@@ -184,10 +192,6 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
  * ストリームの往復・tee 分岐・書き込みバックプレッシャーの検証に使用します。
  */
 export class FakeStreamStorage extends FakeStorage {
-  public constructor(name = "FakeStreamStorage") {
-    super(name);
-  }
-
   /**
    * チャンク書き込みを保留させるゲートです。開くまで書き込みは進みません。
    */
@@ -208,14 +212,18 @@ export class FakeStreamStorage extends FakeStorage {
    */
   public onWriteStart: ((chunk: Uint8Array) => void) | undefined;
 
+  public constructor(name = "FakeStreamStorage") {
+    super(name);
+  }
+
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     this.calls.push({
-      method: "getWritable",
       key: c.key,
       data: undefined,
-      vars: c as IPipelineContext,
-      signal: c.signal,
+      vars: c,
       action: c.action,
+      method: "getWritable",
+      signal: c.signal,
     });
     this.onGetWritable?.(c.key);
     const chunks: Uint8Array[] = [];
@@ -224,6 +232,9 @@ export class FakeStreamStorage extends FakeStorage {
     const key = c.key;
 
     return new WritableStream<Uint8Array>({
+      close: () => {
+        this.map.set(key, chunks);
+      },
       write: async (chunk) => {
         this.onWriteStart?.(chunk);
         await writeGate?.wait();
@@ -234,28 +245,26 @@ export class FakeStreamStorage extends FakeStorage {
 
         chunks.push(chunk);
       },
-      close: () => {
-        this.map.set(key, chunks);
-      },
     });
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     this.calls.push({
-      method: "getReadable",
       key: c.key,
       data: undefined,
-      vars: c as IPipelineContext,
-      signal: c.signal,
+      vars: c,
       action: c.action,
+      method: "getReadable",
+      signal: c.signal,
     });
     const chunks = (this.map.get(c.key) as Uint8Array[] | undefined) ?? [];
 
     return new ReadableStream<Uint8Array>({
-      start(controller) {
+      start(controller): void {
         for (const chunk of chunks) {
           controller.enqueue(chunk);
         }
+
         controller.close();
       },
     });
@@ -263,6 +272,10 @@ export class FakeStreamStorage extends FakeStorage {
 }
 
 export type MiddlewareCall = {
+  readonly key: string | undefined;
+  readonly data: unknown;
+  readonly vars: IPipelineContext | undefined;
+  readonly action: string | undefined;
   readonly method:
     | "open"
     | "close"
@@ -272,10 +285,6 @@ export type MiddlewareCall = {
     | "decodeStream"
     | "use"
     | "mapKey";
-  readonly data: unknown;
-  readonly key: string | undefined;
-  readonly action: string | undefined;
-  readonly vars: IPipelineContext | undefined;
   readonly signal: AbortSignal | undefined;
 };
 
@@ -285,9 +294,13 @@ export type MiddlewareCall = {
  */
 export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TData, TData> {
   public readonly name: string;
+
   public isOpen = false;
+
   public readonly calls: MiddlewareCall[] = [];
+
   public readonly errors: Partial<Record<MiddlewareCall["method"], unknown>> = {};
+
   public hook: ((call: MiddlewareCall) => void | Promise<void>) | undefined;
 
   public constructor(name = "FakeMiddleware") {
@@ -299,12 +312,18 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
-    await this.record("open", { data: undefined, c });
+    await this.record("open", {
+      c,
+      data: undefined,
+    });
     this.isOpen = true;
   }
 
   public async close(c: IMiddleware.CloseContext): Promise<void> {
-    await this.record("close", { data: undefined, c });
+    await this.record("close", {
+      c,
+      data: undefined,
+    });
     this.isOpen = false;
   }
 
@@ -322,11 +341,11 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
   public mapKey(c: IMiddleware.MapKeyContext): string {
     // 記録は同期的には行わず、呼び出し回数の検証用に残します (非同期フックは呼びません)。
     this.calls.push({
-      method: "mapKey",
-      data: undefined,
       key: c.key,
+      data: undefined,
+      vars: c,
       action: undefined,
-      vars: c as IPipelineContext,
+      method: "mapKey",
       signal: undefined,
     });
 
@@ -334,18 +353,27 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
   }
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
-    await this.record("use", { data: undefined, c });
+    await this.record("use", {
+      c,
+      data: undefined,
+    });
     await next();
   }
 
   public async encode(c: IMiddleware.EncodeContext<TData>, next: IMiddleware.INext): Promise<void> {
-    await this.record("encode", { data: c.source, c });
+    await this.record("encode", {
+      c,
+      data: c.source,
+    });
     c.destination = c.source;
     await next();
   }
 
   public async decode(c: IMiddleware.DecodeContext<TData>, next: IMiddleware.INext): Promise<void> {
-    await this.record("decode", { data: c.source, c });
+    await this.record("decode", {
+      c,
+      data: c.source,
+    });
     c.destination = c.source;
     await next();
   }
@@ -353,20 +381,20 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
   protected async record(
     method: MiddlewareCall["method"],
     args: {
-      readonly data?: unknown;
       readonly c: {
         readonly key?: string;
-        readonly signal?: AbortSignal;
         readonly action?: string;
+        readonly signal?: AbortSignal;
       } & IPipelineContext;
+      readonly data?: unknown;
     },
   ): Promise<void> {
     const call: MiddlewareCall = {
-      method,
-      data: args.data,
       key: args.c.key,
+      data: args.data,
+      vars: args.c,
       action: (args.c as { readonly action?: string }).action,
-      vars: args.c as IPipelineContext,
+      method,
       signal: args.c.signal,
     };
     this.calls.push(call);
@@ -391,7 +419,10 @@ export class FakeStreamMiddleware<_TChunk = any> extends FakeMiddleware {
     c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
-    await this.record("encodeStream", { data: undefined, c });
+    await this.record("encodeStream", {
+      c,
+      data: undefined,
+    });
     c.destination = c.source;
     await next();
   }
@@ -400,7 +431,10 @@ export class FakeStreamMiddleware<_TChunk = any> extends FakeMiddleware {
     c: IMiddleware.DecodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
-    await this.record("decodeStream", { data: undefined, c });
+    await this.record("decodeStream", {
+      c,
+      data: undefined,
+    });
     c.destination = c.source;
     await next();
   }
@@ -420,17 +454,25 @@ export class TagMiddleware extends FakeMiddleware {
 
   public override async encode(...args: Parameters<FakeMiddleware["encode"]>): Promise<void> {
     const [c, next] = args;
-    await this.record("encode", { data: c.source, c });
+    await this.record("encode", {
+      c,
+      data: c.source,
+    });
     c.destination = `${String(c.source)}${this.#tag}`;
-    await next!();
+    await next();
   }
 
   public override async decode(...args: Parameters<FakeMiddleware["decode"]>): Promise<void> {
     const [c, next] = args;
-    await this.record("decode", { data: c.source, c });
+    await this.record("decode", {
+      c,
+      data: c.source,
+    });
+
     const data = String(c.source);
     c.destination = data.endsWith(this.#tag) ? data.slice(0, -this.#tag.length) : data;
-    await next!();
+
+    await next();
   }
 }
 
@@ -439,10 +481,11 @@ export class TagMiddleware extends FakeMiddleware {
  */
 export function streamOf<T>(chunks: readonly T[]): ReadableStream<T> {
   return new ReadableStream<T>({
-    start(controller) {
+    start(controller): void {
       for (const chunk of chunks) {
         controller.enqueue(chunk);
       }
+
       controller.close();
     },
   });
@@ -453,6 +496,7 @@ export function streamOf<T>(chunks: readonly T[]): ReadableStream<T> {
  */
 export async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
   const chunks: T[] = [];
+
   for await (const chunk of stream) {
     chunks.push(chunk);
   }
@@ -464,12 +508,13 @@ export async function collect<T>(stream: AsyncIterable<T>): Promise<T[]> {
  * 非同期イテラブルの全チャンクを 1 つの Uint8Array に連結します。
  */
 export async function collectBytes(
-  stream: AsyncIterable<Uint8Array<ArrayBufferLike>>,
+  stream: AsyncIterable<Uint8Array>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const chunks = await collect(stream);
   const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
   const merged = new Uint8Array(new ArrayBuffer(total));
   let offset = 0;
+
   for (const chunk of chunks) {
     merged.set(chunk, offset);
     offset += chunk.byteLength;
@@ -486,37 +531,42 @@ export async function collectBytes(
  */
 export function mapOf(storage: Memory): {
   readonly get: (key: string) => unknown;
-  readonly set: (key: string, value: unknown) => unknown;
   readonly has: (key: string) => boolean;
-  readonly delete: (key: string) => boolean;
+  readonly set: (key: string, value: unknown) => unknown;
   readonly clear: () => void;
+  readonly delete: (key: string) => boolean;
 } {
   return {
     get: (key: string): unknown => {
+      let value: unknown;
+
       try {
-        return storage.read(createGetContext(key) as unknown as IStorage.ReadContext);
+        value = storage.read(createGetContext(key) as unknown as IStorage.ReadContext);
       } catch {
-        return undefined;
+        value = undefined;
       }
+
+      return value;
     },
+    has: (key: string): boolean =>
+      // storage.exists は MaybePromise<boolean> ですが、Memory の実装は同期的です。
+      storage.exists(createHasContext(key) as unknown as IStorage.ExistsContext),
     set: (key: string, value: unknown): unknown => {
       storage.write(createSetContext(key) as unknown as IStorage.WriteContext, value);
+
       return undefined;
     },
-    has: (key: string): boolean => {
-      // storage.exists は MaybePromise<boolean> ですが、Memory の実装は同期的です。
-      return storage.exists(createHasContext(key) as unknown as IStorage.ExistsContext) as boolean;
+    clear: (): void => {
+      storage.clear(createClearContext() as unknown as IStorage.ClearContext);
     },
     delete: (key: string): boolean => {
       try {
         storage.delete(createDeleteContext(key) as unknown as IStorage.DeleteContext);
+
         return true;
       } catch {
         return false;
       }
-    },
-    clear: (): void => {
-      storage.clear(createClearContext() as unknown as IStorage.ClearContext);
     },
   };
 }
@@ -546,7 +596,11 @@ export function isGzip(data: Uint8Array): boolean {
 export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`TIMEOUT(${label})`)), ms)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error(`TIMEOUT(${label})`));
+      }, ms),
+    ),
   ]);
 }
 
@@ -561,10 +615,14 @@ export async function isPending(p: Promise<unknown>): Promise<boolean> {
       () => "settled" as const,
     ),
     new Promise<typeof marker>((resolve) => {
-      queueMicrotask(() => resolve(marker));
+      queueMicrotask(() => {
+        resolve(marker);
+      });
     }),
     new Promise<typeof marker>((resolve) => {
-      setTimeout(() => resolve(marker), 10);
+      setTimeout(() => {
+        resolve(marker);
+      }, 10);
     }),
   ]);
 

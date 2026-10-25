@@ -1,3 +1,3 @@
 # @unikvs/zstd.bun
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/zstd-bun)
+[Document](https://tai-kun.github.io/unikvs/)

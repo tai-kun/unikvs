@@ -2,31 +2,29 @@
   "name": "@unikvs/rate-limit",
   "version": "0.0.1",
   "description": "Transformer plugin that limits operations per time window with a token bucket.",
-  "homepage": "https://github.com/tai-kun/unikvs",
+  "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
-  "author": "tai-kun",
   "repository": {
-    "url": "https://github.com/tai-kun/unikvs"
+    "url": "https://github.com/tai-kun/unikvs",
+    "directory": "packages/rate-limit"
   },
   "files": [
     "dist",
     "src",
     "package.json",
-    "README.md",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "type": "module",
   "sideEffects": false,
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "default": "./dist/src/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc --project ./.config/tsconfig.build.json"
+    "build": "vp -C .config pack"
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
@@ -34,21 +32,16 @@
     "abort-signal-utils": "^0.0.6"
   },
   "devDependencies": {
-    "@tsconfig/node24": "24.0.5",
-    "@tsconfig/strictest": "2.0.8",
-    "@types/node": "24.19.1",
     "@unikvs/testing": "workspace:*",
-    "@vitest/browser": "4.1.11",
-    "@vitest/browser-playwright": "4.1.11",
-    "@vitest/coverage-istanbul": "4.1.11",
-    "@vitest/coverage-v8": "4.1.11",
-    "npm-check-updates": "20.0.2",
-    "playwright": "1.63.0",
+    "@vitest/browser-playwright": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "playwright": "catalog:",
     "valibot": "1.5.0",
-    "vite": "8.3.2",
-    "vitest": "4.1.11"
+    "vite-plus": "catalog:"
   },
   "peerDependencies": {
     "@logtape/logtape": "^2.0.0"
-  }
+  },
+  "readme": "README.md"
 }

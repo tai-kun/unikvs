@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/json#errors)
@@ -29,7 +29,11 @@ export class JsonUnsupportedValueError extends ErrorBase<JsonUnsupportedValueErr
   public constructor(args: JsonUnsupportedValueErrorArgs) {
     const { type, ...options } = args;
     const meta: JsonUnsupportedValueErrorMeta = { type };
-    super(meta, ({ type }) => `JSON cannot serialize a value of type ${type}`, options);
+    super(
+      meta,
+      ({ type: valueType }) => `JSON cannot serialize a value of type ${valueType}`,
+      options,
+    );
   }
 }
 

@@ -42,12 +42,17 @@ export function parseInput<const TSchema extends BaseSchema>(
   Error: IParseInputErrorConstructor = InvalidInputError,
 ): InferOutput<TSchema> {
   const result = safeParse(schema, value);
+
   if (result.success) {
     return result.output;
   }
 
-  const error = new Error({ value, issues: result.issues });
+  const error = new Error({
+    value,
+    issues: result.issues,
+  });
   tryCaptureStackTrace(error, parseInput);
+
   throw error;
 }
 
@@ -61,11 +66,16 @@ export function parseOutput<const TSchema extends BaseSchema>(
   Error: ParseOutputErrorConstructor = InvalidOutputError,
 ): InferOutput<TSchema> {
   const result = safeParse(schema, value);
+
   if (result.success) {
     return result.output;
   }
 
-  const error = new Error({ value, issues: result.issues });
+  const error = new Error({
+    value,
+    issues: result.issues,
+  });
   tryCaptureStackTrace(error, parseOutput);
+
   throw error;
 }

@@ -1,9 +1,9 @@
 import { type IMiddleware } from "@unikvs/core";
 
 import {
+  ReadOnlySetNotAllowedError,
   ReadOnlyClearNotAllowedError,
   ReadOnlyDeleteNotAllowedError,
-  ReadOnlySetNotAllowedError,
 } from "./errors.js";
 
 /**
@@ -71,6 +71,12 @@ export default class ReadOnly implements IMiddleware {
     switch (c.action) {
       case "set": {
         throw new ReadOnlySetNotAllowedError({ key: c.key });
+      }
+
+      case "get":
+      case "has":
+      case "stream": {
+        break;
       }
 
       case "delete": {

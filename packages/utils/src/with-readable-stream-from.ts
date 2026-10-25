@@ -1,3 +1,4 @@
+// oxlint-disable tai-kun/overload-signatures-adjacent
 import { logger } from "./_logger.js";
 
 /**
@@ -8,7 +9,9 @@ interface ReadableStreamWithFrom extends ReadableStream {
    * 反復可能オブジェクト（Iterable または AsyncIterable）から `ReadableStream` を生成します。
    *
    * @template T チャンクの型です。
+   *
    * @param iterable ストリームに変換する反復可能オブジェクトです。
+   *
    * @returns 生成された `ReadableStream` です。
    */
   from<T>(iterable: Iterable<T> | AsyncIterable<T>): ReadableStream<T>;
@@ -25,8 +28,7 @@ function withReadableStreamFrom(
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#with-readable-stream-from)
  */
 function withReadableStreamFrom<T>(cb: (ReadableStream: ReadableStreamWithFrom) => T): T;
-
-function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => unknown) {
+function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => unknown): unknown {
   if ("from" in ReadableStream) {
     // すでに ReadableStream.from が存在する場合は、そのままコールバックを実行します。
     return cb(ReadableStream as any);
@@ -34,16 +36,20 @@ function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => 
 
   try {
     // 一時的に ReadableStream オブジェクトへ from メソッドを定義します。
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     (ReadableStream as any).from = function ReadableStreamFrom<T>(
       iterable: Iterable<T> | AsyncIterable<T>,
     ): ReadableStream<T> {
-      const iter =
-        // 備考: (Symbol.iterator in iterable) をすると、iterable が文字列のとき chromium でエラーになります。
-        typeof (iterable as any)[Symbol.iterator] === "function"
-          ? // @ts-expect-error
-            iterable[Symbol.iterator]()
-          : // @ts-expect-error
-            iterable[Symbol.asyncIterator]();
+      // 備考：(Symbol.iterator in iterable) をすると、iterable が文字列のとき Chromium でエラーになります。
+      let iter: Iterator<T> | AsyncIterator<T>;
+
+      if (typeof (iterable as unknown as Record<symbol, unknown>)[Symbol.iterator] === "function") {
+        // @ts-expect-error: TS2488 - IterableとAsyncIterableの共用体ではSymbol.iteratorの存在を絞り込めません。
+        iter = iterable[Symbol.iterator]();
+      } else {
+        // @ts-expect-error: TS2488 - 同上、Symbol.asyncIteratorの存在を絞り込めません。
+        iter = iterable[Symbol.asyncIterator]();
+      }
 
       // ストリームの終了状態を管理するフラグです。
       let done = false;
@@ -56,7 +62,8 @@ function withReadableStreamFrom(cb: (ReadableStream: ReadableStreamWithFrom) => 
 
           try {
             const result = await iter.next();
-            if (result.done) {
+
+            if (result.done === true) {
               done = true;
               controller.close();
             } else {

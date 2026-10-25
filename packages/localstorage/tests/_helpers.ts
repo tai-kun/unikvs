@@ -34,7 +34,7 @@ export type FakeStorageHooks = {
  * `setItem` 回数を数え、`quotaAt` 回目で `QuotaExceededError` を投げます。
  */
 export function createFakeStorage(hooks: FakeStorageHooks = {}): Storage {
-  const { quotaAt, onSetItem, keyAt } = hooks;
+  const { keyAt, quotaAt, onSetItem } = hooks;
   const store = new Map<string, string>();
   let setCount = 0;
 
@@ -52,7 +52,7 @@ export function createFakeStorage(hooks: FakeStorageHooks = {}): Storage {
     },
 
     getItem(key: string): string | null {
-      return store.has(key) ? store.get(key)! : null;
+      return store.get(key) ?? null;
     },
 
     setItem(key: string, value: string): void {
@@ -149,7 +149,6 @@ export function runWithGlobalLocalStorage<T>(backend: Storage | undefined, fn: (
   const holder = globalThis as Record<string, unknown>;
   const hadOwn = Object.hasOwn(holder, "localStorage");
   const descriptor = Object.getOwnPropertyDescriptor(holder, "localStorage");
-
   Object.defineProperty(holder, "localStorage", {
     value: backend,
     writable: true,

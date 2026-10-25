@@ -2,11 +2,11 @@
  * テスト用の疑似 KV binding です。
  *
  * `Map` バックで `get` / `put` / `delete` / `list` を処理します。
- * `list` は頁送りに対応し、`pageSize` で1ページの件数を変えられます。
+ * `list` は頁送りに対応し、`pageSize` で 1 ページの件数を変えられます。
  */
 import CloudflareKv, {
-  type CloudflareKvOptions,
   type KVNamespaceLike,
+  type CloudflareKvOptions,
   type KVNamespaceListResult,
 } from "../src/cloudflare-kv.js";
 
@@ -26,11 +26,11 @@ export class FakeKVNamespace implements KVNamespaceLike {
   readonly deletes: string[] = [];
 
   readonly lists: {
-    readonly prefix?: string | undefined;
     readonly cursor?: string | undefined;
+    readonly prefix?: string | undefined;
   }[] = [];
 
-  public pageSize = 1_000;
+  public pageSize = 1000;
 
   public async get(
     key: string,
@@ -52,7 +52,11 @@ export class FakeKVNamespace implements KVNamespaceLike {
     value: ArrayBuffer,
     options?: { readonly expirationTtl?: number },
   ): Promise<void> {
-    this.puts.push({ key, value: value.slice(0), options });
+    this.puts.push({
+      key,
+      value: value.slice(0),
+      options,
+    });
     this.store.set(key, value.slice(0));
   }
 
@@ -62,8 +66,8 @@ export class FakeKVNamespace implements KVNamespaceLike {
   }
 
   public async list(options?: {
-    readonly prefix?: string | undefined;
     readonly cursor?: string | undefined;
+    readonly prefix?: string | undefined;
   }): Promise<KVNamespaceListResult> {
     this.lists.push({ ...options });
 
@@ -75,8 +79,8 @@ export class FakeKVNamespace implements KVNamespaceLike {
 
     return {
       keys: page.map((name) => ({ name })),
-      list_complete: next >= names.length,
       cursor: String(next),
+      list_complete: next >= names.length,
     };
   }
 }
@@ -84,7 +88,10 @@ export class FakeKVNamespace implements KVNamespaceLike {
 /**
  * 毎回新しい疑似 binding とストレージを組み立てます。
  */
-export function setup(): { binding: FakeKVNamespace; storage: CloudflareKv } {
+export function setup(): {
+  binding: FakeKVNamespace;
+  storage: CloudflareKv;
+} {
   return setupWith({});
 }
 
@@ -97,5 +104,11 @@ export function setupWith(options: Omit<CloudflareKvOptions, "binding">): {
 } {
   const binding = new FakeKVNamespace();
 
-  return { binding, storage: new CloudflareKv({ ...options, binding }) };
+  return {
+    binding,
+    storage: new CloudflareKv({
+      ...options,
+      binding,
+    }),
+  };
 }

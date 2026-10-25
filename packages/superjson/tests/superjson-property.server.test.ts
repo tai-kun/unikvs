@@ -1,16 +1,17 @@
 import type { IMiddleware } from "@unikvs/core";
-import { forCasesAsync, type Random } from "@unikvs/testing";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
+  type Random,
   readAll,
+  createNext,
   sourceFrom,
+  concatBytes,
+  forCasesAsync,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import Superjson from "../src/superjson.js";
 
@@ -34,16 +35,25 @@ const EXOTIC_STRINGS = ["", "日本語", "🎌", "\u0000", "a\nb", '"quote"', "\
  */
 function generateNumber(random: Random): number {
   switch (random.int(0, 4)) {
-    case 0:
+    case 0: {
       return random.int(-1_000_000, 1_000_000);
-    case 1:
+    }
+
+    case 1: {
       return random.next() * 1_000_000 - 500_000;
-    case 2:
-      return NaN;
-    case 3:
+    }
+
+    case 2: {
+      return Number.NaN;
+    }
+
+    case 3: {
       return random.bool() ? Infinity : -Infinity;
-    default:
+    }
+
+    default: {
       return -0;
+    }
   }
 }
 
@@ -81,107 +91,156 @@ function generateMapKey(random: Random, depth: number): unknown {
  */
 function generateValue(random: Random, depth: number): unknown {
   const kind = random.pick(depth <= 0 ? LEAF_KINDS : NESTED_KINDS);
+  let value: unknown;
 
   switch (kind) {
-    case "undefined":
-      return undefined;
-    case "null":
-      return null;
-    case "boolean":
-      return random.bool();
-    case "number":
-      return generateNumber(random);
-    case "string":
-      return random.bool() ? random.string(random.int(0, 12)) : random.pick(EXOTIC_STRINGS);
-    case "bigint":
-      return BigInt(random.int(-1_000_000, 1_000_000));
-    case "date":
-      return new Date(random.int(0, 4_102_444_800_000));
-    case "array":
-      return random.array(random.int(0, 4), (generator) => generateValue(generator, depth - 1));
-    case "object":
-      return generateObject(random, depth);
-    case "map":
-      return new Map(
+    case "undefined": {
+      value = undefined;
+      break;
+    }
+
+    case "null": {
+      value = null;
+      break;
+    }
+
+    case "boolean": {
+      value = random.bool();
+      break;
+    }
+
+    case "number": {
+      value = generateNumber(random);
+      break;
+    }
+
+    case "string": {
+      value = random.bool() ? random.string(random.int(0, 12)) : random.pick(EXOTIC_STRINGS);
+      break;
+    }
+
+    case "bigint": {
+      value = BigInt(random.int(-1_000_000, 1_000_000));
+      break;
+    }
+
+    case "date": {
+      value = new Date(random.int(0, 4_102_444_800_000));
+      break;
+    }
+
+    case "array": {
+      value = random.array(random.int(0, 4), (generator) => generateValue(generator, depth - 1));
+      break;
+    }
+
+    case "object": {
+      value = generateObject(random, depth);
+      break;
+    }
+
+    case "map": {
+      value = new Map(
         random.array(random.int(0, 4), (generator) => [
           generateMapKey(generator, depth - 1),
           generateValue(generator, depth - 1),
         ]),
       );
-    case "set":
-      return new Set(
+      break;
+    }
+
+    case "set": {
+      value = new Set(
         random.array(random.int(0, 4), (generator) => generateValue(generator, depth - 1)),
       );
-    case "bytes":
-      return random.bytes(random.int(0, 8));
+      break;
+    }
+
+    case "bytes": {
+      value = random.bytes(random.int(0, 8));
+      break;
+    }
+
+    default: {
+      throw new Error(`Unknown kind: ${String(kind)}`);
+    }
   }
+
+  return value;
 }
 
-test("ランダムな値を一括で往復すると元に戻る", async ({ expect }) => {
-  // 実行と検証
-  await forCasesAsync(20241001, 100, async (random, index) => {
-    // 準備
-    const codec = new Superjson();
-    const value = generateValue(random, 4);
+describe("決定的ファズテスト", () => {
+  test("ランダムな値を一括で往復すると元に戻る", async ({ expect }) => {
+    // 実行と検証：
+    await forCasesAsync(20_241_001, 100, async (random, index) => {
+      // 準備：
+      const codec = new Superjson();
+      const value = generateValue(random, 4);
 
-    // 実行
+      // 実行：
+      const encodeContext = createEncodeContext(value);
+      await codec.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+
+      const decodeContext = createDecodeContext(encodeContext.destination);
+      await codec.decode(decodeContext as IMiddleware.DecodeContext, createNext());
+
+      // 検証：
+      expect(decodeContext.destination, `ケース ${index}`).toStrictEqual(value);
+    });
+  });
+
+  test("ランダムな値の列をランダムな境界で分割してもストリームで往復する", async ({ expect }) => {
+    // 実行と検証：
+    await forCasesAsync(20_241_002, 50, async (random, index) => {
+      // 準備：
+      const codec = new Superjson();
+      const values = random.array(random.int(0, 6), (generator) => generateValue(generator, 3));
+
+      // 実行：
+      const encodeContext = createEncodeStreamContext(sourceFrom(values));
+      await codec.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, createNext());
+
+      const encoded = await readAll(
+        encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
+      );
+
+      const bytes = concatBytes(encoded);
+      const chunks: Uint8Array<ArrayBuffer>[] = [];
+      let offset = 0;
+
+      while (offset < bytes.length) {
+        const size = random.int(1, 16);
+        chunks.push(bytes.subarray(offset, Math.min(offset + size, bytes.length)));
+        offset += size;
+      }
+
+      const decodeContext = createDecodeStreamContext(sourceFrom(chunks));
+      await codec.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, createNext());
+
+      const decoded = await readAll(decodeContext.destination);
+
+      // 検証：
+      expect(decoded, `ケース ${index}`).toStrictEqual(values);
+    });
+  });
+
+  test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を往復できる", async ({ expect }) => {
+    // 準備：上流 superjson@2.2.6 が 2 つ目の NaN キーを欠落させる既知の不具合の再現です。
+    // 修正されると「予期せぬ成功」として失敗するため、そのときは generateMapKey の限定を外します。
+    const codec = new Superjson();
+    const value = {
+      first: new Map<unknown, unknown>([[Number.NaN, 1]]),
+      second: new Map<unknown, unknown>([[Number.NaN, 2]]),
+    };
+
+    // 実行：
     const encodeContext = createEncodeContext(value);
     await codec.encode(encodeContext as IMiddleware.EncodeContext, createNext());
+
     const decodeContext = createDecodeContext(encodeContext.destination);
     await codec.decode(decodeContext as IMiddleware.DecodeContext, createNext());
 
-    // 検証
-    expect(decodeContext.destination, `ケース ${index}`).toStrictEqual(value);
+    // 検証：
+    expect(decodeContext.destination).toStrictEqual(value);
   });
-});
-
-test("ランダムな値の列をランダムな境界で分割してもストリームで往復する", async ({ expect }) => {
-  // 実行と検証
-  await forCasesAsync(20241002, 50, async (random, index) => {
-    // 準備
-    const codec = new Superjson();
-    const values = random.array(random.int(0, 6), (generator) => generateValue(generator, 3));
-
-    // 実行
-    const encodeContext = createEncodeStreamContext(sourceFrom(values));
-    await codec.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, createNext());
-    const encoded = await readAll(
-      encodeContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
-    );
-
-    const bytes = concatBytes(encoded);
-    const chunks: Uint8Array<ArrayBuffer>[] = [];
-    let offset = 0;
-    while (offset < bytes.length) {
-      const size = random.int(1, 16);
-      chunks.push(bytes.subarray(offset, Math.min(offset + size, bytes.length)));
-      offset += size;
-    }
-
-    const decodeContext = createDecodeStreamContext(sourceFrom(chunks));
-    await codec.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, createNext());
-    const decoded = await readAll(decodeContext.destination);
-
-    // 検証
-    expect(decoded, `ケース ${index}`).toStrictEqual(values);
-  });
-});
-
-test.fails("同一オブジェクト内の複数の NaN キーを持つ Map を往復できる", async ({ expect }) => {
-  // 準備: 上流 superjson@2.2.6 が 2 つ目の NaN キーを欠落させる既知の不具合の再現です。
-  // 修正されると「予期せぬ成功」として失敗するため、そのときは generateMapKey の限定を外します。
-  const codec = new Superjson();
-  const value = {
-    first: new Map<unknown, unknown>([[Number.NaN, 1]]),
-    second: new Map<unknown, unknown>([[Number.NaN, 2]]),
-  };
-
-  // 実行
-  const encodeContext = createEncodeContext(value);
-  await codec.encode(encodeContext as IMiddleware.EncodeContext, createNext());
-  const decodeContext = createDecodeContext(encodeContext.destination);
-  await codec.decode(decodeContext as IMiddleware.DecodeContext, createNext());
-
-  // 検証
-  expect(decodeContext.destination).toStrictEqual(value);
 });

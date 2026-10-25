@@ -127,6 +127,7 @@ export type TracingOptions = {
  * エラーから状態メッセージを取り出す内部関数です。
  *
  * @param error スパンを失敗させたエラーです。
+ *
  * @returns 状態に設定するメッセージを返します。
  */
 function toStatusMessage(error: unknown): string {
@@ -138,6 +139,7 @@ function toStatusMessage(error: unknown): string {
  * `clear` のようにキーがない操作では空文字を返します。
  *
  * @param c 操作のコンテキストです。
+ *
  * @returns 論理キーを返します。
  */
 function keyOf(c: IMiddleware.UseContext): string {
@@ -174,7 +176,6 @@ export default class Tracing implements IMiddleware {
    * Tracing ミドルウェアを作成します。
    *
    * @param options トレーサーとスパン名の接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#usage)
    */
   public constructor(options: TracingOptions = {}) {
@@ -248,7 +249,10 @@ export default class Tracing implements IMiddleware {
       span.setStatus({ code: "ok" });
     } catch (error) {
       span.setAttribute("success", false);
-      span.setStatus({ code: "error", message: toStatusMessage(error) });
+      span.setStatus({
+        code: "error",
+        message: toStatusMessage(error),
+      });
       throw error;
     } finally {
       span.setAttribute("durationMs", Date.now() - startTime);
@@ -289,7 +293,10 @@ export default class Tracing implements IMiddleware {
       if (success) {
         span.setStatus({ code: "ok" });
       } else {
-        span.setStatus({ code: "error", message: toStatusMessage(error) });
+        span.setStatus({
+          code: "error",
+          message: toStatusMessage(error),
+        });
       }
 
       span.setAttribute("durationMs", Date.now() - startTime);
@@ -311,6 +318,7 @@ export default class Tracing implements IMiddleware {
    *
    * @param source 変換前の入力ストリームです。
    * @param finish スパンを終了する関数です。
+   *
    * @returns 入力をそのまま出力するストリームを返します。
    */
   #passThrough<TChunk>(

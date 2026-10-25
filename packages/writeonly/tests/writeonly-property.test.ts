@@ -1,11 +1,10 @@
 import type { IMiddleware } from "@unikvs/core";
-import { forCasesAsync, type Random } from "@unikvs/testing";
-import { createEncodeContext, createNext } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { type Random, createNext, forCasesAsync, createEncodeContext } from "@unikvs/testing";
+import { test, describe } from "vite-plus/test";
 
 import WriteOnly from "../src/write-only.js";
 
-const seed = 20260930;
+const seed = 20_260_930;
 
 type Value = string | number | boolean | null | readonly number[] | Uint8Array;
 
@@ -18,18 +17,23 @@ function generateValue(random: Random): Value {
     case 0: {
       return random.string(random.int(0, 16));
     }
+
     case 1: {
-      return random.int(-2147483648, 2147483647);
+      return random.int(-2_147_483_648, 2_147_483_647);
     }
+
     case 2: {
       return random.bool();
     }
+
     case 3: {
       return null;
     }
+
     case 4: {
-      return random.array(random.int(0, 4), () => random.int(-2147483648, 2147483647));
+      return random.array(random.int(0, 4), () => random.int(-2_147_483_648, 2_147_483_647));
     }
+
     default: {
       return random.bytes(random.int(0, 16));
     }
@@ -39,15 +43,15 @@ function generateValue(random: Random): Value {
 describe("WriteOnly のプロパティー", () => {
   test("encode は任意の型の値を同一参照で返す", async ({ expect }) => {
     await forCasesAsync(seed, 100, async (random) => {
-      // 準備
+      // 準備：
       const transformer = new WriteOnly();
       const value = generateValue(random);
 
-      // 実行
+      // 実行：
       const c = createEncodeContext(value);
       await transformer.encode(c as IMiddleware.EncodeContext, createNext());
 
-      // 検証
+      // 検証：
       expect(c.destination).toBe(value);
     });
   });

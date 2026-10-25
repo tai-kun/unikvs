@@ -1,4 +1,4 @@
-import type { IMiddleware, IStorage } from "@unikvs/core";
+import type { IStorage, IMiddleware } from "@unikvs/core";
 
 import UniKvsMiddleware from "./_middleware.js";
 import UniKvsStorage from "./_storage.js";
@@ -21,15 +21,13 @@ import type {
   $InferDecodeChunkOutput,
   $InferEncodeChunkOutput,
 } from "./_types.js";
-import { appendForkDestinations, branchStates } from "./_unikvs-branch.js";
+import { type BranchState, branchStates, appendForkDestinations } from "./_unikvs-branch.js";
 import type { Value } from "./value-schemas.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
-export type KeyValueMapping<T = any> = {
-  readonly [key: string]: Value<T>;
-};
+export type KeyValueMapping<T = any> = Readonly<Record<string, Value<T>>>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#config-builder)
@@ -134,8 +132,7 @@ export interface IUniKvsBranch<
     TMiddleware extends IMiddleware<
       [TLastEncodeDataOutput] extends [never] ? any : TLastEncodeDataOutput,
       any,
-      [TLastEncodeChunkOutput] extends [never] ? any : TLastEncodeChunkOutput,
-      any
+      [TLastEncodeChunkOutput] extends [never] ? any : TLastEncodeChunkOutput
     >,
   >(
     middleware: TMiddleware,
@@ -222,22 +219,37 @@ export default class UniKvsBranch {
     });
   }
 
+  /**
+   * この分岐の構築状態を取得します。
+   *
+   * @returns 構築状態を返します。
+   */
+  #branchState(): BranchState {
+    const state = branchStates.get(this);
+
+    if (state === undefined) {
+      throw new Error("分岐の構築状態が見つかりません。");
+    }
+
+    return state;
+  }
+
   public fork(branch: IUniKvsBranch): this {
-    const state = branchStates.get(this)!;
+    const state = this.#branchState();
     appendForkDestinations(state.destinations, state.middlewares, branch);
 
     return this;
   }
 
   public use(middleware: IMiddleware): this {
-    const state = branchStates.get(this)!;
+    const state = this.#branchState();
     state.middlewares.push(UniKvsMiddleware.from(middleware));
 
     return this;
   }
 
   public persist(storage: IStorage): this {
-    const state = branchStates.get(this)!;
+    const state = this.#branchState();
     state.destinations.push({
       storage: UniKvsStorage.from(storage),
       // 登録時点のチェーンをスナップショットして保持するため、以降の use はこの登録に影響しません。

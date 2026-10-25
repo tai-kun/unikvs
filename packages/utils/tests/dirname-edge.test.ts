@@ -1,10 +1,10 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import isValidDirname from "../src/is-valid-dirname.js";
 
 describe("isValidDirname", () => {
   test("ファイル名と同じ規則でディレクトリー名を検証する", ({ expect }) => {
-    // 準備
+    // 準備：
     const cases: readonly (readonly [string, boolean])[] = [
       ["my-dir", true],
       ["サブディレクトリー", true],
@@ -22,7 +22,7 @@ describe("isValidDirname", () => {
       ["e\u0301", false],
     ];
 
-    // 実行と検証
+    // 実行と検証：
     for (const [input, expected] of cases) {
       expect(isValidDirname(input), input).toBe(expected);
     }

@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/base64url#errors)
@@ -47,7 +47,11 @@ export class Base64UrlInvalidPaddingError extends InvalidUsageErrorBase<Base64Ur
   public constructor(args: Base64UrlInvalidPaddingErrorArgs) {
     const { actual, ...options } = args;
     const meta: Base64UrlInvalidPaddingErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid base64url padding option: ${String(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid base64url padding option: ${String(messageActual)}`,
+      options,
+    );
   }
 }
 

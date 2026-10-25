@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -34,8 +34,8 @@ export class TtlInvalidValueError extends InvalidUsageErrorBase<TtlInvalidValueE
     const meta: TtlInvalidValueErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `Invalid TTL value ${formatActual(actual)}. Expected relative seconds (number), an absolute Date, or an object like { ttl } or { expiresAt }.`,
+      ({ actual: actualValue }) =>
+        `Invalid TTL value ${formatActual(actualValue)}. Expected relative seconds (number), an absolute Date, or an object like { ttl } or { expiresAt }.`,
       options,
     );
   }
@@ -52,6 +52,7 @@ setErrorMessage(
  * エラーメッセージに埋め込む実際の値を整形します。
  *
  * @param actual 整形する値です。
+ *
  * @returns 整形した文字列を返します。
  */
 function formatActual(actual: unknown): string {
@@ -59,7 +60,12 @@ function formatActual(actual: unknown): string {
     return JSON.stringify(actual);
   }
 
-  if (typeof actual === "number" || typeof actual === "boolean" || actual == null) {
+  if (
+    typeof actual === "number" ||
+    typeof actual === "boolean" ||
+    actual === null ||
+    actual === undefined
+  ) {
     return String(actual);
   }
 

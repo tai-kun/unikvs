@@ -1,19 +1,18 @@
 import type { IStorage } from "@unikvs/core";
 import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import {
-  InvalidMaxEntriesError,
-  InvalidNamespaceError,
-  InvalidTtlSecondsError,
   KeyNotFoundError,
+  InvalidNamespaceError,
+  InvalidMaxEntriesError,
+  InvalidTtlSecondsError,
 } from "../src/errors.js";
 import VercelRuntimeCache, { DEFAULT_TTL_SECONDS } from "../src/vercel-runtime-cache.js";
 
 describe("オプション検証", () => {
   test("デフォルトの ttlSeconds は 60", ({ expect }) => {
     const storage = new VercelRuntimeCache();
-
     expect(storage.ttlSeconds).toBe(DEFAULT_TTL_SECONDS);
     expect(storage.backend).toBeUndefined();
   });
@@ -28,9 +27,7 @@ describe("オプション検証", () => {
 
   test("不正な maxEntries は InvalidMaxEntriesError", ({ expect }) => {
     for (const actual of [-1, 1.5, Number.NaN]) {
-      expect(() => new VercelRuntimeCache({ maxEntries: actual as number })).toThrow(
-        InvalidMaxEntriesError,
-      );
+      expect(() => new VercelRuntimeCache({ maxEntries: actual })).toThrow(InvalidMaxEntriesError);
     }
   });
 
@@ -46,7 +43,6 @@ describe("オプション検証", () => {
     await storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
     await storage.read(createGetContext("k1") as IStorage.ReadContext);
     await storage.write(createSetContext("k3") as IStorage.WriteContext, "v3");
-
     await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
       true,
     );
@@ -61,7 +57,6 @@ describe("オプション検証", () => {
   test("maxEntries: 0 では何も保持しない", async ({ expect }) => {
     const storage = new VercelRuntimeCache({ maxEntries: 0 });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
-
     await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
       false,
     );
@@ -75,12 +70,12 @@ describe("オプション検証", () => {
     const storage = new VercelRuntimeCache({
       clone: <T>(value: T): T => {
         calls.push(value);
+
         return structuredClone(value);
       },
     });
     await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     await storage.read(createGetContext("k1") as IStorage.ReadContext);
-
     expect(calls).toStrictEqual(["v1", "v1"]);
   });
 });

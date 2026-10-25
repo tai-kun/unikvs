@@ -41,6 +41,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data シリアライズする値です。
+   *
    * @returns シリアライズしたバイト列を返します。
    */
   serialize(env: IEnv, data: unknown): Buffer {
@@ -54,6 +55,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data デシリアライズするバイト列です。
+   *
    * @returns デシリアライズした値を返します。
    */
   deserialize(env: IEnv, data: Uint8Array<ArrayBuffer>): unknown {

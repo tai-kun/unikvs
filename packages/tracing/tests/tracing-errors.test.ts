@@ -1,14 +1,14 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createGetContext,
   readAll,
   sourceFrom,
+  createGetContext,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import Tracing from "../src/tracing.js";
 import { RecordingTracer } from "./_helpers.js";
@@ -18,7 +18,7 @@ import { RecordingTracer } from "./_helpers.js";
  * エラー時のスパン状態を検証するために使用します。
  */
 function createFailingNext(error: unknown): IMiddleware.INext {
-  return async () => {
+  return (): Promise<void> => {
     throw error;
   };
 }
@@ -27,126 +27,146 @@ describe("エラーの記録", () => {
   test("use が失敗したら success は false になり、エラー状態と遅延を記録する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const failure = new Error("boom");
 
-    // 実行
+    // 実行：
     const promise = tracing.use(
       createGetContext("key") as IMiddleware.UseContext,
       createFailingNext(failure),
     );
 
-    // 検証
+    // 検証：
     await expect(promise).rejects.toBe(failure);
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.use.get");
-    expect(span.attributes.get("key")).toBe("key");
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.status).toStrictEqual({ code: "error", message: "boom" });
-    expect(span.ended).toBe(true);
-    expect(span.endCount).toBe(1);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.use.get");
+    expect(span?.attributes.get("key")).toBe("key");
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "boom",
+    });
+    expect(span?.ended).toBe(true);
+    expect(span?.endCount).toBe(1);
   });
 
   test("Error 以外が投げられてもメッセージを文字列化して記録する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
 
-    // 実行
+    // 実行：
     const promise = tracing.encode(
       createEncodeContext("data", "key") as IMiddleware.EncodeContext,
       createFailingNext("string failure"),
     );
 
-    // 検証
+    // 検証：
     await expect(promise).rejects.toBe("string failure");
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.status).toStrictEqual({ code: "error", message: "string failure" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "string failure",
+    });
+    expect(span?.ended).toBe(true);
   });
 
   test("decode が失敗したらエラーをそのまま投げてスパンを終了する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const failure = new Error("decode failed");
 
-    // 実行
+    // 実行：
     const promise = tracing.decode(
       createDecodeContext("data", "key") as IMiddleware.DecodeContext,
       createFailingNext(failure),
     );
 
-    // 検証
+    // 検証：
     await expect(promise).rejects.toBe(failure);
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.decode");
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.status).toStrictEqual({ code: "error", message: "decode failed" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.decode");
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "decode failed",
+    });
+    expect(span?.ended).toBe(true);
   });
 
   test("next が失敗したらストリームのスパンをエラーで終了する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const failure = new Error("setup failed");
     const c = createEncodeStreamContext(sourceFrom(["a"]), "stream");
 
-    // 実行
+    // 実行：
     const promise = tracing.encodeStream(
       c as IMiddleware.EncodeStreamContext,
       createFailingNext(failure),
     );
 
-    // 検証
+    // 検証：
     await expect(promise).rejects.toBe(failure);
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.encodeStream");
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.status).toStrictEqual({ code: "error", message: "setup failed" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.encodeStream");
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "setup failed",
+    });
+    expect(span?.ended).toBe(true);
   });
 
   test("next が失敗した後に destination を取り消してもエラー状態のまま 1 回だけ終了する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const failure = new Error("setup failed");
     const c = createEncodeStreamContext(sourceFrom(["a"]), "stream");
 
-    // 実行
+    // 実行：
     await expect(
       tracing.encodeStream(c as IMiddleware.EncodeStreamContext, createFailingNext(failure)),
     ).rejects.toBe(failure);
     // パイプラインは next の失敗後に destination を解放するため、後から取り消されます。
     await (c.destination as ReadableStream<string>).cancel("teardown");
 
-    // 検証
+    // 検証：
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.status).toStrictEqual({ code: "error", message: "setup failed" });
-    expect(span.endCount).toBe(1);
+
+    const span = tracer.spans.at(0);
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "setup failed",
+    });
+    expect(span?.endCount).toBe(1);
   });
 
   test("ストリーム本体が失敗したらスパンをエラーで終了する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const failure = new Error("chunk failed");
     const source = new ReadableStream<string>({
-      start(controller) {
+      start(controller): void {
         controller.enqueue("a");
         controller.error(failure);
       },
@@ -154,50 +174,55 @@ describe("エラーの記録", () => {
     const c = createDecodeStreamContext(source, "stream");
     await tracing.decodeStream(c as IMiddleware.DecodeStreamContext, async () => {});
 
-    // 実行
+    // 実行：
     const promise = readAll(c.destination as ReadableStream<string>);
 
-    // 検証
+    // 検証：
     await expect(promise).rejects.toBe(failure);
+
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.decodeStream");
-    expect(span.attributes.get("key")).toBe("stream");
-    expect(span.attributes.get("success")).toBe(false);
-    expect(span.status).toStrictEqual({ code: "error", message: "chunk failed" });
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.ended).toBe(true);
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.decodeStream");
+    expect(span?.attributes.get("key")).toBe("stream");
+    expect(span?.attributes.get("success")).toBe(false);
+    expect(span?.status).toStrictEqual({
+      code: "error",
+      message: "chunk failed",
+    });
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.ended).toBe(true);
   });
 
   test("ストリームを取り消すと上流に理由を伝えてスパンを正常終了する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     let upstreamCancelReason: unknown;
     const source = new ReadableStream<string>({
-      start(controller) {
+      start(controller): void {
         controller.enqueue("a");
         controller.enqueue("b");
       },
-      cancel(reason) {
+      cancel(reason): void {
         upstreamCancelReason = reason;
       },
     });
     const c = createEncodeStreamContext(source, "stream");
     await tracing.encodeStream(c as IMiddleware.EncodeStreamContext, async () => {});
+
     const reader = (c.destination as ReadableStream<string>).getReader();
 
-    // 実行
+    // 実行：
     await reader.read();
     await reader.cancel("cancelled");
 
-    // 検証
+    // 検証：
     expect(upstreamCancelReason).toBe("cancelled");
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.attributes.get("success")).toBe(true);
-    expect(span.status).toStrictEqual({ code: "ok" });
-    expect(span.ended).toBe(true);
-    expect(span.endCount).toBe(1);
+    const span = tracer.spans.at(0);
+    expect(span?.attributes.get("success")).toBe(true);
+    expect(span?.status).toStrictEqual({ code: "ok" });
+    expect(span?.ended).toBe(true);
+    expect(span?.endCount).toBe(1);
   });
 });

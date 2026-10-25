@@ -1,16 +1,19 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   bytesEqual,
-  createDecodeContext,
-  createEncodeContext,
   createNext,
   createOpenContext,
+  createDecodeContext,
+  createEncodeContext,
   createPseudoRandomBytes,
 } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
+// oxlint-disable unicorn/number-literal-case
 import ZstdNode from "../src/zstd-node.js";
+
 type ByteEncode = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
 type ByteDecode = IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
 
 /**
@@ -69,25 +72,23 @@ const test = vitest.extend<{
   boundaryInputs: ReadonlyMap<string, Uint8Array<ArrayBuffer>>;
 }>({
   boundaryInputs: [
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({}, use): Promise<void> => {
       await use(createBoundaryInputs());
     },
     { scope: "file" },
   ],
 });
-
 describe("境界サイズと特殊パターンの往復", () => {
   test("0 バイトから 1 KiB までの入力で元のデータに戻る", async ({
-    boundaryInputs,
     expect,
     signal,
+    boundaryInputs,
   }) => {
-    // 準備
+    // 準備：
     const target = new ZstdNode();
     await openTarget(target, signal);
 
-    // 実行と検証
+    // 実行と検証：
     for (const [label, input] of boundaryInputs) {
       const encoded = await encode(target, input);
       const decoded = await decode(target, encoded);
@@ -96,15 +97,16 @@ describe("境界サイズと特殊パターンの往復", () => {
   });
 
   test("1 MiB のランダムデータを往復しても元のデータに戻る", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const target = new ZstdNode();
     await openTarget(target, signal);
+
     const input = createPseudoRandomBytes(1024 * 1024, 4);
 
-    // 実行
+    // 実行：
     const decoded = await decode(target, await encode(target, input));
 
-    // 検証
+    // 検証：
     expect(bytesEqual(decoded, input)).toBe(true);
   }, 30_000);
 });

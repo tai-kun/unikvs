@@ -1,21 +1,21 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatChunks,
-  createEncodeContext,
-  createEncodeStreamContext,
+  toHex,
   createNext,
   sourceFrom,
+  concatChunks,
   splitBySizes,
-  toHex,
+  forCasesAsync,
+  createEncodeContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { forCasesAsync } from "@unikvs/testing";
-import { test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import type Checksum from "../src/checksum.js";
 import {
   type ChecksumOptions,
+  type ChecksumMismatchError,
   ChecksumMd5,
-  ChecksumMismatchError,
   ChecksumSha1,
   ChecksumSha256,
   ChecksumSha384,
@@ -25,27 +25,27 @@ import {
 const SUBTLE_ALGORITHMS = [
   {
     label: "SHA-1",
-    subtleName: "SHA-1",
+    create: (options?: ChecksumOptions): ChecksumSha1 => new ChecksumSha1(options),
     varName: "@unikvs/checksum:sha1",
-    create: (options?: ChecksumOptions) => new ChecksumSha1(options),
+    subtleName: "SHA-1",
   },
   {
     label: "SHA-256",
-    subtleName: "SHA-256",
+    create: (options?: ChecksumOptions): ChecksumSha256 => new ChecksumSha256(options),
     varName: "@unikvs/checksum:sha256",
-    create: (options?: ChecksumOptions) => new ChecksumSha256(options),
+    subtleName: "SHA-256",
   },
   {
     label: "SHA-384",
-    subtleName: "SHA-384",
+    create: (options?: ChecksumOptions): ChecksumSha384 => new ChecksumSha384(options),
     varName: "@unikvs/checksum:sha384",
-    create: (options?: ChecksumOptions) => new ChecksumSha384(options),
+    subtleName: "SHA-384",
   },
   {
     label: "SHA-512",
-    subtleName: "SHA-512",
+    create: (options?: ChecksumOptions): ChecksumSha512 => new ChecksumSha512(options),
     varName: "@unikvs/checksum:sha512",
-    create: (options?: ChecksumOptions) => new ChecksumSha512(options),
+    subtleName: "SHA-512",
   },
 ] as const;
 
@@ -56,6 +56,7 @@ const FIXED_INPUTS = [
 ];
 
 const LARGE_DATA = new Uint8Array(1024 * 1024);
+
 for (let index = 0; index < LARGE_DATA.length; index += 1) {
   LARGE_DATA[index] = (index * 31) % 256;
 }
@@ -66,6 +67,7 @@ for (let index = 0; index < LARGE_DATA.length; index += 1) {
  */
 async function subtleDigest(algorithm: string, data: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest(algorithm, data);
+
   return toHex(new Uint8Array(digest));
 }
 
@@ -93,7 +95,10 @@ async function runEncodeStream(
   checksum: Checksum,
   inputChunks: readonly Uint8Array<ArrayBuffer>[],
   values?: Record<string, unknown>,
-): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+): Promise<{
+  closeError: unknown;
+  outputChunks: Uint8Array<ArrayBuffer>[];
+}> {
   const c = createEncodeStreamContext(sourceFrom(inputChunks), "", { values });
   await checksum.encodeStream(
     c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
@@ -119,97 +124,102 @@ async function runEncodeStream(
     closeError = error;
   }
 
-  return { outputChunks, closeError };
+  return {
+    closeError,
+    outputChunks,
+  };
 }
 
-test.for(SUBTLE_ALGORITHMS)(
-  "$label は固定入力で WebCrypto と同じダイジェストを検証する",
-  async ({ create, subtleName, varName }, { expect }) => {
-    // 準備
-    const checksum = create();
+describe("WebCrypto との突き合わせ", () => {
+  test.for(SUBTLE_ALGORITHMS)(
+    "$label は固定入力で WebCrypto と同じダイジェストを検証する",
+    async ({ create, varName, subtleName }, { expect }) => {
+      // 準備：
+      const checksum = create();
 
-    // 実行と検証
-    for (const data of FIXED_INPUTS) {
-      expect(
-        await encode(checksum, data, { [varName]: await subtleDigest(subtleName, data) }),
-      ).toBe(data);
-    }
-  },
-);
+      // 実行と検証：
+      for (const data of FIXED_INPUTS) {
+        expect(
+          await encode(checksum, data, { [varName]: await subtleDigest(subtleName, data) }),
+        ).toBe(data);
+      }
+    },
+  );
 
-test.for(SUBTLE_ALGORITHMS)(
-  "$label は 1 MiB のストリームでも WebCrypto と同じダイジェストを検証する",
-  async ({ create, subtleName, varName }, { expect }) => {
-    // 準備
-    const checksum = create();
-    const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
+  test.for(SUBTLE_ALGORITHMS)(
+    "$label は 1 MiB のストリームでも WebCrypto と同じダイジェストを検証する",
+    async ({ create, varName, subtleName }, { expect }) => {
+      // 準備：
+      const checksum = create();
+      const chunks = [LARGE_DATA.subarray(0, 500_000), LARGE_DATA.subarray(500_000)];
 
-    // 実行
-    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
-      [varName]: await subtleDigest(subtleName, LARGE_DATA),
+      // 実行：
+      const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
+        [varName]: await subtleDigest(subtleName, LARGE_DATA),
+      });
+
+      // 検証：
+      expect(closeError).toBeUndefined();
+      expect(toHex(concatChunks(outputChunks))).toBe(toHex(LARGE_DATA));
+    },
+  );
+
+  test("SHA-256 はランダムなデータとチャンク分割でも WebCrypto と一致する", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+
+    // 実行と検証：
+    await forCasesAsync(20_240_303, 50, async (random) => {
+      const data = random.bytes(random.int(0, 512));
+      const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
+      const chunks = splitBySizes(data, sizes);
+
+      const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
+        [ChecksumSha256.CHECKSUM_VAR_NAME]: await subtleDigest("SHA-256", data),
+      });
+      expect(closeError).toBeUndefined();
+      expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
     });
-
-    // 検証
-    expect(closeError).toBeUndefined();
-    expect(toHex(concatChunks(outputChunks))).toBe(toHex(LARGE_DATA));
-  },
-);
-
-test("SHA-256 はランダムなデータとチャンク分割でも WebCrypto と一致する", async ({ expect }) => {
-  // 準備
-  const checksum = new ChecksumSha256();
-
-  // 実行と検証
-  await forCasesAsync(20240303, 50, async (random) => {
-    const data = random.bytes(random.int(0, 512));
-    const sizes = random.array(random.int(0, 12), (generator) => generator.int(1, 64));
-    const chunks = splitBySizes(data, sizes);
-
-    const { outputChunks, closeError } = await runEncodeStream(checksum, chunks, {
-      [ChecksumSha256.CHECKSUM_VAR_NAME]: await subtleDigest("SHA-256", data),
-    });
-
-    expect(closeError).toBeUndefined();
-    expect(toHex(concatChunks(outputChunks))).toBe(toHex(data));
   });
-});
 
-test("MD5 は既知のベクターを検証できる", async ({ expect }) => {
-  // 準備
-  const checksum = new ChecksumMd5();
-  const vectors = [
-    ["abc", "900150983cd24fb0d6963f7d28e17f72"],
-    ["日本語テキスト🎉", "af91e7698b2586a0dba9c8d6a44d1d4d"],
-  ] as const;
+  test("MD5 は既知のベクターを検証できる", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumMd5();
+    const vectors = [
+      ["abc", "900150983cd24fb0d6963f7d28e17f72"],
+      ["日本語テキスト🎉", "af91e7698b2586a0dba9c8d6a44d1d4d"],
+    ] as const;
 
-  // 実行と検証
-  for (const [text, digest] of vectors) {
-    const data = Uint8Array.from(new TextEncoder().encode(text));
-    expect(await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: digest })).toBe(data);
-  }
-});
-
-test("MD5 はランダムなデータでも一括検証とストリーム検証が同じダイジェストになる", async ({
-  expect,
-}) => {
-  // 準備
-  const checksum = new ChecksumMd5();
-
-  // 実行と検証
-  await forCasesAsync(20240404, 50, async (random) => {
-    const data = random.bytes(random.int(0, 256));
-    let actual = "";
-    try {
-      await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: "" });
-    } catch (error) {
-      actual = (error as ChecksumMismatchError).meta.actual;
+    // 実行と検証：
+    for (const [text, digest] of vectors) {
+      const data = Uint8Array.from(new TextEncoder().encode(text));
+      expect(await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: digest })).toBe(data);
     }
+  });
 
-    const { closeError } = await runEncodeStream(checksum, [data], {
-      [ChecksumMd5.CHECKSUM_VAR_NAME]: actual,
+  test("MD5 はランダムなデータでも一括検証とストリーム検証が同じダイジェストになる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumMd5();
+
+    // 実行と検証：
+    await forCasesAsync(20_240_404, 50, async (random) => {
+      const data = random.bytes(random.int(0, 256));
+      let actual = "";
+
+      try {
+        await encode(checksum, data, { [ChecksumMd5.CHECKSUM_VAR_NAME]: "" });
+      } catch (error) {
+        actual = (error as ChecksumMismatchError).meta.actual;
+      }
+
+      const { closeError } = await runEncodeStream(checksum, [data], {
+        [ChecksumMd5.CHECKSUM_VAR_NAME]: actual,
+      });
+
+      expect(actual).not.toBe("");
+      expect(closeError).toBeUndefined();
     });
-
-    expect(actual).not.toBe("");
-    expect(closeError).toBeUndefined();
   });
 });

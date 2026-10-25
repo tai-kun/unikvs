@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -40,8 +40,8 @@ export class InvalidLeaseTtlError extends InvalidUsageErrorBase<InvalidLeaseTtlE
     const meta: InvalidLeaseTtlErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`leaseTtlSeconds\` must be a positive integer (seconds), but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`leaseTtlSeconds\` must be a positive integer (seconds), but got ${String(messageActual)}.`,
       options,
     );
   }
@@ -91,8 +91,8 @@ export class InvalidEndpointsError extends InvalidUsageErrorBase<InvalidEndpoint
     const meta: InvalidEndpointsErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) =>
-        `\`endpoints\` must be a non-empty string or a non-empty array of non-empty strings, but got ${String(actual)}.`,
+      ({ actual: messageActual }) =>
+        `\`endpoints\` must be a non-empty string or a non-empty array of non-empty strings, but got ${String(messageActual)}.`,
       options,
     );
   }

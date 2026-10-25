@@ -1,18 +1,18 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidTtlSecondsErrorMeta,
-  InvalidTtlSecondsErrorArgs,
-  InvalidConnectTimeoutErrorMeta,
-  InvalidConnectTimeoutErrorArgs,
-  ConnectTimeoutErrorMeta,
+  KeyNotFoundErrorMeta,
   ConnectTimeoutErrorArgs,
+  ConnectTimeoutErrorMeta,
+  InvalidTtlSecondsErrorArgs,
+  InvalidTtlSecondsErrorMeta,
+  InvalidConnectTimeoutErrorArgs,
+  InvalidConnectTimeoutErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
+  ConnectTimeoutError,
   InvalidTtlSecondsError,
   InvalidConnectTimeoutError,
-  ConnectTimeoutError,
 } from "./errors.js";
 export type * from "./memcached.js";
 export { default as Memcached } from "./memcached.js";

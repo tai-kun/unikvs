@@ -13,4 +13,4 @@ export {
 } from "./errors.js";
 
 export type * from "./retry.js";
-export { default as Retry, isRetryableError } from "./retry.js";
+export { isRetryableError, default as Retry } from "./retry.js";

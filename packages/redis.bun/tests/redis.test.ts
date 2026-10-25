@@ -1,16 +1,16 @@
 import type { IStorage } from "@unikvs/core";
 import {
   collectBytes,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import Redis from "../src/redis.js";
 import { test } from "./_helpers.js";
@@ -19,44 +19,45 @@ describe("初期化と接続管理", () => {
   test("ストレージ名は Redis である", ({ expect, storage }) => {
     // 準備と実行は constructor で完了している。
 
-    // 検証
+    // 検証：
     expect(storage.name).toBe("Redis");
   });
 
-  test("初期状態のとき、isOpen は false である", ({ expect, keyPrefix, url }) => {
-    // 準備
+  test("初期状態のとき、isOpen は false である", ({ url, expect, keyPrefix }) => {
+    // 準備：
     const unopened = new Redis(url, { keyPrefix });
 
-    // 実行と検証
+    // 実行と検証：
     expect(unopened.isOpen).toBe(false);
   });
 
   test("open を実行したとき、isOpen が true になる", ({ expect, storage }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(storage.isOpen).toBe(true);
   });
 
   test("第 2 引数を省略した new Redis(url) でも開いて読み書きできる", async ({
+    url,
     expect,
     signal,
-    url,
   }) => {
-    // 準備
+    // 準備：
     const storage = new Redis(url);
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行
+      // 実行：
       const key = `omitted-options-${crypto.randomUUID()}.bin`;
       const data = new Uint8Array([1, 2, 3]);
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-      // 検証
+      // 検証：
       expect(storage.isOpen).toBe(true);
       await expect(
         storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
       ).resolves.toStrictEqual(data);
     } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (storage.isOpen) {
         storage.close(createCloseContext() as IStorage.CloseContext);
       }
@@ -70,61 +71,61 @@ describe("基本操作 (CRUD)", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "read-test.bin";
     const data = new Uint8Array([1, 2, 3, 4, 5]);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(result).toBeInstanceOf(Uint8Array);
     expect(result).toStrictEqual(data);
   });
 
   test("存在するキーで確認したとき、true が返される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "exists.txt";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([0]),
     );
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
       createHasContext(key, { signal }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
   });
 
   test("存在しないキーで確認したとき、false が返される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "non-existent.txt";
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
       createHasContext(key, { signal }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(false);
   });
 
   test("キーを削除したとき、存在確認が false になる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "delete-me.txt";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([0]),
     );
 
-    // 実行
+    // 実行：
     await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -135,7 +136,7 @@ describe("基本操作 (CRUD)", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.write(
       createSetContext("file1.txt", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
@@ -145,10 +146,10 @@ describe("基本操作 (CRUD)", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext("file1.txt", { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -162,32 +163,33 @@ describe("基本操作 (CRUD)", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     await storage.write(
       createSetContext("argless.txt", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext("argless.txt", { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
   });
 
-  test("何も保存していない状態で clear してもエラーにならない", async ({ expect, signal, url }) => {
-    // 準備
+  test("何も保存していない状態で clear してもエラーにならない", async ({ url, expect, signal }) => {
+    // 準備：
     const fresh = new Redis(url, { keyPrefix: `empty-${crypto.randomUUID()}:` });
     await fresh.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(
         fresh.clear(createClearContext("", { signal }) as IStorage.ClearContext),
       ).resolves.toBe(undefined);
     } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (fresh.isOpen) {
         fresh.close(createCloseContext() as IStorage.CloseContext);
       }
@@ -201,19 +203,19 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "stream-write.txt";
     const data = new TextEncoder().encode("Stream Data");
     const writable = storage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
     );
 
-    // 実行
+    // 実行：
     const writer = writable.getWriter();
     await writer.write(data);
     await writer.close();
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(data);
@@ -224,17 +226,17 @@ describe("ストリーム操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "stream-read.txt";
     const data = new TextEncoder().encode("Readable Stream Content");
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const result = await collectBytes(
       storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
     );
 
-    // 検証
+    // 検証：
     expect(result).toStrictEqual(data);
   });
 });

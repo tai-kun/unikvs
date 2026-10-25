@@ -1,13 +1,13 @@
 import {
-  KeyNotFoundError,
+  type IStorage,
   type IMiddleware,
   type IReadableStream,
-  type IStorage,
   type IWritableStream,
+  KeyNotFoundError,
 } from "@unikvs/core";
 import { PassThrough } from "@unikvs/passthrough";
 
-import { SoftDeleteInvalidRetentionError, TombstoneNotFoundError } from "./errors.js";
+import { TombstoneNotFoundError, SoftDeleteInvalidRetentionError } from "./errors.js";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
@@ -49,18 +49,16 @@ export type TombstoneEntry = {
  * 値のスナップショットを含むため、復元でデータを戻せます。
  */
 type TombstoneRecord = {
-  readonly __tombstone: true;
-  readonly deletedAt: number;
   readonly value: unknown;
   readonly hasValue: boolean;
+  readonly deletedAt: number;
+  readonly __tombstone: true;
 };
 
 /**
  * 削除墓標の一覧を下層ストレージへ保持する台帳の形式です。
  */
-type RegistryRecord = {
-  readonly [key: string]: { readonly deletedAt: number };
-};
+type RegistryRecord = Readonly<Record<string, { readonly deletedAt: number }>>;
 
 /**
  * 削除墓標の一覧を下層ストレージへ保持するときの予約キーです。
@@ -71,6 +69,7 @@ const REGISTRY_KEY = "__unikvs_soft_delete_registry__";
  * 削除墓標の記録かどうかを判定します。
  *
  * @param value 判定する値です。
+ *
  * @returns 削除墓標の記録のとき `true` を返します。
  */
 function isTombstoneRecord(value: unknown): value is TombstoneRecord {
@@ -87,6 +86,7 @@ function isTombstoneRecord(value: unknown): value is TombstoneRecord {
  * 台帳の記録かどうかを判定します。
  *
  * @param value 判定する値です。
+ *
  * @returns 台帳の記録のとき `true` を返します。
  */
 function isRegistryRecord(value: unknown): value is RegistryRecord {
@@ -106,9 +106,9 @@ function isRegistryRecord(value: unknown): value is RegistryRecord {
  * 台帳操作のために転送する実行時変数の範囲です。
  */
 type ContextScope = {
-  readonly signal: AbortSignal;
   get(name: string): unknown;
   set(name: string, value: unknown): unknown;
+  readonly signal: AbortSignal;
   setReadonly(name: string, value: unknown): unknown;
 };
 
@@ -121,9 +121,9 @@ type ContextScope = {
  */
 function createStandaloneScope(): ContextScope {
   return {
-    signal: new AbortController().signal,
     get: (): unknown => undefined,
     set: (): unknown => undefined,
+    signal: new AbortController().signal,
     setReadonly: (): unknown => undefined,
   };
 }
@@ -165,6 +165,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     super();
 
     const { retentionMs } = options;
+
     if (
       retentionMs !== undefined &&
       (typeof retentionMs !== "number" ||
@@ -181,27 +182,30 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     // ストリーム対応は下層ストレージの能力をそのまま引き継ぎます。
     // 対応しないときは未定義のままにし、呼び出し側の既定の非対応エラーを活かします。
     const getReadable = storage.getReadable?.bind(storage);
+
     if (getReadable !== undefined) {
-      this.getReadable = async (c) => {
+      this.getReadable = async (c: IStorage.GetReadableContext): Promise<IReadableStream> => {
         await this.#requireLive(c);
-        return await getReadable(c);
+
+        return getReadable(c);
       };
     }
 
     const getWritable = storage.getWritable?.bind(storage);
+
     if (getWritable !== undefined) {
-      this.getWritable = async (c) => {
+      this.getWritable = async (c: IStorage.GetWritableContext): Promise<IWritableStream> => {
         const writable = await getWritable(c);
         const writer = writable.getWriter();
 
         return new WritableStream({
-          write: (chunk) => writer.write(chunk),
-          close: async () => {
+          abort: (reason?: unknown): Promise<void> => writer.abort(reason),
+          close: async (): Promise<void> => {
             await writer.close();
             // 確定した書き込みで墓標が上書きされたときだけ、台帳から外します。
             await this.#untrackIfOverwritten(c.key, c);
           },
-          abort: (reason) => writer.abort(reason),
+          write: (chunk: unknown): Promise<void> => writer.write(chunk),
         });
       };
     }
@@ -266,6 +270,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     let raw: unknown;
+
     try {
       // 下層へは同一キーの読み出しとして転送します。操作種別は下層では使いません。
       raw = await this.#inner.read(c as unknown as IStorage.ReadContext);
@@ -293,10 +298,12 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     // 台帳自体は墓標化の対象外とし、そのまま委譲します。
     if (c.key === REGISTRY_KEY) {
       await this.#inner.delete(c);
+
       return;
     }
 
     let raw: unknown;
+
     try {
       // 下層へは同一キーの読み出しとして転送します。操作種別は下層では使いません。
       raw = await this.#inner.read(c as unknown as IStorage.ReadContext);
@@ -304,6 +311,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
       if (ex instanceof KeyNotFoundError) {
         // 存在しないキーへの削除は下層の規約に委ねます。
         await this.#inner.delete(c);
+
         return;
       }
 
@@ -320,10 +328,10 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     const record: TombstoneRecord = {
-      __tombstone: true,
-      deletedAt: Date.now(),
       value: raw,
       hasValue: true,
+      deletedAt: Date.now(),
+      __tombstone: true,
     };
     // 下層へは同一キーへの書き込みとして転送します。操作種別は下層では使いません。
     await this.#inner.write(c as unknown as IStorage.WriteContext, record);
@@ -358,7 +366,10 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     await this.#inner.write(
-      { ...this.#scopedKey(scope, key), action: "set" } as unknown as IStorage.WriteContext,
+      {
+        ...this.#scopedKey(scope, key),
+        action: "set",
+      } as unknown as IStorage.WriteContext,
       raw.value,
     );
     await this.#removeRegistryEntry(key, scope);
@@ -375,7 +386,6 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#usage)
    */
   public async purge(key: string): Promise<boolean>;
-
   public async purge(key?: string): Promise<number | boolean> {
     if (key === undefined) {
       const scope = createStandaloneScope();
@@ -425,7 +435,10 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
         continue;
       }
 
-      entries.push({ key, deletedAt: raw.deletedAt });
+      entries.push({
+        key,
+        deletedAt: raw.deletedAt,
+      });
     }
 
     entries.sort((a, b) => a.deletedAt - b.deletedAt || (a.key < b.key ? -1 : 1));
@@ -439,6 +452,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * 墓標のときは存在しないキーとして投げます。
    *
    * @param c 検証する読み出し系のコンテキストです。
+   *
    * @returns 墓標でないときの下層の生値を返します。
    */
   async #requireLive(c: IStorage.ReadContext | IStorage.GetReadableContext): Promise<unknown> {
@@ -476,22 +490,28 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    *
    * @param key 対象のキーです。
    * @param c 実行時変数の範囲です。
+   *
    * @returns 生値または `undefined` を返します。
    */
   async #readRaw(key: string, c: ContextScope): Promise<unknown> {
+    let result: unknown = undefined;
+
     try {
-      return await this.#inner.read({
+      result = await this.#inner.read({
         ...this.#scopedKey(c, key),
         action: "get",
-        repair: { enabled: false, targets: [] },
+        repair: {
+          enabled: false,
+          targets: [],
+        },
       } as unknown as IStorage.ReadContext);
     } catch (ex) {
-      if (ex instanceof KeyNotFoundError) {
-        return undefined;
+      if (!(ex instanceof KeyNotFoundError)) {
+        throw ex;
       }
-
-      throw ex;
     }
+
+    return result;
   }
 
   /**
@@ -524,7 +544,13 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    */
   async #addRegistryEntry(key: string, deletedAt: number, c: ContextScope): Promise<void> {
     const registry = await this.#loadRegistry(c);
-    await this.#saveRegistry({ ...registry, [key]: { deletedAt } }, c);
+    await this.#saveRegistry(
+      {
+        ...registry,
+        [key]: { deletedAt },
+      },
+      c,
+    );
   }
 
   /**
@@ -550,15 +576,20 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * 台帳を下層から読みます。
    *
    * @param c 実行時変数の範囲です。
+   *
    * @returns 台帳の複写を返します。
    */
   async #loadRegistry(c: ContextScope): Promise<RegistryRecord> {
     let raw: unknown;
+
     try {
       raw = await this.#inner.read({
         ...this.#scopedKey(c, REGISTRY_KEY),
         action: "get",
-        repair: { enabled: false, targets: [] },
+        repair: {
+          enabled: false,
+          targets: [],
+        },
       } as unknown as IStorage.ReadContext);
     } catch (ex) {
       if (ex instanceof KeyNotFoundError) {
@@ -583,7 +614,10 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    */
   async #saveRegistry(registry: RegistryRecord, c: ContextScope): Promise<void> {
     await this.#inner.write(
-      { ...this.#scopedKey(c, REGISTRY_KEY), action: "set" } as unknown as IStorage.WriteContext,
+      {
+        ...this.#scopedKey(c, REGISTRY_KEY),
+        action: "set",
+      } as unknown as IStorage.WriteContext,
       registry,
     );
   }
@@ -593,14 +627,15 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    *
    * @param c 元の実行時変数の範囲です。
    * @param key 差し替えるキーです。
+   *
    * @returns キーを差し替えた変数範囲を返します。
    */
   #scopedKey(c: ContextScope, key: string): ContextScope & { readonly key: string } {
     return {
-      key,
-      signal: c.signal,
       get: (name: string): unknown => c.get(name),
+      key,
       set: (name: string, value: unknown): unknown => c.set(name, value),
+      signal: c.signal,
       setReadonly: (name: string, value: unknown): unknown => c.setReadonly(name, value),
     };
   }
@@ -609,6 +644,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * 墓標が保持期限を過ぎているかを判定します。
    *
    * @param record 判定する墓標の記録です。
+   *
    * @returns 期限切れのとき `true` を返します。
    */
   #isExpired(record: TombstoneRecord): boolean {

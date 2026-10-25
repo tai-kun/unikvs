@@ -1,13 +1,14 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   bytesEqual,
+  createNext,
   createDecodeContext,
   createEncodeContext,
-  createNext,
   createPseudoRandomBytes,
 } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
+// oxlint-disable unicorn/number-literal-case
 import Compression from "../src/compression.js";
 import { FORMATS } from "./helpers.js";
 
@@ -66,21 +67,19 @@ const test = vitest.extend<{
   boundaryInputs: ReadonlyMap<string, Uint8Array<ArrayBuffer>>;
 }>({
   boundaryInputs: [
-    // oxlint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({}, use): Promise<void> => {
       await use(createBoundaryInputs());
     },
     { scope: "file" },
   ],
 });
-
 describe("境界サイズと特殊パターンの往復", () => {
   describe.each(FORMATS)("%s 形式", (format) => {
-    test("0 バイトから 1 KiB までの入力で元のデータに戻る", async ({ boundaryInputs, expect }) => {
-      // 準備
+    test("0 バイトから 1 KiB までの入力で元のデータに戻る", async ({ expect, boundaryInputs }) => {
+      // 準備：
       const compression = new Compression(format);
 
-      // 実行と検証
+      // 実行と検証：
       for (const [label, input] of boundaryInputs) {
         const encoded = await encode(compression, input);
         const decoded = await decode(compression, encoded);
@@ -92,10 +91,10 @@ describe("境界サイズと特殊パターンの往復", () => {
   test("1 MiB のランダムデータを deflate / deflate-raw で往復しても元のデータに戻る", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const input = createPseudoRandomBytes(1024 * 1024, 4);
 
-    // 実行と検証
+    // 実行と検証：
     for (const format of ["deflate", "deflate-raw"] as const) {
       const compression = new Compression(format);
       const encoded = await encode(compression, input);
@@ -105,10 +104,10 @@ describe("境界サイズと特殊パターンの往復", () => {
   }, 30_000);
 
   test("4 MiB の反復データを各形式で往復しても元のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const input = new TextEncoder().encode("0123456789abcdef".repeat((4 * 1024 * 1024) / 16));
 
-    // 実行と検証
+    // 実行と検証：
     for (const format of FORMATS) {
       const compression = new Compression(format);
       const encoded = await encode(compression, input);
@@ -117,17 +116,16 @@ describe("境界サイズと特殊パターンの往復", () => {
     }
   }, 30_000);
 });
-
 describe("圧縮率の健全性", () => {
   test("反復データを deflate / deflate-raw で圧縮しても元のデータより大きくならない", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const input = new TextEncoder().encode(
       "Repeat this text multiple times to ensure compression efficiency. ".repeat(100),
     );
 
-    // 実行と検証
+    // 実行と検証：
     for (const format of ["deflate", "deflate-raw"] as const) {
       const compression = new Compression(format);
       const encoded = await encode(compression, input);

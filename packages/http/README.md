@@ -1,3 +1,3 @@
 # @unikvs/http
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/http)
+[Document](https://tai-kun.github.io/unikvs/)

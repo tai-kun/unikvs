@@ -1,6 +1,6 @@
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext, createOpenContext } from "@unikvs/testing";
-import { test as vitest } from "vitest";
+import { createOpenContext, createCloseContext } from "@unikvs/testing";
+import { test as vitest } from "vite-plus/test";
 
 import Valkey, { type ValkeyClient } from "../src/valkey.js";
 
@@ -12,8 +12,7 @@ type Entry = {
 /**
  * `ValkeyClient` 形状を満たすインメモリのフェイクです。
  *
- * Valkey (Redis 互換) の振る舞いとして期限切れの遅延削除、`SCAN` のページング、
- * `RENAME` の置き換え意味論を再現します。`now` を差し替えると時刻を制御できます。
+ * Valkey (Redis 互換) の振る舞いとして期限切れの遅延削除、`SCAN` のページング、`RENAME` の置き換え意味論を再現します。`now` を差し替えると時刻を制御できます。
  */
 export class FakeValkeyClient implements ValkeyClient {
   readonly entries = new Map<string, Entry>();
@@ -32,6 +31,7 @@ export class FakeValkeyClient implements ValkeyClient {
 
   public async quit(): Promise<string> {
     this.quitCalls += 1;
+
     return "OK";
   }
 
@@ -45,6 +45,7 @@ export class FakeValkeyClient implements ValkeyClient {
 
   private purge(key: string): void {
     const entry = this.entries.get(key);
+
     if (entry?.expiresAt !== undefined && entry.expiresAt <= this.now()) {
       this.entries.delete(key);
     }
@@ -58,44 +59,52 @@ export class FakeValkeyClient implements ValkeyClient {
 
   public async set(key: string, value: string | Uint8Array, ...args: unknown[]): Promise<string> {
     let expiresAt: number | undefined;
+
     for (let index = 0; index < args.length; index += 1) {
       if (args[index] === "PX" && typeof args[index + 1] === "number") {
         expiresAt = this.now() + (args[index + 1] as number);
         index += 1;
       }
     }
+
     this.entries.set(key, {
       value: Buffer.from(typeof value === "string" ? value : Buffer.from(value)),
       expiresAt,
     });
+
     return "OK";
   }
 
   public async getBuffer(key: string): Promise<Buffer | null> {
     this.purge(key);
     const entry = this.entries.get(key);
+
     return entry === undefined ? null : Buffer.from(entry.value);
   }
 
   public async exists(key: string): Promise<number> {
     this.purge(key);
+
     return this.entries.has(key) ? 1 : 0;
   }
 
   public async del(...keys: string[]): Promise<number> {
     let count = 0;
+
     for (const key of keys) {
       this.purge(key);
       if (this.entries.delete(key)) {
         count += 1;
       }
     }
+
     return count;
   }
 
   public async scan(cursor: string, ...args: unknown[]): Promise<[string, string[]]> {
     let pattern = "*";
     let count = 10;
+
     for (let index = 0; index < args.length; index += 1) {
       if (args[index] === "MATCH" && typeof args[index + 1] === "string") {
         pattern = args[index + 1] as string;
@@ -112,8 +121,9 @@ export class FakeValkeyClient implements ValkeyClient {
     // 実サーバーの `SCAN` と同様に、走査中の削除で未走査キーが欠落しない。
     const start = cursor === "0" ? 0 : upperBound(keys, cursor);
     const page = keys.slice(start, start + count);
+    const last = page.at(-1);
     const next =
-      page.length === 0 || start + page.length >= keys.length ? "0" : page[page.length - 1]!;
+      page.length === 0 || start + page.length >= keys.length || last === undefined ? "0" : last;
 
     return [next, page];
   }
@@ -122,12 +132,15 @@ export class FakeValkeyClient implements ValkeyClient {
     this.purge(key);
     const chunk = Buffer.from(typeof value === "string" ? value : Buffer.from(value));
     const entry = this.entries.get(key);
+
     if (entry === undefined) {
       this.entries.set(key, { value: chunk });
+
       return chunk.length;
     }
 
     entry.value = Buffer.concat([entry.value, chunk]);
+
     return entry.value.length;
   }
 
@@ -135,6 +148,7 @@ export class FakeValkeyClient implements ValkeyClient {
     this.purge(src);
     this.purge(dest);
     const entry = this.entries.get(src);
+
     if (entry === undefined) {
       throw new Error("ERR no such key");
     }
@@ -142,17 +156,20 @@ export class FakeValkeyClient implements ValkeyClient {
     this.entries.delete(dest);
     this.entries.delete(src);
     this.entries.set(dest, entry);
+
     return "OK";
   }
 
   public async pexpire(key: string, ms: number): Promise<number> {
     this.purge(key);
     const entry = this.entries.get(key);
+
     if (entry === undefined) {
       return 0;
     }
 
     entry.expiresAt = this.now() + ms;
+
     return 1;
   }
 
@@ -163,9 +180,11 @@ export class FakeValkeyClient implements ValkeyClient {
   public pttl(key: string): number {
     this.purge(key);
     const entry = this.entries.get(key);
+
     if (entry === undefined) {
       return -2;
     }
+
     if (entry.expiresAt === undefined) {
       return -1;
     }
@@ -178,6 +197,7 @@ export class FakeValkeyClient implements ValkeyClient {
    */
   public keys(pattern = "*"): string[] {
     this.purgeAll();
+
     return [...this.entries.keys()].filter((key) => matchGlob(pattern, key)).sort();
   }
 }
@@ -188,9 +208,12 @@ export class FakeValkeyClient implements ValkeyClient {
 function upperBound(sorted: string[], value: string): number {
   let low = 0;
   let high = sorted.length;
+
   while (low < high) {
     const middle = (low + high) >> 1;
-    if (sorted[middle]! <= value) {
+    const mid = sorted[middle];
+
+    if (mid !== undefined && mid <= value) {
       low = middle + 1;
     } else {
       high = middle;
@@ -212,17 +235,19 @@ export function matchGlob(pattern: string, key: string): boolean {
         case "*": {
           return ".*";
         }
+
         case "?": {
           return ".";
         }
+
         default: {
-          return char.replace(/[.*+?^${}()|[\]\\]/, "\\$&");
+          return char.replace(/[.*+?^${}()|[\]\\]/u, "\\$&");
         }
       }
     })
     .join("");
 
-  return new RegExp(`^${source}$`).test(key);
+  return new RegExp(`^${source}$`, "u").test(key);
 }
 
 /**
@@ -231,26 +256,26 @@ export function matchGlob(pattern: string, key: string): boolean {
  */
 export const test = vitest.extend<{
   fake: FakeValkeyClient;
-  keyPrefix: string;
   storage: Valkey;
+  keyPrefix: string;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async fake({}, use) {
     await use(new FakeValkeyClient());
   },
-  // oxlint-disable-next-line no-empty-pattern
-  async keyPrefix({}, use) {
-    await use(`unikvs-test-${crypto.randomUUID()}:`);
-  },
   async storage({ fake, keyPrefix }, use) {
-    const storage = new Valkey(undefined, { keyPrefix, client: fake });
+    const storage = new Valkey(undefined, {
+      client: fake,
+      keyPrefix,
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await use(storage);
 
     if (storage.isOpen) {
       await storage.close(createCloseContext() as IStorage.CloseContext);
     }
+  },
+  async keyPrefix({}, use) {
+    await use(`unikvs-test-${crypto.randomUUID()}:`);
   },
 });
 
@@ -263,7 +288,11 @@ export function createStorage(
   keyPrefix: string,
   options?: { ttl?: number | undefined },
 ): Valkey {
-  return new Valkey(undefined, { keyPrefix, client: fake, ...options });
+  return new Valkey(undefined, {
+    keyPrefix,
+    client: fake,
+    ...options,
+  });
 }
 
 /**
@@ -271,6 +300,14 @@ export function createStorage(
  * 未設定のときライブテストは skip されます。
  */
 export function liveUrl(): string | undefined {
-  const url = process.env["VALKEY_URL"] || process.env["REDIS_URL"] || undefined;
-  return url === "" ? undefined : url;
+  const valkeyUrl =
+    process.env["VALKEY_URL"] === undefined || process.env["VALKEY_URL"] === ""
+      ? undefined
+      : process.env["VALKEY_URL"];
+  const redisUrl =
+    process.env["REDIS_URL"] === undefined || process.env["REDIS_URL"] === ""
+      ? undefined
+      : process.env["REDIS_URL"];
+
+  return valkeyUrl ?? redisUrl;
 }

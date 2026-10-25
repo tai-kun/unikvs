@@ -1,51 +1,19 @@
-import { configureSync, resetSync, type LogRecord } from "@logtape/logtape";
 import type { IMiddleware } from "@unikvs/core";
 import {
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
   readAll,
+  createNext,
   sourceFrom,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { afterAll, describe, test as vitest } from "vitest";
+import { describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
+import { createRecordsTest } from "./_helpers.js";
 
-const records: LogRecord[] = [];
-
-configureSync({
-  sinks: {
-    test: (record) => {
-      records.push(record);
-    },
-  },
-  loggers: [
-    {
-      category: ["@unikvs/*", "@unikvs/debug"],
-      sinks: ["test"],
-      lowestLevel: "debug",
-    },
-  ],
-  reset: true,
-});
-
-afterAll(() => {
-  resetSync();
-});
-
-/**
- * 記録されたログをテストごとに空にするフィクスチャーです。
- * Debug トランスフォーマーが出力するプロパティーを検証するために使用します。
- */
-const test = vitest.extend<{ records: LogRecord[] }>({
-  // oxlint-disable-next-line no-empty-pattern
-  async records({}, use) {
-    records.length = 0;
-    await use(records);
-  },
-});
+const test = createRecordsTest();
 
 /**
  * データを書き込みとして記録し、そのまま返します。
@@ -99,130 +67,141 @@ async function pumpDecode(
 
 describe("初期化と基本属性", () => {
   test("name プロパティは Debug を返す", ({ expect }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行と検証
+    // 実行と検証：
     expect(debug.name).toBe("Debug");
   });
 
   test("isOpen は常に true を返す", ({ expect }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行と検証
+    // 実行と検証：
     expect(debug.isOpen).toBe(true);
   });
 
   test("encode はデータを変換せずにそのまま返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     const output = await encode(debug, data, "key");
 
-    // 検証
+    // 検証：
     expect(output).toBe(data);
   });
 
   test("decode はデータを変換せずにそのまま返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     const output = await decode(debug, data, "key");
 
-    // 検証
+    // 検証：
     expect(output).toBe(data);
   });
 });
 
 describe("ログの記録", () => {
   test("encode は操作とキーと文字列長を書き込みとして記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await encode(debug, "hello", "greeting");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties).toMatchObject({
-      action: "set",
+    expect(records.at(0)?.properties).toMatchObject({
       key: "greeting",
-      direction: "write",
       type: "string",
+      action: "set",
       length: 5,
+      direction: "write",
     });
   });
 
   test("decode は操作とキーとバイト数を読み込みとして記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await decode(debug, new Uint16Array(3), "blob");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties).toMatchObject({
-      action: "get",
+    expect(records.at(0)?.properties).toMatchObject({
       key: "blob",
-      direction: "read",
       type: "Uint16Array",
+      action: "get",
+      direction: "read",
       byteLength: 6,
     });
   });
 
   test("空文字のキーでも記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await encode(debug, 42, "");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties).toMatchObject({ action: "set", key: "" });
+    expect(records.at(0)?.properties).toMatchObject({
+      key: "",
+      action: "set",
+    });
   });
 
   test("カスタムのコールバックが返した情報を記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug({
-      getDebugInfo: ({ data }) => ({ custom: data === "hello" ? "matched" : "unmatched" }),
+      getDebugInfo: (): Record<string, unknown> => ({ custom: "matched" }),
     });
 
-    // 実行
+    // 実行：
     await encode(debug, "hello", "foo");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties).toMatchObject({
-      direction: "write",
+    expect(records.at(0)?.properties).toMatchObject({
       custom: "matched",
+      direction: "write",
     });
   });
 
   test("カスタムのコールバックには操作とキーと向きとデータを渡す", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const received: unknown[] = [];
     const debug = new Debug({
-      getDebugInfo: (args) => {
+      getDebugInfo: (args): Record<string, unknown> => {
         received.push(args);
+
         return {};
       },
     });
     const data = new Uint8Array([1]);
     const c = createDecodeContext(data, "foo");
 
-    // 実行
+    // 実行：
     await debug.decode(c as IMiddleware.DecodeContext, createNext());
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(received).toStrictEqual([{ action: "get", key: "foo", direction: "read", data }]);
+    expect(received).toStrictEqual([
+      {
+        key: "foo",
+        data,
+        action: "get",
+        direction: "read",
+      },
+    ]);
   });
 });
 
@@ -238,138 +217,143 @@ describe("既定のデバッグ情報", () => {
     [new Float64Array(2), "Float64Array", { byteLength: 16 }],
     [new DataView(new ArrayBuffer(8)), "DataView", { byteLength: 8 }],
   ] as const)("%o の型と大きさを返す", ([data, type, size], { expect }) => {
-    // 実行
+    // 実行：
     const info = Debug.getDefaultDebugInfo({
-      action: "set",
       key: "key",
-      direction: "write",
       data,
+      action: "set",
+      direction: "write",
     });
 
-    // 検証
-    expect(info).toStrictEqual({ type, ...size });
+    // 検証：
+    expect(info).toStrictEqual({
+      type,
+      ...size,
+    });
   });
 });
 
 describe("フィルター", () => {
   test("keyFilter に一致するキーだけを記録する", async ({ expect, records }) => {
-    // 準備
-    const debug = new Debug({ keyFilter: (key) => key === "target" });
+    // 準備：
+    const debug = new Debug({ keyFilter: (key): boolean => key === "target" });
 
-    // 実行
+    // 実行：
     await encode(debug, "a", "target");
     await encode(debug, "b", "other");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties["key"]).toBe("target");
+    expect(records.at(0)?.properties["key"]).toBe("target");
   });
 
   test("actionFilter に一致する操作だけを記録する", async ({ expect, records }) => {
-    // 準備
-    const debug = new Debug({ actionFilter: (action) => action === "get" });
+    // 準備：
+    const debug = new Debug({ actionFilter: (action): boolean => action === "get" });
 
-    // 実行
+    // 実行：
     await encode(debug, "a", "foo");
     await decode(debug, "b", "foo");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties["direction"]).toBe("read");
+    expect(records.at(0)?.properties["direction"]).toBe("read");
   });
 
   test("フィルターが拒否した場合は記録しない", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug({
-      keyFilter: () => false,
-      actionFilter: () => false,
+      keyFilter: (): boolean => false,
+      actionFilter: (): boolean => false,
     });
 
-    // 実行
+    // 実行：
     await encode(debug, "a", "foo");
     await decode(debug, "b", "foo");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(0);
   });
 
   test("フィルターを指定しない場合はすべて記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
 
-    // 実行
+    // 実行：
     await encode(debug, "1", "a");
     await decode(debug, "2", "b");
     await encode(debug, "3", "c");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(3);
   });
 });
 
 describe("ストリーム", () => {
   test("encodeStream はチャンクごとに書き込みとして記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
     const input = [new Uint8Array([1]), new Uint8Array([2, 3])];
 
-    // 実行
+    // 実行：
     const output = await pumpEncode(debug, input, "stream");
 
-    // 検証
+    // 検証：
     expect(output).toStrictEqual(input);
+
     expect(records).toHaveLength(2);
-    expect(records[0]!.properties).toMatchObject({
-      action: "set",
+    expect(records.at(0)?.properties).toMatchObject({
       key: "stream",
+      action: "set",
       direction: "write",
       byteLength: 1,
     });
-    expect(records[1]!.properties).toMatchObject({
-      action: "set",
+    expect(records.at(1)?.properties).toMatchObject({
       key: "stream",
+      action: "set",
       direction: "write",
       byteLength: 2,
     });
   });
 
   test("decodeStream はチャンクごとに読み込みとして記録する", async ({ expect, records }) => {
-    // 準備
+    // 準備：
     const debug = new Debug();
     const input = ["a", "bc"];
 
-    // 実行
+    // 実行：
     const output = await pumpDecode(debug, input, "stream");
 
-    // 検証
+    // 検証：
     expect(output).toStrictEqual(input);
+
     expect(records).toHaveLength(2);
-    expect(records[0]!.properties).toMatchObject({
-      action: "stream",
+    expect(records.at(0)?.properties).toMatchObject({
       key: "stream",
-      direction: "read",
       type: "string",
+      action: "stream",
       length: 1,
-    });
-    expect(records[1]!.properties).toMatchObject({
-      action: "stream",
-      key: "stream",
       direction: "read",
+    });
+    expect(records.at(1)?.properties).toMatchObject({
+      key: "stream",
       type: "string",
+      action: "stream",
       length: 2,
+      direction: "read",
     });
   });
 
   test("ストリームでもフィルターが適用される", async ({ expect, records }) => {
-    // 準備
-    const debug = new Debug({ keyFilter: (key) => key === "target" });
+    // 準備：
+    const debug = new Debug({ keyFilter: (key): boolean => key === "target" });
 
-    // 実行
+    // 実行：
     await pumpEncode(debug, [new Uint8Array([1])], "other");
     await pumpEncode(debug, [new Uint8Array([2])], "target");
 
-    // 検証
+    // 検証：
     expect(records).toHaveLength(1);
-    expect(records[0]!.properties["key"]).toBe("target");
+    expect(records.at(0)?.properties["key"]).toBe("target");
   });
 });

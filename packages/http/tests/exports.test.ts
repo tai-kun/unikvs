@@ -1,32 +1,32 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
+// oxlint-disable import/no-namespace
 import {
+  InvalidKeyError,
+  HttpNetworkError,
+  KeyNotFoundError,
+  HttpResponseError,
+  InvalidTokenError,
+  InvalidBaseUrlError,
+  InvalidHeadersError,
+  InvalidChunkTypeError,
   ClearNotSupportedError,
   ClearWithoutPrefixNotAllowedError,
-  HttpNetworkError,
-  HttpResponseError,
-  InvalidBaseUrlError,
-  InvalidChunkTypeError,
-  InvalidHeadersError,
-  InvalidKeyError,
-  InvalidTokenError,
-  KeyNotFoundError,
 } from "../src/errors.js";
-import Http, { type HttpOptions, type IFetch } from "../src/http.js";
+import Http, { type IFetch, type HttpOptions } from "../src/http.js";
 import * as index from "../src/index.js";
 
-const probe: IFetch = async (_request: Request) => new Response();
-
+const probe: IFetch = () => Promise.resolve(new Response());
 void probe;
 
 describe("index のエクスポート", () => {
   test("ストレージがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.Http).toBe(Http);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.KeyNotFoundError).toBe(KeyNotFoundError);
     expect(index.InvalidBaseUrlError).toBe(InvalidBaseUrlError);
     expect(index.InvalidHeadersError).toBe(InvalidHeadersError);
@@ -40,10 +40,10 @@ describe("index のエクスポート", () => {
   });
 
   test("HttpOptions 型でインスタンスを組み立てられる", ({ expect }) => {
-    // 準備
+    // 準備：
     const options: HttpOptions = { keyPrefix: "test:" };
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => new Http("https://kv.example.com/store", options)).not.toThrow();
   });
 });

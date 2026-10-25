@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -52,11 +52,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }
@@ -106,7 +110,8 @@ export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSeco
     const meta: InvalidTtlSecondsErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `ttlSeconds must be a finite number > 0, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `ttlSeconds must be a finite number > 0, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -156,7 +161,8 @@ export class InvalidMaxEntriesError extends InvalidUsageErrorBase<InvalidMaxEntr
     const meta: InvalidMaxEntriesErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `maxEntries must be an integer >= 0, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `maxEntries must be an integer >= 0, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -203,7 +209,11 @@ export class InvalidNamespaceError extends InvalidUsageErrorBase<InvalidNamespac
   public constructor(args: InvalidNamespaceErrorArgs) {
     const { actual, ...options } = args;
     const meta: InvalidNamespaceErrorMeta = { actual };
-    super(meta, ({ actual }) => `namespace must be a string, but got ${String(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `namespace must be a string, but got ${String(messageActual)}`,
+      options,
+    );
   }
 }
 

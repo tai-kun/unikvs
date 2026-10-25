@@ -1,8 +1,8 @@
 import {
-  KeyNotFoundError,
-  type IReadableStream,
   type IStorage,
+  type IReadableStream,
   type IWritableStream,
+  KeyNotFoundError,
 } from "@unikvs/core";
 import { getAbortReason, throwIfAborted } from "abort-signal-utils";
 
@@ -174,7 +174,6 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
       clearTimeout(timer);
       reject(getAbortReason(signal));
     };
-
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
@@ -256,7 +255,6 @@ export default class Retry<
    *
    * @param inner 委譲先のストレージです。
    * @param options 再試行回数と待機時間の設定です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#usage)
    */
   public constructor(
@@ -264,29 +262,41 @@ export default class Retry<
     options: RetryOptions = {},
   ) {
     const {
-      maxRetries = 3,
-      initialDelayMs = 100,
-      maxDelayMs = 5000,
       factor = 2,
       jitter = true,
-      retryable = isRetryableError,
       onRetry,
+      retryable = isRetryableError,
+      maxDelayMs = 5000,
+      maxRetries = 3,
+      initialDelayMs = 100,
     } = options;
 
     if (!Number.isInteger(maxRetries) || maxRetries < 0) {
-      throw new RetryInvalidOptionError({ name: "maxRetries", actual: maxRetries });
+      throw new RetryInvalidOptionError({
+        name: "maxRetries",
+        actual: maxRetries,
+      });
     }
 
     if (!Number.isFinite(initialDelayMs) || initialDelayMs < 0) {
-      throw new RetryInvalidOptionError({ name: "initialDelayMs", actual: initialDelayMs });
+      throw new RetryInvalidOptionError({
+        name: "initialDelayMs",
+        actual: initialDelayMs,
+      });
     }
 
     if (!Number.isFinite(maxDelayMs) || maxDelayMs < 0) {
-      throw new RetryInvalidOptionError({ name: "maxDelayMs", actual: maxDelayMs });
+      throw new RetryInvalidOptionError({
+        name: "maxDelayMs",
+        actual: maxDelayMs,
+      });
     }
 
     if (!Number.isFinite(factor) || factor < 1) {
-      throw new RetryInvalidOptionError({ name: "factor", actual: factor });
+      throw new RetryInvalidOptionError({
+        name: "factor",
+        actual: factor,
+      });
     }
 
     this.inner = inner;
@@ -337,8 +347,8 @@ export default class Retry<
     if (typeof getWritable !== "function") {
       return Promise.reject(
         new RetryUnsupportedOperationError({
-          operation: "getWritable",
           storage: this.inner.name,
+          operation: "getWritable",
         }),
       );
     }
@@ -352,8 +362,8 @@ export default class Retry<
     if (typeof getReadable !== "function") {
       return Promise.reject(
         new RetryUnsupportedOperationError({
-          operation: "getReadable",
           storage: this.inner.name,
+          operation: "getReadable",
         }),
       );
     }
@@ -405,11 +415,20 @@ export default class Retry<
         }
 
         if (attempt >= maxAttempts) {
-          throw new RetryExhaustedError({ operation, attempts: attempt, cause: error });
+          throw new RetryExhaustedError({
+            cause: error,
+            attempts: attempt,
+            operation,
+          });
         }
 
         const nextDelayMs = this.#delayMs(attempt);
-        this.onRetry?.({ operation, attempt, error, nextDelayMs });
+        this.onRetry?.({
+          error,
+          attempt,
+          operation,
+          nextDelayMs,
+        });
         await sleep(nextDelayMs, c.signal);
       }
     }

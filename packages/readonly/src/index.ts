@@ -1,13 +1,13 @@
 export type {
-  ReadOnlyDeleteNotAllowedErrorArgs,
-  ReadOnlyDeleteNotAllowedErrorMeta,
   ReadOnlySetNotAllowedErrorArgs,
   ReadOnlySetNotAllowedErrorMeta,
+  ReadOnlyDeleteNotAllowedErrorArgs,
+  ReadOnlyDeleteNotAllowedErrorMeta,
 } from "./errors.js";
 export {
+  ReadOnlySetNotAllowedError,
   ReadOnlyClearNotAllowedError,
   ReadOnlyDeleteNotAllowedError,
-  ReadOnlySetNotAllowedError,
 } from "./errors.js";
 
 export type * from "./readonly.js";

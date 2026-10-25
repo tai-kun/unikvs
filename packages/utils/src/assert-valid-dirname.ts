@@ -13,5 +13,6 @@ export default function assertValidDirname(dirname: string): void {
 
   const error = new InvalidDirnameError({ dirname });
   tryCaptureStackTrace(error, assertValidDirname);
+
   throw error;
 }

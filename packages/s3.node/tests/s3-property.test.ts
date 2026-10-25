@@ -2,39 +2,38 @@ import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
-  createDeleteContext,
+  forCasesAsync,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { forCasesAsync } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
-const seed = 20260930;
+const seed = 20_260_930;
 const caseCount = 25;
 
 const KEY_CHARS = Array.from(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_日本語📦éΩ",
 );
-
 describe("決定的ファズ検証", () => {
   test("任意のキーとバイト列で write→read が往復する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed, caseCount, async (random) => {
       const key = `prop/${random.string(random.int(1, 32), KEY_CHARS)}`;
       const data = random.bytes(random.uint(64 * 1024 + 1));
-
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
-      const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
+      const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
       expect(bytesEqual(result, data)).toBe(true);
+
       expect(
         await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
       ).toBe(true);
@@ -51,10 +50,10 @@ describe("決定的ファズ検証", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const key = "property-stream.bin";
       const expected = random.bytes(random.uint(8 * 1024 + 1));
@@ -62,11 +61,17 @@ describe("決定的ファズ検証", () => {
       let offset = 0;
 
       for (const size of random.array(random.uint(13), () => random.int(1, 2048))) {
-        if (offset >= expected.length) break;
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (offset >= expected.length) {
+          break;
+        }
+
         const end = Math.min(offset + size, expected.length);
         chunks.push(expected.subarray(offset, end));
         offset = end;
       }
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (offset < expected.length) {
         chunks.push(expected.subarray(offset));
       }
@@ -74,9 +79,11 @@ describe("決定的ファズ検証", () => {
       const writer = storage
         .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
         .getWriter();
+
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
+
       await writer.close();
 
       const direct = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
@@ -85,7 +92,6 @@ describe("決定的ファズ検証", () => {
           createStreamContext(key, { signal }) as IStorage.GetReadableContext,
         ),
       );
-
       expect(bytesEqual(direct, expected)).toBe(true);
       expect(bytesEqual(streamed, expected)).toBe(true);
     });

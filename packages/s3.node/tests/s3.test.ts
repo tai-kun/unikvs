@@ -1,62 +1,63 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
-import { InvalidPartSizeError, StorageAbortedError } from "../src/errors.js";
+import { StorageAbortedError, InvalidPartSizeError } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 describe("ライフサイクル管理", () => {
   test("インスタンス化した直後は、isOpen が false である", ({ expect, storage }) => {
     // 準備と実行は constructor で完了している。
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(false);
   });
 
   test("open を呼び出すと、isOpen が true になる", ({ expect, storage }) => {
-    // 実行
+    // 実行：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(true);
   });
 
   test("close を呼び出すと、isOpen が false に戻る", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     storage.close(createCloseContext() as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     expect(storage.isOpen).toBe(false);
   });
 
   test("close 後に再び open すると、データの書き込みと読み取りができる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "reopen.txt";
     const data = new TextEncoder().encode("Reopen");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     storage.close(createCloseContext() as IStorage.CloseContext);
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(data);
@@ -66,18 +67,19 @@ describe("ライフサイクル管理", () => {
 describe("基本データ操作 (CRUD)", () => {
   test("データを書き込んだとき、キーの存在確認が true になる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "test.txt";
     const data = new TextEncoder().encode("Hello S3");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(true);
@@ -85,89 +87,94 @@ describe("基本データ操作 (CRUD)", () => {
 
   test("書き込んだデータを読み戻したとき、元のデータと一致する Uint8Array が返る", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "read-test.txt";
     const expectedData = new TextEncoder().encode("Read Content");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, expectedData);
 
-    // 実行
+    // 実行：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(result).toStrictEqual(expectedData);
   });
 
   test("同じキーに上書きしたとき、読み戻すと最後に書き込んだデータになる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "overwrite.txt";
     const firstData = new TextEncoder().encode("first version");
     const secondData = new TextEncoder().encode("second version");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, firstData);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, secondData);
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(secondData);
   });
 
-  test("存在しないキーを確認したとき、false が返る", async ({ expect, storage, signal }) => {
-    // 準備
+  test("存在しないキーを確認したとき、false が返る", async ({ expect, signal, storage }) => {
+    // 準備：
     const key = "non-existent.txt";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
       createHasContext(key, { signal }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(false);
   });
 
   test("存在しないキーを読み取ろうとしたとき、エラーが投げられる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "missing-read-target.txt";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
-    ).rejects.toThrow(/NoSuchKey|does not exist/);
+    ).rejects.toThrow(/NoSuchKey|does not exist/u);
   });
 
   test("オブジェクトを削除したとき、以降は存在確認が false になる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "delete-test.txt";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1, 2, 3]),
     );
 
-    // 実行
+    // 実行：
     await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -175,14 +182,15 @@ describe("基本データ操作 (CRUD)", () => {
 
   test("存在しないキーを削除しても、エラーにならず完了する", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "non-existent-delete-target.txt";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
     ).resolves.toBeUndefined();
@@ -192,10 +200,10 @@ describe("基本データ操作 (CRUD)", () => {
 describe("ストリーム操作", () => {
   test("複数のチャンクを書き込みストリームに流し込んだとき、連結された内容が保存される", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "stream-write.dat";
     const chunks = [
       new Uint8Array([10, 20, 30]),
@@ -203,19 +211,21 @@ describe("ストリーム操作", () => {
       new Uint8Array([200, 201]),
     ];
     const expected = new Uint8Array(chunks.flatMap((chunk) => Array.from(chunk)));
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writable = storage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
     );
     const writer = writable.getWriter();
 
-    // 実行
+    // 実行：
     for (const chunk of chunks) {
       await writer.write(chunk);
     }
+
     await writer.close();
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(expected);
@@ -223,30 +233,34 @@ describe("ストリーム操作", () => {
 
   test("パートサイズより大きいデータを書き込みストリームで保存したとき、全データが正しく保存される", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     // デフォルトのパートサイズ (5 MiB) をまたいで複数パートになるサイズを使用する。
     const chunkSize = 1024 * 1024;
-    const data = new Uint8Array(chunkSize * 11 + 123456);
+    const data = new Uint8Array(chunkSize * 11 + 123_456);
+
     for (let i = 0; i < data.length; i++) {
       data[i] = i % 251;
     }
+
     const key = "multipart-write.dat";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writable = storage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
     );
     const writer = writable.getWriter();
 
-    // 実行
+    // 実行：
     for (let offset = 0; offset < data.length; offset += chunkSize) {
       await writer.write(data.subarray(offset, offset + chunkSize));
     }
+
     await writer.close();
 
-    // 検証
+    // 検証：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     // toStrictEqual は大きな配列の比較に極端に時間がかかるため、Buffer.equals を使用する。
     expect(Buffer.from(result).equals(Buffer.from(data))).toBe(true);
@@ -254,14 +268,15 @@ describe("ストリーム操作", () => {
 
   test("最小値未満の partSize を変数に指定したとき、書き込みストリームの取得時にエラーが投げられる", ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "too-small-part-size.dat";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getWritable(
         createSetContext(key, {
@@ -269,19 +284,19 @@ describe("ストリーム操作", () => {
           values: { "@unikvs/s3.node:partSize": 1024 },
         }) as IStorage.GetWritableContext,
       ),
-    ).toThrow(/EntityTooSmall/);
+    ).toThrow(/EntityTooSmall/u);
   });
 
   test("正の整数ではない partSize を変数に指定したとき、書き込みストリームの取得時に InvalidPartSizeError が投げられる", ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
     for (const partSize of ["8 * 1024 * 1024", 0, -1, 1.5, null]) {
-      // 実行と検証
+      // 実行と検証：
       expect(() =>
         storage.getWritable(
           createSetContext("invalid-part-size.dat", {
@@ -297,12 +312,12 @@ describe("ストリーム操作", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     expect(() =>
       storage.getWritable(
         createSetContext("aborted-writable.dat", {
@@ -316,9 +331,10 @@ describe("ストリーム操作", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "abort-mid-upload.dat";
     const controller = new AbortController();
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writable = storage.getWritable(
       createSetContext(key, { signal: controller.signal }) as IStorage.GetWritableContext,
@@ -326,29 +342,32 @@ describe("ストリーム操作", () => {
     const writer = writable.getWriter();
     await writer.write(new Uint8Array(1024 * 1024 * 6));
 
-    // 実行
+    // 実行：
     controller.abort();
 
-    // 検証
-    await expect(writer.close()).rejects.toThrow(/abort/i);
+    // 検証：
+    await expect(writer.close()).rejects.toThrow(/abort/iu);
   });
 
   test("読み込みストリームを使用したとき、複数チャンクに分かれた全データを正しく読み取れる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     // ストリームが複数チャンクに分割されるよう、十分な大きさのデータを使用する。
     const expectedData = new Uint8Array(1536 * 1024);
+
     for (let i = 0; i < expectedData.length; i++) {
       expectedData[i] = (i * 31) % 256;
     }
+
     const key = "stream-read.dat";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, expectedData);
 
-    // 実行
+    // 実行：
     const readable = await storage.getReadable(
       createStreamContext(key, { signal }) as IStorage.GetReadableContext,
     );
@@ -357,18 +376,25 @@ describe("ストリーム操作", () => {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (done) {
+        break;
+      }
+
       buffers.push(value);
     }
 
-    // 検証
+    // 検証：
     const totalLength = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
     const result = new Uint8Array(totalLength);
     let offset = 0;
+
     for (const buffer of buffers) {
       result.set(buffer, offset);
       offset += buffer.length;
     }
+
     expect(buffers.length).toBeGreaterThan(1);
     expect(result).toStrictEqual(expectedData);
   });
@@ -377,10 +403,10 @@ describe("ストリーム操作", () => {
 describe("バケット一括削除 (clear)", () => {
   test("複数のオブジェクトが存在するとき、clear を実行すると全てのオブジェクトが削除される", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext("file1.txt", { signal }) as IStorage.WriteContext,
@@ -391,10 +417,10 @@ describe("バケット一括削除 (clear)", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.exists(createHasContext("file1.txt", { signal }) as IStorage.ExistsContext),
     ).resolves.toBe(false);
@@ -403,11 +429,11 @@ describe("バケット一括削除 (clear)", () => {
     ).resolves.toBe(false);
   });
 
-  test("オブジェクトが一つも存在しない状態でも clear を実行できる", async ({ storage, signal }) => {
-    // 準備
+  test("オブジェクトが一つも存在しない状態でも clear を実行できる", async ({ signal, storage }) => {
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
   });
 });
@@ -415,18 +441,19 @@ describe("バケット一括削除 (clear)", () => {
 describe("境界値・異常系テスト", () => {
   test("空データを書き込んだとき、サイズ 0 のオブジェクトとして保存される", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "empty.bin";
     const emptyData = new Uint8Array(0);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, emptyData);
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(emptyData);
@@ -434,19 +461,20 @@ describe("境界値・異常系テスト", () => {
 
   test("特殊文字を含むキー名を使用した場合でも、正しく保存および取得ができる", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "folder/テスト #123.dat";
     const data = new TextEncoder().encode("Special Key Content");
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(result).toStrictEqual(data);
   });
 
@@ -454,13 +482,15 @@ describe("境界値・異常系テスト", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
+
     const key = "abort.txt";
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(async () => {
       await storage.write(
         createSetContext(key, { signal: controller.signal }) as IStorage.WriteContext,
@@ -473,13 +503,14 @@ describe("境界値・異常系テスト", () => {
 describe("書き込みストリームのエラーハンドリング", () => {
   test("アップロードが失敗したとき、ストリームを閉じるとアップロードの失敗理由で拒否される", async ({
     expect,
-    unauthorizedStorage,
     signal,
+    unauthorizedStorage,
   }) => {
-    // 準備
+    // 準備：
     const key = "upload-failure.bin";
     // デフォルトのパートサイズ (5 MiB) を超えてマルチパートアップロードが開始するサイズを使用する。
     const data = new Uint8Array(1024 * 1024 * 6);
+
     unauthorizedStorage.open(createOpenContext() as IStorage.OpenContext);
     const writable = unauthorizedStorage.getWritable(
       createSetContext(key, { signal }) as IStorage.GetWritableContext,
@@ -487,16 +518,16 @@ describe("書き込みストリームのエラーハンドリング", () => {
     const writer = writable.getWriter();
     await writer.write(data);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(writer.close()).rejects.toThrow(Error);
   });
 
   test("書き込みストリームを中断したとき、unhandled rejection が発生しない", async ({
     expect,
-    storage,
     signal,
+    storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
     const writable = storage.getWritable(
       createSetContext("abort-stream.bin", { signal }) as IStorage.GetWritableContext,
@@ -508,13 +539,13 @@ describe("書き込みストリームのエラーハンドリング", () => {
     };
     process.on("unhandledRejection", listener);
 
-    // 実行
+    // 実行：
     await writer.write(new Uint8Array(1024));
     await writer.abort(new Error("中断"));
     // upload.done() の拒否が伝播するまで待機する。
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 検証
+    // 検証：
     process.off("unhandledRejection", listener);
     expect(unhandledRejections).toStrictEqual([]);
   });

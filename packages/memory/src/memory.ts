@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 
 import { InvalidChunkTypeError } from "./errors.js";
 
@@ -32,7 +32,8 @@ export default class Memory implements IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
    */
   public constructor(options: MemoryOptions = {}) {
-    const { clone = (value) => structuredClone(value) } = options;
+    const { clone = <T>(value: T): T => structuredClone(value) } = options;
+
     this.name = "Memory";
     this.#map = new Map();
     this.#clone = clone;
@@ -42,6 +43,7 @@ export default class Memory implements IStorage {
     return true;
   }
 
+  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(c: IStorage.WriteContext, data: any): void {
     this.#map.set(c.key, this.#clone(data));
   }
@@ -78,24 +80,28 @@ export default class Memory implements IStorage {
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
-      write: (chunk) => {
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(this.#clone(chunk));
-      },
-      close: () => {
+      close: (): void => {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
 
         let offset = 0;
+
         for (const chunk of chunks) {
           merged.set(chunk, offset);
           offset += chunk.byteLength;
         }
 
         this.#map.set(c.key, merged);
+      },
+      write: (chunk): void => {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(this.#clone(chunk));
       },
     });
 
@@ -110,9 +116,12 @@ export default class Memory implements IStorage {
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
     const value = this.#map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
-      pull: (controller) => {
+      pull: (controller): void => {
         if (!(value instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk: value });
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk: value,
+          });
         }
 
         controller.enqueue(this.#clone(value) as Uint8Array<ArrayBuffer>);

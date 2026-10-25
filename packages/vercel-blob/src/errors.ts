@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, type ErrorOptions, setErrorMessage } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import getTypeName from "type-name";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
@@ -45,7 +45,8 @@ export class InvalidTokenError extends InvalidUsageErrorBase<InvalidTokenErrorMe
     const meta: InvalidTokenErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `Expected token to be a non-empty string, but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected token to be a non-empty string, but got ${String(messageActual)}`,
       options,
     );
   }
@@ -98,7 +99,8 @@ export class InvalidAccessError extends InvalidUsageErrorBase<InvalidAccessError
     const meta: InvalidAccessErrorMeta = { actual };
     super(
       meta,
-      ({ actual }) => `Expected access to be "public" or "private", but got ${String(actual)}`,
+      ({ actual: messageActual }) =>
+        `Expected access to be "public" or "private", but got ${String(messageActual)}`,
       options,
     );
   }
@@ -155,14 +157,17 @@ export class BlobOperationError extends ErrorBase<BlobOperationErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#errors)
    */
   public constructor(args: BlobOperationErrorArgs) {
-    const { operation, key, ...options } = args;
-    const meta: BlobOperationErrorMeta = { operation, key };
+    const { key, operation, ...options } = args;
+    const meta: BlobOperationErrorMeta = {
+      key,
+      operation,
+    };
     super(
       meta,
-      ({ operation, key }) =>
-        key === undefined
-          ? `Failed to ${operation} blob(s)`
-          : `Failed to ${operation} blob for key ${JSON.stringify(key)}`,
+      ({ key: messageKey, operation: messageOperation }) =>
+        messageKey === undefined
+          ? `Failed to ${messageOperation} blob(s)`
+          : `Failed to ${messageOperation} blob for key ${JSON.stringify(messageKey)}`,
       options,
     );
   }
@@ -170,7 +175,7 @@ export class BlobOperationError extends ErrorBase<BlobOperationErrorMeta> {
 
 setErrorMessage(
   BlobOperationError,
-  ({ operation, key }) =>
+  ({ key, operation }) =>
     key === undefined
       ? `Blob の ${operation} に失敗しました`
       : `キー ${JSON.stringify(key)} の Blob の ${operation} に失敗しました`,
@@ -221,9 +226,12 @@ export class BlobNetworkError extends ErrorBase<BlobNetworkErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#errors)
    */
   public constructor(args: BlobNetworkErrorArgs) {
-    const { url, key, ...options } = args;
-    const meta: BlobNetworkErrorMeta = { url, key };
-    super(meta, ({ url }) => `Failed to download ${url}`, options);
+    const { key, url, ...options } = args;
+    const meta: BlobNetworkErrorMeta = {
+      key,
+      url,
+    };
+    super(meta, ({ url: messageUrl }) => `Failed to download ${messageUrl}`, options);
   }
 }
 
@@ -287,12 +295,17 @@ export class BlobResponseError extends ErrorBase<BlobResponseErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#errors)
    */
   public constructor(args: BlobResponseErrorArgs) {
-    const { url, key, status, statusText, ...options } = args;
-    const meta: BlobResponseErrorMeta = { url, key, status, statusText };
+    const { key, url, status, statusText, ...options } = args;
+    const meta: BlobResponseErrorMeta = {
+      key,
+      url,
+      status,
+      statusText,
+    };
     super(
       meta,
-      ({ url, status, statusText }) =>
-        `Failed to download ${url} with ${status}${statusText === "" ? "" : ` ${statusText}`}`,
+      ({ url: messageUrl, status: messageStatus, statusText: messageStatusText }) =>
+        `Failed to download ${messageUrl} with ${messageStatus}${messageStatusText === "" ? "" : ` ${messageStatusText}`}`,
       options,
     );
   }
@@ -357,11 +370,15 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
     const { key, chunk, ...options } = args;
-    const meta: InvalidChunkTypeErrorMeta = { key, chunk, chunkType: getTypeName(chunk) };
+    const meta: InvalidChunkTypeErrorMeta = {
+      key,
+      chunk,
+      chunkType: getTypeName(chunk),
+    };
     super(
       meta,
-      ({ key, chunkType }) =>
-        `Expected chunk for key ${JSON.stringify(key)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
+      ({ key: messageKey, chunkType }) =>
+        `Expected chunk for key ${JSON.stringify(messageKey)} is Uint8Array<ArrayBuffer>, but got ${chunkType}`,
       options,
     );
   }

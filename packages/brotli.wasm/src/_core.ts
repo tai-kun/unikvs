@@ -30,8 +30,7 @@ export type CompressOptions = {
 /**
  * 上流の送出値を Error へ正規化します。
  *
- * `brotli-wasm` は失敗時に文字列などの非 Error 値を送出する場合があるため、
- * 呼び出し側が `Error` として扱えるよう包み直します。
+ * `brotli-wasm` は失敗時に文字列などの非 Error 値を送出する場合があるため、呼び出し側が `Error` として扱えるよう包み直します。
  */
 function toError(error: unknown): Error {
   if (error instanceof Error) {
@@ -49,12 +48,10 @@ export const api = {
    * `brotli-wasm` を遅延解決します。
    *
    * ESM の `import` はブラウザーでは Web ビルドに解決され、そのまま動作します。
-   * 一方 Node.js の ESM では Web ビルドに解決されて WASM の取得に失敗するため、
-   * 失敗時は Node.js 用の CJS ビルドへフォールバックします。
+   * 一方 Node.js の ESM では Web ビルドに解決されて WASM の取得に失敗するため、失敗時は Node.js 用の CJS ビルドへフォールバックします。
    *
    * なお上流の型定義は CJS ビルドの形状を表すため `default` を `unknown` 経由で受けます。
-   * 実行時の `default` は Web ビルドでは `Promise` ですが、
-   * `await` が同期値も透過するため分岐は不要です。
+   * 実行時の `default` は Web ビルドでは `Promise` ですが、`await` が同期値も透過するため分岐は不要です。
    *
    * 関数の有無はここでは検証せず、使用時のエラーをそのまま表面化させます。
    *
@@ -87,6 +84,7 @@ export const api = {
    * @param env 使用する実行環境です。
    * @param data 圧縮するバイト列です。
    * @param options オプションです。
+   *
    * @returns 圧縮したバイト列を返します。
    */
   compress(env: IEnv, data: Uint8Array<ArrayBuffer>, options: CompressOptions): Uint8Array {
@@ -106,6 +104,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data 展開するバイト列です。
+   *
    * @returns 展開したバイト列を返します。
    */
   decompress(env: IEnv, data: Uint8Array<ArrayBuffer>): Uint8Array {

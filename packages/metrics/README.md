@@ -1,3 +1,3 @@
 # @unikvs/metrics
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/metrics)
+[Document](https://tai-kun.github.io/unikvs/)

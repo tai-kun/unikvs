@@ -1,12 +1,12 @@
 import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
-  createPseudoRandomBytes,
-  createDeleteContext,
   createGetContext,
   createSetContext,
+  createDeleteContext,
+  createPseudoRandomBytes,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
@@ -16,20 +16,20 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const entries = Array.from({ length: 100 }, (_, index) => ({
       key: `parallel/${index}.bin`,
       data: createPseudoRandomBytes(512, index),
     }));
 
-    // 実行
+    // 実行：
     await Promise.all(
       entries.map(({ key, data }) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
 
-    // 検証
+    // 検証：
     for (const { key, data } of entries) {
       const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
       expect(bytesEqual(result, data)).toBe(true);
@@ -41,20 +41,20 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "parallel-same-key.bin";
     const payloads = Array.from({ length: 20 }, (_, index) =>
       createPseudoRandomBytes(1024, index + 100),
     );
 
-    // 実行
+    // 実行：
     await Promise.all(
       payloads.map((data) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
 
-    // 検証
+    // 検証：
     const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
     expect(payloads.some((payload) => bytesEqual(result, payload))).toBe(true);
   });
@@ -64,11 +64,11 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "parallel-write-delete.bin";
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     await Promise.all([
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
@@ -76,7 +76,7 @@ describe("並行操作", () => {
       storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
     ]);
 
-    // 検証
+    // 検証：
     await expect(
       storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext),
     ).resolves.toBeUndefined();
@@ -87,19 +87,19 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "parallel-read.bin";
     const data = createPseudoRandomBytes(64 * 1024, 999);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 実行
+    // 実行：
     const results = await Promise.all(
       Array.from({ length: 20 }, () =>
         storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
       ),
     );
 
-    // 検証
+    // 検証：
     for (const result of results) {
       expect(bytesEqual(result, data)).toBe(true);
     }

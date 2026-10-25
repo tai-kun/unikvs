@@ -1,21 +1,21 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidChunkTypeErrorMeta,
+  KeyNotFoundErrorMeta,
   InvalidChunkTypeErrorArgs,
-  InvalidTtlSecondsErrorMeta,
-  InvalidTtlSecondsErrorArgs,
-  InvalidMaxEntriesErrorMeta,
-  InvalidMaxEntriesErrorArgs,
-  InvalidNamespaceErrorMeta,
+  InvalidChunkTypeErrorMeta,
   InvalidNamespaceErrorArgs,
+  InvalidNamespaceErrorMeta,
+  InvalidMaxEntriesErrorArgs,
+  InvalidMaxEntriesErrorMeta,
+  InvalidTtlSecondsErrorArgs,
+  InvalidTtlSecondsErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
   InvalidChunkTypeError,
-  InvalidTtlSecondsError,
-  InvalidMaxEntriesError,
   InvalidNamespaceError,
+  InvalidMaxEntriesError,
+  InvalidTtlSecondsError,
 } from "./errors.js";
 
 export type * from "./vercel-runtime-cache.js";

@@ -1,33 +1,33 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createOpenContext,
   createClearContext,
   createCloseContext,
   createDeleteContext,
-  createGetContext,
-  createHasContext,
-  createOpenContext,
-  createSetContext,
   createStreamContext,
 } from "@unikvs/testing";
 import { acquireFreePort } from "@unikvs/testing/node";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import S3 from "../src/s3.js";
-import { createClientConfig, test } from "./_helpers.js";
+import { test, createClientConfig } from "./_helpers.js";
 
 describe("異常系とエラー伝播", () => {
   test("存在しないバケットへの write/delete/clear/getReadable は NoSuchBucket で拒否される", async ({
     bucket,
-    endpoint,
     expect,
     signal,
+    endpoint,
   }) => {
-    // 準備
+    // 準備：
     const missing = new S3(bucket, createClientConfig(endpoint));
     missing.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(
         missing.write(
           createSetContext("x.bin", { signal }) as IStorage.WriteContext,
@@ -56,20 +56,20 @@ describe("異常系とエラー伝播", () => {
 
   test("存在しないバケットの exists は 404 として false を返す", async ({
     bucket,
-    endpoint,
     expect,
     signal,
+    endpoint,
   }) => {
-    // 準備
+    // 準備：
     const missing = new S3(bucket, createClientConfig(endpoint));
     missing.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     const result = await missing.exists(
       createHasContext("x.bin", { signal }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     missing.close(createCloseContext() as IStorage.CloseContext);
     expect(result).toBe(false);
   });
@@ -78,22 +78,22 @@ describe("異常系とエラー伝播", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const port = await acquireFreePort();
     const unreachable = new S3("any-bucket", createClientConfig(`http://127.0.0.1:${port}`));
     unreachable.open(createOpenContext() as IStorage.OpenContext);
 
     try {
-      // 実行と検証
+      // 実行と検証：
       await expect(
         unreachable.write(
           createSetContext("x.bin", { signal }) as IStorage.WriteContext,
           new Uint8Array([1]),
         ),
-      ).rejects.toThrow(/ECONNREFUSED|fetch failed/);
+      ).rejects.toThrow(/ECONNREFUSED|fetch failed/u);
       await expect(
         unreachable.exists(createHasContext("x.bin", { signal }) as IStorage.ExistsContext),
-      ).rejects.toThrow(/ECONNREFUSED|fetch failed/);
+      ).rejects.toThrow(/ECONNREFUSED|fetch failed/u);
     } finally {
       unreachable.close(createCloseContext() as IStorage.CloseContext);
     }
@@ -104,10 +104,10 @@ describe("異常系とエラー伝播", () => {
     signal,
     unauthorizedStorage,
   }) => {
-    // 準備
+    // 準備：
     unauthorizedStorage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       unauthorizedStorage.write(
         createSetContext("x.bin", { signal }) as IStorage.WriteContext,
@@ -137,10 +137,10 @@ describe("異常系とエラー伝播", () => {
     signal,
     unauthorizedStorage,
   }) => {
-    // 準備
+    // 準備：
     unauthorizedStorage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       unauthorizedStorage.exists(createHasContext("x.bin", { signal }) as IStorage.ExistsContext),
     ).rejects.toThrow();

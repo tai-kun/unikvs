@@ -1,22 +1,22 @@
 export type {
-  KeyNotFoundErrorMeta,
-  KeyNotFoundErrorArgs,
-  InvalidCloseTimeoutErrorMeta,
-  InvalidCloseTimeoutErrorArgs,
-  InvalidTtlErrorMeta,
   InvalidTtlErrorArgs,
-  ConnectTimeoutErrorMeta,
-  ConnectTimeoutErrorArgs,
-  CloseTimeoutErrorMeta,
+  InvalidTtlErrorMeta,
+  KeyNotFoundErrorArgs,
+  KeyNotFoundErrorMeta,
   CloseTimeoutErrorArgs,
+  CloseTimeoutErrorMeta,
+  ConnectTimeoutErrorArgs,
+  ConnectTimeoutErrorMeta,
+  InvalidCloseTimeoutErrorArgs,
+  InvalidCloseTimeoutErrorMeta,
 } from "./errors.js";
 export {
+  InvalidTtlError,
   KeyNotFoundError,
+  CloseTimeoutError,
+  ConnectTimeoutError,
   ClusterNotSupportedError,
   InvalidCloseTimeoutError,
-  InvalidTtlError,
-  ConnectTimeoutError,
-  CloseTimeoutError,
 } from "./errors.js";
 export type * from "./valkey.js";
 export { default as Valkey } from "./valkey.js";

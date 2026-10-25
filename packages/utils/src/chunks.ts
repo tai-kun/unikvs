@@ -1,3 +1,4 @@
+// oxlint-disable typescript/no-unnecessary-type-assertion
 /**
  * `subarray` で範囲ビューを作れるバイナリーデータの形です。
  */
@@ -22,6 +23,7 @@ interface ITypedArray {
    *
    * @param start 開始要素位置です。
    * @param end 終了要素位置です。
+   *
    * @returns 指定範囲のビューです。
    */
   subarray(start: number, end: number): unknown;
@@ -34,6 +36,7 @@ interface ITypedArray {
  *
  * @param totalSize 全体の大きさです。
  * @param maxSize 1 区切りあたりの最大サイズです。
+ *
  * @yields 開始位置と終了位置の組を順に生成します。
  */
 function* chunkRanges(totalSize: number, maxSize: number): Generator<readonly [number, number]> {
@@ -49,6 +52,8 @@ function* chunkRanges(totalSize: number, maxSize: number): Generator<readonly [n
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#chunks)
+ *
+ * @yields データを指定サイズで区切ったビューを順に生成します。
  */
 export default function* chunks<TData extends DataView | ITypedArray>(
   data: TData,
@@ -63,6 +68,7 @@ export default function* chunks<TData extends DataView | ITypedArray>(
     return;
   }
 
+  // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
   const view = data as ITypedArray;
   const bytesPerElement = view.BYTES_PER_ELEMENT ?? 1;
   const totalElements = view.length ?? view.byteLength;

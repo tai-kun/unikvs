@@ -6,6 +6,7 @@ import type { IReadableStream, IWritableStream } from "@unikvs/core";
  * ランタイムによっては `ReadableStream` クラスを継承せずに同じインターフェースを備えたオブジェクトが存在するため、`instanceof` ではなく必要なメソッドの有無で判定します。
  *
  * @param input 判定する値です。
+ *
  * @returns `ReadableStream` のインターフェースを満たす場合は `true` を返します。
  */
 export function isReadableStream(input: unknown): input is IReadableStream {
@@ -30,6 +31,7 @@ export function isReadableStream(input: unknown): input is IReadableStream {
  * ランタイムによっては `WritableStream` クラスを継承せずに同じインターフェースを備えたオブジェクトが存在するため、`instanceof` ではなく必要なメソッドの有無で判定します。
  *
  * @param input 判定する値です。
+ *
  * @returns `WritableStream` のインターフェースを満たす場合は `true` を返します。
  */
 export function isWritableStream(input: unknown): input is IWritableStream {

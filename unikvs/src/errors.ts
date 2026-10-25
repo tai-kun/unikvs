@@ -10,7 +10,7 @@ import type { BaseIssue } from "valibot";
 export { KeyNotFoundError, InvalidUsageErrorBase };
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -57,12 +57,19 @@ export class InvalidInputError extends InvalidUsageErrorBase<InvalidInputErrorMe
 
   public constructor(args: InvalidInputErrorArgs) {
     const { value: input, issues, ...options } = args;
-    const meta: InvalidInputErrorMeta = { input, issues };
-    super(meta, ({ issues }) => issues.map((i) => i.message).join(": "), options);
+    const meta: InvalidInputErrorMeta = {
+      input,
+      issues,
+    };
+    super(
+      meta,
+      ({ issues: messageIssues }) => messageIssues.map((i) => i.message).join(": "),
+      options,
+    );
   }
 }
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -104,16 +111,23 @@ export class InvalidOutputError extends InvalidUsageErrorBase<InvalidOutputError
 
   public constructor(args: InvalidOutputErrorArgs) {
     const { value: output, issues, ...options } = args;
-    const meta: InvalidOutputErrorMeta = { output, issues };
-    super(meta, ({ issues }) => issues.map((i) => i.message).join(": "), options);
+    const meta: InvalidOutputErrorMeta = {
+      issues,
+      output,
+    };
+    super(
+      meta,
+      ({ issues: messageIssues }) => messageIssues.map((i) => i.message).join(": "),
+      options,
+    );
   }
 }
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// UniKvs
+// UniKvs。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -145,29 +159,11 @@ export class UniKvsIsNotOpenError extends ErrorBase<undefined> {
 
 setErrorMessage(UniKvsIsNotOpenError, "UniKvs は開いていません", "ja");
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// ストレージ
+// ストレージ。
 //
-// -------------------------------------------------------------------------------------------------
-
-// export type StorageIsOpenErrorMeta = {
-//   readonly name: string;
-// };
-
-// export type StorageIsOpenErrorArgs = StorageIsOpenErrorMeta;
-
-// export class StorageIsOpenError extends ErrorBase<StorageIsOpenErrorMeta> {
-//   static {
-//     this.prototype.name = "UniKvsStorageIsOpenError";
-//   }
-
-//   public constructor(args: StorageIsOpenErrorArgs, options?: ErrorOptions) {
-//     super(args, ({ name }) => `Storage "${name}" is open`, options);
-//   }
-// }
-
-// setErrorMessage(StorageIsOpenError, ({ name }) => `ストレージ "${name}" は開いています`, "ja");
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -195,7 +191,7 @@ export class StorageIsNotOpenError extends ErrorBase<StorageIsNotOpenErrorMeta> 
   public constructor(args: StorageIsNotOpenErrorArgs) {
     const { name, ...options } = args;
     const meta: StorageIsNotOpenErrorMeta = { name };
-    super(meta, ({ name }) => `Storage "${name}" is not open`, options);
+    super(meta, ({ name: messageName }) => `Storage "${messageName}" is not open`, options);
   }
 }
 
@@ -228,7 +224,11 @@ export class WritableStreamNotSupportedError extends ErrorBase<WritableStreamNot
   public constructor(args: WritableStreamNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: WritableStreamNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Storage "${name}" does not support writable stream`, options);
+    super(
+      meta,
+      ({ name: messageName }) => `Storage "${messageName}" does not support writable stream`,
+      options,
+    );
   }
 }
 
@@ -265,7 +265,11 @@ export class ReadableStreamNotSupportedError extends ErrorBase<ReadableStreamNot
   public constructor(args: ReadableStreamNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: ReadableStreamNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Storage "${name}" does not support readable stream`, options);
+    super(
+      meta,
+      ({ name: messageName }) => `Storage "${messageName}" does not support readable stream`,
+      options,
+    );
   }
 }
 
@@ -304,7 +308,11 @@ export class MultipartWriteNotSupportedError extends ErrorBase<MultipartWriteNot
   public constructor(args: MultipartWriteNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: MultipartWriteNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Storage "${name}" does not support multipart-write`, options);
+    super(
+      meta,
+      ({ name: messageName }) => `Storage "${messageName}" does not support multipart-write`,
+      options,
+    );
   }
 }
 
@@ -314,29 +322,11 @@ setErrorMessage(
   "ja",
 );
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// ミドルウェア
+// ミドルウェア。
 //
-// -------------------------------------------------------------------------------------------------
-
-// export type MiddlewareIsOpenErrorMeta = {
-//   readonly name: string;
-// };
-
-// export type MiddlewareIsOpenErrorArgs = MiddlewareIsOpenErrorMeta;
-
-// export class MiddlewareIsOpenError extends ErrorBase<MiddlewareIsOpenErrorMeta> {
-//   static {
-//     this.prototype.name = "UniKvsMiddlewareIsOpenError";
-//   }
-
-//   public constructor(args: MiddlewareIsOpenErrorArgs, options?: ErrorOptions) {
-//     super(args, ({ name }) => `Middleware "${name}" is open`, options);
-//   }
-// }
-
-// setErrorMessage(MiddlewareIsOpenError, ({ name }) => `ミドルウェア "${name}" は開いています`, "ja");
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -364,7 +354,7 @@ export class MiddlewareIsNotOpenError extends ErrorBase<MiddlewareIsNotOpenError
   public constructor(args: MiddlewareIsNotOpenErrorArgs) {
     const { name, ...options } = args;
     const meta: MiddlewareIsNotOpenErrorMeta = { name };
-    super(meta, ({ name }) => `Middleware "${name}" is not open`, options);
+    super(meta, ({ name: messageName }) => `Middleware "${messageName}" is not open`, options);
   }
 }
 
@@ -405,10 +395,14 @@ export class MiddlewareDestinationMissingError extends ErrorBase<MiddlewareDesti
 
   public constructor(args: MiddlewareDestinationMissingErrorArgs) {
     const { name, operation, ...options } = args;
-    const meta: MiddlewareDestinationMissingErrorMeta = { name, operation };
+    const meta: MiddlewareDestinationMissingErrorMeta = {
+      name,
+      operation,
+    };
     super(
       meta,
-      ({ name, operation }) => `Middleware "${name}" did not set destination for ${operation}.`,
+      ({ name: messageName, operation: messageOperation }) =>
+        `Middleware "${messageName}" did not set destination for ${messageOperation}.`,
       options,
     );
   }
@@ -451,12 +445,15 @@ export class MiddlewareDestinationFrozenError extends ErrorBase<MiddlewareDestin
   }
 
   public constructor(args: MiddlewareDestinationFrozenErrorArgs) {
-    const { action, key, ...options } = args;
-    const meta: MiddlewareDestinationFrozenErrorMeta = { action, key };
+    const { key, action, ...options } = args;
+    const meta: MiddlewareDestinationFrozenErrorMeta = {
+      key,
+      action,
+    };
     super(
       meta,
-      ({ action, key }) =>
-        `Cannot set destination after next() was called for ${action} operation on key ${JSON.stringify(key)}.`,
+      ({ key: messageKey, action: messageAction }) =>
+        `Cannot set destination after next() was called for ${messageAction} operation on key ${JSON.stringify(messageKey)}.`,
       options,
     );
   }
@@ -464,8 +461,8 @@ export class MiddlewareDestinationFrozenError extends ErrorBase<MiddlewareDestin
 
 setErrorMessage(
   MiddlewareDestinationFrozenError,
-  ({ action, key }) =>
-    `next() を呼び出した後に destination を設定できません（${action} 操作、キー ${JSON.stringify(key)}）。`,
+  ({ key: messageKey, action: messageAction }) =>
+    `next() を呼び出した後に destination を設定できません（${messageAction} 操作、キー ${JSON.stringify(messageKey)}）。`,
   "ja",
 );
 
@@ -499,10 +496,14 @@ export class MiddlewareNextNotCalledError extends ErrorBase<MiddlewareNextNotCal
 
   public constructor(args: MiddlewareNextNotCalledErrorArgs) {
     const { name, operation, ...options } = args;
-    const meta: MiddlewareNextNotCalledErrorMeta = { name, operation };
+    const meta: MiddlewareNextNotCalledErrorMeta = {
+      name,
+      operation,
+    };
     super(
       meta,
-      ({ name, operation }) => `Middleware "${name}" did not call next() for ${operation}.`,
+      ({ name: messageName, operation: messageOperation }) =>
+        `Middleware "${messageName}" did not call next() for ${messageOperation}.`,
       options,
     );
   }
@@ -544,10 +545,14 @@ export class MiddlewareNextNotAwaitedError extends ErrorBase<MiddlewareNextNotAw
 
   public constructor(args: MiddlewareNextNotAwaitedErrorArgs) {
     const { name, operation, ...options } = args;
-    const meta: MiddlewareNextNotAwaitedErrorMeta = { name, operation };
+    const meta: MiddlewareNextNotAwaitedErrorMeta = {
+      name,
+      operation,
+    };
     super(
       meta,
-      ({ name, operation }) => `Middleware "${name}" did not await next() for ${operation}.`,
+      ({ name: messageName, operation: messageOperation }) =>
+        `Middleware "${messageName}" did not await next() for ${messageOperation}.`,
       options,
     );
   }
@@ -591,11 +596,14 @@ export class MiddlewareNextCalledMultipleTimesError extends ErrorBase<Middleware
 
   public constructor(args: MiddlewareNextCalledMultipleTimesErrorArgs) {
     const { name, operation, ...options } = args;
-    const meta: MiddlewareNextCalledMultipleTimesErrorMeta = { name, operation };
+    const meta: MiddlewareNextCalledMultipleTimesErrorMeta = {
+      name,
+      operation,
+    };
     super(
       meta,
-      ({ name, operation }) =>
-        `Middleware "${name}" called next() multiple times for ${operation}.`,
+      ({ name: messageName, operation: messageOperation }) =>
+        `Middleware "${messageName}" called next() multiple times for ${messageOperation}.`,
       options,
     );
   }
@@ -634,7 +642,11 @@ export class StreamEncodingNotSupportedError extends ErrorBase<StreamEncodingNot
   public constructor(args: StreamEncodingNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: StreamEncodingNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Middleware "${name}" does not support stream encoding.`, options);
+    super(
+      meta,
+      ({ name: messageName }) => `Middleware "${messageName}" does not support stream encoding.`,
+      options,
+    );
   }
 }
 
@@ -671,7 +683,11 @@ export class StreamDecodingNotSupportedError extends ErrorBase<StreamDecodingNot
   public constructor(args: StreamDecodingNotSupportedErrorArgs) {
     const { name, ...options } = args;
     const meta: StreamDecodingNotSupportedErrorMeta = { name };
-    super(meta, ({ name }) => `Middleware "${name}" does not support decodable stream`, options);
+    super(
+      meta,
+      ({ name: messageName }) => `Middleware "${messageName}" does not support decodable stream`,
+      options,
+    );
   }
 }
 
@@ -681,11 +697,11 @@ setErrorMessage(
   "ja",
 );
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// ストレージ / ミドルウェア
+// ストレージ / ミドルウェア。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -768,6 +784,17 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
 };
 
 /**
+ * プラグイン種別を正規化します。
+ *
+ * @param plugin 種別名です。
+ *
+ * @returns 正規化された種別を返します。
+ */
+function normalizePlugin(plugin: string): "storage" | "middleware" {
+  return plugin as "storage" | "middleware";
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
 export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggregateErrorMeta> {
@@ -776,9 +803,7 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
   }
 
   public constructor(args: PluginOperationAggregateErrorArgs) {
-    const { plugin, action, errors, ...options } = args;
-    // 個々のエラーで種別が指定されていない場合は、既定の種別で補完します。
-    const normalizePlugin = (p: string): "storage" | "middleware" => p as "storage" | "middleware";
+    const { action, errors, plugin, ...options } = args;
     const normalizedErrors = errors.map((error) => ({
       plugin: normalizePlugin((error.plugin ?? plugin ?? "") as string),
       ...(error.name !== undefined ? { name: error.name } : {}),
@@ -786,14 +811,16 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
       reason: error.reason,
     }));
     const plugins = [...new Set(normalizedErrors.map((error) => error.plugin))];
+    const [onlyPlugin] = plugins;
     const meta: PluginOperationAggregateErrorMeta = {
-      plugin: plugins.length === 1 ? plugins[0]! : "plugin",
       action,
       errors: normalizedErrors,
+      plugin: plugins.length === 1 && onlyPlugin !== undefined ? onlyPlugin : "plugin",
     };
     super(
       meta,
-      ({ action, errors, plugin }) => `${errors.length} ${plugin}(s) fail ${action} operation`,
+      ({ action: messageAction, errors: messageErrors, plugin: messagePlugin }) =>
+        `${messageErrors.length} ${messagePlugin}(s) fail ${messageAction} operation`,
       options,
     );
   }
@@ -802,15 +829,21 @@ export class PluginOperationAggregateError extends ErrorBase<PluginOperationAggr
 setErrorMessage(
   PluginOperationAggregateError,
   ({ action, errors, plugin }) =>
-    `${errors.length} 個の${{ plugin: "プラグイン", storage: "ストレージ", middleware: "ミドルウェア" }[plugin]}が ${action} 操作に失敗`,
+    `${errors.length} 個の${
+      {
+        plugin: "プラグイン",
+        storage: "ストレージ",
+        middleware: "ミドルウェア",
+      }[plugin]
+    }が ${action} 操作に失敗`,
   "ja",
 );
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// その他
+// その他。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)

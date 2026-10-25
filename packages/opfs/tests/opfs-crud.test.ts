@@ -1,18 +1,18 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
 import { InvalidFilenameError } from "@unikvs/utils";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import Opfs from "../src/opfs.js";
-import { removeRoot, test, uniqueRoot } from "./_helpers.js";
+import { test, removeRoot, uniqueRoot } from "./_helpers.js";
 
 const { signal } = new AbortController();
 
@@ -83,24 +83,24 @@ const INVALID_KEY_OPERATIONS: readonly (readonly [string, (storage: Opfs) => Pro
         ),
     ],
   ];
-
 describe("CRUD の振る舞い", () => {
   test("同じキーへ上書きしたとき、最新の内容だけが読み取れる", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const key = "overwrite.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1, 2, 3]),
     );
 
-    // 実行
+    // 実行：
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([9]),
     );
+
     const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(loaded).toStrictEqual(new Uint8Array([9]));
   });
 
@@ -108,14 +108,14 @@ describe("CRUD の振る舞い", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const entries: readonly (readonly [string, readonly number[]])[] = [
       ["a.bin", [1]],
       ["b.bin", [2, 2]],
       ["c.bin", [3, 3, 3]],
     ];
 
-    // 実行
+    // 実行：
     for (const [key, bytes] of entries) {
       await storage.write(
         createSetContext(key, { signal }) as IStorage.WriteContext,
@@ -123,7 +123,7 @@ describe("CRUD の振る舞い", () => {
       );
     }
 
-    // 検証
+    // 検証：
     for (const [key, bytes] of entries) {
       expect(
         await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -132,7 +132,7 @@ describe("CRUD の振る舞い", () => {
   });
 
   test("キーを削除したとき、他のキーは影響を受けない", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     await storage.write(
       createSetContext("keep.bin", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
@@ -142,10 +142,10 @@ describe("CRUD の振る舞い", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await storage.delete(createDeleteContext("remove.bin", { signal }) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     expect(
       await storage.exists(createHasContext("remove.bin", { signal }) as IStorage.ExistsContext),
     ).toBe(false);
@@ -158,38 +158,39 @@ describe("CRUD の振る舞い", () => {
     expect,
     storage,
   }) => {
-    // 実行
+    // 実行：
     const error = await storage
       .delete(createDeleteContext("missing.bin", { signal }) as IStorage.DeleteContext)
       .catch((ex: unknown) => ex);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect((error as DOMException).name).toBe("NotFoundError");
   });
 
   test("Unicode のキーを指定したとき、正しく読み書きできる", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const key = "日本語-テスト.bin";
     const data = new Uint8Array([10, 20, 30]);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
     const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-    // 検証
+    // 検証：
     expect(loaded).toStrictEqual(data);
+
     expect(await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
       true,
     );
   });
 });
-
 describe("一括削除 (Clear) の振る舞い", () => {
   test("サブディレクトリールートで clear したとき、消去後に再書き込みできる", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const root = crypto.randomUUID();
     const storage = new Opfs(root);
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
@@ -202,10 +203,10 @@ describe("一括削除 (Clear) の振る舞い", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     expect(
       await storage.exists(createHasContext("a.bin", { signal }) as IStorage.ExistsContext),
     ).toBe(false);
@@ -213,7 +214,6 @@ describe("一括削除 (Clear) の振る舞い", () => {
       await storage.exists(createHasContext("b.bin", { signal }) as IStorage.ExistsContext),
     ).toBe(false);
     expect(storage.isOpen).toBe(true);
-
     await storage.write(
       createSetContext("c.bin", { signal }) as IStorage.WriteContext,
       new Uint8Array([3]),
@@ -221,14 +221,13 @@ describe("一括削除 (Clear) の振る舞い", () => {
     expect(
       await storage.read(createGetContext("c.bin", { signal }) as IStorage.ReadContext),
     ).toStrictEqual(new Uint8Array([3]));
-
     await removeRoot(root);
   });
 
   test("ネストしたルートで clear したとき、兄弟ディレクトリーのデータに影響しない", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const base = uniqueRoot();
     const target = new Opfs(`${base}/target`);
     const sibling = new Opfs(`${base}/sibling`);
@@ -243,10 +242,10 @@ describe("一括削除 (Clear) の振る舞い", () => {
       new Uint8Array([2]),
     );
 
-    // 実行
+    // 実行：
     await target.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     expect(
       await target.exists(createHasContext("target.bin", { signal }) as IStorage.ExistsContext),
     ).toBe(false);
@@ -256,20 +255,21 @@ describe("一括削除 (Clear) の振る舞い", () => {
     expect(
       await sibling.read(createGetContext("sibling.bin", { signal }) as IStorage.ReadContext),
     ).toStrictEqual(new Uint8Array([2]));
-
     await removeRoot(base);
   });
 
   test("ルート直下で clear したとき、すべてのデータが消去されて再書き込みできる", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const storage = new Opfs("");
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
     const keys = Array.from(
       { length: 5 },
       (_, index) => `clear-${index}-${crypto.randomUUID()}.bin`,
     );
+
     for (const key of keys) {
       await storage.write(
         createSetContext(key, { signal }) as IStorage.WriteContext,
@@ -277,10 +277,10 @@ describe("一括削除 (Clear) の振る舞い", () => {
       );
     }
 
-    // 実行
+    // 実行：
     await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     for (const key of keys) {
       expect(
         await storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
@@ -295,37 +295,34 @@ describe("一括削除 (Clear) の振る舞い", () => {
     expect(
       await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).toStrictEqual(new Uint8Array([2]));
-
     await storage.delete(createDeleteContext(key, { signal }) as IStorage.DeleteContext);
   });
 });
-
 describe("データ完全性の振る舞い", () => {
   for (const [label, data, key] of INTEGRITY_CASES) {
     test(`${label} を書き込んだとき、バイト単位で同じ内容が読み取れる`, async ({
       expect,
       storage,
     }) => {
-      // 実行
+      // 実行：
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
       const loaded = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-      // 検証
+      // 検証：
       expect(loaded).toStrictEqual(data);
     });
   }
 });
-
 describe("キー検証の振る舞い", () => {
   for (const [label, operation] of INVALID_KEY_OPERATIONS) {
     test(`無効なキーで ${label} を呼び出したとき、InvalidFilenameError を投げる`, async ({
       expect,
       storage,
     }) => {
-      // 実行
+      // 実行：
       const error = await operation(storage).catch((ex: unknown) => ex);
 
-      // 検証
+      // 検証：
       expect(error).toBeInstanceOf(InvalidFilenameError);
     });
   }
@@ -335,26 +332,26 @@ describe("キー検証の振る舞い", () => {
       expect,
       storage,
     }) => {
-      // 実行
+      // 実行：
       const error = await storage
         .exists(createHasContext(key, { signal }) as IStorage.ExistsContext)
         .catch((ex: unknown) => ex);
 
-      // 検証
+      // 検証：
       expect(error).toBeInstanceOf(InvalidFilenameError);
     });
   }
 
   test("開いていないストレージでも、無効なキーなら検証エラーが発生する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new Opfs(uniqueRoot());
 
-    // 実行
+    // 実行：
     const error = await storage
       .write(createSetContext(INVALID_KEY, { signal }) as IStorage.WriteContext, new Uint8Array())
       .catch((ex: unknown) => ex);
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidFilenameError);
     expect(storage.isOpen).toBe(false);
   });

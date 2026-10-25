@@ -1,10 +1,10 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import {
   InvalidChunkTypeError,
-  InvalidMaxEntriesError,
   InvalidNamespaceError,
+  InvalidMaxEntriesError,
   InvalidTtlSecondsError,
 } from "./errors.js";
 
@@ -18,8 +18,8 @@ import {
 export type VercelRuntimeCacheBackend = {
   get(key: string): unknown;
   set(key: string, value: unknown, options?: { ttlSeconds?: number }): unknown;
-  delete(key: string): unknown;
   clear?(): unknown;
+  delete(key: string): unknown;
 };
 
 /**
@@ -61,8 +61,7 @@ export type VercelRuntimeCacheOptions = {
   /**
    * 使用するバックエンドです。
    *
-   * 未指定のときは Vercel のランタイムキャッシュを自動検出し、
-   * 見つからなければプロセス内の `Map` にフォールバックします。
+   * 未指定のときは Vercel のランタイムキャッシュを自動検出し、見つからなければプロセス内の `Map` にフォールバックします。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
    */
@@ -96,6 +95,8 @@ function detectVercelRuntimeCache(): VercelRuntimeCacheBackend | undefined {
     g["vercel"]?.["runtimeCache"],
     g["vercel"]?.["cache"],
   ];
+  let backend: VercelRuntimeCacheBackend | undefined = undefined;
+
   for (const candidate of candidates) {
     if (
       candidate !== null &&
@@ -104,18 +105,19 @@ function detectVercelRuntimeCache(): VercelRuntimeCacheBackend | undefined {
       typeof (candidate as VercelRuntimeCacheBackend).set === "function" &&
       typeof (candidate as VercelRuntimeCacheBackend).delete === "function"
     ) {
-      return candidate as VercelRuntimeCacheBackend;
+      backend = candidate as VercelRuntimeCacheBackend;
+
+      break;
     }
   }
 
-  return undefined;
+  return backend;
 }
 
 /**
  * Vercel Runtime Cache を使うストレージです。
  *
- * Vercel のランタイムキャッシュが検出できればそれを使い、
- * 見つからなければプロセス内の `Map` にフォールバックします。
+ * Vercel のランタイムキャッシュが検出できればそれを使い、見つからなければプロセス内の `Map` にフォールバックします。
  * どちらの場合も TTL と最大件数による追い出しを行います。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#usage)
@@ -164,13 +166,14 @@ export default class VercelRuntimeCache implements IStorage {
    */
   public constructor(options: VercelRuntimeCacheOptions = {}) {
     const {
-      ttlSeconds = DEFAULT_TTL_SECONDS,
-      maxEntries,
-      namespace = "",
-      clone = (value) => structuredClone(value),
+      now = (): number => Date.now(),
+      clone = <T>(value: T): T => structuredClone(value),
       backend,
-      now = () => Date.now(),
+      namespace = "",
+      maxEntries,
+      ttlSeconds = DEFAULT_TTL_SECONDS,
     } = options;
+
     if (typeof ttlSeconds !== "number" || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
       throw new InvalidTtlSecondsError({ actual: ttlSeconds });
     }
@@ -212,6 +215,7 @@ export default class VercelRuntimeCache implements IStorage {
    */
   public get size(): number {
     this.#purgeExpiredFallback();
+
     return this.#fallback.size;
   }
 
@@ -221,10 +225,12 @@ export default class VercelRuntimeCache implements IStorage {
 
   public async open(c: IStorage.OpenContext): Promise<void> {
     throwIfAborted(c.signal);
+    await Promise.resolve();
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
     throwIfAborted(c.signal);
+    await Promise.resolve();
   }
 
   #storageKey(key: string): string {
@@ -260,7 +266,8 @@ export default class VercelRuntimeCache implements IStorage {
     }
 
     while (this.#fallback.size > this.maxEntries) {
-      const oldest = this.#fallback.keys().next().value as string | undefined;
+      const oldest = this.#fallback.keys().next().value;
+
       if (oldest === undefined) {
         break;
       }
@@ -276,6 +283,7 @@ export default class VercelRuntimeCache implements IStorage {
   #readFallback(key: string): unknown {
     const storedKey = this.#storageKey(key);
     const entry = this.#fallback.get(storedKey);
+
     if (entry === undefined) {
       throw new KeyNotFoundError({ key });
     }
@@ -286,9 +294,11 @@ export default class VercelRuntimeCache implements IStorage {
     }
 
     this.#touchFallback(storedKey);
+
     return this.#clone(entry.value);
   }
 
+  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     throwIfAborted(c.signal);
     const storedValue = this.#clone(data);
@@ -296,21 +306,30 @@ export default class VercelRuntimeCache implements IStorage {
 
     if (this.#backend !== undefined) {
       const storedKey = this.#storageKey(c.key);
-      const envelope: CacheEntry = { value: storedValue, expiresAt };
+      const envelope: CacheEntry = {
+        value: storedValue,
+        expiresAt,
+      };
       await this.#backend.set(storedKey, envelope, { ttlSeconds: this.ttlSeconds });
       this.#backendKeys.add(storedKey);
+
       return;
     }
 
     const storedKey = this.#storageKey(c.key);
+
     if (this.#fallback.has(storedKey)) {
       this.#fallback.delete(storedKey);
     }
 
-    this.#fallback.set(storedKey, { value: storedValue, expiresAt });
+    this.#fallback.set(storedKey, {
+      value: storedValue,
+      expiresAt,
+    });
 
     if (this.maxEntries === 0) {
       this.#fallback.delete(storedKey);
+
       return;
     }
 
@@ -324,11 +343,13 @@ export default class VercelRuntimeCache implements IStorage {
       using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
       const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+
       if (raw === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
       const entry = raw as CacheEntry;
+
       if (
         entry === null ||
         typeof entry !== "object" ||
@@ -356,11 +377,13 @@ export default class VercelRuntimeCache implements IStorage {
       using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
       const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+
       if (raw === undefined) {
         return false;
       }
 
       const entry = raw as CacheEntry;
+
       if (
         entry === null ||
         typeof entry !== "object" ||
@@ -372,6 +395,7 @@ export default class VercelRuntimeCache implements IStorage {
       if (this.#isExpired(entry)) {
         await this.#backend.delete(storedKey);
         this.#backendKeys.delete(storedKey);
+
         return false;
       }
 
@@ -380,12 +404,14 @@ export default class VercelRuntimeCache implements IStorage {
 
     const storedKey = this.#storageKey(c.key);
     const entry = this.#fallback.get(storedKey);
+
     if (entry === undefined) {
       return false;
     }
 
     if (this.#isExpired(entry)) {
       this.#fallback.delete(storedKey);
+
       return false;
     }
 
@@ -399,11 +425,13 @@ export default class VercelRuntimeCache implements IStorage {
       using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
       const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+
       if (raw === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
       const entry = raw as CacheEntry;
+
       if (
         entry !== null &&
         typeof entry === "object" &&
@@ -417,11 +445,13 @@ export default class VercelRuntimeCache implements IStorage {
 
       await this.#backend.delete(storedKey);
       this.#backendKeys.delete(storedKey);
+
       return;
     }
 
     const storedKey = this.#storageKey(c.key);
     const entry = this.#fallback.get(storedKey);
+
     if (entry === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -441,6 +471,7 @@ export default class VercelRuntimeCache implements IStorage {
       if (typeof this.#backend.clear === "function") {
         await this.#backend.clear();
         this.#backendKeys.clear();
+
         return;
       }
 
@@ -460,25 +491,29 @@ export default class VercelRuntimeCache implements IStorage {
     throwIfAborted(c.signal);
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
-      write: (chunk) => {
-        throwIfAborted(c.signal);
-
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(this.#clone(chunk));
-      },
-      close: async () => {
+      close: async (): Promise<void> => {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
         let offset = 0;
+
         for (const chunk of chunks) {
           merged.set(chunk, offset);
           offset += chunk.byteLength;
         }
 
-        await this.write(c as IStorage.WriteContext, merged);
+        await this.write(c, merged);
+      },
+      write: (chunk): void => {
+        throwIfAborted(c.signal);
+
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(this.#clone(chunk));
       },
     });
 
@@ -491,9 +526,12 @@ export default class VercelRuntimeCache implements IStorage {
     throwIfAborted(c.signal);
     const value = await this.read(c as unknown as IStorage.ReadContext);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
-      pull: (controller) => {
+      pull: (controller): void => {
         if (!(value instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk: value });
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk: value,
+          });
         }
 
         controller.enqueue(this.#clone(value) as Uint8Array<ArrayBuffer>);

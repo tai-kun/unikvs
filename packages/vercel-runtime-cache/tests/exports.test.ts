@@ -1,12 +1,13 @@
 import { KeyNotFoundError as CoreKeyNotFoundError } from "@unikvs/core";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
+// oxlint-disable import/no-namespace
 import {
-  InvalidChunkTypeError,
-  InvalidMaxEntriesError,
-  InvalidNamespaceError,
-  InvalidTtlSecondsError,
   KeyNotFoundError,
+  InvalidChunkTypeError,
+  InvalidNamespaceError,
+  InvalidMaxEntriesError,
+  InvalidTtlSecondsError,
 } from "../src/errors.js";
 import * as index from "../src/index.js";
 import VercelRuntimeCache from "../src/vercel-runtime-cache.js";

@@ -1,17 +1,17 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  captureRejection,
   captureThrown,
-  createCloseContext,
-  createDeleteContext,
+  captureRejection,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
-  createStreamContext,
+  createOpenContext,
   createClearContext,
+  createCloseContext,
+  createDeleteContext,
+  createStreamContext,
 } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
 import { InvalidSizeOfResultError } from "../src/errors.js";
 import LruCache from "../src/lru-cache.js";
@@ -21,99 +21,121 @@ import LruCache from "../src/lru-cache.js";
  * sizeOf の検証と、例外時に値が変わらないことの保証を検証するために使用します。
  */
 const test = vitest.extend<{ storage: LruCache }>({
-  // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     const storage = new LruCache({ maxBytes: 10 });
     await storage.open(createOpenContext() as IStorage.OpenContext);
     await use(storage);
   },
 });
-
 describe("sizeOf の検証", () => {
   test("数値以外を返したとき、InvalidSizeOfResultError を投げる", async ({
     expect,
     signal,
     storage,
   }) => {
-    // 準備
-    const bad = new LruCache({ maxBytes: 10, sizeOf: () => "1" as unknown as number });
+    // 準備：
+    const bad = new LruCache({
+      sizeOf: (): number => "1" as unknown as number,
+      maxBytes: 10,
+    });
     await bad.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
-    const error = captureThrown(() =>
-      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1"),
-    );
+    // 実行：
+    const error = captureThrown(() => {
+      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
-    expect((error as InvalidSizeOfResultError).meta).toStrictEqual({ key: "k1", actual: "1" });
+    expect((error as InvalidSizeOfResultError).meta).toStrictEqual({
+      key: "k1",
+      actual: "1",
+    });
+
     expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("NaN を返したとき、InvalidSizeOfResultError を投げる", async ({ expect, signal }) => {
-    // 準備
-    const bad = new LruCache({ maxBytes: 10, sizeOf: () => Number.NaN });
+    // 準備：
+    const bad = new LruCache({
+      sizeOf: (): number => Number.NaN,
+      maxBytes: 10,
+    });
     await bad.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
-    const error = captureThrown(() =>
-      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1"),
-    );
+    // 実行：
+    const error = captureThrown(() => {
+      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
+
     expect(bad.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("無限大を返したとき、InvalidSizeOfResultError を投げる", async ({ expect, signal }) => {
-    // 準備
-    const bad = new LruCache({ maxBytes: 10, sizeOf: () => Number.POSITIVE_INFINITY });
+    // 準備：
+    const bad = new LruCache({
+      sizeOf: (): number => Number.POSITIVE_INFINITY,
+      maxBytes: 10,
+    });
     await bad.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
-    const error = captureThrown(() =>
-      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1"),
-    );
+    // 実行：
+    const error = captureThrown(() => {
+      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
   });
 
   test("負数を返したとき、InvalidSizeOfResultError を投げる", async ({ expect, signal }) => {
-    // 準備
-    const bad = new LruCache({ maxBytes: 10, sizeOf: () => -1 });
+    // 準備：
+    const bad = new LruCache({
+      sizeOf: (): number => -1,
+      maxBytes: 10,
+    });
     await bad.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
-    const error = captureThrown(() =>
-      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1"),
-    );
+    // 実行：
+    const error = captureThrown(() => {
+      bad.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
-    expect((error as InvalidSizeOfResultError).meta).toStrictEqual({ key: "k1", actual: -1 });
+    expect((error as InvalidSizeOfResultError).meta).toStrictEqual({
+      key: "k1",
+      actual: -1,
+    });
   });
 
   test("検証失敗時に既存の値は残る", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     let bad = false;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (bad) {
           return -1;
         }
+
         return 1;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "old");
     bad = true;
 
-    // 実行
-    captureThrown(() => storage.write(createSetContext("k1") as IStorage.WriteContext, "new"));
+    // 実行：
+    captureThrown(() => {
+      storage.write(createSetContext("k1") as IStorage.WriteContext, "new");
+    });
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("old");
     expect(storage.bytes).toBe(1);
   });
@@ -122,73 +144,79 @@ describe("sizeOf の検証", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
         throw new Error("sizeOf failed");
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
-    const error = captureThrown(() =>
-      storage.write(createSetContext("k1") as IStorage.WriteContext, "v1"),
-    );
+    // 実行：
+    const error = captureThrown(() => {
+      storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    });
 
-    // 検証
+    // 検証：
     expect((error as Error).message).toBe("sizeOf failed");
+
     expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
   });
 
   test("-0 を返したとき、0 相当として受理される", async ({ expect, signal }) => {
-    // 準備
-    const storage = new LruCache({ maxBytes: 10, sizeOf: () => -0 });
+    // 準備：
+    const storage = new LruCache({
+      sizeOf: (): number => -0,
+      maxBytes: 10,
+    });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
     expect(storage.bytes).toBe(0);
   });
 
   test("maxBytes 未設定時は sizeOf を呼ばない", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     let calls = 0;
     const storage = new LruCache({
-      sizeOf: () => {
+      sizeOf: (): number => {
         calls += 1;
+
         return 1;
       },
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(calls).toBe(0);
   });
 
   test("上書き時も毎回 sizeOf を呼ぶ", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     let calls = 0;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
         calls += 1;
+
         return 1;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v2");
 
-    // 検証
+    // 検証：
     expect(calls).toBe(2);
   });
 
@@ -196,26 +224,30 @@ describe("sizeOf の検証", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     let calls = 0;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
         calls += 1;
+
         return 2;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
     const writer = storage
       .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
       .getWriter();
 
-    // 実行
+    // 実行：
     await writer.write(new Uint8Array([1, 2]));
+
     const callsBeforeClose = calls;
+
     await writer.close();
 
-    // 検証
+    // 検証：
     expect(callsBeforeClose).toBe(0);
     expect(calls).toBe(1);
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toStrictEqual(
@@ -224,49 +256,51 @@ describe("sizeOf の検証", () => {
   });
 
   test("read・exists・getReadable では sizeOf を呼ばない", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     let calls = 0;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
         calls += 1;
+
         return 1;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     calls = 0;
 
-    // 実行
+    // 実行：
     storage.read(createGetContext("k1") as IStorage.ReadContext);
     storage.exists(createHasContext("k1") as IStorage.ExistsContext);
     storage.getReadable(createStreamContext("k1") as IStorage.GetReadableContext);
 
-    // 検証
+    // 検証：
     expect(calls).toBe(0);
   });
 
   test("delete・clear・ストレージの close では sizeOf を呼ばない", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     let calls = 0;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
         calls += 1;
+
         return 1;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
     storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
     calls = 0;
 
-    // 実行
+    // 実行：
     storage.delete(createDeleteContext("k1") as IStorage.DeleteContext);
     storage.clear(createClearContext() as IStorage.ClearContext);
     await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
 
-    // 検証
+    // 検証：
     expect(calls).toBe(0);
   });
 
@@ -274,19 +308,24 @@ describe("sizeOf の検証", () => {
     expect,
     signal,
   }) => {
-    // 準備
-    const storage = new LruCache({ maxBytes: 10, sizeOf: () => -1 });
+    // 準備：
+    const storage = new LruCache({
+      sizeOf: (): number => -1,
+      maxBytes: 10,
+    });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
     const writer = storage
       .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
-    // 実行
+    // 実行：
     const error = await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidSizeOfResultError);
+
     expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
   });
 
@@ -294,29 +333,32 @@ describe("sizeOf の検証", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     let bad = false;
     const storage = new LruCache({
-      maxBytes: 10,
-      sizeOf: () => {
+      sizeOf: (): number => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         if (bad) {
           return -1;
         }
+
         return 1;
       },
+      maxBytes: 10,
     });
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     storage.write(createSetContext("k1") as IStorage.WriteContext, "old");
     bad = true;
+
     const writer = storage
       .getWritable(createSetContext("k1") as IStorage.GetWritableContext)
       .getWriter();
     await writer.write(new Uint8Array([9]));
 
-    // 実行
+    // 実行：
     await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).toBe("old");
   });
 });

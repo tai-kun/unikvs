@@ -1,14 +1,14 @@
 import type { IStorage } from "@unikvs/core";
 import {
   captureThrown,
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { LocalStorageNotAvailableError } from "../src/errors.js";
 import LocalStorage from "../src/localstorage.js";
@@ -26,39 +26,39 @@ function withoutBackend(fn: () => void): void {
 
 describe("SSR・非ブラウザー環境", () => {
   test("コンストラクターは backend 不在でも throw しない", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     withoutBackend(() => {
       expect(() => new LocalStorage()).not.toThrow();
     });
   });
 
   test("注入なしの全操作は LocalStorageNotAvailableError を投げる", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     withoutBackend(() => {
       const storage = new LocalStorage();
-      expect(() =>
-        storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v"),
-      ).toThrow(LocalStorageNotAvailableError);
+      expect(() => {
+        storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v");
+      }).toThrow(LocalStorageNotAvailableError);
       expect(() => storage.read(createGetContext("k", { signal }) as IStorage.ReadContext)).toThrow(
         LocalStorageNotAvailableError,
       );
       expect(() =>
         storage.exists(createHasContext("k", { signal }) as IStorage.ExistsContext),
       ).toThrow(LocalStorageNotAvailableError);
-      expect(() =>
-        storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext),
-      ).toThrow(LocalStorageNotAvailableError);
-      expect(() =>
-        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
-      ).toThrow(LocalStorageNotAvailableError);
-      expect(() => storage.open(createOpenContext({ signal }) as IStorage.OpenContext)).toThrow(
-        LocalStorageNotAvailableError,
-      );
+      expect(() => {
+        storage.delete(createDeleteContext("k", { signal }) as IStorage.DeleteContext);
+      }).toThrow(LocalStorageNotAvailableError);
+      expect(() => {
+        storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+      }).toThrow(LocalStorageNotAvailableError);
+      expect(() => {
+        storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+      }).toThrow(LocalStorageNotAvailableError);
     });
   });
 
   test("注入フェイクがあれば backend 不在環境でも CRUD できる", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     withoutBackend(() => {
       const storage = new LocalStorage({ storage: createFakeStorage() });
       storage.write(createSetContext("k", { signal }) as IStorage.WriteContext, "v");
@@ -67,7 +67,7 @@ describe("SSR・非ブラウザー環境", () => {
   });
 
   test("globalThis.localStorage の取得失敗はそのまま伝播する", ({ expect }) => {
-    // 準備
+    // 準備：
     const holder = globalThis as Record<string, unknown>;
     const hadOwn = Object.hasOwn(holder, "localStorage");
     const descriptor = Object.getOwnPropertyDescriptor(holder, "localStorage");
@@ -79,15 +79,16 @@ describe("SSR・非ブラウザー環境", () => {
     });
 
     try {
-      // 実行
+      // 実行：
       const error = captureThrown(() =>
         new LocalStorage().read(createGetContext("k", { signal }) as IStorage.ReadContext),
       );
 
-      // 検証
+      // 検証：
       expect(error).toBeInstanceOf(DOMException);
       expect((error as DOMException).name).toBe("SecurityError");
     } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (hadOwn && descriptor !== undefined) {
         Object.defineProperty(holder, "localStorage", descriptor);
       } else {

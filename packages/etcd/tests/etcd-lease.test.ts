@@ -1,54 +1,60 @@
 import type { IStorage } from "@unikvs/core";
 import {
   collectBytes,
-  createClearContext,
-  createCloseContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createCloseContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, expect, test, vi } from "vitest";
+import { vi, test, expect, describe } from "vite-plus/test";
 
-import { InvalidEndpointsError, InvalidLeaseTtlError, KeyNotFoundError } from "../src/errors.js";
-import Etcd, {
-  type EtcdClientLike,
-  type NativeEtcdClientLike,
-  wrapNativeEtcdClient,
-} from "../src/etcd.js";
+import { KeyNotFoundError, InvalidLeaseTtlError, InvalidEndpointsError } from "../src/errors.js";
+import Etcd, { type EtcdClientLike, wrapNativeEtcdClient } from "../src/etcd.js";
 import { closeStorage, createStorage, FakeEtcdClient } from "./_helpers.js";
 
 const { Etcd3: MockedEtcd3, instances } = vi.hoisted(() => {
-  const instances: { options: unknown; closed: boolean }[] = [];
+  const hoistedInstances: {
+    closed: boolean;
+    options: unknown;
+  }[] = [];
 
-  class MockedEtcd3 {
+  class HoistedMockedEtcd3 {
     public closed = false;
 
     public readonly options: unknown;
 
     public constructor(options?: unknown) {
       this.options = options;
-      instances.push({ options, closed: false });
+      hoistedInstances.push({
+        closed: false,
+        options,
+      });
     }
 
     public close(): void {
       this.closed = true;
-      const record = instances.find((instance) => instance.options === this.options);
+      const record = hoistedInstances.find((instance) => instance.options === this.options);
+
       if (record !== undefined) {
         record.closed = true;
       }
     }
   }
 
-  return { Etcd3: MockedEtcd3, instances };
+  return {
+    Etcd3: HoistedMockedEtcd3,
+    instances: hoistedInstances,
+  };
 });
-
 vi.mock("etcd3", () => ({ Etcd3: MockedEtcd3 }));
 
 describe("リース (TTL) 付き書き込み", () => {
   test("leaseTtlSeconds を指定すると put に TTL が渡される", async () => {
     const { client, signal, storage } = await createStorage({ leaseTtlSeconds: 60 });
+
     try {
       await storage.write(
         createSetContext("leased.bin", { signal }) as IStorage.WriteContext,
@@ -67,6 +73,7 @@ describe("リース (TTL) 付き書き込み", () => {
 
   test("leaseTtlSeconds 未指定のとき put にオプションは渡されない", async () => {
     const { client, signal, storage } = await createStorage();
+
     try {
       await storage.write(
         createSetContext("plain.bin", { signal }) as IStorage.WriteContext,
@@ -82,6 +89,7 @@ describe("リース (TTL) 付き書き込み", () => {
 
   test("ストリーム書き込みにも TTL が適用される", async () => {
     const { client, signal, storage } = await createStorage({ leaseTtlSeconds: 30 });
+
     try {
       const writable = storage.getWritable(
         createSetContext("stream-leased.bin", { signal }) as IStorage.GetWritableContext,
@@ -125,7 +133,6 @@ describe("エンドポイントの検証", () => {
   test("文字列と配列の endpoints を受け付ける", () => {
     const fromString = new Etcd({ endpoints: "http://127.0.0.1:2379" });
     const fromArray = new Etcd({ endpoints: ["http://127.0.0.1:2379", "http://127.0.0.2:2379"] });
-
     expect(fromString.isOpen).toBe(false);
     expect(fromArray.isOpen).toBe(false);
   });
@@ -142,9 +149,9 @@ describe("値の正規化", () => {
     };
     const storage = new Etcd({ client });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       const signal = new AbortController().signal;
-
       await expect(
         storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
       ).resolves.toStrictEqual(new TextEncoder().encode(text));
@@ -158,16 +165,16 @@ describe("値の正規化", () => {
 
   test("get が undefined を返したときは存在しないものとして扱う", async () => {
     const client: EtcdClientLike = {
-      get: async () => undefined,
+      get: async () => {},
       put: async () => {},
       delete: async () => {},
       getAll: async () => ({}),
     };
     const storage = new Etcd({ client });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       const signal = new AbortController().signal;
-
       await expect(
         storage.read(createGetContext("k", { signal }) as IStorage.ReadContext),
       ).rejects.toThrow(KeyNotFoundError);
@@ -189,8 +196,10 @@ describe("getAll の形状差吸収", () => {
   test("配列形式の getAll でも clear できる", async () => {
     const backing = new Map<string, Buffer>([["p:a", Buffer.from([1])]]);
     const client: EtcdClientLike = {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       get: async (key: string) => backing.get(key) ?? null,
       put: async (key: string, value: Uint8Array | string | Buffer) => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         backing.set(key, typeof value === "string" ? Buffer.from(value) : Buffer.from(value));
       },
       delete: async (key: string) => {
@@ -198,11 +207,14 @@ describe("getAll の形状差吸収", () => {
       },
       getAll: async () => [...backing].map(([key, value]) => [key, Buffer.from(value)] as const),
     };
-    const storage = new Etcd({ client, keyPrefix: "p:" });
+    const storage = new Etcd({
+      client,
+      keyPrefix: "p:",
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       const signal = new AbortController().signal;
-
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       expect(backing.size).toBe(0);
@@ -214,6 +226,7 @@ describe("getAll の形状差吸収", () => {
   test("Record 形式の getAll でも clear できる", async () => {
     const backing = new Map<string, Buffer>([["p:a", Buffer.from([1])]]);
     const client: EtcdClientLike = {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       get: async (key: string) => backing.get(key) ?? null,
       put: async () => {},
       delete: async (key: string) => {
@@ -221,11 +234,14 @@ describe("getAll の形状差吸収", () => {
       },
       getAll: async () => Object.fromEntries(backing),
     };
-    const storage = new Etcd({ client, keyPrefix: "p:" });
+    const storage = new Etcd({
+      client,
+      keyPrefix: "p:",
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       const signal = new AbortController().signal;
-
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       expect(backing.size).toBe(0);
@@ -240,6 +256,7 @@ describe("getAll の形状差吸収", () => {
       ["outside", Buffer.from([9])],
     ]);
     const client: EtcdClientLike = {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       get: async (key: string) => backing.get(key) ?? null,
       put: async () => {},
       delete: async (key: string) => {
@@ -248,11 +265,14 @@ describe("getAll の形状差吸収", () => {
       // 実装差で範囲外が混ざった場合を再現する。
       getAll: async () => new Map(backing),
     };
-    const storage = new Etcd({ client, keyPrefix: "p:" });
+    const storage = new Etcd({
+      client,
+      keyPrefix: "p:",
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       const signal = new AbortController().signal;
-
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
       expect(backing.has("p:inside")).toBe(false);
@@ -269,9 +289,16 @@ describe("getAll の形状差吸収", () => {
 class StubNativeClient {
   readonly store = new Map<string, Buffer>();
 
-  readonly directPuts: { readonly key: string; readonly value: Buffer }[] = [];
+  readonly directPuts: {
+    readonly key: string;
+    readonly value: Buffer;
+  }[] = [];
 
-  readonly leasePuts: { readonly key: string; readonly value: Buffer; readonly ttl: number }[] = [];
+  readonly leasePuts: {
+    readonly key: string;
+    readonly ttl: number;
+    readonly value: Buffer;
+  }[] = [];
 
   leasesCreated = 0;
 
@@ -292,13 +319,14 @@ class StubNativeClient {
   }
 
   public getAll(): {
-    prefix(value: string | Buffer): { buffers(): Promise<{ [key: string]: Buffer }> };
+    prefix(value: string | Buffer): { buffers(): Promise<Record<string, Buffer>> };
   } {
     return {
       prefix: (prefix: string | Buffer) => ({
-        buffers: async (): Promise<{ [key: string]: Buffer }> => {
+        buffers: async (): Promise<Record<string, Buffer>> => {
           const name = prefix.toString();
-          const out: { [key: string]: Buffer } = {};
+          const out: Record<string, Buffer> = {};
+
           for (const [key, value] of this.store) {
             if (key.startsWith(name)) {
               out[key] = value;
@@ -318,7 +346,10 @@ class StubNativeClient {
       value: async (value: string | Buffer): Promise<void> => {
         const data = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
         this.store.set(name, data);
-        this.directPuts.push({ key: name, value: Buffer.from(data) });
+        this.directPuts.push({
+          key: name,
+          value: Buffer.from(data),
+        });
       },
     };
   }
@@ -361,7 +392,11 @@ class StubNativeClient {
           const name = key.toString();
           const data = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
           this.store.set(name, data);
-          this.leasePuts.push({ key: name, value: Buffer.from(data), ttl });
+          this.leasePuts.push({
+            key: name,
+            ttl,
+            value: Buffer.from(data),
+          });
         },
       }),
       release: (): void => {
@@ -378,10 +413,8 @@ class StubNativeClient {
 describe("ネイティブクライアントの適合", () => {
   test("TTL なしの put は直接書き込む", async () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
-
+    const client = wrapNativeEtcdClient(raw);
     await client.put("k", Buffer.from([1, 2]));
-
     expect(raw.directPuts).toHaveLength(1);
     expect(raw.leasesCreated).toBe(0);
     await expect(client.get("k")).resolves.toStrictEqual(Buffer.from([1, 2]));
@@ -389,12 +422,10 @@ describe("ネイティブクライアントの適合", () => {
 
   test("TTL 付きの put はリース経由で書き込み、リースを使い回す", async () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike, 60);
-
+    const client = wrapNativeEtcdClient(raw, 60);
     await client.put("a", Buffer.from([1]));
     await client.put("a2", Buffer.from([2]));
     await client.put("b", Buffer.from([3]), { leaseTtlSeconds: 10 });
-
     expect(raw.leasesCreated).toBe(2);
     expect(raw.leasePuts.map(({ ttl }) => ttl)).toStrictEqual([60, 60, 10]);
     await expect(client.get("a")).resolves.toStrictEqual(Buffer.from([1]));
@@ -402,17 +433,14 @@ describe("ネイティブクライアントの適合", () => {
 
   test("文字列値も Buffer に変換して書き込む", async () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
-
+    const client = wrapNativeEtcdClient(raw);
     await client.put("s", "hello");
-
     await expect(client.get("s")).resolves.toStrictEqual(Buffer.from("hello"));
   });
 
   test("存在しないキーの get は null を返す", async () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
-
+    const client = wrapNativeEtcdClient(raw);
     await expect(client.get("missing")).resolves.toBeNull();
   });
 
@@ -420,8 +448,8 @@ describe("ネイティブクライアントの適合", () => {
     const raw = new StubNativeClient();
     raw.store.set("p:a", Buffer.from([1]));
     raw.store.set("other", Buffer.from([2]));
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
 
+    const client = wrapNativeEtcdClient(raw);
     await expect(client.getAll("p:")).resolves.toStrictEqual({ "p:a": Buffer.from([1]) });
   });
 
@@ -429,9 +457,10 @@ describe("ネイティブクライアントの適合", () => {
     const raw = new StubNativeClient();
     raw.store.set("p:a", Buffer.from([1]));
     raw.store.set("p:b", Buffer.from([2]));
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
 
+    const client = wrapNativeEtcdClient(raw);
     await client.delete("p:a");
+
     expect(raw.store.has("p:a")).toBe(false);
 
     await client.deletePrefix?.("p:");
@@ -440,22 +469,18 @@ describe("ネイティブクライアントの適合", () => {
 
   test("close はリースを解放してクライアントを閉じる", async () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike, 60);
-
+    const client = wrapNativeEtcdClient(raw, 60);
     await client.put("a", Buffer.from([1]));
     await client.put("b", Buffer.from([2]), { leaseTtlSeconds: 10 });
     client.close();
-
     expect(raw.releasedLeases).toBe(2);
     expect(raw.closed).toBe(true);
   });
 
   test("close はリースなしでもクライアントを閉じる", () => {
     const raw = new StubNativeClient();
-    const client = wrapNativeEtcdClient(raw as unknown as NativeEtcdClientLike);
-
+    const client = wrapNativeEtcdClient(raw);
     client.close();
-
     expect(raw.releasedLeases).toBe(0);
     expect(raw.closed).toBe(true);
   });
@@ -465,10 +490,10 @@ describe("open の接続先解決", () => {
   test("未指定のときは既定のエンドポイントで接続する", async () => {
     const storage = new Etcd();
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       expect(storage.isOpen).toBe(true);
-      const latest = instances[instances.length - 1];
-
+      const latest = instances.at(-1);
       expect(latest?.options).toStrictEqual({ hosts: ["http://127.0.0.1:2379"] });
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
@@ -478,9 +503,9 @@ describe("open の接続先解決", () => {
   test("文字列の endpoints を配列化して渡す", async () => {
     const storage = new Etcd({ endpoints: "http://etcd:2379" });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-    try {
-      const latest = instances[instances.length - 1];
 
+    try {
+      const latest = instances.at(-1);
       expect(latest?.options).toStrictEqual({ hosts: ["http://etcd:2379"] });
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
@@ -491,9 +516,9 @@ describe("open の接続先解決", () => {
     const endpoints = ["http://a:2379", "http://b:2379"] as const;
     const storage = new Etcd({ endpoints });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-    try {
-      const latest = instances[instances.length - 1];
 
+    try {
+      const latest = instances.at(-1);
       expect(latest?.options).toStrictEqual({ hosts: [...endpoints] });
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
@@ -504,8 +529,12 @@ describe("open の接続先解決", () => {
     const constructed = instances.length;
     const client = new FakeEtcdClient();
     // endpoints は使われないため、到達不能な値を渡しても接続しない。
-    const storage = new Etcd({ client, endpoints: "http://ignored.invalid:2379" });
+    const storage = new Etcd({
+      client,
+      endpoints: "http://ignored.invalid:2379",
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
+
     try {
       await storage.write(
         createSetContext("injected.bin", {
@@ -524,11 +553,11 @@ describe("open の接続先解決", () => {
   test("close はネイティブクライアントを閉じる", async () => {
     const storage = new Etcd();
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await storage.close(createCloseContext() as IStorage.CloseContext);
 
-    const latest = instances[instances.length - 1];
+    const latest = instances.at(-1);
     expect(latest?.closed).toBe(true);
+
     expect(storage.isOpen).toBe(false);
   });
 
@@ -537,9 +566,9 @@ describe("open の接続先解決", () => {
     try {
       const storage = new Etcd();
       await storage.open(createOpenContext() as IStorage.OpenContext);
-      try {
-        const latest = instances[instances.length - 1];
 
+      try {
+        const latest = instances.at(-1);
         expect(latest?.options).toStrictEqual({ hosts: ["http://a:2379", "http://b:2379"] });
       } finally {
         await storage.close(createCloseContext() as IStorage.CloseContext);

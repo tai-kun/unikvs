@@ -1,19 +1,19 @@
 import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
-  collectBytes,
   concatBytes,
-  createAllByteValues,
-  createClearContext,
-  createCloseContext,
-  createDeleteContext,
+  collectBytes,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createClearContext,
+  createCloseContext,
+  createAllByteValues,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import Valkey from "../src/valkey.js";
@@ -31,7 +31,7 @@ function randomKeyPrefix(): string {
 
 describeLive("ライブサーバー (CRUD)", () => {
   test("データが byte-for-byte で往復する", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new Valkey(url, { keyPrefix: randomKeyPrefix() });
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
@@ -39,11 +39,12 @@ describeLive("ライブサーバー (CRUD)", () => {
       const key = "live-roundtrip.bin";
       const data = createAllByteValues(4096);
 
-      // 実行
+      // 実行：
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
       const result = await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext);
 
-      // 検証
+      // 検証：
       expect(bytesEqual(result, data)).toBe(true);
     } finally {
       await storage.close(createCloseContext() as IStorage.CloseContext);
@@ -51,7 +52,7 @@ describeLive("ライブサーバー (CRUD)", () => {
   });
 
   test("削除と存在確認が期待どおりに動く", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new Valkey(url, { keyPrefix: randomKeyPrefix() });
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
@@ -62,7 +63,7 @@ describeLive("ライブサーバー (CRUD)", () => {
         new Uint8Array([1]),
       );
 
-      // 実行と検証
+      // 実行と検証：
       await expect(
         storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
       ).resolves.toBe(true);
@@ -79,8 +80,11 @@ describeLive("ライブサーバー (CRUD)", () => {
   });
 
   test("ttl を指定したとき、期限切れのキーは読み取れなくなる", async ({ expect, signal }) => {
-    // 準備
-    const storage = new Valkey(url, { keyPrefix: randomKeyPrefix(), ttl: 200 });
+    // 準備：
+    const storage = new Valkey(url, {
+      ttl: 200,
+      keyPrefix: randomKeyPrefix(),
+    });
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
     try {
@@ -90,11 +94,11 @@ describeLive("ライブサーバー (CRUD)", () => {
         new Uint8Array([1, 2, 3]),
       );
 
-      // 実行
+      // 実行：
       // 有効期限 (200ms) を十分に超えるまで待つ。
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // 検証
+      // 検証：
       await expect(
         storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
       ).resolves.toBe(false);
@@ -107,7 +111,7 @@ describeLive("ライブサーバー (CRUD)", () => {
   });
 
   test("clear は自プレフィックスのみを削除する", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const keyPrefix = randomKeyPrefix();
     const storage = new Valkey(url, { keyPrefix });
     await storage.open(createOpenContext() as IStorage.OpenContext);
@@ -122,10 +126,10 @@ describeLive("ライブサーバー (CRUD)", () => {
         new Uint8Array([2]),
       );
 
-      // 実行
+      // 実行：
       await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-      // 検証
+      // 検証：
       await expect(
         storage.exists(createHasContext("a.bin", { signal }) as IStorage.ExistsContext),
       ).resolves.toBe(false);
@@ -140,7 +144,7 @@ describeLive("ライブサーバー (CRUD)", () => {
 
 describeLive("ライブサーバー (ストリーム)", () => {
   test("書き込みストリームの内容が swap-on-close で保存される", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const storage = new Valkey(url, { keyPrefix: randomKeyPrefix() });
     await storage.open(createOpenContext() as IStorage.OpenContext);
 
@@ -152,13 +156,14 @@ describeLive("ライブサーバー (ストリーム)", () => {
         .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
         .getWriter();
 
-      // 実行
+      // 実行：
       for (const chunk of chunks) {
         await writer.write(chunk);
       }
+
       await writer.close();
 
-      // 検証
+      // 検証：
       const readable = storage.getReadable(
         createStreamContext(key, { signal }) as IStorage.GetReadableContext,
       );

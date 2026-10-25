@@ -1,13 +1,13 @@
 import type { IMiddleware } from "@unikvs/core";
-import { expectTypeOf, test } from "vitest";
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
 import Debug, {
-  type DebugDirection,
-  type DebugInfoArgs,
   type DebugOptions,
+  type DebugInfoArgs,
+  type DebugDirection,
+  type IDebugKeyFilter,
   type IDebugActionFilter,
   type IDebugInfoCallback,
-  type IDebugKeyFilter,
 } from "../src/debug.js";
 
 /**
@@ -36,7 +36,6 @@ function expectTypeErrors(): void {
   args.direction = "write";
   // @ts-expect-error key は読み取り専用
   args.key = "k";
-
   void invalidGetDebugInfo;
   void invalidKeyFilter;
   void invalidActionFilter;
@@ -44,60 +43,62 @@ function expectTypeErrors(): void {
   void args;
 }
 
-test("Debug は IMiddleware を実装する", () => {
-  // 実行と検証
-  expectTypeOf<Debug>().toExtend<IMiddleware>();
-});
+describe("Debug の型", () => {
+  test("Debug は IMiddleware を実装する", () => {
+    // 実行と検証：
+    expectTypeOf<Debug>().toExtend<IMiddleware>();
+  });
 
-test("name と isOpen とフィルターとコールバックの型", () => {
-  // 実行と検証
-  expectTypeOf<Debug["name"]>().toEqualTypeOf<string>();
-  expectTypeOf<Debug["isOpen"]>().toEqualTypeOf<boolean>();
-  expectTypeOf<Debug["keyFilter"]>().toEqualTypeOf<IDebugKeyFilter>();
-  expectTypeOf<Debug["actionFilter"]>().toEqualTypeOf<IDebugActionFilter>();
-  expectTypeOf<Debug["getDebugInfo"]>().toEqualTypeOf<IDebugInfoCallback>();
-});
+  test("name と isOpen とフィルターとコールバックの型", () => {
+    // 実行と検証：
+    expectTypeOf<Debug["name"]>().toEqualTypeOf<string>();
+    expectTypeOf<Debug["isOpen"]>().toEqualTypeOf<boolean>();
+    expectTypeOf<Debug["keyFilter"]>().toEqualTypeOf<IDebugKeyFilter>();
+    expectTypeOf<Debug["actionFilter"]>().toEqualTypeOf<IDebugActionFilter>();
+    expectTypeOf<Debug["getDebugInfo"]>().toEqualTypeOf<IDebugInfoCallback>();
+  });
 
-test("DebugDirection は write と read のみを表す", () => {
-  // 実行と検証
-  expectTypeOf<DebugDirection>().toEqualTypeOf<"write" | "read">();
-});
+  test("DebugDirection は write と read のみを表す", () => {
+    // 実行と検証：
+    expectTypeOf<DebugDirection>().toEqualTypeOf<"write" | "read">();
+  });
 
-test("DebugInfoArgs は読み取り専用のプロパティーを持つ", () => {
-  // 実行と検証
-  expectTypeOf<DebugInfoArgs>().toEqualTypeOf<{
-    readonly action: string;
-    readonly data: unknown;
-    readonly direction: DebugDirection;
-    readonly key: string;
-  }>();
-});
+  test("DebugInfoArgs は読み取り専用のプロパティーを持つ", () => {
+    // 実行と検証：
+    expectTypeOf<DebugInfoArgs>().toEqualTypeOf<{
+      readonly key: string;
+      readonly data: unknown;
+      readonly action: string;
+      readonly direction: DebugDirection;
+    }>();
+  });
 
-test("DebugOptions はすべてのオプションを省略できる", () => {
-  // 実行と検証
-  expectTypeOf<DebugOptions>().toEqualTypeOf<{
-    readonly keyFilter?: IDebugKeyFilter | undefined;
-    readonly actionFilter?: IDebugActionFilter | undefined;
-    readonly getDebugInfo?: IDebugInfoCallback | undefined;
-  }>();
-});
+  test("DebugOptions はすべてのオプションを省略できる", () => {
+    // 実行と検証：
+    expectTypeOf<DebugOptions>().toEqualTypeOf<{
+      readonly keyFilter?: IDebugKeyFilter | undefined;
+      readonly actionFilter?: IDebugActionFilter | undefined;
+      readonly getDebugInfo?: IDebugInfoCallback | undefined;
+    }>();
+  });
 
-test("encode と decode とストリームはミドルウェアのコンテキストを受け取る", () => {
-  // 実行と検証
-  expectTypeOf<Debug["encode"]>().parameter(0).toExtend<IMiddleware.EncodeContext>();
-  expectTypeOf<Debug["decode"]>().parameter(0).toExtend<IMiddleware.DecodeContext>();
-  expectTypeOf<Debug["encodeStream"]>().parameter(0).toExtend<IMiddleware.EncodeStreamContext>();
-  expectTypeOf<Debug["decodeStream"]>().parameter(0).toExtend<IMiddleware.DecodeStreamContext>();
-});
+  test("encode と decode とストリームはミドルウェアのコンテキストを受け取る", () => {
+    // 実行と検証：
+    expectTypeOf<Debug["encode"]>().parameter(0).toExtend<IMiddleware.EncodeContext>();
+    expectTypeOf<Debug["decode"]>().parameter(0).toExtend<IMiddleware.DecodeContext>();
+    expectTypeOf<Debug["encodeStream"]>().parameter(0).toExtend<IMiddleware.EncodeStreamContext>();
+    expectTypeOf<Debug["decodeStream"]>().parameter(0).toExtend<IMiddleware.DecodeStreamContext>();
+  });
 
-test("getDefaultDebugInfo は IDebugInfoCallback として利用できる", () => {
-  // 実行と検証
-  expectTypeOf(Debug.getDefaultDebugInfo).toExtend<IDebugInfoCallback>();
-  expectTypeOf(Debug.getDefaultDebugInfo).parameter(0).toEqualTypeOf<DebugInfoArgs>();
-  expectTypeOf(Debug.getDefaultDebugInfo).returns.toEqualTypeOf<Record<string, unknown>>();
-});
+  test("getDefaultDebugInfo は IDebugInfoCallback として利用できる", () => {
+    // 実行と検証：
+    expectTypeOf(Debug.getDefaultDebugInfo).toExtend<IDebugInfoCallback>();
+    expectTypeOf(Debug.getDefaultDebugInfo).parameter(0).toEqualTypeOf<DebugInfoArgs>();
+    expectTypeOf(Debug.getDefaultDebugInfo).returns.toEqualTypeOf<Record<string, unknown>>();
+  });
 
-test("不正な使用はコンパイルエラーになる", () => {
-  // 実行と検証
-  expectTypeOf(expectTypeErrors).toBeFunction();
+  test("不正な使用はコンパイルエラーになる", () => {
+    // 実行と検証：
+    expectTypeOf(expectTypeErrors).toBeFunction();
+  });
 });

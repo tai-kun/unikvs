@@ -1,11 +1,11 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { Client } from "memjs";
 
 import {
   ConnectTimeoutError,
-  InvalidConnectTimeoutError,
   InvalidTtlSecondsError,
+  InvalidConnectTimeoutError,
 } from "./errors.js";
 
 /**
@@ -23,7 +23,10 @@ export type MemcachedGetResultValue = Uint8Array | string | null | undefined;
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#usage)
  */
 export type MemcachedGetResult =
-  | { readonly value: MemcachedGetResultValue; readonly flags?: unknown }
+  | {
+      readonly flags?: unknown;
+      readonly value: MemcachedGetResultValue;
+    }
   | MemcachedGetResultValue;
 
 /**
@@ -39,10 +42,10 @@ export type MemcachedClientLike = {
     value: string | Uint8Array,
     options?: { readonly expires?: number | undefined },
   ) => Promise<unknown>;
-  readonly delete: (key: string) => Promise<unknown>;
-  readonly flush: () => Promise<unknown>;
   readonly quit?: (() => unknown) | undefined;
   readonly close?: (() => unknown) | undefined;
+  readonly flush: () => Promise<unknown>;
+  readonly delete: (key: string) => Promise<unknown>;
 };
 
 /**
@@ -113,7 +116,7 @@ export type MemcachedStorageOptions = {
 };
 
 const DEFAULT_KEY_PREFIX = "unikvs:";
-const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
 const PROBE_KEY = "__unikvs_memcached_probe__";
 
 function resolveServers(
@@ -130,7 +133,7 @@ function resolveServers(
   }
 
   if (host !== undefined || port !== undefined) {
-    return `${host ?? "127.0.0.1"}:${port ?? 11211}`;
+    return `${host ?? "127.0.0.1"}:${port ?? 11_211}`;
   }
 
   return (
@@ -148,7 +151,7 @@ function createClient(servers: string): MemcachedClientLike {
 /**
  * 別名 (`quit`/`close`/`end`、`flush`/`flushAll`、`delete`/`del`) を吸収して呼び出します。
  */
-async function invokeClient(
+function invokeClient(
   client: MemcachedClientLike,
   names: readonly string[],
   key?: string,
@@ -159,13 +162,17 @@ async function invokeClient(
     const fn = record[name];
 
     if (typeof fn === "function") {
-      return key === undefined
-        ? (fn as (this: MemcachedClientLike) => unknown).call(client)
-        : (fn as (this: MemcachedClientLike, key: string) => unknown).call(client, key);
+      return Promise.resolve(
+        key === undefined
+          ? (fn as (this: MemcachedClientLike) => unknown).call(client)
+          : (fn as (this: MemcachedClientLike, key: string) => unknown).call(client, key),
+      );
     }
   }
 
-  throw new TypeError(`Memcached client must implement one of: ${names.join(", ")}.`);
+  return Promise.reject(
+    new TypeError(`Memcached client must implement one of: ${names.join(", ")}.`),
+  );
 }
 
 async function releaseClient(client: MemcachedClientLike): Promise<void> {
@@ -228,12 +235,12 @@ export default class Memcached implements IStorage {
    */
   public constructor(servers?: MemcachedServers, options: MemcachedStorageOptions = {}) {
     const {
-      client,
-      servers: serversOption,
       host,
       port,
-      ttlSeconds = 0,
+      client,
+      servers: serversOption,
       keyPrefix = DEFAULT_KEY_PREFIX,
+      ttlSeconds = 0,
       connectTimeout = DEFAULT_CONNECT_TIMEOUT_MS,
     } = options;
 
@@ -260,6 +267,18 @@ export default class Memcached implements IStorage {
     return this.#con !== null;
   }
 
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): { readonly client: MemcachedClientLike } {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Memcached is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
   public async open(c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -277,6 +296,7 @@ export default class Memcached implements IStorage {
     using abortPromise = toAbortPromise(c.signal);
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     try {
       // `memjs` は遅延接続のため、`get` による疎通確認で接続可否を検証します。
       // 存在しないキーへの `get` は `null` 値で成功するため、読み取り専用で安全です。
@@ -307,7 +327,7 @@ export default class Memcached implements IStorage {
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     // 先行 null 化により、並行 `close` 同士は二重解放になりません。
     this.#con = null;
@@ -320,7 +340,7 @@ export default class Memcached implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -329,7 +349,7 @@ export default class Memcached implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -337,6 +357,7 @@ export default class Memcached implements IStorage {
     const data = normalizeGetResult(
       await Promise.race([client.get(this.#toKey(c.key)), abortPromise]),
     );
+
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -345,7 +366,7 @@ export default class Memcached implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -358,7 +379,7 @@ export default class Memcached implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -366,7 +387,7 @@ export default class Memcached implements IStorage {
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 

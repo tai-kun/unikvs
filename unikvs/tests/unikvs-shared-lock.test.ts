@@ -1,5 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import UniKvs from "../src/unikvs.js";
 import { withTimeout } from "./_helpers.js";
@@ -10,6 +10,7 @@ import { withTimeout } from "./_helpers.js";
  */
 class GatedExistsStorage implements IStorage {
   readonly name = "GatedExistsStorage";
+
   isOpen = true;
 
   readonly map = new Map<string, unknown>();
@@ -17,11 +18,14 @@ class GatedExistsStorage implements IStorage {
   onExistsStart: ((key: string) => void) | undefined;
 
   private gatedKey: string | undefined;
+
   private gatePromise: Promise<void> | undefined;
+
   private releaseGate: (() => void) | undefined;
 
   gate(key: string): void {
     const { promise, resolve } = Promise.withResolvers<void>();
+
     this.gatedKey = key;
     this.gatePromise = promise;
     this.releaseGate = resolve;
@@ -50,6 +54,7 @@ class GatedExistsStorage implements IStorage {
     if (c.key === this.gatedKey && this.gatePromise) {
       await this.gatePromise;
     }
+
     return this.map.has(c.key);
   }
 
@@ -63,11 +68,13 @@ class GatedExistsStorage implements IStorage {
 
   getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
     const chunks = (this.map.get(c.key) as unknown[] | undefined) ?? [];
+
     return new ReadableStream({
-      start(controller) {
+      start(controller): void {
         for (const chunk of chunks) {
           controller.enqueue(chunk);
         }
+
         controller.close();
       },
     });
@@ -76,27 +83,31 @@ class GatedExistsStorage implements IStorage {
 
 describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中でも別キーの has を完了できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new GatedExistsStorage();
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
-    storage.onExistsStart = (key) => {
+    storage.onExistsStart = (key): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (key === "a") {
         entered.resolve();
       }
     };
+
     storage.gate("a");
 
     try {
-      // 実行
+      // 実行：
       const pendingHasA = kvs.has("a");
+
       await entered.promise;
       const hasB = kvs.has("b");
 
-      // 検証
+      // 検証：
       await expect(withTimeout(hasB, 200, "has-b")).resolves.toBe(false);
+
       storage.ungate();
       await expect(pendingHasA).resolves.toBe(false);
     } finally {
@@ -105,37 +116,43 @@ describe("UniKvs - 共有ロック", () => {
   });
 
   test("stream のセットアップが保留中でも別キーの has を完了できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new GatedExistsStorage();
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
     storage.map.set("a", [Uint8Array.from([1])]);
 
     const entered = Promise.withResolvers<void>();
-    storage.onExistsStart = (key) => {
+    storage.onExistsStart = (key): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (key === "a") {
         entered.resolve();
       }
     };
+
     storage.gate("a");
 
     const pendingStream = kvs.stream("a");
     let vs: Awaited<ReturnType<typeof kvs.stream>> | undefined;
+
     try {
-      // 実行
+      // 実行：
       await entered.promise;
 
-      // 検証
+      // 検証：
       await expect(withTimeout(kvs.has("b"), 200, "has-b")).resolves.toBe(false);
       storage.ungate();
       vs = await pendingStream;
       const chunks: unknown[] = [];
+
       for await (const chunk of vs) {
         chunks.push(chunk);
       }
+
       expect(chunks).toStrictEqual([Uint8Array.from([1])]);
     } finally {
       storage.ungate();
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (vs === undefined) {
         try {
           vs = await withTimeout(pendingStream, 1000, "stream-resume");
@@ -143,32 +160,37 @@ describe("UniKvs - 共有ロック", () => {
           // 修正前の失敗パスではストリームを消費できないため無視します。
         }
       }
+
       await vs?.dispose();
     }
   });
 
   test("has の存在確認が保留中でも別キーの set は完了できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const storage = new GatedExistsStorage();
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
-    storage.onExistsStart = (key) => {
+    storage.onExistsStart = (key): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (key === "a") {
         entered.resolve();
       }
     };
+
     storage.gate("a");
 
     try {
-      // 実行
+      // 実行：
       const pendingHasA = kvs.has("a");
+
       await entered.promise;
       const setB = kvs.set("b", "value");
 
-      // 検証: グローバル読み取りロックは共存するため、別キーの set は待たされない
+      // 検証 : グローバル読み取りロックは共存するため、別キーの set は待たされない。
       await expect(withTimeout(setB, 200, "set-b")).resolves.toBeUndefined();
+
       storage.ungate();
       await expect(pendingHasA).resolves.toBe(false);
       await expect(kvs.get("b")).resolves.toBe("value");
@@ -180,27 +202,31 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中のとき同一キーの set はキー書き込みロックの競合で待たされる", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const storage = new GatedExistsStorage();
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
-    storage.onExistsStart = (key) => {
+    storage.onExistsStart = (key): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (key === "a") {
         entered.resolve();
       }
     };
+
     storage.gate("a");
 
     try {
-      // 実行
+      // 実行：
       const pendingHasA = kvs.has("a");
+
       await entered.promise;
       const setA = kvs.set("a", "value");
 
-      // 検証: 同一キーの読み取りロックと競合するため、set は has の完了待ちになる
+      // 検証 : 同一キーの読み取りロックと競合するため、set は has の完了待ちになる。
       await expect(withTimeout(setA, 200, "set-a")).rejects.toThrow("TIMEOUT(set-a)");
+
       storage.ungate();
       await expect(pendingHasA).resolves.toBe(false);
       await expect(setA).resolves.toBeUndefined();
@@ -213,25 +239,27 @@ describe("UniKvs - 共有ロック", () => {
   test("ライブストリーム中の別キー操作は完了できるが同一キーの set は dispose まで待たされる", async ({
     expect,
   }) => {
-    // 準備: stream("a") がキー a の読み取りロックを保持し続ける
+    // 準備 : stream("a") がキー a の読み取りロックを保持し続ける。
     const storage = new GatedExistsStorage();
     storage.map.set("a", [Uint8Array.from([1])]);
+
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
+
     const vs = await kvs.stream("a");
 
     try {
-      // 検証: キー a の読み取りロックはキー b の操作と競合しない
+      // 検証 : キー a の読み取りロックはキー b の操作と競合しない。
       await expect(withTimeout(kvs.has("b"), 200, "has-b")).resolves.toBe(false);
       await expect(withTimeout(kvs.set("b", "value"), 200, "set-b")).resolves.toBeUndefined();
 
-      // 実行
+      // 実行：
       const setA = kvs.set("a", "value");
 
-      // 検証: 同一キーへの書き込みはキー読み取りロックの解放待ちになる
+      // 検証 : 同一キーへの書き込みはキー読み取りロックの解放待ちになる。
       await expect(withTimeout(setA, 200, "set-a")).rejects.toThrow("TIMEOUT(set-a)");
 
-      // 実行と検証: dispose でキー読み取りロックが解放されると完了する
+      // 実行と検証 : dispose でキー読み取りロックが解放されると完了する。
       await vs.dispose();
       await expect(setA).resolves.toBeUndefined();
       await expect(kvs.get("a")).resolves.toBe("value");
@@ -243,28 +271,33 @@ describe("UniKvs - 共有ロック", () => {
   test("has の存在確認が保留中のとき clear は io グローバル書き込みロックの競合で待たされる", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const storage = new GatedExistsStorage();
     storage.map.set("a", "value");
+
     await using kvs = UniKvs.config().persist(storage).create();
     await kvs.open();
 
     const entered = Promise.withResolvers<void>();
-    storage.onExistsStart = (key) => {
+    storage.onExistsStart = (key): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
       if (key === "a") {
         entered.resolve();
       }
     };
+
     storage.gate("a");
 
     try {
-      // 実行
+      // 実行：
       const pendingHasA = kvs.has("a");
+
       await entered.promise;
       const clearPending = kvs.clear();
 
-      // 検証: clear の io グローバル書き込みロックはキー読み取りロックの解放待ちになる
+      // 検証 : clear の io グローバル書き込みロックはキー読み取りロックの解放待ちになる。
       await expect(withTimeout(clearPending, 200, "clear")).rejects.toThrow("TIMEOUT(clear)");
+
       storage.ungate();
       await expect(pendingHasA).resolves.toBe(true);
       await expect(clearPending).resolves.toBeUndefined();

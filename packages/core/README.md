@@ -1,3 +1,3 @@
 # @unikvs/core
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/core)
+[Document](https://tai-kun.github.io/unikvs/)

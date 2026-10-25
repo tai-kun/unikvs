@@ -72,6 +72,7 @@ export default class Compression implements IMiddleware {
    *
    * @param data 変換対象のデータです。
    * @param Stream 使用する変換ストリームのコンストラクターです。CompressionStream または DecompressionStream を指定します。
+   *
    * @returns 変換後のバイナリデータを返します。
    */
   async #process(
@@ -81,7 +82,7 @@ export default class Compression implements IMiddleware {
         format: CompressionFormat,
       ): ReadableWritablePair<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
     },
-  ) {
+  ): Promise<Uint8Array<ArrayBuffer>> {
     const stream = toReadableStream([data]);
     const comp = new Stream(this.#format);
     const body = stream.pipeThrough(comp);

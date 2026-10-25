@@ -1,15 +1,15 @@
 import {
-  ReadonlyVariableError,
-  type IActionContext,
   type IGetContext,
+  type IActionContext,
   type IPipelineContext,
+  ReadonlyVariableError,
 } from "@unikvs/core";
 
 /**
  * コンテキストの初期値に使える変数マップの形式です。
  */
 export type TestContextValues =
-  | { readonly [key: string]: unknown }
+  | Readonly<Record<string, unknown>>
   | Iterable<readonly [key: string, value: unknown]>;
 
 /**
@@ -107,13 +107,16 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    */
   public constructor(init: TestContextInit = {}) {
     const {
-      signal,
-      action = "set",
       key = "",
-      repair = { enabled: false, targets: [] },
+      action = "set",
+      repair = {
+        enabled: false,
+        targets: [],
+      },
+      signal,
       source,
-      destination,
       values,
+      destination,
     } = init;
     this.signal = signal ?? new AbortController().signal;
     this.action = action;
@@ -121,13 +124,19 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
     this.repair = repair;
     this.source = source;
     this.destination = destination;
-    this.data = new Map(
-      values == null
-        ? []
-        : Symbol.iterator in Object(values)
-          ? (values as Iterable<readonly [string, unknown]>)
-          : Object.entries(values as { readonly [key: string]: unknown }),
-    );
+
+    let entries: readonly (readonly [string, unknown])[] = [];
+
+    if (values !== undefined && values !== null) {
+      if (Symbol.iterator in Object(values)) {
+        entries = [...(values as Iterable<readonly [string, unknown]>)];
+      } else {
+        entries = Object.entries(values as Readonly<Record<string, unknown>>);
+      }
+    }
+
+    this.data = new Map(entries);
+
     this.readonlyKeys = new Set();
   }
 
@@ -135,9 +144,10 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    * 変数の値を取得します。
    *
    * @param name 取得する変数名です。
+   *
    * @returns 変数の値を返します。
    */
-  public get<const TName extends string>(name: TName): any {
+  public get(name: string): any {
     return this.data.get(name);
   }
 
@@ -146,9 +156,10 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    *
    * @param name 設定する変数名です。
    * @param value 設定する値です。
+   *
    * @returns 自身を返します。
    */
-  public set<const TName extends string>(name: TName, value: any): this {
+  public set(name: string, value: any): this {
     if (this.readonlyKeys.has(name)) {
       throw new ReadonlyVariableError({ name });
     }
@@ -163,9 +174,10 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    *
    * @param name 設定する変数名です。
    * @param value 設定する値です。
+   *
    * @returns 自身を返します。
    */
-  public setReadonly<const TName extends string>(name: TName, value: any): this {
+  public setReadonly(name: string, value: any): this {
     if (this.readonlyKeys.has(name)) {
       throw new ReadonlyVariableError({ name });
     }
@@ -190,20 +202,28 @@ export function createNext(): () => Promise<void> {
  * open 用のコンテキストを作成します。
  *
  * @param init 初期値です。
+ *
  * @returns open アクションのコンテキストを返します。
  */
 export function createOpenContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
-  return new TestContext({ ...init, action: "open" });
+  return new TestContext({
+    ...init,
+    action: "open",
+  });
 }
 
 /**
  * close 用のコンテキストを作成します。
  *
  * @param init 初期値です。
+ *
  * @returns close アクションのコンテキストを返します。
  */
 export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
-  return new TestContext({ ...init, action: "close" });
+  return new TestContext({
+    ...init,
+    action: "close",
+  });
 }
 
 /**
@@ -211,13 +231,18 @@ export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): 
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns set アクションのコンテキストを返します。
  */
 export function createSetContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "set", key });
+  return new TestContext({
+    ...init,
+    action: "set",
+    key,
+  });
 }
 
 /**
@@ -228,6 +253,7 @@ export function createSetContext(
  * @param key 操作対象の論理キーです。
  * @param targets 書き戻し対象名一覧です。
  * @param init 初期値です。
+ *
  * @returns 書き戻し要求を持つ get アクションのコンテキストを返します。
  */
 export function createRepairContext(
@@ -239,7 +265,10 @@ export function createRepairContext(
     ...init,
     action: "get",
     key,
-    repair: { enabled: true, targets: [...targets] } as unknown as TestContextRepair,
+    repair: {
+      enabled: true,
+      targets: [...targets],
+    } as unknown as TestContextRepair,
   });
 }
 
@@ -248,13 +277,18 @@ export function createRepairContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns get アクションのコンテキストを返します。
  */
 export function createGetContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "get", key });
+  return new TestContext({
+    ...init,
+    action: "get",
+    key,
+  });
 }
 
 /**
@@ -262,13 +296,18 @@ export function createGetContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns stream アクションのコンテキストを返します。
  */
 export function createStreamContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "stream", key });
+  return new TestContext({
+    ...init,
+    action: "stream",
+    key,
+  });
 }
 
 /**
@@ -276,13 +315,18 @@ export function createStreamContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns has アクションのコンテキストを返します。
  */
 export function createHasContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "has", key });
+  return new TestContext({
+    ...init,
+    action: "has",
+    key,
+  });
 }
 
 /**
@@ -290,13 +334,18 @@ export function createHasContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns delete アクションのコンテキストを返します。
  */
 export function createDeleteContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "delete", key });
+  return new TestContext({
+    ...init,
+    action: "delete",
+    key,
+  });
 }
 
 /**
@@ -304,13 +353,18 @@ export function createDeleteContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns clear アクションのコンテキストを返します。
  */
 export function createClearContext(
   key = "",
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "clear", key });
+  return new TestContext({
+    ...init,
+    action: "clear",
+    key,
+  });
 }
 
 /**
@@ -318,13 +372,17 @@ export function createClearContext(
  *
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns キー変換用のコンテキストを返します。
  */
 export function createMapKeyContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
 ): TestContext {
-  return new TestContext({ ...init, key });
+  return new TestContext({
+    ...init,
+    key,
+  });
 }
 
 /**
@@ -333,6 +391,7 @@ export function createMapKeyContext(
  * @param source 変換前の入力値です。
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns encode 用のコンテキストを返します。
  */
 export function createEncodeContext(
@@ -340,7 +399,12 @@ export function createEncodeContext(
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "set", key, source });
+  return new TestContext({
+    ...init,
+    action: "set",
+    key,
+    source,
+  });
 }
 
 /**
@@ -349,6 +413,7 @@ export function createEncodeContext(
  * @param source 変換前の入力値です。
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns decode 用のコンテキストを返します。
  */
 export function createDecodeContext(
@@ -356,7 +421,12 @@ export function createDecodeContext(
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "get", key, source });
+  return new TestContext({
+    ...init,
+    action: "get",
+    key,
+    source,
+  });
 }
 
 /**
@@ -365,14 +435,20 @@ export function createDecodeContext(
  * @param source 変換前の入力ストリームです。
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns encodeStream 用のコンテキストを返します。
  */
 export function createEncodeStreamContext(
-  source: ReadableStream<any>,
+  source: ReadableStream,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "set", key, source });
+  return new TestContext({
+    ...init,
+    action: "set",
+    key,
+    source,
+  });
 }
 
 /**
@@ -381,12 +457,18 @@ export function createEncodeStreamContext(
  * @param source 変換前の入力ストリームです。
  * @param key 操作対象の論理キーです。
  * @param init 初期値です。
+ *
  * @returns decodeStream 用のコンテキストを返します。
  */
 export function createDecodeStreamContext(
-  source: ReadableStream<any>,
+  source: ReadableStream,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
 ): TestContext {
-  return new TestContext({ ...init, action: "stream", key, source });
+  return new TestContext({
+    ...init,
+    action: "stream",
+    key,
+    source,
+  });
 }

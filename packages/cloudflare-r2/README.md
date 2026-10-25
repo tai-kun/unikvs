@@ -1,3 +1,3 @@
 # @unikvs/cloudflare-r2
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/cloudflare-r2)
+[Document](https://tai-kun.github.io/unikvs/)

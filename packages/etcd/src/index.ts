@@ -1,11 +1,11 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidLeaseTtlErrorMeta,
+  KeyNotFoundErrorMeta,
   InvalidLeaseTtlErrorArgs,
-  InvalidEndpointsErrorMeta,
+  InvalidLeaseTtlErrorMeta,
   InvalidEndpointsErrorArgs,
+  InvalidEndpointsErrorMeta,
 } from "./errors.js";
 export { KeyNotFoundError, InvalidLeaseTtlError, InvalidEndpointsError } from "./errors.js";
 export type * from "./etcd.js";
-export { default as Etcd, wrapNativeEtcdClient } from "./etcd.js";
+export { wrapNativeEtcdClient, default as Etcd } from "./etcd.js";

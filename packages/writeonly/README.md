@@ -1,3 +1,3 @@
 # @unikvs/writeonly
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/writeonly)
+[Document](https://tai-kun.github.io/unikvs/)

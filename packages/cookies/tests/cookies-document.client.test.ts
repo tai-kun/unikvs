@@ -1,12 +1,12 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { afterEach, describe, test } from "vitest";
+import { test, describe, afterEach } from "vite-plus/test";
 
 import Cookies from "../src/cookies.js";
 
@@ -27,13 +27,13 @@ describe("document.cookie バックエンド (client)", () => {
   });
 
   test("既定の document.cookie で文字列を往復できる", ({ expect }) => {
-    // 準備
+    // 準備：
     cleanup();
 
-    // 実行
+    // 実行：
     storage.write(createSetContext(STRING_KEY, { signal }) as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext(STRING_KEY, { signal }) as IStorage.ReadContext)).toBe(
       "v1",
     );
@@ -41,7 +41,7 @@ describe("document.cookie バックエンド (client)", () => {
       true,
     );
 
-    // 実行と検証
+    // 実行と検証：
     storage.delete(createDeleteContext(STRING_KEY, { signal }) as IStorage.DeleteContext);
     expect(storage.exists(createHasContext(STRING_KEY, { signal }) as IStorage.ExistsContext)).toBe(
       false,
@@ -49,23 +49,24 @@ describe("document.cookie バックエンド (client)", () => {
   });
 
   test("既定の document.cookie でバイト列を往復できる", ({ expect }) => {
-    // 準備
+    // 準備：
     cleanup();
     const data = new Uint8Array([0, 1, 2, 255]);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext(BINARY_KEY, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext(BINARY_KEY, { signal }) as IStorage.ReadContext)).toEqual(
       data,
     );
   });
 
   test("既定の document.cookie で複数の Cookie を clear できる", ({ expect }) => {
-    // 準備
+    // 準備：
     cleanup();
     const keys = ["unikvs-client-clear-1", "unikvs-client-clear-2"];
+
     for (const key of keys) {
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, "v");
       expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
@@ -73,10 +74,10 @@ describe("document.cookie バックエンド (client)", () => {
       );
     }
 
-    // 実行
+    // 実行：
     storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     for (const key of keys) {
       expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
         false,

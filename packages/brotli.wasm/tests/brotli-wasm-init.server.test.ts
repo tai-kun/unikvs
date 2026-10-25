@@ -1,26 +1,24 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
+  createNext,
   abortedSignal,
   captureRejection,
+  createOpenContext,
   createDecodeContext,
   createEncodeContext,
-  createNext,
-  createOpenContext,
   createPseudoRandomBytes,
 } from "@unikvs/testing";
-import { describe, test, vi } from "vitest";
+import { vi, test, describe } from "vite-plus/test";
 
-// 上流モジュールの解決は open() 時に共有キャッシュで1回だけ実行されるため、
-// 解決失敗や中断の検証はモジュールを再読み込みした新鮮な実体で行う。
+import type BrotliWasm from "../src/brotli-wasm.js";
+
+// 上流モジュールの解決は open() 時に共有キャッシュで 1 回だけ実行されるため、解決失敗や中断の検証はモジュールを再読み込みした新鮮な実体で行う。
 // ブラウザー実行では再読み込みの分離が保証されないため、このファイルはサーバー実行専用とする。
 
 /**
  * ターゲットを開きます。
  */
-async function openTarget(
-  target: InstanceType<typeof import("../src/brotli-wasm.js").default>,
-  signal: AbortSignal,
-): Promise<void> {
+async function openTarget(target: BrotliWasm, signal: AbortSignal): Promise<void> {
   await target.open(createOpenContext({ signal }) as IMiddleware.OpenContext);
 }
 
@@ -28,7 +26,7 @@ async function openTarget(
  * バイト列を圧縮して返します。
  */
 async function encode(
-  target: InstanceType<typeof import("../src/brotli-wasm.js").default>,
+  target: BrotliWasm,
   data: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const c = createEncodeContext(data);
@@ -44,7 +42,7 @@ async function encode(
  * 圧縮されたバイト列を展開して返します。
  */
 async function decode(
-  target: InstanceType<typeof import("../src/brotli-wasm.js").default>,
+  target: BrotliWasm,
   data: Uint8Array<ArrayBuffer>,
 ): Promise<Uint8Array<ArrayBuffer>> {
   const c = createDecodeContext(data);
@@ -58,7 +56,7 @@ async function decode(
 
 describe("WASM 初期化の失敗", () => {
   test("初期化失敗時は open を BrotliWasmInitError で拒否する", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     vi.resetModules();
 
     try {
@@ -70,21 +68,23 @@ describe("WASM 初期化の失敗", () => {
       const target = new fresh.default();
 
       try {
-        // 実行
+        // 実行：
         const error = await captureRejection(openTarget(target, signal));
 
-        // 検証
+        // 検証：
         // 失敗は BrotliWasmInitError で包み、原因を保持する。
         expect(error).toBeInstanceOf(freshErrors.BrotliWasmInitError);
         expect((error as InstanceType<typeof freshErrors.BrotliWasmInitError>).cause).toBe(cause);
+
         expect(target.isOpen).toBe(false);
 
-        // 実行と検証
+        // 実行と検証：
         // 失敗はキャッシュされないため、再試行では解決が再実行される。
         await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 41);
         const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
+
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
       } finally {
@@ -101,7 +101,7 @@ describe("open の中断", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     vi.resetModules();
 
     try {
@@ -112,25 +112,27 @@ describe("open の中断", () => {
       const reason = new Error("pre-abort");
 
       try {
-        // 実行
+        // 実行：
         const error = await captureRejection(
           target.open(
             createOpenContext({ signal: abortedSignal(reason) }) as IMiddleware.OpenContext,
           ),
         );
 
-        // 検証
+        // 検証：
         // 事前中断では初期化自体を開始せず、理由をそのまま伝播する。
         expect(error).toBe(reason);
+
         expect(target.isOpen).toBe(false);
         expect(initSpy).not.toHaveBeenCalled();
 
-        // 実行と検証
+        // 実行と検証：
         // 中断はキャッシュを汚さないため、有効な signal では再試行できる。
         await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 32);
         const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
+
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(1);
       } finally {
@@ -142,7 +144,7 @@ describe("open の中断", () => {
   });
 
   test("実行中に中断された open は中断理由で拒否し再試行できる", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     vi.resetModules();
 
     try {
@@ -157,22 +159,24 @@ describe("open の中断", () => {
       const reason = new Error("mid-flight-abort");
 
       try {
-        // 実行
+        // 実行：
         const opening = target.open(
           createOpenContext({ signal: controller.signal }) as IMiddleware.OpenContext,
         );
+
         controller.abort(reason);
 
-        // 検証
+        // 検証：
         await expect(opening).rejects.toBe(reason);
         expect(target.isOpen).toBe(false);
 
-        // 実行と検証
+        // 実行と検証：
         // 実行中の中断はキャッシュを残さないため、有効な signal では再試行できる。
         await openTarget(target, signal);
         const input = createPseudoRandomBytes(64, 33);
         const decoded = await decode(target, await encode(target, input));
         expect(decoded).toStrictEqual(input);
+
         expect(target.isOpen).toBe(true);
         expect(initSpy).toHaveBeenCalledTimes(2);
       } finally {

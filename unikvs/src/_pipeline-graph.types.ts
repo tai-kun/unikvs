@@ -201,6 +201,7 @@ export interface IActiveLeafChecker {
    * 書き込み対象とする葉を判定します。
    *
    * @param leaf 対象の葉です。
+   *
    * @returns 判定結果です。
    */
   (leaf: PipelineLeaf): boolean;
@@ -218,6 +219,7 @@ export interface IEncodeNodeErrorHandler {
    *
    * @param ex 節の取得または写像で発生した例外です。
    * @param activeLeaves 節の配下で対象となる葉です。
+   *
    * @returns 部分木をスキップする場合は `true` を返します。
    */
   (ex: unknown, activeLeaves: readonly PipelineLeaf[]): boolean;

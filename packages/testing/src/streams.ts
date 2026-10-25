@@ -20,7 +20,7 @@ export function sourceFrom<T>(chunks: readonly T[]): ReadableStream<T> {
  * 指定した値の列を順に流して閉じる ReadableStream を作成します。
  * 任意の値の並びをストリームへ流し込むために使用します。
  */
-export const sourceFromValues = sourceFrom;
+export const sourceFromValues: typeof sourceFrom = sourceFrom;
 
 /**
  * ストリームを最後まで読み取り、出力チャンクを返します。
@@ -68,7 +68,7 @@ export async function collectChunks<T>(
  * 変換ストリームにチャンクを順に流し込み、出力されたチャンクを返します。
  * ストリームが入力をそのまま透過することを検証するために使用します。
  */
-export const pipeChunks = collectChunks;
+export const pipeChunks: typeof collectChunks = collectChunks;
 
 /**
  * 変換ストリームへチャンク列を書き込みながら並行して読み取ります。
@@ -78,9 +78,9 @@ export async function pumpThrough<TInput, TOutput>(
   transform: TransformStream<TInput, TOutput>,
   chunks: readonly TInput[],
 ): Promise<{
-  outputChunks: TOutput[];
-  writeError: unknown;
   readError: unknown;
+  writeError: unknown;
+  outputChunks: TOutput[];
 }> {
   const outputChunks: TOutput[] = [];
   let writeError: unknown;
@@ -116,7 +116,11 @@ export async function pumpThrough<TInput, TOutput>(
 
   await pumping;
 
-  return { outputChunks, writeError, readError };
+  return {
+    readError,
+    writeError,
+    outputChunks,
+  };
 }
 
 /**
@@ -127,7 +131,10 @@ export async function pumpThrough<TInput, TOutput>(
 export async function runTransform(
   stream: TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
   inputChunks: readonly Uint8Array<ArrayBuffer>[],
-): Promise<{ outputChunks: Uint8Array<ArrayBuffer>[]; closeError: unknown }> {
+): Promise<{
+  closeError: unknown;
+  outputChunks: Uint8Array<ArrayBuffer>[];
+}> {
   const outputChunks: Uint8Array<ArrayBuffer>[] = [];
   let closeError: unknown;
   const reader = stream.readable.getReader();
@@ -162,5 +169,8 @@ export async function runTransform(
 
   await pumping;
 
-  return { outputChunks, closeError };
+  return {
+    closeError,
+    outputChunks,
+  };
 }

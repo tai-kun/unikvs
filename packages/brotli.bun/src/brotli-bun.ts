@@ -23,8 +23,7 @@ export type BrotliBunOptions = {
 /**
  * Brotli で圧縮・展開するミドルウェアです。
  *
- * Bun ランタイムでは `Bun.brotliCompressSync` と `Bun.brotliDecompressSync` を使い、
- * それ以外の環境では `node:zlib` の brotli 系 API へフォールバックします。
+ * Bun ランタイムでは `Bun.brotliCompressSync` と `Bun.brotliDecompressSync` を使い、それ以外の環境では `node:zlib` の brotli 系 API へフォールバックします。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#usage)
  */
@@ -53,12 +52,12 @@ export default class BrotliBun implements IMiddleware {
 
   /**
    * @param options コンストラクターオプションです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#usage)
    */
   public constructor(options: BrotliBunOptions = {}) {
     const { level = 11 } = options;
     const isValidLevel = Number.isInteger(level) && level >= 0 && level <= 11;
+
     if (!isValidLevel) {
       throw new BrotliBunInvalidLevelError({ actual: level });
     }
@@ -69,6 +68,18 @@ export default class BrotliBun implements IMiddleware {
 
   public get isOpen(): boolean {
     return this.#env !== null;
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("BrotliBun is not open. Call open() first.");
+    }
+
+    return env;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
@@ -98,7 +109,8 @@ export default class BrotliBun implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = api.compress(env, c.source, { level: this.#level });
     c.destination = toOwnedBytes(buffer);
 
@@ -109,7 +121,8 @@ export default class BrotliBun implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = api.decompress(env, c.source);
     c.destination = toOwnedBytes(buffer);
 
@@ -120,7 +133,8 @@ export default class BrotliBun implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const compress = api.createCompress(env, { level: this.#level });
     c.destination = c.source.pipeThrough(compress);
 
@@ -131,7 +145,8 @@ export default class BrotliBun implements IMiddleware {
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const decompress = api.createDecompress(env);
     c.destination = c.source.pipeThrough(decompress);
 

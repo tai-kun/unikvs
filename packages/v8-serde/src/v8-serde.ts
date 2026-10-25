@@ -4,13 +4,13 @@ import { toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
 
 import { type IEnv, api } from "./_core.js";
-import { UnsupportedRuntimeError, V8SerdeDecodeError, V8SerdeEncodeError } from "./errors.js";
+import { V8SerdeDecodeError, V8SerdeEncodeError, UnsupportedRuntimeError } from "./errors.js";
 
 /**
  * ストリームのフレームが保持できるペイロードの最大長です。
  * 4 バイトのビッグエンディアン長で表せる上限であり、単発のエンコードには適用しません。
  */
-const MAX_PAYLOAD_LENGTH = 0xffffffff;
+const MAX_PAYLOAD_LENGTH = 4_294_967_295;
 
 /**
  * 受信チャンクを蓄積する、容量が自動で拡張されるバイトバッファーです。
@@ -46,12 +46,14 @@ class ByteQueue {
    */
   public append(chunk: Uint8Array<ArrayBuffer>): void {
     const required = this.#writeOffset + chunk.byteLength;
+
     if (required > this.#bytes.byteLength) {
       // 必要な容量と現在の容量の倍のうち大きい方を確保し、未処理データを先頭へ詰めます。
       const capacity = Math.max(required, this.#bytes.byteLength * 2, 16);
       const bytes = new Uint8Array(capacity);
       bytes.set(this.#bytes.subarray(this.#readOffset, this.#writeOffset));
       this.#bytes = bytes;
+
       this.#writeOffset -= this.#readOffset;
       this.#readOffset = 0;
     }
@@ -183,7 +185,8 @@ export default class V8Serde implements IMiddleware {
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、環境は設定済みです。
+    const env = this.#requireEnv();
 
     try {
       c.destination = toOwnedBytes(api.serialize(env, c.source));
@@ -198,7 +201,8 @@ export default class V8Serde implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、環境は設定済みです。
+    const env = this.#requireEnv();
 
     try {
       c.destination = api.deserialize(env, c.source);
@@ -213,12 +217,12 @@ export default class V8Serde implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、環境は設定済みです。
+    const env = this.#requireEnv();
     const { serialize } = env;
-
     c.destination = c.source.pipeThrough(
       new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
-        transform: (chunk, controller) => {
+        transform: (chunk, controller): void => {
           controller.enqueue(this.#encodeFrame(serialize, chunk));
         },
       }),
@@ -231,13 +235,16 @@ export default class V8Serde implements IMiddleware {
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、環境は設定済みです。
+    const env = this.#requireEnv();
     const { deserialize } = env;
     const queue = new ByteQueue();
-
     c.destination = c.source.pipeThrough(
       new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
-        transform: (chunk, controller) => {
+        flush: (controller): void => {
+          drain(queue, controller, deserialize, true);
+        },
+        transform: (chunk, controller): void => {
           if (chunk.byteLength === 0) {
             // 空のチャンクはデコードに影響しません。
             return;
@@ -246,9 +253,6 @@ export default class V8Serde implements IMiddleware {
           queue.append(chunk);
           drain(queue, controller, deserialize, false);
         },
-        flush: (controller) => {
-          drain(queue, controller, deserialize, true);
-        },
       }),
     );
 
@@ -256,10 +260,28 @@ export default class V8Serde implements IMiddleware {
   }
 
   /**
+   * 実行環境を取得する内部メソッドです。
+   *
+   * UniKvs の仕様で先に open() が実行されるため、通常は設定済みです。
+   *
+   * @returns 設定済みの実行環境を返します。
+   */
+  #requireEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new Error("V8Serde is not open. Call open() first.");
+    }
+
+    return env;
+  }
+
+  /**
    * 値を 4 バイトのビッグエンディアン長と本体からなるフレームへ変換する内部メソッドです。
    *
    * @param serialize `node:v8` のシリアライザーです。
    * @param data 変換する値です。
+   *
    * @returns フレーム化した `Uint8Array<ArrayBuffer>` を返します。
    */
   #encodeFrame(serialize: IEnv["serialize"], data: unknown): Uint8Array<ArrayBuffer> {
@@ -267,9 +289,10 @@ export default class V8Serde implements IMiddleware {
       const payload = serialize(data);
       const length = payload.byteLength;
 
-      // 理由: 4GiB を超えるペイロードは実メモリーで再現できないため、カバレッジから除外します。
-      /* v8 ignore if */ if (length > MAX_PAYLOAD_LENGTH) {
-        /* v8 ignore next */ throw new Error(
+      // 4GiB を超えるペイロードは実メモリーで再現できないため、カバレッジから除外します。
+      /* v8 ignore next */
+      if (length > MAX_PAYLOAD_LENGTH) {
+        throw new Error(
           `V8Serde payload length ${length} exceeds the maximum ${MAX_PAYLOAD_LENGTH}`,
         );
       }

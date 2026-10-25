@@ -23,7 +23,7 @@ type BranchDestination = {
  * ネイティブの `#` フィールドの代わりに `WeakMap` に保持することで、別モジュールの `UniKvsConfig` から内部アクセサー経由で参照できます。
  * `branchStates` 自体は外部に公開しません。
  */
-type BranchState = {
+export type BranchState = {
   /**
    * 自前の相対パイプラインです。
    * 登録順に保持します。
@@ -40,7 +40,10 @@ type BranchState = {
  * インスタンスと内部状態の対応表です。
  * コンパイラーによる `#` フィールドのダウンレベルと同様に、`WeakMap` をブランド兼ストレージとして使います。
  */
-export const branchStates = /*#__PURE__*/ new WeakMap<IUniKvsBranch, BranchState>();
+export const branchStates: WeakMap<IUniKvsBranch, BranchState> = /* #__PURE__ */ new WeakMap<
+  IUniKvsBranch,
+  BranchState
+>();
 
 /**
  * 分岐先のスナップショットを返します。
@@ -50,10 +53,12 @@ export const branchStates = /*#__PURE__*/ new WeakMap<IUniKvsBranch, BranchState
  * 外部からは使用しません。
  *
  * @param branch スナップショットを取得する分岐です。
+ *
  * @returns 分岐先のコピーを返します。
  */
 export function getBranchDestinationsForFork(branch: IUniKvsBranch): BranchDestination[] {
   const state = branchStates.get(branch);
+
   if (!state) {
     throw new TypeError("fork() expects a branch created by UniKvs.branch().");
   }
@@ -78,6 +83,7 @@ export function appendForkDestinations(
   branch: IUniKvsBranch,
 ): void {
   const prefixSnapshot = [...prefix];
+
   for (const dest of getBranchDestinationsForFork(branch)) {
     destinations.push({
       storage: dest.storage,

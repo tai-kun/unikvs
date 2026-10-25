@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/readonly#errors)
@@ -29,7 +29,11 @@ export class ReadOnlySetNotAllowedError extends InvalidUsageErrorBase<ReadOnlySe
   public constructor(args: ReadOnlySetNotAllowedErrorArgs) {
     const { key, ...options } = args;
     const meta: ReadOnlySetNotAllowedErrorMeta = { key };
-    super(meta, ({ key }) => `ReadOnly.set cannot write key ${JSON.stringify(key)}.`, options);
+    super(
+      meta,
+      ({ key: messageKey }) => `ReadOnly.set cannot write key ${JSON.stringify(messageKey)}.`,
+      options,
+    );
   }
 }
 
@@ -70,8 +74,8 @@ export class ReadOnlyDeleteNotAllowedError extends InvalidUsageErrorBase<ReadOnl
     const meta: ReadOnlyDeleteNotAllowedErrorMeta = { key };
     super(
       meta,
-      ({ key }) =>
-        `ReadOnly.delete with allowDelete false cannot delete key ${JSON.stringify(key)}.`,
+      ({ key: messageKey }) =>
+        `ReadOnly.delete with allowDelete false cannot delete key ${JSON.stringify(messageKey)}.`,
       options,
     );
   }

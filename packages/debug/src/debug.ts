@@ -79,24 +79,6 @@ export type DebugOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#usage)
  */
 export default class Debug implements IMiddleware {
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
-   */
-  public static getDefaultDebugInfo(this: void, args: DebugInfoArgs): Record<string, unknown> {
-    const { data } = args;
-    const info: Record<string, unknown> = { type: getTypeName(data) };
-
-    if (typeof data === "string") {
-      // 文字列は UTF-16 コード単位の長さを記録します。
-      info["length"] = data.length;
-    } else if (ArrayBuffer.isView(data)) {
-      // TypedArray と DataView は要素数ではなく正確なバイト数を記録します。
-      info["byteLength"] = data.byteLength;
-    }
-
-    return info;
-  }
-
   public readonly name: string = "Debug";
 
   /**
@@ -119,13 +101,31 @@ export default class Debug implements IMiddleware {
    */
   public constructor(options: DebugOptions = {}) {
     const {
-      keyFilter = () => true,
-      actionFilter = () => true,
+      keyFilter = (): boolean => true,
+      actionFilter = (): boolean => true,
       getDebugInfo = Debug.getDefaultDebugInfo,
     } = options;
     this.keyFilter = keyFilter;
     this.actionFilter = actionFilter;
     this.getDebugInfo = getDebugInfo;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/debug#debug-info)
+   */
+  public static getDefaultDebugInfo(this: void, args: DebugInfoArgs): Record<string, unknown> {
+    const { data } = args;
+    const info: Record<string, unknown> = { type: getTypeName(data) };
+
+    if (typeof data === "string") {
+      // 文字列は UTF-16 コード単位の長さを記録します。
+      info["length"] = data.length;
+    } else if (ArrayBuffer.isView(data)) {
+      // TypedArray と DataView は要素数ではなく正確なバイト数を記録します。
+      info["byteLength"] = data.byteLength;
+    }
+
+    return info;
   }
 
   public get isOpen(): boolean {
@@ -179,6 +179,7 @@ export default class Debug implements IMiddleware {
    *
    * @param direction データが読み書きされた向きです。
    * @param c 操作のコンテキストです。
+   *
    * @returns 入力をそのまま出力する TransformStream オブジェクトです。
    */
   #createTransform(direction: DebugDirection, c: IKeyedActionContext): TransformStream {

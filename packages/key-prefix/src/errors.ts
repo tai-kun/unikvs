@@ -33,11 +33,14 @@ export class KeyPrefixClearDeniedError extends InvalidUsageErrorBase<KeyPrefixCl
    */
   public constructor(args: KeyPrefixClearDeniedErrorArgs) {
     const { prefix, allowClear, ...options } = args;
-    const meta: KeyPrefixClearDeniedErrorMeta = { prefix, allowClear };
+    const meta: KeyPrefixClearDeniedErrorMeta = {
+      prefix,
+      allowClear,
+    };
     super(
       meta,
-      ({ prefix }) =>
-        `KeyPrefix.clear with prefix ${JSON.stringify(prefix)} cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.`,
+      ({ prefix: prefixValue }) =>
+        `KeyPrefix.clear with prefix ${JSON.stringify(prefixValue)} cannot guarantee scoped deletion. Set allowClear to true when single-tenant exclusive use is guaranteed.`,
       options,
     );
   }

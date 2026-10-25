@@ -7,8 +7,8 @@ declare global {
 type $NeverOr<T, U> = [T] extends [never] ? U : T;
 
 type ParamName<TTypes> =
-  // oxlint-disable-next-line typescript/no-redundant-type-constituents
-  Extract<keyof TTypes | keyof UniKvsPipelineContextTypes, string> | (string & {});
+  | Extract<keyof TTypes | keyof UniKvsPipelineContextTypes, string>
+  | (string & {});
 
 type ParamValue<TTypes, TName extends string> = $NeverOr<
   | (TName extends keyof TTypes ? TTypes[TName] : never)

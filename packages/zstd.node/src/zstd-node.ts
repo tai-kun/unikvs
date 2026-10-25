@@ -1,6 +1,6 @@
 import type { IMiddleware, ITransformStream } from "@unikvs/core";
 import { toOwnedBytes, proxyTransformStream } from "@unikvs/utils";
-import { toAbortPromise } from "abort-signal-utils";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
 
 import { type IEnv, api } from "./_core.js";
@@ -21,13 +21,19 @@ function toOwnedBytesTransformStream(
 ): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
   return proxyTransformStream(
     transform,
-    (chunk: Uint8Array<ArrayBuffer>, controller) => {
+    (
+      chunk: Uint8Array<ArrayBuffer>,
+      controller: TransformStreamDefaultController<Buffer>,
+    ): void => {
       const buffer = Buffer.isBuffer(chunk)
         ? chunk
         : Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
       controller.enqueue(buffer);
     },
-    (buffer: Buffer, controller) => {
+    (
+      buffer: Buffer,
+      controller: TransformStreamDefaultController<Uint8Array<ArrayBuffer>>,
+    ): void => {
       const chunk = toOwnedBytes(buffer);
       controller.enqueue(chunk);
     },
@@ -61,6 +67,7 @@ export default class ZstdNode implements IMiddleware {
   public constructor(options: ZstdNodeOptions = {}) {
     const { level = 3 } = options;
     const isValidLevel = Number.isInteger(level) && level >= 1 && level <= 22;
+
     if (!isValidLevel) {
       throw new ZstdNodeInvalidLevelError({ actual: level });
     }
@@ -71,6 +78,18 @@ export default class ZstdNode implements IMiddleware {
 
   public get isOpen(): boolean {
     return this.#env !== null;
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("ZstdNode is not open. Call open() first.");
+    }
+
+    return env;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
@@ -87,7 +106,7 @@ export default class ZstdNode implements IMiddleware {
         c.signal,
       );
     } catch (ex) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
       throw new UnsupportedRuntimeError({
         name: "ZstdNode",
         cause: ex,
@@ -100,7 +119,8 @@ export default class ZstdNode implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = await api.compress(env, c.source, { level: this.#level });
     c.destination = toOwnedBytes(buffer);
 
@@ -111,7 +131,8 @@ export default class ZstdNode implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const buffer = await api.decompress(env, c.source);
     c.destination = toOwnedBytes(buffer);
 
@@ -122,7 +143,8 @@ export default class ZstdNode implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const compress = api.createCompress(env, { level: this.#level });
     const transform = toOwnedBytesTransformStream(compress);
     c.destination = c.source.pipeThrough(transform);
@@ -134,7 +156,8 @@ export default class ZstdNode implements IMiddleware {
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const decompress = api.createDecompress(env);
     const transform = toOwnedBytesTransformStream(decompress);
     c.destination = c.source.pipeThrough(transform);

@@ -1,20 +1,20 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidChunkTypeErrorMeta,
-  InvalidChunkTypeErrorArgs,
-  InvalidMaxEntriesErrorMeta,
-  InvalidMaxEntriesErrorArgs,
-  InvalidMaxBytesErrorMeta,
+  KeyNotFoundErrorMeta,
   InvalidMaxBytesErrorArgs,
-  InvalidSizeOfResultErrorMeta,
+  InvalidMaxBytesErrorMeta,
+  InvalidChunkTypeErrorArgs,
+  InvalidChunkTypeErrorMeta,
+  InvalidMaxEntriesErrorArgs,
+  InvalidMaxEntriesErrorMeta,
   InvalidSizeOfResultErrorArgs,
+  InvalidSizeOfResultErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
+  InvalidMaxBytesError,
   InvalidChunkTypeError,
   InvalidMaxEntriesError,
-  InvalidMaxBytesError,
   InvalidSizeOfResultError,
 } from "./errors.js";
 

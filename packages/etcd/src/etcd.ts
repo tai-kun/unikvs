@@ -1,8 +1,8 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { Etcd3 } from "etcd3";
 
-import { InvalidEndpointsError, InvalidLeaseTtlError } from "./errors.js";
+import { InvalidLeaseTtlError, InvalidEndpointsError } from "./errors.js";
 
 /**
  * `put` に渡せる etcd 固有のオプションです。
@@ -31,8 +31,7 @@ export type EtcdGetAllResult =
 /**
  * etcd クライアントの最小インターフェースです。
  *
- * テストではこのインターフェースを満たすフェイクを注入し、
- * 実環境では `endpoints` から組み立てた etcd3 クライアントを使います。
+ * テストではこのインターフェースを満たすフェイクを注入し、実環境では `endpoints` から組み立てた etcd3 クライアントを使います。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
  */
@@ -59,7 +58,7 @@ export type NativeEtcdClientLike = {
   get(key: string | Buffer): { buffer(): Promise<Buffer | null> };
 
   getAll(): {
-    prefix(value: string | Buffer): { buffers(): Promise<{ [key: string]: Buffer }> };
+    prefix(value: string | Buffer): { buffers(): Promise<Record<string, Buffer>> };
   };
 
   put(key: string | Buffer): { value(value: string | Buffer): unknown };
@@ -100,7 +99,7 @@ export function wrapNativeEtcdClient(
 
   return {
     async get(key: string): Promise<Buffer | null> {
-      return await raw.get(key).buffer();
+      return raw.get(key).buffer();
     },
 
     async put(
@@ -113,10 +112,12 @@ export function wrapNativeEtcdClient(
 
       if (ttl === undefined) {
         await raw.put(key).value(data);
+
         return;
       }
 
       let lease = leases.get(ttl);
+
       if (lease === undefined) {
         lease = raw.lease(ttl);
         leases.set(ttl, lease);
@@ -129,8 +130,8 @@ export function wrapNativeEtcdClient(
       await raw.delete().key(key).exec();
     },
 
-    async getAll(prefix: string): Promise<{ [key: string]: Buffer }> {
-      return await raw.getAll().prefix(prefix).buffers();
+    async getAll(prefix: string): Promise<Record<string, Buffer>> {
+      return raw.getAll().prefix(prefix).buffers();
     },
 
     async deletePrefix(prefix: string): Promise<void> {
@@ -181,8 +182,7 @@ export type EtcdStorageOptions = {
   /**
    * 注入する etcd クライアントです。
    *
-   * 指定したときは `endpoints` を使った接続は行われず、
-   * `open` / `close` でこのクライアントを開閉したことになります。
+   * 指定したときは `endpoints` を使った接続は行われず、`open` / `close` でこのクライアントを開閉したことになります。
    * 所有権は呼び出し側に残るため、`close` しても破棄されません。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
@@ -193,8 +193,7 @@ export type EtcdStorageOptions = {
    * 接続先の etcd エンドポイントです。
    *
    * `client` を指定したときは使われません。
-   * 未指定のときは `ETCD_ENDPOINTS` 環境変数 (カンマ区切り)、
-   * さらに未指定のときは `http://127.0.0.1:2379` を使います。
+   * 未指定のときは `ETCD_ENDPOINTS` 環境変数 (カンマ区切り)、さらに未指定のときは `http://127.0.0.1:2379` を使います。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#usage)
    */
@@ -278,8 +277,8 @@ export default class Etcd implements IStorage {
       client,
       endpoints,
       keyPrefix = DEFAULT_KEY_PREFIX,
-      leaseTtlSeconds,
       namespace = "",
+      leaseTtlSeconds,
     } = options;
 
     if (
@@ -290,6 +289,7 @@ export default class Etcd implements IStorage {
     }
 
     const normalized = normalizeEndpoints(endpoints);
+
     if (
       endpoints !== undefined &&
       (normalized.length === 0 || normalized.some((endpoint) => endpoint === ""))
@@ -309,6 +309,18 @@ export default class Etcd implements IStorage {
     return this.#con !== null;
   }
 
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Etcd is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -321,27 +333,39 @@ export default class Etcd implements IStorage {
       ?.split(",")
       .map((endpoint) => endpoint.trim())
       .filter((endpoint) => endpoint !== "");
-    const endpoints =
-      this.#endpoints.length > 0
-        ? this.#endpoints
-        : fromEnv !== undefined && fromEnv.length > 0
-          ? fromEnv
-          : [DEFAULT_ENDPOINT];
+    let endpoints: readonly string[];
+
+    if (this.#endpoints.length > 0) {
+      endpoints = this.#endpoints;
+    } else if (fromEnv !== undefined && fromEnv.length > 0) {
+      endpoints = fromEnv;
+    } else {
+      endpoints = [DEFAULT_ENDPOINT];
+    }
 
     if (this.#injected !== undefined) {
-      this.#con = { client: this.#injected, onClose: null };
+      this.#con = {
+        client: this.#injected,
+        onClose: null,
+      };
+
       return;
     }
 
     const raw = new Etcd3({ hosts: [...endpoints] }) as unknown as NativeEtcdClientLike;
     const adapter = wrapNativeEtcdClient(raw, this.#leaseTtlSeconds);
-    this.#con = { client: adapter, onClose: () => adapter.close() };
+    this.#con = {
+      client: adapter,
+      onClose: (): void => {
+        adapter.close();
+      },
+    };
   }
 
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
-    const { onClose } = this.#con!;
+    const { onClose } = this.#getConnection();
 
     // 先行 null 化により、並行 `close` 同士は二重クローズになりません。
     this.#con = null;
@@ -361,7 +385,7 @@ export default class Etcd implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -370,12 +394,13 @@ export default class Etcd implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
 
     const data = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
+
     if (data === null || data === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -384,7 +409,7 @@ export default class Etcd implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -395,7 +420,7 @@ export default class Etcd implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -404,7 +429,7 @@ export default class Etcd implements IStorage {
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -412,10 +437,12 @@ export default class Etcd implements IStorage {
     // 接頭辞配下だけを削除し、名前空間外には触れません。
     if (client.deletePrefix !== undefined) {
       await client.deletePrefix(this.#prefix);
+
       return;
     }
 
     const keys = collectKeys(await Promise.race([client.getAll(this.#prefix), abortPromise]));
+
     for (const key of keys) {
       throwIfAborted(c.signal);
 
@@ -427,7 +454,7 @@ export default class Etcd implements IStorage {
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -437,10 +464,8 @@ export default class Etcd implements IStorage {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write(chunk) {
-        throwIfAborted(c.signal);
-        // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
-        chunks.push(chunk.slice());
+      abort() {
+        chunks.length = 0;
       },
       async close() {
         throwIfAborted(c.signal);
@@ -449,6 +474,7 @@ export default class Etcd implements IStorage {
         const merged = new Uint8Array(totalLength);
 
         let offset = 0;
+
         for (const chunk of chunks) {
           merged.set(chunk, offset);
           offset += chunk.byteLength;
@@ -456,14 +482,16 @@ export default class Etcd implements IStorage {
 
         await client.put(dest, Buffer.from(merged), options);
       },
-      abort() {
-        chunks.length = 0;
+      write(chunk) {
+        throwIfAborted(c.signal);
+        // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
+        chunks.push(chunk.slice());
       },
     });
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -476,6 +504,7 @@ export default class Etcd implements IStorage {
       async pull(controller) {
         if (sent) {
           controller.close();
+
           return;
         }
 
@@ -484,6 +513,7 @@ export default class Etcd implements IStorage {
         using abortPromise = toAbortPromise(c.signal);
 
         const data = await Promise.race([client.get(dest), abortPromise]);
+
         if (data === null || data === undefined) {
           throw new KeyNotFoundError({ key });
         }

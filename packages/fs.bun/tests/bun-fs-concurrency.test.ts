@@ -1,15 +1,15 @@
 import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
-  createPseudoRandomBytes,
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createDeleteContext,
+  createPseudoRandomBytes,
 } from "@unikvs/testing";
 import { listTemporaryFiles } from "@unikvs/testing/node";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import BunFs from "../src/bun-fs.js";
 import { test } from "./_helpers.js";
@@ -20,18 +20,18 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "same-key.bin";
     const values = Array.from({ length: 10 }, (_, index) => new Uint8Array(4096).fill(index + 1));
 
-    // 実行
+    // 実行：
     await Promise.all(
       values.map((data) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
 
-    // 検証
+    // 検証：
     const result = new Uint8Array(
       await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     );
@@ -40,36 +40,35 @@ describe("並行操作", () => {
   });
 
   test("同じキーへ並行にストリーム書き込みしたとき、いずれかのデータがそのまま残る", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "same-key-stream.bin";
     const values = Array.from({ length: 8 }, (_, index) =>
       new Uint8Array(64 * 1024).fill(index + 1),
     );
 
-    // 実行
+    // 実行：
     await Promise.all(
       values.map(async (data) => {
-        const writer = (
-          await storage.getWritable(
-            createSetContext(key, { signal }) as IStorage.GetWritableContext,
-          )
-        ).getWriter();
+        const writer = storage
+          .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)
+          .getWriter();
         await writer.write(data);
         await writer.close();
       }),
     );
 
-    // 検証
+    // 検証：
     const result = new Uint8Array(
       await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     );
     expect(result).toHaveLength(64 * 1024);
     expect(values.some((value) => bytesEqual(value, result))).toBe(true);
+
     expect(await listTemporaryFiles(root)).toStrictEqual([]);
   });
 
@@ -78,20 +77,20 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const entries = Array.from({ length: 40 }, (_, index) => ({
       key: `parallel-${index}.bin`,
       data: new Uint8Array(1024).fill(index % 256),
     }));
 
-    // 実行
+    // 実行：
     await Promise.all(
       entries.map(({ key, data }) =>
         storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data),
       ),
     );
 
-    // 検証
+    // 検証：
     for (const { key, data } of entries) {
       expect(
         bytesEqual(
@@ -109,13 +108,13 @@ describe("並行操作", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "during-write.bin";
     const oldData = new Uint8Array([1, 1, 1]);
     const newData = createPseudoRandomBytes(4 * 1024 * 1024);
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, oldData);
 
-    // 実行
+    // 実行：
     const writing = storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       newData,
@@ -125,8 +124,9 @@ describe("並行操作", () => {
     );
     await writing;
 
-    // 検証
+    // 検証：
     expect([oldData, newData].some((value) => bytesEqual(value, during))).toBe(true);
+
     expect(
       bytesEqual(
         new Uint8Array(
@@ -138,16 +138,16 @@ describe("並行操作", () => {
   });
 
   test("open を同時に複数回呼び出してもその後の操作が成功する", async ({
-    expect,
     root,
+    expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const concurrent = new BunFs(root);
     const key = "concurrent-open.bin";
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     await Promise.all([
       concurrent.open(createOpenContext() as IStorage.OpenContext),
       concurrent.open(createOpenContext() as IStorage.OpenContext),
@@ -155,7 +155,7 @@ describe("並行操作", () => {
     ]);
     await concurrent.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(concurrent.isOpen).toBe(true);
     expect(
       new Uint8Array(
@@ -165,30 +165,33 @@ describe("並行操作", () => {
   });
 
   test("数十の混在操作を並行実行してもデータが壊れない", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const keys = Array.from({ length: 30 }, (_, index) => `mixed-${index}.bin`);
     const data = keys.map((_, index) => new Uint8Array([index % 256, (index * 7) % 256]));
     await Promise.all(
       keys.map((key, index) =>
-        storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data[index]!),
+        storage.write(
+          createSetContext(key, { signal }) as IStorage.WriteContext,
+          data[index] as Uint8Array<ArrayBuffer>,
+        ),
       ),
     );
 
-    // 実行
+    // 実行：
     const readKeys = keys.slice(0, 15);
     const deleteKeys = keys.slice(15);
     const reads = readKeys.map(async (key, index) => {
       const result = new Uint8Array(
         await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
       );
-      expect(bytesEqual(result, data[index]!)).toBe(true);
+      expect(bytesEqual(result, data[index] as Uint8Array<ArrayBuffer>)).toBe(true);
     });
     const deletes = deleteKeys.map((key) =>
       storage.delete(createDeleteContext(key) as IStorage.DeleteContext),
     );
     await Promise.all([...reads, ...deletes]);
 
-    // 検証
+    // 検証：
     for (const [index, key] of keys.entries()) {
       expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(
         index < readKeys.length,

@@ -1,13 +1,13 @@
 export type {
-  InvalidPartSizeErrorMeta,
-  InvalidPartSizeErrorArgs,
-  StorageAbortedErrorMeta,
   StorageAbortedErrorArgs,
+  StorageAbortedErrorMeta,
+  InvalidPartSizeErrorArgs,
+  InvalidPartSizeErrorMeta,
 } from "./errors.js";
 export {
-  InvalidPartSizeError,
   StorageAbortedError,
   StorageNotOpenError,
+  InvalidPartSizeError,
   UnsupportedRuntimeError,
 } from "./errors.js";
 

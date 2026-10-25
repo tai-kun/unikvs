@@ -2,31 +2,29 @@
   "name": "@unikvs/memcached",
   "version": "0.0.1",
   "description": "Storage plugin that stores byte arrays in Memcached on Node.js.",
-  "homepage": "https://github.com/tai-kun/unikvs",
+  "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
-  "author": "tai-kun",
   "repository": {
-    "url": "https://github.com/tai-kun/unikvs"
+    "url": "https://github.com/tai-kun/unikvs",
+    "directory": "packages/memcached"
   },
   "files": [
     "dist",
     "src",
     "package.json",
-    "README.md",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "type": "module",
   "sideEffects": false,
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "default": "./dist/src/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsc --project ./.config/tsconfig.build.json"
+    "build": "vp -C .config pack"
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
@@ -34,18 +32,14 @@
     "memjs": "^1.3.2"
   },
   "devDependencies": {
-    "@tsconfig/node24": "24.0.5",
-    "@tsconfig/strictest": "2.0.8",
     "@types/memjs": "1.3.3",
-    "@types/node": "24.19.1",
     "@unikvs/testing": "workspace:*",
-    "@vitest/coverage-v8": "4.1.11",
-    "npm-check-updates": "20.0.2",
+    "@vitest/coverage-v8": "catalog:",
     "valibot": "1.5.0",
-    "vite": "8.3.2",
-    "vitest": "4.1.11"
+    "vite-plus": "catalog:"
   },
   "peerDependencies": {
     "@logtape/logtape": "^2.0.0"
-  }
+  },
+  "readme": "README.md"
 }

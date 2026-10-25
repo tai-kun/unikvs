@@ -1,4 +1,4 @@
-import { KeyNotFoundError, StorageAbortedError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError, StorageAbortedError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import { InvalidChunkTypeError } from "./errors.js";
@@ -182,6 +182,7 @@ export default class CloudflareR2 implements IStorage {
    */
   public constructor(options: CloudflareR2Options) {
     const { bucket, keyPrefix = "" } = options;
+
     this.name = "CloudflareR2";
     this.#bucket = bucket;
     this.#keyPrefix = keyPrefix;
@@ -237,6 +238,7 @@ export default class CloudflareR2 implements IStorage {
     using abortPromise = toAbortPromise(c.signal);
 
     const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
+
     if (object === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -266,14 +268,15 @@ export default class CloudflareR2 implements IStorage {
     using abortPromise = toAbortPromise(c.signal);
 
     let cursor: string | undefined = undefined;
+
     do {
       throwIfAborted(c.signal);
 
       const page: R2ObjectsLike = await Promise.race([
         this.#bucket.list({
-          prefix: this.#keyPrefix,
-          cursor,
           limit: CLEAR_BATCH_SIZE,
+          cursor,
+          prefix: this.#keyPrefix,
         }),
         abortPromise,
       ]);
@@ -281,10 +284,12 @@ export default class CloudflareR2 implements IStorage {
       const keys = page.objects
         .map((object) => object.key)
         .filter((key) => key.startsWith(this.#keyPrefix));
+
       for (let start = 0; start < keys.length; start += CLEAR_BATCH_SIZE) {
         throwIfAborted(c.signal);
 
         const batch = keys.slice(start, start + CLEAR_BATCH_SIZE);
+
         if (batch.length > 0) {
           await this.#bucket.delete(batch);
         }
@@ -306,14 +311,8 @@ export default class CloudflareR2 implements IStorage {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write(chunk) {
-        throwIfAborted(c.signal);
-
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key, chunk });
-        }
-
-        chunks.push(chunk.slice());
+      abort() {
+        chunks.length = 0;
       },
       close: async () => {
         throwIfAborted(c.signal);
@@ -321,6 +320,7 @@ export default class CloudflareR2 implements IStorage {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
         let offset = 0;
+
         for (const chunk of chunks) {
           merged.set(chunk, offset);
           offset += chunk.byteLength;
@@ -328,8 +328,17 @@ export default class CloudflareR2 implements IStorage {
 
         await bucket.put(fullKey, merged);
       },
-      abort() {
-        chunks.length = 0;
+      write(chunk) {
+        throwIfAborted(c.signal);
+
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key,
+            chunk,
+          });
+        }
+
+        chunks.push(chunk.slice());
       },
     });
   }
@@ -341,6 +350,7 @@ export default class CloudflareR2 implements IStorage {
     using abortPromise = toAbortPromise(c.signal);
 
     const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
+
     if (object === null) {
       throw new KeyNotFoundError({ key: c.key });
     }

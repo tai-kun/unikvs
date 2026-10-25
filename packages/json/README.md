@@ -1,3 +1,3 @@
 # @unikvs/json
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/json)
+[Document](https://tai-kun.github.io/unikvs/)

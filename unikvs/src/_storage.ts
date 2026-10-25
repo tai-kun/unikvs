@@ -4,7 +4,7 @@ import { callFnOnce } from "call-fn-once";
 
 import { PluginLifecycle } from "./_plugin-lifecycle.js";
 import { ReadableStreamSchema, WritableStreamSchema } from "./_streams.schemas.js";
-import * as v from "./_valibot.js";
+import { parseOutput } from "./_valibot.js";
 import {
   type PluginOperationAggregateError,
   StorageIsNotOpenError,
@@ -15,7 +15,7 @@ import {
 /**
  * 同じオブジェクトに対して同じ `UniKvsStorage` インスタンスを返すためのメモです。
  */
-const instances = /*#__PURE__*/ new WeakMap<IStorage, UniKvsStorage>();
+const instances = /* #__PURE__ */ new WeakMap<IStorage, UniKvsStorage>();
 
 /**
  * `IStorage` を `UniKvs` 内部から扱うためのラッパーです。
@@ -23,16 +23,6 @@ const instances = /*#__PURE__*/ new WeakMap<IStorage, UniKvsStorage>();
  * ストレージを安全に使うための検証などの処理が集約されています。
  */
 export default class UniKvsStorage {
-  /**
-   * `IStorage` から `UniKvs` 内部から扱うためのストレージを作成します。
-   *
-   * @param storage 元となるストレージです。
-   * @returns 検証などの機能が集約されたストレージです。
-   */
-  public static from(storage: IStorage): UniKvsStorage {
-    return callFnOnce(instances, storage, () => new UniKvsStorage(storage));
-  }
-
   /**
    * ラップするストレージです。
    */
@@ -52,6 +42,17 @@ export default class UniKvsStorage {
     this.#io = storage;
     this.#lifecycle = new PluginLifecycle(storage);
     this.name = storage.name;
+  }
+
+  /**
+   * `IStorage` から `UniKvs` 内部から扱うためのストレージを作成します。
+   *
+   * @param storage 元となるストレージです。
+   *
+   * @returns 検証などの機能が集約されたストレージです。
+   */
+  public static from(storage: IStorage): UniKvsStorage {
+    return callFnOnce(instances, storage, () => new UniKvsStorage(storage));
   }
 
   /**
@@ -102,6 +103,7 @@ export default class UniKvsStorage {
    * データを読み取ります。
    *
    * @param c 読み取りコンテキストです。
+   *
    * @returns 読み取ったデータを返します。
    */
   public async read(c: IStorage.ReadContext): Promise<unknown> {
@@ -116,6 +118,7 @@ export default class UniKvsStorage {
    * データの存在を確認します。
    *
    * @param c 存在確認コンテキストです。
+   *
    * @returns 存在する場合は `true` を返します。
    */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
@@ -125,7 +128,7 @@ export default class UniKvsStorage {
 
     const output = await this.#io.exists(c);
 
-    return Boolean(output);
+    return output;
   }
 
   /**
@@ -158,38 +161,42 @@ export default class UniKvsStorage {
    * 読み取り用のストリームを取得します。
    *
    * @param c ストリーム取得コンテキストです。
+   *
    * @returns 読み取り用のストリームを返します。
    */
   public async getReadable(c: IStorage.GetReadableContext): Promise<IReadableStream> {
     if (!this.#io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.name });
     }
+
     if (this.#io.getReadable === undefined) {
       throw new ReadableStreamNotSupportedError({ name: this.name });
     }
 
     const output = await this.#io.getReadable(c);
 
-    return v.parseOutput(ReadableStreamSchema, output);
+    return parseOutput(ReadableStreamSchema, output);
   }
 
   /**
    * 書き込み用のストリームを取得します。
    *
    * @param c ストリーム取得コンテキストです。
+   *
    * @returns 書き込み用のストリームを返します。
    */
   public async getWritable(c: IStorage.GetWritableContext): Promise<IWritableStream> {
     if (!this.#io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.name });
     }
+
     if (this.#io.getWritable === undefined) {
       throw new WritableStreamNotSupportedError({ name: this.name });
     }
 
     const output = await this.#io.getWritable(c);
 
-    return v.parseOutput(WritableStreamSchema, output);
+    return parseOutput(WritableStreamSchema, output);
   }
 
   /**
@@ -205,13 +212,13 @@ export default class UniKvsStorage {
     if (!this.#io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.name });
     }
+
     if (this.#io.onOtherWriteError === undefined) {
       return;
     }
 
     await this.#io.onOtherWriteError(c, [
       {
-        plugin: "storage",
         errors: (
           err.meta.errors as readonly {
             readonly plugin: "storage";
@@ -221,6 +228,7 @@ export default class UniKvsStorage {
           plugin: "storage" as const,
           reason: error.reason,
         })),
+        plugin: "storage",
       },
     ]);
   }

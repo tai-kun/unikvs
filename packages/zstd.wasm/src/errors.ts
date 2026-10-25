@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions, InvalidUsageErrorBase } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
 /**
@@ -48,7 +48,11 @@ export class ZstdWasmInvalidLevelError extends InvalidUsageErrorBase<ZstdWasmInv
   public constructor(args: ZstdWasmInvalidLevelErrorArgs) {
     const { actual, ...options } = args;
     const meta: ZstdWasmInvalidLevelErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid zstd compression level: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid zstd compression level: ${inspect(messageActual)}`,
+      options,
+    );
   }
 }
 

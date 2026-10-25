@@ -1,30 +1,30 @@
-import { InvalidUsageErrorBase, type IStorage } from "@unikvs/core";
+import { type IStorage, InvalidUsageErrorBase } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { KeyNotFoundError, UnsupportedRuntimeError } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 describe("KeyNotFoundError", () => {
   test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new KeyNotFoundError({ key: "k1" });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("UniKvsKeyNotFoundError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new KeyNotFoundError({ key: "k1" });
 
-    // 検証
+    // 検証：
     expect(error.meta).toStrictEqual({ key: "k1" });
     expect(error.message).toBe("Key not found: k1");
   });
@@ -32,36 +32,45 @@ describe("KeyNotFoundError", () => {
 
 describe("UnsupportedRuntimeError", () => {
   test("name は UniKvsUnsupportedRuntimeError である", ({ expect }) => {
-    // 準備と実行
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備と実行。
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
   });
 
   test("InvalidUsageErrorBase を継承している", ({ expect }) => {
-    // 準備と実行
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備と実行。
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
   });
 
   test("既定のメッセージを持つ", ({ expect }) => {
-    // 準備と実行
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備と実行。
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("Redis can only be used in the Bun runtime");
   });
 });
 
 describe("存在しないキー", () => {
   test("read は KeyNotFoundError で失敗する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "missing.bin";
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).rejects.toThrow(KeyNotFoundError);
@@ -70,11 +79,11 @@ describe("存在しないキー", () => {
 
 describe("中断された signal", () => {
   test("write は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("aborted.bin", { signal: controller.signal }) as IStorage.WriteContext,
@@ -84,27 +93,28 @@ describe("中断された signal", () => {
   });
 
   test("read は拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "aborted-read.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
+
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal: controller.signal }) as IStorage.ReadContext),
     ).rejects.toThrow();
   });
 
   test("exists は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.exists(
         createHasContext("aborted.bin", { signal: controller.signal }) as IStorage.ExistsContext,
@@ -113,11 +123,11 @@ describe("中断された signal", () => {
   });
 
   test("delete は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.delete(
         createDeleteContext("aborted.bin", { signal: controller.signal }) as IStorage.DeleteContext,
@@ -126,11 +136,11 @@ describe("中断された signal", () => {
   });
 
   test("clear は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
     ).rejects.toThrow();

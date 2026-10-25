@@ -1,6 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
 import SessionStorage from "../src/sessionstorage.js";
 import { createFakeStorage } from "./_helpers.js";
@@ -12,27 +12,25 @@ const { signal } = new AbortController();
  * 文字列値の往復を検証するために使用します。
  */
 const test = vitest.extend<{ storage: SessionStorage }>({
-  // oxlint-disable-next-line no-empty-pattern
   async storage({}, use) {
     await use(new SessionStorage({ storage: createFakeStorage() }));
   },
 });
-
 describe("文字列値の往復", () => {
   test("空文字・空白を保存したとき、そのまま取得できる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const cases: [string, string][] = [
       ["empty", ""],
       ["spaces", "   "],
       ["tabs", "\t\n\r"],
     ];
 
-    // 実行
+    // 実行：
     for (const [key, data] of cases) {
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
-    // 検証
+    // 検証：
     for (const [key, data] of cases) {
       expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
       expect(storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext)).toBe(
@@ -42,7 +40,7 @@ describe("文字列値の往復", () => {
   });
 
   test("Unicode・日本語・絵文字を保存したとき、そのまま取得できる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const cases: [string, string][] = [
       ["japanese", "こんにちは、世界"],
       ["emoji", "🎉🚀🔑"],
@@ -51,38 +49,38 @@ describe("文字列値の往復", () => {
       ["accents", "café naïve résumé"],
     ];
 
-    // 実行
+    // 実行：
     for (const [key, data] of cases) {
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
-    // 検証
+    // 検証：
     for (const [key, data] of cases) {
       expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
     }
   });
 
   test("改行を含む文字列を保存したとき、そのまま取得できる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const data = "1 行目\n2 行目\r\n3 行目\ttab 付き";
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("multiline", { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("multiline", { signal }) as IStorage.ReadContext)).toBe(
       data,
     );
   });
 
   test("長大な文字列を保存したとき、そのまま取得できる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const data = "あ".repeat(1024 * 1024);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("large", { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(storage.read(createGetContext("large", { signal }) as IStorage.ReadContext)).toBe(data);
   });
 
@@ -90,36 +88,41 @@ describe("文字列値の往復", () => {
     expect,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const cases: [string, string][] = [
       ["s", "s:foo"],
       ["b", "b:aGVsbG8="],
       ["j", 'j:{"a":1}'],
     ];
 
-    // 実行
+    // 実行：
     for (const [key, data] of cases) {
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
 
-    // 検証
+    // 検証：
     for (const [key, data] of cases) {
       expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(data);
     }
   });
 
   test("呼出側で JSON 文字列化した値を保存したとき、復元できる", ({ expect, storage }) => {
-    // 準備
-    const profile = { name: "aoba", tags: ["x", "y"], nested: { n: 1 } };
+    // 準備：
+    const profile = {
+      name: "aoba",
+      tags: ["x", "y"],
+      nested: { n: 1 },
+    };
     const data = JSON.stringify(profile);
 
-    // 実行
+    // 実行：
     storage.write(createSetContext("profile", { signal }) as IStorage.WriteContext, data);
+
     const restored = JSON.parse(
-      storage.read(createGetContext("profile", { signal }) as IStorage.ReadContext) as string,
+      storage.read(createGetContext("profile", { signal }) as IStorage.ReadContext),
     );
 
-    // 検証
+    // 検証：
     expect(restored).toStrictEqual(profile);
   });
 });

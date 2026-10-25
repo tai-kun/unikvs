@@ -1,11 +1,11 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
 import {
-  InvalidPartSizeError,
   StorageAbortedError,
   StorageNotOpenError,
+  InvalidPartSizeError,
   UnsupportedRuntimeError,
 } from "../src/errors.js";
 
@@ -16,7 +16,6 @@ import {
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
@@ -24,13 +23,15 @@ const test = vitest.extend<{
     deleteGlobalConfig();
   },
 });
-
 describe("エラーの国際化 (server)", () => {
   test("UnsupportedRuntimeError は既定では英語メッセージと name を持つ", ({ expect }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "S3", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "S3",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
     expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("S3 can only be used in the Bun runtime");
@@ -40,21 +41,27 @@ describe("エラーの国際化 (server)", () => {
     expect,
     setLang,
   }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "S3", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "S3",
+      runtime: "Bun",
+    });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("S3 は Bun ランタイムでのみ使用できます");
   });
 
   test("UnsupportedRuntimeError は en に戻すと英語メッセージに戻る", ({ expect, setLang }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "S3", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "S3",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     setLang("ja");
     expect(error.message).toBe("S3 は Bun ランタイムでのみ使用できます");
 
@@ -63,13 +70,13 @@ describe("エラーの国際化 (server)", () => {
   });
 
   test("StorageNotOpenError は ja を設定すると日本語メッセージになる", ({ expect, setLang }) => {
-    // 準備
+    // 準備：
     const error = new StorageNotOpenError();
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe(
       "S3 クライアントがオープンされていません。close() の前に open() を呼び出してください",
     );
@@ -79,13 +86,13 @@ describe("エラーの国際化 (server)", () => {
     expect,
     setLang,
   }) => {
-    // 準備
+    // 準備：
     const error = new InvalidPartSizeError({ actual: 0 });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toContain("変数に無効なパートサイズ 0 が指定されました");
     expect(error.message).toContain(String(5 * 1024 * 1024));
   });
@@ -94,13 +101,13 @@ describe("エラーの国際化 (server)", () => {
     expect,
     setLang,
   }) => {
-    // 準備
+    // 準備：
     const error = new StorageAbortedError({ key: "greeting.bin" });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toContain('キー "greeting.bin" のアップロード');
   });
 });

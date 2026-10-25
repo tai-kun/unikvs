@@ -46,20 +46,12 @@ export default class KeyPrefix extends PassThrough implements IMiddleware {
   }
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
-    switch (c.action) {
-      case "clear":
-        // 範囲限定削除を保証できない構成では clear を拒否します。
-        if (this.prefix !== "" && this.allowClear) {
-          throw new KeyPrefixClearDeniedError({
-            prefix: this.prefix,
-            allowClear: this.allowClear,
-          });
-        }
-
-        break;
-
-      default:
-        break;
+    // 範囲限定削除を保証できない構成では clear を拒否します。
+    if (c.action === "clear" && this.prefix !== "" && this.allowClear) {
+      throw new KeyPrefixClearDeniedError({
+        prefix: this.prefix,
+        allowClear: this.allowClear,
+      });
     }
 
     await next();

@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage } from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-filename-error)
@@ -29,11 +29,19 @@ export class InvalidFilenameError extends ErrorBase<InvalidFilenameErrorMeta> {
   public constructor(args: InvalidFilenameErrorArgs) {
     const { filename, ...options } = args;
     const meta: InvalidFilenameErrorMeta = { filename };
-    super(meta, ({ filename }) => `Invalid file name: ${filename}`, options);
+    super(
+      meta,
+      ({ filename: messageFilename }) => `Invalid file name: ${messageFilename}`,
+      options,
+    );
   }
 }
 
-setErrorMessage(InvalidFilenameError, ({ filename }) => `無効なファイル名: ${filename}`, "ja");
+setErrorMessage(
+  InvalidFilenameError,
+  ({ filename: messageFilename }) => `無効なファイル名: ${messageFilename}`,
+  "ja",
+);
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#invalid-dirname-error)
@@ -64,8 +72,16 @@ export class InvalidDirnameError extends ErrorBase<InvalidDirnameErrorMeta> {
   public constructor(args: InvalidDirnameErrorArgs) {
     const { dirname, ...options } = args;
     const meta: InvalidDirnameErrorMeta = { dirname };
-    super(meta, ({ dirname }) => `Invalid directory name: ${dirname}`, options);
+    super(
+      meta,
+      ({ dirname: messageDirname }) => `Invalid directory name: ${messageDirname}`,
+      options,
+    );
   }
 }
 
-setErrorMessage(InvalidDirnameError, ({ dirname }) => `無効なディレクトリー名: ${dirname}`, "ja");
+setErrorMessage(
+  InvalidDirnameError,
+  ({ dirname: messageDirname }) => `無効なディレクトリー名: ${messageDirname}`,
+  "ja",
+);

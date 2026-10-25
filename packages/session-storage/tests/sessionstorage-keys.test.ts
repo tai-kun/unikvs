@@ -1,11 +1,11 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
 } from "@unikvs/testing";
-import { describe, test as vitest } from "vitest";
+import { test as vitest, describe } from "vite-plus/test";
 
 import SessionStorage from "../src/sessionstorage.js";
 import { createFakeStorage } from "./_helpers.js";
@@ -16,8 +16,10 @@ const { signal } = new AbortController();
  * テストごとに既定 prefix の SessionStorage と背後 Storage を提供します。
  * 実キーへの prefix 付与を間接検証するために使用します。
  */
-const test = vitest.extend<{ backend: Storage; storage: SessionStorage }>({
-  // oxlint-disable-next-line no-empty-pattern
+const test = vitest.extend<{
+  backend: Storage;
+  storage: SessionStorage;
+}>({
   async backend({}, use) {
     await use(createFakeStorage());
   },
@@ -25,10 +27,9 @@ const test = vitest.extend<{ backend: Storage; storage: SessionStorage }>({
     await use(new SessionStorage({ storage: backend }));
   },
 });
-
 describe("キーの扱い", () => {
   test("任意の文字列キーで保存と取得ができる", ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const keys = [
       "",
       " ",
@@ -41,12 +42,12 @@ describe("キーの扱い", () => {
       "a".repeat(1000),
     ];
 
-    // 実行
+    // 実行：
     for (const [index, key] of keys.entries()) {
       storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, `v${index}`);
     }
 
-    // 検証
+    // 検証：
     for (const [index, key] of keys.entries()) {
       expect(storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)).toBe(
         `v${index}`,
@@ -58,37 +59,44 @@ describe("キーの扱い", () => {
   });
 
   test("論理キーに既定 prefix を付与して保存する", ({ expect, backend, storage }) => {
-    // 実行
+    // 実行：
     storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
 
-    // 検証
+    // 検証：
     expect(backend.getItem("unikvs:k1")).toBe("v1");
     expect(backend.getItem("k1")).toBe(null);
   });
 
   test("異なる keyPrefix のインスタンス間ではデータを共有しない", ({ expect, backend }) => {
-    // 準備
-    const storageA = new SessionStorage({ storage: backend, keyPrefix: "a:" });
-    const storageB = new SessionStorage({ storage: backend, keyPrefix: "b:" });
+    // 準備：
+    const storageA = new SessionStorage({
+      storage: backend,
+      keyPrefix: "a:",
+    });
+    const storageB = new SessionStorage({
+      storage: backend,
+      keyPrefix: "b:",
+    });
     storageA.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "va");
 
-    // 実行と検証
+    // 実行と検証：
     expect(storageB.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
       false,
     );
+
     expect(backend.getItem("a:k1")).toBe("va");
     expect(backend.getItem("b:k1")).toBe(null);
   });
 
   test("clear は prefix 配下のみ削除する", ({ expect, backend, storage }) => {
-    // 準備
+    // 準備：
     storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
     backend.setItem("other:k2", "v2");
 
-    // 実行
+    // 実行：
     storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
 
-    // 検証
+    // 検証：
     expect(storage.exists(createHasContext("k1", { signal }) as IStorage.ExistsContext)).toBe(
       false,
     );

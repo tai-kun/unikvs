@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -50,12 +50,16 @@ export class CookieTooLargeError extends ErrorBase<CookieTooLargeErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#errors)
    */
   public constructor(args: CookieTooLargeErrorArgs) {
-    const { key, actual, limit, ...options } = args;
-    const meta: CookieTooLargeErrorMeta = { key, actual, limit };
+    const { key, limit, actual, ...options } = args;
+    const meta: CookieTooLargeErrorMeta = {
+      key,
+      limit,
+      actual,
+    };
     super(
       meta,
-      ({ key, actual, limit }) =>
-        `Cookie value for key ${JSON.stringify(key)} is ${actual} bytes, which exceeds the size limit of ${limit} bytes.`,
+      ({ key: messageKey, limit: messageLimit, actual: messageActual }) =>
+        `Cookie value for key ${JSON.stringify(messageKey)} is ${messageActual} bytes, which exceeds the size limit of ${messageLimit} bytes.`,
       options,
     );
   }
@@ -63,7 +67,7 @@ export class CookieTooLargeError extends ErrorBase<CookieTooLargeErrorMeta> {
 
 setErrorMessage(
   CookieTooLargeError,
-  ({ key, actual, limit }) =>
+  ({ key, limit, actual }) =>
     `キー ${JSON.stringify(key)} の Cookie 値は ${actual} バイトであり、上限 ${limit} バイトを超えています`,
   "ja",
 );

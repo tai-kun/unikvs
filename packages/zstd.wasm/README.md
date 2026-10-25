@@ -1,3 +1,3 @@
 # @unikvs/zstd.wasm
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/zstd.wasm)
+[Document](https://tai-kun.github.io/unikvs/)

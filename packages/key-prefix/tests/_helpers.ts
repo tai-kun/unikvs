@@ -1,5 +1,5 @@
 import { Memory } from "@unikvs/memory";
-import { UniKvs, type PlainValue, type StreamValue } from "unikvs";
+import { type PlainValue, type StreamValue, UniKvs } from "unikvs";
 
 import KeyPrefix, { type KeyPrefixOptions } from "../src/key-prefix.js";
 
@@ -33,7 +33,13 @@ export async function collectValueBytes(
  * 指定したプレフィックスの KeyPrefix を適用したクライアントを作成します。
  * Memory 実体への物理キーの書き込みの検証に使用します。
  */
-export async function createPrefixedKvs(prefix: string, options?: KeyPrefixOptions) {
+export async function createPrefixedKvs(
+  prefix: string,
+  options?: KeyPrefixOptions,
+): Promise<{
+  kvs: UniKvs<TestMapping>;
+  storage: Memory;
+}> {
   const storage = new Memory();
   const kvs = UniKvs.config<TestMapping>()
     .use(new KeyPrefix(prefix, options))
@@ -41,5 +47,8 @@ export async function createPrefixedKvs(prefix: string, options?: KeyPrefixOptio
     .create();
   await kvs.open();
 
-  return { kvs, storage };
+  return {
+    kvs,
+    storage,
+  };
 }

@@ -1,3 +1,3 @@
 # @unikvs/zstd.node
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/zstd.node)
+[Document](https://tai-kun.github.io/unikvs/)

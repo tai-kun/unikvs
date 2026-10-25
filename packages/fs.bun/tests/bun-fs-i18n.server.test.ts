@@ -1,6 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
 import { UnsupportedRuntimeError } from "../src/errors.js";
 
@@ -11,7 +11,6 @@ import { UnsupportedRuntimeError } from "../src/errors.js";
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
@@ -19,34 +18,42 @@ const test = vitest.extend<{
     deleteGlobalConfig();
   },
 });
-
 describe("UnsupportedRuntimeError の国際化 (server)", () => {
   test("既定では英語メッセージと name を持つ", ({ expect }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "BunFs",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
     expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("BunFs can only be used in the Bun runtime");
   });
 
   test("ja を設定すると日本語メッセージになる", ({ expect, setLang }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "BunFs",
+      runtime: "Bun",
+    });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("BunFs は Bun ランタイムでのみ使用できます");
   });
 
   test("en に戻すと英語メッセージに戻る", ({ expect, setLang }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "BunFs", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "BunFs",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     setLang("ja");
     expect(error.message).toBe("BunFs は Bun ランタイムでのみ使用できます");
 

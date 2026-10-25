@@ -1,21 +1,22 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createDecodeContext,
-  createEncodeStreamContext,
-  createNext,
-  createOpenContext,
-  forCasesAsync,
-  sourceFrom,
   type Random,
+  createNext,
+  sourceFrom,
+  concatBytes,
+  forCasesAsync,
+  createOpenContext,
+  createDecodeContext,
+  createEncodeContext,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
+// oxlint-disable unicorn/number-literal-case
 import V8Serde from "../src/v8-serde.js";
 
-const SEED = 20240927;
+const SEED = 20_240_927;
 const CASE_COUNT = 50;
 const STREAM_CASE_COUNT = 30;
 
@@ -74,72 +75,125 @@ function generateValue(random: Random, depth = 0): unknown {
   const compositeKinds = ["array", "object", "map", "set", "date", "regexp", "typedArray"] as const;
   const kinds = depth >= 3 ? primitiveKinds : ([...primitiveKinds, ...compositeKinds] as const);
   const kind = random.pick(kinds);
+  let value: unknown;
 
   switch (kind) {
-    case "null":
-      return null;
-    case "undefined":
-      return undefined;
-    case "bool":
-      return random.bool();
-    case "int":
-      return random.int(-1000, 1000);
-    case "float":
-      return random.next() * 1000 - 500;
-    case "string":
-      return random.string(random.uint(12));
-    case "bigint":
+    case "null": {
+      value = null;
+      break;
+    }
+
+    case "undefined": {
+      value = undefined;
+      break;
+    }
+
+    case "bool": {
+      value = random.bool();
+      break;
+    }
+
+    case "int": {
+      value = random.int(-1000, 1000);
+      break;
+    }
+
+    case "float": {
+      value = random.next() * 1000 - 500;
+      break;
+    }
+
+    case "string": {
+      value = random.string(random.uint(12));
+      break;
+    }
+
+    case "bigint": {
       // 任意の大きさの bigint が bigint のまま往復することを確認します。
       if (random.bool()) {
-        return BigInt(random.int(-1_000_000, 1_000_000));
+        value = BigInt(random.int(-1_000_000, 1_000_000));
+      } else {
+        value =
+          ((BigInt(random.uint(0xff_ff_ff_ff)) << 64n) + BigInt(random.uint(0xff_ff_ff_ff))) *
+          (random.bool() ? 1n : -1n);
       }
-      return (
-        ((BigInt(random.uint(0xffffffff)) << 64n) + BigInt(random.uint(0xffffffff))) *
-        (random.bool() ? 1n : -1n)
-      );
-    case "bytes":
-      return random.bytes(random.uint(16));
-    case "array":
-      return random.array(random.uint(4), (childRandom) => generateValue(childRandom, depth + 1));
-    case "object":
-      return Object.fromEntries(
+
+      break;
+    }
+
+    case "bytes": {
+      value = random.bytes(random.uint(16));
+      break;
+    }
+
+    case "array": {
+      value = random.array(random.uint(4), (childRandom) => generateValue(childRandom, depth + 1));
+      break;
+    }
+
+    case "object": {
+      value = Object.fromEntries(
         random.array(random.uint(4), (childRandom): [string, unknown] => [
           `k${childRandom.string(1 + childRandom.uint(4))}`,
           generateValue(childRandom, depth + 1),
         ]),
       );
-    case "map":
-      return new Map(
+      break;
+    }
+
+    case "map": {
+      value = new Map(
         random.array(random.uint(4), (childRandom): [unknown, unknown] => [
           generateValue(childRandom, depth + 1),
           generateValue(childRandom, depth + 1),
         ]),
       );
-    case "set":
-      return new Set(
+      break;
+    }
+
+    case "set": {
+      value = new Set(
         random.array(random.uint(4), (childRandom) => generateValue(childRandom, depth + 1)),
       );
-    case "date":
-      return new Date(random.int(-4_000_000_000_000, 4_000_000_000_000));
-    case "regexp":
-      return new RegExp(
+      break;
+    }
+
+    case "date": {
+      value = new Date(random.int(-4_000_000_000_000, 4_000_000_000_000));
+      break;
+    }
+
+    case "regexp": {
+      value = new RegExp(
         random.string(1 + random.uint(6)),
         random.pick(["", "g", "i", "m", "s", "u", "y", "gi", "gimsuy"]),
       );
+      break;
+    }
+
     case "typedArray": {
       const length = random.uint(8);
-      switch (random.pick(["int16", "float64"] as const)) {
-        case "int16":
-          return new Int16Array(
-            random.array(length, (childRandom) => childRandom.int(-32768, 32767)),
-          );
-        case "float64":
-          return new Float64Array(
-            random.array(length, (childRandom) => childRandom.next() * 1000 - 500),
-          );
+      const typedArrayKind = random.pick(["int16", "float64"] as const);
+
+      if (typedArrayKind === "int16") {
+        value = new Int16Array(
+          random.array(length, (childRandom) => childRandom.int(-32_768, 32_767)),
+        );
+      } else {
+        value = new Float64Array(
+          random.array(length, (childRandom) => childRandom.next() * 1000 - 500),
+        );
       }
+
+      break;
+    }
+
+    default: {
+      throw new Error(`Unknown kind: ${String(kind)}`);
     }
   }
+
+  return value;
 }
 
 /**
@@ -191,9 +245,9 @@ async function pumpDecode(
   target: V8Serde,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: unknown[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: unknown[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
   await target.decodeStream(
@@ -220,21 +274,24 @@ async function pumpDecode(
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
 }
 
 describe("決定的ファズテスト", () => {
   test("ランダムな値を一括で往復すると元の値に戻る", async ({ expect, signal }) => {
-    // 準備
+    // 準備：
     const target = await createOpenedTarget(signal);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(SEED, CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
 
       const encoded = await encode(target, value);
       const decoded = await decode(target, encoded);
-
       expect(decoded, `case ${index}`).toStrictEqual(value);
     });
   });
@@ -243,17 +300,16 @@ describe("決定的ファズテスト", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const target = await createOpenedTarget(signal);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(SEED + 1, STREAM_CASE_COUNT, async (random, index) => {
       const value = generateValue(random);
       const frame = await encodeFrame(target, value);
       const chunks = splitRandomly(random, frame);
 
       const decoded = await pumpDecode(target, chunks);
-
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();
       expect(decoded.outputChunks, `case ${index}`).toStrictEqual([value]);
@@ -264,17 +320,16 @@ describe("決定的ファズテスト", () => {
     expect,
     signal,
   }) => {
-    // 準備
+    // 準備：
     const target = await createOpenedTarget(signal);
 
-    // 実行と検証
+    // 実行と検証：
     await forCasesAsync(SEED + 2, STREAM_CASE_COUNT, async (random, index) => {
       const values = random.array(random.uint(6), (childRandom) => generateValue(childRandom));
       const frames = await Promise.all(values.map((value) => encodeFrame(target, value)));
       const chunks = splitRandomly(random, concatBytes(frames));
 
       const decoded = await pumpDecode(target, chunks);
-
       expect(decoded.writeError, `case ${index}`).toBeUndefined();
       expect(decoded.readError, `case ${index}`).toBeUndefined();
       expect(decoded.outputChunks, `case ${index}`).toStrictEqual(values);

@@ -2,24 +2,27 @@ import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
-  ChecksumInvalidRequiredError,
   ChecksumMismatchError,
   ChecksumRequiredError,
   ChecksumInvalidVarNameError,
+  ChecksumInvalidRequiredError,
 } from "./errors.js";
 
 /**
  * データのサイズ単位を定義する定数です。
  */
 const B = 1;
+
 /**
  * キロバイト（1000 バイト）を表す定数です。
  */
 const KB = 1000 * B;
+
 /**
  * メガバイト（1000 KB）を表す定数です。
  */
 const MB = 1000 * KB;
+
 /**
  * ギガバイト（1000 MB）を表す定数です。
  */
@@ -98,6 +101,7 @@ export default abstract class Checksum implements IMiddleware {
    */
   public constructor(name: string, hash: IHash, options: ChecksumOptions = {}) {
     const { required = false } = options;
+
     if (typeof required !== "boolean") {
       throw new ChecksumInvalidRequiredError({ actual: required });
     }
@@ -152,20 +156,27 @@ export default abstract class Checksum implements IMiddleware {
    *
    * @param data 検証するデータです。
    * @param c チェックサム変数を保持するコンテキストです。
+   *
    * @returns 入力されたデータをそのまま返します。
    */
   #checksum(data: Uint8Array<ArrayBuffer>, c: IPipelineContext): Uint8Array<ArrayBuffer> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
+
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
     const checksum = c.get(CHECKSUM_VAR_NAME);
+
     if (typeof checksum === "string") {
       // チェックサムの指定がある場合のみ検証ロジックを走らせます。
       const hash = bytesToHex(this.#hash(data));
+
       if (checksum !== hash) {
-        throw new ChecksumMismatchError({ actual: hash, expected: checksum });
+        throw new ChecksumMismatchError({
+          actual: hash,
+          expected: checksum,
+        });
       }
     } else if (this.required) {
       throw new ChecksumRequiredError();
@@ -179,17 +190,20 @@ export default abstract class Checksum implements IMiddleware {
    * ストリーム形式で逐次的にハッシュ計算と検証を行う TransformStream を作成する内部メソッドです。
    *
    * @param c チェックサム変数を保持するコンテキストです。
+   *
    * @returns 変換処理を定義した TransformStream オブジェクトです。
    */
   #checksumStream(
     c: IPipelineContext,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
+
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
     const checksum = c.get(CHECKSUM_VAR_NAME);
+
     if (typeof checksum !== "string") {
       if (this.required) {
         throw new ChecksumRequiredError();
@@ -222,8 +236,12 @@ export default abstract class Checksum implements IMiddleware {
        */
       flush() {
         const hash = bytesToHex(hasher.digest());
+
         if (checksum !== hash) {
-          throw new ChecksumMismatchError({ actual: hash, expected: checksum });
+          throw new ChecksumMismatchError({
+            actual: hash,
+            expected: checksum,
+          });
         }
       },
     });

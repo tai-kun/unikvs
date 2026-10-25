@@ -33,7 +33,11 @@ export class ZstdNodeInvalidLevelError extends InvalidUsageErrorBase<ZstdNodeInv
   public constructor(args: ZstdNodeInvalidLevelErrorArgs) {
     const { actual, ...options } = args;
     const meta: ZstdNodeInvalidLevelErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid zstd compression level: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid zstd compression level: ${inspect(messageActual)}`,
+      options,
+    );
   }
 }
 

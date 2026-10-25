@@ -1,6 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
-import { toAbortPromise } from "abort-signal-utils";
+import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { callAbortableFnOnce } from "call-fn-once";
 
 import { type IEnv, api } from "./_core.js";
@@ -16,8 +16,7 @@ export type ZstdWasmOptions = {
   readonly level?: number | undefined;
 };
 
-// 理由: 上流の @bokuweb/zstd-wasm には一括変換 (compress/decompress) のみがあり、
-// ストリーミング API が存在しないため、encodeStream/decodeStream は提供しません。
+// 理由 : 上流の @bokuweb/zstd-wasm には一括変換 (compress/decompress) のみがあり、ストリーミング API が存在しないため、encodeStream/decodeStream は提供しません。
 // テストでも非提供が契約として検証されています。
 
 /**
@@ -47,6 +46,7 @@ export default class ZstdWasm implements IMiddleware {
   public constructor(options: ZstdWasmOptions = {}) {
     const { level = 3 } = options;
     const isValidLevel = Number.isInteger(level) && level >= 1 && level <= 22;
+
     if (!isValidLevel) {
       throw new ZstdWasmInvalidLevelError({ actual: level });
     }
@@ -57,6 +57,18 @@ export default class ZstdWasm implements IMiddleware {
 
   public get isOpen(): boolean {
     return this.#env !== null;
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("ZstdWasm is not open. Call open() first.");
+    }
+
+    return env;
   }
 
   public async open(c: IMiddleware.OpenContext): Promise<void> {
@@ -73,7 +85,7 @@ export default class ZstdWasm implements IMiddleware {
         c.signal,
       );
     } catch (ex) {
-      c.signal.throwIfAborted();
+      throwIfAborted(c.signal);
 
       throw new ZstdWasmInitError({ cause: ex });
     }
@@ -83,7 +95,8 @@ export default class ZstdWasm implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const view = api.compress(env, c.source, {
       level: this.#level,
     });
@@ -96,7 +109,8 @@ export default class ZstdWasm implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const env = this.#env!; // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    // UniKvs の仕様で先に open() が実行されるため、これは非 null です。
+    const env = this.#getEnv();
     const view = api.decompress(env, c.source);
     c.destination = toOwnedBytes(view);
 

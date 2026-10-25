@@ -3,14 +3,14 @@ import { join } from "node:path";
 
 import type { IStorage } from "@unikvs/core";
 import {
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
 import { InvalidFilenameError } from "@unikvs/utils";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
@@ -20,7 +20,7 @@ describe("キー検証", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const validKeys = [
       "file.txt",
       "archive.tar.gz",
@@ -34,13 +34,13 @@ describe("キー検証", () => {
     ];
 
     for (const [index, key] of validKeys.entries()) {
-      // 準備
+      // 準備：
       const data = new Uint8Array([index, index + 1]);
 
-      // 実行
+      // 実行：
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-      // 検証
+      // 検証：
       expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
       expect(
         new Uint8Array(
@@ -48,10 +48,10 @@ describe("キー検証", () => {
         ),
       ).toStrictEqual(data);
 
-      // 実行
+      // 実行：
       await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
-      // 検証
+      // 検証：
       expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
     }
   });
@@ -61,7 +61,7 @@ describe("キー検証", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const invalidKeys = [
       "",
       ".",
@@ -87,7 +87,7 @@ describe("キー検証", () => {
       "trailing.",
       "trailing ",
       "null\u0000byte",
-      "control\u001fchar",
+      "control\u001Fchar",
       "line\nbreak",
       "e\u0301.bin",
       "a".repeat(256),
@@ -109,9 +109,9 @@ describe("キー検証", () => {
       await expect(
         storage.delete(createDeleteContext(key) as IStorage.DeleteContext),
       ).rejects.toThrow(InvalidFilenameError);
-      await expect(
+      expect(() =>
         storage.getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext),
-      ).rejects.toThrow(InvalidFilenameError);
+      ).toThrow(InvalidFilenameError);
       expect(() =>
         storage.getReadable(createStreamContext(key, { signal }) as IStorage.GetReadableContext),
       ).toThrow(InvalidFilenameError);
@@ -119,34 +119,34 @@ describe("キー検証", () => {
   });
 
   test("手動で配置した 255 バイトのファイル名は read・exists・delete できる", async ({
-    expect,
     root,
+    expect,
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     const key = "a".repeat(255);
     const data = new Uint8Array([1, 2, 3]);
     await writeFile(join(root, key), data);
 
-    // 実行と検証
+    // 実行と検証：
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(true);
     expect(
       new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
     ).toStrictEqual(data);
 
-    // 実行
+    // 実行：
     await storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     expect(await storage.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
   });
 
   test.fails("255 バイトの有効なキーでも write できる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "a".repeat(255);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext(key, { signal }) as IStorage.WriteContext,

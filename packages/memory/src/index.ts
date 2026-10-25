@@ -1,8 +1,8 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  InvalidChunkTypeErrorMeta,
+  KeyNotFoundErrorMeta,
   InvalidChunkTypeErrorArgs,
+  InvalidChunkTypeErrorMeta,
 } from "./errors.js";
 export { KeyNotFoundError, InvalidChunkTypeError } from "./errors.js";
 

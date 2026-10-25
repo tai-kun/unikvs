@@ -1,4 +1,4 @@
-import { ErrorBase, setErrorMessage, type ErrorOptions, InvalidUsageErrorBase } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
 /**
@@ -48,7 +48,11 @@ export class BrotliWasmInvalidLevelError extends InvalidUsageErrorBase<BrotliWas
   public constructor(args: BrotliWasmInvalidLevelErrorArgs) {
     const { actual, ...options } = args;
     const meta: BrotliWasmInvalidLevelErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid brotli compression level: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: messageActual }) => `Invalid brotli compression level: ${inspect(messageActual)}`,
+      options,
+    );
   }
 }
 

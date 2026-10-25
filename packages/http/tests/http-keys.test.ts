@@ -1,10 +1,10 @@
 import type { IStorage } from "@unikvs/core";
 import { captureRejection, createGetContext, createSetContext } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { InvalidKeyError } from "../src/errors.js";
 import Http from "../src/http.js";
-import { createMockServer } from "./_helpers.js";
+import { type RecordedCall, createMockServer } from "./_helpers.js";
 
 const baseUrl = "https://kv.example.com/store";
 
@@ -16,116 +16,124 @@ function lastSegment(url: string): string {
   return url.slice(`${baseUrl}/`.length);
 }
 
+/**
+ * 最初の呼び出し URL を返します。
+ * テスト本体での条件分岐を避けるために使用します。
+ */
+function firstCallUrl(calls: readonly RecordedCall[]): string {
+  return calls[0]?.url ?? "";
+}
+
 describe("キーの符号化", () => {
   test("任意文字列のキーを保存したとき、元のキーで取得できる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
     const keys = ["a/b", "a:b", "あいう", "🔑", "a b", "a?b", "a#b", "..", "../escape", "a\nb"];
 
-    // 実行
+    // 実行：
     for (const [index, key] of keys.entries()) {
       await storage.write(
-        createSetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        createSetContext(key, { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
         new Uint8Array([index]),
       );
     }
 
-    // 検証
+    // 検証：
     for (const [index, key] of keys.entries()) {
       const result = await storage.read(
-        createGetContext(key, { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        createGetContext(key, { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
       );
       expect(result).toStrictEqual(new Uint8Array([index]));
     }
   });
 
   test("キー全体が単一パスセグメントとして符号化される", async ({ expect }) => {
-    // 準備
-    const { fetch, calls } = createMockServer();
+    // 準備：
+    const { calls, fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     await storage.write(
-      createSetContext("a/b:c", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext("a/b:c", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 検証
+    // 検証：
     expect(calls[0]?.url).toBe(`${baseUrl}/${encodeURIComponent("unikvs:a/b:c")}`);
-    expect(lastSegment(calls[0]?.url ?? "")).not.toContain("/");
+    expect(lastSegment(firstCallUrl(calls))).not.toContain("/");
   });
 
   test("ドットを含むキーは %2E に符号化される", async ({ expect }) => {
-    // 準備
-    const { fetch, calls } = createMockServer();
+    // 準備：
+    const { calls, fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     await storage.write(
-      createSetContext("a.b", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext("a.b", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 検証
+    // 検証：
     expect(calls[0]?.url).toContain("%2E");
-    expect(lastSegment(calls[0]?.url ?? "")).not.toContain(".");
-    expect(decodeURIComponent(lastSegment(calls[0]?.url ?? ""))).toBe("unikvs:a.b");
+    expect(lastSegment(firstCallUrl(calls))).not.toContain(".");
+    expect(decodeURIComponent(lastSegment(firstCallUrl(calls)))).toBe("unikvs:a.b");
   });
 
   test("空文字キーを使用しても、clear の ?prefix= と衝突しない", async ({ expect }) => {
-    // 準備
-    const { fetch, calls } = createMockServer();
+    // 準備：
+    const { calls, fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     await storage.write(
-      createSetContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext("", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 検証
+    // 検証：
     expect(calls[0]?.url).toBe(`${baseUrl}/${encodeURIComponent("unikvs:")}`);
     expect(calls[0]?.url).not.toContain("?prefix=");
     expect(
       await storage.read(
-        createGetContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        createGetContext("", { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
       ),
     ).toStrictEqual(new Uint8Array([1]));
   });
 
   test("lone-surrogate を含むキーは InvalidKeyError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.write(
-        createSetContext("\uD800", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        createSetContext("\uD800", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidKeyError);
     expect((error as InvalidKeyError).meta).toStrictEqual({ key: "\uD800" });
     expect((error as InvalidKeyError).cause).toBeInstanceOf(URIError);
   });
 
   test("lone-surrogate を含むキーの read は InvalidKeyError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const { fetch } = createMockServer();
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.read(
-        createGetContext("\uD800", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        createGetContext("\uD800", { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(InvalidKeyError);
   });
 });

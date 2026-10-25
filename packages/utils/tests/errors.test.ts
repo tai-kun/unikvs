@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import { InvalidDirnameError, InvalidFilenameError } from "../src/errors.js";
 
@@ -22,13 +22,16 @@ describe("InvalidFilenameError", () => {
   });
 
   test("options.cause を Error の cause に伝達する", ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("原因");
 
-    // 実行
-    const error = new InvalidFilenameError({ filename: "test", cause });
+    // 実行：
+    const error = new InvalidFilenameError({
+      cause,
+      filename: "test",
+    });
 
-    // 検証
+    // 検証：
     expect(error.cause).toBe(cause);
   });
 });
@@ -53,13 +56,16 @@ describe("InvalidDirnameError", () => {
   });
 
   test("options.cause を Error の cause に伝達する", ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("原因");
 
-    // 実行
-    const error = new InvalidDirnameError({ dirname: "test", cause });
+    // 実行：
+    const error = new InvalidDirnameError({
+      cause,
+      dirname: "test",
+    });
 
-    // 検証
+    // 検証：
     expect(error.cause).toBe(cause);
   });
 });

@@ -1,32 +1,33 @@
-import { describe, expectTypeOf, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
-import { ExpiryInvalidExpiresAtError, KeyNotFoundError } from "../src/errors.js";
+import { KeyNotFoundError, ExpiryInvalidExpiresAtError } from "../src/errors.js";
 import Expiry from "../src/expiry.js";
 import type {
-  ExpiryExpiredInfo,
-  ExpiryInvalidExpiresAtErrorArgs,
-  ExpiryInvalidExpiresAtErrorMeta,
   ExpiryOptions,
   ExpiresAtInput,
+  ExpiryExpiredInfo,
   KeyNotFoundErrorArgs,
   KeyNotFoundErrorMeta,
+  ExpiryInvalidExpiresAtErrorArgs,
+  ExpiryInvalidExpiresAtErrorMeta,
 } from "../src/index.js";
 import * as index from "../src/index.js";
 
 describe("index のエクスポート", () => {
   test("トランスフォーマーがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.Expiry).toBe(Expiry);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.KeyNotFoundError).toBe(KeyNotFoundError);
     expect(index.ExpiryInvalidExpiresAtError).toBe(ExpiryInvalidExpiresAtError);
   });
 
   test("型がエクスポートされている", () => {
-    // 実行と検証
+    // 実行と検証：
     // `index.js` から型を import できることで型の再輸出を確認する。
     expectTypeOf<ExpiresAtInput>().toEqualTypeOf<Date | number | string>();
     expectTypeOf<ExpiryExpiredInfo>().toEqualTypeOf<{
@@ -34,9 +35,9 @@ describe("index のエクスポート", () => {
       readonly expiresAt: number;
     }>();
     expectTypeOf<ExpiryOptions>().toEqualTypeOf<{
-      readonly defaultExpiresAt?: ExpiresAtInput | undefined;
       readonly now?: (() => number) | undefined;
       readonly onExpire?: ((info: ExpiryExpiredInfo) => void) | undefined;
+      readonly defaultExpiresAt?: ExpiresAtInput | undefined;
     }>();
     expectTypeOf<ExpiryInvalidExpiresAtErrorMeta>().toEqualTypeOf<{
       readonly key?: string | undefined;

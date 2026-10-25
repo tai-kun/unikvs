@@ -1,15 +1,15 @@
-import { KeyNotFoundError, type IPipelineContext, type IStorage } from "@unikvs/core";
+import { type IStorage, type IPipelineContext, KeyNotFoundError } from "@unikvs/core";
 
 import {
-  ClearNotSupportedError,
-  ClearWithoutPrefixNotAllowedError,
+  InvalidKeyError,
   HttpNetworkError,
   HttpResponseError,
-  InvalidBaseUrlError,
-  InvalidChunkTypeError,
-  InvalidHeadersError,
-  InvalidKeyError,
   InvalidTokenError,
+  InvalidBaseUrlError,
+  InvalidHeadersError,
+  InvalidChunkTypeError,
+  ClearNotSupportedError,
+  ClearWithoutPrefixNotAllowedError,
 } from "./errors.js";
 
 /**
@@ -70,15 +70,17 @@ function assertHeadersRecord(value: unknown): Record<string, string> {
 
 // `token` 値が空でない文字列であることを検証します。
 function assertTokenValue(value: unknown): string | undefined {
+  let result: string | undefined;
+
   if (value === undefined) {
-    return undefined;
+    result = undefined;
+  } else if (typeof value === "string" && value !== "") {
+    result = value;
+  } else {
+    throw new InvalidTokenError({ actual: value });
   }
 
-  if (typeof value === "string" && value !== "") {
-    return value;
-  }
-
-  throw new InvalidTokenError({ actual: value });
+  return result;
 }
 
 /**
@@ -114,11 +116,11 @@ export default class Http implements IStorage {
    */
   public constructor(baseUrl: string, options: HttpOptions = {}) {
     const {
+      fetch,
+      token,
+      headers,
       keyPrefix = "unikvs:",
       allowClearWithoutPrefix = false,
-      fetch,
-      headers,
-      token,
     } = options;
 
     // 非 `string` 入力は `TypeError` ではなく個別エラーで拒否します。
@@ -137,7 +139,7 @@ export default class Http implements IStorage {
     }
 
     // 末尾の `/` を除去して正規化します。
-    const normalized = baseUrl.replace(/\/+$/, "");
+    const normalized = baseUrl.replace(/\/+$/u, "");
 
     // 除去後に空文字になる入力は拒否します。
     if (normalized === "") {
@@ -165,6 +167,12 @@ export default class Http implements IStorage {
     this.#fetchImpl = fetch;
     this.#baseHeaders = headers === undefined ? {} : assertHeadersRecord(headers);
     this.#baseToken = assertTokenValue(token);
+  }
+
+  // 中断済みなら中断例外を再送出します。
+  // `fetch` の `catch` 直後に呼びます。
+  static #rethrowIfAborted(signal: AbortSignal): void {
+    signal.throwIfAborted();
   }
 
   // 使用する `fetch` 実装を解決します。
@@ -217,7 +225,10 @@ export default class Http implements IStorage {
     try {
       segment = encodeURIComponent(`${this.#keyPrefix}${key}`).replaceAll(".", "%2E");
     } catch (ex) {
-      throw new InvalidKeyError({ key, cause: ex });
+      throw new InvalidKeyError({
+        key,
+        cause: ex,
+      });
     }
 
     return `${this.#baseUrl}/${segment}`;
@@ -231,16 +242,13 @@ export default class Http implements IStorage {
     try {
       encoded = encodeURIComponent(this.#keyPrefix);
     } catch (ex) {
-      throw new InvalidKeyError({ key: this.#keyPrefix, cause: ex });
+      throw new InvalidKeyError({
+        key: this.#keyPrefix,
+        cause: ex,
+      });
     }
 
     return `${this.#baseUrl}/?prefix=${encoded}`;
-  }
-
-  // 中断済みなら中断例外を再送出します。
-  // `fetch` の `catch` 直後に呼びます。
-  static #rethrowIfAborted(signal: AbortSignal): void {
-    signal.throwIfAborted();
   }
 
   public get isOpen(): boolean {
@@ -249,10 +257,12 @@ export default class Http implements IStorage {
 
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
+    await Promise.resolve();
   }
 
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
+    await Promise.resolve();
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -266,22 +276,30 @@ export default class Http implements IStorage {
     try {
       response = await fetchFn(
         new Request(url, {
-          method: "PUT",
-          headers: { ...headers, "Content-Type": "application/octet-stream" },
           body: data,
+          method: "PUT",
           signal: c.signal,
+          headers: {
+            ...headers,
+            "Content-Type": "application/octet-stream",
+          },
         }),
       );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "PUT",
+      });
     }
 
     if (!response.ok) {
       throw new HttpResponseError({
-        method: "PUT",
-        url,
         key: c.key,
+        url,
+        method: "PUT",
         status: response.status,
         statusText: response.statusText,
       });
@@ -297,10 +315,21 @@ export default class Http implements IStorage {
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
+      response = await fetchFn(
+        new Request(url, {
+          method: "GET",
+          signal: c.signal,
+          headers,
+        }),
+      );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "GET",
+      });
     }
 
     if (response.status === 404 || response.status === 410) {
@@ -309,9 +338,9 @@ export default class Http implements IStorage {
 
     if (!response.ok) {
       throw new HttpResponseError({
-        method: "GET",
-        url,
         key: c.key,
+        url,
+        method: "GET",
         status: response.status,
         statusText: response.statusText,
       });
@@ -331,10 +360,21 @@ export default class Http implements IStorage {
     let headResponse: Response;
 
     try {
-      headResponse = await fetchFn(new Request(url, { method: "HEAD", headers, signal: c.signal }));
+      headResponse = await fetchFn(
+        new Request(url, {
+          method: "HEAD",
+          signal: c.signal,
+          headers,
+        }),
+      );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "HEAD", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "HEAD",
+      });
     }
 
     if (headResponse.status === 404 || headResponse.status === 410) {
@@ -348,9 +388,9 @@ export default class Http implements IStorage {
     // `HEAD` 未対応サーバー向けに `GET` でフォールバックします。
     if (headResponse.status !== 405 && headResponse.status !== 501) {
       throw new HttpResponseError({
-        method: "HEAD",
-        url,
         key: c.key,
+        url,
+        method: "HEAD",
         status: headResponse.status,
         statusText: headResponse.statusText,
       });
@@ -362,13 +402,21 @@ export default class Http implements IStorage {
       getResponse = await fetchFn(
         new Request(url, {
           method: "GET",
-          headers: { ...headers, Range: "bytes=0-0" },
           signal: c.signal,
+          headers: {
+            ...headers,
+            Range: "bytes=0-0",
+          },
         }),
       );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "GET",
+      });
     }
 
     // ボディを消費せず破棄します。
@@ -388,9 +436,9 @@ export default class Http implements IStorage {
     await getResponse.body?.cancel();
 
     throw new HttpResponseError({
-      method: "GET",
-      url,
       key: c.key,
+      url,
+      method: "GET",
       status: getResponse.status,
       statusText: getResponse.statusText,
     });
@@ -405,10 +453,21 @@ export default class Http implements IStorage {
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
+      response = await fetchFn(
+        new Request(url, {
+          method: "DELETE",
+          signal: c.signal,
+          headers,
+        }),
+      );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "DELETE", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "DELETE",
+      });
     }
 
     // 削除は冪等とし存在しないキーも成功扱いにします。
@@ -418,9 +477,9 @@ export default class Http implements IStorage {
 
     if (!response.ok) {
       throw new HttpResponseError({
-        method: "DELETE",
-        url,
         key: c.key,
+        url,
+        method: "DELETE",
         status: response.status,
         statusText: response.statusText,
       });
@@ -441,10 +500,21 @@ export default class Http implements IStorage {
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "DELETE", headers, signal: c.signal }));
+      response = await fetchFn(
+        new Request(url, {
+          method: "DELETE",
+          signal: c.signal,
+          headers,
+        }),
+      );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "DELETE", url, key: undefined, cause: ex });
+      throw new HttpNetworkError({
+        key: undefined,
+        url,
+        cause: ex,
+        method: "DELETE",
+      });
     }
 
     if (response.ok) {
@@ -453,13 +523,16 @@ export default class Http implements IStorage {
 
     // 未対応応答は恒久失敗として専用エラーにします。
     if (response.status === 404 || response.status === 405 || response.status === 501) {
-      throw new ClearNotSupportedError({ prefix: this.#keyPrefix, status: response.status });
+      throw new ClearNotSupportedError({
+        prefix: this.#keyPrefix,
+        status: response.status,
+      });
     }
 
     throw new HttpResponseError({
-      method: "DELETE",
-      url,
       key: undefined,
+      url,
+      method: "DELETE",
       status: response.status,
       statusText: response.statusText,
     });
@@ -475,12 +548,8 @@ export default class Http implements IStorage {
     const chunks: Uint8Array[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      write(chunk) {
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(chunk.slice());
+      abort() {
+        chunks.length = 0;
       },
       close: async () => {
         c.signal.throwIfAborted();
@@ -499,29 +568,44 @@ export default class Http implements IStorage {
         try {
           response = await fetchFn(
             new Request(url, {
-              method: "PUT",
-              headers: { ...headers, "Content-Type": "application/octet-stream" },
               body: merged,
+              method: "PUT",
               signal: c.signal,
+              headers: {
+                ...headers,
+                "Content-Type": "application/octet-stream",
+              },
             }),
           );
         } catch (ex) {
           Http.#rethrowIfAborted(c.signal);
-          throw new HttpNetworkError({ method: "PUT", url, key: c.key, cause: ex });
+          throw new HttpNetworkError({
+            key: c.key,
+            url,
+            cause: ex,
+            method: "PUT",
+          });
         }
 
         if (!response.ok) {
           throw new HttpResponseError({
-            method: "PUT",
-            url,
             key: c.key,
+            url,
+            method: "PUT",
             status: response.status,
             statusText: response.statusText,
           });
         }
       },
-      abort() {
-        chunks.length = 0;
+      write(chunk) {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(chunk.slice());
       },
     });
   }
@@ -537,10 +621,21 @@ export default class Http implements IStorage {
     let response: Response;
 
     try {
-      response = await fetchFn(new Request(url, { method: "GET", headers, signal: c.signal }));
+      response = await fetchFn(
+        new Request(url, {
+          method: "GET",
+          signal: c.signal,
+          headers,
+        }),
+      );
     } catch (ex) {
       Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({ method: "GET", url, key: c.key, cause: ex });
+      throw new HttpNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+        method: "GET",
+      });
     }
 
     if (response.status === 404 || response.status === 410) {
@@ -549,9 +644,9 @@ export default class Http implements IStorage {
 
     if (!response.ok) {
       throw new HttpResponseError({
-        method: "GET",
-        url,
         key: c.key,
+        url,
+        method: "GET",
         status: response.status,
         statusText: response.statusText,
       });

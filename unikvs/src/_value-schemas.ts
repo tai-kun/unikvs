@@ -1,12 +1,13 @@
-import * as v from "./_valibot.js";
+import type { GenericSchema } from "./_valibot.js";
+import { union, safeParse } from "./_valibot.js";
 import { InvalidInputError } from "./errors.js";
 import type { PlainValue, StreamValue } from "./value-schemas.js";
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// 値の型
+// 値の型。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * PlainValue 型から内部のデータ型を抽出します。
@@ -45,7 +46,7 @@ export type $InferStreamValueChunkInput<TStreamValue> =
  *
  * 同じライブラリーが複数読み込まれた環境でも認識できるようにグローバルシンボルを使用します。
  */
-export const VALUE_SCHEMA_BRAND: unique symbol = /*#__PURE__*/ Symbol.for(
+export const VALUE_SCHEMA_BRAND: unique symbol = /* #__PURE__ */ Symbol.for(
   "unikvs:VALUE_SCHEMA_BRAND",
 );
 
@@ -70,37 +71,35 @@ export type ValueSchemaInfo = {
   /**
    * データの検証に使用するスキーマです。
    */
-  readonly schema: v.GenericSchema;
+  readonly schema: GenericSchema;
 };
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// スキーマ定義
+// スキーマ定義。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * 検証済みのオブジェクト形式のスキーマ定義です。
  */
-type UniKvsSchemaInfoRecord = {
-  readonly [key: string]: ValueSchemaInfo;
-};
+type UniKvsSchemaInfoRecord = Readonly<Record<string, ValueSchemaInfo>>;
 
 /**
  * 検証済みの配列形式のスキーマ定義です。
  */
-type UniKvsSchemaInfoEntries = readonly (readonly [v.GenericSchema, ValueSchemaInfo])[];
+type UniKvsSchemaInfoEntries = readonly (readonly [GenericSchema, ValueSchemaInfo])[];
 
 /**
  * 検証済みのスキーマ定義です。
  */
 type UniKvsSchemaInfo = UniKvsSchemaInfoRecord | UniKvsSchemaInfoEntries;
 
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 //
-// スキーマリゾルバー
+// スキーマリゾルバー。
 //
-// -------------------------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------。
 
 /**
  * キーに対応する値のスキーマ情報を解決するインターフェースです。
@@ -110,7 +109,9 @@ export interface IValueSchemaResolver {
    * キーに対応する値のスキーマ情報を返します。
    *
    * @param key 解決するキーです。
+   *
    * @returns 対応するスキーマ情報を返します。対応する定義がない場合は `undefined` を返します。
+   *
    * @throws キーがどのキースキーマにも一致しない場合に `InvalidInputError` を投げます。
    */
   resolve(key: string): ValueSchemaInfo | undefined;
@@ -139,25 +140,30 @@ class RecordValueSchemaResolver implements IValueSchemaResolver {
 class EntriesValueSchemaResolver implements IValueSchemaResolver {
   readonly #entries: UniKvsSchemaInfoEntries;
 
-  readonly #keySchema: v.GenericSchema | undefined;
+  readonly #keySchema: GenericSchema | undefined;
 
   public constructor(entries: UniKvsSchemaInfoEntries) {
     this.#entries = entries;
     if (entries.length > 0) {
-      this.#keySchema = v.union(entries.map(([keySchema]) => keySchema));
+      this.#keySchema = union(entries.map(([keySchema]) => keySchema));
     }
   }
 
   public resolve(key: string): ValueSchemaInfo | undefined {
+    let resolved: ValueSchemaInfo | undefined;
+
     for (const [keySchema, valueSchema] of this.#entries) {
-      const result = v.safeParse(keySchema, key);
+      const result = safeParse(keySchema, key);
+
       if (result.success) {
-        return valueSchema;
+        resolved = valueSchema;
+        break;
       }
     }
 
-    if (this.#keySchema) {
-      const result = v.safeParse(this.#keySchema, key);
+    if (resolved === undefined && this.#keySchema) {
+      const result = safeParse(this.#keySchema, key);
+
       if (!result.success) {
         throw new InvalidInputError({
           value: key,
@@ -166,7 +172,7 @@ class EntriesValueSchemaResolver implements IValueSchemaResolver {
       }
     }
 
-    return undefined;
+    return resolved;
   }
 }
 
@@ -174,6 +180,7 @@ class EntriesValueSchemaResolver implements IValueSchemaResolver {
  * 検証済みのスキーマ定義からスキーマリゾルバーを生成します。
  *
  * @param schema 検証済みのスキーマ定義です。
+ *
  * @returns スキーマリゾルバーを返します。
  */
 export function createValueSchemaResolver(schema: UniKvsSchemaInfo): IValueSchemaResolver {

@@ -1,6 +1,6 @@
 import { InvalidUsageErrorBase } from "@unikvs/core";
-import { deleteGlobalConfig, setGlobalConfig } from "valibot";
-import { describe, test as vitest } from "vitest";
+import { setGlobalConfig, deleteGlobalConfig } from "valibot";
+import { test as vitest, describe } from "vite-plus/test";
 
 import { KeyNotFoundError, UnsupportedRuntimeError } from "../src/errors.js";
 
@@ -11,7 +11,6 @@ import { KeyNotFoundError, UnsupportedRuntimeError } from "../src/errors.js";
 const test = vitest.extend<{
   setLang: (lang: string) => void;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async setLang({}, use) {
     await use((lang) => {
       setGlobalConfig({ lang });
@@ -19,13 +18,15 @@ const test = vitest.extend<{
     deleteGlobalConfig();
   },
 });
-
 describe("エラーの国際化 (server)", () => {
   test("UnsupportedRuntimeError は既定では英語メッセージと name を持つ", ({ expect }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     expect(error).toBeInstanceOf(InvalidUsageErrorBase);
     expect(error.name).toBe("UniKvsUnsupportedRuntimeError");
     expect(error.message).toBe("Redis can only be used in the Bun runtime");
@@ -35,21 +36,27 @@ describe("エラーの国際化 (server)", () => {
     expect,
     setLang,
   }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("Redis は Bun ランタイムでのみ使用できます");
   });
 
   test("UnsupportedRuntimeError は en に戻すと英語メッセージに戻る", ({ expect, setLang }) => {
-    // 準備
-    const error = new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+    // 準備：
+    const error = new UnsupportedRuntimeError({
+      name: "Redis",
+      runtime: "Bun",
+    });
 
-    // 実行と検証
+    // 実行と検証：
     setLang("ja");
     expect(error.message).toBe("Redis は Bun ランタイムでのみ使用できます");
 
@@ -61,13 +68,13 @@ describe("エラーの国際化 (server)", () => {
     expect,
     setLang,
   }) => {
-    // 準備
+    // 準備：
     const error = new KeyNotFoundError({ key: "greeting.bin" });
 
-    // 実行
+    // 実行：
     setLang("ja");
 
-    // 検証
+    // 検証：
     expect(error.message).toBe("キー greeting.bin が見つかりません");
   });
 });

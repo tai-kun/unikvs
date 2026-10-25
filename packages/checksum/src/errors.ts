@@ -1,4 +1,4 @@
-import { ErrorBase, InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 import { inspect } from "inspect-lite";
 
 /**
@@ -34,8 +34,16 @@ export class ChecksumMismatchError extends ErrorBase<ChecksumMismatchErrorMeta> 
    */
   public constructor(args: ChecksumMismatchErrorArgs) {
     const { actual, expected, ...options } = args;
-    const meta: ChecksumMismatchErrorMeta = { actual, expected };
-    super(meta, ({ actual, expected }) => `Expected ${expected}, but got ${actual}`, options);
+    const meta: ChecksumMismatchErrorMeta = {
+      actual,
+      expected,
+    };
+    super(
+      meta,
+      ({ actual: actualValue, expected: expectedValue }) =>
+        `Expected ${expectedValue}, but got ${actualValue}`,
+      options,
+    );
   }
 }
 
@@ -74,7 +82,7 @@ export class ChecksumInvalidVarNameError extends InvalidUsageErrorBase<ChecksumI
   public constructor(args: ChecksumInvalidVarNameErrorArgs) {
     const { actual, ...options } = args;
     const meta: ChecksumInvalidVarNameErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid vars key: ${inspect(actual)}`, options);
+    super(meta, ({ actual: actualValue }) => `Invalid vars key: ${inspect(actualValue)}`, options);
   }
 }
 
@@ -131,7 +139,11 @@ export class ChecksumInvalidRequiredError extends InvalidUsageErrorBase<Checksum
   public constructor(args: ChecksumInvalidRequiredErrorArgs) {
     const { actual, ...options } = args;
     const meta: ChecksumInvalidRequiredErrorMeta = { actual };
-    super(meta, ({ actual }) => `Invalid checksum required option: ${inspect(actual)}`, options);
+    super(
+      meta,
+      ({ actual: actualValue }) => `Invalid checksum required option: ${inspect(actualValue)}`,
+      options,
+    );
   }
 }
 

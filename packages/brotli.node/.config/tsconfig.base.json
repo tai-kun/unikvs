@@ -3,7 +3,7 @@
   "include": ["./global.d.ts", "../src/**/*"],
   "compilerOptions": {
     "types": ["node"],
-    "lib": ["DOM", "ESNext"],
+    "lib": ["ESNext"],
     "noEmit": true,
     "target": "es2020",
     "module": "nodenext",

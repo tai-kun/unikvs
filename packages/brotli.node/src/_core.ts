@@ -1,8 +1,8 @@
 import type { Transform } from "node:stream";
 import type {
+  constants,
   brotliCompress,
   brotliDecompress,
-  constants,
   createBrotliCompress,
   createBrotliDecompress,
 } from "node:zlib";
@@ -12,9 +12,7 @@ import type { ITransformStream } from "@unikvs/core";
 /**
  * `node:zlib` と周辺モジュールの解決結果をまとめた実行環境です。
  *
- * Web の CompressionStream には brotli 形式が存在しないため、
- * 圧縮処理は常に `node:zlib` へ委譲します。このため、このパッケージは
- * Node.js ランタイム専用です。
+ * Web の CompressionStream には brotli 形式が存在しないため、圧縮処理は常に `node:zlib` へ委譲します。このため、このパッケージは Node.js ランタイム専用です。
  */
 export interface IEnv {
   /**
@@ -75,8 +73,8 @@ export const api = {
     ]);
 
     return {
-      Transform: stream.Transform,
       constants: zlib.constants,
+      Transform: stream.Transform,
       brotliCompress: util.promisify(zlib.brotliCompress),
       brotliDecompress: util.promisify(zlib.brotliDecompress),
       createBrotliCompress: zlib.createBrotliCompress,
@@ -90,6 +88,7 @@ export const api = {
    * @param env 使用する実行環境です。
    * @param data 圧縮するバイト列です。
    * @param options オプションです。
+   *
    * @returns 圧縮したバイト列を返します。
    */
   async compress(
@@ -99,7 +98,7 @@ export const api = {
   ): Promise<Buffer> {
     const { level } = options;
 
-    return await env.brotliCompress(data, {
+    return env.brotliCompress(data, {
       params: {
         [env.constants.BROTLI_PARAM_QUALITY]: level,
       },
@@ -111,10 +110,11 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data 展開するバイト列です。
+   *
    * @returns 展開したバイト列を返します。
    */
   async decompress(env: IEnv, data: Uint8Array<ArrayBuffer>): Promise<Buffer> {
-    return await env.brotliDecompress(data);
+    return env.brotliDecompress(data);
   },
 
   /**
@@ -122,6 +122,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param options オプションです。
+   *
    * @returns 圧縮用のストリームを返します。
    */
   createCompress(env: IEnv, options: CompressOptions): ITransformStream<Buffer, Buffer> {
@@ -133,19 +134,20 @@ export const api = {
     });
 
     // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
-    return env.Transform.toWeb(duplex) as ITransformStream;
+    return env.Transform.toWeb(duplex);
   },
 
   /**
    * 展開用の ITransformStream を作成します。
    *
    * @param env 使用する実行環境です。
+   *
    * @returns 展開用のストリームを返します。
    */
   createDecompress(env: IEnv): ITransformStream<Buffer, Buffer> {
     const duplex = env.createBrotliDecompress();
 
     // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
-    return env.Transform.toWeb(duplex) as ITransformStream;
+    return env.Transform.toWeb(duplex);
   },
 };

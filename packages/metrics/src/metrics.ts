@@ -121,7 +121,10 @@ export type MetricsMeter = {
    */
   createHistogram?(
     name: string,
-    options?: { description?: string; unit?: string },
+    options?: {
+      unit?: string;
+      description?: string;
+    },
   ): MetricsHistogram | undefined;
 };
 
@@ -129,8 +132,7 @@ export type MetricsMeter = {
  * OTel の MeterProvider のうち、本パッケージが使う最小の構造です。
  *
  * OTel への依存を避けるため、構造的な部分集合として定義します。
- * `@opentelemetry/api` (任意のピア依存) の `metrics.getMeterProvider()` や、
- * 互換性のある任意のオブジェクトを渡せます。
+ * `@opentelemetry/api` (任意のピア依存) の `metrics.getMeterProvider()` や、互換性のある任意のオブジェクトを渡せます。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
  */
@@ -267,8 +269,8 @@ export type MetricsOptions = {
  */
 type MutableActionSummary = {
   count: number;
-  success: number;
   error: number;
+  success: number;
   totalBytes: number;
   totalDurationMs: number;
 };
@@ -279,44 +281,40 @@ const textEncoder = new TextEncoder();
  * 値のバイトサイズを見積もります。不明な場合は `undefined` を返します。
  *
  * @param data サイズを見積もる値です。
+ *
  * @returns バイト数を返します。不明な場合は `undefined` を返します。
  */
 function estimateBytes(data: unknown): number | undefined {
+  let size: number | undefined = undefined;
+
   if (typeof data === "string") {
-    return textEncoder.encode(data).byteLength;
+    size = textEncoder.encode(data).byteLength;
+  } else if (data instanceof ArrayBuffer) {
+    size = data.byteLength;
+  } else if (ArrayBuffer.isView(data)) {
+    size = data.byteLength;
   }
 
-  if (data instanceof ArrayBuffer) {
-    return data.byteLength;
-  }
-
-  if (ArrayBuffer.isView(data)) {
-    return data.byteLength;
-  }
-
-  return undefined;
+  return size;
 }
 
 /**
  * Prometheus のラベル値をエスケープします。
  *
  * @param value エスケープする値です。
+ *
  * @returns エスケープした文字列を返します。
  */
 function escapeLabelValue(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
+  return value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll('"', '\\"');
 }
 
 /**
  * 操作のメトリクスを記録するミドルウェアです。
  *
- * `use` フックはすべての操作 (`set`/`get`/`stream`/`has`/`delete`/`clear`) の
- * レイテンシーと成否を測定します。`encode`/`decode` フックはバイトサイズも記録し、
- * ストリームのフックはストリームが確定するまでチャンクサイズを合計します。
- * 測定値はメモリーに保持され (`getMetrics()` と `toPrometheusString()` を参照)、
- * 必要に応じて OTel の計器やカスタム出力先へ転送されます。
- * 記録処理は決して例外を投げません。出力先の失敗は握りつぶすため、
- * メトリクスが操作のパイプラインを壊すことはありません。
+ * `use` フックはすべての操作 (`set`/`get`/`stream`/`has`/`delete`/`clear`) のレイテンシーと成否を測定します。`encode`/`decode` フックはバイトサイズも記録し、ストリームのフックはストリームが確定するまでチャンクサイズを合計します。
+ * 測定値はメモリーに保持され (`getMetrics()` と `toPrometheusString()` を参照)、必要に応じて OTel の計器やカスタム出力先へ転送されます。
+ * 記録処理は決して例外を投げません。出力先の失敗は握りつぶすため、メトリクスが操作のパイプラインを壊すことはありません。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
  */
@@ -370,7 +368,7 @@ export default class Metrics implements IMiddleware {
     this.#exporterFn = typeof options.exporter === "function" ? options.exporter : undefined;
     this.#meterProvider = options.meterProvider;
     this.#onRecord = options.onRecord;
-    this.#clock = options.clock ?? (() => performance.now());
+    this.#clock = options.clock ?? ((): number => performance.now());
   }
 
   /**
@@ -387,7 +385,6 @@ export default class Metrics implements IMiddleware {
    *
    * @param c 操作の種類 (と `clear` 以外ではキー) を持つ操作コンテキストです。
    * @param next 次の操作です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
    */
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
@@ -399,21 +396,21 @@ export default class Metrics implements IMiddleware {
       await next();
     } catch (error) {
       this.#observe({
+        key,
+        bytes: undefined,
         action: c.action,
         outcome: "error",
         durationMs: this.#clock() - start,
-        bytes: undefined,
-        key,
       });
       throw error;
     }
 
     this.#observe({
+      key,
+      bytes: undefined,
       action: c.action,
       outcome: "success",
       durationMs: this.#clock() - start,
-      bytes: undefined,
-      key,
     });
   }
 
@@ -422,13 +419,9 @@ export default class Metrics implements IMiddleware {
    *
    * @param c 変換元のサイズを観測する encode コンテキストです。
    * @param next 次のトランスフォーマーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
    */
-  public async encode<TData>(
-    c: IMiddleware.EncodeContext<TData>,
-    next: IMiddleware.INext,
-  ): Promise<void> {
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     const start = this.#clock();
     const bytes = estimateBytes(c.source);
 
@@ -438,21 +431,21 @@ export default class Metrics implements IMiddleware {
       await next();
     } catch (error) {
       this.#observe({
+        key: c.key,
+        bytes,
         action: c.action,
         outcome: "error",
         durationMs: this.#clock() - start,
-        bytes,
-        key: c.key,
       });
       throw error;
     }
 
     this.#observe({
+      key: c.key,
+      bytes,
       action: c.action,
       outcome: "success",
       durationMs: this.#clock() - start,
-      bytes,
-      key: c.key,
     });
   }
 
@@ -461,13 +454,9 @@ export default class Metrics implements IMiddleware {
    *
    * @param c 変換元のサイズを観測する decode コンテキストです。
    * @param next 次のトランスフォーマーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
    */
-  public async decode<TData>(
-    c: IMiddleware.DecodeContext<TData>,
-    next: IMiddleware.INext,
-  ): Promise<void> {
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
     const start = this.#clock();
     const bytes = estimateBytes(c.source);
 
@@ -477,21 +466,21 @@ export default class Metrics implements IMiddleware {
       await next();
     } catch (error) {
       this.#observe({
+        key: c.key,
+        bytes,
         action: c.action,
         outcome: "error",
         durationMs: this.#clock() - start,
-        bytes,
-        key: c.key,
       });
       throw error;
     }
 
     this.#observe({
+      key: c.key,
+      bytes,
       action: c.action,
       outcome: "success",
       durationMs: this.#clock() - start,
-      bytes,
-      key: c.key,
     });
   }
 
@@ -500,11 +489,10 @@ export default class Metrics implements IMiddleware {
    *
    * @param c チャンクを測定する encode ストリームのコンテキストです。
    * @param next 次のトランスフォーマーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
    */
-  public async encodeStream<TChunk>(
-    c: IMiddleware.EncodeStreamContext<TChunk>,
+  public async encodeStream(
+    c: IMiddleware.EncodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
     await this.#pipeAndCount(c, next);
@@ -515,11 +503,10 @@ export default class Metrics implements IMiddleware {
    *
    * @param c チャンクを測定する decode ストリームのコンテキストです。
    * @param next 次のトランスフォーマーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#usage)
    */
-  public async decodeStream<TChunk>(
-    c: IMiddleware.DecodeStreamContext<TChunk>,
+  public async decodeStream(
+    c: IMiddleware.DecodeStreamContext,
     next: IMiddleware.INext,
   ): Promise<void> {
     await this.#pipeAndCount(c, next);
@@ -537,16 +524,20 @@ export default class Metrics implements IMiddleware {
 
     for (const [action, summary] of this.#summaries) {
       byAction[action] = {
-        action,
         count: summary.count,
-        success: summary.success,
         error: summary.error,
+        action,
+        success: summary.success,
         totalBytes: summary.totalBytes,
         totalDurationMs: summary.totalDurationMs,
       };
     }
 
-    return { total: this.#records.length, byAction, records: [...this.#records] };
+    return {
+      total: this.#records.length,
+      records: [...this.#records],
+      byAction,
+    };
   }
 
   /**
@@ -607,8 +598,7 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * ストリームをバイト数を数える変換へ通し、確定 (flush) または失敗
-   * (cancel/フックのエラー) したときに 1 件の測定値を記録します。
+   * ストリームをバイト数を数える変換へ通し、確定 (flush) または失敗 (cancel/ フックのエラー) したときに 1 件の測定値を記録します。
    *
    * @param c ストリーム操作のコンテキストです。
    * @param next 次のトランスフォーマーです。
@@ -628,18 +618,20 @@ export default class Metrics implements IMiddleware {
 
       settled = true;
       this.#observe({
+        key: "key" in c ? c.key : undefined,
+        bytes,
         action: c.action,
         outcome,
         durationMs: this.#clock() - start,
-        bytes,
-        key: "key" in c ? c.key : undefined,
       });
     };
 
-    // `cancel` は実行時に呼び出されますが、`Transformer` 型には存在しないため、
-    // 変換ストリームの読み取り側を包んでキャンセルを検出します。
+    // `cancel` は実行時に呼び出されますが、`Transformer` 型には存在しないため、変換ストリームの読み取り側を包んでキャンセルを検出します。
     const transform = new TransformStream<unknown, unknown>({
-      transform: (chunk, controller) => {
+      flush: (): void => {
+        settle("success");
+      },
+      transform: (chunk: unknown, controller: TransformStreamDefaultController<unknown>): void => {
         const size = estimateBytes(chunk);
 
         if (size !== undefined) {
@@ -648,26 +640,23 @@ export default class Metrics implements IMiddleware {
 
         controller.enqueue(chunk);
       },
-      flush: () => {
-        settle("success");
-      },
     });
 
     const piped = c.source.pipeThrough(transform);
     const reader = piped.getReader();
-
     c.destination = new ReadableStream<unknown>({
-      async pull(controller) {
+      async pull(controller: ReadableStreamDefaultController<unknown>): Promise<void> {
         const result = await reader.read();
 
         if (result.done) {
           controller.close();
+
           return;
         }
 
         controller.enqueue(result.value);
       },
-      async cancel(reason) {
+      async cancel(reason?: unknown): Promise<void> {
         settle("error");
         await reader.cancel(reason);
       },
@@ -693,7 +682,13 @@ export default class Metrics implements IMiddleware {
     let summary = this.#summaries.get(record.action);
 
     if (summary === undefined) {
-      summary = { count: 0, success: 0, error: 0, totalBytes: 0, totalDurationMs: 0 };
+      summary = {
+        count: 0,
+        error: 0,
+        success: 0,
+        totalBytes: 0,
+        totalDurationMs: 0,
+      };
       this.#summaries.set(record.action, summary);
     }
 
@@ -737,8 +732,8 @@ export default class Metrics implements IMiddleware {
         description: "Total number of operations by action and outcome.",
       });
       this.#otelDuration = meter?.createHistogram?.("unikvs.operation.duration", {
-        description: "Operation duration in milliseconds by action.",
         unit: "ms",
+        description: "Operation duration in milliseconds by action.",
       });
       this.#otelBytes = meter?.createCounter?.("unikvs.operation.bytes", {
         description: "Total observed bytes by action.",

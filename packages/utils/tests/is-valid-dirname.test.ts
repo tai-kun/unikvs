@@ -1,4 +1,4 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import isValidDirname from "../src/is-valid-dirname.js";
 

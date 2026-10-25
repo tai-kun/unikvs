@@ -1,4 +1,4 @@
-import { InvalidUsageErrorBase, setErrorMessage, type ErrorOptions } from "@unikvs/core";
+import { type ErrorOptions, setErrorMessage, InvalidUsageErrorBase } from "@unikvs/core";
 
 export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
@@ -34,8 +34,8 @@ export class WriteOnlyDeleteNotAllowedError extends InvalidUsageErrorBase<WriteO
     const meta: WriteOnlyDeleteNotAllowedErrorMeta = { key };
     super(
       meta,
-      ({ key }) =>
-        `WriteOnly.delete with allowDelete false cannot delete key ${JSON.stringify(key)}.`,
+      ({ key: messageKey }) =>
+        `WriteOnly.delete with allowDelete false cannot delete key ${JSON.stringify(messageKey)}.`,
       options,
     );
   }

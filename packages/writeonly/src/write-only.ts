@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IMiddleware } from "@unikvs/core";
+import { type IMiddleware, KeyNotFoundError } from "@unikvs/core";
 
 import { WriteOnlyClearNotAllowedError, WriteOnlyDeleteNotAllowedError } from "./errors.js";
 
@@ -59,6 +59,10 @@ export default class WriteOnly implements IMiddleware {
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     switch (c.action) {
+      case "set": {
+        break;
+      }
+
       case "has":
       case "get":
       case "stream": {

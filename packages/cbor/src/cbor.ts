@@ -1,6 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
-import { Decoder, decode, encode } from "cbor-x";
+import { decode, encode, Decoder } from "cbor-x";
 
 import { CborDecodeError, CborEncodeError } from "./errors.js";
 
@@ -30,6 +30,7 @@ type IncompleteDecodeError = Error & {
  * cbor-x は RegExp の途中で入力が切れると incomplete フラグを付けずに SyntaxError を投げます。
  *
  * @param error cbor-x が投げたエラーです。
+ *
  * @returns 入力不足の可能性があるエラーなら true を返します。
  */
 function isPossiblyIncompleteInputError(error: unknown): error is IncompleteDecodeError {
@@ -71,12 +72,14 @@ class ByteQueue {
    */
   public append(chunk: Uint8Array<ArrayBuffer>): void {
     const required = this.#writeOffset + chunk.byteLength;
+
     if (required > this.#bytes.byteLength) {
       // 必要な容量と現在の容量の倍のうち大きい方を確保し、未処理データを先頭へ詰めます。
       const capacity = Math.max(required, this.#bytes.byteLength * 2, 16);
       const bytes = new Uint8Array(capacity);
       bytes.set(this.#bytes.subarray(this.#readOffset, this.#writeOffset));
       this.#bytes = bytes;
+
       this.#writeOffset -= this.#readOffset;
       this.#readOffset = 0;
     }
@@ -119,6 +122,7 @@ function enqueueValues(
   error: unknown,
 ): void {
   const values = (error as Partial<IncompleteDecodeError>).values;
+
   for (const value of values ?? []) {
     controller.enqueue(value);
   }
@@ -126,8 +130,7 @@ function enqueueValues(
 
 /**
  * バッファーに溜まったデータを先頭から順にデコードして下流へ流します。
- * cbor-x の `decodeMultiple` は、完成済みの値の配列を返すか、入力不足なら
- * `incomplete` フラグと完成済みの値を持つエラーを投げます。
+ * cbor-x の `decodeMultiple` は、完成済みの値の配列を返すか、入力不足なら `incomplete` フラグと完成済みの値を持つエラーを投げます。
  *
  * @param decoder cbor-x のデコーダーです。
  * @param queue 未処理データを保持するバッファーです。
@@ -149,9 +152,11 @@ function drain(
   try {
     // forEach を渡さない場合はデコード済みの値の配列が返るため、型を合わせてキャストします。
     const values = decoder.decodeMultiple(view) as unknown as unknown[];
+
     for (const value of values) {
       controller.enqueue(value);
     }
+
     queue.consume(view.byteLength);
   } catch (ex) {
     if (isFinal) {
@@ -209,7 +214,7 @@ export default class Cbor implements IMiddleware {
   ): Promise<void> {
     c.destination = c.source.pipeThrough(
       new TransformStream<unknown, Uint8Array<ArrayBuffer>>({
-        transform: (chunk, controller) => {
+        transform: (chunk, controller): void => {
           controller.enqueue(this.#encode(chunk));
         },
       }),
@@ -224,12 +229,17 @@ export default class Cbor implements IMiddleware {
   ): Promise<void> {
     // copyBuffers を有効にすると、デコードした型付き配列が内部バッファーを参照しなくなります。
     // バッファーを使い回すため、参照のままだと後続チャンクの追加で値が壊れます。
-    const decoder = new Decoder({ useRecords: false, copyBuffers: true });
+    const decoder = new Decoder({
+      useRecords: false,
+      copyBuffers: true,
+    });
     const queue = new ByteQueue();
-
     c.destination = c.source.pipeThrough(
       new TransformStream<Uint8Array<ArrayBuffer>, unknown>({
-        transform: (chunk, controller) => {
+        flush: (controller): void => {
+          drain(decoder, queue, controller, true);
+        },
+        transform: (chunk, controller): void => {
           if (chunk.byteLength === 0) {
             // 空のチャンクはデコードに影響しません。
             return;
@@ -237,9 +247,6 @@ export default class Cbor implements IMiddleware {
 
           queue.append(chunk);
           drain(decoder, queue, controller, false);
-        },
-        flush: (controller) => {
-          drain(decoder, queue, controller, true);
         },
       }),
     );
@@ -251,6 +258,7 @@ export default class Cbor implements IMiddleware {
    * 値を CBOR のバイト列へ変換する内部メソッドです。
    *
    * @param data 変換する値です。
+   *
    * @returns CBOR に変換した `Uint8Array<ArrayBuffer>` を返します。
    */
   #encode(data: unknown): Uint8Array<ArrayBuffer> {

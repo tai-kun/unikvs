@@ -1,8 +1,8 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 
 import {
-  InvalidChunkTypeError,
   InvalidMaxBytesError,
+  InvalidChunkTypeError,
   InvalidMaxEntriesError,
   InvalidSizeOfResultError,
 } from "./errors.js";
@@ -94,11 +94,12 @@ export default class LruCache implements IStorage {
    */
   public constructor(options: LruCacheOptions = {}) {
     const {
-      clone = (value) => structuredClone(value),
-      maxEntries,
-      maxBytes,
+      clone = <T>(value: T): T => structuredClone(value),
       sizeOf = defaultSizeOf,
+      maxBytes,
+      maxEntries,
     } = options;
+
     if (maxEntries !== undefined) {
       if (!Number.isInteger(maxEntries) || maxEntries < 0) {
         throw new InvalidMaxEntriesError({ actual: maxEntries });
@@ -172,12 +173,12 @@ export default class LruCache implements IStorage {
     }
   }
 
+  // oxlint-disable-next-line typescript/explicit-module-boundary-types
   public write(c: IStorage.WriteContext, data: any): void {
     c.signal.throwIfAborted();
     this.#assertOpen();
 
     const storedValue = this.#clone(data);
-
     this.#commit(c.key, storedValue);
   }
 
@@ -230,24 +231,28 @@ export default class LruCache implements IStorage {
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
-      write: (chunk) => {
-        if (!(chunk instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk });
-        }
-
-        chunks.push(this.#clone(chunk));
-      },
-      close: () => {
+      close: (): void => {
         const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
         const merged = new Uint8Array(totalLength);
 
         let offset = 0;
+
         for (const chunk of chunks) {
           merged.set(chunk, offset);
           offset += chunk.byteLength;
         }
 
         this.#commit(c.key, merged);
+      },
+      write: (chunk: Uint8Array<ArrayBuffer>): void => {
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        chunks.push(this.#clone(chunk));
       },
     });
 
@@ -267,9 +272,12 @@ export default class LruCache implements IStorage {
     // メモリーストレージにはネイティブなストリームがないため、既存の値を単一チャンクとしてストリームで送出します。
     const value = this.#map.get(c.key);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
-      pull: (controller) => {
+      pull: (controller: ReadableStreamDefaultController<Uint8Array<ArrayBuffer>>): void => {
         if (!(value instanceof Uint8Array)) {
-          throw new InvalidChunkTypeError({ key: c.key, chunk: value });
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk: value,
+          });
         }
 
         controller.enqueue(this.#clone(value) as Uint8Array<ArrayBuffer>);
@@ -299,6 +307,7 @@ export default class LruCache implements IStorage {
    */
   #removeEntry(key: string): void {
     const size = this.#sizes.get(key);
+
     if (size !== undefined) {
       this.#totalBytes -= size;
       this.#sizes.delete(key);
@@ -318,8 +327,12 @@ export default class LruCache implements IStorage {
 
     if (this.maxBytes !== undefined) {
       const measured = this.#sizeOf(storedValue, key);
+
       if (typeof measured !== "number" || !Number.isFinite(measured) || measured < 0) {
-        throw new InvalidSizeOfResultError({ key, actual: measured });
+        throw new InvalidSizeOfResultError({
+          key,
+          actual: measured,
+        });
       }
 
       if (this.#map.has(key)) {
@@ -352,7 +365,6 @@ export default class LruCache implements IStorage {
       } else {
         while (this.#map.size > this.maxEntries) {
           const oldest = this.#map.keys().next().value as string;
-
           this.#removeEntry(oldest);
         }
       }
@@ -361,6 +373,7 @@ export default class LruCache implements IStorage {
     if (this.maxBytes !== undefined) {
       while (this.#totalBytes > this.maxBytes) {
         const oldest = this.#map.keys().next().value as string;
+
         if (oldest === justWritten) {
           break;
         }

@@ -2,48 +2,45 @@ import type { IStorage } from "@unikvs/core";
 import {
   abortedSignal,
   captureRejection,
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { afterEach, describe, test, vi } from "vitest";
+import { vi, test, describe, afterEach } from "vite-plus/test";
 
 import { HttpNetworkError, HttpResponseError } from "../src/errors.js";
 import Http, { type IFetch } from "../src/http.js";
 import {
-  createMockServer,
   errorResponse,
+  createMockServer,
   fallbackResponse,
   rejectingFallbackResponse,
 } from "./_helpers.js";
 
 const baseUrl = "https://kv.example.com/store";
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe("通信失敗の分類", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   test("fetch が投げたとき、write は HttpNetworkError に包む", async ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new TypeError("fetch failed");
-    const failingFetch: IFetch = async () => {
-      throw cause;
-    };
+    const failingFetch: IFetch = () => Promise.reject(cause);
     const storage = new Http(baseUrl, { fetch: failingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.write(
-        createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpNetworkError);
     expect((error as HttpNetworkError).meta.method).toBe("PUT");
     expect((error as HttpNetworkError).meta.key).toBe("k");
@@ -51,25 +48,26 @@ describe("通信失敗の分類", () => {
   });
 
   test("fetch が投げたとき、read と delete は HttpNetworkError に包む", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const failingFetch: IFetch = async () => {
       throw new TypeError("down");
     };
     const storage = new Http(baseUrl, { fetch: failingFetch });
 
-    // 実行
+    // 実行：
     const readError = await captureRejection(
       storage.read(
-        createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        createGetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
       ),
     );
     const deleteError = await captureRejection(
       storage.delete(
-        createDeleteContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
+        createDeleteContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.DeleteContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(readError).toBeInstanceOf(HttpNetworkError);
     expect((readError as HttpNetworkError).meta.method).toBe("GET");
     expect(deleteError).toBeInstanceOf(HttpNetworkError);
@@ -77,65 +75,68 @@ describe("通信失敗の分類", () => {
   });
 
   test("fetch が投げたとき、clear は key なしの HttpNetworkError に包む", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const failingFetch: IFetch = async () => {
       throw new TypeError("down");
     };
     const storage = new Http(baseUrl, { fetch: failingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.clear(
-        createClearContext("", { signal: AbortSignal.timeout(5_000) }) as IStorage.ClearContext,
+        createClearContext("", { signal: AbortSignal.timeout(5000) }) as IStorage.ClearContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpNetworkError);
     expect((error as HttpNetworkError).meta).toStrictEqual({
-      method: "DELETE",
-      url: `${baseUrl}/?prefix=${encodeURIComponent("unikvs:")}`,
       key: undefined,
+      url: `${baseUrl}/?prefix=${encodeURIComponent("unikvs:")}`,
+      method: "DELETE",
     });
   });
 
   test("fetch 注入なしでは globalThis.fetch を使う", async ({ expect }) => {
-    // 準備
-    const { fetch, calls } = createMockServer();
+    // 準備：
+    const { calls, fetch } = createMockServer();
     vi.stubGlobal("fetch", fetch);
+
     const storage = new Http(baseUrl);
 
-    // 実行
+    // 実行：
     await storage.write(
-      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 検証
+    // 検証：
     expect(calls.length).toBe(1);
   });
 
   test("非 ok 応答のとき、method と url と status を報告する", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(500, "Internal Server Error");
     const storage = new Http(baseUrl, { fetch: badFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.write(
-        createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).meta).toStrictEqual({
-      method: "PUT",
+      key: "k",
       url: `${baseUrl}/${encodeURIComponent("unikvs:k").replaceAll(".", "%2E")}`,
+      method: "PUT",
       status: 500,
       statusText: "Internal Server Error",
-      key: "k",
     });
     expect((error as HttpResponseError).message).toBe(
       `Request PUT ${baseUrl}/${encodeURIComponent("unikvs:k").replaceAll(".", "%2E")} failed with 500 Internal Server Error`,
@@ -143,18 +144,19 @@ describe("通信失敗の分類", () => {
   });
 
   test("statusText が空のとき、末尾空白なしで整形される", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(503, "");
     const storage = new Http(baseUrl, { fetch: badFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.read(
-        createGetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ReadContext,
+        createGetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).message).toBe(
       `Request GET ${baseUrl}/${encodeURIComponent("unikvs:k").replaceAll(".", "%2E")} failed with 503`,
@@ -162,63 +164,66 @@ describe("通信失敗の分類", () => {
   });
 
   test("PUT の 404 も HttpResponseError になる", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(404, "Not Found");
     const storage = new Http(baseUrl, { fetch: badFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.write(
-        createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+        createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
         new Uint8Array([1]),
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
   });
 
   test("delete の 500 は HttpResponseError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(500, "Internal Server Error");
     const storage = new Http(baseUrl, { fetch: badFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.delete(
-        createDeleteContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.DeleteContext,
+        createDeleteContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.DeleteContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).meta.method).toBe("DELETE");
   });
 
   test("getReadable の 500 は HttpResponseError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(500, "Internal Server Error");
     const storage = new Http(baseUrl, { fetch: badFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.getReadable(
         createStreamContext("k", {
-          signal: AbortSignal.timeout(5_000),
+          signal: AbortSignal.timeout(5000),
         }) as IStorage.GetReadableContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).meta.method).toBe("GET");
   });
 });
-
 describe("中断の透過", () => {
   test("進行中の中断は HttpNetworkError に包まず再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -226,19 +231,20 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.read(createGetContext("k", { signal: controller.signal }) as IStorage.ReadContext),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("exists の HEAD 失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -246,27 +252,32 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
         createHasContext("k", { signal: controller.signal }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("exists フォールバック GET の失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     let calls = 0;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const flakyFetch: IFetch = async (request: Request) => {
       calls += 1;
 
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- 1 回目の HEAD と 2 回目の GET で異なる振る舞いを再現するために条件分岐を使用します。
       if (calls === 1) {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       controller.abort();
@@ -275,21 +286,22 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: flakyFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
         createHasContext("k", { signal: controller.signal }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("delete の失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -297,21 +309,22 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
-    // 実行
+    // 実行：
     const deleteError = await captureRejection(
       storage.delete(
         createDeleteContext("k", { signal: controller.signal }) as IStorage.DeleteContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(deleteError).toBeInstanceOf(DOMException);
     expect(deleteError).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("clear の失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -319,19 +332,20 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("getReadable の失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -339,21 +353,22 @@ describe("中断の透過", () => {
     };
     const storage = new Http(baseUrl, { fetch: hangingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.getReadable(
         createStreamContext("k", { signal: controller.signal }) as IStorage.GetReadableContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("getWritable の close 失敗時も中断は再送出する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const hangingFetch: IFetch = async (request: Request) => {
       controller.abort();
       request.signal.throwIfAborted();
@@ -367,16 +382,17 @@ describe("中断の透過", () => {
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
-    // 実行
+    // 実行：
     const error = await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(error).not.toBeInstanceOf(HttpNetworkError);
   });
 
   test("getWritable の close 失敗時は中断なしなら HttpNetworkError に包む", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const failingFetch: IFetch = async () => {
       throw new TypeError("down");
     };
@@ -384,51 +400,56 @@ describe("中断の透過", () => {
     const writer = storage
       .getWritable(
         createSetContext("k", {
-          signal: AbortSignal.timeout(5_000),
+          signal: AbortSignal.timeout(5000),
         }) as IStorage.GetWritableContext,
       )
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
-    // 実行
+    // 実行：
     const error = await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpNetworkError);
     expect((error as HttpNetworkError).meta.method).toBe("PUT");
   });
 
   test("getWritable の close 非 ok 時は HttpResponseError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const badFetch: IFetch = async () => errorResponse(500, "Internal Server Error");
     const storage = new Http(baseUrl, { fetch: badFetch });
     const writer = storage
       .getWritable(
         createSetContext("k", {
-          signal: AbortSignal.timeout(5_000),
+          signal: AbortSignal.timeout(5000),
         }) as IStorage.GetWritableContext,
       )
       .getWriter();
     await writer.write(new Uint8Array([1]));
 
-    // 実行
+    // 実行：
     const error = await captureRejection(writer.close());
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
   });
 
   test("中断済みシグナルでは fetch を呼ばず中断例外を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     let called = 0;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const countingFetch: IFetch = async () => {
       called += 1;
 
-      return new Response(null, { status: 200, statusText: "OK" });
+      return new Response(null, {
+        status: 200,
+        statusText: "OK",
+      });
     };
     const storage = new Http(baseUrl, { fetch: countingFetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.write(
         createSetContext("k", { signal: abortedSignal() }) as IStorage.WriteContext,
@@ -436,149 +457,184 @@ describe("中断の透過", () => {
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(DOMException);
     expect(called).toBe(0);
   });
 });
-
 describe("exists のフォールバック", () => {
   test("HEAD 405 では GET にフォールバックして true を返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const { fetch } = createMockServer({ headNotSupported: true });
     const storage = new Http(baseUrl, { fetch });
     await storage.write(
-      createSetContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.WriteContext,
+      createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
       new Uint8Array([1, 2, 3]),
     );
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
-      createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
   });
 
   test("HEAD 501 では GET にフォールバックする", async ({ expect }) => {
-    // 準備
+    // 準備：
     let headCalls = 0;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
         headCalls += 1;
 
-        return new Response(null, { status: 501, statusText: "Not Implemented" });
+        return new Response(null, {
+          status: 501,
+          statusText: "Not Implemented",
+        });
       }
 
-      return new Response(new Uint8Array([1]), { status: 206, statusText: "Partial Content" });
+      return new Response(new Uint8Array([1]), {
+        status: 206,
+        statusText: "Partial Content",
+      });
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
-      createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
     expect(headCalls).toBe(1);
   });
 
   test("フォールバック GET の 206 でも true を返す", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return fallbackResponse(206);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
-      createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
   });
 
   test("フォールバック GET の 404 と 410 は false を返す", async ({ expect }) => {
-    // 準備と実行と検証
+    // 準備と実行と検証。
     for (const status of [404, 410]) {
+      // oxlint-disable-next-line unicorn/consistent-function-scoping
       const fetch: IFetch = async (request: Request) => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
         if (request.method === "HEAD") {
-          return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+          return new Response(null, {
+            status: 405,
+            statusText: "Method Not Allowed",
+          });
         }
 
         return fallbackResponse(status);
       };
       const storage = new Http(baseUrl, { fetch });
       const result = await storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       );
       expect(result).toBe(false);
     }
   });
 
   test("HEAD 403 ではフォールバックせず HttpResponseError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     let getCalls = 0;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 403, statusText: "Forbidden" });
+        return new Response(null, {
+          status: 403,
+          statusText: "Forbidden",
+        });
       }
 
       getCalls += 1;
 
-      return new Response(null, { status: 200, statusText: "OK" });
+      return new Response(null, {
+        status: 200,
+        statusText: "OK",
+      });
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).meta.method).toBe("HEAD");
     expect(getCalls).toBe(0);
   });
 
   test("フォールバック GET の 500 は HttpResponseError を投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return fallbackResponse(500);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(HttpResponseError);
     expect((error as HttpResponseError).meta.method).toBe("GET");
   });
 
   test("フォールバックではボディを破棄してから判定する", async ({ expect }) => {
-    // 準備
+    // 準備：
     let canceled = false;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return fallbackResponse(200, () => {
@@ -587,112 +643,137 @@ describe("exists のフォールバック", () => {
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
-      createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
     expect(canceled).toBe(true);
   });
 
   test("body が null でもフォールバックは成功する", async ({ expect }) => {
-    // 準備
+    // 準備：
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return fallbackResponse(200, undefined, true);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const result = await storage.exists(
-      createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+      createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
     );
 
-    // 検証
+    // 検証：
     expect(result).toBe(true);
   });
 
   test("cancel が拒否したとき、そのエラーをそのまま伝播する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("cancel failed");
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return rejectingFallbackResponse(200, cause);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBe(cause);
   });
 
   test("非 2xx 送出前の cancel 失敗は cancel 由来エラーを投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("cancel failed");
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return rejectingFallbackResponse(500, cause);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBe(cause);
   });
 
   test("404 判定前の cancel 失敗も cancel 由来エラーを投げる", async ({ expect }) => {
-    // 準備
+    // 準備：
     const cause = new Error("cancel failed");
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
     const fetch: IFetch = async (request: Request) => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- HEAD と GET で異なる応答を返すモックの分岐はサーバー振る舞いの再現に必須のため、条件分岐を使用します。
       if (request.method === "HEAD") {
-        return new Response(null, { status: 405, statusText: "Method Not Allowed" });
+        return new Response(null, {
+          status: 405,
+          statusText: "Method Not Allowed",
+        });
       }
 
       return rejectingFallbackResponse(404, cause);
     };
     const storage = new Http(baseUrl, { fetch });
 
-    // 実行
+    // 実行：
     const error = await captureRejection(
       storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       ),
     );
 
-    // 検証
+    // 検証：
     expect(error).toBe(cause);
   });
 
   test("HEAD の 404 と 410 は false を返す", async ({ expect }) => {
-    // 準備と実行と検証
+    // 準備と実行と検証。
     for (const status of [404, 410]) {
-      const fetch: IFetch = async () => new Response(null, { status, statusText: "Missing" });
+      // oxlint-disable-next-line unicorn/consistent-function-scoping
+      const fetch: IFetch = async () =>
+        new Response(null, {
+          status,
+          statusText: "Missing",
+        });
       const storage = new Http(baseUrl, { fetch });
       const result = await storage.exists(
-        createHasContext("k", { signal: AbortSignal.timeout(5_000) }) as IStorage.ExistsContext,
+        createHasContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ExistsContext,
       );
       expect(result).toBe(false);
     }

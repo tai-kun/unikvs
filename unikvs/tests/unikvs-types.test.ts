@@ -1,24 +1,24 @@
-import type { IMiddleware, IStorage } from "@unikvs/core";
+import type { IStorage, IMiddleware, IPipelineContext } from "@unikvs/core";
 import { Memory } from "@unikvs/memory";
-import * as v from "valibot";
-import { describe, expectTypeOf, test } from "vitest";
+import { pipe, string, instance, transform } from "valibot";
+import { test, describe, expectTypeOf } from "vite-plus/test";
 
 import type { IValueStream as ValueStream } from "../src/types.js";
 import UniKvsConfig, { type IUniKvsConfigBuilder } from "../src/unikvs-config.js";
 import UniKvs from "../src/unikvs.js";
 import type {
+  SetValue,
   KeyofKeyValueMappingHasPlainValue,
   KeyofKeyValueMappingHasStreamValue,
-  SetValue,
 } from "../src/unikvs.types.js";
-import { PlainValue, StreamValue, type Value } from "../src/value-schemas.js";
+import { type Value, PlainValue, StreamValue } from "../src/value-schemas.js";
 
 type Bytes = Uint8Array<ArrayBuffer>;
 
 type Mapping = {
-  message: PlainValue<string>;
-  logs: StreamValue<Bytes>;
   data: Value<Bytes>;
+  logs: StreamValue<Bytes>;
+  message: PlainValue<string>;
 };
 
 /**
@@ -34,6 +34,7 @@ function typeOf<T>(_expression: () => T): T {
  */
 class StringToNumber implements IMiddleware<string, number> {
   readonly name = "StringToNumber";
+
   readonly isOpen = true;
 
   async encode(
@@ -58,16 +59,21 @@ class StringToNumber implements IMiddleware<string, number> {
  */
 class NumberStorage implements IStorage<number> {
   readonly name = "NumberStorage";
+
   readonly isOpen = true;
 
   write(): void {}
+
   read(): number {
     return 0;
   }
+
   exists(): boolean {
     return false;
   }
+
   delete(): void {}
+
   clear(): void {}
 }
 
@@ -77,16 +83,21 @@ class NumberStorage implements IStorage<number> {
  */
 class BytesStorage implements IStorage<Bytes> {
   readonly name = "BytesStorage";
+
   readonly isOpen = true;
 
   write(): void {}
+
   read(): Bytes {
-    return new Uint8Array() as Bytes;
+    return new Uint8Array();
   }
+
   exists(): boolean {
     return false;
   }
+
   delete(): void {}
+
   clear(): void {}
 }
 
@@ -103,39 +114,50 @@ function createTypedKvs(): UniKvs<Mapping> {
   return UniKvs.config<Mapping>().persist(new Memory()).create();
 }
 
+/**
+ * カスタム変数を取得するヘルパーです。
+ *
+ * @param ctx パイプラインコンテキストです。
+ *
+ * @returns カウントを返します。
+ */
+function getCustom(ctx: IPipelineContext<{ readonly count: number }>): number {
+  return ctx.get("count");
+}
+
 describe("UniKvs - 型: 基本契約", () => {
   test("config の型引数が create の戻り値に反映される", () => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 検証
+    // 検証：
     expectTypeOf(kvs).toEqualTypeOf<UniKvs<Mapping>>();
   });
 
   test("get は PlainValue と Value のキーだけを受け付け、データ型を返す", () => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 検証
+    // 検証：
     expectTypeOf(typeOf(() => kvs.get("message"))).toEqualTypeOf<Promise<string>>();
     expectTypeOf(typeOf(() => kvs.get("data"))).toEqualTypeOf<Promise<Bytes>>();
     expectTypeOf(typeOf(() => kvs.get({ key: "message" }))).toEqualTypeOf<Promise<string>>();
   });
 
   test("stream は StreamValue と Value のキーだけを受け付け、ValueStream を返す", () => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 検証
+    // 検証：
     expectTypeOf(typeOf(() => kvs.stream("logs"))).toEqualTypeOf<Promise<ValueStream<Bytes>>>();
     expectTypeOf(typeOf(() => kvs.stream("data"))).toEqualTypeOf<Promise<ValueStream<Bytes>>>();
   });
 
   test("set・has・delete の戻り値型", () => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 検証
+    // 検証：
     expectTypeOf(typeOf(() => kvs.set("message", "hello"))).toEqualTypeOf<Promise<void>>();
     expectTypeOf(typeOf(() => kvs.set("logs", new ReadableStream<Bytes>()))).toEqualTypeOf<
       Promise<void>
@@ -146,90 +168,90 @@ describe("UniKvs - 型: 基本契約", () => {
   });
 
   test("SetValue は値の種別に応じた入力を表す", () => {
-    // 検証
+    // 検証：
     expectTypeOf<SetValue<PlainValue<string>>>().toEqualTypeOf<string>();
     expectTypeOf<SetValue<StreamValue<Bytes>>>().toEqualTypeOf<ReadableStream<Bytes>>();
     expectTypeOf<SetValue<Value<Bytes>>>().toEqualTypeOf<Bytes | ReadableStream<Bytes>>();
   });
 
   test("キーの種別ごとのキー集合が推論される", () => {
-    // 検証
+    // 検証：
     expectTypeOf<KeyofKeyValueMappingHasPlainValue<Mapping>>().toEqualTypeOf<"message" | "data">();
     expectTypeOf<KeyofKeyValueMappingHasStreamValue<Mapping>>().toEqualTypeOf<"logs" | "data">();
   });
 
   test("ValueStream は非同期イテレーターと非同期破棄を提供する", () => {
-    // 検証
-    expectTypeOf<ValueStream<Bytes>>().toMatchTypeOf<AsyncIterable<Bytes>>();
-    expectTypeOf<ValueStream<Bytes>>().toMatchTypeOf<AsyncDisposable>();
+    // 検証：
+    expectTypeOf<ValueStream<Bytes>>().toExtend<AsyncIterable<Bytes>>();
+    expectTypeOf<ValueStream<Bytes>>().toExtend<AsyncDisposable>();
     expectTypeOf<ValueStream<Bytes>["dispose"]>().toEqualTypeOf<() => Promise<void>>();
   });
 });
 
 describe("UniKvs - 型: 不正な組み合わせ", () => {
   test("PlainValue のキーに stream は使えない", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error PlainValue のキーは stream できない
-    expect(typeOf(() => void kvs.stream("message"))).toBeUndefined();
+    expect(typeOf(() => kvs.stream("message"))).toBeUndefined();
   });
 
   test("StreamValue のキーに get は使えない", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error StreamValue のキーは get できない
-    expect(typeOf(() => void kvs.get("logs"))).toBeUndefined();
+    expect(typeOf(() => kvs.get("logs"))).toBeUndefined();
   });
 
   test("StreamValue のキーにプレーン値は set できない", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error StreamValue のキーは ReadableStream のみ受け付ける
-    expect(typeOf(() => void kvs.set("logs", new Uint8Array([1])))).toBeUndefined();
+    expect(typeOf(() => kvs.set("logs", new Uint8Array([1])))).toBeUndefined();
   });
 
   test("PlainValue のキーに ReadableStream は set できない", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error PlainValue のキーはプレーン値のみ受け付ける
-    expect(typeOf(() => void kvs.set("message", new ReadableStream<string>()))).toBeUndefined();
+    expect(typeOf(() => kvs.set("message", new ReadableStream<string>()))).toBeUndefined();
   });
 
   test("マッピングに存在しないキーは使えない", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = createTypedKvs();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error 未知のキー
-    expect(typeOf(() => void kvs.get("unknown"))).toBeUndefined();
+    expect(typeOf(() => kvs.get("unknown"))).toBeUndefined();
     // @ts-expect-error 未知のキー
-    expect(typeOf(() => void kvs.has("unknown"))).toBeUndefined();
+    expect(typeOf(() => kvs.has("unknown"))).toBeUndefined();
     // @ts-expect-error 未知のキー
-    expect(typeOf(() => void kvs.delete("unknown"))).toBeUndefined();
+    expect(typeOf(() => kvs.delete("unknown"))).toBeUndefined();
   });
 });
 
 describe("UniKvs - 型: schema とミドルウェアの推論", () => {
   test("schema からキーと値の型が推論される", () => {
-    // 準備
+    // 準備：
     const kvs = UniKvs.config({
       schema: {
-        message: PlainValue(v.string()),
-        logs: StreamValue(v.instance(Uint8Array)),
+        logs: StreamValue(instance(Uint8Array)),
+        message: PlainValue(string()),
       },
     })
       .persist(new Memory())
       .create();
 
-    // 検証
+    // 検証：
     expectTypeOf(typeOf(() => kvs.get("message"))).toEqualTypeOf<Promise<string>>();
     expectTypeOf(typeOf(() => kvs.stream("logs"))).toEqualTypeOf<
       Promise<ValueStream<InstanceType<Uint8ArrayConstructor>>>
@@ -237,30 +259,30 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
   });
 
   test("transform スキーマでは入力型と出力型が区別される", ({ expect }) => {
-    // 準備
+    // 準備：
     const kvs = UniKvs.config({
-      schema: { count: PlainValue(v.pipe(v.string(), v.transform(Number))) },
+      schema: { count: PlainValue(pipe(string(), transform(Number))) },
     })
       .persist(new Memory())
       .create();
 
-    // 検証: get は変換後の number、set は変換前の string を受け付ける
+    // 検証 : get は変換後の number、set は変換前の string を受け付ける。
     expectTypeOf(typeOf(() => kvs.get("count"))).toEqualTypeOf<Promise<number>>();
     expectTypeOf(typeOf(() => kvs.set("count", "42"))).toEqualTypeOf<Promise<void>>();
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error 入力型は string であり number は受け付けない
-    expect(typeOf(() => void kvs.set("count", 42))).toBeUndefined();
+    expect(typeOf(() => kvs.set("count", 42))).toBeUndefined();
   });
 
   test("use と persist は接続可能な組み合わせのみを型で受け付ける", ({ expect }) => {
-    // 実行と検証: string を number に変換するチェーンは number ストレージへ接続できる
+    // 実行と検証 : string を number に変換するチェーンは number ストレージへ接続できる。
     UniKvs.config<{ foo: PlainValue<string> }>()
       .use(new StringToNumber())
       .persist(new NumberStorage())
       .create();
 
-    // 実行と検証
+    // 実行と検証：
     const storage = new NumberStorage();
     // @ts-expect-error 変換なしでは number 専用ストレージへ接続できない
     const invalidConfig = UniKvs.config<{ foo: PlainValue<string> }>().persist(storage);
@@ -268,11 +290,11 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
   });
 
   test("fork のみでは Builder のまま型レベルで create できない", ({ expect }) => {
-    // 準備
+    // 準備：
     const branch = UniKvs.branch().persist(new Memory());
     const config = UniKvs.config().fork(branch);
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error: Builder には create がありません。
     expect(typeOf(() => config.create())).toBeUndefined();
     // @ts-expect-error: Branch には create がありません。
@@ -282,69 +304,62 @@ describe("UniKvs - 型: schema とミドルウェアの推論", () => {
 
 describe("UniKvs - 型: fork の互換検査", () => {
   test("親出力と分岐入力の不一致は型エラーになる", ({ expect }) => {
-    // 準備: 親は string、分岐先頭は number のため不適合です。
+    // 準備 : 親は string、分岐先頭は number のため不適合です。
     // 先頭のみを検査します。
     // 中間以降は検査しません。
     const branch = UniKvs.branch().persist(new NumberStorage());
 
-    // 実行と検証
+    // 実行と検証：
     // @ts-expect-error 親出力 string は分岐入力 number を受容できない
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(branch))).toBeUndefined();
   });
 
   test("persist なし分岐は型エラーにならない", ({ expect }) => {
-    // 準備: 空分岐は no-op のため検査を素通りします。
+    // 準備 : 空分岐は no-op のため検査を素通りします。
     const empty = UniKvs.branch();
 
-    // 実行と検証: 空分岐の fork は型エラーになりません。
+    // 実行と検証 : 空分岐の fork は型エラーになりません。
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
 
-    // 準備: 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
+    // 準備 : 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
     const unused = UniKvs.branch().use(new StringToNumber());
 
-    // 実行と検証: persist なし分岐の不一致は型エラーになりません。
+    // 実行と検証 : persist なし分岐の不一致は型エラーになりません。
     expect(typeOf(() => UniKvs.config<{ foo: PlainValue<number> }>().fork(unused))).toBeUndefined();
   });
 
   test("分岐内の never は親のチャンク型に伝播する", () => {
-    // 準備: 親はストリーム対応、分岐は非ストリーム対応です。
+    // 準備 : 親はストリーム対応、分岐は非ストリーム対応です。
     const builder = UniKvs.config<{ data: Value<Bytes> }>().fork(
       UniKvs.branch().persist(new BytesStorage()),
     );
 
-    // 検証: 親チャンク入力は `never` になります。
+    // 検証 : 親チャンク入力は `never` になります。
     expectTypeOf<$BuilderChunkInput<typeof builder>>().toEqualTypeOf<never>();
   });
 
   test("ストリーム対応の分岐では親のチャンク型を保つ", () => {
-    // 準備
+    // 準備：
     const builder = UniKvs.config<{ logs: StreamValue<Bytes> }>()
       .fork(UniKvs.branch().persist(new Memory()))
       .persist(new Memory());
 
-    // 検証: fork 後も persist と create が型レベルでつながります。
-    expectTypeOf(typeOf(() => builder.create())).toMatchTypeOf<
-      UniKvs<{ logs: StreamValue<Bytes> }>
-    >();
+    // 検証 : fork 後も persist と create が型レベルでつながります。
+    expectTypeOf(typeOf(() => builder.create())).toExtend<UniKvs<{ logs: StreamValue<Bytes> }>>();
   });
 });
 
 describe("UniKvs - 型: コンテキスト", () => {
   test("IPipelineContext はカスタム変数の型を解決する", () => {
-    // 準備
-    function getCustom(ctx: import("@unikvs/core").IPipelineContext<{ readonly count: number }>) {
-      return ctx.get("count");
-    }
-
-    // 検証
+    // 検証：
     expectTypeOf(getCustom).returns.toEqualTypeOf<number>();
   });
 
   test("操作の action はコンテキストのプロパティーで区別する", ({ expect }) => {
-    // 準備: 8操作すべてが型として存在する
+    // 準備 : 8 操作すべてが型として存在する。
     const actions = ["open", "close", "set", "get", "stream", "has", "delete", "clear"] as const;
 
-    // 検証
+    // 検証：
     expect(actions).toHaveLength(8);
   });
 });

@@ -1,20 +1,20 @@
 import { randomUUID } from "node:crypto";
 
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import {
-  Redis as Ioredis,
   type ClusterNode,
-  type ClusterOptions,
   type RedisOptions,
+  type ClusterOptions,
+  Redis as Ioredis,
 } from "ioredis";
 
 import {
-  CloseTimeoutError,
-  ClusterNotSupportedError,
-  ConnectTimeoutError,
-  InvalidCloseTimeoutError,
   InvalidTtlError,
+  CloseTimeoutError,
+  ConnectTimeoutError,
+  ClusterNotSupportedError,
+  InvalidCloseTimeoutError,
 } from "./errors.js";
 
 /**
@@ -104,8 +104,7 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
   /**
    * 書き込んだキーに付与する有効期限 (ミリ秒) です。
    *
-   * 未指定のときはキーは失効しません。単発書き込みは `SET ... PX` で、
-   * ストリーム書き込みは確定 (`RENAME`) 後の `PEXPIRE` で付与します。
+   * 未指定のときはキーは失効しません。単発書き込みは `SET ... PX` で、ストリーム書き込みは確定 (`RENAME`) 後の `PEXPIRE` で付与します。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
    */
@@ -113,10 +112,13 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
 };
 
 const SCAN_COUNT = 1000;
-const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
-const DEFAULT_CLOSE_TIMEOUT_MS = 5_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
+const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 
-type Connection = { readonly client: ValkeyClient; readonly owned: boolean };
+type Connection = {
+  readonly owned: boolean;
+  readonly client: ValkeyClient;
+};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#usage)
@@ -155,11 +157,11 @@ export default class Valkey implements IStorage {
    */
   public constructor(url?: string, options: ValkeyStorageOptions = {}) {
     const {
-      keyPrefix = "unikvs:",
-      cluster,
-      closeTimeout = DEFAULT_CLOSE_TIMEOUT_MS,
-      client,
       ttl,
+      client,
+      cluster,
+      keyPrefix = "unikvs:",
+      closeTimeout = DEFAULT_CLOSE_TIMEOUT_MS,
       ...redisOptions
     } = options;
 
@@ -192,7 +194,19 @@ export default class Valkey implements IStorage {
   }
 
   public get isOpen(): boolean {
-    return !!this.#con;
+    return this.#con !== null;
+  }
+
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Valkey is not open. Call open() first.");
+    }
+
+    return con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -205,21 +219,39 @@ export default class Valkey implements IStorage {
 
     // 注入されたクライアントは呼び出し側の所有物のため、接続も切断も行いません。
     if (this.#injected !== undefined) {
-      this.#con = { client: this.#injected, owned: false };
+      this.#con = {
+        owned: false,
+        client: this.#injected,
+      };
+
       return;
     }
 
     // 空文字の `url`・環境変数は未指定として扱います (本パッケージ仕様)。
     // `url` は `valkey://` / `redis://` / `rediss://` 形式での指定を要求します。
     // 実行時の形式検証は行いません (bare 形式は非サポート・動作未保証)。
-    const url = this.#url || process.env["VALKEY_URL"] || process.env["REDIS_URL"] || undefined;
+    const explicitUrl = this.#url === undefined || this.#url === "" ? undefined : this.#url;
+    const valkeyUrl =
+      process.env["VALKEY_URL"] === undefined || process.env["VALKEY_URL"] === ""
+        ? undefined
+        : process.env["VALKEY_URL"];
+    const redisUrl =
+      process.env["REDIS_URL"] === undefined || process.env["REDIS_URL"] === ""
+        ? undefined
+        : process.env["REDIS_URL"];
+    const url = explicitUrl ?? valkeyUrl ?? redisUrl;
     const connectTimeout = this.#options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     // `ioredis` v6 のコンストラクタ型は `replyMapping` に明示 `undefined` を許しません。
     // `exactOptionalPropertyTypes` 下では spread のまま渡せないため型表明を付けます。
     // 実行時の値は変わらず、`replyMapping` を含む透過は保たれます。
     type ConnectOptions = RedisOptions & { replyMapping?: "legacy" };
-    const options = { ...this.#options, lazyConnect: true, connectTimeout } as ConnectOptions;
+
+    const options = {
+      ...this.#options,
+      lazyConnect: true,
+      connectTimeout,
+    } as ConnectOptions;
     const raw = url === undefined ? new Ioredis(options) : new Ioredis(url, options);
 
     // `ioredis` は接続失敗・再試行時に `error` イベントを emit します。
@@ -228,6 +260,7 @@ export default class Valkey implements IStorage {
     raw.on("error", () => {});
 
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     try {
       await Promise.race([
         raw.connect(),
@@ -246,13 +279,16 @@ export default class Valkey implements IStorage {
       }
     }
 
-    this.#con = { client: raw, owned: true };
+    this.#con = {
+      owned: true,
+      client: raw,
+    };
   }
 
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
-    const { client, owned } = this.#con!;
+    const { owned, client } = this.#getConnection();
 
     // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
     this.#con = null;
@@ -264,6 +300,7 @@ export default class Valkey implements IStorage {
 
     const closeTimeout = this.#closeTimeout;
     let timer: ReturnType<typeof setTimeout> | undefined;
+
     try {
       await Promise.race([
         client.quit(),
@@ -291,6 +328,7 @@ export default class Valkey implements IStorage {
     using abortPromise = toAbortPromise(signal);
 
     let cursor = "0";
+
     do {
       throwIfAborted(signal);
 
@@ -298,6 +336,7 @@ export default class Valkey implements IStorage {
         client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT),
         abortPromise,
       ]);
+
       if (keys.length > 0) {
         await client.del(...keys);
       }
@@ -307,7 +346,7 @@ export default class Valkey implements IStorage {
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -319,12 +358,13 @@ export default class Valkey implements IStorage {
   }
 
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
 
     const data = await Promise.race([client.getBuffer(this.#toKey(c.key)), abortPromise]);
+
     if (data === null) {
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -333,7 +373,7 @@ export default class Valkey implements IStorage {
   }
 
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -342,7 +382,7 @@ export default class Valkey implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -350,7 +390,7 @@ export default class Valkey implements IStorage {
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -360,7 +400,7 @@ export default class Valkey implements IStorage {
   }
 
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
     const ttl = this.#ttl;
 
     throwIfAborted(c.signal);
@@ -382,7 +422,10 @@ export default class Valkey implements IStorage {
       }
     };
     const finish = async (): Promise<void> => {
-      if (finished) return;
+      if (finished) {
+        return;
+      }
+
       finished = true;
       removeAbortListener();
       await discardTemporary();
@@ -390,10 +433,28 @@ export default class Valkey implements IStorage {
     const onAbort = (): void => {
       void finish();
     };
-
     c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
+      async abort() {
+        await finish();
+      },
+      async close() {
+        throwIfAborted(c.signal);
+        try {
+          // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
+          await client.rename(tmp, dest);
+          if (ttl !== undefined) {
+            await client.pexpire(dest, ttl);
+          }
+        } catch (ex) {
+          await finish();
+          throw ex;
+        }
+        // rename 後は一時キーが存在しないため、完了済みとして中断時の削除を行いません。
+        finished = true;
+        removeAbortListener();
+      },
       async start() {
         try {
           throwIfAborted(c.signal);
@@ -413,30 +474,11 @@ export default class Valkey implements IStorage {
           throw ex;
         }
       },
-      async close() {
-        throwIfAborted(c.signal);
-        try {
-          // 全チャンクの追記が完了した時点で初めて最終キーへ置き換えます (swap-on-close)。
-          await client.rename(tmp, dest);
-          if (ttl !== undefined) {
-            await client.pexpire(dest, ttl);
-          }
-        } catch (ex) {
-          await finish();
-          throw ex;
-        }
-        // rename 後は一時キーが存在しないため、完了済みとして中断時の削除を行いません。
-        finished = true;
-        removeAbortListener();
-      },
-      async abort() {
-        await finish();
-      },
     });
   }
 
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    const { client } = this.#con!;
+    const { client } = this.#getConnection();
 
     throwIfAborted(c.signal);
 
@@ -448,6 +490,7 @@ export default class Valkey implements IStorage {
       async pull(controller) {
         if (sent) {
           controller.close();
+
           return;
         }
 
@@ -456,6 +499,7 @@ export default class Valkey implements IStorage {
         using abortPromise = toAbortPromise(c.signal);
 
         const data = await Promise.race([client.getBuffer(dest), abortPromise]);
+
         if (data === null) {
           throw new KeyNotFoundError({ key: c.key });
         }

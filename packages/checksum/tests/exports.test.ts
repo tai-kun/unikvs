@@ -1,11 +1,12 @@
-import { describe, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe } from "vite-plus/test";
 
 import Checksum from "../src/checksum.js";
 import {
-  ChecksumInvalidRequiredError,
-  ChecksumInvalidVarNameError,
   ChecksumMismatchError,
   ChecksumRequiredError,
+  ChecksumInvalidVarNameError,
+  ChecksumInvalidRequiredError,
 } from "../src/errors.js";
 import * as index from "../src/index.js";
 import ChecksumMd5 from "../src/md5.js";
@@ -17,7 +18,7 @@ import ChecksumSha512 from "../src/sha512.js";
 
 describe("index のエクスポート", () => {
   test("トランスフォーマーがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.Checksum).toBe(Checksum);
     expect(index.ChecksumMd5).toBe(ChecksumMd5);
     expect(index.ChecksumSha1).toBe(ChecksumSha1);
@@ -28,7 +29,7 @@ describe("index のエクスポート", () => {
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.ChecksumMismatchError).toBe(ChecksumMismatchError);
     expect(index.ChecksumRequiredError).toBe(ChecksumRequiredError);
     expect(index.ChecksumInvalidVarNameError).toBe(ChecksumInvalidVarNameError);

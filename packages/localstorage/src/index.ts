@@ -1,8 +1,8 @@
-export type { KeyNotFoundErrorMeta, KeyNotFoundErrorArgs } from "./errors.js";
+export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "./errors.js";
 export {
-  ClearWithoutPrefixNotAllowedError,
   KeyNotFoundError,
   LocalStorageNotAvailableError,
+  ClearWithoutPrefixNotAllowedError,
 } from "./errors.js";
 
 export type * from "./localstorage.js";

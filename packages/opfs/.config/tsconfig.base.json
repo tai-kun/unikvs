@@ -1,8 +1,8 @@
 {
-  "extends": ["@tsconfig/node24", "@tsconfig/strictest"],
+  "extends": ["@tsconfig/strictest"],
   "include": ["./global.d.ts", "../src/**/*"],
   "compilerOptions": {
-    "types": ["node"],
+    "types": [],
     "lib": ["DOM", "ESNext"],
     "noEmit": true,
     "target": "es2020",

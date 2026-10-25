@@ -1,13 +1,14 @@
-import { describe, test } from "vitest";
+// oxlint-disable import/no-namespace
+import { test, describe } from "vite-plus/test";
 
 import {
   BlobNetworkError,
-  BlobOperationError,
+  KeyNotFoundError,
   BlobResponseError,
+  InvalidTokenError,
+  BlobOperationError,
   InvalidAccessError,
   InvalidChunkTypeError,
-  InvalidTokenError,
-  KeyNotFoundError,
 } from "../src/errors.js";
 import type { BlobClientLike, VercelBlobOptions } from "../src/index.js";
 import * as index from "../src/index.js";
@@ -16,12 +17,12 @@ import { createFakeClient, createFakeDownload } from "./_helpers.js";
 
 describe("index のエクスポート", () => {
   test("ストレージがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.VercelBlob).toBe(VercelBlob);
   });
 
   test("エラークラスがエクスポートされている", ({ expect }) => {
-    // 実行と検証
+    // 実行と検証：
     expect(index.KeyNotFoundError).toBe(KeyNotFoundError);
     expect(index.InvalidTokenError).toBe(InvalidTokenError);
     expect(index.InvalidAccessError).toBe(InvalidAccessError);
@@ -32,18 +33,18 @@ describe("index のエクスポート", () => {
   });
 
   test("VercelBlobOptions 型でインスタンスを組み立てられる", ({ expect }) => {
-    // 準備
+    // 準備：
     const client: BlobClientLike = createFakeClient();
     const { fetch } = createFakeDownload(new Map());
     const options: VercelBlobOptions = {
-      client,
       fetch,
-      keyPrefix: "test/",
-      access: "public",
       token: "secret",
+      access: "public",
+      client,
+      keyPrefix: "test/",
     };
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => new VercelBlob(options)).not.toThrow();
   });
 });

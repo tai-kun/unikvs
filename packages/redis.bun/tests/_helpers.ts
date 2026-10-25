@@ -1,16 +1,16 @@
-import { spawn, type ChildProcess } from "node:child_process";
+// oxlint-disable vitest/require-top-level-describe
+import { type ChildProcess, spawn } from "node:child_process";
 
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext, createOpenContext } from "@unikvs/testing";
-import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
+import { createOpenContext, createCloseContext } from "@unikvs/testing";
+import { waitForPort, acquireFreePort } from "@unikvs/testing/node";
 import { RedisClient } from "bun";
-import { afterAll, beforeAll, test as vitest } from "vitest";
+import { test as vitest, afterAll, beforeAll } from "vite-plus/test";
 
 import Redis from "../src/redis.js";
 
 let server: ChildProcess | undefined;
 let portNumber = 0;
-
 beforeAll(async () => {
   portNumber = await acquireFreePort();
 
@@ -32,7 +32,6 @@ beforeAll(async () => {
 
   await waitForPort(portNumber);
 });
-
 afterAll(() => {
   if (server && !server.killed) {
     server.kill();
@@ -44,36 +43,34 @@ afterAll(() => {
  * 同じサーバーを共有してもキーが衝突せず、clear が他のテストへ影響しないために使用します。
  */
 export const test = vitest.extend<{
-  client: RedisClient;
-  keyPrefix: string;
-  storage: Redis;
   url: string;
+  client: RedisClient;
+  storage: Redis;
+  keyPrefix: string;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async url({}, use) {
     await use(`redis://127.0.0.1:${portNumber}`);
   },
-  // oxlint-disable-next-line no-empty-pattern
-  async keyPrefix({}, use) {
-    await use(randomKeyPrefix());
-  },
   async client({ url }, use) {
     const client = new RedisClient(url);
+
     try {
       await use(client);
     } finally {
       client.close();
     }
   },
-  async storage({ keyPrefix, url }, use) {
+  async storage({ url, keyPrefix }, use) {
     const storage = new Redis(url, { keyPrefix });
     await storage.open(createOpenContext() as IStorage.OpenContext);
-
     await use(storage);
 
     if (storage.isOpen) {
       storage.close(createCloseContext() as IStorage.CloseContext);
     }
+  },
+  async keyPrefix({}, use) {
+    await use(randomKeyPrefix());
   },
 });
 

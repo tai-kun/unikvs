@@ -1,13 +1,13 @@
 export type {
-  KeyNotFoundErrorMeta,
   KeyNotFoundErrorArgs,
-  WriteOnlyDeleteNotAllowedErrorMeta,
+  KeyNotFoundErrorMeta,
   WriteOnlyDeleteNotAllowedErrorArgs,
+  WriteOnlyDeleteNotAllowedErrorMeta,
 } from "./errors.js";
 export {
   KeyNotFoundError,
-  WriteOnlyDeleteNotAllowedError,
   WriteOnlyClearNotAllowedError,
+  WriteOnlyDeleteNotAllowedError,
 } from "./errors.js";
 
 export type * from "./write-only.js";

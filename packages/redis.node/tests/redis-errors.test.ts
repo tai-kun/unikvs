@@ -1,36 +1,36 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createClearContext,
-  createDeleteContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createClearContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import {
-  CloseTimeoutError,
-  ClusterNotSupportedError,
-  ConnectTimeoutError,
-  InvalidCloseTimeoutError,
   KeyNotFoundError,
+  CloseTimeoutError,
+  ConnectTimeoutError,
+  ClusterNotSupportedError,
+  InvalidCloseTimeoutError,
 } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 describe("KeyNotFoundError", () => {
   test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new KeyNotFoundError({ key: "k1" });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("UniKvsKeyNotFoundError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new KeyNotFoundError({ key: "k1" });
 
-    // 検証
+    // 検証：
     expect(error.meta).toStrictEqual({ key: "k1" });
     expect(error.message).toBe("Key not found: k1");
   });
@@ -38,10 +38,10 @@ describe("KeyNotFoundError", () => {
 
 describe("ClusterNotSupportedError", () => {
   test("name は RedisClusterNotSupportedError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new ClusterNotSupportedError();
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("RedisClusterNotSupportedError");
     expect(error.message).toContain("standalone");
   });
@@ -49,18 +49,18 @@ describe("ClusterNotSupportedError", () => {
 
 describe("InvalidCloseTimeoutError", () => {
   test("name は RedisInvalidCloseTimeoutError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new InvalidCloseTimeoutError({ actual: 0 });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("RedisInvalidCloseTimeoutError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new InvalidCloseTimeoutError({ actual: 0 });
 
-    // 検証
+    // 検証：
     expect(error.meta).toStrictEqual({ actual: 0 });
     expect(error.message).toContain("`closeTimeout` must be a finite positive number");
   });
@@ -68,18 +68,18 @@ describe("InvalidCloseTimeoutError", () => {
 
 describe("ConnectTimeoutError", () => {
   test("name は RedisConnectTimeoutError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new ConnectTimeoutError({ timeoutMs: 1000 });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("RedisConnectTimeoutError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new ConnectTimeoutError({ timeoutMs: 1000 });
 
-    // 検証
+    // 検証：
     expect(error.meta).toStrictEqual({ timeoutMs: 1000 });
     expect(error.message).toBe("Timed out connecting to Redis after 1000ms");
   });
@@ -87,18 +87,18 @@ describe("ConnectTimeoutError", () => {
 
 describe("CloseTimeoutError", () => {
   test("name は RedisCloseTimeoutError である", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new CloseTimeoutError({ timeoutMs: 100 });
 
-    // 検証
+    // 検証：
     expect(error.name).toBe("RedisCloseTimeoutError");
   });
 
   test("meta と一度だけ整形されたメッセージを保持する", ({ expect }) => {
-    // 準備と実行
+    // 準備と実行。
     const error = new CloseTimeoutError({ timeoutMs: 100 });
 
-    // 検証
+    // 検証：
     expect(error.meta).toStrictEqual({ timeoutMs: 100 });
     expect(error.message).toBe("Timed out closing Redis after 100ms");
   });
@@ -106,10 +106,10 @@ describe("CloseTimeoutError", () => {
 
 describe("存在しないキー", () => {
   test("read は KeyNotFoundError で失敗する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "missing.bin";
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).rejects.toThrow(KeyNotFoundError);
@@ -118,11 +118,11 @@ describe("存在しないキー", () => {
 
 describe("中断された signal", () => {
   test("write は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("aborted.bin", { signal: controller.signal }) as IStorage.WriteContext,
@@ -132,27 +132,28 @@ describe("中断された signal", () => {
   });
 
   test("read は拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "aborted-read.bin";
     await storage.write(
       createSetContext(key, { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
+
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.read(createGetContext(key, { signal: controller.signal }) as IStorage.ReadContext),
     ).rejects.toThrow();
   });
 
   test("exists は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.exists(
         createHasContext("aborted.bin", { signal: controller.signal }) as IStorage.ExistsContext,
@@ -161,11 +162,11 @@ describe("中断された signal", () => {
   });
 
   test("delete は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.delete(
         createDeleteContext("aborted.bin", { signal: controller.signal }) as IStorage.DeleteContext,
@@ -174,11 +175,11 @@ describe("中断された signal", () => {
   });
 
   test("clear は拒否される", async ({ expect, storage }) => {
-    // 準備
+    // 準備：
     const controller = new AbortController();
     controller.abort();
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
     ).rejects.toThrow();

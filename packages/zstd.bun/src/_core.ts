@@ -1,5 +1,27 @@
+import type { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
+
 import type { ITransformStream } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
+
+/**
+ * `node:zlib` の zstd に関する部分です。
+ */
+type NodeZlibModule = {
+  /**
+   * 同期圧縮関数です。
+   */
+  readonly zstdCompressSync: typeof zstdCompressSync;
+
+  /**
+   * 同期展開関数です.
+   */
+  readonly zstdDecompressSync: typeof zstdDecompressSync;
+
+  /**
+   * 圧縮パラメーターを指定するための定数です。
+   */
+  readonly constants: typeof constants;
+};
 
 /**
  * 解決した zstd 実装をまとめた実行環境です。
@@ -34,18 +56,20 @@ export type CompressOptions = {
 };
 
 /**
- * Bun 名前空間の zstd に関する部分です。
+ * Bun 名前空間の zstd API に関する部分です。
+ *
+ * `@types/bun` には zstd の宣言がまだないため、brotli 系 API と同じ `{ level }` 形式のオプションを受け付ける形状を想定して定義します。
  */
-type BunZstdProbe = {
+type BunZstdApi = {
   /**
    * 圧縮関数です。
    */
-  readonly zstdCompressSync?: unknown;
+  readonly zstdCompressSync: (data: Uint8Array, options?: { level?: number }) => Uint8Array;
 
   /**
    * 展開関数です。
    */
-  readonly zstdDecompressSync?: unknown;
+  readonly zstdDecompressSync: (data: Uint8Array) => Uint8Array;
 };
 
 /**
@@ -61,9 +85,10 @@ function readBunProbe(): unknown {
  * チャンク列を結合して 1 つの所有化されたバイト列にします。
  *
  * @param chunks 結合するチャンク列です。
+ *
  * @returns 結合したバイト列を返します。
  */
-function concatChunks(chunks: ReadonlyArray<Uint8Array>): Uint8Array<ArrayBuffer> {
+function concatChunks(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
   let total = 0;
 
   for (const chunk of chunks) {
@@ -91,20 +116,21 @@ export const api = {
    * 利用できない場合は `undefined` を返します。
    *
    * @param probe 解決対象の Bun 名前空間のプローブです。
+   *
    * @returns Bun の名前空間、または `undefined` を返します。
    */
-  detectBun(probe: unknown): typeof import("bun") | undefined {
-    if (typeof probe !== "object" || probe === null) {
-      return undefined;
+  detectBun(probe: unknown): BunZstdApi | undefined {
+    let resolved: BunZstdApi | undefined;
+
+    if (typeof probe === "object" && probe !== null) {
+      const { zstdCompressSync, zstdDecompressSync } = probe as Partial<BunZstdApi>;
+
+      if (typeof zstdCompressSync === "function" && typeof zstdDecompressSync === "function") {
+        resolved = probe as BunZstdApi;
+      }
     }
 
-    const { zstdCompressSync, zstdDecompressSync } = probe as BunZstdProbe;
-
-    if (typeof zstdCompressSync !== "function" || typeof zstdDecompressSync !== "function") {
-      return undefined;
-    }
-
-    return probe as typeof import("bun");
+    return resolved;
   },
 
   /**
@@ -113,26 +139,26 @@ export const api = {
    * zstd 系 API が欠けている場合はエラーを投げます。
    *
    * @param zlib `node:zlib` モジュールです。
+   *
    * @returns 解決した実行環境を返します。
    */
-  createNodeEnv(zlib: typeof import("node:zlib")): IEnv {
+  createNodeEnv(zlib: NodeZlibModule): IEnv {
     if (typeof zlib.zstdCompressSync !== "function") {
-      throw new Error("zstdCompressSync is not available in node:zlib");
+      throw new TypeError("zstdCompressSync is not available in node:zlib");
     }
 
     if (typeof zlib.zstdDecompressSync !== "function") {
-      throw new Error("zstdDecompressSync is not available in node:zlib");
+      throw new TypeError("zstdDecompressSync is not available in node:zlib");
     }
 
     return {
       kind: "node",
-      compressSync: (data, level) => {
-        return zlib.zstdCompressSync(data, {
+      compressSync: (data, level) =>
+        zlib.zstdCompressSync(data, {
           params: {
             [zlib.constants.ZSTD_c_compressionLevel]: level,
           },
-        });
-      },
+        }),
       decompressSync: (data) => zlib.zstdDecompressSync(data),
     };
   },
@@ -140,8 +166,7 @@ export const api = {
   /**
    * zstd 実装を遅延解決します。
    *
-   * Bun ランタイムでは `Bun.zstdCompressSync` と `Bun.zstdDecompressSync` を使い、
-   * それ以外の環境では `node:zlib` の zstd 系 API へフォールバックします。
+   * Bun ランタイムでは `Bun.zstdCompressSync` と `Bun.zstdDecompressSync` を使い、それ以外の環境では `node:zlib` の zstd 系 API へフォールバックします。
    *
    * @returns 解決した実行環境を返します。
    */
@@ -167,6 +192,7 @@ export const api = {
    * @param env 使用する実行環境です。
    * @param data 圧縮するバイト列です。
    * @param options オプションです。
+   *
    * @returns 圧縮したバイト列を返します。
    */
   compress(env: IEnv, data: Uint8Array, options: CompressOptions): Uint8Array {
@@ -182,6 +208,7 @@ export const api = {
    *
    * @param env 使用する実行環境です。
    * @param data 展開するバイト列です。
+   *
    * @returns 展開したバイト列を返します。
    */
   decompress(env: IEnv, data: Uint8Array): Uint8Array {
@@ -191,11 +218,11 @@ export const api = {
   /**
    * 指定した圧縮レベルで圧縮する TransformStream を作成します。
    *
-   * Bun にストリーミング用の zstd API がないため、書き込まれたチャンクを
-   * 蓄積し、flush 時に一括変換して 1 チャンクとして出力します。
+   * Bun にストリーミング用の zstd API がないため、書き込まれたチャンクを蓄積し、flush 時に一括変換して 1 チャンクとして出力します。
    *
    * @param env 使用する実行環境です。
    * @param options オプションです。
+   *
    * @returns 圧縮用のストリームを返します。
    */
   createCompress(
@@ -205,7 +232,7 @@ export const api = {
     // open() 前の利用は TypeError で拒否されるよう、実行環境へ同期的に触れます。
     const compressSync = env.compressSync;
     const { level } = options;
-    const chunks: Array<Uint8Array> = [];
+    const chunks: Uint8Array[] = [];
 
     return new TransformStream({
       transform(chunk) {
@@ -214,6 +241,7 @@ export const api = {
 
       flush(controller) {
         const data = concatChunks(chunks);
+
         chunks.length = 0;
         controller.enqueue(toOwnedBytes(compressSync(data, level)));
       },
@@ -223,16 +251,16 @@ export const api = {
   /**
    * 展開用の TransformStream を作成します。
    *
-   * Bun にストリーミング用の zstd API がないため、書き込まれたチャンクを
-   * 蓄積し、flush 時に一括変換して 1 チャンクとして出力します。
+   * Bun にストリーミング用の zstd API がないため、書き込まれたチャンクを蓄積し、flush 時に一括変換して 1 チャンクとして出力します。
    *
    * @param env 使用する実行環境です。
+   *
    * @returns 展開用のストリームを返します。
    */
   createDecompress(env: IEnv): ITransformStream<Uint8Array, Uint8Array<ArrayBuffer>> {
     // open() 前の利用は TypeError で拒否されるよう、実行環境へ同期的に触れます。
     const decompressSync = env.decompressSync;
-    const chunks: Array<Uint8Array> = [];
+    const chunks: Uint8Array[] = [];
 
     return new TransformStream({
       transform(chunk) {
@@ -241,6 +269,7 @@ export const api = {
 
       flush(controller) {
         const data = concatChunks(chunks);
+
         chunks.length = 0;
         controller.enqueue(toOwnedBytes(decompressSync(data)));
       },

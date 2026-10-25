@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IMiddleware } from "@unikvs/core";
+import { type IMiddleware, KeyNotFoundError } from "@unikvs/core";
 
 import { ExpiryInvalidExpiresAtError } from "./errors.js";
 
@@ -85,10 +85,13 @@ type ExpiryEnvelope = {
 
 const EXPIRES_AT_VAR = "@unikvs/expiry:expiresAt";
 
-function toEpochMs(input: unknown, key: string | undefined): number {
+function toEpochMs(input: unknown, key?: string): number {
   if (typeof input === "number") {
     if (!Number.isFinite(input)) {
-      throw new ExpiryInvalidExpiresAtError({ key, actual: input });
+      throw new ExpiryInvalidExpiresAtError({
+        key,
+        actual: input,
+      });
     }
 
     return input;
@@ -98,7 +101,10 @@ function toEpochMs(input: unknown, key: string | undefined): number {
     const ms = input.getTime();
 
     if (Number.isNaN(ms)) {
-      throw new ExpiryInvalidExpiresAtError({ key, actual: input });
+      throw new ExpiryInvalidExpiresAtError({
+        key,
+        actual: input,
+      });
     }
 
     return ms;
@@ -108,38 +114,43 @@ function toEpochMs(input: unknown, key: string | undefined): number {
     const ms = Date.parse(input);
 
     if (Number.isNaN(ms)) {
-      throw new ExpiryInvalidExpiresAtError({ key, actual: input });
+      throw new ExpiryInvalidExpiresAtError({
+        key,
+        actual: input,
+      });
     }
 
     return ms;
   }
 
-  throw new ExpiryInvalidExpiresAtError({ key, actual: input });
+  throw new ExpiryInvalidExpiresAtError({
+    key,
+    actual: input,
+  });
 }
 
 function asEnvelope(value: unknown): ExpiryEnvelope | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
+  let envelope: ExpiryEnvelope | undefined = undefined;
+
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    if (
+      EXPIRY_MARKER in value &&
+      "expiresAt" in value &&
+      "data" in value &&
+      Object.keys(value).length === 3
+    ) {
+      const { expiresAt } = value as { readonly expiresAt: unknown };
+
+      if (
+        (value as { readonly [EXPIRY_MARKER]?: unknown })[EXPIRY_MARKER] === EXPIRY_VERSION &&
+        (expiresAt === null || typeof expiresAt === "number")
+      ) {
+        envelope = value as ExpiryEnvelope;
+      }
+    }
   }
 
-  if (!(EXPIRY_MARKER in value) || !("expiresAt" in value) || !("data" in value)) {
-    return undefined;
-  }
-
-  if (Object.keys(value).length !== 3) {
-    return undefined;
-  }
-
-  const { expiresAt } = value as { readonly expiresAt: unknown };
-
-  if (
-    (value as { readonly [EXPIRY_MARKER]?: unknown })[EXPIRY_MARKER] !== EXPIRY_VERSION ||
-    (expiresAt !== null && typeof expiresAt !== "number")
-  ) {
-    return undefined;
-  }
-
-  return value as ExpiryEnvelope;
+  return envelope;
 }
 
 /**
@@ -170,15 +181,12 @@ export default class Expiry implements IMiddleware {
    * Expiry ミドルウェアを作成します。
    *
    * @param options 既定の有効期限と時刻の取得方法です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#usage)
    */
   public constructor(options: ExpiryOptions = {}) {
-    const { defaultExpiresAt, now = Date.now, onExpire } = options;
-
+    const { now = Date.now, onExpire, defaultExpiresAt } = options;
     this.defaultExpiresAt = defaultExpiresAt;
-    this.#defaultExpiresAt =
-      defaultExpiresAt === undefined ? null : toEpochMs(defaultExpiresAt, undefined);
+    this.#defaultExpiresAt = defaultExpiresAt === undefined ? null : toEpochMs(defaultExpiresAt);
     this.#now = now;
     this.#onExpire = onExpire;
   }
@@ -209,7 +217,10 @@ export default class Expiry implements IMiddleware {
     }
 
     if (envelope.expiresAt !== null && this.#now() >= envelope.expiresAt) {
-      this.#onExpire?.({ key: c.key, expiresAt: envelope.expiresAt });
+      this.#onExpire?.({
+        key: c.key,
+        expiresAt: envelope.expiresAt,
+      });
 
       throw new KeyNotFoundError({ key: c.key });
     }
@@ -224,10 +235,9 @@ export default class Expiry implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const expiresAt = this.#resolveExpiresAt(c);
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           controller.enqueue(
             Object.freeze({
               [EXPIRY_MARKER]: EXPIRY_VERSION,
@@ -249,10 +259,9 @@ export default class Expiry implements IMiddleware {
     const now = this.#now;
     const onExpire = this.#onExpire;
     const key = c.key;
-
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller) {
+        transform(chunk, controller): void {
           const envelope = asEnvelope(chunk);
 
           if (envelope === undefined) {
@@ -262,7 +271,10 @@ export default class Expiry implements IMiddleware {
           }
 
           if (envelope.expiresAt !== null && now() >= envelope.expiresAt) {
-            onExpire?.({ key, expiresAt: envelope.expiresAt });
+            onExpire?.({
+              key,
+              expiresAt: envelope.expiresAt,
+            });
 
             throw new KeyNotFoundError({ key });
           }

@@ -1,4 +1,4 @@
-import { ITransformStream } from "@unikvs/core";
+import type { ITransformStream } from "@unikvs/core";
 import { NinjaPromise } from "ninja-promise";
 
 /**
@@ -22,8 +22,8 @@ export interface IProxiedTransformStream<TInput = any, TOutput = any> extends IT
  * @param source 変換対象のソースストリームです。
  * @param proxyInput 入力値をソースの入力へ変換する処理です。
  * @param proxyOutput ソースの出力を出力値へ変換する処理です。
- * @returns 入力と出力が変換されたストリームと終了を表す `closePromise` です。
  *
+ * @returns 入力と出力が変換されたストリームと終了を表す `closePromise` です。
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#proxy-transform-stream)
  */
 export default function proxyTransformStream<TSourceInput, TSourceOutput, TInput, TOutput>(
@@ -35,19 +35,26 @@ export default function proxyTransformStream<TSourceInput, TSourceOutput, TInput
     | Transformer<TSourceOutput, TOutput>
     | TransformerTransformCallback<TSourceOutput, TOutput>,
 ): IProxiedTransformStream<TInput, TOutput> {
-  if (typeof proxyInput === "function") {
-    proxyInput = {
-      transform: proxyInput,
-    };
-  }
-  if (typeof proxyOutput === "function") {
-    proxyOutput = {
-      transform: proxyOutput,
-    };
+  let inputTransformer:
+    | Transformer<TInput, TSourceInput>
+    | TransformerTransformCallback<TInput, TSourceInput> = proxyInput;
+
+  if (typeof inputTransformer === "function") {
+    const transform = inputTransformer;
+    inputTransformer = { transform };
   }
 
-  const inputTransform = new TransformStream<TInput, TSourceInput>(proxyInput);
-  const outputTransform = new TransformStream<TSourceOutput, TOutput>(proxyOutput);
+  let outputTransformer:
+    | Transformer<TSourceOutput, TOutput>
+    | TransformerTransformCallback<TSourceOutput, TOutput> = proxyOutput;
+
+  if (typeof outputTransformer === "function") {
+    const transform = outputTransformer;
+    outputTransformer = { transform };
+  }
+
+  const inputTransform = new TransformStream<TInput, TSourceInput>(inputTransformer);
+  const outputTransform = new TransformStream<TSourceOutput, TOutput>(outputTransformer);
 
   const readable = source.readable.pipeThrough(outputTransform);
   const writable = inputTransform.writable;

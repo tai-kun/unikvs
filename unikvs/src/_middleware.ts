@@ -12,7 +12,7 @@ import {
 /**
  * 同じオブジェクトに対して同じ `UniKvsMiddleware` インスタンスを返すためのメモです。
  */
-const instances = /*#__PURE__*/ new WeakMap<IMiddleware, UniKvsMiddleware>();
+const instances = /* #__PURE__ */ new WeakMap<IMiddleware, UniKvsMiddleware>();
 
 /**
  * `IMiddleware` を `UniKvs` 内部から扱うためのラッパーです。
@@ -20,16 +20,6 @@ const instances = /*#__PURE__*/ new WeakMap<IMiddleware, UniKvsMiddleware>();
  * ミドルウェアを安全に使うための検証などの処理が集約されています。
  */
 export default class UniKvsMiddleware {
-  /**
-   * `IMiddleware` から `UniKvs` 内部から扱うためのミドルウェアを作成します。
-   *
-   * @param middleware 元となるミドルウェアです。
-   * @returns 検証などの機能が集約されたミドルウェアです。
-   */
-  public static from(middleware: IMiddleware): UniKvsMiddleware {
-    return callFnOnce(instances, middleware, () => new UniKvsMiddleware(middleware));
-  }
-
   /**
    * ラップするミドルウェアです。
    */
@@ -49,6 +39,17 @@ export default class UniKvsMiddleware {
     this.#mw = middleware;
     this.#lifecycle = new PluginLifecycle(middleware);
     this.name = middleware.name;
+  }
+
+  /**
+   * `IMiddleware` から `UniKvs` 内部から扱うためのミドルウェアを作成します。
+   *
+   * @param middleware 元となるミドルウェアです。
+   *
+   * @returns 検証などの機能が集約されたミドルウェアです。
+   */
+  public static from(middleware: IMiddleware): UniKvsMiddleware {
+    return callFnOnce(instances, middleware, () => new UniKvsMiddleware(middleware));
   }
 
   /**
@@ -85,6 +86,7 @@ export default class UniKvsMiddleware {
    * キーを写像します。
    *
    * @param c キー写像コンテキストです。
+   *
    * @returns 写像後のキーを返します。
    */
   public mapKey(c: IMiddleware.MapKeyContext): string {
@@ -95,9 +97,9 @@ export default class UniKvsMiddleware {
     if (this.#mw.mapKey === undefined) {
       // 既定ではキーをそのまま似します。
       return c.key;
-    } else {
-      return this.#mw.mapKey(c);
     }
+
+    return this.#mw.mapKey(c);
   }
 
   /**
@@ -174,6 +176,7 @@ export default class UniKvsMiddleware {
     if (!this.#mw.isOpen) {
       throw new MiddlewareIsNotOpenError({ name: this.name });
     }
+
     if (this.#mw.encodeStream === undefined) {
       throw new StreamEncodingNotSupportedError({ name: this.name });
     }
@@ -194,6 +197,7 @@ export default class UniKvsMiddleware {
     if (!this.#mw.isOpen) {
       throw new MiddlewareIsNotOpenError({ name: this.name });
     }
+
     if (this.#mw.decodeStream === undefined) {
       throw new StreamDecodingNotSupportedError({ name: this.name });
     }

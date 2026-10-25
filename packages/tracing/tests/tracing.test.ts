@@ -1,19 +1,19 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  createDecodeContext,
-  createDecodeStreamContext,
-  createDeleteContext,
-  createEncodeContext,
-  createEncodeStreamContext,
+  readAll,
+  createNext,
+  sourceFrom,
   createGetContext,
   createHasContext,
-  createNext,
   createSetContext,
+  createDecodeContext,
+  createDeleteContext,
+  createEncodeContext,
   createStreamContext,
-  readAll,
-  sourceFrom,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import Tracing from "../src/tracing.js";
 import { RecordingTracer } from "./_helpers.js";
@@ -68,67 +68,67 @@ async function pumpDecode(
 
 describe("初期化と基本属性", () => {
   test("name プロパティは Tracing である", ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
 
-    // 実行と検証
+    // 実行と検証：
     expect(tracing.name).toBe("Tracing");
   });
 
   test("isOpen は常に true を返す", ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
 
-    // 実行と検証
+    // 実行と検証：
     expect(tracing.isOpen).toBe(true);
   });
 
   test("既定の接頭辞は unikvs. である", ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
 
-    // 実行と検証
+    // 実行と検証：
     expect(tracing.spanNamePrefix).toBe("unikvs.");
   });
 
   test("トレーサーを省略しても操作はそのまま通る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     const output = await encode(tracing, data, "key");
 
-    // 検証
+    // 検証：
     expect(output).toBe(data);
   });
 
   test("encode はデータを変換せずにそのまま返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing({ tracer: new RecordingTracer() });
     const data = new Uint8Array([1, 2, 3]);
 
-    // 実行
+    // 実行：
     const output = await encode(tracing, data, "key");
 
-    // 検証
+    // 検証：
     expect(output).toBe(data);
   });
 
   test("decode はデータを変換せずにそのまま返す", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing({ tracer: new RecordingTracer() });
     const data = "hello";
 
-    // 実行
+    // 実行：
     const output = await decode(tracing, data, "key");
 
-    // 検証
+    // 検証：
     expect(output).toBe(data);
   });
 
   test("encode と decode は next を呼ぶ前に destination を設定する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
     const encoded = new Uint8Array([1, 2, 3]);
     const decoded = "hello";
@@ -136,15 +136,19 @@ describe("初期化と基本属性", () => {
     const encodeContext = createEncodeContext(encoded, "key");
     const decodeContext = createDecodeContext(decoded, "key");
 
-    // 実行
-    await tracing.encode(encodeContext as IMiddleware.EncodeContext, async () => {
+    // 実行：
+    await tracing.encode(encodeContext as IMiddleware.EncodeContext, (): Promise<void> => {
       seen.push(encodeContext.destination);
+
+      return Promise.resolve();
     });
-    await tracing.decode(decodeContext as IMiddleware.DecodeContext, async () => {
+    await tracing.decode(decodeContext as IMiddleware.DecodeContext, (): Promise<void> => {
       seen.push(decodeContext.destination);
+
+      return Promise.resolve();
     });
 
-    // 検証
+    // 検証：
     expect(seen).toHaveLength(2);
     expect(seen[0]).toBe(encoded);
     expect(seen[1]).toBe(decoded);
@@ -155,7 +159,7 @@ describe("初期化と基本属性", () => {
 
 describe("操作ごとのスパン", () => {
   test("use は操作ごとに対応するスパンを作る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     // 本番の clear コンテキストは key を持たないため、同じ形のコンテキストを使います。
@@ -172,140 +176,155 @@ describe("操作ごとのスパン", () => {
       [clearContext, ""],
     ] as [IMiddleware.UseContext, string][];
 
-    // 実行
+    // 実行：
     for (const [c] of cases) {
       await tracing.use(c, createNext());
     }
 
-    // 検証
+    // 検証：
     expect(tracer.spans).toHaveLength(cases.length);
 
     for (const [index, [c, key]] of cases.entries()) {
-      const span = tracer.spans[index]!;
-      expect(span.name).toBe(`unikvs.use.${c.action}`);
-      expect(span.attributes.get("key")).toBe(key);
-      expect(span.attributes.get("action")).toBe(c.action);
-      expect(span.attributes.get("success")).toBe(true);
-      expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-      expect(span.status).toStrictEqual({ code: "ok" });
-      expect(span.ended).toBe(true);
-      expect(span.endCount).toBe(1);
+      const span = tracer.spans.at(index);
+      expect(span?.name).toBe(`unikvs.use.${c.action}`);
+      expect(span?.attributes.get("key")).toBe(key);
+      expect(span?.attributes.get("action")).toBe(c.action);
+      expect(span?.attributes.get("success")).toBe(true);
+      expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+      expect(span?.status).toStrictEqual({ code: "ok" });
+      expect(span?.ended).toBe(true);
+      expect(span?.endCount).toBe(1);
     }
   });
 
   test("encode はスパンにキーと成否と遅延を記録する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
 
-    // 実行
+    // 実行：
     await encode(tracing, "hello", "greeting");
 
-    // 検証
+    // 検証：
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.encode");
-    expect(span.attributes.get("key")).toBe("greeting");
-    expect(span.attributes.get("action")).toBe("set");
-    expect(span.attributes.get("success")).toBe(true);
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.attributes.get("durationMs") as number).toBeGreaterThanOrEqual(0);
-    expect(span.status).toStrictEqual({ code: "ok" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.encode");
+    expect(span?.attributes.get("key")).toBe("greeting");
+    expect(span?.attributes.get("action")).toBe("set");
+    expect(span?.attributes.get("success")).toBe(true);
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.attributes.get("durationMs") as number).toBeGreaterThanOrEqual(0);
+    expect(span?.status).toStrictEqual({ code: "ok" });
+    expect(span?.ended).toBe(true);
   });
 
   test("decode はスパンにキーと成否と遅延を記録する", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
 
-    // 実行
+    // 実行：
     await decode(tracing, "hello", "blob");
 
-    // 検証
+    // 検証：
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.decode");
-    expect(span.attributes.get("key")).toBe("blob");
-    expect(span.attributes.get("action")).toBe("get");
-    expect(span.attributes.get("success")).toBe(true);
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.status).toStrictEqual({ code: "ok" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.decode");
+    expect(span?.attributes.get("key")).toBe("blob");
+    expect(span?.attributes.get("action")).toBe("get");
+    expect(span?.attributes.get("success")).toBe(true);
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.status).toStrictEqual({ code: "ok" });
+    expect(span?.ended).toBe(true);
   });
 
   test("encodeStream は読み切りで 1 件のスパンを記録し、チャンクをそのまま通す", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const input = [new Uint8Array([1]), new Uint8Array([2, 3])];
 
-    // 実行
+    // 実行：
     const output = await pumpEncode(tracing, input, "stream");
 
-    // 検証
+    // 検証：
     expect(output).toStrictEqual(input);
     expect(output[0]).toBe(input[0]);
     expect(output[1]).toBe(input[1]);
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.encodeStream");
-    expect(span.attributes.get("key")).toBe("stream");
-    expect(span.attributes.get("action")).toBe("set");
-    expect(span.attributes.get("success")).toBe(true);
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.status).toStrictEqual({ code: "ok" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.encodeStream");
+    expect(span?.attributes.get("key")).toBe("stream");
+    expect(span?.attributes.get("action")).toBe("set");
+    expect(span?.attributes.get("success")).toBe(true);
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.status).toStrictEqual({ code: "ok" });
+    expect(span?.ended).toBe(true);
   });
 
   test("decodeStream は読み切りで 1 件のスパンを記録し、チャンクをそのまま通す", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
     const tracing = new Tracing({ tracer });
     const input = ["a", "bc"];
 
-    // 実行
+    // 実行：
     const output = await pumpDecode(tracing, input, "stream");
 
-    // 検証
+    // 検証：
     expect(output).toStrictEqual(input);
     expect(output[0]).toBe(input[0]);
     expect(output[1]).toBe(input[1]);
     expect(tracer.spans).toHaveLength(1);
-    const span = tracer.spans[0]!;
-    expect(span.name).toBe("unikvs.decodeStream");
-    expect(span.attributes.get("key")).toBe("stream");
-    expect(span.attributes.get("action")).toBe("stream");
-    expect(span.attributes.get("success")).toBe(true);
-    expect(span.attributes.get("durationMs")).toEqual(expect.any(Number));
-    expect(span.status).toStrictEqual({ code: "ok" });
-    expect(span.ended).toBe(true);
+
+    const span = tracer.spans.at(0);
+    expect(span?.name).toBe("unikvs.decodeStream");
+    expect(span?.attributes.get("key")).toBe("stream");
+    expect(span?.attributes.get("action")).toBe("stream");
+    expect(span?.attributes.get("success")).toBe(true);
+    expect(span?.attributes.get("durationMs")).toEqual(expect.any(Number));
+    expect(span?.status).toStrictEqual({ code: "ok" });
+    expect(span?.ended).toBe(true);
   });
 
   test("encodeStream と decodeStream は next を呼ぶ前に destination を設定する", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const tracing = new Tracing();
     const encodeContext = createEncodeStreamContext(sourceFrom(["a", "bc"]), "stream-key");
     const decodeContext = createDecodeStreamContext(sourceFrom(["d"]), "stream-key");
     const seen: unknown[] = [];
 
-    // 実行
-    await tracing.encodeStream(encodeContext as IMiddleware.EncodeStreamContext, async () => {
-      seen.push(encodeContext.destination);
-    });
-    await tracing.decodeStream(decodeContext as IMiddleware.DecodeStreamContext, async () => {
-      seen.push(decodeContext.destination);
-    });
+    // 実行：
+    await tracing.encodeStream(
+      encodeContext as IMiddleware.EncodeStreamContext,
+      (): Promise<void> => {
+        seen.push(encodeContext.destination);
+
+        return Promise.resolve();
+      },
+    );
+    await tracing.decodeStream(
+      decodeContext as IMiddleware.DecodeStreamContext,
+      (): Promise<void> => {
+        seen.push(decodeContext.destination);
+
+        return Promise.resolve();
+      },
+    );
+
     const encodedChunks = await readAll(encodeContext.destination as ReadableStream<string>);
     const decodedChunks = await readAll(decodeContext.destination as ReadableStream<string>);
 
-    // 検証
+    // 検証：
     expect(seen).toHaveLength(2);
     expect(seen[0]).toBeDefined();
     expect(seen[1]).toBeDefined();
@@ -316,18 +335,21 @@ describe("操作ごとのスパン", () => {
   });
 
   test("spanNamePrefix を指定するとスパン名に反映される", async ({ expect }) => {
-    // 準備
+    // 準備：
     const tracer = new RecordingTracer();
-    const tracing = new Tracing({ tracer, spanNamePrefix: "myapp.kvs." });
+    const tracing = new Tracing({
+      tracer,
+      spanNamePrefix: "myapp.kvs.",
+    });
 
-    // 実行
+    // 実行：
     await encode(tracing, "hello", "key");
     await decode(tracing, "hello", "key");
     await tracing.use(createGetContext("key") as IMiddleware.UseContext, createNext());
     await pumpEncode(tracing, ["a"], "key");
     await pumpDecode(tracing, ["a"], "key");
 
-    // 検証
+    // 検証：
     expect(tracer.spans.map((span) => span.name)).toStrictEqual([
       "myapp.kvs.encode",
       "myapp.kvs.decode",

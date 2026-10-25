@@ -1,14 +1,15 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { createServer, type Server, Socket } from "node:net";
+// oxlint-disable vitest/require-top-level-describe
+import { type ChildProcess, spawn } from "node:child_process";
+import { rmSync, mkdtempSync } from "node:fs";
+import { type Server, Socket, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { S3Client, CreateBucketCommand, type S3ClientConfig } from "@aws-sdk/client-s3";
+import { type S3ClientConfig, S3Client, CreateBucketCommand } from "@aws-sdk/client-s3";
 import type { IStorage } from "@unikvs/core";
 import { createCloseContext } from "@unikvs/testing";
-import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
-import { afterAll, beforeAll, test as vitest } from "vitest";
+import { waitForPort, acquireFreePort } from "@unikvs/testing/node";
+import { test as vitest, afterAll, beforeAll } from "vite-plus/test";
 
 import S3 from "../src/s3.js";
 
@@ -16,7 +17,6 @@ let bucketId = 0;
 let server: ChildProcess | undefined;
 let volumeDir: string;
 let portNumber = 0;
-
 beforeAll(async () => {
   portNumber = await acquireFreePort();
   volumeDir = mkdtempSync(join(tmpdir(), "unikvs-s3-node-"));
@@ -27,13 +27,16 @@ beforeAll(async () => {
 
   await waitForPort(portNumber);
 });
-
-afterAll(async () => {
+afterAll(() => {
   if (server && !server.killed) {
     server.kill();
   }
+
   if (volumeDir !== undefined) {
-    rmSync(volumeDir, { recursive: true, force: true });
+    rmSync(volumeDir, {
+      force: true,
+      recursive: true,
+    });
   }
 });
 
@@ -42,8 +45,8 @@ afterAll(async () => {
  */
 export function createClientConfig(endpoint: string): S3ClientConfig {
   return {
-    endpoint,
     region: "ap-northeast-1",
+    endpoint,
     credentials: {
       accessKeyId: "rustfsadmin",
       secretAccessKey: "rustfsadmin",
@@ -76,29 +79,26 @@ export async function createBucket(endpoint: string, bucket: string): Promise<vo
 // oxlint-disable-next-line jest/expect-expect jest/no-disabled-tests
 export const test = vitest.extend<{
   bucket: string;
-  endpoint: string;
   storage: S3;
+  endpoint: string;
   unauthorizedStorage: S3;
 }>({
-  // oxlint-disable-next-line no-empty-pattern
   async bucket({}, use) {
     const bucket = `test-bucket-${bucketId++}`;
     await use(bucket);
-  },
-  // oxlint-disable-next-line no-empty-pattern
-  async endpoint({}, use) {
-    await use(`http://127.0.0.1:${portNumber}`);
   },
   async storage({ bucket, endpoint }, use) {
     await createBucket(endpoint, bucket);
 
     const storage = new S3(bucket, createClientConfig(endpoint));
-
     await use(storage);
 
     if (storage.isOpen) {
       storage.close(createCloseContext() as IStorage.CloseContext);
     }
+  },
+  async endpoint({}, use) {
+    await use(`http://127.0.0.1:${portNumber}`);
   },
   async unauthorizedStorage({ endpoint }, use) {
     const bucket = `test-unauthorized-bucket-${bucketId++}`;
@@ -112,7 +112,6 @@ export const test = vitest.extend<{
         secretAccessKey: "unauthorized",
       },
     });
-
     await use(storage);
 
     if (storage.isOpen) {
@@ -128,10 +127,14 @@ export const test = vitest.extend<{
 export async function createDelayedProxy(
   targetPort: number,
   delayMs: number,
-): Promise<{ endpoint: string; close: () => Promise<void> }> {
+): Promise<{
+  close: () => Promise<void>;
+  endpoint: string;
+}> {
   const sockets = new Set<Socket>();
   const proxy: Server = createServer((client) => {
     const upstream = new Socket();
+
     sockets.add(client);
     sockets.add(upstream);
 
@@ -154,27 +157,28 @@ export async function createDelayedProxy(
     upstream.on("close", cleanup);
     upstream.connect(targetPort, "127.0.0.1");
   });
-
   await new Promise<void>((resolve, reject) => {
     proxy.once("error", reject);
     proxy.listen(0, "127.0.0.1", resolve);
   });
 
   const address = proxy.address();
+
   if (typeof address !== "object" || address === null) {
     throw new Error("プロキシーのポート取得に失敗しました");
   }
 
   return {
-    endpoint: `http://127.0.0.1:${address.port}`,
     close: () =>
       new Promise<void>((resolve) => {
         for (const socket of sockets) {
           socket.destroy();
         }
+
         proxy.close(() => {
           resolve();
         });
       }),
+    endpoint: `http://127.0.0.1:${address.port}`,
   };
 }

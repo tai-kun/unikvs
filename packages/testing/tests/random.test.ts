@@ -1,39 +1,58 @@
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
-import { createRandom, forCases, forCasesAsync } from "../src/random.js";
+import { type Random, forCases, createRandom, forCasesAsync } from "../src/random.js";
+
+/**
+ * 指定した index で失敗を投げるコールバックを作成します。
+ *
+ * @param failure 投げる失敗です。
+ * @param target 失敗させる index です。
+ *
+ * @returns forCases に渡すコールバックを返します。
+ */
+function createThrowOnIndex(
+  failure: unknown,
+  target: number,
+): (random: Random, index: number) => void {
+  return (_random: Random, index: number): void => {
+    if (index === target) {
+      throw failure;
+    }
+  };
+}
 
 describe("createRandom", () => {
   test("同じ seed からは同じ数列を生成する", ({ expect }) => {
-    // 準備
-    const first = createRandom(20260930);
-    const second = createRandom(20260930);
+    // 準備：
+    const first = createRandom(20_260_930);
+    const second = createRandom(20_260_930);
 
-    // 実行
+    // 実行：
     const firstValues = Array.from({ length: 10 }, () => first.next());
     const secondValues = Array.from({ length: 10 }, () => second.next());
 
-    // 検証
+    // 検証：
     expect(firstValues).toStrictEqual(secondValues);
   });
 
   test("異なる seed では異なる数列になる", ({ expect }) => {
-    // 準備
+    // 準備：
     const first = createRandom(1);
     const second = createRandom(2);
 
-    // 実行
+    // 実行：
     const firstValues = Array.from({ length: 16 }, () => first.next());
     const secondValues = Array.from({ length: 16 }, () => second.next());
 
-    // 検証
+    // 検証：
     expect(firstValues).not.toStrictEqual(secondValues);
   });
 
   test("int と uint は指定範囲に収まる", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(3);
 
-    // 実行と検証
+    // 実行と検証：
     for (let index = 0; index < 100; index++) {
       expect(random.int(3, 7)).toBeGreaterThanOrEqual(3);
       expect(random.int(3, 7)).toBeLessThanOrEqual(7);
@@ -43,10 +62,10 @@ describe("createRandom", () => {
   });
 
   test("bytes と string は指定長になり shuffle は内容を保つ", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(4);
 
-    // 実行
+    // 実行：
     const bytes = random.bytes(32);
     const text = random.string(12);
     const shuffled = random.shuffle([1, 2, 3, 4, 5]);
@@ -54,10 +73,10 @@ describe("createRandom", () => {
     const flag = random.bool();
     const value = random.next();
 
-    // 検証
+    // 検証：
     expect(bytes).toHaveLength(32);
     expect(text).toHaveLength(12);
-    expect(text).toMatch(/^[a-z0-9]+$/);
+    expect(text).toMatch(/^[a-z0-9]+$/u);
     expect([...shuffled].sort((a, b) => a - b)).toStrictEqual([1, 2, 3, 4, 5]);
     expect([10, 20, 30]).toContain(picked);
     expect(typeof flag).toBe("boolean");
@@ -65,80 +84,78 @@ describe("createRandom", () => {
   });
 
   test("string は指定した文字集合からのみ作られる", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(5);
 
-    // 実行
+    // 実行：
     const text = random.string(16, ["a", "b"]);
 
-    // 検証
-    expect(text).toMatch(/^[ab]+$/);
+    // 検証：
+    expect(text).toMatch(/^[ab]+$/u);
   });
 
   test("pick は空の配列に対して RangeError を投げる", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(6);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => random.pick([])).toThrow(RangeError);
   });
 
   test("不正な範囲に対して RangeError を投げる", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(8);
 
-    // 実行と検証
+    // 実行と検証：
     expect(() => random.int(5, 3)).toThrow(RangeError);
     expect(() => random.uint(-1)).toThrow(RangeError);
     expect(() => random.string(4, [])).toThrow(RangeError);
   });
 
   test("array は生成関数に random と index を渡す", ({ expect }) => {
-    // 準備
+    // 準備：
     const random = createRandom(7);
 
-    // 実行
+    // 実行：
     const values = random.array(3, (child, index) => `${index}:${child.int(0, 0)}`);
 
-    // 検証
+    // 検証：
     expect(values).toStrictEqual(["0:0", "1:0", "2:0"]);
   });
 });
 
 describe("forCases", () => {
   test("count 回だけ実行する", ({ expect }) => {
-    // 準備
+    // 準備：
     let count = 0;
 
-    // 実行
+    // 実行：
     forCases(6, 4, () => {
       count += 1;
     });
 
-    // 検証
+    // 検証：
     expect(count).toBe(4);
   });
 
   test("失敗したケースの seed と index を報告する", ({ expect }) => {
-    // 準備
+    // 準備：
     const original = new Error("元の失敗");
 
-    // 実行
-    const error = (() => {
+    // 実行：
+    const error = ((): unknown => {
+      let captured: unknown = undefined;
+
       try {
-        forCases(100, 5, (_random, index) => {
-          if (index === 3) {
-            throw original;
-          }
-        });
+        forCases(100, 5, createThrowOnIndex(original, 3));
       } catch (caught) {
-        return caught;
+        captured = caught;
       }
 
-      return undefined;
+      return captured;
     })();
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("seed: 100");
     expect((error as Error).message).toContain("index: 3");
@@ -146,17 +163,15 @@ describe("forCases", () => {
   });
 
   test("forCasesAsync は失敗したケースの cause を保つ", async ({ expect }) => {
-    // 準備
+    // 準備：
     const original = new Error("元の失敗");
 
-    // 実行
-    const error = await forCasesAsync(200, 5, async (_random, index) => {
-      if (index === 2) {
-        throw original;
-      }
-    }).catch((caught: unknown) => caught);
+    // 実行：
+    const error = await forCasesAsync(200, 5, createThrowOnIndex(original, 2)).catch(
+      (caught: unknown) => caught,
+    );
 
-    // 検証
+    // 検証：
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).toContain("seed: 200");
     expect((error as Error).message).toContain("index: 2");

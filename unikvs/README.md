@@ -1,3 +1,3 @@
-# unikvs
+# server-client
 
-[Documentation](https://tai-kun.github.io/unikvs/packages/unikvs)
+[Document](https://tai-kun.github.io/ts-template/)

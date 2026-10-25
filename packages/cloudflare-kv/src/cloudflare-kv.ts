@@ -1,4 +1,4 @@
-import { KeyNotFoundError, type IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 
 import { InvalidBindingError, InvalidKeyPrefixError, InvalidTtlSecondsError } from "./errors.js";
@@ -32,8 +32,10 @@ export interface KVNamespaceListResult {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
  */
 export interface KVNamespaceLike {
-  get(key: string, type: "arrayBuffer"): Promise<ArrayBuffer | null>;
-  get(key: string, options: { readonly type: "arrayBuffer" }): Promise<ArrayBuffer | null>;
+  get(
+    key: string,
+    type: "arrayBuffer" | { readonly type: "arrayBuffer" },
+  ): Promise<ArrayBuffer | null>;
   put(
     key: string,
     value: ArrayBuffer,
@@ -41,8 +43,8 @@ export interface KVNamespaceLike {
   ): Promise<void>;
   delete(key: string): Promise<void>;
   list(options?: {
-    readonly prefix?: string | undefined;
     readonly cursor?: string | undefined;
+    readonly prefix?: string | undefined;
   }): Promise<KVNamespaceListResult>;
 }
 
@@ -78,11 +80,10 @@ export type CloudflareKvOptions = {
 /**
  * Cloudflare KV binding 上のストレージです。
  *
- * 注意: Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
+ * 注意 : Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
  * 書き込み・削除の直後に別ロケーションから読むと古い値が見えることがあります。
  * 同一コロケーション内からの読み取りは強い一貫性が保たれます。
- * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、
- * 厳密な一貫性が必要な用途には使わないでください。
+ * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、厳密な一貫性が必要な用途には使わないでください。
  *
  * 値はバイナリーセーフな `ArrayBuffer` としてそのまま `put` / `get` します。
  *
@@ -107,11 +108,10 @@ export default class CloudflareKv implements IStorage {
   /**
    * Cloudflare KV binding 上のストレージです。
    *
-   * 注意: Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
+   * 注意 : Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
    * 書き込み・削除の直後に別ロケーションから読むと古い値が見えることがあります。
    * 同一コロケーション内からの読み取りは強い一貫性が保たれます。
-   * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、
-   * 厳密な一貫性が必要な用途には使わないでください。
+   * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、厳密な一貫性が必要な用途には使わないでください。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#usage)
    */
@@ -173,7 +173,6 @@ export default class CloudflareKv implements IStorage {
     // ビューの `byteOffset` を持ち込まないよう正確な長さで複製します。
     const buffer = new ArrayBuffer(data.byteLength);
     new Uint8Array(buffer).set(data);
-
     await this.#binding.put(
       this.#fullKey(c.key),
       buffer,
@@ -229,7 +228,12 @@ export default class CloudflareKv implements IStorage {
     do {
       const page: KVNamespaceListResult = await Promise.race([
         this.#binding.list(
-          cursor === undefined ? { prefix: this.#keyPrefix } : { prefix: this.#keyPrefix, cursor },
+          cursor === undefined
+            ? { prefix: this.#keyPrefix }
+            : {
+                cursor,
+                prefix: this.#keyPrefix,
+              },
         ),
         abortPromise,
       ]);

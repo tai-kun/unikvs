@@ -1,30 +1,33 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  concatBytes,
-  createDecodeContext,
-  createDecodeStreamContext,
-  createEncodeContext,
-  createEncodeStreamContext,
-  createNext,
-  createPseudoRandomBytes,
   readAll,
+  createNext,
   sourceFrom,
+  concatBytes,
   splitIntoChunks,
+  createDecodeContext,
+  createEncodeContext,
+  createPseudoRandomBytes,
+  createDecodeStreamContext,
+  createEncodeStreamContext,
 } from "@unikvs/testing";
-import { describe, test } from "vitest";
+import { test, describe } from "vite-plus/test";
 
 import Compression from "../src/compression.js";
 import { FORMATS } from "./helpers.js";
 
 type ByteContext = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
+
 type ByteDecodeContext = IMiddleware.DecodeContext<
   Uint8Array<ArrayBuffer>,
   Uint8Array<ArrayBuffer>
 >;
+
 type ByteEncodeStreamContext = IMiddleware.EncodeStreamContext<
   Uint8Array<ArrayBuffer>,
   Uint8Array<ArrayBuffer>
 >;
+
 type ByteDecodeStreamContext = IMiddleware.DecodeStreamContext<
   Uint8Array<ArrayBuffer>,
   Uint8Array<ArrayBuffer>
@@ -61,9 +64,9 @@ async function decode(
  * ストリームの読み取り時のエラーを検証するために使用します。
  */
 async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
-  outputChunks: T[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: T[];
 }> {
   const outputChunks: T[] = [];
   let readError: unknown;
@@ -83,7 +86,11 @@ async function collectSettled<T>(stream: ReadableStream<T>): Promise<{
     readError = ex;
   }
 
-  return { outputChunks, writeError: undefined, readError };
+  return {
+    readError,
+    writeError: undefined,
+    outputChunks,
+  };
 }
 
 /**
@@ -93,9 +100,9 @@ function pumpEncode(
   compression: Compression,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createEncodeStreamContext(sourceFrom(chunks));
 
@@ -111,9 +118,9 @@ function pumpDecode(
   compression: Compression,
   chunks: readonly Uint8Array<ArrayBuffer>[],
 ): Promise<{
-  outputChunks: Uint8Array<ArrayBuffer>[];
-  writeError: undefined;
   readError: unknown;
+  writeError: undefined;
+  outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
   const c = createDecodeStreamContext(sourceFrom(chunks));
 
@@ -131,6 +138,7 @@ async function roundTripStream(
 ): Promise<Uint8Array<ArrayBuffer>[]> {
   const encodedContext = createEncodeStreamContext(sourceFrom(chunks));
   await compression.encodeStream(encodedContext as ByteEncodeStreamContext, createNext());
+
   const decodedContext = createDecodeStreamContext(
     encodedContext.destination as ReadableStream<Uint8Array<ArrayBuffer>>,
   );
@@ -141,35 +149,35 @@ async function roundTripStream(
 
 describe.each(FORMATS)("%s 形式のストリーム", (format) => {
   test("空のストリームを圧縮して展開すると空のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(compression, []);
     const decoded = await decode(compression, concatBytes(encoded.outputChunks));
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(decoded).toStrictEqual(new Uint8Array(0));
   });
 
   test("1 チャンクのストリームを往復すると元のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(1024, 11);
 
-    // 実行
+    // 実行：
     const decodedChunks = await roundTripStream(compression, [input]);
 
-    // 検証
+    // 検証：
     expect(concatBytes(decodedChunks)).toStrictEqual(input);
   });
 
   test("大きさが不揃いな複数チャンクのストリームを往復すると元のデータに戻る", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(8192, 12);
     const chunks = [
@@ -179,43 +187,43 @@ describe.each(FORMATS)("%s 形式のストリーム", (format) => {
       input.subarray(8191),
     ];
 
-    // 実行
+    // 実行：
     const decodedChunks = await roundTripStream(compression, chunks);
 
-    // 検証
+    // 検証：
     expect(concatBytes(decodedChunks)).toStrictEqual(input);
   });
 
   test("100 個の小さなチャンクのストリームを往復すると元のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(1000, 13);
     const chunks = Array.from({ length: 100 }, (_, index) =>
       input.subarray(index * 10, index * 10 + 10),
     );
 
-    // 実行
+    // 実行：
     const decodedChunks = await roundTripStream(compression, chunks);
 
-    // 検証
+    // 検証：
     expect(concatBytes(decodedChunks)).toStrictEqual(input);
   });
 
   test("1 バイトずつ encode して 7 バイトずつ decode しても元のデータに戻る", async ({
     expect,
   }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(512, 14);
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(compression, splitIntoChunks(input, 1));
     const decoded = await pumpDecode(
       compression,
       splitIntoChunks(concatBytes(encoded.outputChunks), 7),
     );
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(decoded.writeError).toBeUndefined();
@@ -224,30 +232,30 @@ describe.each(FORMATS)("%s 形式のストリーム", (format) => {
   });
 
   test("単体の encode 結果を小さなチャンクで展開しても元のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(2048, 15);
     const encoded = await encode(compression, input);
 
-    // 実行
+    // 実行：
     const decoded = await pumpDecode(compression, splitIntoChunks(encoded, 13));
 
-    // 検証
+    // 検証：
     expect(decoded.writeError).toBeUndefined();
     expect(decoded.readError).toBeUndefined();
     expect(concatBytes(decoded.outputChunks)).toStrictEqual(input);
   });
 
   test("encodeStream の出力を単体の decode で展開すると元のデータに戻る", async ({ expect }) => {
-    // 準備
+    // 準備：
     const compression = new Compression(format);
     const input = createPseudoRandomBytes(2048, 16);
 
-    // 実行
+    // 実行：
     const encoded = await pumpEncode(compression, [input]);
     const decoded = await decode(compression, concatBytes(encoded.outputChunks));
 
-    // 検証
+    // 検証：
     expect(encoded.writeError).toBeUndefined();
     expect(encoded.readError).toBeUndefined();
     expect(decoded).toStrictEqual(input);

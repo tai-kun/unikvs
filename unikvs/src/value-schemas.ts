@@ -1,4 +1,4 @@
-import * as v from "./_valibot.js";
+import type { InferInput, InferOutput, GenericSchema } from "./_valibot.js";
 import {
   type ValueSchemaInfo,
   type ValueSchemaKind,
@@ -17,7 +17,7 @@ type ValueSchemaDescriptor = ValueSchemaInfo & {
  */
 function createValueSchemaDescriptor(
   kind: ValueSchemaKind,
-  schema: v.GenericSchema,
+  schema: GenericSchema,
 ): ValueSchemaDescriptor {
   return {
     [VALUE_SCHEMA_BRAND]: true,
@@ -43,12 +43,12 @@ export type PlainValue<TData = any, TInput = TData> = [
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
-export function PlainValue<const TSchema extends v.GenericSchema>(
+export function PlainValue<const TSchema extends GenericSchema>(
   schema: TSchema,
-): PlainValue<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
+): PlainValue<InferOutput<TSchema>, InferInput<TSchema>> {
   return createValueSchemaDescriptor("plain", schema) as unknown as PlainValue<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
+    InferOutput<TSchema>,
+    InferInput<TSchema>
   >;
 }
 
@@ -69,12 +69,12 @@ export type StreamValue<TChunkData = any, TChunkInput = TChunkData> = [
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
-export function StreamValue<const TSchema extends v.GenericSchema>(
+export function StreamValue<const TSchema extends GenericSchema>(
   schema: TSchema,
-): StreamValue<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
+): StreamValue<InferOutput<TSchema>, InferInput<TSchema>> {
   return createValueSchemaDescriptor("stream", schema) as unknown as StreamValue<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
+    InferOutput<TSchema>,
+    InferInput<TSchema>
   >;
 }
 
@@ -88,11 +88,11 @@ export type Value<TDataAndChunkData = any, TInput = TDataAndChunkData> =
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#value-types)
  */
-export function Value<const TSchema extends v.GenericSchema>(
+export function Value<const TSchema extends GenericSchema>(
   schema: TSchema,
-): Value<v.InferOutput<TSchema>, v.InferInput<TSchema>> {
+): Value<InferOutput<TSchema>, InferInput<TSchema>> {
   return createValueSchemaDescriptor("any", schema) as unknown as Value<
-    v.InferOutput<TSchema>,
-    v.InferInput<TSchema>
+    InferOutput<TSchema>,
+    InferInput<TSchema>
   >;
 }

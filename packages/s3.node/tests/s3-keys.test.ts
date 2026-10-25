@@ -1,32 +1,43 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  createDeleteContext,
   createGetContext,
   createHasContext,
-  createOpenContext,
   createSetContext,
+  createOpenContext,
+  createDeleteContext,
 } from "@unikvs/testing";
-import { describe } from "vitest";
+import { describe } from "vite-plus/test";
 
 import { test } from "./_helpers.js";
 
 describe("キーの扱い", () => {
   test("スラッシュで区切られたキーは他のキーと干渉しない", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const entries = [
-      { key: "dir/sub/file.txt", data: new Uint8Array([1]) },
-      { key: "dir/sub.txt", data: new Uint8Array([2]) },
-      { key: "dir.txt", data: new Uint8Array([3]) },
+      {
+        key: "dir/sub/file.txt",
+        data: new Uint8Array([1]),
+      },
+      {
+        key: "dir/sub.txt",
+        data: new Uint8Array([2]),
+      },
+      {
+        key: "dir.txt",
+        data: new Uint8Array([3]),
+      },
     ];
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     for (const { key, data } of entries) {
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
     }
+
     await storage.delete(createDeleteContext("dir/sub.txt", { signal }) as IStorage.DeleteContext);
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext("dir/sub/file.txt", { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(new Uint8Array([1]));
@@ -39,14 +50,21 @@ describe("キーの扱い", () => {
   });
 
   test("先頭と末尾にスラッシュがあるキーも保存できる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const entries = [
-      { key: "/leading.txt", data: new Uint8Array([1]) },
-      { key: "trailing/", data: new Uint8Array([2]) },
+      {
+        key: "/leading.txt",
+        data: new Uint8Array([1]),
+      },
+      {
+        key: "trailing/",
+        data: new Uint8Array([2]),
+      },
     ];
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     for (const { key, data } of entries) {
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
       await expect(
@@ -56,16 +74,29 @@ describe("キーの扱い", () => {
   });
 
   test("Unicode と絵文字を含むキーが往復する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const entries = [
-      { key: "日本語キー.txt", data: new Uint8Array([1]) },
-      { key: "📦emoji🚀.bin", data: new Uint8Array([2]) },
-      { key: "ключ/ключ.bin", data: new Uint8Array([3]) },
-      { key: "e\u0301clair.txt", data: new Uint8Array([4]) },
+      {
+        key: "日本語キー.txt",
+        data: new Uint8Array([1]),
+      },
+      {
+        key: "📦emoji🚀.bin",
+        data: new Uint8Array([2]),
+      },
+      {
+        key: "ключ/ключ.bin",
+        data: new Uint8Array([3]),
+      },
+      {
+        key: "e\u0301clair.txt",
+        data: new Uint8Array([4]),
+      },
     ];
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     for (const { key, data } of entries) {
       await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
       await expect(
@@ -75,14 +106,14 @@ describe("キーの扱い", () => {
   });
 
   test("大文字と小文字を区別する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
     await storage.write(
       createSetContext("Case.txt", { signal }) as IStorage.WriteContext,
       new Uint8Array([1]),
     );
 
-    // 実行
+    // 実行：
     const lowerExists = await storage.exists(
       createHasContext("case.txt", { signal }) as IStorage.ExistsContext,
     );
@@ -90,21 +121,22 @@ describe("キーの扱い", () => {
       createGetContext("Case.txt", { signal }) as IStorage.ReadContext,
     );
 
-    // 検証
+    // 検証：
     expect(lowerExists).toBe(false);
     expect(upperData).toStrictEqual(new Uint8Array([1]));
   });
 
   test("255 文字のキーは保存できる", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = `${"a".repeat(251)}.bin`;
     const data = new Uint8Array([1]);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     expect(key).toHaveLength(255);
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
@@ -112,11 +144,12 @@ describe("キーの扱い", () => {
   });
 
   test("1025 文字のキーは KeyTooLongError で拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "a".repeat(1025);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext(key, { signal }) as IStorage.WriteContext,
@@ -128,10 +161,10 @@ describe("キーの扱い", () => {
   });
 
   test("空文字列のキーへの write と read は拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(createSetContext("", { signal }) as IStorage.WriteContext, new Uint8Array([1])),
     ).rejects.toThrow();
@@ -145,10 +178,10 @@ describe("キーの扱い", () => {
     signal,
     storage,
   }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("dir/../escape.txt", { signal }) as IStorage.WriteContext,
@@ -161,10 +194,10 @@ describe("キーの扱い", () => {
   });
 
   test("連続するスラッシュを含むキーは拒否される", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行と検証
+    // 実行と検証：
     await expect(
       storage.write(
         createSetContext("dir//file.txt", { signal }) as IStorage.WriteContext,
@@ -174,15 +207,16 @@ describe("キーの扱い", () => {
   });
 
   test("記号を含むキーが往復する", async ({ expect, signal, storage }) => {
-    // 準備
+    // 準備：
     const key = "a b/c?d&e=f+x%y.txt";
     const data = new Uint8Array([1, 2, 3]);
+
     storage.open(createOpenContext() as IStorage.OpenContext);
 
-    // 実行
+    // 実行：
     await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
 
-    // 検証
+    // 検証：
     await expect(
       storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
     ).resolves.toStrictEqual(data);
