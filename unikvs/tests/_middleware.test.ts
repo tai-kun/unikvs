@@ -47,30 +47,30 @@ async function noop(): Promise<void> {}
  * encode 時に "encoded:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
 class MockMiddleware implements IMiddleware {
-  readonly name = "MockMiddleware";
+  public readonly name = "MockMiddleware";
 
-  isOpen = true;
+  public isOpen = true;
 
-  openCallCount = 0;
+  public openCallCount = 0;
 
-  closeCallCount = 0;
+  public closeCallCount = 0;
 
-  async open(_c: IMiddleware.OpenContext): Promise<void> {
+  public async open(_c: IMiddleware.OpenContext): Promise<void> {
     this.openCallCount++;
     this.isOpen = true;
   }
 
-  async close(_c: IMiddleware.CloseContext): Promise<void> {
+  public async close(_c: IMiddleware.CloseContext): Promise<void> {
     this.closeCallCount++;
     this.isOpen = false;
   }
 
-  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = `encoded:${String(c.source)}`;
     await next();
   }
 
-  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = String(c.source).replace(/^encoded:/u, "");
     await next();
   }

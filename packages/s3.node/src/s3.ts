@@ -21,6 +21,8 @@ export type S3StorageOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
  */
 export default class S3 implements IStorage {
+  public readonly name: string;
+
   /**
    * S3 クライアントのインスタンスを保持します。
    *
@@ -40,8 +42,6 @@ export default class S3 implements IStorage {
    */
   readonly #config: S3ClientConfig;
 
-  public readonly name: string;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
    */
@@ -59,18 +59,6 @@ export default class S3 implements IStorage {
   public open(_c: IStorage.OpenContext): void {
     this.#client?.destroy();
     this.#client = new S3Client(this.#config);
-  }
-
-  // 開いているクライアントを返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getClient(): S3Client {
-    const client = this.#client;
-
-    if (client === null) {
-      throw new TypeError("S3: AWS client is not open. Call open() first.");
-    }
-
-    return client;
   }
 
   public close(_c: IStorage.CloseContext): void {
@@ -272,5 +260,17 @@ export default class S3 implements IStorage {
     }
 
     return body.transformToWebStream();
+  }
+
+  // 開いているクライアントを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getClient(): S3Client {
+    const client = this.#client;
+
+    if (client === null) {
+      throw new TypeError("S3: AWS client is not open. Call open() first.");
+    }
+
+    return client;
   }
 }

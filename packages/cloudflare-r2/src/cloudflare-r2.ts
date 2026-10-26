@@ -221,11 +221,6 @@ export default class CloudflareR2 implements IStorage {
     this.#open = false;
   }
 
-  // 論理キーに接頭辞を付与して実キーを組み立てます。
-  #resolveKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -368,5 +363,10 @@ export default class CloudflareR2 implements IStorage {
         controller.close();
       },
     });
+  }
+
+  // 論理キーに接頭辞を付与して実キーを組み立てます。
+  #resolveKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

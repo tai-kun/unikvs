@@ -275,6 +275,7 @@ export default defineConfig({
       "unicorn/no-typeof-undefined": "error",
       "promise/prefer-await-to-then": "error",
       "unicorn/prefer-node-protocol": "error",
+      "explicit-member-accessibility": "error",
       "unicorn/prefer-array-flat-map": "error",
       "unicorn/prefer-structured-clone": "error",
       "unicorn/prefer-number-properties": "error",

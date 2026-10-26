@@ -551,29 +551,29 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
   }) => {
     // 準備：
     class BareStorage implements IStorage<string> {
-      readonly name = "BareStorage";
+      public readonly name = "BareStorage";
 
-      isOpen = true;
+      public isOpen = true;
 
-      readonly map = new Map<string, string>();
+      public readonly map = new Map<string, string>();
 
-      write(): void {
+      public write(): void {
         throw new Error("bare write failed");
       }
 
-      read(c: IStorage.ReadContext): string {
+      public read(c: IStorage.ReadContext): string {
         return this.map.get(c.key) as string;
       }
 
-      exists(c: IStorage.ExistsContext): boolean {
+      public exists(c: IStorage.ExistsContext): boolean {
         return this.map.has(c.key);
       }
 
-      delete(c: IStorage.DeleteContext): void {
+      public delete(c: IStorage.DeleteContext): void {
         this.map.delete(c.key);
       }
 
-      clear(): void {
+      public clear(): void {
         this.map.clear();
       }
     }

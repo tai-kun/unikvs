@@ -16,12 +16,12 @@ export type MemoryOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memory#usage)
  */
 export default class Memory implements IStorage {
+  public readonly name: string;
+
   /**
    * キーと値のペアを保持する内部マップです。
    */
   readonly #map: Map<string, any>;
-
-  public readonly name: string;
 
   /**
    * データの複製に使用する関数です。

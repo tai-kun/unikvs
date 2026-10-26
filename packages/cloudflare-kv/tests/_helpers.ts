@@ -17,15 +17,15 @@ export type PutRecord = {
 };
 
 export class FakeKVNamespace implements KVNamespaceLike {
-  readonly store = new Map<string, ArrayBuffer>();
+  public readonly store = new Map<string, ArrayBuffer>();
 
-  readonly gets: string[] = [];
+  public readonly gets: string[] = [];
 
-  readonly puts: PutRecord[] = [];
+  public readonly puts: PutRecord[] = [];
 
-  readonly deletes: string[] = [];
+  public readonly deletes: string[] = [];
 
-  readonly lists: {
+  public readonly lists: {
     readonly cursor?: string | undefined;
     readonly prefix?: string | undefined;
   }[] = [];

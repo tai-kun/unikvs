@@ -161,21 +161,21 @@ describe("基本操作 (CRUD) の振る舞い", () => {
     class FailingWritableStream extends WritableStream<Uint8Array> {
       readonly #real: FileSystemWritableFileStream;
 
-      constructor(real: FileSystemWritableFileStream) {
+      public constructor(real: FileSystemWritableFileStream) {
         super();
         this.#real = real;
       }
 
-      write(): Promise<void> {
+      public write(): Promise<void> {
         return Promise.reject(new DOMException("quota exceeded (simulated)", "QuotaExceededError"));
       }
 
-      override close(): Promise<void> {
+      public override close(): Promise<void> {
         // 実ストリームへコミットします。
         return this.#real.close();
       }
 
-      override abort(reason?: unknown): Promise<void> {
+      public override abort(reason?: unknown): Promise<void> {
         return this.#real.abort(reason);
       }
     }

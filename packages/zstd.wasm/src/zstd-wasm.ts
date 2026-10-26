@@ -59,18 +59,6 @@ export default class ZstdWasm implements IMiddleware {
     return this.#env !== null;
   }
 
-  // 開いている実行環境を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getEnv(): IEnv {
-    const env = this.#env;
-
-    if (env === null) {
-      throw new TypeError("ZstdWasm is not open. Call open() first.");
-    }
-
-    return env;
-  }
-
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -115,5 +103,17 @@ export default class ZstdWasm implements IMiddleware {
     c.destination = toOwnedBytes(view);
 
     await next();
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("ZstdWasm is not open. Call open() first.");
+    }
+
+    return env;
   }
 }

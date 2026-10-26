@@ -10,16 +10,6 @@ import Memcached, { type MemcachedGetResult, type MemcachedClientLike } from "..
  * 時刻は手動進行式で、TTL の検証を確定的にするために使用します。
  */
 export class FakeMemcachedClient implements MemcachedClientLike {
-  readonly #store = new Map<
-    string,
-    {
-      value: string;
-      expiresAt: number | null;
-    }
-  >();
-
-  #now = 0;
-
   public quitCalls = 0;
 
   public closeCalls = 0;
@@ -36,6 +26,16 @@ export class FakeMemcachedClient implements MemcachedClientLike {
     expires: number | undefined;
   }[] = [];
 
+  readonly #store = new Map<
+    string,
+    {
+      value: string;
+      expiresAt: number | null;
+    }
+  >();
+
+  #now = 0;
+
   public get size(): number {
     return this.#store.size;
   }
@@ -45,10 +45,6 @@ export class FakeMemcachedClient implements MemcachedClientLike {
    */
   public advance(ms: number): void {
     this.#now += ms;
-  }
-
-  #isExpired(entry: { expiresAt: number | null }): boolean {
-    return entry.expiresAt !== null && this.#now >= entry.expiresAt;
   }
 
   public async get(key: string): Promise<MemcachedGetResult> {
@@ -120,6 +116,10 @@ export class FakeMemcachedClient implements MemcachedClientLike {
 
   public close(): void {
     this.closeCalls += 1;
+  }
+
+  #isExpired(entry: { expiresAt: number | null }): boolean {
+    return entry.expiresAt !== null && this.#now >= entry.expiresAt;
   }
 }
 

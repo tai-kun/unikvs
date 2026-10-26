@@ -240,16 +240,16 @@ describe("UniKvs - schema による入出力検証", () => {
   test("スキーマの検証は UniKvs の入出力で行われる", async ({ expect }) => {
     // 準備：
     class JsonMiddleware implements IMiddleware {
-      readonly name = "JsonMiddleware";
+      public readonly name = "JsonMiddleware";
 
-      isOpen = true;
+      public isOpen = true;
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = JSON.stringify(c.source);
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = JSON.parse(c.source as string) as string;
         await next();
       }

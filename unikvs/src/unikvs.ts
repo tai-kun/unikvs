@@ -224,87 +224,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     return this;
   }
 
-  /**
-   * 基本変数と操作固有変数を結合した実行時変数マップを作成します。
-   *
-   * @param vars 操作固有の変数です。
-   *
-   * @returns 結合した変数マップを返します。
-   */
-  #createOperationVars(vars: readonly VariablesEntry[] | undefined): Map<string, unknown> {
-    const map = new Map(this.#baseVars);
-
-    if (vars) {
-      for (const [k, v] of vars) {
-        map.set(k, v);
-      }
-    }
-
-    return map;
-  }
-
-  /**
-   * 操作内で共有される変数ストアを作成します。
-   *
-   * 同一操作内の全コンテキスト (`use`/`encode`/`decode`/ ストレージ) で共有され、下流の `set` が上流の `await next()` 後の `get` に見えます。
-   *
-   * @param vars 操作固有の変数です。
-   *
-   * @returns 共有ストアを返します。
-   */
-  #createOperationStore(vars: readonly VariablesEntry[] | undefined): VariablesStore {
-    return createVariablesStore([...this.#baseVars, ...(vars ?? [])]);
-  }
-
-  /**
-   * キーに対応する値のスキーマ情報を解決します。
-   *
-   * @param key 解決するキーです。
-   *
-   * @returns 対応するスキーマ情報を返します。スキーマ未設定または対応する定義がない場合は `undefined` を返します。
-   */
-  #resolveValueSchema(key: string): ValueSchemaInfo | undefined {
-    return this.#valueSchemaResolver?.resolve(key);
-  }
-
-  /**
-   * すべての宛先で読み取りに失敗したときのエラーを組み立てます。
-   *
-   * @param key 読み取ったキーです。
-   * @param errors 収集した失敗です。
-   *
-   * @returns `KeyNotFoundError` を返します。
-   */
-  #notFound(key: string, errors: readonly PluginErrorRecord[]): KeyNotFoundError {
-    const args: KeyNotFoundErrorArgs = { key };
-
-    switch (errors.length) {
-      case 0: {
-        break;
-      }
-
-      case 1: {
-        const [firstError] = errors;
-
-        if (firstError !== undefined) {
-          args.cause = firstError.reason;
-        }
-
-        break;
-      }
-
-      default: {
-        args.cause = new PluginOperationAggregateError({
-          action: "read",
-          errors,
-          plugin: "storage",
-        });
-      }
-    }
-
-    return new KeyNotFoundError(args);
-  }
-
   public get isOpen(): boolean {
     return this.#con !== null;
   }
@@ -457,121 +376,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  async #close(
-    operationVars: Map<string, unknown>,
-    signal: AbortSignal,
-    con: Connection,
-    progress: { pluginsStarted: boolean },
-  ): Promise<void> {
-    using _lock = await asyncmux(this, signal);
-    // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con !== con) {
-      throw new UniKvsIsNotOpenError();
-    }
-
-    const { io } = this.#con;
-    using _ioLock = await io.lock({ signal });
-    const closeFns: [
-      () => Promise<void>,
-      () => Promise<void>,
-      plugin: "storage" | "middleware",
-      name: string,
-      index: number,
-    ][] = [];
-
-    // ストレージのクローズ処理を登録します。
-    // open と同じ方針でプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
-    for (const [index, leaf] of this.#pipeline.leaves.entries()) {
-      const createContext = (): CloseContext =>
-        new CloseContext({
-          vars: new Map(operationVars).entries(),
-          signal,
-        });
-      // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
-      const createRetryContext = (): CloseContext =>
-        new CloseContext({
-          vars: new Map(operationVars).entries(),
-          signal: AbortSignal.timeout(10e3),
-        });
-      closeFns.push([
-        (): Promise<void> => leaf.storage.close(createContext()),
-        (): Promise<void> => leaf.storage.retryClose(createRetryContext()),
-        "storage",
-        leaf.name,
-        index,
-      ]);
-    }
-
-    // ミドルウェアのクローズ処理を登録します。
-    for (const [index, plugin] of this.#pipeline.middlewares.entries()) {
-      const createContext = (): CloseContext =>
-        new CloseContext({
-          vars: new Map(operationVars).entries(),
-          signal,
-        });
-      // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
-      const createRetryContext = (): CloseContext =>
-        new CloseContext({
-          vars: new Map(operationVars).entries(),
-          signal: AbortSignal.timeout(10e3),
-        });
-      closeFns.push([
-        (): Promise<void> => plugin.close(createContext()),
-        (): Promise<void> => plugin.retryClose(createRetryContext()),
-        "middleware",
-        plugin.name,
-        index,
-      ]);
-    }
-
-    // すべての処理を並列に実行し、エラーが発生した場合は集約します。
-    progress.pluginsStarted = true;
-    const errors: {
-      name: string;
-      index: number;
-      plugin: "storage" | "middleware";
-      reason: unknown;
-    }[] = [];
-    const retries: (() => Promise<void>)[] = [];
-    await Promise.all(
-      closeFns.map(async ([f, retry, plugin, name, index]) => {
-        try {
-          await f();
-        } catch (ex) {
-          errors.push({
-            name,
-            index,
-            plugin,
-            reason: ex,
-          });
-          // 通常の close で再試行すると、close 失敗後に別の利用者が引き継いだ参照まで解放してしまいます。
-          retries.push(retry);
-        }
-      }),
-    );
-
-    if (errors.length > 0) {
-      // 失敗したプラグインだけを 1 回再試行します。
-      // 成功済みのプラグインを再 close すると、参照カウントが二重に解放され、共有している他の利用者の実体まで閉じてしまうためです。
-      await Promise.all(
-        retries.map(async (f) => {
-          try {
-            await f();
-          } catch (ex) {
-            logger.error`Failed to retry closing a plugin: ${ex}`;
-          }
-        }),
-      );
-
-      throw new PluginOperationAggregateError({
-        action: "close",
-        errors,
-      });
-    }
-
-    this.#con = null;
-  }
-
   public close(options?: CloseOptions): Promise<void>;
   public close(...args: any): Promise<void> {
     try {
@@ -644,7 +448,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
-  async [Symbol.asyncDispose](): Promise<void> {
+  public async [Symbol.asyncDispose](): Promise<void> {
     if (!this.isOpen) {
       return;
     }
@@ -652,312 +456,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     await this.close({
       signal: AbortSignal.timeout(10e3),
     });
-  }
-
-  /**
-   * 書き込み失敗の集約と、成功した宛先への通知を行います。
-   *
-   * @param targets 書き込みを試みた対象です。
-   * @param failed 失敗した葉の集合です。
-   * @param errors 集約する失敗です。
-   * @param signal 中断シグナルです。
-   */
-  async #finishWrites(
-    targets: readonly {
-      readonly key: string;
-      readonly leaf: PipelineLeaf;
-    }[],
-    store: VariablesStore,
-    failed: ReadonlySet<PipelineLeaf>,
-    errors: PluginErrorRecord[],
-    signal: AbortSignal,
-  ): Promise<void> {
-    if (errors.length === 0) {
-      return;
-    }
-
-    const error = new PluginOperationAggregateError({
-      action: "write",
-      errors,
-      plugin: "storage",
-    });
-    const notifyErrors: unknown[] = [];
-    await Promise.all(
-      targets.map(async (target) => {
-        // 失敗した宛先を除いたすべての宛先へ通知します。通知に失敗しても元の集約エラーは置き換えません。
-        if (failed.has(target.leaf)) {
-          return;
-        }
-
-        try {
-          const c = new SetContext({
-            key: target.key,
-            store,
-            signal,
-          });
-          await target.leaf.storage.onOtherWriteError(c, error);
-        } catch (ex) {
-          notifyErrors.push(ex);
-        }
-      }),
-    );
-
-    if (notifyErrors.length > 0) {
-      logger.error(new AggregateError(notifyErrors, "Failed to handle error"));
-    }
-
-    throw error;
-  }
-
-  /**
-   * ミドルウェアの `use` をオニオン実行し、失敗時は集約して投げます。
-   *
-   * 同一コンテキストオブジェクトを全ミドルウェアで共有し、`next` で下流をネスト実行するため、下流の `set` が上流の `await next()` 後の `get` に見えます。
-   * `encode`/`decode` と同じく `next()` の呼び出し規約を検証し、違反したときは操作を実行せず失敗させます (fail-close)。
-   * いずれかのミドルウェアが投げたときは即時に確定し、後段は実行しません (fail-fast)。
-   * 失敗は集約エラー (単一件) として投げます。
-   *
-   * @param action 集約エラーに付与する操作名です。
-   * @param c 共有の `use` コンテキストです。
-   */
-  async #use(
-    action: "read" | "write" | "delete" | "clear",
-    c: IMiddleware.UseContext,
-  ): Promise<void> {
-    throwIfAborted(c.signal);
-
-    const middlewares = this.#pipeline.middlewares;
-    const dispatch = async (index: number): Promise<void> => {
-      const maybeMiddleware = middlewares[index];
-
-      if (maybeMiddleware === undefined) {
-        return;
-      }
-
-      const middleware: UniKvsMiddleware = maybeMiddleware;
-
-      let nextCalled = false;
-      let nextSettled = false;
-      let downstreamError: unknown;
-      let hasDownstreamError = false;
-
-      function next(): Promise<void> {
-        if (nextCalled) {
-          // 2 回目以降の `next()` は下流を実行せず拒否だけを返します。
-          const rejection = Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: middleware.name,
-              operation: "use",
-            }),
-          );
-          // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
-          // oxlint-disable-next-line promise/prefer-await-to-then
-          rejection.catch(() => {});
-
-          return rejection;
-        }
-
-        nextCalled = true;
-
-        const promise = Promise.try(async () => {
-          try {
-            await dispatch(index + 1);
-          } catch (ex) {
-            // 下流の失敗を親自身の失敗と取り違えないよう、由来を記録します。
-            downstreamError = ex;
-            hasDownstreamError = true;
-            throw ex;
-          } finally {
-            nextSettled = true;
-          }
-        });
-        // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
-        // oxlint-disable-next-line promise/prefer-await-to-then
-        promise.catch(() => {});
-
-        return promise;
-      }
-
-      try {
-        await middleware.use(c, next);
-        throwIfAborted(c.signal);
-        if (!nextCalled) {
-          throw new MiddlewareNextNotCalledError({
-            name: middleware.name,
-            operation: "use",
-          });
-        }
-
-        if (!nextSettled) {
-          throw new MiddlewareNextNotAwaitedError({
-            name: middleware.name,
-            operation: "use",
-          });
-        }
-      } catch (ex) {
-        // 中断による失敗はそのまま投げます。
-        if (c.signal.aborted && ex === c.signal.reason) {
-          throw ex;
-        }
-
-        // 規約違反はプログラミングエラーであり、集約せずに投げます。
-        if (
-          ex instanceof MiddlewareNextNotCalledError ||
-          ex instanceof MiddlewareNextNotAwaitedError ||
-          ex instanceof MiddlewareNextCalledMultipleTimesError
-        ) {
-          throw ex;
-        }
-
-        // `next()` から伝播した下流の失敗は再集約せず、そのまま投げます。
-        if (hasDownstreamError && ex === downstreamError) {
-          throw ex;
-        }
-
-        throw new PluginOperationAggregateError({
-          action,
-          errors: [
-            {
-              name: middleware.name,
-              index,
-              reason: ex,
-            },
-          ],
-          plugin: "middleware",
-        });
-      }
-    };
-    await dispatch(0);
-  }
-
-  /**
-   * プレーン値の並列書き込みを行います。
-   *
-   * @param io 多重化インスタンスです。
-   * @param signal 中断シグナルです。
-   * @param key 書き込みキーです。
-   * @param store 操作内で共有される変数ストアです。
-   * @param value 書き込む値です.
-   */
-  async #setPlain(
-    io: Asyncmux,
-    signal: AbortSignal,
-    key: string,
-    store: VariablesStore,
-    value: unknown,
-  ): Promise<void> {
-    const targets = await this.#pipeline.encode(
-      {
-        key,
-        store,
-        signal,
-      },
-      value,
-    );
-    using _ioLock = await io.lock({
-      key,
-      signal,
-    });
-    const errors: PluginErrorRecord[] = [];
-    const failed = new Set<PipelineLeaf>();
-    await Promise.all(
-      targets.map(async (target) => {
-        try {
-          const c = new SetContext({
-            key: target.key,
-            store,
-            signal,
-          });
-          await target.leaf.storage.write(c, target.data);
-        } catch (ex) {
-          errors.push({
-            name: target.leaf.name,
-            index: target.leaf.index,
-            reason: ex,
-          });
-          failed.add(target.leaf);
-        }
-      }),
-    );
-    await this.#finishWrites(targets, store, failed, errors, signal);
-  }
-
-  /**
-   * ストリーム値の並列書き込みを行います。
-   *
-   * @param io 多重化インスタンスです。
-   * @param signal 中断シグナルです。
-   * @param key 書き込みキーです。
-   * @param store 操作内で共有される変数ストアです。
-   * @param value 書き込むストリームです。
-   */
-  async #setStream(
-    io: Asyncmux,
-    signal: AbortSignal,
-    key: string,
-    store: VariablesStore,
-    value: IReadableStream,
-  ): Promise<void> {
-    const streams = new Set<IReadableStream>([value]);
-    let tree;
-
-    try {
-      tree = await this.#pipeline.buildEncodeTree(
-        {
-          key,
-          store,
-          signal,
-        },
-        value,
-        streams,
-      );
-    } catch (ex) {
-      await cancelStreams(streams, ex);
-      throw ex;
-    }
-
-    using _ioLock = await io
-      .lock({
-        key,
-        signal,
-      })
-      .catch(async (ex) => {
-        // キーロックの待機中に中断されたときも、構築済みのストリームをキャンセルします。
-        // ソースストリームをロックしたまま残さないためです。
-        await cancelStreams(streams, ex);
-        throw ex;
-      });
-
-    const errors: PluginErrorRecord[] = [];
-    const failed = new Set<PipelineLeaf>();
-    await Promise.all(
-      tree.targets.map(async (target) => {
-        try {
-          const c = new SetContext({
-            key: target.key,
-            store,
-            signal,
-          });
-          const w = await target.leaf.storage.getWritable(c);
-          await target.stream.pipeTo(w, { signal });
-        } catch (ex) {
-          // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
-          try {
-            await target.stream.cancel(ex);
-          } catch {
-            // キャンセルに失敗してもエラー集約を優先します。
-          }
-
-          errors.push({
-            name: target.leaf.name,
-            index: target.leaf.index,
-            reason: ex,
-          });
-          failed.add(target.leaf);
-        }
-      }),
-    );
-    await this.#finishWrites(tree.targets, store, failed, errors, signal);
   }
 
   public set<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
@@ -1026,61 +524,6 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       throw ex;
     }
-  }
-
-  /**
-   * 読み取り元のチェーン全体を逆順にデコードし、書き戻し対象向けに再エンコードして書き込みます。
-   *
-   * @param data 読み取ったデータです。
-   * @param hit 読み取り元の葉です。
-   * @param missing 読み取りに失敗または不在だった葉です。
-   * @param store 操作内で共有される変数ストアです。
-   * @param key キーです。
-   * @param signal 中断シグナルです。
-   * @param throwOnRepairDenied 書き戻し拒否をエラーとして投げるかどうかです。
-   *
-   * @returns デコード済みの原データを返します。
-   */
-  async #repairPlain(
-    data: unknown,
-    hit: ResolvedLeaf,
-    missing: readonly PipelineLeaf[],
-    store: VariablesStore,
-    key: string,
-    signal: AbortSignal,
-    throwOnRepairDenied: boolean,
-  ): Promise<unknown> {
-    const raw = await this.#pipeline.decode(
-      hit.leaf,
-      {
-        key,
-        store,
-        signal,
-      },
-      data,
-    );
-    await this.#pipeline.repair(
-      {
-        key,
-        store,
-        signal,
-      },
-      missing,
-      throwOnRepairDenied,
-      raw,
-      async (leaf, writeKey, input) => {
-        const c = new SetContext({
-          key: writeKey,
-          store,
-          signal,
-        });
-        await leaf.storage.write(c, input);
-      },
-    );
-
-    throwIfAborted(signal);
-
-    return raw;
   }
 
   public get<const TKey extends KeyofKeyValueMappingHasPlainValue<TKeyValueMapping>>(
@@ -1835,5 +1278,562 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         plugin: "storage",
       });
     }
+  }
+
+  /**
+   * 基本変数と操作固有変数を結合した実行時変数マップを作成します。
+   *
+   * @param vars 操作固有の変数です。
+   *
+   * @returns 結合した変数マップを返します。
+   */
+  #createOperationVars(vars: readonly VariablesEntry[] | undefined): Map<string, unknown> {
+    const map = new Map(this.#baseVars);
+
+    if (vars) {
+      for (const [k, v] of vars) {
+        map.set(k, v);
+      }
+    }
+
+    return map;
+  }
+
+  /**
+   * 操作内で共有される変数ストアを作成します。
+   *
+   * 同一操作内の全コンテキスト (`use`/`encode`/`decode`/ ストレージ) で共有され、下流の `set` が上流の `await next()` 後の `get` に見えます。
+   *
+   * @param vars 操作固有の変数です。
+   *
+   * @returns 共有ストアを返します。
+   */
+  #createOperationStore(vars: readonly VariablesEntry[] | undefined): VariablesStore {
+    return createVariablesStore([...this.#baseVars, ...(vars ?? [])]);
+  }
+
+  /**
+   * キーに対応する値のスキーマ情報を解決します。
+   *
+   * @param key 解決するキーです。
+   *
+   * @returns 対応するスキーマ情報を返します。スキーマ未設定または対応する定義がない場合は `undefined` を返します。
+   */
+  #resolveValueSchema(key: string): ValueSchemaInfo | undefined {
+    return this.#valueSchemaResolver?.resolve(key);
+  }
+
+  /**
+   * すべての宛先で読み取りに失敗したときのエラーを組み立てます。
+   *
+   * @param key 読み取ったキーです。
+   * @param errors 収集した失敗です。
+   *
+   * @returns `KeyNotFoundError` を返します。
+   */
+  #notFound(key: string, errors: readonly PluginErrorRecord[]): KeyNotFoundError {
+    const args: KeyNotFoundErrorArgs = { key };
+
+    switch (errors.length) {
+      case 0: {
+        break;
+      }
+
+      case 1: {
+        const [firstError] = errors;
+
+        if (firstError !== undefined) {
+          args.cause = firstError.reason;
+        }
+
+        break;
+      }
+
+      default: {
+        args.cause = new PluginOperationAggregateError({
+          action: "read",
+          errors,
+          plugin: "storage",
+        });
+      }
+    }
+
+    return new KeyNotFoundError(args);
+  }
+
+  async #close(
+    operationVars: Map<string, unknown>,
+    signal: AbortSignal,
+    con: Connection,
+    progress: { pluginsStarted: boolean },
+  ): Promise<void> {
+    using _lock = await asyncmux(this, signal);
+    // ロック待機中に接続状態が変更されていないか再確認します。
+    if (this.#con !== con) {
+      throw new UniKvsIsNotOpenError();
+    }
+
+    const { io } = this.#con;
+    using _ioLock = await io.lock({ signal });
+    const closeFns: [
+      () => Promise<void>,
+      () => Promise<void>,
+      plugin: "storage" | "middleware",
+      name: string,
+      index: number,
+    ][] = [];
+
+    // ストレージのクローズ処理を登録します。
+    // open と同じ方針でプラグインごとに複製し、並列実行中の変更が互いに見えないようにします。
+    for (const [index, leaf] of this.#pipeline.leaves.entries()) {
+      const createContext = (): CloseContext =>
+        new CloseContext({
+          vars: new Map(operationVars).entries(),
+          signal,
+        });
+      // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
+      const createRetryContext = (): CloseContext =>
+        new CloseContext({
+          vars: new Map(operationVars).entries(),
+          signal: AbortSignal.timeout(10e3),
+        });
+      closeFns.push([
+        (): Promise<void> => leaf.storage.close(createContext()),
+        (): Promise<void> => leaf.storage.retryClose(createRetryContext()),
+        "storage",
+        leaf.name,
+        index,
+      ]);
+    }
+
+    // ミドルウェアのクローズ処理を登録します。
+    for (const [index, plugin] of this.#pipeline.middlewares.entries()) {
+      const createContext = (): CloseContext =>
+        new CloseContext({
+          vars: new Map(operationVars).entries(),
+          signal,
+        });
+      // 再試行は通常 close の失敗 (操作 signal の abort など) に引きずられないよう、新しいタイムアウト signal を使います。
+      const createRetryContext = (): CloseContext =>
+        new CloseContext({
+          vars: new Map(operationVars).entries(),
+          signal: AbortSignal.timeout(10e3),
+        });
+      closeFns.push([
+        (): Promise<void> => plugin.close(createContext()),
+        (): Promise<void> => plugin.retryClose(createRetryContext()),
+        "middleware",
+        plugin.name,
+        index,
+      ]);
+    }
+
+    // すべての処理を並列に実行し、エラーが発生した場合は集約します。
+    progress.pluginsStarted = true;
+    const errors: {
+      name: string;
+      index: number;
+      plugin: "storage" | "middleware";
+      reason: unknown;
+    }[] = [];
+    const retries: (() => Promise<void>)[] = [];
+    await Promise.all(
+      closeFns.map(async ([f, retry, plugin, name, index]) => {
+        try {
+          await f();
+        } catch (ex) {
+          errors.push({
+            name,
+            index,
+            plugin,
+            reason: ex,
+          });
+          // 通常の close で再試行すると、close 失敗後に別の利用者が引き継いだ参照まで解放してしまいます。
+          retries.push(retry);
+        }
+      }),
+    );
+
+    if (errors.length > 0) {
+      // 失敗したプラグインだけを 1 回再試行します。
+      // 成功済みのプラグインを再 close すると、参照カウントが二重に解放され、共有している他の利用者の実体まで閉じてしまうためです。
+      await Promise.all(
+        retries.map(async (f) => {
+          try {
+            await f();
+          } catch (ex) {
+            logger.error`Failed to retry closing a plugin: ${ex}`;
+          }
+        }),
+      );
+
+      throw new PluginOperationAggregateError({
+        action: "close",
+        errors,
+      });
+    }
+
+    this.#con = null;
+  }
+
+  /**
+   * 書き込み失敗の集約と、成功した宛先への通知を行います。
+   *
+   * @param targets 書き込みを試みた対象です。
+   * @param failed 失敗した葉の集合です。
+   * @param errors 集約する失敗です。
+   * @param signal 中断シグナルです。
+   */
+  async #finishWrites(
+    targets: readonly {
+      readonly key: string;
+      readonly leaf: PipelineLeaf;
+    }[],
+    store: VariablesStore,
+    failed: ReadonlySet<PipelineLeaf>,
+    errors: PluginErrorRecord[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (errors.length === 0) {
+      return;
+    }
+
+    const error = new PluginOperationAggregateError({
+      action: "write",
+      errors,
+      plugin: "storage",
+    });
+    const notifyErrors: unknown[] = [];
+    await Promise.all(
+      targets.map(async (target) => {
+        // 失敗した宛先を除いたすべての宛先へ通知します。通知に失敗しても元の集約エラーは置き換えません。
+        if (failed.has(target.leaf)) {
+          return;
+        }
+
+        try {
+          const c = new SetContext({
+            key: target.key,
+            store,
+            signal,
+          });
+          await target.leaf.storage.onOtherWriteError(c, error);
+        } catch (ex) {
+          notifyErrors.push(ex);
+        }
+      }),
+    );
+
+    if (notifyErrors.length > 0) {
+      logger.error(new AggregateError(notifyErrors, "Failed to handle error"));
+    }
+
+    throw error;
+  }
+
+  /**
+   * ミドルウェアの `use` をオニオン実行し、失敗時は集約して投げます。
+   *
+   * 同一コンテキストオブジェクトを全ミドルウェアで共有し、`next` で下流をネスト実行するため、下流の `set` が上流の `await next()` 後の `get` に見えます。
+   * `encode`/`decode` と同じく `next()` の呼び出し規約を検証し、違反したときは操作を実行せず失敗させます (fail-close)。
+   * いずれかのミドルウェアが投げたときは即時に確定し、後段は実行しません (fail-fast)。
+   * 失敗は集約エラー (単一件) として投げます。
+   *
+   * @param action 集約エラーに付与する操作名です。
+   * @param c 共有の `use` コンテキストです。
+   */
+  async #use(
+    action: "read" | "write" | "delete" | "clear",
+    c: IMiddleware.UseContext,
+  ): Promise<void> {
+    throwIfAborted(c.signal);
+
+    const middlewares = this.#pipeline.middlewares;
+    const dispatch = async (index: number): Promise<void> => {
+      const maybeMiddleware = middlewares[index];
+
+      if (maybeMiddleware === undefined) {
+        return;
+      }
+
+      const middleware: UniKvsMiddleware = maybeMiddleware;
+
+      let nextCalled = false;
+      let nextSettled = false;
+      let downstreamError: unknown;
+      let hasDownstreamError = false;
+
+      function next(): Promise<void> {
+        if (nextCalled) {
+          // 2 回目以降の `next()` は下流を実行せず拒否だけを返します。
+          const rejection = Promise.reject(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: middleware.name,
+              operation: "use",
+            }),
+          );
+          // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
+          // oxlint-disable-next-line promise/prefer-await-to-then
+          rejection.catch(() => {});
+
+          return rejection;
+        }
+
+        nextCalled = true;
+
+        const promise = Promise.try(async () => {
+          try {
+            await dispatch(index + 1);
+          } catch (ex) {
+            // 下流の失敗を親自身の失敗と取り違えないよう、由来を記録します。
+            downstreamError = ex;
+            hasDownstreamError = true;
+            throw ex;
+          } finally {
+            nextSettled = true;
+          }
+        });
+        // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
+        // oxlint-disable-next-line promise/prefer-await-to-then
+        promise.catch(() => {});
+
+        return promise;
+      }
+
+      try {
+        await middleware.use(c, next);
+        throwIfAborted(c.signal);
+        if (!nextCalled) {
+          throw new MiddlewareNextNotCalledError({
+            name: middleware.name,
+            operation: "use",
+          });
+        }
+
+        if (!nextSettled) {
+          throw new MiddlewareNextNotAwaitedError({
+            name: middleware.name,
+            operation: "use",
+          });
+        }
+      } catch (ex) {
+        // 中断による失敗はそのまま投げます。
+        if (c.signal.aborted && ex === c.signal.reason) {
+          throw ex;
+        }
+
+        // 規約違反はプログラミングエラーであり、集約せずに投げます。
+        if (
+          ex instanceof MiddlewareNextNotCalledError ||
+          ex instanceof MiddlewareNextNotAwaitedError ||
+          ex instanceof MiddlewareNextCalledMultipleTimesError
+        ) {
+          throw ex;
+        }
+
+        // `next()` から伝播した下流の失敗は再集約せず、そのまま投げます。
+        if (hasDownstreamError && ex === downstreamError) {
+          throw ex;
+        }
+
+        throw new PluginOperationAggregateError({
+          action,
+          errors: [
+            {
+              name: middleware.name,
+              index,
+              reason: ex,
+            },
+          ],
+          plugin: "middleware",
+        });
+      }
+    };
+    await dispatch(0);
+  }
+
+  /**
+   * プレーン値の並列書き込みを行います。
+   *
+   * @param io 多重化インスタンスです。
+   * @param signal 中断シグナルです。
+   * @param key 書き込みキーです。
+   * @param store 操作内で共有される変数ストアです。
+   * @param value 書き込む値です.
+   */
+  async #setPlain(
+    io: Asyncmux,
+    signal: AbortSignal,
+    key: string,
+    store: VariablesStore,
+    value: unknown,
+  ): Promise<void> {
+    const targets = await this.#pipeline.encode(
+      {
+        key,
+        store,
+        signal,
+      },
+      value,
+    );
+    using _ioLock = await io.lock({
+      key,
+      signal,
+    });
+    const errors: PluginErrorRecord[] = [];
+    const failed = new Set<PipelineLeaf>();
+    await Promise.all(
+      targets.map(async (target) => {
+        try {
+          const c = new SetContext({
+            key: target.key,
+            store,
+            signal,
+          });
+          await target.leaf.storage.write(c, target.data);
+        } catch (ex) {
+          errors.push({
+            name: target.leaf.name,
+            index: target.leaf.index,
+            reason: ex,
+          });
+          failed.add(target.leaf);
+        }
+      }),
+    );
+    await this.#finishWrites(targets, store, failed, errors, signal);
+  }
+
+  /**
+   * ストリーム値の並列書き込みを行います。
+   *
+   * @param io 多重化インスタンスです。
+   * @param signal 中断シグナルです。
+   * @param key 書き込みキーです。
+   * @param store 操作内で共有される変数ストアです。
+   * @param value 書き込むストリームです。
+   */
+  async #setStream(
+    io: Asyncmux,
+    signal: AbortSignal,
+    key: string,
+    store: VariablesStore,
+    value: IReadableStream,
+  ): Promise<void> {
+    const streams = new Set<IReadableStream>([value]);
+    let tree;
+
+    try {
+      tree = await this.#pipeline.buildEncodeTree(
+        {
+          key,
+          store,
+          signal,
+        },
+        value,
+        streams,
+      );
+    } catch (ex) {
+      await cancelStreams(streams, ex);
+      throw ex;
+    }
+
+    using _ioLock = await io
+      .lock({
+        key,
+        signal,
+      })
+      .catch(async (ex) => {
+        // キーロックの待機中に中断されたときも、構築済みのストリームをキャンセルします。
+        // ソースストリームをロックしたまま残さないためです。
+        await cancelStreams(streams, ex);
+        throw ex;
+      });
+
+    const errors: PluginErrorRecord[] = [];
+    const failed = new Set<PipelineLeaf>();
+    await Promise.all(
+      tree.targets.map(async (target) => {
+        try {
+          const c = new SetContext({
+            key: target.key,
+            store,
+            signal,
+          });
+          const w = await target.leaf.storage.getWritable(c);
+          await target.stream.pipeTo(w, { signal });
+        } catch (ex) {
+          // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
+          try {
+            await target.stream.cancel(ex);
+          } catch {
+            // キャンセルに失敗してもエラー集約を優先します。
+          }
+
+          errors.push({
+            name: target.leaf.name,
+            index: target.leaf.index,
+            reason: ex,
+          });
+          failed.add(target.leaf);
+        }
+      }),
+    );
+    await this.#finishWrites(tree.targets, store, failed, errors, signal);
+  }
+
+  /**
+   * 読み取り元のチェーン全体を逆順にデコードし、書き戻し対象向けに再エンコードして書き込みます。
+   *
+   * @param data 読み取ったデータです。
+   * @param hit 読み取り元の葉です。
+   * @param missing 読み取りに失敗または不在だった葉です。
+   * @param store 操作内で共有される変数ストアです。
+   * @param key キーです。
+   * @param signal 中断シグナルです。
+   * @param throwOnRepairDenied 書き戻し拒否をエラーとして投げるかどうかです。
+   *
+   * @returns デコード済みの原データを返します。
+   */
+  async #repairPlain(
+    data: unknown,
+    hit: ResolvedLeaf,
+    missing: readonly PipelineLeaf[],
+    store: VariablesStore,
+    key: string,
+    signal: AbortSignal,
+    throwOnRepairDenied: boolean,
+  ): Promise<unknown> {
+    const raw = await this.#pipeline.decode(
+      hit.leaf,
+      {
+        key,
+        store,
+        signal,
+      },
+      data,
+    );
+    await this.#pipeline.repair(
+      {
+        key,
+        store,
+        signal,
+      },
+      missing,
+      throwOnRepairDenied,
+      raw,
+      async (leaf, writeKey, input) => {
+        const c = new SetContext({
+          key: writeKey,
+          store,
+          signal,
+        });
+        await leaf.storage.write(c, input);
+      },
+    );
+
+    throwIfAborted(signal);
+
+    return raw;
   }
 }

@@ -20,23 +20,23 @@ import { mapOf, streamOf, sha256Hex, withTimeout, collectBytes } from "./_helper
  * open/close の呼び出し回数の記録や、open/close 時のエラー注入ができます。
  */
 class MockStorage implements IStorage {
-  readonly name: string;
+  public readonly name: string;
 
-  isOpen = false;
+  public isOpen = false;
 
-  openCallCount = 0;
+  public openCallCount = 0;
 
-  closeCallCount = 0;
+  public closeCallCount = 0;
 
-  lastWriteVars: IPipelineContext | undefined;
+  public lastWriteVars: IPipelineContext | undefined;
 
-  readonly map = new Map<string, unknown>();
+  public readonly map = new Map<string, unknown>();
 
   private readonly openError: { error: unknown } | undefined;
 
   private readonly closeError: { error: unknown } | undefined;
 
-  constructor(
+  public constructor(
     name = "MockStorage",
     options: {
       openError?: unknown;
@@ -48,7 +48,7 @@ class MockStorage implements IStorage {
     this.closeError = "closeError" in options ? { error: options.closeError } : undefined;
   }
 
-  async open(): Promise<void> {
+  public async open(): Promise<void> {
     this.openCallCount++;
     if (this.openError !== undefined) {
       throw this.openError.error;
@@ -57,7 +57,7 @@ class MockStorage implements IStorage {
     this.isOpen = true;
   }
 
-  async close(): Promise<void> {
+  public async close(): Promise<void> {
     this.closeCallCount++;
     this.isOpen = false;
     if (this.closeError !== undefined) {
@@ -65,24 +65,24 @@ class MockStorage implements IStorage {
     }
   }
 
-  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
     this.lastWriteVars = c as unknown as IPipelineContext;
     this.map.set(c.key, data);
   }
 
-  async read(c: IStorage.ReadContext): Promise<unknown> {
+  public async read(c: IStorage.ReadContext): Promise<unknown> {
     return this.map.get(c.key);
   }
 
-  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     return this.map.has(c.key);
   }
 
-  async delete(c: IStorage.DeleteContext): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.map.delete(c.key);
   }
 
-  async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 }
@@ -91,16 +91,16 @@ class MockStorage implements IStorage {
  * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
 class MockMiddleware implements IMiddleware {
-  readonly name = "MockMiddleware";
+  public readonly name = "MockMiddleware";
 
-  isOpen = true;
+  public isOpen = true;
 
-  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = `e:${String(c.source)}`;
     await next();
   }
 
-  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = String(c.source).replace(/^e:/u, "");
     await next();
   }
@@ -111,39 +111,39 @@ class MockMiddleware implements IMiddleware {
  * チャンク列をメモリー上に保持します。
  */
 class MemoryStreamStorage implements IStorage {
-  readonly name = "MemoryStreamStorage";
+  public readonly name = "MemoryStreamStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
   private readonly map = new Map<string, unknown[]>();
 
-  async open(): Promise<void> {
+  public async open(): Promise<void> {
     this.isOpen = true;
   }
 
-  async close(): Promise<void> {
+  public async close(): Promise<void> {
     this.isOpen = false;
   }
 
-  async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
+  public async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
 
-  async read(_c: IStorage.ReadContext): Promise<unknown> {
+  public async read(_c: IStorage.ReadContext): Promise<unknown> {
     return undefined;
   }
 
-  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     return this.map.has(c.key);
   }
 
-  async delete(c: IStorage.DeleteContext): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.map.delete(c.key);
   }
 
-  async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 
-  getWritable(c: IStorage.GetWritableContext): WritableStream<unknown> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<unknown> {
     const chunks: unknown[] = [];
 
     return new WritableStream({
@@ -156,7 +156,7 @@ class MemoryStreamStorage implements IStorage {
     });
   }
 
-  getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
     const chunks = this.map.get(c.key) ?? [];
 
     return new ReadableStream({
@@ -176,13 +176,13 @@ class MemoryStreamStorage implements IStorage {
  * open 中断時の挙動を検証するために使用します。
  */
 class HangUntilAbortOpenStorage implements IStorage {
-  readonly name = "HangUntilAbortOpenStorage";
+  public readonly name = "HangUntilAbortOpenStorage";
 
-  isOpen = false;
+  public isOpen = false;
 
-  closeCallCount = 0;
+  public closeCallCount = 0;
 
-  async open(c: IStorage.OpenContext): Promise<void> {
+  public async open(c: IStorage.OpenContext): Promise<void> {
     this.isOpen = true;
     const { signal } = c;
     await new Promise<never>((_, reject) => {
@@ -202,57 +202,57 @@ class HangUntilAbortOpenStorage implements IStorage {
     });
   }
 
-  async close(): Promise<void> {
+  public async close(): Promise<void> {
     this.closeCallCount++;
     this.isOpen = false;
   }
 
-  async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
+  public async write(_c: IStorage.WriteContext, _data: unknown): Promise<void> {}
 
-  async read(_c: IStorage.ReadContext): Promise<unknown> {
+  public async read(_c: IStorage.ReadContext): Promise<unknown> {
     return undefined;
   }
 
-  async exists(_c: IStorage.ExistsContext): Promise<boolean> {
+  public async exists(_c: IStorage.ExistsContext): Promise<boolean> {
     return false;
   }
 
-  async delete(_c: IStorage.DeleteContext): Promise<void> {}
+  public async delete(_c: IStorage.DeleteContext): Promise<void> {}
 
-  async clear(_c: IStorage.ClearContext): Promise<void> {}
+  public async clear(_c: IStorage.ClearContext): Promise<void> {}
 }
 
 /**
  * 読み取りストリームが cancel されたことを sourceCancelled で観測できるストレージモックです。
  */
 class CancelObservableStorage implements IStorage {
-  readonly name = "CancelObservableStorage";
+  public readonly name = "CancelObservableStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
-  sourceCancelled = false;
+  public sourceCancelled = false;
 
-  readonly entries = new Map<string, Uint8Array[]>();
+  public readonly entries = new Map<string, Uint8Array[]>();
 
-  write(_c: IStorage.WriteContext, _data: unknown): void {}
+  public write(_c: IStorage.WriteContext, _data: unknown): void {}
 
-  read(_c: IStorage.ReadContext): unknown {
+  public read(_c: IStorage.ReadContext): unknown {
     return undefined;
   }
 
-  exists(c: IStorage.ExistsContext): boolean {
+  public exists(c: IStorage.ExistsContext): boolean {
     return this.entries.has(c.key);
   }
 
-  delete(c: IStorage.DeleteContext): void {
+  public delete(c: IStorage.DeleteContext): void {
     this.entries.delete(c.key);
   }
 
-  clear(): void {
+  public clear(): void {
     this.entries.clear();
   }
 
-  getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     const chunks: Uint8Array[] = [];
 
     return new WritableStream({
@@ -265,7 +265,7 @@ class CancelObservableStorage implements IStorage {
     });
   }
 
-  getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     const chunks = this.entries.get(c.key) ?? [];
 
     return new ReadableStream<Uint8Array>({
@@ -285,21 +285,24 @@ class CancelObservableStorage implements IStorage {
  * decodeStream で常にエラーを投げるミドルウェアモックです。
  */
 class FailDecodeStreamMiddleware implements IMiddleware {
-  readonly name = "FailDecodeStream";
+  public readonly name = "FailDecodeStream";
 
-  isOpen = true;
+  public isOpen = true;
 
-  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = c.source;
     await next();
   }
 
-  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = c.source;
     await next();
   }
 
-  async decodeStream(_c: IMiddleware.DecodeStreamContext, _next: IMiddleware.INext): Promise<void> {
+  public async decodeStream(
+    _c: IMiddleware.DecodeStreamContext,
+    _next: IMiddleware.INext,
+  ): Promise<void> {
     throw new Error("decodeStream failed");
   }
 }
@@ -308,11 +311,11 @@ class FailDecodeStreamMiddleware implements IMiddleware {
  * read と getReadable が常に失敗するストレージモックです。
  */
 class ReadErrorStorage extends MockStorage {
-  override async read(_c: IStorage.ReadContext): Promise<unknown> {
+  public override async read(_c: IStorage.ReadContext): Promise<unknown> {
     throw new Error("read failed");
   }
 
-  getReadable(_c: IStorage.GetReadableContext): ReadableStream<unknown> {
+  public getReadable(_c: IStorage.GetReadableContext): ReadableStream<unknown> {
     throw new Error("read failed");
   }
 }
@@ -346,33 +349,33 @@ function getAggregateReasons(
  * getWritable で常にエラーを投げるストレージモックです。
  */
 class FailGetWritableStorage implements IStorage {
-  readonly name = "FailGetWritableStorage";
+  public readonly name = "FailGetWritableStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
-  readonly map = new Map<string, unknown>();
+  public readonly map = new Map<string, unknown>();
 
-  write(c: IStorage.WriteContext, data: unknown): void {
+  public write(c: IStorage.WriteContext, data: unknown): void {
     this.map.set(c.key, data);
   }
 
-  read(c: IStorage.ReadContext): unknown {
+  public read(c: IStorage.ReadContext): unknown {
     return this.map.get(c.key);
   }
 
-  exists(c: IStorage.ExistsContext): boolean {
+  public exists(c: IStorage.ExistsContext): boolean {
     return this.map.has(c.key);
   }
 
-  delete(c: IStorage.DeleteContext): void {
+  public delete(c: IStorage.DeleteContext): void {
     this.map.delete(c.key);
   }
 
-  clear(): void {
+  public clear(): void {
     this.map.clear();
   }
 
-  getWritable(_c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
+  public getWritable(_c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     throw new Error("getWritable failed");
   }
 }
@@ -381,31 +384,31 @@ class FailGetWritableStorage implements IStorage {
  * 全チャンクの読み取り後にエラーになる読み取りストリームを返すストレージモックです。
  */
 class ErrorMidwayReadableStorage implements IStorage {
-  readonly name = "ErrorMidwayReadableStorage";
+  public readonly name = "ErrorMidwayReadableStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
-  readonly entries = new Map<string, Uint8Array[]>();
+  public readonly entries = new Map<string, Uint8Array[]>();
 
-  write(_c: IStorage.WriteContext, _data: unknown): void {}
+  public write(_c: IStorage.WriteContext, _data: unknown): void {}
 
-  read(_c: IStorage.ReadContext): unknown {
+  public read(_c: IStorage.ReadContext): unknown {
     return undefined;
   }
 
-  exists(c: IStorage.ExistsContext): boolean {
+  public exists(c: IStorage.ExistsContext): boolean {
     return this.entries.has(c.key);
   }
 
-  delete(c: IStorage.DeleteContext): void {
+  public delete(c: IStorage.DeleteContext): void {
     this.entries.delete(c.key);
   }
 
-  clear(): void {
+  public clear(): void {
     this.entries.clear();
   }
 
-  getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
+  public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     const chunks: Uint8Array[] = [];
 
     return new WritableStream({
@@ -418,7 +421,7 @@ class ErrorMidwayReadableStorage implements IStorage {
     });
   }
 
-  getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     const chunks = this.entries.get(c.key) ?? [];
     let i = 0;
 
@@ -626,35 +629,35 @@ describe("UniKvs - オープン / クローズ", () => {
     expect,
   }) => {
     class SlowOpenStorage implements IStorage {
-      readonly name = "SlowOpenStorage";
+      public readonly name = "SlowOpenStorage";
 
-      readonly gate = Promise.withResolvers<void>();
+      public readonly gate = Promise.withResolvers<void>();
 
-      isOpen = false;
+      public isOpen = false;
 
-      async open(): Promise<void> {
+      public async open(): Promise<void> {
         // signal を無視して、テストが解放するまで時間のかかるオープン処理を模倣します。
         await this.gate.promise;
         this.isOpen = true;
       }
 
-      async close(): Promise<void> {
+      public async close(): Promise<void> {
         this.isOpen = false;
       }
 
-      write(_c: IStorage.WriteContext, _data: unknown): void {}
+      public write(_c: IStorage.WriteContext, _data: unknown): void {}
 
-      read(_c: IStorage.ReadContext): any {
+      public read(_c: IStorage.ReadContext): any {
         return undefined;
       }
 
-      exists(_args: IStorage.ExistsContext): boolean {
+      public exists(_args: IStorage.ExistsContext): boolean {
         return false;
       }
 
-      delete(_args: IStorage.DeleteContext): void {}
+      public delete(_args: IStorage.DeleteContext): void {}
 
-      clear(_args: IStorage.ClearContext): void {}
+      public clear(_args: IStorage.ClearContext): void {}
     }
 
     // 準備：
@@ -964,7 +967,7 @@ describe("UniKvs - 複数ストレージ", () => {
     expect,
   }) => {
     class ExistsErrorStorage extends MockStorage {
-      override async exists(_c: IStorage.ExistsContext): Promise<boolean> {
+      public override async exists(_c: IStorage.ExistsContext): Promise<boolean> {
         throw new Error("exists failed");
       }
     }
@@ -985,7 +988,7 @@ describe("UniKvs - 複数ストレージ", () => {
     expect,
   }) => {
     class DeleteErrorStorage extends MockStorage {
-      override async delete(_c: IStorage.DeleteContext): Promise<void> {
+      public override async delete(_c: IStorage.DeleteContext): Promise<void> {
         throw new Error("delete failed");
       }
     }
@@ -1100,23 +1103,23 @@ describe("UniKvs - ミドルウェア連携", () => {
 
   test("複数ミドルウェアの適用順序は set で順方向、get で逆方向", async ({ expect }) => {
     class Append implements IMiddleware {
-      readonly name: string;
+      public readonly name: string;
 
-      isOpen = true;
+      public isOpen = true;
 
-      readonly tag: string;
+      public readonly tag: string;
 
-      constructor(tag: string) {
+      public constructor(tag: string) {
         this.tag = tag;
         this.name = tag;
       }
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = `${String(c.source)}${this.tag}`;
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         const s = String(c.source);
         c.destination = s.slice(0, -this.tag.length);
 
@@ -1139,15 +1142,15 @@ describe("UniKvs - ミドルウェア連携", () => {
 
   test("encode が失敗してもストレージには書き込まれず set は安全に失敗する", async ({ expect }) => {
     class BoomMiddleware implements IMiddleware {
-      readonly name = "Boom";
+      public readonly name = "Boom";
 
-      isOpen = true;
+      public isOpen = true;
 
-      encode(): never {
+      public encode(): never {
         throw new Error("boom");
       }
 
-      decode(): never {
+      public decode(): never {
         throw new Error("boom");
       }
     }
@@ -1169,23 +1172,23 @@ describe("UniKvs - ミドルウェア連携", () => {
 describe("UniKvs - ストレージ間のミドルウェア", () => {
   test("set すると各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
     class Append implements IMiddleware {
-      readonly name: string;
+      public readonly name: string;
 
-      isOpen = true;
+      public isOpen = true;
 
-      readonly tag: string;
+      public readonly tag: string;
 
-      constructor(tag: string) {
+      public constructor(tag: string) {
         this.tag = tag;
         this.name = tag;
       }
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = `${String(c.source)}${this.tag}`;
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         const s = String(c.source);
         // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         c.destination = s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
@@ -1220,23 +1223,23 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
 
   test("get はヒットしたストレージの専用パイプラインでデコードする", async ({ expect }) => {
     class Append implements IMiddleware {
-      readonly name: string;
+      public readonly name: string;
 
-      isOpen = true;
+      public isOpen = true;
 
-      readonly tag: string;
+      public readonly tag: string;
 
-      constructor(tag: string) {
+      public constructor(tag: string) {
         this.tag = tag;
         this.name = tag;
       }
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = `${String(c.source)}${this.tag}`;
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         const s = String(c.source);
         // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         c.destination = s.endsWith(this.tag) ? s.slice(0, -this.tag.length) : s;
@@ -1271,18 +1274,18 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
 
   test("stream も各ストレージに専用パイプラインの出力が書き込まれる", async ({ expect }) => {
     class Suffix implements IMiddleware {
-      readonly name: string;
+      public readonly name: string;
 
-      isOpen = true;
+      public isOpen = true;
 
-      readonly tag: number;
+      public readonly tag: number;
 
-      constructor(tag: number) {
+      public constructor(tag: number) {
         this.tag = tag;
         this.name = `suffix-${tag}`;
       }
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         const data = c.source as Uint8Array;
         const out = new Uint8Array(data.byteLength + 1);
         out.set(data, 0);
@@ -1292,7 +1295,7 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         const data = c.source as Uint8Array;
         // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
         c.destination = data[data.byteLength - 1] === this.tag ? data.slice(0, -1) : data;
@@ -1300,7 +1303,7 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
         await next();
       }
 
-      async encodeStream(
+      public async encodeStream(
         c: IMiddleware.EncodeStreamContext,
         next: IMiddleware.INext,
       ): Promise<void> {
@@ -1319,7 +1322,7 @@ describe("UniKvs - ストレージ間のミドルウェア", () => {
         await next();
       }
 
-      async decodeStream(
+      public async decodeStream(
         c: IMiddleware.DecodeStreamContext,
         next: IMiddleware.INext,
       ): Promise<void> {
@@ -1808,21 +1811,21 @@ describe("UniKvs - stream 操作", () => {
     expect,
   }) => {
     class PassThroughMiddleware implements IMiddleware {
-      readonly name = "PassThrough";
+      public readonly name = "PassThrough";
 
-      isOpen = true;
+      public isOpen = true;
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = c.source;
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = c.source;
         await next();
       }
 
-      async encodeStream(
+      public async encodeStream(
         c: IMiddleware.EncodeStreamContext,
         next: IMiddleware.INext,
       ): Promise<void> {
@@ -1830,7 +1833,7 @@ describe("UniKvs - stream 操作", () => {
         await next();
       }
 
-      async decodeStream(
+      public async decodeStream(
         c: IMiddleware.DecodeStreamContext,
         next: IMiddleware.INext,
       ): Promise<void> {
@@ -1840,21 +1843,21 @@ describe("UniKvs - stream 操作", () => {
     }
 
     class BoomEncodeStreamMiddleware implements IMiddleware {
-      readonly name = "BoomEncodeStream";
+      public readonly name = "BoomEncodeStream";
 
-      isOpen = true;
+      public isOpen = true;
 
-      async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+      public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = c.source;
         await next();
       }
 
-      async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+      public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
         c.destination = c.source;
         await next();
       }
 
-      async encodeStream(
+      public async encodeStream(
         _c: IMiddleware.EncodeStreamContext,
         _next: IMiddleware.INext,
       ): Promise<void> {

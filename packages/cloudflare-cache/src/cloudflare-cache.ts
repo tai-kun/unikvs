@@ -148,23 +148,6 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     });
   }
 
-  // キーに対応する要求を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
-  #requestFor(key: string): Request {
-    let segment: string;
-
-    try {
-      segment = encodeURIComponent(key).replaceAll(".", "%2E");
-    } catch (ex) {
-      throw new InvalidKeyError({
-        key,
-        cause: ex,
-      });
-    }
-
-    return new Request(`${this.#origin}/${segment}`);
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -189,23 +172,6 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
         key: c.key,
         cause: ex,
         operation: "put",
-      });
-    }
-  }
-
-  // `match` の失敗を `CacheOperationError` に包みます。
-  // 中断の打ち切りは呼び出し側で `toAbortPromise` と競争させるため、ここでは判定しません。
-  async #match(
-    c: IStorage.ReadContext | IStorage.ExistsContext | IStorage.GetReadableContext,
-    request: Request,
-  ): Promise<Response | undefined> {
-    try {
-      return await this.#cache.match(request);
-    } catch (ex) {
-      throw new CacheOperationError({
-        key: c.key,
-        cause: ex,
-        operation: "match",
       });
     }
   }
@@ -336,5 +302,39 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     }
 
     return response.body as ReadableStream<Uint8Array<ArrayBuffer>>;
+  }
+
+  // キーに対応する要求を組み立てます。
+  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  #requestFor(key: string): Request {
+    let segment: string;
+
+    try {
+      segment = encodeURIComponent(key).replaceAll(".", "%2E");
+    } catch (ex) {
+      throw new InvalidKeyError({
+        key,
+        cause: ex,
+      });
+    }
+
+    return new Request(`${this.#origin}/${segment}`);
+  }
+
+  // `match` の失敗を `CacheOperationError` に包みます。
+  // 中断の打ち切りは呼び出し側で `toAbortPromise` と競争させるため、ここでは判定しません。
+  async #match(
+    c: IStorage.ReadContext | IStorage.ExistsContext | IStorage.GetReadableContext,
+    request: Request,
+  ): Promise<Response | undefined> {
+    try {
+      return await this.#cache.match(request);
+    } catch (ex) {
+      throw new CacheOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "match",
+      });
+    }
   }
 }

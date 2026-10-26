@@ -175,82 +175,6 @@ export default class Http implements IStorage {
     signal.throwIfAborted();
   }
 
-  // 使用する `fetch` 実装を解決します。
-  #resolveFetch(): IFetch {
-    return this.#fetchImpl ?? globalThis.fetch;
-  }
-
-  // 送信ヘッダーを三層優先度で解決します。
-  #resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
-    const headers: Record<string, string> = { ...this.#baseHeaders };
-    const commonHeaders = c.get("@unikvs/fetch:headers");
-
-    if (commonHeaders !== undefined) {
-      Object.assign(headers, assertHeadersRecord(commonHeaders));
-    }
-
-    const specificHeaders = c.get("@unikvs/http:headers");
-
-    if (specificHeaders !== undefined) {
-      Object.assign(headers, assertHeadersRecord(specificHeaders));
-    }
-
-    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
-    const specificToken = assertTokenValue(c.get("@unikvs/http:token"));
-    const token = specificToken ?? commonToken ?? this.#baseToken;
-
-    if (token !== undefined) {
-      let hasAuthorization = false;
-
-      for (const name of Object.keys(headers)) {
-        if (name.toLowerCase() === "authorization") {
-          hasAuthorization = true;
-          break;
-        }
-      }
-
-      if (!hasAuthorization) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    return headers;
-  }
-
-  // キーに対応する完全 URL を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
-  #keyUrl(key: string): string {
-    let segment: string;
-
-    try {
-      segment = encodeURIComponent(`${this.#keyPrefix}${key}`).replaceAll(".", "%2E");
-    } catch (ex) {
-      throw new InvalidKeyError({
-        key,
-        cause: ex,
-      });
-    }
-
-    return `${this.#baseUrl}/${segment}`;
-  }
-
-  // `clear` 用の完全 URL を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
-  #clearUrl(): string {
-    let encoded: string;
-
-    try {
-      encoded = encodeURIComponent(this.#keyPrefix);
-    } catch (ex) {
-      throw new InvalidKeyError({
-        key: this.#keyPrefix,
-        cause: ex,
-      });
-    }
-
-    return `${this.#baseUrl}/?prefix=${encoded}`;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -662,5 +586,81 @@ export default class Http implements IStorage {
     }
 
     return response.body;
+  }
+
+  // 使用する `fetch` 実装を解決します。
+  #resolveFetch(): IFetch {
+    return this.#fetchImpl ?? globalThis.fetch;
+  }
+
+  // 送信ヘッダーを三層優先度で解決します。
+  #resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
+    const headers: Record<string, string> = { ...this.#baseHeaders };
+    const commonHeaders = c.get("@unikvs/fetch:headers");
+
+    if (commonHeaders !== undefined) {
+      Object.assign(headers, assertHeadersRecord(commonHeaders));
+    }
+
+    const specificHeaders = c.get("@unikvs/http:headers");
+
+    if (specificHeaders !== undefined) {
+      Object.assign(headers, assertHeadersRecord(specificHeaders));
+    }
+
+    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
+    const specificToken = assertTokenValue(c.get("@unikvs/http:token"));
+    const token = specificToken ?? commonToken ?? this.#baseToken;
+
+    if (token !== undefined) {
+      let hasAuthorization = false;
+
+      for (const name of Object.keys(headers)) {
+        if (name.toLowerCase() === "authorization") {
+          hasAuthorization = true;
+          break;
+        }
+      }
+
+      if (!hasAuthorization) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
+
+    return headers;
+  }
+
+  // キーに対応する完全 URL を組み立てます。
+  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  #keyUrl(key: string): string {
+    let segment: string;
+
+    try {
+      segment = encodeURIComponent(`${this.#keyPrefix}${key}`).replaceAll(".", "%2E");
+    } catch (ex) {
+      throw new InvalidKeyError({
+        key,
+        cause: ex,
+      });
+    }
+
+    return `${this.#baseUrl}/${segment}`;
+  }
+
+  // `clear` 用の完全 URL を組み立てます。
+  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  #clearUrl(): string {
+    let encoded: string;
+
+    try {
+      encoded = encodeURIComponent(this.#keyPrefix);
+    } catch (ex) {
+      throw new InvalidKeyError({
+        key: this.#keyPrefix,
+        cause: ex,
+      });
+    }
+
+    return `${this.#baseUrl}/?prefix=${encoded}`;
   }
 }

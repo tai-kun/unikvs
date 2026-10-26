@@ -22,6 +22,8 @@ async function ignoreRejection(promise: Promise<unknown>): Promise<void> {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
  */
 export default class Opfs implements IStorage {
+  public readonly name: string;
+
   /**
    * OPFS 内の作業対象となるディレクトリーハンドルを保持します。
    *
@@ -39,8 +41,6 @@ export default class Opfs implements IStorage {
    * ハンドル受け取り時は親ディレクトリーをたどれないため、クリアは列挙削除で行います。
    */
   readonly #fromHandle: boolean;
-
-  public readonly name: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
@@ -82,18 +82,6 @@ export default class Opfs implements IStorage {
 
   public get isOpen(): boolean {
     return this.#rootHandle !== null;
-  }
-
-  // 開いているルートディレクトリーハンドルを返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getRootHandle(): FileSystemDirectoryHandle {
-    const handle = this.#rootHandle;
-
-    if (handle === null) {
-      throw new TypeError("Opfs is not open. Call open() first.");
-    }
-
-    return handle;
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
@@ -341,5 +329,17 @@ export default class Opfs implements IStorage {
         await ignoreRejection(reader.cancel(reason));
       },
     });
+  }
+
+  // 開いているルートディレクトリーハンドルを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getRootHandle(): FileSystemDirectoryHandle {
+    const handle = this.#rootHandle;
+
+    if (handle === null) {
+      throw new TypeError("Opfs is not open. Call open() first.");
+    }
+
+    return handle;
   }
 }

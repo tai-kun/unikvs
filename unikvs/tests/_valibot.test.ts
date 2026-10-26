@@ -32,7 +32,7 @@ describe("parseInput", () => {
      * parseInput が差し替えられたエラーコンストラクターを呼び出すことを検証するために使用します。
      */
     class CustomError extends Error {
-      constructor(args: any) {
+      public constructor(args: any) {
         super(`Custom: ${args.value}`);
       }
     }
@@ -95,7 +95,7 @@ describe("parseOutput", () => {
      * parseOutput が差し替えられたエラーコンストラクターを呼び出すことを検証するために使用します。
      */
     class CustomError extends Error {
-      constructor(args: any) {
+      public constructor(args: any) {
         super(`Custom: ${args.value}`);
       }
     }

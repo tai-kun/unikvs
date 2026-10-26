@@ -47,6 +47,18 @@ function defaultSizeOf(value: any): number {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
  */
 export default class LruCache implements IStorage {
+  public readonly name: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-entries)
+   */
+  public readonly maxEntries: number | undefined;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-bytes)
+   */
+  public readonly maxBytes: number | undefined;
+
   /**
    * キーと値のペアを保持する内部マップです。
    */
@@ -66,18 +78,6 @@ export default class LruCache implements IStorage {
    * オープン状態を保持するフラグです。
    */
   #opened: boolean;
-
-  public readonly name: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-entries)
-   */
-  public readonly maxEntries: number | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#max-bytes)
-   */
-  public readonly maxBytes: number | undefined;
 
   /**
    * データの複製に使用する関数です。
@@ -162,15 +162,6 @@ export default class LruCache implements IStorage {
     this.#sizes.clear();
     this.#totalBytes = 0;
     this.#opened = false;
-  }
-
-  /**
-   * 未オープン状態での操作を TypeError で拒否します。
-   */
-  #assertOpen(): void {
-    if (!this.#opened) {
-      throw new TypeError("LruCache is not open. Call open() before operating.");
-    }
   }
 
   public write(c: IStorage.WriteContext, data: any): void {
@@ -285,6 +276,15 @@ export default class LruCache implements IStorage {
     });
 
     return stream;
+  }
+
+  /**
+   * 未オープン状態での操作を TypeError で拒否します。
+   */
+  #assertOpen(): void {
+    if (!this.#opened) {
+      throw new TypeError("LruCache is not open. Call open() before operating.");
+    }
   }
 
   /**

@@ -9,13 +9,13 @@ import { withTimeout } from "./_helpers.js";
  * 共有ロックの動作検証のために使用します。
  */
 class GatedExistsStorage implements IStorage {
-  readonly name = "GatedExistsStorage";
+  public readonly name = "GatedExistsStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
-  readonly map = new Map<string, unknown>();
+  public readonly map = new Map<string, unknown>();
 
-  onExistsStart: ((key: string) => void) | undefined;
+  public onExistsStart: ((key: string) => void) | undefined;
 
   private gatedKey: string | undefined;
 
@@ -23,7 +23,7 @@ class GatedExistsStorage implements IStorage {
 
   private releaseGate: (() => void) | undefined;
 
-  gate(key: string): void {
+  public gate(key: string): void {
     const { promise, resolve } = Promise.withResolvers<void>();
 
     this.gatedKey = key;
@@ -31,25 +31,25 @@ class GatedExistsStorage implements IStorage {
     this.releaseGate = resolve;
   }
 
-  ungate(): void {
+  public ungate(): void {
     this.releaseGate?.();
     this.gatePromise = undefined;
     this.gatedKey = undefined;
   }
 
-  async open(): Promise<void> {}
+  public async open(): Promise<void> {}
 
-  async close(): Promise<void> {}
+  public async close(): Promise<void> {}
 
-  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
     this.map.set(c.key, data);
   }
 
-  async read(c: IStorage.ReadContext): Promise<unknown> {
+  public async read(c: IStorage.ReadContext): Promise<unknown> {
     return this.map.get(c.key);
   }
 
-  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     this.onExistsStart?.(c.key);
     if (c.key === this.gatedKey && this.gatePromise) {
       await this.gatePromise;
@@ -58,15 +58,15 @@ class GatedExistsStorage implements IStorage {
     return this.map.has(c.key);
   }
 
-  async delete(c: IStorage.DeleteContext): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.map.delete(c.key);
   }
 
-  async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 
-  getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
+  public getReadable(c: IStorage.GetReadableContext): ReadableStream<unknown> {
     const chunks = (this.map.get(c.key) as unknown[] | undefined) ?? [];
 
     return new ReadableStream({

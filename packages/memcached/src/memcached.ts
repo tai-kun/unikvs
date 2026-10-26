@@ -211,6 +211,11 @@ function normalizeGetResult(result: unknown): Uint8Array<ArrayBuffer> | null {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
  */
 export default class Memcached implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
+   */
+  public readonly name = "Memcached";
+
   #con: { readonly client: MemcachedClientLike } | null = null;
 
   readonly #injectedClient: MemcachedClientLike | undefined;
@@ -222,11 +227,6 @@ export default class Memcached implements IStorage {
   readonly #connectTimeout: number;
 
   readonly #keyPrefix: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
-   */
-  public readonly name = "Memcached";
 
   /**
    * Memcached ストレージを作成します。
@@ -265,18 +265,6 @@ export default class Memcached implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): { readonly client: MemcachedClientLike } {
-    const con = this.#con;
-
-    if (con === null) {
-      throw new TypeError("Memcached is not open. Call open() first.");
-    }
-
-    return con;
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
@@ -335,10 +323,6 @@ export default class Memcached implements IStorage {
     await invokeClient(client, ["quit", "close", "end"]);
   }
 
-  #toKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -394,5 +378,21 @@ export default class Memcached implements IStorage {
     // memcached にキー列挙手段はないため、`flush` で全件削除します。
     // プレフィックスの内外を問わず、サーバー上の全キーが対象になります。
     await invokeClient(client, ["flush", "flushAll"]);
+  }
+
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): { readonly client: MemcachedClientLike } {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Memcached is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
+  #toKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

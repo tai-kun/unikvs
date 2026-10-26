@@ -116,33 +116,6 @@ export default class CacheStorage implements IStorage {
     await cache.put(request, response);
   }
 
-  // 使用中の `Cache` を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getCache(): Cache {
-    const cache = this.#cache;
-
-    if (cache === null) {
-      throw new TypeError("CacheStorage is not open. Call open() first.");
-    }
-
-    return cache;
-  }
-
-  async #read(c: IKeyedActionContext): Promise<Response> {
-    using abortPromise = toAbortPromise(c.signal);
-
-    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
-    const cache = this.#getCache();
-    const request = this.#toRequest(c.key);
-    const response = await Promise.race([cache.match(request), abortPromise]);
-
-    if (response === undefined) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    return response;
-  }
-
   public read(c: IStorage.ReadContext): Promise<Response> {
     return this.#read(c);
   }
@@ -246,5 +219,32 @@ export default class CacheStorage implements IStorage {
         }
       },
     });
+  }
+
+  // 使用中の `Cache` を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getCache(): Cache {
+    const cache = this.#cache;
+
+    if (cache === null) {
+      throw new TypeError("CacheStorage is not open. Call open() first.");
+    }
+
+    return cache;
+  }
+
+  async #read(c: IKeyedActionContext): Promise<Response> {
+    using abortPromise = toAbortPromise(c.signal);
+
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
+    const request = this.#toRequest(c.key);
+    const response = await Promise.race([cache.match(request), abortPromise]);
+
+    if (response === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    return response;
   }
 }

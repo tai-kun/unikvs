@@ -404,74 +404,6 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     this.#fetchImpl = fetchImpl;
   }
 
-  // 使用する `fetch` 実装を解決します。
-  #resolveFetch(): IFetch {
-    return this.#fetchImpl ?? globalThis.fetch;
-  }
-
-  // 送信トークンを三層優先度で解決します。
-  #resolveToken(c: Pick<IPipelineContext, "get">): string | undefined {
-    const specificToken = assertTokenValue(c.get("@unikvs/vercel-blob:token"));
-    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
-
-    return specificToken ?? commonToken ?? this.#token;
-  }
-
-  // キーに対応する pathname を組み立てます。
-  #pathname(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
-  // ダウンロード要求を組み立てます。
-  #downloadRequest(url: string, token: string | undefined, signal: AbortSignal): Request {
-    const headers: Record<string, string> = {};
-
-    if (token !== undefined) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    return new Request(url, {
-      signal,
-      headers,
-    });
-  }
-
-  // URL からバイト列をダウンロードします。
-  async #download(
-    c: IStorage.ReadContext | IStorage.GetReadableContext,
-    url: string,
-    token: string | undefined,
-  ): Promise<Response> {
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(this.#downloadRequest(url, token, c.signal));
-    } catch (ex) {
-      throwIfAborted(c.signal);
-      throw new BlobNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-      });
-    }
-
-    if (response.status === 404 || response.status === 410) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    if (!response.ok) {
-      throw new BlobResponseError({
-        key: c.key,
-        url,
-        status: response.status,
-        statusText: response.statusText,
-      });
-    }
-
-    return response;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -711,5 +643,73 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
 
     return response.body;
+  }
+
+  // 使用する `fetch` 実装を解決します。
+  #resolveFetch(): IFetch {
+    return this.#fetchImpl ?? globalThis.fetch;
+  }
+
+  // 送信トークンを三層優先度で解決します。
+  #resolveToken(c: Pick<IPipelineContext, "get">): string | undefined {
+    const specificToken = assertTokenValue(c.get("@unikvs/vercel-blob:token"));
+    const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
+
+    return specificToken ?? commonToken ?? this.#token;
+  }
+
+  // キーに対応する pathname を組み立てます。
+  #pathname(key: string): string {
+    return `${this.#keyPrefix}${key}`;
+  }
+
+  // ダウンロード要求を組み立てます。
+  #downloadRequest(url: string, token: string | undefined, signal: AbortSignal): Request {
+    const headers: Record<string, string> = {};
+
+    if (token !== undefined) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    return new Request(url, {
+      signal,
+      headers,
+    });
+  }
+
+  // URL からバイト列をダウンロードします。
+  async #download(
+    c: IStorage.ReadContext | IStorage.GetReadableContext,
+    url: string,
+    token: string | undefined,
+  ): Promise<Response> {
+    const fetchFn = this.#resolveFetch();
+    let response: Response;
+
+    try {
+      response = await fetchFn(this.#downloadRequest(url, token, c.signal));
+    } catch (ex) {
+      throwIfAborted(c.signal);
+      throw new BlobNetworkError({
+        key: c.key,
+        url,
+        cause: ex,
+      });
+    }
+
+    if (response.status === 404 || response.status === 410) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (!response.ok) {
+      throw new BlobResponseError({
+        key: c.key,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+
+    return response;
   }
 }

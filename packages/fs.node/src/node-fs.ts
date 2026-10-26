@@ -15,6 +15,8 @@ export type NodeFsOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefs)
  */
 export default class NodeFs implements IStorage {
+  public readonly name: string;
+
   /**
    * オープン済みかどうかを保持します。
    *
@@ -26,8 +28,6 @@ export default class NodeFs implements IStorage {
    * データを保存するルートディレクトリーの絶対パスです。
    */
   #root: string;
-
-  public readonly name: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefs)
@@ -42,39 +42,12 @@ export default class NodeFs implements IStorage {
     return this.#con;
   }
 
-  // オープン済みかを確認します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): void {
-    if (!this.#con) {
-      throw new TypeError("NodeFs is not open. Call open() first.");
-    }
-  }
-
   public async open(_c: IStorage.OpenContext): Promise<void> {
     const root = resolve(this.#root);
     await fs.mkdir(root, { recursive: true });
     this.#root = root;
 
     this.#con = true;
-  }
-
-  /**
-   * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
-   *
-   * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
-   */
-  #resolvePath(key: string): {
-    tmp: string;
-    dest: string;
-  } {
-    const dest = join(this.#root, key);
-    // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
-    const tmp = `${dest}.${randomUUID()}.tmp`;
-
-    return {
-      tmp,
-      dest,
-    };
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -263,5 +236,32 @@ export default class NodeFs implements IStorage {
     const readableStream = Readable.toWeb(readStream);
 
     return readableStream as ReadableStream<Uint8Array<ArrayBuffer>>;
+  }
+
+  // オープン済みかを確認します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): void {
+    if (!this.#con) {
+      throw new TypeError("NodeFs is not open. Call open() first.");
+    }
+  }
+
+  /**
+   * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
+   *
+   * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
+   */
+  #resolvePath(key: string): {
+    tmp: string;
+    dest: string;
+  } {
+    const dest = join(this.#root, key);
+    // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
+    const tmp = `${dest}.${randomUUID()}.tmp`;
+
+    return {
+      tmp,
+      dest,
+    };
   }
 }

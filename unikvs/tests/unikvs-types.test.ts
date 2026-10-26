@@ -34,11 +34,11 @@ function typeOf<T>(_expression: () => T): T {
  * ビルダーの型絞り込みの検証に使用します。
  */
 class StringToNumber implements IMiddleware<string, number> {
-  readonly name = "StringToNumber";
+  public readonly name = "StringToNumber";
 
-  readonly isOpen = true;
+  public readonly isOpen = true;
 
-  async encode(
+  public async encode(
     c: IMiddleware.EncodeContext<string, number>,
     next: IMiddleware.INext,
   ): Promise<void> {
@@ -46,7 +46,7 @@ class StringToNumber implements IMiddleware<string, number> {
     await next();
   }
 
-  async decode(
+  public async decode(
     c: IMiddleware.DecodeContext<number, string>,
     next: IMiddleware.INext,
   ): Promise<void> {
@@ -59,23 +59,23 @@ class StringToNumber implements IMiddleware<string, number> {
  * number のみを扱うストレージです。型が一致しない接続を検証するために使用します。
  */
 class NumberStorage implements IStorage<number> {
-  readonly name = "NumberStorage";
+  public readonly name = "NumberStorage";
 
-  readonly isOpen = true;
+  public readonly isOpen = true;
 
-  write(): void {}
+  public write(): void {}
 
-  read(): number {
+  public read(): number {
     return 0;
   }
 
-  exists(): boolean {
+  public exists(): boolean {
     return false;
   }
 
-  delete(): void {}
+  public delete(): void {}
 
-  clear(): void {}
+  public clear(): void {}
 }
 
 /**
@@ -83,23 +83,23 @@ class NumberStorage implements IStorage<number> {
  * 分岐内の `never` が親のチャンク型へ伝播するかを検証するために使用します。
  */
 class BytesStorage implements IStorage<Bytes> {
-  readonly name = "BytesStorage";
+  public readonly name = "BytesStorage";
 
-  readonly isOpen = true;
+  public readonly isOpen = true;
 
-  write(): void {}
+  public write(): void {}
 
-  read(): Bytes {
+  public read(): Bytes {
     return new Uint8Array();
   }
 
-  exists(): boolean {
+  public exists(): boolean {
     return false;
   }
 
-  delete(): void {}
+  public delete(): void {}
 
-  clear(): void {}
+  public clear(): void {}
 }
 
 /**

@@ -247,53 +247,6 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
     this.#cookieAttributes = cookieAttributes;
   }
 
-  #backend(): CookieStoreLike {
-    if (this.#injectedStore !== undefined) {
-      return this.#injectedStore;
-    }
-
-    const document = (globalThis as { document?: DocumentLike | undefined }).document;
-
-    if (document !== undefined && typeof document.cookie === "string") {
-      return new DocumentCookieStore(document);
-    }
-
-    throw new CookieNotAvailableError();
-  }
-
-  #toRealKey(key: string): string {
-    return encodeURIComponent(key);
-  }
-
-  #encode(data: string | Uint8Array): {
-    readonly payload: string;
-    readonly rawSize: number;
-  } {
-    if (typeof data === "string") {
-      return {
-        payload: `${STRING_MARKER}${data}`,
-        rawSize: textEncoder.encode(data).length,
-      };
-    }
-
-    return {
-      payload: `${BINARY_MARKER}${encodeBase64(data)}`,
-      rawSize: data.byteLength,
-    };
-  }
-
-  #decode(payload: string): string | Uint8Array {
-    if (payload.startsWith(BINARY_MARKER)) {
-      return decodeBase64(payload.slice(BINARY_MARKER.length));
-    }
-
-    if (payload.startsWith(STRING_MARKER)) {
-      return payload.slice(STRING_MARKER.length);
-    }
-
-    return payload;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -368,5 +321,52 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
       throwIfAborted(c.signal);
       backend.delete(target, this.#cookieAttributes);
     }
+  }
+
+  #backend(): CookieStoreLike {
+    if (this.#injectedStore !== undefined) {
+      return this.#injectedStore;
+    }
+
+    const document = (globalThis as { document?: DocumentLike | undefined }).document;
+
+    if (document !== undefined && typeof document.cookie === "string") {
+      return new DocumentCookieStore(document);
+    }
+
+    throw new CookieNotAvailableError();
+  }
+
+  #toRealKey(key: string): string {
+    return encodeURIComponent(key);
+  }
+
+  #encode(data: string | Uint8Array): {
+    readonly payload: string;
+    readonly rawSize: number;
+  } {
+    if (typeof data === "string") {
+      return {
+        payload: `${STRING_MARKER}${data}`,
+        rawSize: textEncoder.encode(data).length,
+      };
+    }
+
+    return {
+      payload: `${BINARY_MARKER}${encodeBase64(data)}`,
+      rawSize: data.byteLength,
+    };
+  }
+
+  #decode(payload: string): string | Uint8Array {
+    if (payload.startsWith(BINARY_MARKER)) {
+      return decodeBase64(payload.slice(BINARY_MARKER.length));
+    }
+
+    if (payload.startsWith(STRING_MARKER)) {
+      return payload.slice(STRING_MARKER.length);
+    }
+
+    return payload;
   }
 }

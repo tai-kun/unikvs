@@ -60,6 +60,8 @@ type Connection = { readonly client: Ioredis };
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
  */
 export default class Redis implements IStorage {
+  public readonly name: string;
+
   #con: Connection | null;
 
   readonly #url: string | undefined;
@@ -73,8 +75,6 @@ export default class Redis implements IStorage {
   readonly #closeTimeout: number;
 
   readonly #keyPrefix: string;
-
-  public readonly name: string;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
@@ -109,18 +109,6 @@ export default class Redis implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): Connection {
-    const con = this.#con;
-
-    if (con === null) {
-      throw new TypeError("Redis is not open. Call open() first.");
-    }
-
-    return con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -214,26 +202,6 @@ export default class Redis implements IStorage {
         clearTimeout(timer);
       }
     }
-  }
-
-  #toKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
-  async #clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
-    let cursor = "0";
-
-    do {
-      signal.throwIfAborted();
-
-      const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
-
-      if (keys.length > 0) {
-        await client.del(...keys);
-      }
-
-      cursor = nextCursor;
-    } while (cursor !== "0");
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -388,5 +356,37 @@ export default class Redis implements IStorage {
         controller.close();
       },
     });
+  }
+
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Redis is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
+  #toKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
+  }
+
+  async #clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
+    let cursor = "0";
+
+    do {
+      signal.throwIfAborted();
+
+      const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
+
+      if (keys.length > 0) {
+        await client.del(...keys);
+      }
+
+      cursor = nextCursor;
+    } while (cursor !== "0");
   }
 }

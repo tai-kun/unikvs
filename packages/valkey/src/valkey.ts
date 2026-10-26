@@ -120,6 +120,11 @@ type Connection = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
  */
 export default class Valkey implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
+   */
+  public readonly name: string;
+
   #con: Connection | null;
 
   readonly #url: string | undefined;
@@ -140,11 +145,6 @@ export default class Valkey implements IStorage {
   readonly #injected: ValkeyClient | undefined;
 
   readonly #keyPrefix: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
-   */
-  public readonly name: string;
 
   /**
    * Valkey ストレージを作成します。
@@ -191,18 +191,6 @@ export default class Valkey implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): Connection {
-    const con = this.#con;
-
-    if (con === null) {
-      throw new TypeError("Valkey is not open. Call open() first.");
-    }
-
-    return con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -314,31 +302,6 @@ export default class Valkey implements IStorage {
         clearTimeout(timer);
       }
     }
-  }
-
-  #toKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
-  async #clearPattern(client: ValkeyClient, pattern: string, signal: AbortSignal): Promise<void> {
-    using abortPromise = toAbortPromise(signal);
-
-    let cursor = "0";
-
-    do {
-      throwIfAborted(signal);
-
-      const [nextCursor, keys] = await Promise.race([
-        client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT),
-        abortPromise,
-      ]);
-
-      if (keys.length > 0) {
-        await client.del(...keys);
-      }
-
-      cursor = nextCursor;
-    } while (cursor !== "0");
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -504,5 +467,42 @@ export default class Valkey implements IStorage {
         controller.close();
       },
     });
+  }
+
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Valkey is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
+  #toKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
+  }
+
+  async #clearPattern(client: ValkeyClient, pattern: string, signal: AbortSignal): Promise<void> {
+    using abortPromise = toAbortPromise(signal);
+
+    let cursor = "0";
+
+    do {
+      throwIfAborted(signal);
+
+      const [nextCursor, keys] = await Promise.race([
+        client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT),
+        abortPromise,
+      ]);
+
+      if (keys.length > 0) {
+        await client.del(...keys);
+      }
+
+      cursor = nextCursor;
+    } while (cursor !== "0");
   }
 }

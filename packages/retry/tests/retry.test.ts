@@ -59,17 +59,6 @@ class FlakyStorage implements IStorage {
     });
   }
 
-  #maybeFail(operation: string): void {
-    this.calls.push(operation);
-    const failure = this.#failures.get(operation);
-
-    if (failure && failure.remaining > 0) {
-      failure.remaining -= 1;
-
-      throw failure.error;
-    }
-  }
-
   public open(c: IStorage.OpenContext): void {
     this.#maybeFail(`open:${c.action}`);
   }
@@ -127,6 +116,17 @@ class FlakyStorage implements IStorage {
 
   public onOtherWriteError(): void {
     this.calls.push("onOtherWriteError");
+  }
+
+  #maybeFail(operation: string): void {
+    this.calls.push(operation);
+    const failure = this.#failures.get(operation);
+
+    if (failure && failure.remaining > 0) {
+      failure.remaining -= 1;
+
+      throw failure.error;
+    }
   }
 }
 

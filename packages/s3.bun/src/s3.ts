@@ -46,6 +46,8 @@ function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
  */
 export default class S3 implements IStorage {
+  public readonly name: string;
+
   /**
    * Bun の S3 クライアントのインスタンスを保持します。
    *
@@ -65,8 +67,6 @@ export default class S3 implements IStorage {
    */
   readonly #options: S3StorageOptions;
 
-  public readonly name: string;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
    */
@@ -79,18 +79,6 @@ export default class S3 implements IStorage {
 
   public get isOpen(): boolean {
     return Boolean(this.#client);
-  }
-
-  // 開いているクライアントを返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getClient(): S3Client {
-    const client = this.#client;
-
-    if (client === null) {
-      throw new TypeError("S3: Bun S3 client is not open. Call open() first.");
-    }
-
-    return client;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -226,5 +214,17 @@ export default class S3 implements IStorage {
         await reader.cancel(reason);
       },
     });
+  }
+
+  // 開いているクライアントを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getClient(): S3Client {
+    const client = this.#client;
+
+    if (client === null) {
+      throw new TypeError("S3: Bun S3 client is not open. Call open() first.");
+    }
+
+    return client;
   }
 }

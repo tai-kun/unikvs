@@ -37,6 +37,8 @@ export type BunFsOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfs)
  */
 export default class BunFs implements IStorage {
+  public readonly name: string;
+
   /**
    * Node.js 互換モジュールのインスタンスを保持します。
    *
@@ -49,8 +51,6 @@ export default class BunFs implements IStorage {
    */
   #root: string;
 
-  public readonly name: string;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfs)
    */
@@ -62,16 +62,6 @@ export default class BunFs implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // オープン済みかを確認します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): Connection {
-    if (this.#con === null) {
-      throw new TypeError("BunFs is not open. Call open() first.");
-    }
-
-    return this.#con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -90,26 +80,6 @@ export default class BunFs implements IStorage {
     this.#con = {
       fs,
       path,
-    };
-  }
-
-  /**
-   * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
-   *
-   * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
-   */
-  #resolvePath(key: string): {
-    tmp: string;
-    dest: string;
-  } {
-    const { path } = this.#getConnection();
-    const dest = path.join(this.#root, key);
-    // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
-    const tmp = `${dest}.${Bun.randomUUIDv7()}.tmp`;
-
-    return {
-      tmp,
-      dest,
     };
   }
 
@@ -335,5 +305,35 @@ export default class BunFs implements IStorage {
         }
       },
     });
+  }
+
+  // オープン済みかを確認します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    if (this.#con === null) {
+      throw new TypeError("BunFs is not open. Call open() first.");
+    }
+
+    return this.#con;
+  }
+
+  /**
+   * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
+   *
+   * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
+   */
+  #resolvePath(key: string): {
+    tmp: string;
+    dest: string;
+  } {
+    const { path } = this.#getConnection();
+    const dest = path.join(this.#root, key);
+    // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
+    const tmp = `${dest}.${Bun.randomUUIDv7()}.tmp`;
+
+    return {
+      tmp,
+      dest,
+    };
   }
 }

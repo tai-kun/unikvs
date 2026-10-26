@@ -287,24 +287,24 @@ describe("getAll の形状差吸収", () => {
  * etcd3 ネイティブ操作の最小スタブです。
  */
 class StubNativeClient {
-  readonly store = new Map<string, Buffer>();
+  public readonly store = new Map<string, Buffer>();
 
-  readonly directPuts: {
+  public readonly directPuts: {
     readonly key: string;
     readonly value: Buffer;
   }[] = [];
 
-  readonly leasePuts: {
+  public readonly leasePuts: {
     readonly key: string;
     readonly ttl: number;
     readonly value: Buffer;
   }[] = [];
 
-  leasesCreated = 0;
+  public leasesCreated = 0;
 
-  releasedLeases = 0;
+  public releasedLeases = 0;
 
-  closed = false;
+  public closed = false;
 
   public get(key: string | Buffer): { buffer(): Promise<Buffer | null> } {
     const name = key.toString();

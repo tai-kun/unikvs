@@ -150,11 +150,6 @@ export default class CloudflareKv implements IStorage {
     this.#ttlSeconds = ttlSeconds;
   }
 
-  // 論理キーに接頭辞を付けた実キーを組み立てます。
-  #fullKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -249,5 +244,10 @@ export default class CloudflareKv implements IStorage {
       throwIfAborted(c.signal);
       await this.#binding.delete(name);
     }
+  }
+
+  // 論理キーに接頭辞を付けた実キーを組み立てます。
+  #fullKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

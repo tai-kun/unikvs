@@ -16,11 +16,11 @@ export type RecordedPut = {
  * リースの失効は etcd 側の責務のため再現しません。実装は `etcd3` の `autoKeepAlive` (既定で有効) を使うため、開いている間はキーが残ります。
  */
 export class FakeEtcdClient implements EtcdClientLike {
-  readonly store = new Map<string, Buffer>();
+  public readonly store = new Map<string, Buffer>();
 
-  readonly puts: RecordedPut[] = [];
+  public readonly puts: RecordedPut[] = [];
 
-  readonly deletedPrefixes: string[] = [];
+  public readonly deletedPrefixes: string[] = [];
 
   public deletePrefix?: (prefix: string) => Promise<void>;
 

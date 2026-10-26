@@ -13,12 +13,12 @@ export type CompressionFormat = Extract<
  * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)
  */
 export default class Compression implements IMiddleware {
+  public readonly name: string = "Compression";
+
   /**
    * 使用する圧縮アルゴリズムの形式です。
    */
   readonly #format: CompressionFormat;
-
-  public readonly name: string = "Compression";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/compression#usage)

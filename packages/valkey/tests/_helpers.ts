@@ -15,7 +15,7 @@ type Entry = {
  * Valkey (Redis 互換) の振る舞いとして期限切れの遅延削除、`SCAN` のページング、`RENAME` の置き換え意味論を再現します。`now` を差し替えると時刻を制御できます。
  */
 export class FakeValkeyClient implements ValkeyClient {
-  readonly entries = new Map<string, Entry>();
+  public readonly entries = new Map<string, Entry>();
 
   public connectCalls = 0;
 
@@ -41,20 +41,6 @@ export class FakeValkeyClient implements ValkeyClient {
 
   public on(): unknown {
     return undefined;
-  }
-
-  private purge(key: string): void {
-    const entry = this.entries.get(key);
-
-    if (entry?.expiresAt !== undefined && entry.expiresAt <= this.now()) {
-      this.entries.delete(key);
-    }
-  }
-
-  private purgeAll(): void {
-    for (const key of this.entries.keys()) {
-      this.purge(key);
-    }
   }
 
   public async set(key: string, value: string | Uint8Array, ...args: unknown[]): Promise<string> {
@@ -199,6 +185,20 @@ export class FakeValkeyClient implements ValkeyClient {
     this.purgeAll();
 
     return [...this.entries.keys()].filter((key) => matchGlob(pattern, key)).sort();
+  }
+
+  private purge(key: string): void {
+    const entry = this.entries.get(key);
+
+    if (entry?.expiresAt !== undefined && entry.expiresAt <= this.now()) {
+      this.entries.delete(key);
+    }
+  }
+
+  private purgeAll(): void {
+    for (const key of this.entries.keys()) {
+      this.purge(key);
+    }
   }
 }
 

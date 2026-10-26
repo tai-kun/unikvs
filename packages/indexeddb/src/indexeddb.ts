@@ -60,6 +60,8 @@ function fromStoredBlob(stored: StoredBlob): Blob {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
  */
 export default class Indexeddb implements IStorage {
+  public readonly name: string;
+
   /**
    * IndexedDB のデータベースインスタンスを保持します。
    *
@@ -82,8 +84,6 @@ export default class Indexeddb implements IStorage {
    */
   readonly #storeName: string;
 
-  public readonly name: string;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
    */
@@ -101,18 +101,6 @@ export default class Indexeddb implements IStorage {
 
   public get isOpen(): boolean {
     return this.#db !== null;
-  }
-
-  // 開いているデータベースを返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getDb(): IDBPDatabase {
-    const db = this.#db;
-
-    if (db === null) {
-      throw new TypeError("Indexeddb is not open. Call open() first.");
-    }
-
-    return db;
   }
 
   public async open(c: IStorage.OpenContext): Promise<void> {
@@ -304,5 +292,17 @@ export default class Indexeddb implements IStorage {
         }
       },
     });
+  }
+
+  // 開いているデータベースを返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getDb(): IDBPDatabase {
+    const db = this.#db;
+
+    if (db === null) {
+      throw new TypeError("Indexeddb is not open. Call open() first.");
+    }
+
+    return db;
   }
 }

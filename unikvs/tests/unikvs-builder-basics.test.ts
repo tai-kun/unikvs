@@ -10,16 +10,16 @@ import { FakeStorage } from "./_helpers.js";
  * encode 時に "e:" 接頭辞を付与し、decode 時に除去するミドルウェアモックです。
  */
 class MockMiddleware implements IMiddleware {
-  readonly name = "MockMiddleware";
+  public readonly name = "MockMiddleware";
 
-  readonly isOpen = true;
+  public readonly isOpen = true;
 
-  async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
+  public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = `e:${String(c.source)}`;
     await next();
   }
 
-  async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
+  public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
     c.destination = String(c.source).replace(/^e:/u, "");
     await next();
   }

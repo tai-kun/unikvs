@@ -52,24 +52,6 @@ export default class LocalStorage implements IStorage<string> {
     this.#keyPrefix = keyPrefix;
   }
 
-  // 使用する `Storage` を解決します。
-  // 実行時の意味は `#injectedStorage ?? globalThis.localStorage` です。
-  #backend(): Storage {
-    const backend =
-      this.#injectedStorage ?? (globalThis as { localStorage?: Storage | undefined }).localStorage;
-
-    if (!backend) {
-      throw new LocalStorageNotAvailableError();
-    }
-
-    return backend;
-  }
-
-  // 論理キーに接頭辞を付与して実キーに変換します。
-  #toRealKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -145,5 +127,23 @@ export default class LocalStorage implements IStorage<string> {
       c.signal.throwIfAborted();
       backend.removeItem(target);
     }
+  }
+
+  // 使用する `Storage` を解決します。
+  // 実行時の意味は `#injectedStorage ?? globalThis.localStorage` です。
+  #backend(): Storage {
+    const backend =
+      this.#injectedStorage ?? (globalThis as { localStorage?: Storage | undefined }).localStorage;
+
+    if (!backend) {
+      throw new LocalStorageNotAvailableError();
+    }
+
+    return backend;
+  }
+
+  // 論理キーに接頭辞を付与して実キーに変換します。
+  #toRealKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

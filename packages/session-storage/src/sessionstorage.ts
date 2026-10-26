@@ -52,25 +52,6 @@ export default class SessionStorage implements IStorage<string> {
     this.#keyPrefix = keyPrefix;
   }
 
-  // 使用する `Storage` を解決します。
-  // 実行時の意味は `#injectedStorage ?? globalThis.sessionStorage` です。
-  #backend(): Storage {
-    const backend =
-      this.#injectedStorage ??
-      (globalThis as { sessionStorage?: Storage | undefined }).sessionStorage;
-
-    if (!backend) {
-      throw new SessionStorageNotAvailableError();
-    }
-
-    return backend;
-  }
-
-  // 論理キーに接頭辞を付与して実キーに変換します。
-  #toRealKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
-  }
-
   public get isOpen(): boolean {
     return true;
   }
@@ -146,5 +127,24 @@ export default class SessionStorage implements IStorage<string> {
       c.signal.throwIfAborted();
       backend.removeItem(target);
     }
+  }
+
+  // 使用する `Storage` を解決します。
+  // 実行時の意味は `#injectedStorage ?? globalThis.sessionStorage` です。
+  #backend(): Storage {
+    const backend =
+      this.#injectedStorage ??
+      (globalThis as { sessionStorage?: Storage | undefined }).sessionStorage;
+
+    if (!backend) {
+      throw new SessionStorageNotAvailableError();
+    }
+
+    return backend;
+  }
+
+  // 論理キーに接頭辞を付与して実キーに変換します。
+  #toRealKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

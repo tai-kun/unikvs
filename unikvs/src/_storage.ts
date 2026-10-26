@@ -24,6 +24,11 @@ const instances = /* #__PURE__ */ new WeakMap<IStorage, UniKvsStorage>();
  */
 export default class UniKvsStorage {
   /**
+   * ストレージの名前です。
+   */
+  public readonly name: string;
+
+  /**
    * ラップするストレージです。
    */
   readonly #io: IStorage;
@@ -32,11 +37,6 @@ export default class UniKvsStorage {
    * 参照カウントと実 `close` の再試行を管理します。
    */
   readonly #lifecycle: PluginLifecycle<IStorage.OpenContext, IStorage.CloseContext>;
-
-  /**
-   * ストレージの名前です。
-   */
-  public readonly name: string;
 
   private constructor(storage: IStorage) {
     this.#io = storage;

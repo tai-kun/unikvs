@@ -233,71 +233,6 @@ export default class VercelRuntimeCache implements IStorage {
     await Promise.resolve();
   }
 
-  #storageKey(key: string): string {
-    return this.namespace === "" ? key : `${this.namespace}:${key}`;
-  }
-
-  #expiresAt(): number {
-    return this.#now() + this.ttlSeconds * 1000;
-  }
-
-  #isExpired(entry: CacheEntry): boolean {
-    return entry.expiresAt !== undefined && entry.expiresAt <= this.#now();
-  }
-
-  #purgeExpiredFallback(): void {
-    for (const [storedKey, entry] of this.#fallback) {
-      if (this.#isExpired(entry)) {
-        this.#fallback.delete(storedKey);
-      }
-    }
-  }
-
-  #touchFallback(storedKey: string): void {
-    const entry = this.#fallback.get(storedKey) as CacheEntry;
-
-    this.#fallback.delete(storedKey);
-    this.#fallback.set(storedKey, entry);
-  }
-
-  #evictFallbackIfNeeded(): void {
-    if (this.maxEntries === undefined) {
-      return;
-    }
-
-    while (this.#fallback.size > this.maxEntries) {
-      const oldest = this.#fallback.keys().next().value;
-
-      if (oldest === undefined) {
-        break;
-      }
-
-      this.#fallback.delete(oldest);
-    }
-
-    if (this.maxEntries === 0) {
-      this.#fallback.clear();
-    }
-  }
-
-  #readFallback(key: string): unknown {
-    const storedKey = this.#storageKey(key);
-    const entry = this.#fallback.get(storedKey);
-
-    if (entry === undefined) {
-      throw new KeyNotFoundError({ key });
-    }
-
-    if (this.#isExpired(entry)) {
-      this.#fallback.delete(storedKey);
-      throw new KeyNotFoundError({ key });
-    }
-
-    this.#touchFallback(storedKey);
-
-    return this.#clone(entry.value);
-  }
-
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     throwIfAborted(c.signal);
     const storedValue = this.#clone(data);
@@ -539,5 +474,70 @@ export default class VercelRuntimeCache implements IStorage {
     });
 
     return stream;
+  }
+
+  #storageKey(key: string): string {
+    return this.namespace === "" ? key : `${this.namespace}:${key}`;
+  }
+
+  #expiresAt(): number {
+    return this.#now() + this.ttlSeconds * 1000;
+  }
+
+  #isExpired(entry: CacheEntry): boolean {
+    return entry.expiresAt !== undefined && entry.expiresAt <= this.#now();
+  }
+
+  #purgeExpiredFallback(): void {
+    for (const [storedKey, entry] of this.#fallback) {
+      if (this.#isExpired(entry)) {
+        this.#fallback.delete(storedKey);
+      }
+    }
+  }
+
+  #touchFallback(storedKey: string): void {
+    const entry = this.#fallback.get(storedKey) as CacheEntry;
+
+    this.#fallback.delete(storedKey);
+    this.#fallback.set(storedKey, entry);
+  }
+
+  #evictFallbackIfNeeded(): void {
+    if (this.maxEntries === undefined) {
+      return;
+    }
+
+    while (this.#fallback.size > this.maxEntries) {
+      const oldest = this.#fallback.keys().next().value;
+
+      if (oldest === undefined) {
+        break;
+      }
+
+      this.#fallback.delete(oldest);
+    }
+
+    if (this.maxEntries === 0) {
+      this.#fallback.clear();
+    }
+  }
+
+  #readFallback(key: string): unknown {
+    const storedKey = this.#storageKey(key);
+    const entry = this.#fallback.get(storedKey);
+
+    if (entry === undefined) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    if (this.#isExpired(entry)) {
+      this.#fallback.delete(storedKey);
+      throw new KeyNotFoundError({ key });
+    }
+
+    this.#touchFallback(storedKey);
+
+    return this.#clone(entry.value);
   }
 }

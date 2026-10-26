@@ -615,13 +615,13 @@ describe("UniKvs - プレーン実行の共有ストア", () => {
   }) => {
     // 準備 : A を共有する B/C の兄弟分岐。
     class BranchMiddleware extends FakeMiddleware {
+      public seen: unknown;
+
       readonly #writeName: string;
 
       readonly #writeValue: string;
 
       readonly #readName: string;
-
-      public seen: unknown;
 
       public constructor(name: string, writeName: string, writeValue: string, readName: string) {
         super(name);

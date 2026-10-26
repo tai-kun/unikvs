@@ -21,6 +21,11 @@ const instances = /* #__PURE__ */ new WeakMap<IMiddleware, UniKvsMiddleware>();
  */
 export default class UniKvsMiddleware {
   /**
+   * ミドルウェアの名前です。
+   */
+  public readonly name: string;
+
+  /**
    * ラップするミドルウェアです。
    */
   readonly #mw: IMiddleware;
@@ -29,11 +34,6 @@ export default class UniKvsMiddleware {
    * 参照カウントと実 `close` の再試行を管理します。
    */
   readonly #lifecycle: PluginLifecycle<IMiddleware.OpenContext, IMiddleware.CloseContext>;
-
-  /**
-   * ミドルウェアの名前です。
-   */
-  public readonly name: string;
 
   private constructor(middleware: IMiddleware) {
     this.#mw = middleware;

@@ -508,7 +508,7 @@ export default class UniKvsBuilder<
     }
   }
 
-  fork<
+  public fork<
     TBranchChunkInput,
     TBranchChunkOutput,
     TBranchHeadEncodeDataInput,
@@ -576,7 +576,7 @@ export default class UniKvsBuilder<
     return this;
   }
 
-  use<
+  public use<
     TMiddleware extends IMiddleware<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       any,
@@ -609,7 +609,7 @@ export default class UniKvsBuilder<
     return this;
   }
 
-  persist<
+  public persist<
     TStorage extends IStorage<
       [TLastMiddlewareEncodeDataOutput] extends [never] ? any : TLastMiddlewareEncodeDataOutput,
       [TLastMiddlewareDecodeDataInput] extends [never] ? any : TLastMiddlewareDecodeDataInput,

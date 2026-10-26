@@ -252,6 +252,11 @@ type Connection = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
  */
 export default class Etcd implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
+   */
+  public readonly name: string;
+
   #con: Connection | null;
 
   readonly #injected: EtcdClientLike | undefined;
@@ -261,11 +266,6 @@ export default class Etcd implements IStorage {
   readonly #prefix: string;
 
   readonly #leaseTtlSeconds: number | undefined;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
-   */
-  public readonly name: string;
 
   /**
    * etcd ストレージを作成します。
@@ -307,18 +307,6 @@ export default class Etcd implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): Connection {
-    const con = this.#con;
-
-    if (con === null) {
-      throw new TypeError("Etcd is not open. Call open() first.");
-    }
-
-    return con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -372,16 +360,6 @@ export default class Etcd implements IStorage {
 
     // 注入クライアントの所有権は呼び出し側にあるため、ここでは破棄しません。
     await onClose?.();
-  }
-
-  #toKey(key: string): string {
-    return `${this.#prefix}${key}`;
-  }
-
-  #putOptions(): EtcdPutOptions | undefined {
-    return this.#leaseTtlSeconds === undefined
-      ? undefined
-      : { leaseTtlSeconds: this.#leaseTtlSeconds };
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -522,5 +500,27 @@ export default class Etcd implements IStorage {
         controller.close();
       },
     });
+  }
+
+  // 開いている接続を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new TypeError("Etcd is not open. Call open() first.");
+    }
+
+    return con;
+  }
+
+  #toKey(key: string): string {
+    return `${this.#prefix}${key}`;
+  }
+
+  #putOptions(): EtcdPutOptions | undefined {
+    return this.#leaseTtlSeconds === undefined
+      ? undefined
+      : { leaseTtlSeconds: this.#leaseTtlSeconds };
   }
 }

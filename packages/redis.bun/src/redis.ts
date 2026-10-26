@@ -35,6 +35,8 @@ const SCAN_COUNT = 1000;
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redis)
  */
 export default class Redis implements IStorage {
+  public readonly name: string;
+
   /**
    * Redis クライアントのインスタンスを保持します。
    *
@@ -59,8 +61,6 @@ export default class Redis implements IStorage {
    */
   readonly #keyPrefix: string;
 
-  public readonly name: string;
-
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redis)
    */
@@ -76,16 +76,6 @@ export default class Redis implements IStorage {
 
   public get isOpen(): boolean {
     return this.#con !== null;
-  }
-
-  // オープン済みかを確認します。
-  // 未オープン時は `TypeError` を投げます。
-  #getConnection(): Connection {
-    if (this.#con === null) {
-      throw new TypeError("Redis is not open. Call open() first.");
-    }
-
-    return this.#con;
   }
 
   public async open(_c: IStorage.OpenContext): Promise<void> {
@@ -119,13 +109,6 @@ export default class Redis implements IStorage {
   public close(_c: IStorage.CloseContext): void {
     this.#getConnection().client.close();
     this.#con = null;
-  }
-
-  /**
-   * unikvs のキーにプレフィックスを付与し、Redis のキーへ変換します。
-   */
-  #toKey(key: string): string {
-    return `${this.#keyPrefix}${key}`;
   }
 
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
@@ -298,5 +281,22 @@ export default class Redis implements IStorage {
         controller.close();
       },
     });
+  }
+
+  // オープン済みかを確認します。
+  // 未オープン時は `TypeError` を投げます。
+  #getConnection(): Connection {
+    if (this.#con === null) {
+      throw new TypeError("Redis is not open. Call open() first.");
+    }
+
+    return this.#con;
+  }
+
+  /**
+   * unikvs のキーにプレフィックスを付与し、Redis のキーへ変換します。
+   */
+  #toKey(key: string): string {
+    return `${this.#keyPrefix}${key}`;
   }
 }

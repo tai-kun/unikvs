@@ -245,21 +245,6 @@ export default class UniKvsBranch<
     });
   }
 
-  /**
-   * この分岐の構築状態を取得します。
-   *
-   * @returns 構築状態を返します。
-   */
-  #branchState(): BranchState {
-    const state = branchStates.get(this);
-
-    if (state === undefined) {
-      throw new Error("分岐の構築状態が見つかりません。");
-    }
-
-    return state;
-  }
-
   public fork<
     TSubChunkInput,
     TSubChunkOutput,
@@ -441,5 +426,20 @@ export default class UniKvsBranch<
     });
 
     return this;
+  }
+
+  /**
+   * この分岐の構築状態を取得します。
+   *
+   * @returns 構築状態を返します。
+   */
+  #branchState(): BranchState {
+    const state = branchStates.get(this);
+
+    if (state === undefined) {
+      throw new Error("分岐の構築状態が見つかりません。");
+    }
+
+    return state;
   }
 }

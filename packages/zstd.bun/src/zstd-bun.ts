@@ -70,18 +70,6 @@ export default class ZstdBun implements IMiddleware {
     return this.#env !== null;
   }
 
-  // 開いている実行環境を返します。
-  // 未オープン時は `TypeError` を投げます。
-  #getEnv(): IEnv {
-    const env = this.#env;
-
-    if (env === null) {
-      throw new TypeError("ZstdBun is not open. Call open() first.");
-    }
-
-    return env;
-  }
-
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -151,5 +139,17 @@ export default class ZstdBun implements IMiddleware {
     c.destination = c.source.pipeThrough(decompress);
 
     await next();
+  }
+
+  // 開いている実行環境を返します。
+  // 未オープン時は `TypeError` を投げます。
+  #getEnv(): IEnv {
+    const env = this.#env;
+
+    if (env === null) {
+      throw new TypeError("ZstdBun is not open. Call open() first.");
+    }
+
+    return env;
   }
 }

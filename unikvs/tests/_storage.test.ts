@@ -65,43 +65,43 @@ function clearContext(): IStorage.ClearContext {
  * Map 上にデータを保存し、open/close の呼び出し回数を記録するストレージモックです。
  */
 class MockStorage implements IStorage {
-  readonly name = "MockStorage";
+  public readonly name = "MockStorage";
 
-  isOpen = true;
+  public isOpen = true;
 
-  readonly map = new Map<string, any>();
+  public readonly map = new Map<string, any>();
 
-  openCallCount = 0;
+  public openCallCount = 0;
 
-  closeCallCount = 0;
+  public closeCallCount = 0;
 
-  async open(_c: IStorage.OpenContext): Promise<void> {
+  public async open(_c: IStorage.OpenContext): Promise<void> {
     this.openCallCount++;
     this.isOpen = true;
   }
 
-  async close(_c: IStorage.CloseContext): Promise<void> {
+  public async close(_c: IStorage.CloseContext): Promise<void> {
     this.closeCallCount++;
     this.isOpen = false;
   }
 
-  async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+  public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
     this.map.set(c.key, data);
   }
 
-  async read(c: IStorage.ReadContext): Promise<unknown> {
+  public async read(c: IStorage.ReadContext): Promise<unknown> {
     return this.map.get(c.key);
   }
 
-  async exists(c: IStorage.ExistsContext): Promise<boolean> {
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     return this.map.has(c.key);
   }
 
-  async delete(c: IStorage.DeleteContext): Promise<void> {
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.map.delete(c.key);
   }
 
-  async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
 }
@@ -633,7 +633,7 @@ describe("UniKvsStorage - ストリーム", () => {
     } as unknown as IReadableStream<Uint8Array>;
 
     class StreamStorage extends MockStorage {
-      getReadable(): IReadableStream {
+      public getReadable(): IReadableStream {
         return compatible;
       }
     }
@@ -674,7 +674,7 @@ describe("UniKvsStorage - ストリーム", () => {
     } as unknown as IWritableStream<Uint8Array>;
 
     class StreamStorage extends MockStorage {
-      getWritable(): IWritableStream {
+      public getWritable(): IWritableStream {
         return compatible;
       }
     }

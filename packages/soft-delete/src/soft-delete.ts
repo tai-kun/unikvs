@@ -140,11 +140,6 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   public readonly retentionMs: number | undefined;
 
   /**
-   * 削除墓標の実体を保持する下層ストレージです。
-   */
-  readonly #inner: IStorage;
-
-  /**
    * 下層ストレージが対応している場合の読み取りストリーム取得関数です。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
@@ -157,6 +152,11 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public getWritable?: (c: IStorage.GetWritableContext) => Promise<IWritableStream>;
+
+  /**
+   * 削除墓標の実体を保持する下層ストレージです。
+   */
+  readonly #inner: IStorage;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
