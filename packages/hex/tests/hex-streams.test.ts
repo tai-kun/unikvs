@@ -2,6 +2,7 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   readAll,
+  bytesEqual,
   createNext,
   sourceFrom,
   concatBytes,
@@ -195,7 +196,8 @@ describe("encodeStream", () => {
     // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
-    expect(concatBytes(result.outputChunks)).toStrictEqual(await encode(hex, input));
+    // 数 MiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(concatBytes(result.outputChunks), await encode(hex, input))).toBe(true);
   });
 });
 
@@ -372,7 +374,8 @@ describe("decodeStream", () => {
     // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
-    expect(concatBytes(result.outputChunks)).toStrictEqual(input);
+    // 数百 KiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(concatBytes(result.outputChunks), input)).toBe(true);
   });
 });
 

@@ -2,6 +2,7 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
   readAll,
+  bytesEqual,
   createNext,
   sourceFrom,
   concatBytes,
@@ -248,7 +249,8 @@ describe("encodeStream", () => {
     // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
-    expect(concatBytes(result.outputChunks)).toStrictEqual(await encode(base64url, input));
+    // 数 MiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(concatBytes(result.outputChunks), await encode(base64url, input))).toBe(true);
   });
 
   test("3 の倍数長では flush で追加出力しない", async ({ expect }) => {
@@ -502,7 +504,8 @@ describe("decodeStream", () => {
     // 検証：
     expect(result.writeError).toBeUndefined();
     expect(result.readError).toBeUndefined();
-    expect(concatBytes(result.outputChunks)).toStrictEqual(input);
+    // 数百 KiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(concatBytes(result.outputChunks), input)).toBe(true);
   });
 });
 

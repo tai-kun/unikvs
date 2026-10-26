@@ -1,6 +1,6 @@
 // oxlint-disable unicorn/number-literal-case
 import type { IMiddleware } from "@unikvs/core";
-import { createNext, createDecodeContext, createEncodeContext } from "@unikvs/testing";
+import { bytesEqual, createNext, createDecodeContext, createEncodeContext } from "@unikvs/testing";
 import { FastUtf8 } from "fast-utf8";
 import { test, describe } from "vite-plus/test";
 
@@ -154,7 +154,8 @@ describe("一括のラウンドトリップ", () => {
     const output = await decode(base64, encoded);
 
     // 検証：
-    expect(output).toStrictEqual(input);
+    // 数 MiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(output, input)).toBe(true);
   });
 
   test("encode 出力は既知ベクトルと一致する", async ({ expect }) => {
