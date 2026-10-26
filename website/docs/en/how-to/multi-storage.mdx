@@ -1,0 +1,83 @@
+---
+title: "Using Multiple Storages"
+description: "How to write to multiple storages and repair on read."
+---
+
+Register multiple storages when combining, for example, a fast backend with a durable one.
+
+## Register Multiple Storages [#register-multiple]
+
+Calling `persist()` multiple times writes to every backend in parallel. Reads check backends in registration order and return the value from the first backend that has it.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { NodeFs } from "@unikvs/fs.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  profile: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .persist(new NodeFs(".unikvs"))
+  .build();
+```
+
+In this example, writes go to both memory and files, while reads check memory first.
+
+:::note[Registration order sets priority]
+Read priority follows the order of `persist()` calls. Register fast or temporary backends first.
+:::
+
+## Repair on Read [#read-repair]
+
+`get()` and `stream()` accept `repair: true` to write values found in later backends back to earlier ones. The default is `false`.
+
+```ts
+const bytes = await kvs.get("profile", { repair: true });
+```
+
+To control repair, use `@unikvs/allow-repair`. On branches that disallow repair, reads still succeed and a warning is logged. To fail reads when repair is denied, pass `throwOnRepairDenied: true`.
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+
+const noRepair = new AllowRepair();
+noRepair.disable();
+
+const kvs = new unikvs.Builder<{
+  profile: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .fork(new unikvs.Branch().use(noRepair).persist(new NodeFs(".unikvs")))
+  .build();
+```
+
+:::warning[Branch additions stay local]
+Additions to a pipeline branched with `fork()` apply only to that branch. The parent pipeline is unchanged.
+:::
+
+## Vary Transformations per Storage [#branch-pipeline]
+
+Use `fork()` when each branch needs a different middleware combination. Each backend uses a snapshot of the pipeline taken at the time `persist()` is called. Middleware added after registration therefore does not affect already-registered backends.
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import { NodeFs } from "@unikvs/fs.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  settings: unikvs.PlainValue<Uint8Array>;
+}>()
+  .fork(new unikvs.Branch().use(new Json()).persist(new Memory()))
+  .persist(new NodeFs(".unikvs"))
+  .build();
+```
+
+In this example, JSON transformation applies only to the memory side; the file side stores raw bytes.
+
+## Related [#related]
+
+- For the background, see [Architecture](/explanation/architecture).
+- For choosing a backend, see [Storage Comparison](/reference/comparison).
+- For package-specific notes, see each [package reference](/packages).

@@ -1,0 +1,345 @@
+---
+title: "@unikvs/http"
+description: "How to use Http in @unikvs/http, a storage that keeps bytes on an HTTP server."
+---
+
+## Overview [#overview]
+
+`@unikvs/http` is a storage that exchanges bytes with an HTTP server. Use it with a server supporting `PUT`, `GET`, `HEAD`, and `DELETE`.
+
+- `name` is `Http`.
+- `isOpen` is always `true`. `open` and `close` perform no setup or teardown.
+- This storage appends `keyPrefix` to keys, URL-encodes them, and places them under `baseUrl`.
+- Headers and tokens can be overridden per operation via runtime variables, in addition to the constructor.
+
+Install with:
+
+```package-install
+npm install @unikvs/http
+```
+
+## Usage [#usage]
+
+Http implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Http } from "@unikvs/http";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    baseUrl: {
+      type: "[#base-url] string",
+      required: true,
+      description: "Base URL. Specify an absolute URL without query or fragment.",
+    },
+    keyPrefix: {
+      type: "[#key-prefix] string | undefined",
+      default: '"unikvs:"',
+      description: "Prefix attached to every key.",
+    },
+    allowClearWithoutPrefix: {
+      type: "[#allow-clear-without-prefix] boolean | undefined",
+      default: "false",
+      description: "Whether to allow clear with an empty prefix.",
+    },
+    fetch: {
+      type: "[#fetch] IFetch | undefined",
+      description:
+        "fetch implementation to use. Pass a function taking a Request and returning a Response. Uses globalThis.fetch when omitted.",
+    },
+    headers: {
+      type: "[#headers] Record<string, string> | undefined",
+      description: "Default request headers. Can be overridden with runtime variables.",
+    },
+    token: {
+      type: "[#token] string | undefined",
+      description:
+        "Default bearer token. Specify a non-empty string. Can be overridden with runtime variables.",
+    },
+  }}
+/>
+
+The following example stores bytes and reads them back.
+
+```ts
+import { Http } from "@unikvs/http";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  image: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new Http("https://example.com/kvs"))
+  .build();
+
+await kvs.open();
+await kvs.set("image", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("image");
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type       |
+| ---------------------------------- | ------------------------- |
+| `write`/`read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable`/`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- Stores bytes only. Convert strings and other values to bytes before passing them.
+- This storage handles `write` with `PUT`, `read` with `GET`, and `exists` with `HEAD` (falling back to `GET` when unsupported).
+- `delete` succeeds even for missing keys.
+- `clear` requests deletion under the prefix with `DELETE`. Throws `ClearNotSupportedError` when the server does not support it.
+- `getWritable` buffers chunks and sends them at once with `PUT` on `close`.
+- `getReadable` returns the `GET` response body as-is. Returns an empty stream when there is no body.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### Meaning
+
+Thrown when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/http";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### InvalidBaseUrlError [#invalid-base-url-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-base-url-actual] unknown",
+      required: true,
+      description: "The received baseUrl value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when the constructor `baseUrl` is not an absolute URL. Leading/trailing whitespace, empty strings, relative URLs, and URLs with query or fragment are rejected.
+
+#### How to fix
+
+Specify an absolute URL without query or fragment.
+
+### InvalidHeadersError [#invalid-headers-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-headers-actual] unknown",
+      required: true,
+      description: "The received headers value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when headers are not an object with string values. Both constructor `headers` and runtime-variable headers are validated.
+
+#### How to fix
+
+Make every header value a string.
+
+### InvalidTokenError [#invalid-token-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-token-actual] unknown",
+      required: true,
+      description: "The received token value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when the token is not a non-empty string. Both constructor `token` and runtime-variable tokens are validated.
+
+#### How to fix
+
+Specify a non-empty string for the token.
+
+### InvalidKeyError [#invalid-key-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-key-key] string",
+      required: true,
+      description: "The key that could not be encoded.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a key cannot be encoded as a URL path segment.
+
+#### How to fix
+
+Use an encodable key.
+
+### ClearWithoutPrefixNotAllowedError [#clear-without-prefix-not-allowed-error]
+
+#### Meaning
+
+Thrown when `clear` is called with an empty `keyPrefix` while `allowClearWithoutPrefix` is still `false`.
+
+#### How to fix
+
+Set a non-empty `keyPrefix` or pass `allowClearWithoutPrefix: true`.
+
+### ClearNotSupportedError [#clear-not-supported-error]
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#clear-not-supported-prefix] string",
+      required: true,
+      description: "The prefix attempted to delete.",
+    },
+    status: {
+      type: "[#clear-not-supported-status] number",
+      required: true,
+      description: "The status returned by the server.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when the server responds to `clear` with `404`, `405`, or `501`. The server does not support prefix deletion.
+
+#### How to fix
+
+Implement prefix deletion on the server, or stop calling `clear`.
+
+### HttpNetworkError [#http-network-error]
+
+<TypeTable
+  type={{
+    method: {
+      type: "[#http-network-method] string",
+      required: true,
+      description: "Method of the failed request.",
+    },
+    url: {
+      type: "[#http-network-url] string",
+      required: true,
+      description: "URL of the failed request.",
+    },
+    key: {
+      type: "[#http-network-key] string | undefined",
+      required: true,
+      description: "Key being operated on. undefined for failed clear.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when `fetch` itself fails. Abortion-driven failures are excluded.
+
+#### How to fix
+
+Check the network and server status, and retry if needed.
+
+### HttpResponseError [#http-response-error]
+
+<TypeTable
+  type={{
+    method: {
+      type: "[#http-response-method] string",
+      required: true,
+      description: "Method of the failed request.",
+    },
+    url: {
+      type: "[#http-response-url] string",
+      required: true,
+      description: "URL of the failed request.",
+    },
+    status: {
+      type: "[#http-response-status] number",
+      required: true,
+      description: "Status returned by the server.",
+    },
+    statusText: {
+      type: "[#http-response-status-text] string",
+      required: true,
+      description: "Status text returned by the server.",
+    },
+    key: {
+      type: "[#http-response-key] string | undefined",
+      required: true,
+      description: "Key being operated on. undefined for failed clear.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown on unexpected response statuses. `404`/`410` on `read` and `getReadable` become `KeyNotFoundError`, `404`/`410` on `delete` become success, and `404`/`405`/`501` on `clear` become `ClearNotSupportedError`.
+
+#### How to fix
+
+Check the response with `meta.status` and `meta.statusText`.
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "The received chunk value.",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "The type name of the received chunk.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a non-`Uint8Array<ArrayBuffer>` chunk is written to `getWritable`.
+
+#### How to fix
+
+Write `Uint8Array` chunks to streams.

@@ -1,0 +1,156 @@
+---
+title: "@unikvs/s3.bun"
+description: "How to use @unikvs/s3.bun, which stores byte sequences in S3-compatible object storage."
+---
+
+## Overview [#overview]
+
+`@unikvs/s3.bun` is a storage plugin that stores byte sequences in S3-compatible object storage. <Badge variant="warning">Bun only</Badge> Use it for persistence in the cloud or in S3-compatible storage.
+
+- `name` is `"S3"`, and `isOpen` reports whether it is open.
+- `open()` creates the client, and `close()` releases the reference.
+- This storage performs all operations against the bucket given in the constructor, using keys as-is as object keys.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/s3.bun
+```
+
+S3-compatible object storage is required separately.
+
+## Usage [#usage]
+
+S3 implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+```
+
+### S3 [#s3]
+
+Storage that saves to S3-compatible storage. Callers open it with `open()` and close it with `close()` when done.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "[#s3-bucket] string",
+      required: true,
+      description: "The bucket name to store data in.",
+    },
+    options: {
+      type: "[#s3-options] S3StorageOptions",
+      description: "Settings passed to the Bun `S3Client`, such as the endpoint and credentials.",
+    },
+  }}
+/>
+
+### S3StorageOptions [#s3storageoptions]
+
+Bun `S3Options` minus `bucket`. Specify the bucket name as the first constructor argument.
+
+The following example saves a value and reads it back:
+
+```ts
+import { S3 } from "@unikvs/s3.bun";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new S3("my-bucket"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- The write-stream part size can be changed with the runtime variable `@unikvs/s3.bun:partSize` (or `@unikvs/s3:partSize`).
+- `clear()` lists and deletes every object in the bucket.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### StorageNotOpenError [#error-storage-not-open]
+
+Thrown when `close()` is called without opening.
+
+#### Meaning
+
+`close()` was called even though the S3 client is not open.
+
+#### How to fix
+
+Call `open()` before `close()`.
+
+### InvalidPartSizeError [#error-invalid-part-size]
+
+A shared `@unikvs/core` error. Thrown when the write-stream part size is not a positive integer.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-part-size-actual] unknown",
+      required: true,
+      description: "The specified part size value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The runtime-variable part size (`@unikvs/s3.bun:partSize` or `@unikvs/s3:partSize`) is not a positive integer. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Specify a positive integer (in bytes) as the part size.
+
+### StorageAbortedError [#error-storage-aborted]
+
+A shared `@unikvs/core` error. Thrown when the signal is already aborted before acquiring a write stream.
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#storage-aborted-key] string",
+      required: true,
+      description: "The key that was to be uploaded.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The `AbortSignal` is already aborted when `getWritable()` is called. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Pass a signal that is not aborted, or check the signal state before requesting.
+
+### UnsupportedRuntimeError [#error-unsupported-runtime]
+
+A shared `@unikvs/core` error. Thrown when opening it on a runtime other than Bun.
+
+#### Meaning
+
+This storage only works on Bun. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Run it on the Bun runtime.

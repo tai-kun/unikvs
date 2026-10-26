@@ -1,0 +1,209 @@
+---
+title: "Package Reference"
+description: "List and guide to UniKVS packages."
+---
+
+UniKVS consists of the core `unikvs` package plus plugin and utility packages. Install everything except `unikvs` only as needed.
+
+See [installation](/how-to/installation) for setup, and [storage comparison](/reference/comparison) for choosing a backend.
+
+## Core [#core]
+
+<CardGroup cols={2}>
+  <Card title="UniKVS" href="./unikvs" icon="package">
+    The core package with the config builder and KVS client.
+  </Card>
+</CardGroup>
+
+## Shared [#shared]
+
+Shared foundations used by all packages.
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/core" href="./core" icon="cpu">
+    Shared types and errors for all packages.
+  </Card>
+  <Card title="@unikvs/utils" href="./utils" icon="wrench">
+    Shared helper functions for plugin authors.
+  </Card>
+  <Card title="@unikvs/testing" href="./testing" icon="flask-conical">
+    Test contexts and helpers for plugins.
+  </Card>
+</CardGroup>
+
+## Storage [#storage]
+
+Backends that provide data persistence. They differ by runtime environment.
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/memory" href="./memory" icon="zap">
+    Store arbitrary values in memory.
+  </Card>
+  <Card title="@unikvs/http" href="./http" icon="globe">
+    Use an HTTP server as a backend.
+  </Card>
+  <Card title="@unikvs/null" href="./null" icon="circle-off">
+    Discard everything; use as a no-op sink.
+  </Card>
+  <Card title="@unikvs/lru-cache" href="./lru-cache" icon="list">
+    Store data in memory with entry or capacity limits.
+  </Card>
+  <Card title="@unikvs/opfs" href="./opfs" icon="folder">
+    Store data in the browser OPFS.
+  </Card>
+  <Card title="@unikvs/indexeddb" href="./indexeddb" icon="table">
+    Store data in the browser IndexedDB.
+  </Card>
+  <Card title="@unikvs/localstorage" href="./localstorage" icon="database">
+    Store data in the browser Local Storage.
+  </Card>
+  <Card title="@unikvs/session-storage" href="./session-storage" icon="database">
+    Store strings in the browser sessionStorage.
+  </Card>
+  <Card title="@unikvs/fs.node" href="./fs-node" icon="hard-drive">
+    Store data in the Node.js local filesystem.
+  </Card>
+  <Card title="@unikvs/s3.node" href="./s3-node" icon="cloud">
+    Store data in S3-compatible object storage.
+  </Card>
+  <Card title="@unikvs/redis.node" href="./redis-node" icon="database">
+    Store data in Redis.
+  </Card>
+  <Card title="@unikvs/fs.bun" href="./fs-bun" icon="hard-drive">
+    Store data in the Bun local filesystem.
+  </Card>
+  <Card title="@unikvs/s3.bun" href="./s3-bun" icon="cloud">
+    Store data in S3-compatible object storage with Bun.
+  </Card>
+  <Card title="@unikvs/redis.bun" href="./redis-bun" icon="database">
+    Store data in Redis using the Bun Redis client.
+  </Card>
+  <Card title="@unikvs/valkey" href="./valkey" icon="database">
+    Store data in Valkey.
+  </Card>
+  <Card title="@unikvs/memcached" href="./memcached" icon="database">
+    Store data in Memcached.
+  </Card>
+  <Card title="@unikvs/etcd" href="./etcd" icon="database">
+    Store data in etcd.
+  </Card>
+  <Card title="@unikvs/cache-storage" href="./cache-storage" icon="archive">
+    Store data in the browser Cache Storage.
+  </Card>
+  <Card title="@unikvs/cookies" href="./cookies" icon="cookie">
+    Use cookies as a backend.
+  </Card>
+  <Card title="@unikvs/cloudflare-kv" href="./cloudflare-kv" icon="cloud">
+    Store data in Cloudflare KV.
+  </Card>
+  <Card title="@unikvs/cloudflare-r2" href="./cloudflare-r2" icon="cloud">
+    Store data in Cloudflare R2.
+  </Card>
+  <Card title="@unikvs/cloudflare-cache" href="./cloudflare-cache" icon="cloud">
+    Store data in the Cloudflare Cache API.
+  </Card>
+  <Card title="@unikvs/vercel-blob" href="./vercel-blob" icon="cloud">
+    Store data in Vercel Blob.
+  </Card>
+  <Card title="@unikvs/vercel-runtime-cache" href="./vercel-runtime-cache" icon="zap">
+    Store data in the Vercel runtime cache.
+  </Card>
+  <Card title="@unikvs/retry" href="./retry" icon="rotate-cw">
+    Wrapper that retries transient failures.
+  </Card>
+  <Card title="@unikvs/soft-delete" href="./soft-delete" icon="trash">
+    Wrapper that treats deletes as soft deletes.
+  </Card>
+</CardGroup>
+
+## Middleware [#middleware]
+
+Transparently transform values. Grouped by transformation.
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/json" href="./json" icon="braces">
+    Convert values to JSON, and to JSON Lines for streams.
+  </Card>
+  <Card title="@unikvs/superjson" href="./superjson" icon="boxes">
+    Convert with SuperJSON, preserving Date, Map, Set, BigInt, and undefined.
+  </Card>
+  <Card title="@unikvs/cbor" href="./cbor" icon="binary">
+    Convert values to CBOR, and to CBOR sequences for streams.
+  </Card>
+  <Card title="@unikvs/v8-serde" href="./v8-serde" icon="binary">
+    Serialize fast with Node.js v8.serialize.
+  </Card>
+  <Card title="@unikvs/base64" href="./base64" icon="file-code">
+    Convert bytes to Base64 text.
+  </Card>
+  <Card title="@unikvs/base64url" href="./base64url" icon="file-code">
+    Convert bytes to URL-safe Base64url.
+  </Card>
+  <Card title="@unikvs/hex" href="./hex" icon="file-code">
+    Convert bytes to hexadecimal (Hex) strings.
+  </Card>
+  <Card title="@unikvs/compression" href="./compression" icon="archive">
+    Compress and decompress with gzip, deflate, and deflate-raw.
+  </Card>
+  <Card title="@unikvs/checksum" href="./checksum" icon="shield-check">
+    Verify MD5, SHA-1, SHA-224, SHA-256, SHA-384, and SHA-512.
+  </Card>
+  <Card title="@unikvs/zstd.wasm" href="./zstd-wasm" icon="archive">
+    Compress and decompress with WASM zstd.
+  </Card>
+  <Card title="@unikvs/zstd.node" href="./zstd-node" icon="archive">
+    Compress and decompress with Node.js zstd.
+  </Card>
+  <Card title="@unikvs/zstd.bun" href="./zstd-bun" icon="archive">
+    Compress and decompress with Bun zstd.
+  </Card>
+  <Card title="@unikvs/brotli.node" href="./brotli-node" icon="archive">
+    Compress and decompress with Node.js Brotli.
+  </Card>
+  <Card title="@unikvs/brotli.bun" href="./brotli-bun" icon="archive">
+    Compress and decompress with Bun Brotli.
+  </Card>
+  <Card title="@unikvs/brotli.wasm" href="./brotli-wasm" icon="archive">
+    Compress and decompress with WASM Brotli.
+  </Card>
+</CardGroup>
+
+## Dev tools [#dev]
+
+Packages for observing and controlling behavior.
+
+<CardGroup cols={2}>
+  <Card title="@unikvs/debug" href="./debug" icon="bug">
+    Log read/write operations and data for debugging.
+  </Card>
+  <Card title="@unikvs/passthrough" href="./passthrough" icon="arrow-right-left">
+    Pass data through without transformation.
+  </Card>
+  <Card title="@unikvs/allow-repair" href="./allow-repair" icon="wrench">
+    Control whether read-repair write-backs are allowed.
+  </Card>
+  <Card title="@unikvs/key-prefix" href="./key-prefix" icon="hash">
+    Prepend a fixed string to every key.
+  </Card>
+  <Card title="@unikvs/writeonly" href="./writeonly" icon="lock">
+    Make an existing storage write-only.
+  </Card>
+  <Card title="@unikvs/readonly" href="./readonly" icon="lock">
+    Make an existing storage read-only.
+  </Card>
+  <Card title="@unikvs/expiry" href="./expiry" icon="clock">
+    Validate that values with expiry are still valid.
+  </Card>
+  <Card title="@unikvs/ttl" href="./ttl" icon="timer">
+    Attach and manage TTLs on values.
+  </Card>
+  <Card title="@unikvs/rate-limit" href="./rate-limit" icon="gauge">
+    Limit operation frequency.
+  </Card>
+  <Card title="@unikvs/metrics" href="./metrics" icon="chart-line">
+    Collect operation metrics.
+  </Card>
+  <Card title="@unikvs/tracing" href="./tracing" icon="activity">
+    Record operation traces.
+  </Card>
+</CardGroup>

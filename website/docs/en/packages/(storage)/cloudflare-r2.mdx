@@ -1,0 +1,136 @@
+---
+title: "@unikvs/cloudflare-r2"
+description: "How to use @unikvs/cloudflare-r2, which stores byte sequences in a Cloudflare R2 binding."
+---
+
+## Overview [#overview]
+
+`@unikvs/cloudflare-r2` is storage that stores byte sequences in a Cloudflare Workers R2 binding.
+
+It applies a prefix to logical keys to form real keys and calls `put` / `get` / `head` / `delete` / `list`. Callers pass the real binding directly with no `wrangler` dependency.
+
+- `name` is `CloudflareR2`.
+- `isOpen` becomes `true` on `open()` and returns to `false` on `close()`.
+- `delete` is idempotent; missing keys are treated as success.
+- Supports streamed reading and writing.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/cloudflare-r2
+```
+
+## Usage [#usage]
+
+CloudflareR2 implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { CloudflareR2 } from "@unikvs/cloudflare-r2";
+```
+
+### `CloudflareR2` [#cloudflare-r2]
+
+Storage that stores byte sequences in a Workers R2 binding.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    bucket: {
+      type: "[#cloudflare-r2-bucket] R2BucketLike",
+      required: true,
+      description: "The R2 bucket binding to use.",
+    },
+    keyPrefix: {
+      type: "[#cloudflare-r2-key-prefix] string",
+      default: '""',
+      description: "The prefix prepended to every key.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { CloudflareR2 } from "@unikvs/cloudflare-r2";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new CloudflareR2({ bucket }))
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                                 |
+| ------------------------------------ | ----------------------------------------- |
+| `write` / `read`                     | Byte sequence (`Uint8Array<ArrayBuffer>`) |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>`                 |
+
+- Only byte sequences can be stored. Convert strings or objects with middleware before passing them.
+- Values are copied on write so that reusing the caller's view does not change the stored value.
+- The stream from `getWritable` accumulates chunks and stores them at once on `close`.
+- The stream from `getReadable` materializes the stored value and emits it as a single chunk.
+- `clear` lists the objects under the prefix and deletes them in batches of 1000.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### Meaning
+
+Thrown when a chunk other than `Uint8Array<ArrayBuffer>` is written to the stream obtained from `getWritable`.
+
+#### How to fix
+
+Pass `Uint8Array<ArrayBuffer>` as chunks.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown by `read` / `getReadable` when the specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cloudflare-r2";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### StorageAbortedError [#error-storage-aborted]
+
+#### Meaning
+
+Thrown when acquisition is rejected before `getWritable` because the signal is already aborted at call time. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Pass a signal that is not aborted, or check the signal state before requesting.

@@ -1,0 +1,85 @@
+---
+title: "UniKVS"
+description: "Documentation for UniKVS, a modular KVS client for TypeScript. Choose tutorials, how-to guides, explanations, or references depending on your goal."
+---
+
+UniKVS is a modular, portable KVS client for TypeScript. It combines middleware that transparently transforms data with storages that write to multiple backends, assembled through a builder.
+
+## How to Read [#how-to-read]
+
+These docs follow the four Diátaxis categories. Pick the entry point that matches your current goal.
+
+<CardGroup cols={2}>
+  <Card title="Tutorials" href="/tutorials" icon="rocket">
+    First-time users build something hands-on to grasp the big picture.
+  </Card>
+  <Card title="How-to Guides" href="/how-to" icon="wrench">
+    Follow task-oriented steps to solve a problem.
+  </Card>
+  <Card title="Explanation" href="/explanation" icon="book-open">
+    Understand how it works and the design behind it.
+  </Card>
+  <Card title="Reference" href="/reference" icon="database">
+    Look up backend comparisons and operation specs.
+  </Card>
+</CardGroup>
+
+## Quickstart [#quickstart]
+
+Start with the minimal in-memory setup. It takes about 5 minutes.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+See [Your First UniKVS](/tutorials/first-kvs) for the full walkthrough.
+
+## Key Features [#features]
+
+- Transparent encoding and decoding via middleware.
+- Parallel writes to multiple storages.
+- Per-key value types that restrict available operations at the type level.
+- Runtime validation of input/output values with Valibot schemas.
+- Support for both single values and streams.
+- Cancellation via `AbortSignal` and per-operation runtime variables.
+- Storages for both Node.js and browsers.
+
+## Packages [#packages]
+
+Each package is documented in the [package reference](/packages). Representative packages:
+
+<CardGroup cols={2}>
+  <Card title="UniKVS" href="/packages/unikvs" icon="package">
+    The config builder and KVS client itself.
+  </Card>
+  <Card title="@unikvs/memory" href="/packages/memory" icon="zap">
+    Stores arbitrary data in memory.
+  </Card>
+  <Card title="@unikvs/compression" href="/packages/compression" icon="archive">
+    Compresses and decompresses with gzip, deflate, and deflate-raw.
+  </Card>
+  <Card title="@unikvs/json" href="/packages/json" icon="braces">
+    Converts values to JSON, and streams to JSON Lines.
+  </Card>
+  <Card title="@unikvs/fs.node" href="/packages/fs-node" icon="hard-drive">
+    Stores data on the local filesystem in Node.js.
+  </Card>
+  <Card title="@unikvs/opfs" href="/packages/opfs" icon="folder">
+    Stores data in the browser OPFS.
+  </Card>
+</CardGroup>

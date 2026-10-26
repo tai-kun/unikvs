@@ -1,0 +1,49 @@
+---
+title: "Value Model"
+description: "Explains single values, streams, and their relation to Valibot validation."
+---
+
+Deciding the value kind per key restricts which operations are available at the type level. Enabling runtime validation also catches malformed data early.
+
+## Value Kinds [#value-kinds]
+
+`PlainValue` and `StreamValue` serve different purposes; `Value` is syntactic sugar covering both.
+
+| Type             | Write                              | Read           | Stream read                   |
+| ---------------- | ---------------------------------- | -------------- | ----------------------------- |
+| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T`  | Not available.                |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not available. | `stream(key): ValueStream<T>` |
+| `Value<T>`       | `set(key, T \| ReadableStream<T>)` | `get(key): T`  | `stream(key): ValueStream<T>` |
+
+`Value` is equivalent to `PlainValue | StreamValue`. Disallowed combinations are type errors.
+
+## Schema Forms [#schema-forms]
+
+In schema-based setups, value types are inferred from Valibot schemas, and input/output values are validated at runtime.
+
+- The object form uses key names as-is. Unknown keys pass validation.
+- The array form lists key-schema/value-schema pairs. The first matching definition wins, and unmatched keys throw `InvalidInputError`.
+
+So choose the array form when you want strictness against key-name mistakes.
+
+## Validation Timing [#validation-timing]
+
+| Operation | What is validated           | Error on failure     |
+| --------- | --------------------------- | -------------------- |
+| `set`     | Validates the input value.  | `InvalidInputError`  |
+| `get`     | Validates the output value. | `InvalidOutputError` |
+| `stream`  | Validates each chunk.       | `InvalidOutputError` |
+
+Stream validation is lazy and per chunk. Writes validate inside the write path; reads validate as chunks are consumed.
+
+## Streams [#streams]
+
+`stream()` returns a `ValueStream`. It wraps `ReadableStream` and supports `for await...of` plus automatic disposal with `await using`.
+
+Stream chunk types vary by backend. For example, memory supports only `Uint8Array`, and string-only backends do not support streams at all. Check each package's data types before use.
+
+For the steps, see [Using Streams](/how-to/streams).
+
+## Relation to Errors [#errors]
+
+Malformed data maps to different errors by kind. Bad input is fixable by the caller, so it uses `InvalidInputError`; bad stored data or transformation results use `InvalidOutputError`. For handling steps, see [Handling Errors](/how-to/handle-errors).

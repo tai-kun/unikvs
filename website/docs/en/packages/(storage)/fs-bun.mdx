@@ -1,0 +1,84 @@
+---
+title: "@unikvs/fs.bun"
+description: "How to use @unikvs/fs.bun, which stores byte sequences in the Bun local file system."
+---
+
+## Overview [#overview]
+
+`@unikvs/fs.bun` is a storage plugin that stores byte sequences in the local file system. <Badge variant="warning">Bun only</Badge> Use it for persistence on a single node or as a simple store during development.
+
+- `name` is `"BunFs"`, and `isOpen` reports whether it is open.
+- `open()` creates the root directory and opens it. There is no `close()`.
+- Keys are stored as-is as file names. Writes go to a temporary file first and are atomically renamed on completion.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/fs.bun
+```
+
+## Usage [#usage]
+
+BunFs implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+```
+
+### BunFs [#bunfs]
+
+Storage that saves to the local file system. Callers open it with `open()` before use.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    root: {
+      type: "[#bunfs-root] string",
+      description:
+        'The root directory for stored data. Defaults to `".unikvs"` and is resolved to an absolute path in `open()`.',
+    },
+    options: {
+      type: "[#bunfs-options] BunFsOptions",
+      description: "Options reserved for future use. Currently an empty object.",
+    },
+  }}
+/>
+
+### BunFsOptions [#bunfsoptions]
+
+An option type reserved for future use. Currently an empty object with no settable fields.
+
+The following example saves a value and reads it back:
+
+```ts
+import { BunFs } from "@unikvs/fs.bun";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new BunFs("./data"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Keys are validated as file names; keys containing path separators and similar are rejected.
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- Writes go to a temporary file first and are atomically renamed on completion, so concurrent writes never collide on temporary files.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Opening it on a runtime other than Bun throws the shared `@unikvs/core` error `UnsupportedRuntimeError`. Reading or deleting a missing key fails with the `ENOENT` system error.

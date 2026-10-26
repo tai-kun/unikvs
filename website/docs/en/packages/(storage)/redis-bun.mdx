@@ -1,0 +1,99 @@
+---
+title: "@unikvs/redis.bun"
+description: "How to use @unikvs/redis.bun, which stores byte sequences in Redis from Bun."
+---
+
+## Overview [#overview]
+
+`@unikvs/redis.bun` is a storage plugin that stores byte sequences in Redis. <Badge variant="warning">Bun only</Badge> Use it for caches or temporary data shared across nodes.
+
+- `name` is `"Redis"`, and `isOpen` reports whether it is open.
+- `open()` connects, and `close()` disconnects when done.
+- This storage prefixes keys with `"unikvs:"` by default, limiting the scope of `clear()` deletions.
+- When the connection URL is omitted, the client resolves it from environment variables (`REDIS_URL`, `VALKEY_URL`).
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/redis.bun
+```
+
+A Redis server is required separately.
+
+## Usage [#usage]
+
+Redis implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+```
+
+### Redis [#redis]
+
+Storage that saves to Redis. Callers open it with `open()` and close it with `close()` when done.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    url: {
+      type: "[#redis-url] string | undefined",
+      description:
+        "The connection URL. Resolved by the client from environment variables when omitted.",
+    },
+    options: {
+      type: "[#redis-options] RedisStorageOptions",
+      description: "Options configuring the client and this package's behavior.",
+    },
+  }}
+/>
+
+### RedisStorageOptions [#redisstorageoptions]
+
+Bun `RedisOptions` plus this package's own fields. Bun fields are passed through as-is.
+
+<TypeTable
+  type={{
+    keyPrefix: {
+      type: "[#redisstorageoptions-keyprefix] string",
+      description:
+        'The prefix prepended to every key. Defaults to `"unikvs:"`. Specify an empty string to use keys as-is.',
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { Redis } from "@unikvs/redis.bun";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new Redis("redis://127.0.0.1:6379"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- Write streams append to a temporary key and atomically replace it with a rename on completion.
+- Read streams emit the fetched bytes as a single chunk.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Reading a missing key throws the shared `@unikvs/core` error `KeyNotFoundError`, and opening it on a runtime other than Bun throws the shared error `UnsupportedRuntimeError`.

@@ -1,0 +1,233 @@
+---
+title: "@unikvs/redis.node"
+description: "How to use @unikvs/redis.node, which stores byte sequences in Redis from Node.js."
+---
+
+## Overview [#overview]
+
+`@unikvs/redis.node` is a storage plugin that stores byte sequences in Redis. <Badge variant="warning">Node.js only</Badge> Use it for caches or temporary data shared across nodes.
+
+- `name` is `"Redis"`, and `isOpen` reports whether it is open.
+- `open()` connects, and `close()` disconnects when done.
+- This storage prefixes keys with `"unikvs:"` by default, limiting the scope of `clear()` deletions.
+- When the connection URL is omitted, the `REDIS_URL` (or `VALKEY_URL`) environment variable is used.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/redis.node
+```
+
+A Redis server is required separately.
+
+## Usage [#usage]
+
+Redis implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+```
+
+### Redis [#redis]
+
+Storage that saves to Redis. Callers open it with `open()` and close it with `close()` when done.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    url: {
+      type: "[#redis-url] string | undefined",
+      description:
+        "The connection URL (`redis://` / `rediss://` form). Resolved from environment variables when omitted.",
+    },
+    options: {
+      type: "[#redis-options] RedisStorageOptions",
+      description: "Options configuring the client and this package's behavior.",
+    },
+  }}
+/>
+
+### RedisStorageOptions [#redisstorageoptions]
+
+`ioredis` `RedisOptions` plus this package's own fields. `ioredis` fields are passed through as-is.
+
+<TypeTable
+  type={{
+    keyPrefix: {
+      type: "[#redisstorageoptions-keyprefix] string",
+      description: 'The prefix prepended to every key. Defaults to `"unikvs:"`.',
+    },
+    cluster: {
+      type: "[#redisstorageoptions-cluster] RedisClusterSpec",
+      description: "The cluster endpoints. Unsupported in v1, so specifying it is an error.",
+    },
+    closeTimeout: {
+      type: "[#redisstorageoptions-closetimeout] number",
+      description:
+        "The wait time (in milliseconds) for disconnection in `close()`. Defaults to `5000`.",
+    },
+  }}
+/>
+
+### RedisClusterSpec [#redisclusterspec]
+
+The type specifying cluster endpoints. Unsupported in v1, so specifying it is an error.
+
+<TypeTable
+  type={{
+    nodes: {
+      type: "[#redisclusterspec-nodes] readonly ClusterNode[]",
+      required: true,
+      description: "The cluster nodes to connect to.",
+    },
+    options: {
+      type: "[#redisclusterspec-options] ClusterOptions",
+      description: "Options passed to the `ioredis` `Cluster`.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { Redis } from "@unikvs/redis.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new Redis("redis://127.0.0.1:6379"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- Write streams append to a temporary key and atomically replace it with a rename on completion.
+- Read streams emit the fetched bytes as a single chunk.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### ClusterNotSupportedError [#error-cluster-not-supported]
+
+Thrown when the constructor `cluster` option is specified.
+
+#### Meaning
+
+v1 only supports standalone mode; the `cluster` option is not supported.
+
+#### How to fix
+
+Omit the `cluster` option and connect to a standalone Redis.
+
+### InvalidCloseTimeoutError [#error-invalid-close-timeout]
+
+Thrown when the constructor `closeTimeout` is not a finite positive number.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-close-timeout-actual] unknown",
+      required: true,
+      description: "The received `closeTimeout` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+`closeTimeout` was given something other than a finite positive number (in milliseconds).
+
+#### How to fix
+
+Specify a finite positive number (in milliseconds) for `closeTimeout`.
+
+### ConnectTimeoutError [#error-connect-timeout]
+
+Thrown when the connection in `open()` times out.
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#connect-timeout-timeoutms] number",
+      required: true,
+      description: "The time (in milliseconds) until timeout.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The connection to Redis was not established within `connectTimeout` (default `5000` ms).
+
+#### How to fix
+
+Check that the server is running and the connection URL is correct, and extend `connectTimeout` if needed.
+
+### CloseTimeoutError [#error-close-timeout]
+
+Thrown when disconnection in `close()` times out.
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#close-timeout-timeoutms] number",
+      required: true,
+      description: "The time (in milliseconds) until timeout.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Disconnection from Redis did not finish within `closeTimeout`. The connection is disconnected and cleaned up.
+
+#### How to fix
+
+Check the server state, and extend `closeTimeout` if it keeps happening.
+
+### KeyNotFoundError [#error-key-not-found]
+
+A shared `@unikvs/core` error. Thrown when reading a missing key.
+
+#### Meaning
+
+The specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/redis.node";
+
+try {
+  const data = await kvs.get("missing");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

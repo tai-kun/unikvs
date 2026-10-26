@@ -1,0 +1,163 @@
+---
+title: "@unikvs/expiry"
+description: "Middleware that attaches an absolute-time expiry and treats expired reads as missing."
+---
+
+## Overview [#overview]
+
+`Expiry` attaches an absolute-time expiry to written values, and treats expired reads as missing.<Badge>Middleware</Badge>
+
+Use it for expiring caches or temporary data. You can be notified when an expiry is detected.
+
+- `name` is `Expiry`.
+- `isOpen` is always `true`.
+- Set the expiry per operation with `@unikvs/expiry:expiresAt`, or with `defaultExpiresAt`.
+- Expired `get` and stream reads fail as `KeyNotFoundError`.
+
+Install with:
+
+```package-install
+npm install @unikvs/expiry
+```
+
+## Usage [#usage]
+
+Expiry implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Expiry } from "@unikvs/expiry";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    defaultExpiresAt: {
+      type: "[#expiry-options-default-expires-at] Date | number | string",
+      description:
+        "Default expiry used when an operation specifies none. A Date is absolute time, a number is epoch ms, a string is ISO 8601.",
+    },
+    now: {
+      type: "[#expiry-options-now] () => number",
+      default: "Date.now",
+      description: "Returns the current time (epoch ms). Use it to freeze time in tests.",
+    },
+    onExpire: {
+      type: "[#expiry-options-on-expire] (info: ExpiryExpiredInfo) => void",
+      description: "Called when an expiry is detected.",
+    },
+  }}
+/>
+
+The following sets an expiry per write and treats expired reads as missing:
+
+```ts
+import { Expiry } from "@unikvs/expiry";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ report: unikvs.PlainValue<string> }>()
+  .use(new Expiry())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("report", "hello", {
+  vars: { "@unikvs/expiry:expiresAt": Date.now() + 60_000 },
+});
+console.log(await kvs.get("report")); // "hello"
+await kvs.close();
+```
+
+### `Expiry` [#expiry]
+
+Middleware that wraps values in an expiry envelope and detects expiry on reads.
+
+### `ExpiryOptions` [#expiry-options]
+
+Options accepted by the `Expiry` constructor. Specifies the default, the clock, and notifications.
+
+### `ExpiresAtInput` [#expires-at-input]
+
+Accepted expiry values. A `Date` is an absolute expiry time, a `number` is epoch ms, a `string` is an absolute expiry time in ISO 8601.
+
+### `ExpiryExpiredInfo` [#expiry-expired-info]
+
+Information reported when an expiry is detected.
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#expiry-expired-info-key] string",
+      required: true,
+      description: "The expired key.",
+    },
+    expiresAt: {
+      type: "[#expiry-expired-info-expires-at] number",
+      required: true,
+      description: "Expiry time (epoch ms).",
+    },
+  }}
+/>
+
+## Data types [#data-types]
+
+| Method         | Input                         | Output            |
+| -------------- | ----------------------------- | ----------------- |
+| `encode`       | `unknown`                     | envelope          |
+| `decode`       | envelope or any value         | `unknown`         |
+| `encodeStream` | `unknown` (chunk)             | envelope (chunk)  |
+| `decodeStream` | envelope or any value (chunk) | `unknown` (chunk) |
+
+- `encode` wraps input as `{ "@unikvs/expiry": 1, expiresAt: number | null, data: unknown }`. Without an explicit or default value, `expiresAt` is `null`.
+- `decode` unwraps the envelope and returns the original value; values that were never wrapped pass through.
+- `decode` and `decodeStream` throw `KeyNotFoundError` when `expiresAt` is at or before now, and call `onExpire`.
+- Streams wrap and unwrap one envelope per chunk, preserving order.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### ExpiryInvalidExpiresAtError [#error-expiry-invalid-expires-at]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#expiry-invalid-expires-at-key] string",
+      description: "The target key. Undefined for the constructor default.",
+    },
+    actual: {
+      type: "[#expiry-invalid-expires-at-actual] unknown",
+      required: true,
+      description: "The received expiresAt value.",
+    },
+  }}
+/>
+
+#### Meaning [#error-expiry-invalid-expires-at-meaning]
+
+Thrown when `expiresAt` is none of a `Date`, epoch ms, or ISO 8601 string. Both the constructor's `defaultExpiresAt` and per-write vars are validated.
+
+#### How to fix [#error-expiry-invalid-expires-at-howto]
+
+Pass a `Date`, a finite number (epoch ms), or an ISO 8601 string parseable by `Date.parse`. `NaN`, infinities, and values like `true` are rejected.
+
+#### Example [#error-expiry-invalid-expires-at-example]
+
+Catching `ExpiryInvalidExpiresAtError`:
+
+```ts
+import { ExpiryInvalidExpiresAtError } from "@unikvs/expiry";
+
+try {
+  await kvs.set("report", "hello", { vars: { "@unikvs/expiry:expiresAt": "not-a-date" } });
+} catch (ex) {
+  if (ex instanceof ExpiryInvalidExpiresAtError) {
+    console.log(ex.meta); // { key: "report", actual: "not-a-date" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+Expired reads fail as `@unikvs/core` `KeyNotFoundError`. See [Errors](/packages/core/errors#error-key-not-found).

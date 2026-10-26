@@ -1,0 +1,133 @@
+---
+title: "@unikvs/tracing"
+description: "Middleware that emits a trace span per operation."
+---
+
+## Overview [#overview]
+
+`Tracing` emits a trace span for each read, write, and conversion operation, recording duration and success.<Badge>Middleware</Badge>
+
+Use it for distributed tracing and performance analysis. Pass a structurally OpenTelemetry-compatible tracer.
+
+- `name` is `Tracing`.
+- `isOpen` is always `true`.
+- Spans carry `key`, `action`, `success`, and `durationMs` as attributes.
+- `encode` / `decode` and streams pass data through and only emit spans.
+
+Install with:
+
+```package-install
+npm install @unikvs/tracing
+```
+
+## Usage [#usage]
+
+Tracing implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Tracing } from "@unikvs/tracing";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    tracer: {
+      type: "[#tracing-options-tracer] TracerLike",
+      description: "Tracer that emits spans. When omitted, nothing is recorded.",
+    },
+    spanNamePrefix: {
+      type: "[#tracing-options-span-name-prefix] string",
+      default: '"unikvs."',
+      description: "Prefix prepended to span names.",
+    },
+  }}
+/>
+
+The following records operations with a custom tracer:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Tracing, type TracerLike } from "@unikvs/tracing";
+import * as unikvs from "unikvs";
+
+const tracer: TracerLike = {
+  startSpan: (name) => ({
+    setAttribute: () => {},
+    setStatus: () => {},
+    end: () => {},
+  }),
+};
+
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(new Tracing({ tracer }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `Tracing` [#tracing]
+
+Middleware that emits a trace span per operation. `use` emits one span per operation; `encode` / `decode` and streams emit one span per conversion.
+
+### `TracingOptions` [#tracing-options]
+
+Options accepted by the `Tracing` constructor. Specifies the tracer and the span-name prefix.
+
+### `SpanStatusCode` [#span-status-code]
+
+Span status code. One of `"unset"`, `"ok"`, or `"error"`.
+
+### `SpanStatus` [#span-status]
+
+Status set on a span.
+
+<TypeTable
+  type={{
+    code: {
+      type: "[#span-status-code-prop] SpanStatusCode",
+      required: true,
+      description: "Span status code.",
+    },
+    message: {
+      type: "[#span-status-message] string",
+      description: "Message attached to the status.",
+    },
+  }}
+/>
+
+### `SpanAttributeValue` [#span-attribute-value]
+
+Value type settable as a span attribute. One of `string`, `number`, or `boolean`.
+
+### `SpanLike` [#span-like]
+
+Minimal interface of spans issued by a tracer. Structurally compatible with OpenTelemetry Span.
+
+### `TracerLike` [#tracer-like]
+
+Minimal interface of tracers that emit spans. Structurally compatible with OpenTelemetry Tracer.
+
+## Data types [#data-types]
+
+| Method         | Input             | Output                         |
+| -------------- | ----------------- | ------------------------------ |
+| `encode`       | `unknown`         | `unknown` (passthrough)        |
+| `decode`       | `unknown`         | `unknown` (passthrough)        |
+| `encodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
+| `decodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
+
+- `use` wraps operations in a `unikvs.use.<action>` span; `encode` uses `unikvs.encode` and `decode` uses `unikvs.decode`.
+- Streams are wrapped in `unikvs.encodeStream` / `unikvs.decodeStream` spans, ending on full read, error, or cancellation.
+- Chunks pass through unchanged, preserving order and references.
+- Success sets `success` to `true` with status `ok`; failure sets `success` to `false` with status `error` and a message.
+
+## Errors [#errors]
+
+This package has no package-specific errors.
+
+Span emission itself never throws. When an operation fails, this middleware marks the status `error` and rethrows the original error. When no tracer is given, operations pass through with nothing recorded.

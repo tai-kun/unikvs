@@ -1,0 +1,128 @@
+---
+title: "@unikvs/localstorage"
+description: "Usage of LocalStorage in @unikvs/localstorage, a storage that keeps strings in localStorage."
+---
+
+## Overview [#overview]
+
+`@unikvs/localstorage` <Badge variant="warning">Browser only</Badge> Usage of LocalStorage in @unikvs/localstorage, a storage that keeps strings in localStorage.
+
+- `name` is `LocalStorage`.
+- `isOpen` is always `true`. `open` checks availability; `close` does nothing.
+- Logical keys are stored with `keyPrefix` prepended.
+
+Install with:
+
+```package-install
+npm install @unikvs/localstorage
+```
+
+## Usage [#usage]
+
+LocalStorage implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    keyPrefix: {
+      type: "[#key-prefix] string | undefined",
+      default: '"unikvs:"',
+      description: "Prefix attached to every key.",
+    },
+    allowClearWithoutPrefix: {
+      type: "[#allow-clear-without-prefix] boolean | undefined",
+      default: "false",
+      description: "Whether to allow clear with an empty prefix.",
+    },
+    storage: {
+      type: "[#storage] Storage | undefined",
+      description: "The Storage to use. Uses globalThis.localStorage when omitted.",
+    },
+  }}
+/>
+
+The following example stores a string and reads it back.
+
+```ts
+import { LocalStorage } from "@unikvs/localstorage";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new LocalStorage())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation        | Supported data type |
+| ---------------- | ------------------- |
+| `write` / `read` | Strings             |
+
+- Stores strings only.
+- Convert objects and other values to strings before passing them.
+- Streams (`getWritable` / `getReadable`) are not supported.
+
+## Errors [#errors]
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### Meaning
+
+Thrown when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/localstorage";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### ClearWithoutPrefixNotAllowedError [#clear-without-prefix-not-allowed-error]
+
+#### Meaning
+
+Thrown when `clear` is called with an empty `keyPrefix` while `allowClearWithoutPrefix` is still `false`. This guard prevents wiping the whole `localStorage`.
+
+#### How to fix
+
+Set a non-empty `keyPrefix` or pass `allowClearWithoutPrefix: true`.
+
+### LocalStorageNotAvailableError [#local-storage-not-available-error]
+
+#### Meaning
+
+Thrown when operating in an environment without `localStorage`. No `storage` was injected and the runtime has no `localStorage`.
+
+#### How to fix
+
+Inject a `Storage` via `options.storage` or run in a supported browser.

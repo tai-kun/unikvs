@@ -1,0 +1,100 @@
+---
+title: "Validating Values"
+description: "How to validate keys and input/output values with Valibot schemas."
+---
+
+Use Valibot schema validation to catch input mistakes and corrupted stored data early.
+
+## Specify Schemas [#specify-schema]
+
+Pass `PlainValue()` or `StreamValue()` combined with Valibot schemas to the `Builder` `schema` option. Install `valibot` separately.
+
+```package-install
+npm install valibot
+```
+
+<Tabs>
+  <Tab title="Fixed Keys">
+    For literal key names, use the object form.
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: {
+        message: unikvs.PlainValue(v.pipe(v.string(), v.minLength(1))),
+      },
+    })
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+  <Tab title="Dynamic Keys">
+    To dispatch by key pattern, use the array form. The first matching definition wins.
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: [
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), unikvs.PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), unikvs.StreamValue(v.instance(Uint8Array))],
+      ],
+    })
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+</Tabs>
+
+:::warning[Invalid schema definitions]
+If the `schema` form is invalid, the constructor throws `InvalidInputError`.
+:::
+
+## Validation Scope [#validation-scope]
+
+What each operation validates and the error on failure:
+
+| Operation        | What is validated                   | Error on failure     |
+| ---------------- | ----------------------------------- | -------------------- |
+| `set`            | Validates the input value.          | `InvalidInputError`  |
+| `get`            | Validates the output value.         | `InvalidOutputError` |
+| `stream`         | Validates each chunk.               | `InvalidOutputError` |
+| `has` / `delete` | Validates the key, array form only. | `InvalidInputError`  |
+
+```ts
+await kvs.set("message", "hello");
+await kvs.get("message"); // "hello"
+
+// Fails input validation and throws InvalidInputError
+await kvs.set("message", "");
+```
+
+:::note[Plain/stream mix-ups]
+Passing a `ReadableStream` to a plain-only key, or a plain value to a stream-only key, throws `InvalidInputError`. In array form, a key matching no key schema is also `InvalidInputError`.
+:::
+
+## Without Schemas [#without-schema]
+
+Omitting `schema` disables runtime validation. Only type-level restrictions remain.
+
+```ts
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  message: unikvs.PlainValue<string>;
+}>()
+  .persist(storage)
+  .build();
+```
+
+To guarantee input shapes in production, choose the schema-based setup.
+
+## Related [#related]
+
+- For choosing types, see [Value Model](/explanation/value-model).
+- For handling exceptions, see [Handling Errors](/how-to/handle-errors).

@@ -1,0 +1,70 @@
+---
+title: "インストール"
+description: "実行環境に合わせて UniKVS とプラグインを導入する手順です。"
+---
+
+目的の保存先と変換処理に合わせて、必要なパッケージだけを導入します。
+
+## 本体を導入する [#install-core]
+
+`unikvs` は必須です。保存先や変換処理は別パッケージとして導入します。
+
+```package-install
+npm install unikvs
+```
+
+## 保存先を追加する [#install-storage]
+
+使う保存先のパッケージを追加します。代表的な組み合わせは次のとおりです。
+
+<Tabs>
+  <Tab title="メモリー">
+    テストや一時的な保存に使います。追加の外部サービスは不要です。
+
+    ```package-install
+    npm install @unikvs/memory
+    ```
+
+  </Tab>
+  <Tab title="Node.js ファイル">
+    Node.js のローカルファイルシステムに保存します。
+
+    ```package-install
+    npm install @unikvs/fs.node
+    ```
+
+  </Tab>
+  <Tab title="ブラウザー">
+    ブラウザーでは OPFS、IndexedDB、Local Storage などから選びます。
+
+    ```package-install
+    npm install @unikvs/opfs @unikvs/indexeddb @unikvs/localstorage
+    ```
+
+  </Tab>
+</Tabs>
+
+保存先の選び方は[ストレージ比較](/reference/comparison)を参照してください。各パッケージの詳細は[パッケージリファレンス](/packages)を参照してください。
+
+## 変換処理を追加する [#install-middleware]
+
+値の変換が必要な場合だけ、使うミドルウェアを追加します。
+
+```package-install
+npm install @unikvs/json @unikvs/compression
+```
+
+## 検証を使う場合 [#install-validation]
+
+Valibot スキーマで入出力値を検証する場合は、`valibot` を別途導入します。
+
+```package-install
+npm install valibot
+```
+
+`Builder` の `schema` オプションにスキーマを渡すと検証が有効になります。詳しい手順は[値を検証する](/how-to/validation)を参照してください。
+
+## バージョンの注意 [#versions]
+
+- 本体とプラグインのバージョンは、できるだけ同じリリース系列でそろえてください。
+- ピア依存で警告が出た場合は、警告文のバージョン指定に合わせて追加してください。たとえばログ関連のピア依存を求められた場合は、指示に従って導入します。

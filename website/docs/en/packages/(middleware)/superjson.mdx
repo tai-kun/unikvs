@@ -1,0 +1,90 @@
+---
+title: "@unikvs/superjson"
+description: "How to use @unikvs/superjson, middleware that serializes values with SuperJSON."
+---
+
+## Overview [#overview]
+
+Middleware that serializes values with SuperJSON. <Badge>Middleware</Badge>
+
+It preserves type information lost by plain JSON, such as `Date`, `Map`, `Set`, `BigInt`, and `undefined`. Streams convert each item to one JSON Lines row.
+
+- `name` is `"Superjson"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/superjson
+```
+
+## Usage [#usage]
+
+Superjson implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Superjson } from "@unikvs/superjson";
+```
+
+The following example stores an object holding a date without losing type information, and reads it back as a `Date`.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Superjson } from "@unikvs/superjson";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ event: unikvs.Value<{ readonly at: Date }> }>()
+  .use(new Superjson())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("event", { at: new Date("2026-01-01T00:00:00Z") });
+const event = await kvs.get("event");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` converts a value to a SuperJSON string and encodes it as UTF-8 bytes.
+- `decode` converts bytes back to a UTF-8 string and parses it as SuperJSON.
+- `encodeStream` emits one line per input item (`<SuperJSON>\n`) in JSON Lines format.
+- `decodeStream` buffers received bytes as a string and parses lines as newlines become available.
+- One trailing CR is stripped per line, and empty lines are skipped.
+- If there is no trailing newline, the remaining buffer is processed as the final line.
+- Functions and symbols are rejected upfront because SuperJSON would silently convert them to `"{}"`.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `SuperjsonUnsupportedValueError` [#error-superjson-unsupported-value]
+
+Thrown when passing a value of a type SuperJSON cannot handle.
+
+<TypeTable
+  type={{
+    type: {
+      type: "[#superjson-unsupported-value-type] string",
+      required: true,
+      description: "`typeof` of the value being converted.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Functions and symbols are converted to `"{}"` by SuperJSON without an error, so they are rejected upfront to prevent data loss. `meta.type` holds the target's `typeof`.
+
+#### How to fix
+
+Do not include functions or symbols in values.
+
+Native errors received while decoding invalid SuperJSON or UTF-8 propagate unchanged.

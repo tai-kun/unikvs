@@ -1,0 +1,158 @@
+---
+title: "@unikvs/cache-storage"
+description: "How to use CacheStorage in @unikvs/cache-storage, a storage that keeps Responses in the Cache API."
+---
+
+## Overview [#overview]
+
+`@unikvs/cache-storage` <Badge variant="warning">Browser only</Badge> is a storage that keeps `Response` objects in the Cache API. Use it to cache fetched responses as-is.
+
+- `name` is `CacheStorage`.
+- Requires `open` and `close`. `open` opens the `Cache`.
+- Map logical keys to `Request` objects with `toRequest`.
+- Uses a dedicated `Cache`, so `clear` deletes every enumerated request.
+
+Install with:
+
+```package-install
+npm install @unikvs/cache-storage
+```
+
+## Usage [#usage]
+
+CacheStorage implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { CacheStorage } from "@unikvs/cache-storage";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    cacheName: {
+      type: "[#cache-name] string",
+      required: true,
+      description: "Name of the Cache to use.",
+    },
+    toRequest: {
+      type: "[#to-request] IToRequest",
+      required: true,
+      description: "Function that converts a logical key into a Request.",
+    },
+    caches: {
+      type: "[#caches] CacheStorage | undefined",
+      description: "CacheStorage of the Cache API to use. Uses the runtime Cache API when omitted.",
+    },
+  }}
+/>
+
+The following example stores a `Response` and reads it back.
+
+```ts
+import { CacheStorage } from "@unikvs/cache-storage";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  page: unikvs.PlainValue<Response>;
+}>()
+  .persist(
+    new CacheStorage({
+      cacheName: "unikvs",
+      toRequest: (key) => `/kvs/${key}`,
+    }),
+  )
+  .build();
+
+await kvs.open();
+await kvs.set("page", new Response("hello"));
+
+const res = await kvs.get("page");
+console.log(await res.text()); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type       |
+| ---------------------------------- | ------------------------- |
+| `write`/`read`                     | `Response`                |
+| `getWritable`/`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- Stores `Response` objects as-is.
+- Stream chunks support only `Uint8Array<ArrayBuffer>`.
+- Streams from `getWritable` concatenate chunks and save them as a `Response` on `close`.
+- Streams from `getReadable` emit the stored `Response` bytes as a single chunk.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### Meaning
+
+Thrown when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cache-storage";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### CacheStorageNotAvailableError [#cache-storage-not-available-error]
+
+#### Meaning
+
+Thrown at `open` time when no Cache API is found. No `caches` was injected and the runtime has no Cache API.
+
+#### How to fix
+
+Inject a `CacheStorage` via `options.caches` or run in a supported browser.
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "The received chunk value.",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "The type name of the received chunk.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a non-`Uint8Array<ArrayBuffer>` chunk is written to `getWritable`.
+
+#### How to fix
+
+Write `Uint8Array` chunks to streams.

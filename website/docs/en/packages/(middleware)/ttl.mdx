@@ -1,0 +1,135 @@
+---
+title: "@unikvs/ttl"
+description: "Middleware that attaches a TTL in relative seconds or absolute time, treating expired reads as missing."
+---
+
+## Overview [#overview]
+
+`Ttl` attaches a relative-seconds or absolute-time expiry to written values, and treats expired reads as missing.<Badge>Middleware</Badge>
+
+Use it for short-lived caches or session-like data. Plain values and streams expire differently.
+
+- `name` is `Ttl`.
+- `isOpen` is always `true`.
+- Set the expiry per operation with the `@unikvs/ttl:ttl` / `@unikvs/ttl:expiresAt` vars (bare `ttl` / `expiresAt` are also accepted for backward compatibility), or with `defaultTtl`.
+- Expired `get` / `has` / `stream` behave as `KeyNotFoundError`.
+
+Install with:
+
+```package-install
+npm install @unikvs/ttl
+```
+
+## Usage [#usage]
+
+Ttl implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Ttl } from "@unikvs/ttl";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    defaultTtl: {
+      type: "[#ttl-options-default-ttl] TtlInput",
+      description:
+        "Default TTL used when an operation specifies none. Accepts relative seconds, absolute time, or the object form.",
+    },
+    now: {
+      type: "[#ttl-options-now] () => number",
+      default: "Date.now",
+      description: "Returns the current time (epoch ms). Use it to freeze time in tests.",
+    },
+  }}
+/>
+
+The following sets a 60-second default TTL and overrides it per write:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Ttl } from "@unikvs/ttl";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ report: unikvs.PlainValue<string> }>()
+  .use(new Ttl({ defaultTtl: 60 }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("report", "hello");
+await kvs.set("short", "bye", { vars: { "@unikvs/ttl:ttl": 10 } });
+console.log(await kvs.get("report")); // "hello"
+await kvs.close();
+```
+
+### `Ttl` [#ttl]
+
+Middleware that manages expiry with an expiry envelope plus per-operation records. It checks expiry before reads and treats existence checks as missing.
+
+### `TtlOptions` [#ttl-options]
+
+Options accepted by the `Ttl` constructor. Specifies the default TTL and the clock.
+
+### `TtlInput` [#ttl-input]
+
+Per-write TTL value. A `number` is relative seconds (fractions allowed; zero or below expires immediately), a `Date` is an absolute expiry time, and the object form takes `ttl` in relative seconds or `expiresAt` in epoch ms or a `Date`.
+
+## Data types [#data-types]
+
+| Method         | Input                 | Output                         |
+| -------------- | --------------------- | ------------------------------ |
+| `encode`       | `unknown`             | envelope or passthrough        |
+| `decode`       | envelope or any value | `unknown`                      |
+| `encodeStream` | `unknown` (chunk)     | `unknown` (chunk, passthrough) |
+| `decodeStream` | `unknown` (chunk)     | `unknown` (chunk, passthrough) |
+
+- `encode` wraps the value as `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` when a TTL applies, and stores the expiry in the operation record. Overwrites without a TTL clear the record and pass data through.
+- `decode` unwraps the envelope while it is valid, and throws `KeyNotFoundError` once expired. When the record is missing (e.g. after a restart), it restores the record from the envelope.
+- Streams never embed the expiry in-band (to fit chunk type constraints) and are managed by records only. `encodeStream` and `decodeStream` pass data through.
+- TTL resolution prefers the `ttl` var, then the `expiresAt` var, then `defaultTtl`. Namespaced vars take precedence over bare names.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### TtlInvalidValueError [#error-ttl-invalid-value]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#ttl-invalid-value-actual] unknown",
+      required: true,
+      description: "The specified TTL value.",
+    },
+  }}
+/>
+
+#### Meaning [#error-ttl-invalid-value-meaning]
+
+Thrown when a TTL value matches none of relative seconds, absolute time, or the object form. Both the constructor's `defaultTtl` and per-write vars are validated.
+
+#### How to fix [#error-ttl-invalid-value-howto]
+
+Pass a finite number (relative seconds), a `Date`, or an object such as `{ ttl }` or `{ expiresAt }`. Strings and non-finite values are rejected.
+
+#### Example [#error-ttl-invalid-value-example]
+
+Catching `TtlInvalidValueError`:
+
+```ts
+import { TtlInvalidValueError } from "@unikvs/ttl";
+
+try {
+  await kvs.set("report", "hello", { vars: { ttl: "60" } });
+} catch (ex) {
+  if (ex instanceof TtlInvalidValueError) {
+    console.log(ex.meta); // { actual: "60" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+Expired reads fail as `@unikvs/core` `KeyNotFoundError`. See [Errors](/packages/core/errors#error-key-not-found).

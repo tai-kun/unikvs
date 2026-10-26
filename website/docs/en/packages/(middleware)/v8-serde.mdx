@@ -1,0 +1,96 @@
+---
+title: "@unikvs/v8-serde"
+description: "How to use @unikvs/v8-serde, Node.js-only middleware that serializes values with node:v8."
+---
+
+## Overview [#overview]
+
+Middleware that serializes values with the `node:v8` serializer. <Badge>Middleware</Badge> <Badge variant="warning">Node.js only</Badge>
+
+Single reads/writes serialize a value directly, while streams convert values to concatenated frames of a 4-byte big-endian length plus payload.
+
+- `name` is `"V8Serde"`.
+- `isOpen` becomes `true` after `open()` completes.
+- `open()` fails in environments without `node:v8`.
+
+Install with:
+
+```package-install
+npm install @unikvs/v8-serde
+```
+
+## Usage [#usage]
+
+V8Serde implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+```
+
+The following example serializes an object for storage and restores its original shape on read.
+
+```ts
+import { V8Serde } from "@unikvs/v8-serde";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ item: unikvs.Value<{ readonly id: number }> }>()
+  .use(new V8Serde())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("item", { id: 1 });
+const item = await kvs.get("item");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` serializes a value with `v8.serialize`. Call `open()` first.
+- `decode` restores bytes to a value with `v8.deserialize`. Call `open()` first.
+- `encodeStream` emits one length-prefixed frame per input item (4-byte big-endian length plus payload), concatenated in order.
+- `decodeStream` accumulates received bytes and emits values as frames complete.
+- Truncated frames wait for the next chunk; leftover bytes at the end throw an error.
+- Empty chunks do not affect decoding, so this middleware ignores them.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `V8SerdeEncodeError` [#error-v8-serde-encode]
+
+#### Meaning
+
+Thrown when `v8.serialize` encoding of a value fails. The cause is preserved in `cause`.
+
+#### How to fix
+
+Check `cause` and pass a value supported by `v8.serialize`.
+
+### `V8SerdeDecodeError` [#error-v8-serde-decode]
+
+#### Meaning
+
+Thrown when `v8.deserialize` decoding fails. This covers corrupted input and incomplete frames left at the end of a stream. The cause is preserved in `cause`.
+
+#### How to fix
+
+Make sure the input was produced by `v8.serialize` and the stream was not cut off midway.
+
+### `UnsupportedRuntimeError` [#error-unsupported-runtime]
+
+#### Meaning
+
+Thrown by `open()` in environments without `node:v8`. This is a shared error from [`@unikvs/core`](/packages/core/errors#error-unsupported-runtime).
+
+#### How to fix
+
+Use it in a Node.js environment.

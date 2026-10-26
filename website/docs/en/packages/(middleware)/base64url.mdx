@@ -1,0 +1,119 @@
+---
+title: "@unikvs/base64url"
+description: "How to use @unikvs/base64url, middleware that encodes bytes as base64url."
+---
+
+## Overview [#overview]
+
+Middleware that returns bytes as a URL-safe base64url string. <Badge>Middleware</Badge>
+
+It avoids `+` and `/`, making it suitable for URLs and file names. It supports both padded and unpadded forms, and accepts either form when decoding.
+
+- `name` is `"Base64Url"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/base64url
+```
+
+## Usage [#usage]
+
+Base64Url implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    encoder: {
+      type: "[#base64url-encoder] FastUtf8",
+      description: "Implementation used to encode strings to bytes. Uses the default when omitted.",
+    },
+    decoder: {
+      type: "[#base64url-decoder] FastUtf8",
+      description: "Implementation used to decode bytes to strings. Uses the default when omitted.",
+    },
+    padding: {
+      type: "[#base64url-padding] boolean",
+      description: "Whether to append `=` on encode. Defaults to `false`.",
+    },
+  }}
+/>
+
+The following example stores bytes as base64url and restores the original bytes on read.
+
+```ts
+import { Base64Url } from "@unikvs/base64url";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .use(new Base64Url())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0x01, 0x02, 0x03]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` converts bytes to a base64url string and encodes it as UTF-8 bytes.
+- `decode` converts base64url-encoded bytes back to the original bytes.
+- Decoding accepts both padded and unpadded forms.
+- `encodeStream` splits input into 3-byte units, carrying remainders across chunks.
+- Encode remainders are finalized when the stream ends.
+- `decodeStream` restores 4 characters at a time, carrying remainders to the next call.
+- A padded trailing sequence is validated and restored when the stream ends.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `Base64UrlDecodeError` [#error-base64url-decode]
+
+#### Meaning
+
+Thrown when the input cannot be interpreted as base64url. This covers invalid characters, misplaced `=` padding, and inputs whose length remainder is 1.
+
+#### How to fix
+
+Make sure the input is valid base64url.
+
+A `TypeError` propagates unchanged when trailing partial UTF-8 bytes remain at the end of a stream.
+
+### `Base64UrlInvalidPaddingError` [#error-base64url-invalid-padding]
+
+Thrown when the `padding` option is not a boolean.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#base64url-invalid-padding-actual] unknown",
+      required: true,
+      description: "The specified `padding` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Because this is a usage error, it extends `InvalidUsageErrorBase`. `meta.actual` keeps the specified value as-is.
+
+#### How to fix
+
+Specify `true` or `false` for `padding`. It defaults to `false`.

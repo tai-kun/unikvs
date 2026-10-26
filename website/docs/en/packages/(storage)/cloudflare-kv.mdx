@@ -1,0 +1,155 @@
+---
+title: "@unikvs/cloudflare-kv"
+description: "How to use @unikvs/cloudflare-kv, which stores byte sequences in a Cloudflare KV binding."
+---
+
+## Overview [#overview]
+
+`@unikvs/cloudflare-kv` is storage that stores byte sequences in a Cloudflare Workers KV binding.
+
+This storage prepends a prefix to every key and `put` / `get` values as-is as binary-safe `ArrayBuffer`s.
+
+- `name` is `CloudflareKv`.
+- `isOpen` is always `true`. `open()` / `close()` only check for interruption.
+- `delete` is idempotent; missing keys are treated as success.
+- Streamed reading and writing are not supported.
+
+:::warning[Note eventual consistency]
+
+Cloudflare KV is eventually consistent storage. Reading from another location immediately after a write or delete may return a stale value. Do not use it where strict consistency is required.
+
+:::
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/cloudflare-kv
+```
+
+## Usage [#usage]
+
+CloudflareKv implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { CloudflareKv } from "@unikvs/cloudflare-kv";
+```
+
+### `CloudflareKv` [#cloudflare-kv]
+
+Storage that runs on a Cloudflare KV binding.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    binding: {
+      type: "[#cloudflare-kv-binding] KVNamespaceLike",
+      required: true,
+      description: "The KV binding to inject. Pass an object with get, put, delete, and list.",
+    },
+    keyPrefix: {
+      type: "[#cloudflare-kv-key-prefix] string",
+      default: '"unikvs:"',
+      description: "The prefix prepended to every key.",
+    },
+    ttlSeconds: {
+      type: "[#cloudflare-kv-ttl-seconds] number",
+      description:
+        "The expiration (in seconds) attached on write. Unlimited when omitted. Passed as-is as put expirationTtl.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { CloudflareKv } from "@unikvs/cloudflare-kv";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new CloudflareKv({ binding }))
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation        | Data type                                 |
+| ---------------- | ----------------------------------------- |
+| `write` / `read` | Byte sequence (`Uint8Array<ArrayBuffer>`) |
+
+- Only byte sequences can be stored. Convert strings or objects with middleware before passing them.
+- Values are stored as-is as `ArrayBuffer`; the view's `byteOffset` is not carried over.
+- `clear` lists the keys under the prefix with `list` and then deletes them.
+- Streamed reading and writing are not supported.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidBindingError [#error-invalid-binding]
+
+#### Meaning
+
+Thrown at construction when `binding` is not an object with `get`, `put`, `delete`, and `list`.
+
+#### How to fix
+
+Pass a KVNamespace binding or an equivalent object with the four methods.
+
+### InvalidKeyPrefixError [#error-invalid-key-prefix]
+
+#### Meaning
+
+Thrown at construction when `keyPrefix` is not a string.
+
+#### How to fix
+
+Specify a string for `keyPrefix`.
+
+### InvalidTtlSecondsError [#error-invalid-ttl-seconds]
+
+#### Meaning
+
+Thrown at construction when `ttlSeconds` is neither a positive integer nor `undefined`.
+
+#### How to fix
+
+Specify a positive integer for `ttlSeconds`, or omit it.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown by `read` when the specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cloudflare-kv";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

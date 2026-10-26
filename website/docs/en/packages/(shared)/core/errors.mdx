@@ -1,0 +1,311 @@
+---
+title: "Errors"
+description: "@unikvs/core error foundation: ErrorBase, setErrorMessage, language switching, and the 6 shared errors."
+---
+
+## Overview [#overview]
+
+`@unikvs/core` errors use the `i18n-error-base` mechanism. All shared errors derive from `ErrorBase` and keep matching values in `meta`. Messages ship in default English plus registered Japanese (`ja`).
+
+The 6 shared errors:
+
+| Error class               | Extends                 | `name`                          | Details                               |
+| ------------------------- | ----------------------- | ------------------------------- | ------------------------------------- |
+| `KeyNotFoundError`        | `ErrorBase`             | `UniKvsKeyNotFoundError`        | [Details](#error-key-not-found)       |
+| `UnsupportedRuntimeError` | `InvalidUsageErrorBase` | `UniKvsUnsupportedRuntimeError` | [Details](#error-unsupported-runtime) |
+| `InvalidPartSizeError`    | `ErrorBase`             | `UniKvsInvalidPartSizeError`    | [Details](#error-invalid-part-size)   |
+| `StorageAbortedError`     | `ErrorBase`             | `UniKvsStorageAbortedError`     | [Details](#error-storage-aborted)     |
+| `RepairNotAllowedError`   | `ErrorBase`             | `UniKvsRepairNotAllowedError`   | [Details](#error-repair-not-allowed)  |
+| `ReadonlyVariableError`   | `InvalidUsageErrorBase` | `UniKvsReadonlyVariableError`   | [Details](#error-readonly-variable)   |
+
+The two extending `InvalidUsageErrorBase` (`UnsupportedRuntimeError`, `ReadonlyVariableError`) require caller fixes. The rest are handled per runtime state (key presence, aborts, config values, permissions).
+
+## Error foundation [#errors-base]
+
+| Type / value                   | Description                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| `ErrorMeta`                    | `Readonly<Record<string, unknown>>`: the shape of `meta` |
+| `ErrorOptions`                 | Options holding `cause` (`{ cause?: unknown }`)          |
+| `ErrorBase<TMeta>`             | Base class. Takes `meta` and a message factory           |
+| `InvalidUsageErrorBase<TMeta>` | For usage mistakes. Extends `ErrorBase`                  |
+| `setErrorMessage`              | Registers per-class, per-language messages               |
+
+### Constructor [#errors-base-constructor]
+
+`ErrorBase` takes `meta` and a message (string or factory). When `meta` is typed `undefined`, a message-only form works.
+
+```ts
+import { ErrorBase } from "@unikvs/core";
+
+// with meta: the reference is kept as-is
+const error = new ErrorBase({ key: "foo" }, ({ key }) => `Key not found: ${key}`);
+
+console.log(error.meta); // { key: "foo" }
+console.log(error.message); // "Key not found: foo"
+console.log(error.toString()); // "Error: Key not found: foo" (when name is unset)
+
+// without meta
+const plain = new ErrorBase(undefined, "boom");
+console.log(plain.meta); // undefined
+```
+
+:::note[Type-argument inference]
+Calling `new ErrorBase({ code: 1 }, "message")` infers the type argument as `{ code: number }`. You can also write it explicitly as `new ErrorBase<{ readonly code: number }>({ code: 1 }, "message")`. The default type argument is `ErrorMeta | undefined`.
+:::
+
+### `name` and `prefix` [#errors-base-name]
+
+Set `name` on the prototype. When unset, the inherited `Error` name (`"Error"`) applies. All shared errors have `UniKvs*Error`-style names.
+
+```ts
+class KeyNotFoundError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "KeyNotFoundError";
+  }
+}
+```
+
+Setting `prefix` prepends it to the whole output, including the translated message.
+
+```ts
+class PrefixedError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "PrefixedError";
+  }
+
+  public constructor(args: { readonly key: string }) {
+    super(args, ({ key }) => `Missing: ${key}`);
+  }
+}
+
+PrefixedError.prefix = "[test] ";
+console.log(new PrefixedError({ key: "foo" }).message); // "[test] Missing: foo"
+```
+
+### `cause` [#errors-base-cause]
+
+`cause` behaves like the standard `Error`. Omitting `options` means the `cause` property itself is absent; passing it explicitly keeps the reference as-is. Non-`Error` values work too.
+
+```ts
+const withCause = new KeyNotFoundError({ key: "foo" }, { cause: { reason: "disk full" } });
+console.log("cause" in withCause); // true
+
+const withoutOptions = new KeyNotFoundError({ key: "foo" });
+console.log("cause" in withoutOptions); // false
+```
+
+## Language switching [#i18n]
+
+Switch message language via Valibot's global config. `valibot` is a peer dependency, so install it on your side.
+
+```ts
+import { deleteGlobalConfig, setGlobalConfig } from "valibot";
+import { KeyNotFoundError } from "@unikvs/core";
+
+console.log(new KeyNotFoundError({ key: "k1" }).message);
+// "Key not found: k1"
+
+setGlobalConfig({ lang: "ja" });
+console.log(new KeyNotFoundError({ key: "k1" }).message);
+// "キー k1 が見つかりません"
+
+deleteGlobalConfig(); // back to default English
+```
+
+Shared errors ship default English messages plus Japanese messages. Unregistered languages fall back to default English.
+
+## Registering messages [#set-error-message]
+
+Register per-language messages for custom errors with `setErrorMessage`. Pass a string or a function receiving `meta`, with a language tag (single, or an iterable like `Set`).
+
+```ts
+import { ErrorBase, setErrorMessage } from "@unikvs/core";
+
+class MyError extends ErrorBase<{ readonly key: string }> {
+  static {
+    this.prototype.name = "MyError";
+  }
+
+  public constructor(args: { readonly key: string }) {
+    super(args, ({ key }) => `Missing: ${key}`);
+  }
+}
+
+setErrorMessage(MyError, ({ key }) => `キー ${key} がありません`, "ja");
+setErrorMessage(MyError, "not found", new Set(["ja", "fr"])); // bulk registration for multiple languages
+```
+
+Registration follows these rules:
+
+- Resolved per class; registering on a parent is not inherited by children.
+- Re-registering a language overwrites with the new message.
+- Registering an empty string does not fall back. The empty string becomes the message.
+- Registered message functions receive `meta` by reference.
+- Cannot register on classes not extending `I18nErrorBase`.
+
+## Shared errors [#errors]
+
+Each of the 6 concrete errors keeps matching values in `meta`. Discriminate with `instanceof` and take recovery info from `meta`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+
+try {
+  throw new KeyNotFoundError({ key: "missing-key" });
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log(ex.meta); // { key: "missing-key" }
+    console.log(ex.message); // "Key not found: missing-key"
+  } else {
+    throw ex;
+  }
+}
+```
+
+### `KeyNotFoundError` [#error-key-not-found]
+
+Used when no storage has the key. Thrown on `get` failures.
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#key-not-found-key] string",
+      required: true,
+      description: "The missing key.",
+    },
+  }}
+/>
+
+- Extends: `ErrorBase`
+- `name`: `UniKvsKeyNotFoundError`
+- English: `Key not found: k1`
+- Japanese: `キー k1 が見つかりません`
+
+### `UnsupportedRuntimeError` [#error-unsupported-runtime]
+
+Used when a plugin runs outside its supported runtimes. A usage mistake, so it extends `InvalidUsageErrorBase`.
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#unsupported-runtime-name] string",
+      required: true,
+      description: "Plugin display name.",
+    },
+    runtime: {
+      type: "[#unsupported-runtime-runtime] string",
+      required: true,
+      description: "Supported runtime name.",
+    },
+  }}
+/>
+
+```ts
+throw new UnsupportedRuntimeError({ name: "Redis", runtime: "Bun" });
+// "Redis can only be used in the Bun runtime"
+// (ja) "Redis は Bun ランタイムでのみ使用できます"
+```
+
+- Extends: `InvalidUsageErrorBase`
+- `name`: `UniKvsUnsupportedRuntimeError`
+
+### `InvalidPartSizeError` [#error-invalid-part-size]
+
+Used when a `vars` part size is non-integer or non-positive. Keeps the given value as-is in `actual`.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-part-size-actual] unknown",
+      required: true,
+      description: "The given part-size value.",
+    },
+  }}
+/>
+
+```ts
+throw new InvalidPartSizeError({ actual: 0 });
+// "Invalid part size 0 was specified in the vars. ... Specify a positive integer in bytes such as 5242880."
+// (ja) "変数に無効なパートサイズ 0 が指定されました。..."
+```
+
+- Extends: `ErrorBase`
+- `name`: `UniKvsInvalidPartSizeError`
+
+:::note[Message content]
+The message body states that non-integer/non-positive values cannot serve as multipart-upload part sizes and cause unpredictable behavior. It also says to specify a positive integer (in bytes, e.g. `5242880`).
+:::
+
+### `StorageAbortedError` [#error-storage-aborted]
+
+Used when acquisition of a write stream is rejected before starting because the passed `AbortSignal` is already aborted. Requests already known-aborted before start never succeed, so they fail immediately.
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#storage-aborted-key] string",
+      required: true,
+      description: "The key being uploaded.",
+    },
+  }}
+/>
+
+- Extends: `ErrorBase`
+- `name`: `UniKvsStorageAbortedError`
+- English: abort-reason explanation containing `"k1"` (`The upload for key "k1" was aborted before it started ...`)
+- Japanese: equivalent explanation containing `"k1"`
+
+Fix by passing a non-aborted signal or checking signal state before requesting.
+
+### `RepairNotAllowedError` [#error-repair-not-allowed]
+
+Used when a `repair: true` read is denied a repair write to earlier storages. `names` holds the repair-target display names as a frozen array.
+
+<TypeTable
+  type={{
+    names: {
+      type: "[#repair-not-allowed-names] readonly string[]",
+      required: true,
+      description: "Display names of repair targets.",
+    },
+  }}
+/>
+
+```ts
+new RepairNotAllowedError({ names: ["Memory"] }).message;
+// 'Repair writes via "Memory" are not allowed'
+// (ja) '"Memory" への書き戻しは許可されていません'
+
+new RepairNotAllowedError({ names: [] }).message;
+// 'Repair writes via "(unknown)" are not allowed' (empty array builds an unknown name)
+```
+
+- Extends: `ErrorBase`
+- `name`: `UniKvsRepairNotAllowedError`
+
+Repair eligibility is controlled by [`@unikvs/allow-repair`](/packages/allow-repair); on denial, `meta.names` holds the repair-target display names.
+
+### `ReadonlyVariableError` [#error-readonly-variable]
+
+Used on writes to variables pinned by `setReadonly()`. A usage mistake, so it extends `InvalidUsageErrorBase`.
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#readonly-variable-name] string",
+      required: true,
+      description: "The variable name being modified.",
+    },
+  }}
+/>
+
+```ts
+new ReadonlyVariableError({ name: "x" }).message;
+// 'Cannot modify readonly variable: "x"'
+// (ja) '読み取り専用の変数 "x" は変更できません'
+```
+
+- Extends: `InvalidUsageErrorBase`
+- `name`: `UniKvsReadonlyVariableError`
+
+See [Pipeline contexts › Reading and writing variables](./pipeline-context#variables).

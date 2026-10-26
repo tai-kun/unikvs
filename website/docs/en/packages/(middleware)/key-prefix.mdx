@@ -1,0 +1,136 @@
+---
+title: "@unikvs/key-prefix"
+description: "Middleware that prepends a fixed string to every key, enabling tenant isolation."
+---
+
+## Overview [#overview]
+
+`KeyPrefix` prepends a fixed string to every key, enabling tenant isolation.<Badge>Middleware</Badge>
+
+Use it to share one storage across tenants without key collisions. By prefixing physical keys, this middleware separates logical keys.
+
+- `name` is `KeyPrefix`.
+- `isOpen` is always `true`.
+- `mapKey` prefixes keys, and `use` rejects `clear` when range-scoped deletion cannot be guaranteed.
+- `encode` / `decode` / `encodeStream` / `decodeStream` pass data through.
+
+Install with:
+
+```package-install
+npm install @unikvs/key-prefix
+```
+
+## Usage [#usage]
+
+KeyPrefix implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { KeyPrefix } from "@unikvs/key-prefix";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#key-prefix-prefix] string",
+      required: true,
+      description: "Fixed string prepended to every key. An empty string passes keys through.",
+    },
+    allowClear: {
+      type: "[#key-prefix-allow-clear] boolean",
+      default: "false",
+      description:
+        "Whether to reject clear when the prefix is non-empty. True rejects; false (default) passes through.",
+    },
+  }}
+/>
+
+The following isolates keys per tenant:
+
+```ts
+import { KeyPrefix } from "@unikvs/key-prefix";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(new KeyPrefix("tenant-a:"))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+// Stored downstream as tenant-a:k1
+await kvs.close();
+```
+
+### `KeyPrefix` [#key-prefix]
+
+Middleware that prepends a fixed prefix to keys. It extends `PassThrough` and performs no data conversion.
+
+### `KeyPrefixOptions` [#key-prefix-options]
+
+Options accepted by the `KeyPrefix` constructor. `allowClear` defaults to `false`.
+
+## Data types [#data-types]
+
+| Method         | Input | Output |
+| -------------- | ----- | ------ |
+| `encode`       | `any` | `any`  |
+| `decode`       | `any` | `any`  |
+| `encodeStream` | `any` | `any`  |
+| `decodeStream` | `any` | `any`  |
+
+- `encode` and `decode` return the input by reference without conversion.
+- `encodeStream` and `decodeStream` pass chunks through, preserving order and references.
+- Key mapping happens in `mapKey`, returning `` `${prefix}${key}` ``. An empty prefix returns the key unchanged.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### KeyPrefixClearDeniedError [#error-key-prefix-clear-denied]
+
+<TypeTable
+  type={{
+    prefix: {
+      type: "[#key-prefix-clear-denied-prefix] string",
+      required: true,
+      description: "The prefix at rejection time.",
+    },
+    allowClear: {
+      type: "[#key-prefix-clear-denied-allow-clear] boolean",
+      required: true,
+      description: "The allowClear value at rejection time.",
+    },
+  }}
+/>
+
+#### Meaning [#error-key-prefix-clear-denied-meaning]
+
+Thrown when `clear` is called while the prefix is non-empty and `allowClear` is `true`. Prefixed `clear` cannot guarantee range-scoped deletion and might delete other tenants' data, so it is rejected.
+
+#### How to fix [#error-key-prefix-clear-denied-howto]
+
+In shared environments, use per-key `delete` instead of `clear`. When a single tenant is guaranteed exclusive, or whole-store deletion is intended, set `allowClear` to `false` (default) to pass through.
+
+#### Example [#error-key-prefix-clear-denied-example]
+
+Catching `KeyPrefixClearDeniedError`:
+
+```ts
+import { KeyPrefix, KeyPrefixClearDeniedError } from "@unikvs/key-prefix";
+
+const prefix = new KeyPrefix("tenant-a:", { allowClear: true });
+
+try {
+  await kvs.clear();
+} catch (ex) {
+  if (ex instanceof KeyPrefixClearDeniedError) {
+    console.log(ex.meta); // { prefix: "tenant-a:", allowClear: true }
+  } else {
+    throw ex;
+  }
+}
+```

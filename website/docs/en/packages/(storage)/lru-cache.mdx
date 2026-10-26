@@ -1,0 +1,215 @@
+---
+title: "@unikvs/lru-cache"
+description: "How to use LruCache in @unikvs/lru-cache, an LRU storage that keeps arbitrary values with limits."
+---
+
+## Overview [#overview]
+
+`@unikvs/lru-cache` is an LRU storage that keeps arbitrary values in memory with limits. It evicts least-recently-used entries first, so it works well as a cache.
+
+- `name` is `LruCache`.
+- Requires `open` and `close`. `close` discards all stored values.
+- Set limits with `maxEntries` and `maxBytes`. Both are optional.
+- Use `size` for the entry count and `bytes` for the byte count (when `maxBytes` is set).
+
+Install with:
+
+```package-install
+npm install @unikvs/lru-cache
+```
+
+## Usage [#usage]
+
+LruCache implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { LruCache } from "@unikvs/lru-cache";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    clone: {
+      type: "[#clone] (<T>(value: T) => T) | undefined",
+      default: "structuredClone",
+      description: "Function used to clone data. Uses structuredClone when omitted.",
+    },
+    maxEntries: {
+      type: "[#max-entries] number | undefined",
+      description: "Maximum number of entries. Specify a non-negative integer.",
+    },
+    maxBytes: {
+      type: "[#max-bytes] number | undefined",
+      description: "Maximum total bytes. Specify a non-negative finite number.",
+    },
+    sizeOf: {
+      type: "[#size-of] ((value: any, key: string) => number) | undefined",
+      description:
+        "Function deciding per-key bytes. Defaults to byteLength for Uint8Array and 1 otherwise.",
+    },
+  }}
+/>
+
+The following example stores values with an entry-count limit.
+
+```ts
+import { LruCache } from "@unikvs/lru-cache";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new LruCache({ maxEntries: 100 }))
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type                       |
+| ---------------------------------- | ----------------------------------------- |
+| `write`/`read`                     | Arbitrary values (strings, objects, etc.) |
+| `getWritable`/`getReadable` chunks | `Uint8Array<ArrayBuffer>`                 |
+
+- Stores arbitrary values. Handles values cloneable with `structuredClone`, such as strings and objects.
+- Clones read/write values with `structuredClone` by default. Change it with the constructor `clone` option.
+- When `maxEntries` is exceeded, least-recently-used keys are evicted first. With `maxEntries: 0`, nothing is stored.
+- When `maxBytes` is set, older keys are evicted so total bytes stay within the limit.
+- Stream chunks support only `Uint8Array<ArrayBuffer>`.
+- Streams from `getWritable` concatenate written chunks and save them on `close`.
+- Streams from `getReadable` emit the stored value as a single chunk. Throws `InvalidChunkTypeError` when the stored value is not a `Uint8Array`.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### Meaning
+
+Thrown when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/lru-cache";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "The received chunk value.",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "The type name of the received chunk.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a non-`Uint8Array<ArrayBuffer>` chunk is written to a stream, or when `getReadable` is called on a value that is not a `Uint8Array`.
+
+#### How to fix
+
+Write `Uint8Array` chunks to streams. Store byte sequences for values used with `getReadable`.
+
+### InvalidMaxEntriesError [#invalid-max-entries-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-max-entries-actual] unknown",
+      required: true,
+      description: "The given maxEntries value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when the constructor `maxEntries` is not a non-negative integer.
+
+#### How to fix
+
+Specify a non-negative integer for `maxEntries`.
+
+### InvalidMaxBytesError [#invalid-max-bytes-error]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-max-bytes-actual] unknown",
+      required: true,
+      description: "The given maxBytes value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when the constructor `maxBytes` is not a non-negative finite number.
+
+#### How to fix
+
+Specify a non-negative finite number for `maxBytes`.
+
+### InvalidSizeOfResultError [#invalid-size-of-result-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-size-of-result-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    actual: {
+      type: "[#invalid-size-of-result-actual] unknown",
+      required: true,
+      description: "The value returned by sizeOf.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when `sizeOf` returns a value that is not a non-negative finite number.
+
+#### How to fix
+
+Fix `sizeOf` so it returns a non-negative finite number.

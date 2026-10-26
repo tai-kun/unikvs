@@ -1,0 +1,83 @@
+---
+title: "@unikvs/indexeddb"
+description: "How to use Indexeddb in @unikvs/indexeddb, a storage that keeps arbitrary values in IndexedDB."
+---
+
+## Overview [#overview]
+
+`@unikvs/indexeddb` <Badge variant="warning">Browser only</Badge> is a storage that keeps arbitrary values in IndexedDB. Use it to store structured-cloneable values, `Blob`, or `File`.
+
+- `name` is `Indexeddb`.
+- Requires `open` and `close`.
+- Specify the database and store names in the constructor.
+- `Blob` and `File` are stored in an intermediate form and restored on read.
+
+Install with:
+
+```package-install
+npm install @unikvs/indexeddb
+```
+
+## Usage [#usage]
+
+Indexeddb implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Indexeddb } from "@unikvs/indexeddb";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    dbName: {
+      type: "[#db-name] string",
+      default: '"unikvs_db"',
+      description: "Name of the database to use.",
+    },
+    storeName: {
+      type: "[#store-name] string",
+      default: '"kvs_store"',
+      description: "Name of the object store to use.",
+    },
+  }}
+/>
+
+The following example stores a value and reads it back.
+
+```ts
+import { Indexeddb } from "@unikvs/indexeddb";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new Indexeddb())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type                            |
+| ---------------------------------- | ---------------------------------------------- |
+| `write`/`read`                     | Arbitrary values (including `Blob` and `File`) |
+| `getWritable`/`getReadable` chunks | `Uint8Array`                                   |
+
+- Stores arbitrary values. Handles values supported by IndexedDB structured clone.
+- `Blob` and `File` are stored in an intermediate form and restored on read. `File` names and modification times are preserved.
+- `delete` on a missing key succeeds, and `exists` returns `false`.
+- Stream chunks are `Uint8Array`.
+- Streams from `getWritable` concatenate chunks and save them on `close`.
+- Streams from `getReadable` emit the stored value as a single chunk.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Reading a missing key throws a `NotFoundError` `DOMException`. Operating before opening throws a `TypeError`.

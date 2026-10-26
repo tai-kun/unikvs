@@ -1,0 +1,139 @@
+---
+title: "@unikvs/cookies"
+description: "How to use @unikvs/cookies, which stores strings and bytes in HTTP cookies."
+---
+
+## Overview [#overview]
+
+`@unikvs/cookies` is a storage backed by HTTP cookies.
+
+This storage converts strings and bytes into a cookie-storable form. Bytes are Base64-encoded, and keys and values are URL-encoded before storing.
+
+- `name` is `Cookies`.
+- `isOpen` is always `true`. `open()` checks cookie store availability.
+- All operations are synchronous.
+- `delete` throws `KeyNotFoundError` for a missing key.
+- Stream reading and writing are not supported.
+
+Install with:
+
+```package-install
+npm install @unikvs/cookies
+```
+
+## Usage [#usage]
+
+Cookies implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Cookies } from "@unikvs/cookies";
+```
+
+### `Cookies` [#cookies]
+
+Storage backed by cookies.
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    cookieAttributes: {
+      type: "[#cookies-cookie-attributes] CookieAttributes",
+      description:
+        "Attributes attached to every cookie. Specify path, domain, secure, sameSite, and maxAge.",
+    },
+    sizeLimitBytes: {
+      type: "[#cookies-size-limit-bytes] number",
+      default: "4096",
+      description: "Maximum size (bytes) of a single value.",
+    },
+    store: {
+      type: "[#cookies-store] CookieStoreLike",
+      description: "Store used to read and write cookies. Uses document.cookie when omitted.",
+    },
+  }}
+/>
+
+The following example stores a value and reads it back.
+
+```ts
+import { Cookies } from "@unikvs/cookies";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<string>;
+}>()
+  .persist(new Cookies())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", "hello");
+
+const data = await kvs.get("foo");
+console.log(data); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation      | Supported data type        |
+| -------------- | -------------------------- | ------------ |
+| `write`/`read` | Strings and bytes (`string | Uint8Array`) |
+
+- Stores strings and bytes. Strings are stored with an `s:` prefix, bytes as Base64 with a `b:` prefix.
+- Values whose raw size (UTF-8 bytes for strings, byte length for bytes) exceeds `sizeLimitBytes` cannot be stored.
+- Inject a `CookieStoreLike` as `store` in environments without `document.cookie`.
+- Stream reading and writing are not supported.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### CookieTooLargeError [#error-cookie-too-large]
+
+#### Meaning
+
+`write` throws it when the raw cookie value size exceeds `sizeLimitBytes`.
+
+#### How to fix
+
+Make the value smaller or raise `sizeLimitBytes`. Browsers also impose their own cookie limits, so store large values in another storage.
+
+### CookieNotAvailableError [#error-cookie-not-available]
+
+#### Meaning
+
+Thrown when `document.cookie` is unavailable and no `store` was injected.
+
+#### How to fix
+
+Pass an implementation satisfying `CookieStoreLike` as `store`.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+`read` and `delete` throw it when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading or deleting.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cookies";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

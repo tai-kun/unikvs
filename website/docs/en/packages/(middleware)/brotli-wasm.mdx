@@ -1,0 +1,151 @@
+---
+title: "@unikvs/brotli.wasm"
+description: "Middleware that compresses and decompresses with a WebAssembly Brotli implementation."
+---
+
+## Overview [#overview]
+
+`@unikvs/brotli.wasm` is a plugin that compresses bytes with Brotli for storage and decompresses them on read. <Badge>Middleware</Badge>
+
+It lazily resolves `brotli-wasm` via dynamic `import`, so it works in both browsers and Node.js. Use it when you want Brotli regardless of runtime.
+
+- `name` is `BrotliWasm`.
+- `isOpen` becomes `true` after `open()`. It is `false` initially.
+- Streaming `encodeStream` and `decodeStream` are not provided. Only batched conversion is supported.
+
+Install with:
+
+```package-install
+npm install @unikvs/brotli.wasm @logtape/logtape
+```
+
+## Usage [#usage]
+
+`BrotliWasm` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { BrotliWasm } from "@unikvs/brotli.wasm";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "Compression level. Specify an integer from 0 to 11. Higher values compress better but take longer. Defaults to 11 when omitted.",
+    },
+  }}
+/>
+
+The following example compresses written values with Brotli for storage and decompresses them on read.
+
+```ts
+import { BrotliWasm } from "@unikvs/brotli.wasm";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(new BrotliWasm({ level: 11 }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // Decompressed bytes
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method   | Input                     | Output                    |
+| -------- | ------------------------- | ------------------------- |
+| `encode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` compresses input bytes with Brotli.
+- `decode` decompresses input bytes with Brotli.
+- Streaming `encodeStream` and `decodeStream` are not provided.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `BrotliWasmInitError` [#error-brotli-wasm-init]
+
+#### Meaning
+
+Thrown when `open()` fails to initialize the `brotli-wasm` module.
+
+#### How to fix
+
+Check that `brotli-wasm` is installed correctly and that the browser can fetch the WASM file.
+
+#### Example
+
+The following example catches `BrotliWasmInitError`.
+
+```ts
+import { BrotliWasm, BrotliWasmInitError } from "@unikvs/brotli.wasm";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(new BrotliWasm())
+  .persist(new Memory())
+  .build();
+
+try {
+  await kvs.open();
+} catch (ex) {
+  if (ex instanceof BrotliWasmInitError) {
+    console.log("Failed to initialize");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### `BrotliWasmInvalidLevelError` [#error-brotli-wasm-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#brotli-wasm-invalid-level-actual] unknown",
+      required: true,
+      description: "The specified compression level.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The constructor throws this error when `level` is not an integer from 0 to 11.
+
+#### How to fix
+
+Specify an integer from 0 to 11. It defaults to 11 when omitted.
+
+#### Example
+
+The following example catches `BrotliWasmInvalidLevelError`.
+
+```ts
+import { BrotliWasm, BrotliWasmInvalidLevelError } from "@unikvs/brotli.wasm";
+
+try {
+  new BrotliWasm({ level: 12 });
+} catch (ex) {
+  if (ex instanceof BrotliWasmInvalidLevelError) {
+    console.log(ex.meta); // { actual: 12 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+Calling `encode` or similar before `open()` throws a `TypeError`. Compression and decompression failures normalize the upstream thrown value to an `Error` before propagating it.

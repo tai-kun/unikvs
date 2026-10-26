@@ -1,0 +1,235 @@
+---
+title: "@unikvs/memcached"
+description: "How to use @unikvs/memcached, which stores byte sequences in Memcached from Node.js."
+---
+
+## Overview [#overview]
+
+`@unikvs/memcached` is a storage plugin that stores byte sequences in Memcached. <Badge variant="warning">Node.js only</Badge> Use it for caches shared across nodes.
+
+- `name` is `"Memcached"`, and `isOpen` reports whether it is open.
+- `open()` verifies the connection, and `close()` releases it when done.
+- This storage prefixes keys with `"unikvs:"` by default.
+- When servers are omitted, the `MEMCACHED_SERVERS` (or `MEMCACHIER_SERVERS`, `MEMCACHE_SERVERS`) environment variable is used, falling back to `"127.0.0.1:11211"` when unset.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/memcached
+```
+
+A Memcached server is required separately.
+
+## Usage [#usage]
+
+Memcached implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { Memcached } from "@unikvs/memcached";
+```
+
+### Memcached [#memcached]
+
+Storage that saves to Memcached. Callers open it with `open()` and close it with `close()` when done.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    servers: {
+      type: "[#memcached-servers] MemcachedServers",
+      description:
+        "The servers to connect to. Takes precedence over `options.servers`. Resolved from options and environment variables when omitted.",
+    },
+    options: {
+      type: "[#memcached-options] MemcachedStorageOptions",
+      description: "Options configuring the client and this package's behavior.",
+    },
+  }}
+/>
+
+### MemcachedStorageOptions [#memcachedstorageoptions]
+
+The constructor options for `Memcached`.
+
+<TypeTable
+  type={{
+    client: {
+      type: "[#memcachedstorageoptions-client] MemcachedClientLike",
+      description: "Injects an existing client. When specified, no connection is created.",
+    },
+    servers: {
+      type: "[#memcachedstorageoptions-servers] MemcachedServers",
+      description: "The servers to connect to. The first constructor argument takes precedence.",
+    },
+    host: {
+      type: "[#memcachedstorageoptions-host] string",
+      description: "Specifies the host directly instead of `servers`.",
+    },
+    port: {
+      type: "[#memcachedstorageoptions-port] number",
+      description: "Specifies the port directly instead of `servers`.",
+    },
+    ttlSeconds: {
+      type: "[#memcachedstorageoptions-ttlseconds] number",
+      description:
+        "The expiration (in seconds) for written values. `0` means no expiration. Defaults to `0`.",
+    },
+    keyPrefix: {
+      type: "[#memcachedstorageoptions-keyprefix] string",
+      description: 'The prefix prepended to every key. Defaults to `"unikvs:"`.',
+    },
+    connectTimeout: {
+      type: "[#memcachedstorageoptions-connecttimeout] number",
+      description:
+        "The time (in milliseconds) after which the connection check in `open()` is aborted. Defaults to `5000`.",
+    },
+  }}
+/>
+
+### MemcachedClientLike [#memcachedclientlike]
+
+The minimal shape of an injectable Memcached client. The `memjs` `Client` satisfies this shape.
+
+### MemcachedServers [#memcachedservers]
+
+The shape accepted as the `servers` argument. A string (`"host:port,host:port"`) or an array of them.
+
+### MemcachedGetResult [#memcachedgetresult]
+
+The shape accepted as the return value of `get`.
+
+### MemcachedGetResultValue [#memcachedgetresultvalue]
+
+The shape accepted as the value in the return value of `get`. `memjs` returns `{ value: Buffer | null, flags }`.
+
+The following example saves a value and reads it back:
+
+```ts
+import { Memcached } from "@unikvs/memcached";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.PlainValue<Uint8Array> }>()
+  .persist(new Memcached("127.0.0.1:11211"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation        | Data type                 |
+| ---------------- | ------------------------- |
+| `write` / `read` | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Values are stored as Base64-encoded strings.
+- Streamed reading and writing are not supported.
+- `clear()` deletes all keys on the server because there is no way to list keys.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidTtlSecondsError [#error-invalid-ttl-seconds]
+
+Thrown when the constructor `ttlSeconds` is not a finite number greater than or equal to 0.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-ttl-seconds-actual] unknown",
+      required: true,
+      description: "The received `ttlSeconds` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+`ttlSeconds` was given something other than a finite number greater than or equal to 0.
+
+#### How to fix
+
+Specify a finite number greater than or equal to 0 (in seconds) for `ttlSeconds`.
+
+### InvalidConnectTimeoutError [#error-invalid-connect-timeout]
+
+Thrown when the constructor `connectTimeout` is not a finite positive number.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-connect-timeout-actual] unknown",
+      required: true,
+      description: "The received `connectTimeout` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+`connectTimeout` was given something other than a finite positive number (in milliseconds).
+
+#### How to fix
+
+Specify a finite positive number (in milliseconds) for `connectTimeout`.
+
+### ConnectTimeoutError [#error-connect-timeout]
+
+Thrown when the connection check in `open()` times out.
+
+<TypeTable
+  type={{
+    timeoutMs: {
+      type: "[#connect-timeout-timeoutms] number",
+      required: true,
+      description: "The time (in milliseconds) until timeout.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The connection check to Memcached did not finish within `connectTimeout` (default `5000` ms).
+
+#### How to fix
+
+Check that the server is running and the servers are correct, and extend `connectTimeout` if needed.
+
+### KeyNotFoundError [#error-key-not-found]
+
+A shared `@unikvs/core` error. Thrown when reading a missing key.
+
+#### Meaning
+
+The specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/memcached";
+
+try {
+  const data = await kvs.get("missing");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

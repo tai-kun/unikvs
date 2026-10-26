@@ -1,0 +1,220 @@
+---
+title: "@unikvs/metrics"
+description: "Middleware that records operation counts, byte sizes, and latency, forwardable to OTel or Prometheus."
+---
+
+## Overview [#overview]
+
+`Metrics` records counts, byte sizes, and latency for every operation, with aggregation and external export.<Badge>Middleware</Badge>
+
+Use it for performance visibility and operational monitoring. Measurements stay in memory and can be forwarded to OTel instruments or custom sinks.
+
+- `name` is `Metrics`.
+- `isOpen` is always `true`.
+- `use` measures every operation; `encode` / `decode` and streams also record byte sizes.
+- Recording never throws; sink failures are ignored.
+
+Install with:
+
+```package-install
+npm install @unikvs/metrics @opentelemetry/api
+```
+
+`@opentelemetry/api` is only needed when `exporter` is `"otel"`. Memory-only aggregation and Prometheus output (`toPrometheusString()`) do not need it.
+
+## Usage [#usage]
+
+Metrics implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Metrics } from "@unikvs/metrics";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    exporter: {
+      type: "[#metrics-options-exporter] MetricsExporterKind | MetricsExporter",
+      description:
+        "Where to forward measurements. Pass a built-in exporter name or a custom sink. Measurements are always kept in memory regardless of this setting.",
+    },
+    meterProvider: {
+      type: "[#metrics-options-meter-provider] MetricsMeterProvider",
+      description: 'OTel MeterProvider used when exporter is "otel".',
+    },
+    registry: {
+      type: "[#metrics-options-registry] unknown",
+      description:
+        "Opaque registry handle kept for external Prometheus integration. The exposition text comes from toPrometheusString().",
+    },
+    onRecord: {
+      type: "[#metrics-options-on-record] (record: MetricRecord) => void",
+      description: "Called every time a measurement is recorded.",
+    },
+    clock: {
+      type: "[#metrics-options-clock] () => number",
+      description: "Clock returning milliseconds. Defaults to performance.now().",
+    },
+  }}
+/>
+
+The following measures operations and reads the aggregation:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Metrics } from "@unikvs/metrics";
+import * as unikvs from "unikvs";
+
+const metrics = new Metrics();
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(metrics)
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(metrics.getMetrics().total); // record count
+console.log(metrics.toPrometheusString()); // Prometheus format
+await kvs.close();
+```
+
+### `Metrics` [#metrics]
+
+Middleware that records operation metrics. Measurements stay in memory and are available via `getMetrics()` and `toPrometheusString()`.
+
+### `MetricsOptions` [#metrics-options]
+
+Options accepted by the `Metrics` constructor. Specifies the exporter and clock.
+
+### `MetricsAction` [#metrics-action]
+
+Operation names observed by the metrics middleware. Equivalent to `IMiddleware.UseContext["action"]`.
+
+### `MetricsOutcome` [#metrics-outcome]
+
+Whether an observed operation succeeded or failed. `"success"` or `"error"`.
+
+### `MetricsExporterKind` [#metrics-exporter-kind]
+
+Built-in exporter selected by name. `"otel"` forwards to instruments; `"prometheus"` means in-memory retention plus text output.
+
+### `MetricsExporter` [#metrics-exporter]
+
+Custom sink receiving every recorded measurement.
+
+### `MetricRecord` [#metric-record]
+
+Measurement observed for a single operation.
+
+<TypeTable
+  type={{
+    action: {
+      type: "[#metric-record-action] MetricsAction",
+      required: true,
+      description: "The observed operation.",
+    },
+    outcome: {
+      type: "[#metric-record-outcome] MetricsOutcome",
+      required: true,
+      description: "Whether the operation succeeded or failed.",
+    },
+    durationMs: {
+      type: "[#metric-record-duration-ms] number",
+      required: true,
+      description: "Wall-clock elapsed time (ms).",
+    },
+    bytes: {
+      type: "[#metric-record-bytes] number | undefined",
+      description: "Observed byte count. Undefined when unknown.",
+    },
+    key: {
+      type: "[#metric-record-key] string | undefined",
+      required: true,
+      description: "Target key. Undefined for keyless clear.",
+    },
+  }}
+/>
+
+### `MetricsActionSummary` [#metrics-action-summary]
+
+Per-operation-name counters.
+
+<TypeTable
+  type={{
+    action: {
+      type: "[#metrics-action-summary-action] string",
+      required: true,
+      description: "Operation name.",
+    },
+    count: {
+      type: "[#metrics-action-summary-count] number",
+      required: true,
+      description: "Total recorded operations.",
+    },
+    success: {
+      type: "[#metrics-action-summary-success] number",
+      required: true,
+      description: "Successful operations.",
+    },
+    error: {
+      type: "[#metrics-action-summary-error] number",
+      required: true,
+      description: "Failed operations.",
+    },
+    totalBytes: {
+      type: "[#metrics-action-summary-total-bytes] number",
+      required: true,
+      description: "Total observed bytes.",
+    },
+    totalDurationMs: {
+      type: "[#metrics-action-summary-total-duration-ms] number",
+      required: true,
+      description: "Total observed elapsed time (ms).",
+    },
+  }}
+/>
+
+### `MetricsSnapshot` [#metrics-snapshot]
+
+Snapshot of all measurements recorded so far.
+
+<TypeTable
+  type={{
+    total: {
+      type: "[#metrics-snapshot-total] number",
+      required: true,
+      description: "Total recorded measurements.",
+    },
+    byAction: {
+      type: "[#metrics-snapshot-by-action] Record<string, MetricsActionSummary>",
+      required: true,
+      description: "Aggregation keyed by operation name.",
+    },
+    records: {
+      type: "[#metrics-snapshot-records] readonly MetricRecord[]",
+      required: true,
+      description: "All recorded measurements (in record order).",
+    },
+  }}
+/>
+
+## Data types [#data-types]
+
+| Method         | Input             | Output                         |
+| -------------- | ----------------- | ------------------------------ |
+| `encode`       | `unknown`         | `unknown` (passthrough)        |
+| `decode`       | `unknown`         | `unknown` (passthrough)        |
+| `encodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
+| `decodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
+
+- `use` measures latency and success for every operation, recording bytes as `undefined`.
+- `encode` and `decode` pass data through, also recording bytes for strings, `ArrayBuffer`, and `ArrayBufferView`. Other types record `undefined`.
+- Streams pass chunks through and record the total chunk size as one record on completion. Cancellations and failures record as `error`.
+- This middleware deliberately omits key labels so `toPrometheusString()` cardinality stays flat. Per-key detail is available via `getMetrics()` and `onRecord`.
+
+## Errors [#errors]
+
+This package has no package-specific errors.
+
+Recording never throws and sink failures are ignored, so metrics never break the operation pipeline. When the original operation fails, the error is rethrown after recording.

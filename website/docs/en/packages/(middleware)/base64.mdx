@@ -1,0 +1,119 @@
+---
+title: "@unikvs/base64"
+description: "How to use @unikvs/base64, middleware that encodes bytes as base64."
+---
+
+## Overview [#overview]
+
+Middleware that returns bytes as a base64 string. <Badge>Middleware</Badge>
+
+It supports both padded and unpadded forms, and accepts either form when decoding.
+
+- `name` is `"Base64"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/base64
+```
+
+## Usage [#usage]
+
+Base64 implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Base64 } from "@unikvs/base64";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    encoder: {
+      type: "[#base64-encoder] FastUtf8",
+      description: "Implementation used to encode strings to bytes. Uses the default when omitted.",
+    },
+    decoder: {
+      type: "[#base64-decoder] FastUtf8",
+      description: "Implementation used to decode bytes to strings. Uses the default when omitted.",
+    },
+    padding: {
+      type: "[#base64-padding] boolean",
+      description: "Whether to append `=` on encode. Defaults to `true`.",
+    },
+  }}
+/>
+
+The following example stores bytes as base64 and restores the original bytes on read.
+
+```ts
+import { Base64 } from "@unikvs/base64";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .use(new Base64())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0x01, 0x02, 0x03]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` converts bytes to a base64 string and encodes it as UTF-8 bytes.
+- `decode` converts base64-encoded bytes back to the original bytes.
+- Decoding accepts both padded and unpadded forms.
+- `encodeStream` splits input into 3-byte units, carrying remainders across chunks.
+- Encode remainders are finalized when the stream ends.
+- `decodeStream` restores 4 characters at a time, carrying remainders to the next call.
+- A padded trailing sequence is validated and restored when the stream ends.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `Base64DecodeError` [#error-base64-decode]
+
+#### Meaning
+
+Thrown when the input cannot be interpreted as base64. This covers invalid characters, misplaced `=` padding, and inputs whose length remainder is 1.
+
+#### How to fix
+
+Make sure the input is valid base64.
+
+A `TypeError` propagates unchanged when trailing partial UTF-8 bytes remain at the end of a stream.
+
+### `Base64InvalidPaddingError` [#error-base64-invalid-padding]
+
+Thrown when the `padding` option is not a boolean.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#base64-invalid-padding-actual] unknown",
+      required: true,
+      description: "The specified `padding` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Because this is a usage error, it extends `InvalidUsageErrorBase`. `meta.actual` keeps the specified value as-is.
+
+#### How to fix
+
+Specify `true` or `false` for `padding`. It defaults to `true`.

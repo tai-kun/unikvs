@@ -1,0 +1,631 @@
+---
+title: "@unikvs/testing"
+description: "Shared helpers for UniKvs package unit tests: abort checks, bytes, test contexts, deterministic randomness, and stream operations."
+---
+
+## Overview [#overview]
+
+`@unikvs/testing` <Badge>Shared</Badge> provides shared helpers for UniKvs package unit tests. It is a runner-independent set of pure functions: abort-signal checks, thrown-exception capture, byte building and comparison, contexts usable as-is in storage/middleware unit tests, reproducible randomness from fixed seeds, stream driving and verification, and Node.js integration-test support.
+
+Coverage:
+
+| Area                                     | Contents                                                       | Details             |
+| ---------------------------------------- | -------------------------------------------------------------- | ------------------- |
+| Abort and exception capture              | Aborted signals; captured exceptions and rejections            | [Details](#abort)   |
+| Bytes                                    | Concatenation, comparison, deterministic generation, splitting | [Details](#bytes)   |
+| Test contexts                            | `TestContext` and per-operation factories                      | [Details](#context) |
+| Deterministic randomness                 | Fixed-seed PRNG and repeated runs                              | [Details](#random)  |
+| Streams                                  | Feeding, reading, and driving transform streams                | [Details](#streams) |
+| Node.js support (`@unikvs/testing/node`) | Free-port acquisition, waiting, temp-file listing              | [Details](#node)    |
+
+## Installation [#installation]
+
+```package-install
+npm install @unikvs/testing
+```
+
+:::note[Currently a private package]
+Since `package.json` sets `private: true`, it is not published to the npm registry; workspace packages use it as a dev dependency.
+:::
+
+ESM only (`sideEffects: false`). The only runtime dependency is `@unikvs/core`; the `./node` subpath is Node.js-only (uses `node:fs/promises` and `node:net`).
+
+## Usage [#usage]
+
+Capture a thrown error first, then verify its type and meta:
+
+```ts
+import { KeyNotFoundError } from "@unikvs/core";
+import { captureRejection, captureThrown } from "@unikvs/testing";
+
+const rejection = await captureRejection(promise);
+console.log(rejection instanceof KeyNotFoundError); // true
+
+const thrown = captureThrown(() => fn());
+console.log(thrown instanceof Error); // true
+```
+
+In storage/middleware unit tests, build contexts with the per-operation factories:
+
+```ts
+import { createNext, createSetContext } from "@unikvs/testing";
+
+const ctx = createSetContext("key", { source: data });
+await middleware.set?.(ctx, data, createNext());
+```
+
+In randomness-dependent tests, build reproducible inputs from a fixed seed:
+
+```ts
+import { forCases } from "@unikvs/testing";
+
+forCases(1234, 100, (random, index) => {
+  const key = random.string(16);
+  // same seed and count always produce the same input
+});
+```
+
+In stream tests, combine chunk feeding with reading:
+
+```ts
+import { collectBytes, sourceFrom } from "@unikvs/testing";
+
+const bytes = await collectBytes(sourceFrom(chunks));
+```
+
+## Aborts and exception capture [#abort]
+
+For entry-point abort checks and verifying thrown error types/meta.[`abortedSignal`](#aborted-signal) always returns an aborted signal;[`captureRejection`](#capture-rejection) and [`captureThrown`](#capture-thrown) return the thrown value as-is, so verify with `instanceof` and `meta`. Both throw a bare `Error` when nothing is thrown.See [Failures](#failures).
+
+```ts
+import { abortedSignal } from "@unikvs/testing";
+
+const signal = abortedSignal(new Error("stop"));
+console.log(signal.aborted); // true
+```
+
+## Building and comparing bytes [#bytes]
+
+For building and comparing expected values. [`concatBytes`](#concat-bytes) and its alias [`concatChunks`](#concat-chunks) join chunk sequences into one byte sequence; [`bytesEqual`](#bytes-equal) compares length and each byte. [`createAllByteValues`](#create-all-byte-values) generates deterministic bytes cycling 0-255; [`createPseudoRandomBytes`](#create-pseudo-random-bytes) generates deterministic LCG pseudorandom bytes. [`toHex`](#to-hex) and [`toText`](#to-text) build expectations without going through implementation-side conversion. [`splitIntoChunks`](#split-into-chunks) and [`splitBySizes`](#split-by-sizes) make chunk sequences split at arbitrary boundaries, for verifying boundary-independent processing.
+
+```ts
+import { bytesEqual, concatBytes, createAllByteValues, splitIntoChunks } from "@unikvs/testing";
+
+const bytes = createAllByteValues(600);
+const chunks = splitIntoChunks(bytes, 256); // 3-way split: 256, 256, 88
+console.log(bytesEqual(concatBytes(chunks), bytes)); // true
+```
+
+:::note[Suited for multi-MiB comparisons]
+`bytesEqual` compares length and bytes in order, avoiding the cost of comparing large byte sequences with `toStrictEqual`.
+:::
+
+## Test contexts [#context]
+
+[`TestContext`](#test-context) is a concrete test-only `IPipelineContext`. It holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, and `setReadonly`. Structurally assignable to each context type, it works as-is in storage/middleware unit tests. Pass initial values via [`TestContextInit`](#test-context-init). [`TestContextValues`](#test-context-values) is the `values` form (a `Record` or an iterable of entries).
+
+Per-operation factories:
+
+| Factory                     | `action`   | Purpose             | Details                                  |
+| --------------------------- | ---------- | ------------------- | ---------------------------------------- |
+| `createNext`                | —          | Middleware `next`   | [Details](#create-next)                  |
+| `createOpenContext`         | `"open"`   | Opening             | [Details](#create-open-context)          |
+| `createCloseContext`        | `"close"`  | Closing             | [Details](#create-close-context)         |
+| `createSetContext`          | `"set"`    | Writing             | [Details](#create-set-context)           |
+| `createGetContext`          | `"get"`    | Reading             | [Details](#create-get-context)           |
+| `createStreamContext`       | `"stream"` | Stream reading      | [Details](#create-stream-context)        |
+| `createHasContext`          | `"has"`    | Presence check      | [Details](#create-has-context)           |
+| `createDeleteContext`       | `"delete"` | Deleting            | [Details](#create-delete-context)        |
+| `createClearContext`        | `"clear"`  | Clearing all        | [Details](#create-clear-context)         |
+| `createRepairContext`       | `"get"`    | Reading with repair | [Details](#create-repair-context)        |
+| `createMapKeyContext`       | `"set"`    | Key mapping         | [Details](#create-map-key-context)       |
+| `createEncodeContext`       | `"set"`    | Encoding            | [Details](#create-encode-context)        |
+| `createDecodeContext`       | `"get"`    | Decoding            | [Details](#create-decode-context)        |
+| `createEncodeStreamContext` | `"set"`    | Stream encoding     | [Details](#create-encode-stream-context) |
+| `createDecodeStreamContext` | `"stream"` | Stream decoding     | [Details](#create-decode-stream-context) |
+
+```ts
+import { createGetContext, createRepairContext } from "@unikvs/testing";
+
+const ctx = createGetContext("key", { values: { "test:count": 1 } });
+console.log(ctx.get("test:count")); // 1
+
+const repair = createRepairContext("key", ["Memory"]);
+console.log(repair.repair); // { enabled: true, targets: ["Memory"] }
+```
+
+:::warning[Beware readonly]
+Writes to variables pinned by `setReadonly()` throw [`ReadonlyVariableError`](/packages/core/errors#error-readonly-variable).
+:::
+
+## Deterministic randomness [#random]
+
+[`Random`](#random) is the operation set for building reproducible inputs from fixed seeds. [`createRandom`](#create-random) builds a mulberry32 generator returning the same values for the same seed and call order. [`forCases`](#for-cases) and [`forCasesAsync`](#for-cases-async) run the body a set number of times with seeds derived from the seed and case index. Failed cases include their seed and index in the message and keep the original exception in `cause`.
+
+```ts
+import { createRandom, forCasesAsync } from "@unikvs/testing";
+
+const random = createRandom(42);
+console.log(random.string(8)); // always the same string
+
+await forCasesAsync(42, 50, async (random, index) => {
+  // async cases are also reported with their index
+});
+```
+
+Out-of-range arguments (non-integer or inverted ranges for `int`, negative maxima for `uint`, picking from empty arrays or alphabets, etc.) throw `RangeError`.
+
+## Driving and verifying streams [#streams]
+
+For feeding streams and reading from them.[`sourceFrom`](#source-from) and its alias [`sourceFromValues`](#source-from-values) build a `ReadableStream` that emits chunks in order and closes.[`readAll`](#read-all) reads to the end and returns output chunks;[`collectBytes`](#collect-bytes) returns all chunks joined as bytes.[`collectChunks`](#collect-chunks) and its alias [`pipeChunks`](#pipe-chunks) return the output of feeding chunk sequences through a transform stream.[`pumpThrough`](#pump-through) and [`runTransform`](#run-transform) write and read concurrently, avoiding backpressure deadlocks while surfacing write/read/close failures.
+
+```ts
+import { collectChunks, sourceFrom } from "@unikvs/testing";
+
+const output = await collectChunks(new TransformStream(), [1, 2, 3]);
+console.log(output); // [1, 2, 3]
+```
+
+## Node.js support [#node]
+
+`@unikvs/testing/node` subpath serves Node.js integration tests.[`acquireFreePort`](#acquire-free-port) acquires one free port from the OS;[`waitForPort`](#wait-for-port) waits until the port accepts connections.[`listTemporaryFiles`](#list-temporary-files) returns names of leftover temp files (`*.tmp`) directly under the root, for verifying swap-on-close cleanup.
+
+```ts
+import { acquireFreePort, waitForPort } from "@unikvs/testing/node";
+
+const port = await acquireFreePort();
+await waitForPort(port); // waits until connectable
+```
+
+:::warning[Node.js only]
+This subpath uses `node:fs/promises` and `node:net`, so it does not run in browsers.
+:::
+
+## Failures [#failures]
+
+The test helpers themselves have no error classes. Failure handling:
+
+- [`captureRejection`](#capture-rejection) throws a bare `Error` (message: the promise was not rejected) when the promise resolves.
+- [`captureThrown`](#capture-thrown) throws a bare `Error` (message: nothing was thrown) when nothing is thrown.
+- [`TestContext`](#test-context) `set` and `setReadonly` throw [`ReadonlyVariableError`](/packages/core/errors#error-readonly-variable) on writes to readonly-pinned variables.
+- [`forCases`](#for-cases) and [`forCasesAsync`](#for-cases-async) wrap failures in an `Error` (message includes seed and index), keeping the original exception in `cause`.
+- Out-of-range [`Random`](#random) arguments throw `RangeError` (see [Deterministic randomness](#random)).
+- [`acquireFreePort`](#acquire-free-port) and [`waitForPort`](#wait-for-port) throw a bare `Error` when acquisition or waiting fails.
+
+## API reference [#api]
+
+Per-symbol reference.
+
+### `abortedSignal()` [#aborted-signal]
+
+Always returns an aborted signal. For entry-point abort checks. Passing `reason` sets the abort reason.
+
+```ts
+import { abortedSignal } from "@unikvs/testing";
+
+const signal = abortedSignal(new Error("stop"));
+console.log(signal.aborted); // true
+```
+
+### `captureRejection()` [#capture-rejection]
+
+Returns the rejection reason of async processing. Used to verify the type and meta of the actually thrown error. Throws a bare `Error` when the given `Promise` resolves.
+
+```ts
+import { captureRejection } from "@unikvs/testing";
+
+const reason = await captureRejection(promise);
+```
+
+### `captureThrown()` [#capture-thrown]
+
+Returns the exception from sync processing. Used to verify the type and meta of the actually thrown error. Throws a bare `Error` when nothing is thrown.
+
+```ts
+import { captureThrown } from "@unikvs/testing";
+
+const error = captureThrown(() => fn());
+```
+
+### `concatBytes()` [#concat-bytes]
+
+Joins chunk sequences into one byte sequence. Used to compare split stream results against a single byte sequence.
+
+```ts
+import { concatBytes } from "@unikvs/testing";
+
+const bytes = concatBytes([new Uint8Array([1]), new Uint8Array([2, 3])]);
+```
+
+### `concatChunks()` [#concat-chunks]
+
+[`concatBytes`](#concat-bytes) Alias used when chunk-joining runs in a stream context.
+
+### `bytesEqual()` [#bytes-equal]
+
+Compares two byte sequences for equal length and bytes. Avoids the cost of comparing multi-MiB data with `toStrictEqual`.
+
+```ts
+import { bytesEqual } from "@unikvs/testing";
+
+console.log(bytesEqual(left, right)); // true or false
+```
+
+### `createAllByteValues()` [#create-all-byte-values]
+
+Generates deterministic bytes cycling 0-255. For round-trip verification of data containing every byte value. Builds a `size`-byte array with `index % 256` at each position.
+
+```ts
+import { createAllByteValues } from "@unikvs/testing";
+
+const bytes = createAllByteValues(600); // 0..255, 0..255, 0..87
+```
+
+### `createPseudoRandomBytes()` [#create-pseudo-random-bytes]
+
+Generates deterministic LCG pseudorandom bytes. For preparing unbiased arbitrary binary at scale. Omitting `seed` uses `0x12345678`.
+
+```ts
+import { createPseudoRandomBytes } from "@unikvs/testing";
+
+const bytes = createPseudoRandomBytes(1024, 42);
+```
+
+### `toHex()` [#to-hex]
+
+Converts bytes to a lowercase hex string. Builds expectations without going through implementation-side conversion.
+
+### `toText()` [#to-text]
+
+Converts byte chunk sequences to a UTF-8 string. Compares encode results as strings.
+
+### `splitIntoChunks()` [#split-into-chunks]
+
+Splits bytes into chunks of at most the given size. Verifies processing works however boundaries fall. Returned chunks are range views of the original bytes.
+
+```ts
+import { splitIntoChunks } from "@unikvs/testing";
+
+const chunks = splitIntoChunks(bytes, 256);
+```
+
+### `splitBySizes()` [#split-by-sizes]
+
+Cuts bytes into the given lengths in order. Builds chunk sequences split at arbitrary boundaries. Consumes `sizes` in order, merging the remainder into one trailing chunk. Returned chunks are range views of the original bytes.
+
+### `TestContextValues` [#test-context-values]
+
+The variable-map form usable as context initial values. Accepts a readonly `Record` or an iterable of entries (`[key, value]`).
+
+```ts
+import type { TestContextValues } from "@unikvs/testing";
+
+const fromRecord: TestContextValues = { count: 1 };
+const fromEntries: TestContextValues = [["count", 1]];
+```
+
+### `TestContextInit` [#test-context-init]
+
+Constructor arguments for [`TestContext`](#test-context):
+
+<TypeTable
+  type={{
+    signal: {
+      type: "[#test-context-init-signal] AbortSignal",
+      description: "Signal aborting the operation. Defaults to a fresh `AbortController` signal.",
+    },
+    action: {
+      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      description: 'Operation kind. Defaults to `"set"`.',
+    },
+    key: {
+      type: "[#test-context-init-key] string",
+      description: 'Logical target key. Defaults to `""`.',
+    },
+    repair: {
+      type: "[#test-context-init-repair] TestContextRepair",
+      description:
+        "Repair request accompanying reads. Meaningful only in `get` and `stream` contexts.",
+    },
+    source: {
+      type: "[#test-context-init-source] unknown",
+      description: "Pre-conversion input value.",
+    },
+    destination: {
+      type: "[#test-context-init-destination] unknown",
+      description: "Post-conversion output value.",
+    },
+    values: {
+      type: "[#test-context-init-values] TestContextValues",
+      description: "Initial values handled by `get` and `set`.",
+    },
+  }}
+/>
+
+### `TestContext` [#test-context]
+
+Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeline-context#contexts)): holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, and `setReadonly`. `repair` has the `TestContextRepair` shape, same as [`IGetContext`](/packages/core/pipeline-context#igetcontext) `repair`.
+
+<TypeTable
+  type={{
+    signal: {
+      type: "[#test-context-signal] AbortSignal",
+      required: true,
+      description: "Signal aborting the operation.",
+    },
+    action: {
+      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      required: true,
+      description: "Operation kind.",
+    },
+    key: {
+      type: "[#test-context-key] string",
+      required: true,
+      description: "Logical target key.",
+    },
+    repair: {
+      type: "[#test-context-repair] TestContextRepair",
+      required: true,
+      description: "Repair request accompanying reads.",
+    },
+    source: {
+      type: "[#test-context-source] any",
+      required: true,
+      description: "Pre-conversion input value.",
+    },
+    destination: {
+      type: "[#test-context-destination] any",
+      description: "Post-conversion output value.",
+    },
+    get: {
+      type: "[#test-context-get] get(name: string): any",
+      required: true,
+      description: "Gets a variable value.",
+    },
+    set: {
+      type: "[#test-context-set] set(name: string, value: any): this",
+      required: true,
+      description:
+        "Sets a variable value. Returns `this`. Throws `ReadonlyVariableError` on readonly-pinned variables.",
+    },
+    setReadonly: {
+      type: "[#test-context-setreadonly] setReadonly(name: string, value: any): this",
+      required: true,
+      description:
+        "Sets a variable value as readonly. Returns `this`. Throws `ReadonlyVariableError` on readonly-pinned variables.",
+    },
+  }}
+/>
+
+### `createNext()` [#create-next]
+
+Creates a no-op function for middleware `next`. Returns a function returning a resolved `Promise`.
+
+### `createOpenContext()` [#create-open-context]
+
+Creates a context for `open`. Returns [`TestContext`](#test-context) with `action` `"open"`.
+
+### `createCloseContext()` [#create-close-context]
+
+Creates a context for `close`. Returns [`TestContext`](#test-context) with `action` `"close"`.
+
+### `createSetContext()` [#create-set-context]
+
+Creates a context for `set`. Sets the first-argument key and returns it with `action` `"set"`.
+
+```ts
+import { createSetContext } from "@unikvs/testing";
+
+const ctx = createSetContext("key", { source: data });
+```
+
+### `createGetContext()` [#create-get-context]
+
+Creates a context for `get`. Sets the first-argument key and returns it with `action` `"get"`.
+
+### `createStreamContext()` [#create-stream-context]
+
+Creates a context for `stream`. Sets the first-argument key and returns it with `action` `"stream"`.
+
+### `createHasContext()` [#create-has-context]
+
+Creates a context for `has`. Sets the first-argument key and returns it with `action` `"has"`.
+
+### `createDeleteContext()` [#create-delete-context]
+
+Creates a context for `delete`. Sets the first-argument key and returns it with `action` `"delete"`.
+
+### `createClearContext()` [#create-clear-context]
+
+Creates a context for `clear` with `action` `"clear"`. Omitting the key uses `""`.
+
+### `createRepairContext()` [#create-repair-context]
+
+Creates a `get` context with repair. Used to verify repair allow/deny. The second-argument target name list is copied, and `repair` becomes `{ enabled: true, targets }`.
+
+```ts
+import { createRepairContext } from "@unikvs/testing";
+
+const ctx = createRepairContext("key", ["Memory"]);
+```
+
+### `createMapKeyContext()` [#create-map-key-context]
+
+Creates a context for `mapKey`. Sets the first-argument key. Key mapping itself uses only `key`, so `action` stays at the default `"set"`.
+
+### `createEncodeContext()` [#create-encode-context]
+
+Creates a context for `encode`. Uses the first argument as the pre-conversion input (`source`) with `action` `"set"`.
+
+### `createDecodeContext()` [#create-decode-context]
+
+Creates a context for `decode`. Uses the first argument as the pre-conversion input (`source`) with `action` `"get"`.
+
+### `createEncodeStreamContext()` [#create-encode-stream-context]
+
+Creates a context for `encodeStream`. Uses the first argument as the pre-conversion input stream (`source`) with `action` `"set"`.
+
+### `createDecodeStreamContext()` [#create-decode-stream-context]
+
+Creates a context for `decodeStream`. Uses the first argument as the pre-conversion input stream (`source`) with `action` `"stream"`.
+
+### `Random` [#random]
+
+The operation set of a deterministic PRNG. Builds reproducible inputs from fixed seeds in randomness-dependent tests.
+
+<TypeTable
+  type={{
+    next: {
+      type: "[#random-next] next(): number",
+      required: true,
+      description: "Returns a fraction in [0, 1).",
+    },
+    int: {
+      type: "[#random-int] int(min: number, max: number): number",
+      required: true,
+      description:
+        "Returns an integer from `min` to `max` inclusive. Throws `RangeError` on non-integers or inverted ranges.",
+    },
+    uint: {
+      type: "[#random-uint] uint(max?: number): number",
+      required: true,
+      description:
+        "Returns an integer from 0 to `max` inclusive. `max` defaults to `0xffffffff`. Throws `RangeError` on non-integers or negative values.",
+    },
+    bool: {
+      type: "[#random-bool] bool(): boolean",
+      required: true,
+      description: "Returns a boolean.",
+    },
+    pick: {
+      type: "[#random-pick] pick<T>(items: readonly T[]): T",
+      required: true,
+      description: "Picks one element from an array. Throws `RangeError` on empty arrays.",
+    },
+    bytes: {
+      type: "[#random-bytes] bytes(length: number): Uint8Array<ArrayBuffer>",
+      required: true,
+      description: "Returns random bytes of the given length.",
+    },
+    string: {
+      type: "[#random-string] string(length: number, alphabet?: string | readonly string[]): string",
+      required: true,
+      description:
+        "Returns a string of the given length. Omitting `alphabet` uses lowercase letters and digits. Throws `RangeError` on empty alphabets.",
+    },
+    array: {
+      type: "[#random-array] array<T>(length: number, generate: (random: Random, index: number) => T): T[]",
+      required: true,
+      description: "Returns an array built by calling `generate` `length` times.",
+    },
+    shuffle: {
+      type: "[#random-shuffle] shuffle<T>(items: readonly T[]): T[]",
+      required: true,
+      description: "Returns a duplicated, shuffled array. The input is unchanged.",
+    },
+  }}
+/>
+
+### `createRandom()` [#create-random]
+
+mulberry32 Creates a deterministic PRNG. Returns the same values for the same seed and call order. Makes failures reproducible.
+
+```ts
+import { createRandom } from "@unikvs/testing";
+
+const random = createRandom(42);
+console.log(random.string(8)); // always the same string
+```
+
+### `forCases()` [#for-cases]
+
+Runs the test body `count` times with randomness derived from the same seed. Failed cases include their seed and index in the message and keep the original exception in `cause`.
+
+```ts
+import { forCases } from "@unikvs/testing";
+
+forCases(1234, 100, (random, index) => {
+  const key = random.string(16);
+  // ...
+});
+```
+
+### `forCasesAsync()` [#for-cases-async]
+
+[`forCases`](#for-cases) Async variant used to report async-case failures with seed and index.
+
+```ts
+import { forCasesAsync } from "@unikvs/testing";
+
+await forCasesAsync(1234, 50, async (random, index) => {
+  // ...
+});
+```
+
+### `sourceFrom()` [#source-from]
+
+Creates a `ReadableStream` emitting the given chunk sequence in order, then closing. Feeds data into streams in arbitrary splits.
+
+```ts
+import { sourceFrom } from "@unikvs/testing";
+
+const stream = sourceFrom([chunk1, chunk2]);
+```
+
+### `sourceFromValues()` [#source-from-values]
+
+[`sourceFrom`](#source-from) Alias used to feed arbitrary value sequences into streams.
+
+### `readAll()` [#read-all]
+
+Reads a stream to the end and returns output chunks. Verifies stream output order and content.
+
+### `collectBytes()` [#collect-bytes]
+
+Reads a stream to the end and returns all chunks joined as bytes. Verifies stream reads match plain reads.
+
+```ts
+import { collectBytes, sourceFrom } from "@unikvs/testing";
+
+const bytes = await collectBytes(sourceFrom(chunks));
+```
+
+### `collectChunks()` [#collect-chunks]
+
+Feeds the given chunk sequence from upstream through a transform stream and returns output chunks in order. Verifies chunk reference, order, and boundaries are preserved.
+
+```ts
+import { collectChunks } from "@unikvs/testing";
+
+const output = await collectChunks(new TransformStream(), [1, 2, 3]);
+```
+
+### `pipeChunks()` [#pipe-chunks]
+
+[`collectChunks`](#collect-chunks) Alias used to verify streams pass input through unchanged.
+
+### `pumpThrough()` [#pump-through]
+
+Writes chunk sequences to a transform stream while reading concurrently. Avoids backpressure deadlocks while surfacing write/read errors. Returns `readError` and `writeError` (both `undefined` on success) and `outputChunks`.
+
+```ts
+import { pumpThrough } from "@unikvs/testing";
+
+const { readError, writeError, outputChunks } = await pumpThrough(new TransformStream(), [1, 2, 3]);
+```
+
+### `runTransform()` [#run-transform]
+
+Writes chunks to a transform stream in order and reads everything readable, concurrently to avoid backpressure deadlocks.Failures from writing, reading, or closing all return as `closeError` (`undefined` on success). Output goes in `outputChunks`. Byte transform streams only.
+
+### `acquireFreePort()` [#acquire-free-port]
+
+Acquires one free port from the OS. Stands up a temporary server on `127.0.0.1` and closes it to fix the number, returning a `Promise` resolving to it.`@unikvs/testing/node` subpath.
+
+### `waitForPort()` [#wait-for-port]
+
+Waits until the given port accepts connections. Retries connecting to `127.0.0.1` every 250 ms, rejecting with a bare `Error` past 10 s by default (configurable via `timeoutMs`).`@unikvs/testing/node` subpath.
+
+### `listTemporaryFiles()` [#list-temporary-files]
+
+Returns names of leftover temp files (`*.tmp`) directly under the root. Verifies swap-on-close cleanup. Non-recursive.`@unikvs/testing/node` subpath.

@@ -1,0 +1,109 @@
+---
+title: "@unikvs/debug"
+description: "Middleware that logs debug information about operations and data being read or written."
+---
+
+## Overview [#overview]
+
+`@unikvs/debug` is a plugin that logs the kind and size of data being read or written.<Badge>Middleware</Badge>
+
+It passes data through unchanged while recording the operation name, key, and direction. Use it to observe data flow through storage.
+
+- `name` is `Debug`.
+- `isOpen` is always `true`. `open()` is unnecessary.
+- Logging uses `@logtape/logtape`. Recording is controlled by `keyFilter` and `actionFilter`.
+
+Install with:
+
+```package-install
+npm install @unikvs/debug @logtape/logtape
+```
+
+## Usage [#usage]
+
+`Debug` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Debug } from "@unikvs/debug";
+```
+
+### `DebugOptions` [#options]
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    keyFilter: {
+      type: "[#key-filter] IDebugKeyFilter | undefined",
+      description:
+        "Decides which keys to record. Only keys returning `true` are recorded. When omitted, all keys are recorded.",
+    },
+    actionFilter: {
+      type: "[#action-filter] IDebugActionFilter | undefined",
+      description:
+        "Decides which operations to record. Only operations returning `true` are recorded. When omitted, all operations are recorded.",
+    },
+    getDebugInfo: {
+      type: "[#debug-info] IDebugInfoCallback | undefined",
+      description:
+        "Builds the recorded info from data. When omitted, the type name and size are recorded.",
+    },
+  }}
+/>
+
+### `DebugDirection` [#records]
+
+`DebugDirection` is the data direction: `write` or `read`. It is `write` for `encode` on writes and `read` for `decode` on reads.
+
+The following records writes and reads of a specific key:
+
+```ts
+import { configureSync } from "@logtape/logtape";
+import { Debug } from "@unikvs/debug";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+configureSync({
+  sinks: { console: (record) => console.log(record.message) },
+  loggers: [{ category: ["@unikvs/debug"], sinks: ["console"], lowestLevel: "debug" }],
+});
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<string> }>()
+  .use(
+    new Debug({
+      keyFilter: (key) => key.startsWith("foo"),
+      actionFilter: (action) => action === "set" || action === "get",
+    }),
+  )
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", "hello");
+
+const value = await kvs.get("foo");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input    | Output   |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` outputs input data unchanged and logs it as a write.
+- `decode` outputs input data unchanged and logs it as a read.
+- `encodeStream` outputs each chunk unchanged and logs each one as a write.
+- `decodeStream` outputs each chunk unchanged and logs each one as a read.
+- Operations rejected by filters are not logged.
+
+## Errors [#errors]
+
+This package has no package-specific errors.
+
+Errors thrown by `getDebugInfo` propagate as-is.

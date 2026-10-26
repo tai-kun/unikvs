@@ -1,0 +1,132 @@
+---
+title: "@unikvs/memory"
+description: "Usage of Memory in @unikvs/memory, a storage that keeps arbitrary values in memory."
+---
+
+## Overview [#overview]
+
+`@unikvs/memory` Usage of Memory in @unikvs/memory, a storage that keeps arbitrary values in memory.
+
+- `name` is `Memory`.
+- `isOpen` is always `true`.
+- No `open` or `close`.
+
+Install with:
+
+```package-install
+npm install @unikvs/memory
+```
+
+## Usage [#usage]
+
+Memory implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Memory } from "@unikvs/memory";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    clone: {
+      type: "[#clone] (<T>(value: T) => T) | undefined",
+      default: "structuredClone",
+      description: "Function used to clone data. Uses structuredClone when omitted.",
+    },
+  }}
+/>
+
+The following example stores a value and reads it back.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Supported data type                       |
+| ------------------------------------ | ----------------------------------------- |
+| `write` / `read`                     | Arbitrary values (strings, objects, etc.) |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>`                 |
+
+- Stores arbitrary values. Handles values cloneable with `structuredClone`, such as strings and objects.
+- Clones read/write values with `structuredClone` by default. Change it with the constructor `clone` option.
+- Stream chunks support only `Uint8Array<ArrayBuffer>`.
+- Streams from `getWritable` concatenate written chunks and save them on `close`.
+- Streams from `getReadable` emit the stored value as a single chunk. Throws `InvalidChunkTypeError` when the stored value is not a `Uint8Array`.
+
+## Errors [#errors]
+
+### KeyNotFoundError [#key-not-found-error]
+
+#### Meaning
+
+Thrown when the specified key does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/memory";
+
+try {
+  await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "The received chunk value.",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "The type name of the received chunk.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a non-`Uint8Array<ArrayBuffer>` chunk is written to a stream, or when `getReadable` is called on a value that is not a `Uint8Array`.
+
+#### How to fix
+
+Write `Uint8Array` chunks to streams. Store byte sequences for values used with `getReadable`.

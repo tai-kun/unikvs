@@ -1,0 +1,66 @@
+---
+title: "@unikvs/passthrough"
+description: "Middleware that passes data through without conversion."
+---
+
+## Overview [#overview]
+
+`@unikvs/passthrough` passes data through without any conversion.<Badge>Middleware</Badge>
+
+It fits empty pipeline slots or serves as a base for custom middleware. Alone, it never changes stored content.
+
+- `name` is `PassThrough`.
+- `isOpen` is always `true`. `open()` is unnecessary.
+
+Install with:
+
+```package-install
+npm install @unikvs/passthrough @logtape/logtape
+```
+
+## Usage [#usage]
+
+`PassThrough` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { PassThrough } from "@unikvs/passthrough";
+```
+
+The following stores a value through passthrough and reads it back unchanged:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { PassThrough } from "@unikvs/passthrough";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(new PassThrough())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input    | Output   |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` outputs the input data unchanged.
+- `decode` outputs the input data unchanged.
+- `encodeStream` outputs the input stream unchanged.
+- `decodeStream` outputs the input stream unchanged.
+
+## Errors [#errors]
+
+This package has no package-specific errors.

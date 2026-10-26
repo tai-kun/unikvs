@@ -1,0 +1,128 @@
+---
+title: "@unikvs/writeonly"
+description: "How to use @unikvs/writeonly, which rejects reads to make storage write-only."
+---
+
+## Overview [#overview]
+
+`@unikvs/writeonly` <Badge>Middleware</Badge> rejects reads to make storage write-only.
+
+Read-direction operations (`get` / `has` / `stream` / `decode`) are rejected as if the key did not exist, while writes pass through. When `allowDelete` is `false`, deletion is also rejected.
+
+- `name` is `WriteOnly`.
+- `isOpen` is always `true`.
+- `allowDelete` defaults to `false`.
+
+Install with:
+
+```package-install
+npm install @unikvs/writeonly
+```
+
+## Usage [#usage]
+
+WriteOnly implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { WriteOnly } from "@unikvs/writeonly";
+```
+
+### `WriteOnly` [#writeonly]
+
+Middleware that rejects reads to make storage write-only.
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    allowDelete: {
+      type: "[#writeonly-allow-delete] boolean",
+      default: "false",
+      description: "Whether to allow delete operations. When false, delete and clear are rejected.",
+    },
+  }}
+/>
+
+The following stores a value:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { WriteOnly } from "@unikvs/writeonly";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .use(new WriteOnly())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input       | Output                           |
+| -------------- | ----------- | -------------------------------- |
+| `encode`       | write value | Write value (passed through)     |
+| `decode`       | read value  | Always throws `KeyNotFoundError` |
+| `getEncodable` | write chunk | Write chunk (passed through)     |
+| `getDecodable` | read chunk  | Always throws `KeyNotFoundError` |
+
+- The write direction performs no conversion and passes values through.
+- The read direction always fails, as if the key did not exist.
+- Deletion is controlled by `use()`: when `allowDelete` is `false`, `delete` and `clear` are rejected.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### WriteOnlyDeleteNotAllowedError [#error-write-only-delete-not-allowed]
+
+#### Meaning
+
+Thrown when `delete` is called while `allowDelete` is `false`.
+
+#### How to fix
+
+Pass `allowDelete: true` when deletion is needed.
+
+### WriteOnlyClearNotAllowedError [#error-write-only-clear-not-allowed]
+
+#### Meaning
+
+Thrown when `clear` is called while `allowDelete` is `false`.
+
+#### How to fix
+
+Pass `allowDelete: true` when clearing everything is needed.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown when a read-direction operation (`get` / `has` / `stream` / `decode`) is called. This is the shared `@unikvs/core` error.
+
+#### How to fix
+
+Do not use this middleware when reads are needed.
+
+#### Example
+
+Catching `KeyNotFoundError`:
+
+```ts
+import { KeyNotFoundError } from "@unikvs/writeonly";
+
+try {
+  const data = await kvs.get("foo");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("reads are not allowed");
+  } else {
+    throw ex;
+  }
+}
+```

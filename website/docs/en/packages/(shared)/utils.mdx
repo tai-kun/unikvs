@@ -1,0 +1,276 @@
+---
+title: "@unikvs/utils"
+description: "Shared helpers for plugin authors: filename validation, byte operations, stream utilities, and 2 error types."
+---
+
+## Overview [#overview]
+
+`@unikvs/utils` <Badge>Shared</Badge> is a set of small helpers shared by plugin implementations: filename and dirname validation, hex conversion and splitting of bytes, shared UTF-8 instances, owned-byte copies, `ReadableStream` builders, proxied streams with conversion, and 2 validation-failure error types.
+
+Exported functions:
+
+| Function                 | Description                                 | Details                               |
+| ------------------------ | ------------------------------------------- | ------------------------------------- |
+| `assertValidFilename`    | Validates a filename, throwing when invalid | [Details](#assert-valid-filename)     |
+| `assertValidDirname`     | Validates a dirname, throwing when invalid  | [Details](#assert-valid-dirname)      |
+| `isValidFilename`        | Returns whether a valid filename            | [Details](#is-valid-filename)         |
+| `isValidDirname`         | Returns whether a valid dirname             | [Details](#is-valid-dirname)          |
+| `bytesToHex`             | Converts bytes to a lowercase hex string    | [Details](#bytes-to-hex)              |
+| `chunks`                 | Splits binary data into sized pieces        | [Details](#chunks)                    |
+| `defaultUtf8Encoder`     | Shared UTF-8 encoder                        | [Details](#default-utf8)              |
+| `defaultUtf8Decoder`     | Shared UTF-8 decoder                        | [Details](#default-utf8)              |
+| `toOwnedBytes`           | Returns bytes as owned                      | [Details](#to-owned-bytes)            |
+| `toReadableStream`       | Converts an iterable to a stream            | [Details](#to-readable-stream)        |
+| `withReadableStreamFrom` | Temporarily polyfills `ReadableStream.from` | [Details](#with-readable-stream-from) |
+| `proxyTransformStream`   | Builds a stream with in/out conversion      | [Details](#proxy-transform-stream)    |
+
+Validation failures are the 2 errors [`InvalidFilenameError`](#invalid-filename-error) and [`InvalidDirnameError`](#invalid-dirname-error). Both extend [`@unikvs/core`](/packages/core) `ErrorBase` with registered Japanese messages.
+
+## Installation [#installation]
+
+```package-install
+npm install @unikvs/utils
+```
+
+ESM only (`sideEffects: false`). Depends on `@unikvs/core`, `fast-utf8`, `filename-reserved-regex`, `ninja-promise`, and `try-capture-stack-trace`, with `@logtape/logtape` as a peer dependency for logging.
+
+## Usage [#usage]
+
+For filename validation, use the boolean-returning and throwing variants appropriately:
+
+```ts
+import { assertValidFilename, InvalidFilenameError, isValidFilename } from "@unikvs/utils";
+
+if (!isValidFilename(name)) {
+  console.log(`${name} is not usable`);
+}
+
+try {
+  assertValidFilename(name);
+} catch (ex) {
+  if (ex instanceof InvalidFilenameError) {
+    console.log(ex.meta); // { filename: name }
+  } else {
+    throw ex;
+  }
+}
+```
+
+For byte conversion and splitting, combine hex conversion with view-based slicing:
+
+```ts
+import { bytesToHex, chunks } from "@unikvs/utils";
+
+const bytes = new Uint8Array([0, 171, 255]);
+console.log(bytesToHex(bytes)); // "00abff"
+
+for (const view of chunks(bytes, 2)) {
+  // view is a view of the original bytes; no copy
+  console.log(bytesToHex(view));
+}
+```
+
+For stream building, convert from iterables and delegate with conversion:
+
+```ts
+import { proxyTransformStream, toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+
+const proxied = proxyTransformStream(
+  source,
+  (chunk, controller) => controller.enqueue(encode(chunk)),
+  (chunk, controller) => controller.enqueue(decode(chunk)),
+);
+await proxied.writable.getWriter().close();
+await proxied.closePromise;
+```
+
+## Errors [#errors]
+
+Both validation-failure errors keep matching values in `meta`. Discriminate with `instanceof` and take the offending name from `meta`.
+
+### `InvalidFilenameError` [#invalid-filename-error]
+
+Used for invalid filenames. Thrown by [`assertValidFilename`](#assert-valid-filename).
+
+<TypeTable
+  type={{
+    filename: {
+      type: "[#invalid-filename-filename] string",
+      required: true,
+      description: "The offending filename.",
+    },
+  }}
+/>
+
+- Extends: `ErrorBase` (the [`@unikvs/core`](/packages/core/errors#errors-base) error foundation)
+- `name`: `UniKvsInvalidFilenameError`
+- English: `Invalid file name: foo/bar`
+- Japanese: `無効なファイル名: foo/bar`
+
+### `InvalidDirnameError` [#invalid-dirname-error]
+
+Used for invalid dirnames. Thrown by [`assertValidDirname`](#assert-valid-dirname).
+
+<TypeTable
+  type={{
+    dirname: {
+      type: "[#invalid-dirname-dirname] string",
+      required: true,
+      description: "The offending dirname.",
+    },
+  }}
+/>
+
+- Extends: `ErrorBase` (the [`@unikvs/core`](/packages/core/errors#errors-base) error foundation)
+- `name`: `UniKvsInvalidDirnameError`
+- English: `Invalid directory name: foo/bar`
+- Japanese: `無効なディレクトリー名: foo/bar`
+
+## API reference [#api]
+
+Per-function reference. For errors, see [Errors](#errors).
+
+### `assertValidFilename()` [#assert-valid-filename]
+
+Validates a filename, throwing [`InvalidFilenameError`](#invalid-filename-error) when invalid. Returns nothing when valid. The stack trace excludes this function itself, so it points at the caller rather than the throw site.
+
+```ts
+import { assertValidFilename } from "@unikvs/utils";
+
+assertValidFilename("photo.png"); // ok
+assertValidFilename("a/b"); // throws InvalidFilenameError
+```
+
+### `assertValidDirname()` [#assert-valid-dirname]
+
+Validates a dirname, throwing [`InvalidDirnameError`](#invalid-dirname-error) when invalid. Returns nothing when valid. The stack trace excludes this function itself, so it points at the caller rather than the throw site.
+
+```ts
+import { assertValidDirname } from "@unikvs/utils";
+
+assertValidDirname("photos"); // ok
+assertValidDirname(".."); // throws InvalidDirnameError
+```
+
+### `isValidFilename()` [#is-valid-filename]
+
+Returns whether a string is a valid filename. Rules:
+
+- Rejects empty strings, `"."`, and `".."`.
+- Rejects anything over 255 bytes in UTF-8 encoding.
+- Rejects strings that do not round-trip through encode/decode (e.g. containing a BOM).
+- Rejects strings not matching NFC normalization.
+- Rejects reserved characters and Windows reserved names.
+- Explicitly rejects `":"`.
+
+```ts
+import { isValidFilename } from "@unikvs/utils";
+
+isValidFilename("photo.png"); // true
+isValidFilename(""); // false
+isValidFilename("a/b"); // false
+```
+
+### `isValidDirname()` [#is-valid-dirname]
+
+Returns whether a string is a valid dirname. Defers to [`isValidFilename`](#is-valid-filename), so the rules are the same.
+
+```ts
+import { isValidDirname } from "@unikvs/utils";
+
+isValidDirname("photos"); // true
+isValidDirname(".."); // false
+```
+
+### `bytesToHex()` [#bytes-to-hex]
+
+Converts bytes to a lowercase hex string. Uses `Uint8Array.prototype.toHex` when the runtime has it, otherwise an internal 256-entry table. Throws `RangeError` when invalid byte values (e.g. holes in sparse arrays) are mixed in.
+
+```ts
+import { bytesToHex } from "@unikvs/utils";
+
+bytesToHex(new Uint8Array([0, 171, 255])); // "00abff"
+```
+
+### `chunks()` [#chunks]
+
+Yields views of binary data sliced at the given size. Accepts `DataView` and typed arrays. Produced values are same-type views with no copying: a `DataView` input returns a new `DataView` sliced by buffer range; typed-array inputs return `subarray` views. Fractional sizes truncate, with a minimum of 1. Empty data yields nothing.
+
+```ts
+import { chunks } from "@unikvs/utils";
+
+for (const view of chunks(new Uint8Array([1, 2, 3]), 2)) {
+  console.log(view); // Uint8Array(2) [1, 2], Uint8Array(1) [3]
+}
+```
+
+### Shared UTF-8 instances [#default-utf8]
+
+Shared UTF-8 instances used as defaults when none are injected. `defaultUtf8Encoder` is a non-strict (`strict: false`) encoder assuming ASCII input; `defaultUtf8Decoder` is a strict (`strict: true`) decoder throwing `TypeError` on invalid input. Use it for bulk decoding needing `TextDecoder`-fatal-equivalent behavior.
+
+```ts
+import { defaultUtf8Decoder, defaultUtf8Encoder } from "@unikvs/utils";
+
+const bytes = defaultUtf8Encoder.encode("hello");
+console.log(defaultUtf8Decoder.decode(bytes)); // "hello"
+```
+
+### `toOwnedBytes()` [#to-owned-bytes]
+
+Returns a view as an owned `Uint8Array<ArrayBuffer>`. When the backing is an `ArrayBuffer` covering everything with the `Uint8Array` constructor itself, returns it as-is without copying. A subclass view covering everything is rewrapped in `Uint8Array` over the same buffer. Anything else (range views, shared-buffer origins, etc.) is copied into a new array.
+
+```ts
+import { toOwnedBytes } from "@unikvs/utils";
+
+const owned: Uint8Array<ArrayBuffer> = toOwnedBytes(view);
+```
+
+### `toReadableStream()` [#to-readable-stream]
+
+Converts an `Iterable` or `AsyncIterable` to a `ReadableStream`. Passing a string directly yields primitives on iteration, which WebKit's native `from` rejects, so it converts to a character array first. Uses [`withReadableStreamFrom`](#with-readable-stream-from) for the conversion.
+
+```ts
+import { toReadableStream } from "@unikvs/utils";
+
+const stream = toReadableStream([1, 2, 3]);
+```
+
+### `withReadableStreamFrom()` [#with-readable-stream-from]
+
+Runs a callback with a `from`-capable `ReadableStream`, whether or not `ReadableStream.from` exists in the runtime. Runs as-is when `from` exists; otherwise defines a temporary polyfill and always removes it afterwards. Sync callbacks return their value as-is. The overload taking a `PromiseLike`-returning async callback has return type `never`, so carrying a stream built during polyfilling to the outside is untyped. Use it to build streams in sync callbacks like [`toReadableStream`](#to-readable-stream). Iterator-cleanup failures are logged to the Logtape logger.
+
+```ts
+import { withReadableStreamFrom } from "@unikvs/utils";
+
+const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1, 2, 3]));
+```
+
+### `proxyTransformStream()` [#proxy-transform-stream]
+
+Builds a new stream with input/output conversion around a source. Written values are converted by `proxyInput` before reaching the source; source output is converted by `proxyOutput` for reading. `proxyInput` and `proxyOutput` take either conversion callbacks or `Transformer` objects. The returned `closePromise` resolves when the input-to-source connection finishes; mid-stream failures propagate to reads and `closePromise`.
+
+```ts
+import { proxyTransformStream } from "@unikvs/utils";
+
+const proxied = proxyTransformStream(
+  source,
+  (chunk, controller) => controller.enqueue(encode(chunk)),
+  (chunk, controller) => controller.enqueue(decode(chunk)),
+);
+```
+
+### `IProxiedTransformStream` [#iproxied-transform-stream]
+
+The stream returned by [`proxyTransformStream`](#proxy-transform-stream), with input/output conversion.[`@unikvs/core`](/packages/core/stream) Extends [`@unikvs/core`](/packages/core/stream) `ITransformStream`.
+
+<TypeTable
+  type={{
+    closePromise: {
+      type: "[#iproxied-transform-stream-closepromise] NinjaPromise<void>",
+      required: true,
+      description: "Resolves when the input-to-source connection finishes.",
+    },
+  }}
+/>

@@ -1,0 +1,120 @@
+---
+title: "@unikvs/brotli.node"
+description: "Middleware that compresses and decompresses Brotli with Node.js node:zlib."
+---
+
+## Overview [#overview]
+
+`@unikvs/brotli.node` is a plugin that compresses bytes with Brotli for storage and decompresses them on read. <Badge>Middleware</Badge> <Badge variant="warning">Node.js only</Badge>
+
+Because Web `CompressionStream` has no Brotli format, compression is always delegated to `node:zlib`. Use it to keep stored values small.
+
+- `name` is `Brotli`.
+- `isOpen` becomes `true` after `open()`. It is `false` initially.
+- Node.js runtime only. This middleware lazily resolves `node:util`, `node:zlib`, and `node:stream` in `open()`.
+
+Install with:
+
+```package-install
+npm install @unikvs/brotli.node @logtape/logtape
+```
+
+## Usage [#usage]
+
+`Brotli` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Brotli } from "@unikvs/brotli.node";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "Compression level. Specify an integer from 0 to 11. Higher values compress better but take longer. Defaults to 11 when omitted.",
+    },
+  }}
+/>
+
+The following example compresses written values with Brotli for storage and decompresses them on read.
+
+```ts
+import { Brotli } from "@unikvs/brotli.node";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(new Brotli({ level: 11 }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // Decompressed bytes
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` compresses input bytes with Brotli.
+- `decode` decompresses input bytes with Brotli.
+- `encodeStream` connects the input stream to a Brotli compression stream.
+- `decodeStream` connects the input stream to a Brotli decompression stream.
+- Chunks produced by the `node:zlib` stream are emitted as-is, without combining them into one chunk.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `BrotliInvalidLevelError` [#error-brotli-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#brotli-invalid-level-actual] unknown",
+      required: true,
+      description: "The specified compression level.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The constructor throws this error when `level` is not an integer from 0 to 11.
+
+#### How to fix
+
+Specify an integer from 0 to 11. It defaults to 11 when omitted.
+
+#### Example
+
+The following example catches `BrotliInvalidLevelError`.
+
+```ts
+import { Brotli, BrotliInvalidLevelError } from "@unikvs/brotli.node";
+
+try {
+  new Brotli({ level: 12 });
+} catch (ex) {
+  if (ex instanceof BrotliInvalidLevelError) {
+    console.log(ex.meta); // { actual: 12 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+If `open()` fails to resolve the runtime, this middleware throws [`UnsupportedRuntimeError`](/packages/core/errors#error-unsupported-runtime). Calling `encode` or similar before `open()` throws a `TypeError`. Decompression failures propagate the upstream error unchanged.

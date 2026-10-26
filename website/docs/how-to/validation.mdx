@@ -1,0 +1,100 @@
+---
+title: "値を検証する"
+description: "Valibot スキーマでキーと入出力値を検証する手順です。"
+---
+
+入力ミスや保存データの破損に早く気づきたい場合は、Valibot スキーマによる検証を使います。
+
+## スキーマを指定する [#specify-schema]
+
+`Builder` の `schema` オプションに、`PlainValue()` や `StreamValue()` と Valibot スキーマの組み合わせを渡します。`valibot` は別途インストールします。
+
+```package-install
+npm install valibot
+```
+
+<Tabs>
+  <Tab title="固定キー">
+    キー名をそのまま使う場合は、オブジェクト形式で指定します。
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: {
+        message: unikvs.PlainValue(v.pipe(v.string(), v.minLength(1))),
+      },
+    })
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+  <Tab title="動的キー">
+    キーのパターンで使い分ける場合は、配列形式で指定します。最初に一致した定義を採用します。
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: [
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), unikvs.PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), unikvs.StreamValue(v.instance(Uint8Array))],
+      ],
+    })
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+</Tabs>
+
+:::warning[スキーマ定義が不正な場合]
+`schema` の形式が不正な場合はコンストラクターの時点で `InvalidInputError` を投げます。
+:::
+
+## 検証の範囲を確認する [#validation-scope]
+
+操作ごとの検証内容と失敗時のエラーは次のとおりです。
+
+| 操作            | 検証内容                               | 失敗時のエラー       |
+| --------------- | -------------------------------------- | -------------------- |
+| `set`           | 入力値を検証します。                   | `InvalidInputError`  |
+| `get`           | 出力値を検証します。                   | `InvalidOutputError` |
+| `stream`        | チャンクを 1 つずつ検証します。        | `InvalidOutputError` |
+| `has`・`delete` | 配列形式の場合のみ、キーを検証します。 | `InvalidInputError`  |
+
+```ts
+await kvs.set("message", "hello");
+await kvs.get("message"); // "hello"
+
+// 入力検証に失敗し、InvalidInputError を投げます
+await kvs.set("message", "");
+```
+
+:::note[プレーンとストリームの取り違え]
+プレーン専用のキーに `ReadableStream` を渡した場合や、ストリーム専用のキーにプレーン値を渡した場合は `InvalidInputError` を投げます。配列形式でどのキースキーマにも一致しないキーも `InvalidInputError` です。
+:::
+
+## 検証を使わない場合 [#without-schema]
+
+`schema` を省略した場合は、実行時の検証を行いません。型レベルでの制限だけが残ります。
+
+```ts
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  message: unikvs.PlainValue<string>;
+}>()
+  .persist(storage)
+  .build();
+```
+
+入力値の形式を本番環境でも保証したい場合は、スキーマありの構成を選んでください。
+
+## 関連情報 [#related]
+
+- 型の使い分けは[値のモデル](/explanation/value-model)を参照してください。
+- 例外の処理は[エラーを処理する](/how-to/handle-errors)を参照してください。

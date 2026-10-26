@@ -1,4 +1,85 @@
 ---
 title: "UniKVS"
-description: ""
+description: "TypeScript 製のモジュラーな KVS クライアント UniKVS のドキュメントです。目的に合わせてチュートリアル、ハウツーガイド、解説、リファレンスを使い分けてください。"
 ---
+
+UniKVS は TypeScript 製のモジュラーでポータブルな KVS クライアントです。データを透過的に変換するミドルウェアと、複数の保存先に書き込むストレージを、ビルダーで組み合わせます。
+
+## 読み進め方 [#how-to-read]
+
+このドキュメントは Diátaxis の 4 分類に沿って構成しています。いまの目的に合う入口を選んでください。
+
+<CardGroup cols={2}>
+  <Card title="チュートリアル" href="/tutorials" icon="rocket">
+    初めて触る方が手を動かして全体像をつかみます。
+  </Card>
+  <Card title="ハウツーガイド" href="/how-to" icon="wrench">
+    目的別の手順を確認して課題を解決します。
+  </Card>
+  <Card title="解説" href="/explanation" icon="book-open">
+    仕組みと設計を理解して判断できるようになります。
+  </Card>
+  <Card title="リファレンス" href="/reference" icon="database">
+    保存先の比較や操作の仕様を調べます。
+  </Card>
+</CardGroup>
+
+## クイックスタート [#quickstart]
+
+まずはメモリーストレージで最小構成を試します。所要時間は 5 分程度です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+const value = await kvs.get("greeting");
+console.log(value); // "hello"
+
+await kvs.close();
+```
+
+詳しい手順は[はじめての UniKVS](/tutorials/first-kvs)で確認してください。
+
+## 主な特徴 [#features]
+
+- ミドルウェアによる透過的なエンコードとデコードに対応します。
+- 複数のストレージへの並列書き込みに対応します。
+- キーごとに値の型を定義し、使える操作を型レベルで制限します。
+- Valibot スキーマによる入出力値の実行時検証に対応します。
+- 単一値とストリームの両方に対応します。
+- `AbortSignal` によるキャンセルと実行時変数の受け渡しに対応します。
+- Node.js とブラウザーの両方に対応したストレージを用意しています。
+
+## パッケージ [#packages]
+
+パッケージごとの使い方は[パッケージリファレンス](/packages)にまとめています。代表的なパッケージは次のとおりです。
+
+<CardGroup cols={2}>
+  <Card title="UniKVS" href="/packages/unikvs" icon="package">
+    設定ビルダーと KVS クライアント本体です。
+  </Card>
+  <Card title="@unikvs/memory" href="/packages/memory" icon="zap">
+    メモリー上に任意のデータを保存します。
+  </Card>
+  <Card title="@unikvs/compression" href="/packages/compression" icon="archive">
+    gzip・deflate・deflate-raw による圧縮と展開を行います。
+  </Card>
+  <Card title="@unikvs/json" href="/packages/json" icon="braces">
+    値を JSON に、ストリームでは JSON Lines に変換します。
+  </Card>
+  <Card title="@unikvs/fs.node" href="/packages/fs-node" icon="hard-drive">
+    Node.js のローカルファイルシステムに保存します。
+  </Card>
+  <Card title="@unikvs/opfs" href="/packages/opfs" icon="folder">
+    ブラウザーの OPFS に保存します。
+  </Card>
+</CardGroup>

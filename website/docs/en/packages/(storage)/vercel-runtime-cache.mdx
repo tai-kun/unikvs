@@ -1,0 +1,173 @@
+---
+title: "@unikvs/vercel-runtime-cache"
+description: "How to use @unikvs/vercel-runtime-cache, which stores values in the Vercel runtime cache."
+---
+
+## Overview [#overview]
+
+`@unikvs/vercel-runtime-cache` is storage that stores values in the Vercel runtime cache.
+
+This storage auto-detects the runtime cache and falls back to an in-process `Map` when none is found. In both cases entries are evicted by TTL and maximum count.
+
+- `name` is `VercelRuntimeCache`.
+- `isOpen` is always `true`. `open()` / `close()` only check for interruption.
+- `delete` throws `KeyNotFoundError` for a missing key.
+- Supports streamed reading and writing.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/vercel-runtime-cache
+```
+
+## Usage [#usage]
+
+VercelRuntimeCache implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { VercelRuntimeCache } from "@unikvs/vercel-runtime-cache";
+```
+
+### `VercelRuntimeCache` [#vercel-runtime-cache]
+
+Storage that uses the Vercel Runtime Cache.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    ttlSeconds: {
+      type: "[#vercel-runtime-cache-ttl-seconds] number",
+      default: "60",
+      description: "The entry lifetime (in seconds).",
+    },
+    maxEntries: {
+      type: "[#vercel-runtime-cache-max-entries] number",
+      description: "The maximum number of entries to keep. Unlimited when omitted.",
+    },
+    namespace: {
+      type: "[#vercel-runtime-cache-namespace] string",
+      default: '""',
+      description:
+        "The namespace prepended to backend keys. Use it when multiple storages share the same backend.",
+    },
+    clone: {
+      type: "[#vercel-runtime-cache-clone] <T>(value: T) => T",
+      description: "The function used to clone values. Uses structuredClone by default.",
+    },
+    backend: {
+      type: "[#vercel-runtime-cache-backend] VercelRuntimeCacheBackend",
+      description:
+        "The backend to use. When omitted, it is auto-detected and falls back to an in-process Map when none is found.",
+    },
+    now: {
+      type: "[#vercel-runtime-cache-now] () => number",
+      description: "The function returning the current time. Use it to fix the time in tests.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { VercelRuntimeCache } from "@unikvs/vercel-runtime-cache";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<string>;
+}>()
+  .persist(new VercelRuntimeCache())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", "hello");
+
+const data = await kvs.get("foo");
+console.log(data); // "hello"
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                          |
+| ------------------------------------ | ---------------------------------- |
+| `write` / `read`                     | Any value (strings, objects, etc.) |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>`          |
+
+- Any value can be stored. By default values are cloned with `structuredClone`, so handle values that `structuredClone` can clone.
+- Expired entries are treated as missing and swept on read.
+- The stream from `getWritable` accumulates `Uint8Array<ArrayBuffer>` chunks and stores them together on `close`.
+- `getReadable` can only be used when the stored value is a `Uint8Array<ArrayBuffer>`.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidTtlSecondsError [#error-invalid-ttl-seconds]
+
+#### Meaning
+
+Thrown at construction when `ttlSeconds` is not a finite number greater than 0.
+
+#### How to fix
+
+Specify a finite number greater than 0 for `ttlSeconds`.
+
+### InvalidMaxEntriesError [#error-invalid-max-entries]
+
+#### Meaning
+
+Thrown at construction when `maxEntries` is not an integer greater than or equal to 0.
+
+#### How to fix
+
+Specify an integer greater than or equal to 0 for `maxEntries`.
+
+### InvalidNamespaceError [#error-invalid-namespace]
+
+#### Meaning
+
+Thrown at construction when `namespace` is not a string.
+
+#### How to fix
+
+Specify a string for `namespace`.
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### Meaning
+
+Thrown when a chunk other than `Uint8Array<ArrayBuffer>` is written to the stream from `getWritable`, or when the `getReadable` target value is not a `Uint8Array<ArrayBuffer>`.
+
+#### How to fix
+
+Use `Uint8Array<ArrayBuffer>` for values handled as streams.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown by `read` / `delete` when the specified key does not exist or has expired. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/vercel-runtime-cache";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

@@ -1,0 +1,120 @@
+---
+title: "@unikvs/zstd.node"
+description: "Middleware that compresses and decompresses Zstandard with Node.js node:zlib."
+---
+
+## Overview [#overview]
+
+`@unikvs/zstd.node` is a plugin that compresses bytes with Zstandard for storage and decompresses them on read. <Badge>Middleware</Badge> <Badge variant="warning">Node.js only</Badge>
+
+It delegates to the Zstandard support in `node:zlib`, so it is Node.js-only. Use it when you want small stored values with fast processing.
+
+- `name` is `ZstdNode`.
+- `isOpen` becomes `true` after `open()`. It is `false` initially.
+- Node.js runtime only. This middleware lazily resolves `node:util`, `node:zlib`, and `node:stream` in `open()`.
+
+Install with:
+
+```package-install
+npm install @unikvs/zstd.node @logtape/logtape
+```
+
+## Usage [#usage]
+
+`ZstdNode` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { ZstdNode } from "@unikvs/zstd.node";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    level: {
+      type: "[#level] number | undefined",
+      description:
+        "Compression level. Specify an integer from 1 to 22. Higher values compress better but take longer. Defaults to 3 when omitted.",
+    },
+  }}
+/>
+
+The following example compresses written values with Zstandard for storage and decompresses them on read.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { ZstdNode } from "@unikvs/zstd.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(new ZstdNode({ level: 3 }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("foo");
+console.log(bytes); // Decompressed bytes
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` compresses input bytes with Zstandard.
+- `decode` decompresses input bytes with Zstandard.
+- `encodeStream` connects the input stream to a Zstandard compression stream.
+- `decodeStream` connects the input stream to a Zstandard decompression stream.
+- Chunks produced by the `node:zlib` stream are emitted as-is, without combining them into one chunk.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `ZstdNodeInvalidLevelError` [#error-zstd-node-invalid-level]
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#zstd-node-invalid-level-actual] unknown",
+      required: true,
+      description: "The specified compression level.",
+    },
+  }}
+/>
+
+#### Meaning
+
+The constructor throws this error when `level` is not an integer from 1 to 22.
+
+#### How to fix
+
+Specify an integer from 1 to 22. It defaults to 3 when omitted.
+
+#### Example
+
+The following example catches `ZstdNodeInvalidLevelError`.
+
+```ts
+import { ZstdNode, ZstdNodeInvalidLevelError } from "@unikvs/zstd.node";
+
+try {
+  new ZstdNode({ level: 0 });
+} catch (ex) {
+  if (ex instanceof ZstdNodeInvalidLevelError) {
+    console.log(ex.meta); // { actual: 0 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+If `open()` fails to resolve the runtime, this middleware throws [`UnsupportedRuntimeError`](/packages/core/errors#error-unsupported-runtime). Calling `encode` or similar before `open()` throws a `TypeError`. Decompression failures propagate the upstream error unchanged.

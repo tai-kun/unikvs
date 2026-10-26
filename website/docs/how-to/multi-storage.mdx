@@ -1,0 +1,83 @@
+---
+title: "複数の保存先を使う"
+description: "複数ストレージへの書き込みと読み取り時の書き戻しを設定する手順です。"
+---
+
+高速な保存先と永続的な保存先を組み合わせる場合などに、複数のストレージを登録します。
+
+## 複数ストレージを登録する [#register-multiple]
+
+`persist()` を複数回呼ぶと、すべての保存先に並列で書き込みます。読み取りは登録順に確認し、最初に見つかった保存先の値を返します。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { NodeFs } from "@unikvs/fs.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  profile: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .persist(new NodeFs(".unikvs"))
+  .build();
+```
+
+上記の例では、書き込みはメモリーとファイルの両方に行い、読み取りはメモリーを先に確認します。
+
+:::note[登録順が優先順になります]
+読み取りの優先順は `persist()` の呼び出し順で決まります。速い保存先や一時的な保存先を先に登録してください。
+:::
+
+## 読み取り時に書き戻す [#read-repair]
+
+`get()` と `stream()` は `repair: true` を指定すると、後段で見つかった値を前段へ書き戻します。既定値は `false` です。
+
+```ts
+const bytes = await kvs.get("profile", { repair: true });
+```
+
+書き戻しを制御したい場合は、`@unikvs/allow-repair` を使います。書き戻しを許可しない分岐では、読み取り自体は成功し、警告ログに残ります。拒否時に読み取りも失敗させたい場合は `throwOnRepairDenied: true` を指定します。
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+
+const noRepair = new AllowRepair();
+noRepair.disable();
+
+const kvs = new unikvs.Builder<{
+  profile: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .fork(new unikvs.Branch().use(noRepair).persist(new NodeFs(".unikvs")))
+  .build();
+```
+
+:::warning[分岐先の追加は親に漏れません]
+`fork()` で分岐したパイプラインへの追加は、分岐先だけに適用されます。親パイプラインの構成は変わりません。
+:::
+
+## 保存先ごとに変換を変える [#branch-pipeline]
+
+`fork()` は分岐ごとに異なるミドルウェアの組み合わせを使いたい場合に使います。各保存先は、`persist()` 呼び出し時点のパイプラインのスナップショットを使います。そのため、分岐後に追加したミドルウェアは、すでに登録済みの保存先には影響しません。
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import { NodeFs } from "@unikvs/fs.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  settings: unikvs.PlainValue<Uint8Array>;
+}>()
+  .fork(new unikvs.Branch().use(new Json()).persist(new Memory()))
+  .persist(new NodeFs(".unikvs"))
+  .build();
+```
+
+上記の例では、メモリー側だけ JSON 変換を適用し、ファイル側はバイト列のまま保存します。
+
+## 関連情報 [#related]
+
+- 動作の背景は[アーキテクチャー](/explanation/architecture)を参照してください。
+- 保存先の選び方は[ストレージ比較](/reference/comparison)を参照してください。
+- パッケージ固有の注意は各[パッケージリファレンス](/packages)を参照してください。

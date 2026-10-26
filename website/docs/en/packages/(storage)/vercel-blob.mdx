@@ -1,0 +1,192 @@
+---
+title: "@unikvs/vercel-blob"
+description: "How to use @unikvs/vercel-blob, which stores byte sequences in Vercel Blob."
+---
+
+## Overview [#overview]
+
+`@unikvs/vercel-blob` is storage that stores byte sequences in Vercel Blob.
+
+This storage converts keys to the `${keyPrefix}${key}` pathname and processes them with `put` / `head` / `del` / `list`. For reads, it resolves the URL with `head` and downloads it with `fetch`.
+
+- `name` is `VercelBlob`.
+- `isOpen` is always `true`. `open()` / `close()` only check for interruption.
+- `delete` is idempotent; missing keys are treated as success.
+- The token is resolved in the order: runtime variables `@unikvs/vercel-blob:token` / `@unikvs/fetch:token`, the constructor `token`, then environment variables.
+- Supports streamed reading and writing.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/vercel-blob
+```
+
+## Usage [#usage]
+
+VercelBlob implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { VercelBlob } from "@unikvs/vercel-blob";
+```
+
+### `VercelBlob` [#vercel-blob]
+
+Storage that stores byte sequences in Vercel Blob.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    token: {
+      type: "[#vercel-blob-token] string",
+      description:
+        "The token used for operations. When omitted, environment variables such as BLOB_READ_WRITE_TOKEN are used.",
+    },
+    client: {
+      type: "[#vercel-blob-client] BlobClientLike",
+      description:
+        "The Vercel Blob client to use. When omitted, the functions from @vercel/blob are used.",
+    },
+    keyPrefix: {
+      type: "[#vercel-blob-key-prefix] string",
+      default: '""',
+      description: "The prefix prepended to every key.",
+    },
+    access: {
+      type: "[#vercel-blob-access] BlobAccess",
+      default: '"private"',
+      description: "The visibility of stored blobs. Specify public or private.",
+    },
+    fetch: {
+      type: "[#vercel-blob-fetch] IFetch",
+      description:
+        "The fetch implementation used to download from blob URLs. When omitted, globalThis.fetch is used.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { VercelBlob } from "@unikvs/vercel-blob";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new VercelBlob())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                                 |
+| ------------------------------------ | ----------------------------------------- |
+| `write` / `read`                     | Byte sequence (`Uint8Array<ArrayBuffer>`) |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>`                 |
+
+- Only byte sequences can be stored. Convert strings or objects with middleware before passing them.
+- Stored with the `application/octet-stream` content type.
+- The stream from `getWritable` accumulates chunks and stores them at once on `close`.
+- The stream from `getReadable` returns the body of the download response.
+- `clear` collects every pathname under the prefix and then deletes them.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidTokenError [#error-invalid-token]
+
+#### Meaning
+
+Thrown when `token` is not a non-empty string. Both the constructor and runtime variable values are validated.
+
+#### How to fix
+
+Specify a non-empty string token. When omitted, environment variables are used.
+
+### InvalidAccessError [#error-invalid-access]
+
+#### Meaning
+
+Thrown at construction when `access` is neither `public` nor `private`.
+
+#### How to fix
+
+Specify `public` or `private` for `access`.
+
+### BlobOperationError [#error-blob-operation]
+
+#### Meaning
+
+Thrown when the Vercel Blob client's `put` / `head` / `del` / `list` fails.
+
+#### How to fix
+
+Check the failed operation in `meta.operation` and investigate the cause in `cause`.
+
+### BlobNetworkError [#error-blob-network]
+
+#### Meaning
+
+Thrown when the blob download request itself fails.
+
+#### How to fix
+
+Check the network state and the validity of the blob URL, and investigate the cause in `cause`.
+
+### BlobResponseError [#error-blob-response]
+
+#### Meaning
+
+Thrown when the blob download response has a failure status. A 404 / 410 status, which indicates absence, is converted to `KeyNotFoundError`.
+
+#### How to fix
+
+Check the status in `meta.status` and resolve the response-side problem.
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### Meaning
+
+Thrown when a chunk other than `Uint8Array<ArrayBuffer>` is written to the stream obtained from `getWritable`.
+
+#### How to fix
+
+Pass `Uint8Array<ArrayBuffer>` as chunks.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown by `read` / `getReadable` when the specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/vercel-blob";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

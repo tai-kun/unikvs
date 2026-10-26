@@ -1,0 +1,158 @@
+---
+title: "@unikvs/soft-delete"
+description: "How to use @unikvs/soft-delete, which keeps deleted data as restorable tombstones."
+---
+
+## Overview [#overview]
+
+`@unikvs/soft-delete` is a wrapper that keeps deleted data as restorable tombstones.
+
+This wrapper turns `delete` into a tombstone write to the same key instead of a physical delete, so `restore` can bring the value back. Tombstones and the registry live in the delegated storage, so they are replicated along with it.
+
+- `name` is `SoftDelete`.
+- `isOpen` follows the delegated storage.
+- With `retentionMs`, tombstones past their retention period are swept.
+- Stream support and chunk types follow the delegated storage.
+
+Install with:
+
+```package-install
+npm install @unikvs/soft-delete
+```
+
+## Usage [#usage]
+
+SoftDelete implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { SoftDelete } from "@unikvs/soft-delete";
+```
+
+### `SoftDelete` [#soft-delete]
+
+Wrapper that keeps deleted data as restorable tombstones.
+
+Constructor arguments. Pass the delegated `storage` as the first argument.
+
+<TypeTable
+  type={{
+    storage: {
+      type: "[#soft-delete-storage] IStorage",
+      required: true,
+      description: "Delegated storage holding the tombstone data.",
+    },
+    retentionMs: {
+      type: "[#soft-delete-retention-ms] number",
+      description: "How long (milliseconds) to keep tombstones. Kept indefinitely when omitted.",
+    },
+  }}
+/>
+
+The following example deletes a value and restores it.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { SoftDelete } from "@unikvs/soft-delete";
+import * as unikvs from "unikvs";
+
+const softDelete = new SoftDelete(new Memory());
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(softDelete)
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+await kvs.delete("foo"); // remains as a tombstone
+console.log(await kvs.has("foo")); // false
+
+await softDelete.restore("foo");
+console.log(await kvs.has("foo")); // true
+
+await kvs.close();
+```
+
+It can also be used as middleware. When passed to `use()`, this middleware treats tombstones leaking into the read path as missing keys.
+
+The following example uses it as middleware.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { SoftDelete } from "@unikvs/soft-delete";
+import * as unikvs from "unikvs";
+
+const inner = new Memory();
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .use(new SoftDelete(inner))
+  .persist(inner)
+  .build();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type                       |
+| ---------------------------------- | ----------------------------------------- |
+| `write`/`read`                     | Arbitrary values (strings, objects, etc.) |
+| `getWritable`/`getReadable` chunks | Follows the delegated storage             |
+
+- Stores arbitrary values. Tombstones are stored under the same key as internal records.
+- Tombstones and the registry live in the delegated storage. The reserved key `__unikvs_soft_delete_registry__` is used for the registry.
+- Stream support and chunk types follow the delegated storage. Acquisition functions stay undefined when unsupported.
+- As middleware it is transparent. When a tombstone leaks into the read path, this middleware throws `KeyNotFoundError`.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### TombstoneNotFoundError [#error-tombstone-not-found]
+
+#### Meaning
+
+`restore` and `purge` throw it when the target has no tombstone, or when the tombstone is past its retention period.
+
+#### How to fix
+
+Check the tombstone list with `listTombstones` before operating.
+
+### SoftDeleteInvalidRetentionError [#error-soft-delete-invalid-retention]
+
+#### Meaning
+
+Thrown at construction when `retentionMs` is not a non-negative finite number.
+
+#### How to fix
+
+Specify a non-negative finite number (milliseconds) for `retentionMs`, or omit it.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown when reading a key that has only a tombstone or does not exist. A shared error from `@unikvs/core`.
+
+#### How to fix
+
+Check with `exists` before reading. Use `restore` when you need a deleted value.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/soft-delete";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

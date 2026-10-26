@@ -1,0 +1,81 @@
+---
+title: "@unikvs/allow-repair"
+description: "Middleware that controls whether read-time repair writes are allowed."
+---
+
+## Overview [#overview]
+
+`@unikvs/allow-repair` is a plugin that allows or denies read-time repair writes.<Badge>Middleware</Badge>
+
+It extends `PassThrough` and passes data through without conversion. Use it to temporarily stop repair writes to earlier storages in a multi-storage setup.
+
+- `name` is `AllowRepair`.
+- `isOpen` is always `true`. `open()` is unnecessary.
+- Repair is allowed initially. `disable()` switches to denying.
+
+Install with:
+
+```package-install
+npm install @unikvs/allow-repair
+```
+
+## Usage [#usage]
+
+`AllowRepair` implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+```
+
+The following reads with repair denied, then re-reads after allowing it:
+
+```ts
+import { AllowRepair } from "@unikvs/allow-repair";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const gate = new AllowRepair();
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>()
+  .use(gate)
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+gate.disable();
+
+try {
+  await kvs.get("foo", { repair: true });
+} catch {
+  console.log("repair was denied");
+}
+
+gate.enable();
+
+const bytes = await kvs.get("foo", { repair: true });
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input    | Output   |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` outputs the input data unchanged.
+- `decode` outputs the input data unchanged.
+- `encodeStream` outputs the input stream unchanged.
+- `decodeStream` outputs the input stream unchanged.
+- `use` only decides repair eligibility for `get` and `stream`; it never changes data.
+
+## Errors [#errors]
+
+This package has no package-specific errors.
+
+`use()` throws [`RepairNotAllowedError`](/packages/core/errors#error-repair-not-allowed) when repair is denied. It never throws when `enabled` is `true` or when the read has repair disabled.

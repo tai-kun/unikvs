@@ -1,0 +1,80 @@
+---
+title: "@unikvs/compression"
+description: "How to use @unikvs/compression, middleware that compresses and decompresses bytes in a given format."
+---
+
+## Overview [#overview]
+
+Middleware that compresses and decompresses bytes in a given format. <Badge>Middleware</Badge>
+
+It converts both single reads/writes and streams transparently, without changing caller types.
+
+- `name` is `"Compression"`.
+- `isOpen` is always `true`.
+- Available formats depend on the runtime's `CompressionStream` and `DecompressionStream`.
+
+Install with:
+
+```package-install
+npm install @unikvs/compression
+```
+
+## Usage [#usage]
+
+Compression implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Compression } from "@unikvs/compression";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    format: {
+      type: "[#compression-format] CompressionFormat",
+      required: true,
+      description:
+        "Compression format to use. Specify a format supported by both `CompressionStream` and `DecompressionStream`.",
+    },
+  }}
+/>
+
+The following example stores bytes compressed with gzip and decompresses them on read.
+
+```ts
+import { Compression } from "@unikvs/compression";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .use(new Compression("gzip"))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0x01, 0x02, 0x03]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` compresses bytes in the given format.
+- `decode` decompresses compressed bytes in the given format.
+- `encodeStream` passes the stream through `CompressionStream` as-is.
+- `decodeStream` passes the stream through `DecompressionStream` as-is.
+- Chunk boundaries are left to the compressor and decompressor.
+
+## Errors [#errors]
+
+This package has no package-specific errors.
+
+If an unsupported format is specified or corrupted data is decompressed, the runtime's native error propagates unchanged.

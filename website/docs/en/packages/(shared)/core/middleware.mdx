@@ -1,0 +1,200 @@
+---
+title: "Middleware"
+description: "@unikvs/core IMiddleware: hooks and contexts implemented by middleware."
+---
+
+## Overview [#overview]
+
+`IMiddleware` is the interface middleware implements. Only `name` and `isOpen` are required; every hook is optional. Implement just the hooks you need.
+
+```ts
+import type { IMiddleware } from "@unikvs/core";
+
+type MyMiddleware = IMiddleware<string, string, ArrayBuffer, ArrayBuffer>;
+```
+
+## Type arguments [#type-params]
+
+| Type argument  | Default | Corresponding hooks                |
+| -------------- | ------- | ---------------------------------- |
+| `TEncodeData`  | `any`   | `encode` input and `decode` output |
+| `TDecodeData`  | `any`   | `decode` input and `encode` output |
+| `TEncodeChunk` | `any`   | `encodeStream` in/out              |
+| `TDecodeChunk` | `any`   | `decodeStream` in/out              |
+
+`encode` converts raw data to the stored form; `decode` reverses it. Data and stream conversions have separate type arguments, so values and chunks can have different types.
+
+## Identity [#identity]
+
+| Member   | Required | Description         |
+| -------- | -------- | ------------------- |
+| `name`   | required | Plugin name         |
+| `isOpen` | required | Whether initialized |
+
+`open(c)` and `close(c)` are optional. As with [storage lifecycles](./storage#identity), implement them only when needed.
+
+## Hooks [#hooks]
+
+| Hook           | Arguments                     | Description                          |
+| -------------- | ----------------------------- | ------------------------------------ |
+| `mapKey`       | `MapKeyContext`               | Transforms the key, returns `string` |
+| `open`         | `OpenContext`                 | Initialization                       |
+| `close`        | `CloseContext`                | Teardown                             |
+| `use`          | `UseContext`, `next`          | Around read/write operations         |
+| `encode`       | `EncodeContext`, `next`       | Write-data conversion                |
+| `decode`       | `DecodeContext`, `next`       | Read-data reverse conversion         |
+| `encodeStream` | `EncodeStreamContext`, `next` | Write-stream conversion              |
+| `decodeStream` | `DecodeStreamContext`, `next` | Read-stream reverse conversion       |
+
+### `mapKey` [#hooks-map-key]
+
+Transforms the key itself. Synchronously returns a `string`. Unlike other hooks, it has no `next`.
+
+### `use` [#hooks-use]
+
+Runs around read/write operations (`set` / `get` / `stream` / `has` / `delete` / `clear`). Narrow by `action` for type-safe access to each operation's `key` or `repair`.
+
+```ts
+import type { IMiddleware } from "@unikvs/core";
+
+export class Timing implements IMiddleware {
+  public readonly name = "Timing";
+  public isOpen = false;
+
+  public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+    const startedAt = Date.now();
+    await next();
+    console.log(`${c.action} took ${Date.now() - startedAt}ms`);
+  }
+}
+```
+
+### `encode` and `decode` [#hooks-encode-decode]
+
+Data conversion and its inverse. `source` is the input; assign the result to `destination`.
+
+```ts
+import type { IMiddleware } from "@unikvs/core";
+
+export class UpperCase implements IMiddleware<string> {
+  public readonly name = "UpperCase";
+  public isOpen = false;
+
+  public async encode(
+    c: IMiddleware.EncodeContext<string>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.toUpperCase();
+    await next();
+  }
+
+  public async decode(
+    c: IMiddleware.DecodeContext<string>,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    c.destination = c.source.toLowerCase();
+    await next();
+  }
+}
+```
+
+`EncodeContext<string>` equals `IEncodeContext<string, string>`. With a single type argument, input and output resolve to the same type.
+
+### `encodeStream` and `decodeStream` [#hooks-encode-decode-stream]
+
+Stream conversion and its inverse. Unlike data conversion, `source` and `destination` are [`IReadableStream`](./stream).
+
+## `next` [#next]
+
+`use` / `encode` / `decode` / `encodeStream` / `decodeStream` advance downstream by calling `next()`. `INext` takes no arguments and returns `Promise<void>`.
+
+```ts
+public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+  await next(); // advance downstream
+}
+```
+
+Write pre/post processing around `next()`. The return is `PromiseLike<void>` — always async, never `MaybePromise`.
+
+:::warning[Do not mix sync and async]
+`open` / `close` return `MaybePromise<void>`, but the `use` family returns `PromiseLike<void>`. Calls before `open()` or for unsupported operations throw the appropriate error from each plugin.
+:::
+
+## Context aliases [#contexts]
+
+The `IMiddleware` namespace provides aliases of [pipeline contexts](./pipeline-context#contexts).
+
+| Alias                                | Entity                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `IMiddleware.MapKeyContext`          | [`IMapKeyContext`](./pipeline-context#imapkeycontext)                                            |
+| `IMiddleware.OpenContext`            | [`IOpenContext`](./pipeline-context#iopencontext)                                                |
+| `IMiddleware.CloseContext`           | [`ICloseContext`](./pipeline-context#iclosecontext)                                              |
+| `IMiddleware.UseContext`             | `ISetContext \| IGetContext \| IStreamContext \| IHasContext \| IDeleteContext \| IClearContext` |
+| `IMiddleware.EncodeContext<T>`       | [`IEncodeContext<T, T>`](./pipeline-context#iencodecontext)                                      |
+| `IMiddleware.DecodeContext<T>`       | [`IDecodeContext<T, T>`](./pipeline-context#idecodecontext)                                      |
+| `IMiddleware.EncodeStreamContext<T>` | [`IEncodeStreamContext<T, T>`](./pipeline-context#iencodestreamcontext)                          |
+| `IMiddleware.DecodeStreamContext<T>` | [`IDecodeStreamContext<T, T>`](./pipeline-context#idecodestreamcontext)                          |
+
+## Example [#example]
+
+<Tabs>
+  <Tab title="Key mapping">
+    ```ts
+    import type { IMiddleware } from "@unikvs/core";
+
+    export class PrefixKey implements IMiddleware {
+      public readonly name = "PrefixKey";
+      public isOpen = false;
+
+      public mapKey(c: IMiddleware.MapKeyContext): string {
+        return `app:${c.key}`;
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab title="Around processing">
+    ```ts
+    import type { IMiddleware } from "@unikvs/core";
+
+    export class PrefixKey implements IMiddleware {
+      public readonly name = "PrefixKey";
+      public isOpen = false;
+
+      public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        console.log(`start: ${c.action}`);
+        await next();
+        console.log(`end: ${c.action}`);
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab title="Data conversion">
+    ```ts
+    import type { IMiddleware } from "@unikvs/core";
+
+    export class UpperCase implements IMiddleware<string> {
+      public readonly name = "UpperCase";
+      public isOpen = false;
+
+      public async encode(
+        c: IMiddleware.EncodeContext<string>,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source.toUpperCase();
+        await next();
+      }
+
+      public async decode(
+        c: IMiddleware.DecodeContext<string>,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source.toLowerCase();
+        await next();
+      }
+    }
+    ```
+
+  </Tab>
+</Tabs>

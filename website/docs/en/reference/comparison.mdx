@@ -1,0 +1,49 @@
+---
+title: "Storage Comparison"
+description: "Compares supported data types, runtimes, and durability across backends."
+---
+
+If you are unsure which backend to choose, compare supported data types and runtimes in this table. For installation, see [Installation](/how-to/installation).
+
+## How to Choose [#selection]
+
+- For tests and temporary storage, use [Memory](/packages/memory).
+- In browsers, prefer [OPFS](/packages/opfs) or [IndexedDB](/packages/indexeddb); for strings only, use [Local Storage](/packages/localstorage).
+- In Node.js, use [Node.js Filesystem](/packages/fs-node); in Bun, use [Bun Filesystem](/packages/fs-bun).
+- For external services, pick an S3, Redis, Valkey, Memcached, etcd, Cloudflare, or Vercel backend matching your environment.
+- To tolerate transient failures, wrap with [Retry](/packages/retry); to keep deletions, wrap with [Soft Delete](/packages/soft-delete).
+
+## Comparison Table [#comparison]
+
+| Backend                                                | Supported data types       | Streams                                 | Runtime                                       |
+| ------------------------------------------------------ | -------------------------- | --------------------------------------- | --------------------------------------------- |
+| [Memory](/packages/memory)                             | Arbitrary values           | Supported. Chunks are `Uint8Array`.     | No restrictions.                              |
+| [Null](/packages/null)                                 | Stores nothing             | Accepts writes only. Reads always fail. | No restrictions.                              |
+| [LRU Cache](/packages/lru-cache)                       | Arbitrary values           | Supported. Chunks are `Uint8Array`.     | No restrictions.                              |
+| [HTTP](/packages/http)                                 | `Uint8Array`               | Supported.                              | No restrictions. Requires a server.           |
+| [OPFS](/packages/opfs)                                 | `Uint8Array`               | Supported.                              | Browser and worker only.                      |
+| [IndexedDB](/packages/indexeddb)                       | Arbitrary values           | Supported.                              | Browser only.                                 |
+| [Local Storage](/packages/localstorage)                | Strings                    | Not supported.                          | Browser only.                                 |
+| [Session Storage](/packages/session-storage)           | Strings                    | Not supported.                          | Browser only.                                 |
+| [Cache Storage](/packages/cache-storage)               | `Response`                 | Supported.                              | Browser and worker only.                      |
+| [Cookie](/packages/cookies)                            | String or `Uint8Array`     | Not supported.                          | Browser only.                                 |
+| [Node.js Filesystem](/packages/fs-node)                | `Uint8Array`               | Supported.                              | Node.js only.                                 |
+| [Bun Filesystem](/packages/fs-bun)                     | `Uint8Array`               | Supported.                              | Bun only.                                     |
+| [S3 Node.js](/packages/s3-node)                        | `Uint8Array`               | Supported.                              | Node.js. Requires an external service.        |
+| [S3 Bun](/packages/s3-bun)                             | `Uint8Array`               | Supported.                              | Bun only. Requires an external service.       |
+| [Redis Node.js](/packages/redis-node)                  | `Uint8Array`               | Supported.                              | Node.js. Requires an external service.        |
+| [Redis Bun](/packages/redis-bun)                       | `Uint8Array`               | Supported.                              | Bun only. Requires an external service.       |
+| [Valkey](/packages/valkey)                             | `Uint8Array`               | Supported.                              | Node.js. Requires an external service.        |
+| [Memcached](/packages/memcached)                       | `Uint8Array`               | Not supported.                          | No restrictions. Requires an external server. |
+| [etcd](/packages/etcd)                                 | `Uint8Array`               | Supported.                              | No restrictions. Requires an external server. |
+| [Cloudflare Cache](/packages/cloudflare-cache)         | `Uint8Array`               | Supported.                              | Cloudflare Workers only.                      |
+| [Cloudflare KV](/packages/cloudflare-kv)               | `Uint8Array`               | Not supported.                          | Cloudflare Workers only.                      |
+| [Cloudflare R2](/packages/cloudflare-r2)               | `Uint8Array`               | Supported.                              | Cloudflare Workers only.                      |
+| [Vercel Blob](/packages/vercel-blob)                   | `Uint8Array`               | Supported. Joined on write.             | No restrictions. Requires a token.            |
+| [Vercel Runtime Cache](/packages/vercel-runtime-cache) | Arbitrary values           | Supported.                              | Assumes the Vercel runtime.                   |
+| [Retry](/packages/retry)                               | Depends on wrapped backend | Depends on wrapped backend.             | No restrictions.                              |
+| [Soft Delete](/packages/soft-delete)                   | Depends on wrapped backend | Depends on wrapped backend.             | No restrictions.                              |
+
+:::note[See each package for details]
+For constructor arguments, limits, and details, see each [package reference](/packages).
+:::

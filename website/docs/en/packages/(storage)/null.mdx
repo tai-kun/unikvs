@@ -1,0 +1,63 @@
+---
+title: "@unikvs/null"
+description: "Usage of Null in @unikvs/null, a test storage that discards writes."
+---
+
+## Overview [#overview]
+
+`@unikvs/null` Usage of Null in @unikvs/null, a test storage that discards writes.
+
+- `name` is `Null`.
+- `isOpen` is always `true`.
+- No `open` or `close`.
+
+Install with:
+
+```package-install
+npm install @unikvs/null
+```
+
+## Usage [#usage]
+
+Null implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Null } from "@unikvs/null";
+```
+
+The following example confirms writes are discarded.
+
+```ts
+import { Null } from "@unikvs/null";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  greeting: unikvs.PlainValue<string>;
+}>()
+  .persist(new Null())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", "hello");
+
+console.log(await kvs.has("greeting")); // false
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Supported data type             |
+| ------------------------------------ | ------------------------------- |
+| `write` / `read`                     | Arbitrary values (never stored) |
+| `getWritable` / `getReadable` chunks | Arbitrary values (never stored) |
+
+- Discards every written value.
+- `read`, `delete`, and `getReadable` always throw `KeyNotFoundError`.
+- `exists` always returns `false`.
+- `clear` does nothing.
+- `getWritable` discards all written chunks.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Failed reads throw `KeyNotFoundError`, the shared error from `@unikvs/core`.

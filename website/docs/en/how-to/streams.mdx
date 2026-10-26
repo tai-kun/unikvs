@@ -1,0 +1,71 @@
+---
+title: "Using Streams"
+description: "How to read and write large values in chunks with ReadableStream."
+---
+
+For large byte sequences, read and write them in chunks as streams.
+
+## Define a Stream Key [#define-stream-key]
+
+Define stream keys with `StreamValue` or `Value`. `stream()` cannot be used on `PlainValue` keys.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  logs: unikvs.StreamValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+```
+
+## Write a Stream [#write-stream]
+
+Pass a `ReadableStream` to `set()`. The memory storage chunk type is `Uint8Array`.
+
+```ts
+const stream = new ReadableStream<Uint8Array>({
+  start(controller) {
+    controller.enqueue(new Uint8Array([0x01, 0x02]));
+    controller.enqueue(new Uint8Array([0x03, 0x04]));
+    controller.close();
+  },
+});
+
+await kvs.set("logs", stream);
+```
+
+## Read a Stream [#read-stream]
+
+`stream()` returns a `ValueStream`. Process chunks in order with `for await...of`.
+
+```ts
+for await (const chunk of await kvs.stream("logs")) {
+  console.log(chunk); // Uint8Array
+}
+```
+
+Dispose of streams when done. Use `await using` for automatic disposal or call `dispose()`.
+
+```ts
+await using vs = await kvs.stream("logs");
+const reader = vs.getReader();
+const { value } = await reader.read();
+console.log(value);
+```
+
+:::warning[Dispose of used streams]
+Remember automatic disposal with `await using` or a `dispose()` call.
+:::
+
+## Check Support [#check-support]
+
+Stream support and chunk types vary by backend. For example, Local Storage, Cookie, Memcached, and Cloudflare KV backends do not support streams. Check the data types in each [package reference](/packages) before use.
+
+## Related [#related]
+
+- For choosing value types, see [Value Model](/explanation/value-model).
+- For backend support, see [Storage Comparison](/reference/comparison).

@@ -1,0 +1,215 @@
+---
+title: "@unikvs/etcd"
+description: "How to use @unikvs/etcd, which stores byte sequences in etcd."
+---
+
+## Overview [#overview]
+
+`@unikvs/etcd` is a storage plugin that stores byte sequences in etcd. Use it when distributed coordination is needed, such as sharing configuration or service discovery.
+
+- `name` is `"Etcd"`, and `isOpen` reports whether it is open.
+- `open()` connects, and `close()` releases the connection when done.
+- This storage applies a namespace and prefix (default `"unikvs:"`) to keys, limiting the scope of `clear()` deletions.
+- When endpoints are omitted, the `ETCD_ENDPOINTS` environment variable (comma-separated) is used, falling back to `"http://127.0.0.1:2379"` when unset.
+- When `leaseTtlSeconds` is specified, written keys get a lease expiration (in seconds).
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/etcd
+```
+
+An etcd cluster is required separately.
+
+## Usage [#usage]
+
+Etcd implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { Etcd } from "@unikvs/etcd";
+```
+
+### Etcd [#etcd]
+
+Storage that saves to etcd. Callers open it with `open()` and close it with `close()` when done.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    options: {
+      type: "[#etcd-options] EtcdStorageOptions",
+      description: "Options configuring the endpoints and this package's behavior.",
+    },
+  }}
+/>
+
+### EtcdStorageOptions [#etcdstorageoptions]
+
+Options for the etcd storage.
+
+<TypeTable
+  type={{
+    client: {
+      type: "[#etcdstorageoptions-client] EtcdClientLike",
+      description:
+        "The etcd client to inject. When specified, no connection is made and ownership stays with the caller.",
+    },
+    endpoints: {
+      type: "[#etcdstorageoptions-endpoints] string | readonly string[]",
+      description: "The etcd endpoints to connect to. Not used when `client` is specified.",
+    },
+    keyPrefix: {
+      type: "[#etcdstorageoptions-keyprefix] string",
+      description: 'The prefix prepended to every key. Defaults to `"unikvs:"`.',
+    },
+    leaseTtlSeconds: {
+      type: "[#etcdstorageoptions-leasettlseconds] number",
+      description:
+        "The lease expiration (in seconds) attached to every write. Use it to expire keys automatically.",
+    },
+    namespace: {
+      type: "[#etcdstorageoptions-namespace] string",
+      description: 'The namespace prepended before `keyPrefix`. Defaults to `""`.',
+    },
+  }}
+/>
+
+### EtcdPutOptions [#etcdputoptions]
+
+etcd-specific options that can be passed to `put`.
+
+<TypeTable
+  type={{
+    leaseTtlSeconds: {
+      type: "[#etcdputoptions-leasettlseconds] number",
+      description: "The lease expiration (in seconds) attached to the key.",
+    },
+  }}
+/>
+
+### EtcdGetAllResult [#etcdgetallresult]
+
+The key-value pair form returned by `getAll`. A record, map, or entry iterable.
+
+### EtcdClientLike [#etcdclientlike]
+
+The minimal interface of an etcd client. In tests, inject a fake satisfying this interface; in production, use the etcd3 client built from `endpoints`.
+
+### NativeEtcdClientLike [#nativeetcdclientlike]
+
+The minimal portion of the etcd3 package client used by this package.
+
+### wrapNativeEtcdClient [#wrapnativeetcdclient]
+
+Adapts a native etcd3 client to `EtcdClientLike`. Writes with a lease when `leaseTtlSeconds` is specified.
+
+The following example saves a value and reads it back:
+
+```ts
+import { Etcd } from "@unikvs/etcd";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new Etcd({ endpoints: "http://127.0.0.1:2379" }))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- Write streams accumulate chunks and store them with a single write on completion.
+- Read streams emit the fetched bytes as a single chunk.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidLeaseTtlError [#error-invalid-lease-ttl]
+
+Thrown when the constructor `leaseTtlSeconds` is not a positive integer.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-lease-ttl-actual] unknown",
+      required: true,
+      description: "The received `leaseTtlSeconds` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+`leaseTtlSeconds` was given something other than a positive integer (in seconds).
+
+#### How to fix
+
+Specify a positive integer (in seconds) for `leaseTtlSeconds`.
+
+### InvalidEndpointsError [#error-invalid-endpoints]
+
+Thrown when the constructor `endpoints` is an empty string or an empty array.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#invalid-endpoints-actual] unknown",
+      required: true,
+      description: "The received `endpoints` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+`endpoints` was given an empty string, an empty array, or an array containing empty strings.
+
+#### How to fix
+
+Specify a non-empty string for `endpoints`, or a non-empty array containing only non-empty strings.
+
+### KeyNotFoundError [#error-key-not-found]
+
+A shared `@unikvs/core` error. Thrown when reading a missing key.
+
+#### Meaning
+
+The specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/etcd";
+
+try {
+  const data = await kvs.get("missing");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

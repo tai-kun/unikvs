@@ -1,0 +1,176 @@
+---
+title: "@unikvs/cloudflare-cache"
+description: "How to use @unikvs/cloudflare-cache, which stores byte sequences in the Workers Cache API binding."
+---
+
+## Overview [#overview]
+
+`@unikvs/cloudflare-cache` is storage that stores byte sequences in the Workers Cache API binding.
+
+This storage converts keys to request URLs and processes them with `put` / `match` / `delete` as responses with a binary body. When the constructor `cache` is omitted, `caches.default` is used.
+
+- `name` is `CloudflareCache`.
+- `isOpen` is always `true`. `open()` / `close()` only check for interruption.
+- `clear` is not supported because the Cache API has no key enumeration.
+- Supports streamed reading and writing.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/cloudflare-cache
+```
+
+## Usage [#usage]
+
+CloudflareCache implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { CloudflareCache } from "@unikvs/cloudflare-cache";
+```
+
+### `CloudflareCache` [#cloudflare-cache]
+
+Storage that stores byte sequences in the Workers Cache API binding.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    cache: {
+      type: "[#cloudflare-cache-cache] CacheLike",
+      description: "The Cache binding to use. When omitted, caches.default is used.",
+    },
+    origin: {
+      type: "[#cloudflare-cache-origin] string",
+      default: '"https://unikvs.cloudflare-cache"',
+      description:
+        "The origin URL used when converting keys to request URLs. Specify an absolute URL with no query or fragment.",
+    },
+  }}
+/>
+
+The following example saves a value and reads it back:
+
+```ts
+import { CloudflareCache } from "@unikvs/cloudflare-cache";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new CloudflareCache())
+  .build();
+
+await kvs.open();
+await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                                 |
+| ------------------------------------ | ----------------------------------------- |
+| `write` / `read`                     | Byte sequence (`Uint8Array<ArrayBuffer>`) |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>`                 |
+
+- Only byte sequences can be stored. Convert strings or objects with middleware before passing them.
+- Keys are converted to request URLs of the form `${origin}/<encoded key>`.
+- The stream from `getWritable` accumulates chunks and stores them at once on `close`.
+- The stream from `getReadable` returns the body of the stored response.
+- `clear` is not supported. Delete keys one at a time.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### InvalidOriginError [#error-invalid-origin]
+
+#### Meaning
+
+Thrown at construction when `origin` is not an absolute URL without query or fragment.
+
+#### How to fix
+
+Specify an absolute URL with no surrounding whitespace, query, or fragment.
+
+### InvalidKeyError [#error-invalid-key]
+
+#### Meaning
+
+Thrown when a key cannot be encoded as a URL path segment.
+
+#### How to fix
+
+Use encodable strings as keys. Avoid keys containing lone surrogates, for example.
+
+### CacheBindingNotFoundError [#error-cache-binding-not-found]
+
+#### Meaning
+
+Thrown at construction when no `cache` is given and `caches.default` does not exist either.
+
+#### How to fix
+
+Pass a Cache binding in `cache`, or run on a runtime where `caches.default` exists.
+
+### CacheOperationError [#error-cache-operation]
+
+#### Meaning
+
+Thrown when any of `put` / `match` / `delete` is rejected.
+
+#### How to fix
+
+Check the failed operation in `meta.operation` and investigate the cause in `cause`.
+
+### ClearNotSupportedError [#error-clear-not-supported]
+
+#### Meaning
+
+Thrown when `clear()` is called. Bulk deletion is not supported because the Cache API has no key enumeration.
+
+#### How to fix
+
+Delete keys one at a time with `delete`.
+
+### InvalidChunkTypeError [#error-invalid-chunk-type]
+
+#### Meaning
+
+Thrown when a chunk other than `Uint8Array<ArrayBuffer>` is written to the stream obtained from `getWritable`.
+
+#### How to fix
+
+Pass `Uint8Array<ArrayBuffer>` as chunks.
+
+### KeyNotFoundError [#error-key-not-found]
+
+#### Meaning
+
+Thrown by `read` / `getReadable` when the specified key does not exist. A shared `@unikvs/core` error.
+
+#### How to fix
+
+Check with `exists` before reading.
+
+#### Example
+
+The following example catches `KeyNotFoundError`.
+
+```ts
+import { KeyNotFoundError } from "@unikvs/cloudflare-cache";
+
+try {
+  const data = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```

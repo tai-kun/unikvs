@@ -1,0 +1,92 @@
+---
+title: "エラーを処理する"
+description: "UniKVS のよくある失敗に備えて例外を処理する手順です。"
+---
+
+想定できる失敗にだけ備えたい場合は、エラーの種類ごとに対処を分けます。
+
+## 存在しないキーに備える [#not-found]
+
+`get()` でキーが見つからない場合は `KeyNotFoundError` を投げます。`has()` で事前確認するか、例外を捕捉して分岐します。
+
+```ts
+import { KeyNotFoundError } from "unikvs";
+
+try {
+  const bytes = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("キーが見つかりません");
+  } else {
+    throw ex;
+  }
+}
+```
+
+`has()` は存在しない場合に `false` を返します。ただし、すべての保存先で読み取りに失敗した場合は `KeyNotFoundError` を投げます。
+
+## ライフサイクル違反に備える [#lifecycle]
+
+`open()` 前の操作は `UniKvsIsNotOpenError` を投げます。`build()` 前に保存先を登録していない場合は `MissingStorageError` を投げます。
+
+```ts
+const kvs = new unikvs.Builder<{
+  foo: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(storage)
+  .build();
+
+await kvs.open();
+```
+
+- `open()` を 2 回呼ぶと `UniKvsIsOpenError` を投げます。
+- 未オープンで `close()` を呼ぶと `UniKvsIsNotOpenError` を投げます。
+- `await using` を使うと、ブロックを抜けるときに自動で `close()` します。
+
+## 入出力の検証失敗に備える [#validation-errors]
+
+スキーマありの構成では、入力の不備は `InvalidInputError`、出力の不備は `InvalidOutputError` になります。
+
+- プレーン専用のキーにストリームを渡した場合は `InvalidInputError` です。
+- 配列形式でキーに一致する定義がない場合も `InvalidInputError` です。
+- 保存データが壊れて出力検証に失敗した場合は `InvalidOutputError` です。
+
+詳しい条件は[値を検証する](/how-to/validation)を参照してください。
+
+## 複数保存先の部分失敗を調べる [#aggregate-error]
+
+書き込みや削除で一部の保存先だけが失敗した場合は、`PluginOperationAggregateError` を投げます。`meta.errors` に保存先ごとの失敗が入ります。
+
+```ts
+import { PluginOperationAggregateError } from "unikvs";
+
+try {
+  await kvs.set("foo", new Uint8Array([1]));
+} catch (ex) {
+  if (ex instanceof PluginOperationAggregateError) {
+    for (const entry of ex.meta.errors) {
+      console.log(entry.name, entry.reason);
+    }
+  } else {
+    throw ex;
+  }
+}
+```
+
+## 書き戻しの拒否に備える [#repair-denied]
+
+`repair: true` で書き戻しが拒否された場合、既定では読み取りは成功し、警告ログに残ります。拒否時に読み取りも失敗させたい場合は、`throwOnRepairDenied: true` を指定します。
+
+```ts
+const bytes = await kvs.get("foo", {
+  repair: true,
+  throwOnRepairDenied: true,
+});
+```
+
+書き戻しの可否は `AllowRepair` で制御します。詳しい手順は[複数の保存先を使う](/how-to/multi-storage)を参照してください。
+
+## 関連情報 [#related]
+
+- エラーの全体像は本体の[エラー一覧](/packages/unikvs#errors)を参照してください。
+- 共通エラーの基盤は[@unikvs/core のエラー](/packages/core/errors)を参照してください。

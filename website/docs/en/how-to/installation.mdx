@@ -1,0 +1,70 @@
+---
+title: "Installation"
+description: "How to install UniKVS and plugins for your runtime."
+---
+
+Install only the packages you need for your target backends and transformations.
+
+## Install the Core [#install-core]
+
+`unikvs` is required. Backends and transformations are separate packages.
+
+```package-install
+npm install unikvs
+```
+
+## Add Storages [#install-storage]
+
+Add the packages for the backends you use. Common combinations:
+
+<Tabs>
+  <Tab title="Memory">
+    For tests and temporary storage. No external services needed.
+
+    ```package-install
+    npm install @unikvs/memory
+    ```
+
+  </Tab>
+  <Tab title="Node.js Files">
+    Stores data on the local filesystem in Node.js.
+
+    ```package-install
+    npm install @unikvs/fs.node
+    ```
+
+  </Tab>
+  <Tab title="Browsers">
+    In browsers, choose from OPFS, IndexedDB, Local Storage, and others.
+
+    ```package-install
+    npm install @unikvs/opfs @unikvs/indexeddb @unikvs/localstorage
+    ```
+
+  </Tab>
+</Tabs>
+
+For choosing a backend, see [Storage Comparison](/reference/comparison). For details on each package, see the [package reference](/packages).
+
+## Add Transformations [#install-middleware]
+
+Add middleware only when you need value transformation.
+
+```package-install
+npm install @unikvs/json @unikvs/compression
+```
+
+## For Validation [#install-validation]
+
+To validate input/output values with Valibot schemas, install `valibot` separately.
+
+```package-install
+npm install valibot
+```
+
+Pass schemas to the `Builder` `schema` option to enable validation. See [Validating Values](/how-to/validation) for the steps.
+
+## Version Notes [#versions]
+
+- Keep the core and plugin versions on the same release line where possible.
+- If you see peer dependency warnings, install what the warning requests. For example, if a logging-related peer dependency is requested, follow the instructions to install it.

@@ -1,0 +1,84 @@
+---
+title: "@unikvs/fs.node"
+description: "How to use @unikvs/fs.node, which stores byte sequences in the Node.js local file system."
+---
+
+## Overview [#overview]
+
+`@unikvs/fs.node` is a storage plugin that stores byte sequences in the local file system. <Badge variant="warning">Node.js only</Badge> Use it for persistence on a single node or as a simple store during development.
+
+- `name` is `"NodeFs"`, and `isOpen` reports whether it is open.
+- `open()` creates the root directory and opens it. There is no `close()`.
+- Keys are stored as-is as file names. Writes go to a temporary file first and are atomically renamed on completion.
+
+Install it with the following command:
+
+```package-install
+npm install @unikvs/fs.node
+```
+
+## Usage [#usage]
+
+NodeFs implements IStorage. Pass it to UniKvs via persist().
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+```
+
+### NodeFs [#nodefs]
+
+Storage that saves to the local file system. Callers open it with `open()` before use.
+
+The constructor arguments are as follows:
+
+<TypeTable
+  type={{
+    root: {
+      type: "[#nodefs-root] string",
+      description:
+        'The root directory for stored data. Defaults to `".unikvs"` and is resolved to an absolute path in `open()`.',
+    },
+    options: {
+      type: "[#nodefs-options] NodeFsOptions",
+      description: "Options reserved for future use. Currently an empty object.",
+    },
+  }}
+/>
+
+### NodeFsOptions [#nodefsoptions]
+
+An option type reserved for future use. Currently an empty object with no settable fields.
+
+The following example saves a value and reads it back:
+
+```ts
+import { NodeFs } from "@unikvs/fs.node";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .persist(new NodeFs("./data"))
+  .build();
+
+await kvs.open();
+
+await kvs.set("file", new Uint8Array([0, 1, 2]));
+
+const data = await kvs.get("file");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+```
+
+## Data types [#data-types]
+
+| Operation                            | Data type                 |
+| ------------------------------------ | ------------------------- |
+| `write` / `read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable` / `getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- `write` / `read` use byte sequences (`Uint8Array<ArrayBuffer>`).
+- Keys are validated as file names; keys containing path separators and similar are rejected.
+- Supports streamed reading and writing with `Uint8Array<ArrayBuffer>` chunks.
+- Writes go to a temporary file first and are atomically renamed on completion, so concurrent writes never collide on temporary files.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Reading or deleting a missing key fails with the `ENOENT` system error.

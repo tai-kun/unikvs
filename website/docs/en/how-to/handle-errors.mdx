@@ -1,0 +1,92 @@
+---
+title: "Handling Errors"
+description: "How to handle exceptions for common UniKVS failures."
+---
+
+To prepare only for expected failures, handle each error type separately.
+
+## Missing Keys [#not-found]
+
+`get()` throws `KeyNotFoundError` when a key is not found. Check with `has()` first, or catch the exception and branch.
+
+```ts
+import { KeyNotFoundError } from "unikvs";
+
+try {
+  const bytes = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+`has()` returns `false` for missing keys. However, it throws `KeyNotFoundError` when reads fail on every backend.
+
+## Lifecycle Violations [#lifecycle]
+
+Operations before `open()` throw `UniKvsIsNotOpenError`. Calling `build()` without registering a backend throws `MissingStorageError`.
+
+```ts
+const kvs = new unikvs.Builder<{
+  foo: unikvs.PlainValue<Uint8Array>;
+}>()
+  .persist(storage)
+  .build();
+
+await kvs.open();
+```
+
+- Calling `open()` twice throws `UniKvsIsOpenError`.
+- Calling `close()` while not open throws `UniKvsIsNotOpenError`.
+- With `await using`, `close()` runs automatically when leaving the block.
+
+## Validation Failures [#validation-errors]
+
+In schema-based setups, bad input raises `InvalidInputError` and bad output raises `InvalidOutputError`.
+
+- Passing a stream to a plain-only key is `InvalidInputError`.
+- In array form, a key matching no definition is also `InvalidInputError`.
+- Corrupted stored data failing output validation is `InvalidOutputError`.
+
+See [Validating Values](/how-to/validation) for the exact conditions.
+
+## Partial Multi-Storage Failures [#aggregate-error]
+
+When writes or deletes fail on only some backends, a `PluginOperationAggregateError` is thrown. Per-backend failures are in `meta.errors`.
+
+```ts
+import { PluginOperationAggregateError } from "unikvs";
+
+try {
+  await kvs.set("foo", new Uint8Array([1]));
+} catch (ex) {
+  if (ex instanceof PluginOperationAggregateError) {
+    for (const entry of ex.meta.errors) {
+      console.log(entry.name, entry.reason);
+    }
+  } else {
+    throw ex;
+  }
+}
+```
+
+## Denied Repair [#repair-denied]
+
+When repair is denied with `repair: true`, reads succeed by default and a warning is logged. To fail reads on denial, pass `throwOnRepairDenied: true`.
+
+```ts
+const bytes = await kvs.get("foo", {
+  repair: true,
+  throwOnRepairDenied: true,
+});
+```
+
+Repair is controlled with `AllowRepair`. See [Using Multiple Storages](/how-to/multi-storage) for the steps.
+
+## Related [#related]
+
+- For the full picture, see the core [error list](/packages/unikvs#errors).
+- For the shared error base, see [@unikvs/core errors](/packages/core/errors).

@@ -1,0 +1,77 @@
+---
+title: "@unikvs/opfs"
+description: "How to use Opfs in @unikvs/opfs, a storage that keeps bytes in OPFS."
+---
+
+## Overview [#overview]
+
+`@unikvs/opfs` <Badge variant="warning">Browser only</Badge> is a storage that keeps bytes in the Origin Private File System. Use it to persist files in the browser.
+
+- `name` is `Opfs`.
+- Requires `open`. No `close`.
+- Specify the root directory in the constructor.
+- This storage validates keys as file names.
+
+Install with:
+
+```package-install
+npm install @unikvs/opfs
+```
+
+## Usage [#usage]
+
+Opfs implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    root: {
+      type: "[#root] string | FileSystemDirectoryHandle",
+      default: '".unikvs"',
+      description:
+        "Root directory for data. Pass a name as a string or a directory handle directly.",
+    },
+  }}
+/>
+
+The following example stores bytes and reads them back.
+
+```ts
+import { Opfs } from "@unikvs/opfs";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  image: unikvs.Value<Uint8Array>;
+}>()
+  .persist(new Opfs())
+  .build();
+
+await kvs.open();
+await kvs.set("image", new Uint8Array([0, 1, 2]));
+
+const bytes = await kvs.get("image");
+console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type       |
+| ---------------------------------- | ------------------------- |
+| `write`/`read`                     | `Uint8Array<ArrayBuffer>` |
+| `getWritable`/`getReadable` chunks | `Uint8Array<ArrayBuffer>` |
+
+- Stores bytes only.
+- This storage validates keys as file names. Invalid keys throw `InvalidFilenameError`.
+- Streams from `getWritable` write directly to the OPFS write stream.
+- Streams from `getReadable` return the file's read stream.
+
+## Errors [#errors]
+
+This package has no package-specific errors. Invalid keys throw `InvalidFilenameError` from `@unikvs/utils`. Reading a missing key throws a `NotFoundError` `DOMException`. Operating before opening throws a `TypeError`.

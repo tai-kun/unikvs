@@ -1,0 +1,472 @@
+---
+title: "UniKVS"
+description: "How to use UniKVS, the main package providing the builder and KVS client."
+---
+
+## Overview [#overview]
+
+`unikvs` is the main client package. <Badge>Main client</Badge> Combine middleware and storage with the builder (`Builder` / `UniKvsBuilder`), then read and write with the resulting client (`UniKvs`).
+
+```package-install
+npm i unikvs
+```
+
+## Builder [#builder]
+
+Create a builder with `new Builder()`. You can pass the mapping directly as a type parameter, or let it be inferred from a Valibot schema via the `schema` option. The latter also enables runtime validation of input and output values.
+
+<Tabs>
+  <Tab title="With schema">
+    Pass Valibot schemas to `PlainValue()`, `StreamValue()`, or `Value()`. The mapping type is inferred automatically. Install `valibot` separately when using Valibot schemas.
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: {
+        foo: unikvs.PlainValue(v.instance(Uint8Array)),
+      },
+    })
+      .persist(storage)
+      .build();
+    ```
+
+    Use array form for dynamic keys. List key-schema / value-schema pairs; the first match wins.
+
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: [
+        [v.pipe(v.string(), v.regex(/^msg-.+/)), unikvs.PlainValue(v.string())],
+        [v.pipe(v.string(), v.regex(/^img-.+/)), unikvs.StreamValue(v.instance(Uint8Array))],
+      ],
+    })
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+  <Tab title="Without schema">
+    `T` is a mapping from key to value (`{ [key]: PlainValue | StreamValue | Value }`); allowed operations per key are decided at the type level. No runtime validation is performed.
+
+    ```ts
+    import * as unikvs from "unikvs";
+
+    const kvs = new unikvs.Builder<{
+      foo: unikvs.Value<Uint8Array>;
+    }>()
+      .persist(storage)
+      .build();
+    ```
+
+  </Tab>
+</Tabs>
+
+:::warning[Invalid schema definition]
+If `schema` is malformed, the constructor throws `InvalidInputError`.
+:::
+
+Configure in the following order.
+
+<Steps>
+  <Step title="`use(middleware)`">
+    Add middleware (optional). You can also add it after registering storage.
+  </Step>
+  <Step title="`persist(storage)`">Add storage (required, multiple allowed).</Step>
+  <Step title="`fork(branch)`">
+    Add storage on a branched pipeline (optional). Additions on a branch do not leak to the parent
+    pipeline.
+  </Step>
+  <Step title="`build()`">
+    Create a `UniKvs` client. Throws `MissingStorageError` when no storage is registered.
+  </Step>
+</Steps>
+
+:::warning[Register storage first]
+Call `persist()` at least once before `build()`.
+:::
+
+Each storage uses a snapshot of the pipeline taken when `persist()` was called.
+
+Writes run against all storages in parallel; reads decode by applying the preceding stages in reverse order, starting from the storage where the key was found.
+
+### Branching [#builder-fork]
+
+Use `fork()` to add storage on a branched pipeline. Create branches with `new Branch()`. Additions on a branch do not leak to the parent pipeline.
+
+The following example registers different storages on a branch and on the parent.
+
+```ts
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder({
+  vars: {},
+  schema: {},
+})
+  .use(new Middleware())
+  .fork(new unikvs.Branch().use(new Middleware()).persist(new Storage()))
+  .persist(new Storage())
+  .build();
+```
+
+## Client operations [#client-operations]
+
+The created client provides the following operations. Call `open()` to initialize and `close()` when done (`await using` also auto-closes).
+
+| Method            | Description                        |
+| ----------------- | ---------------------------------- |
+| `open()`          | Initialize storage and middleware. |
+| `close()`         | Close all storage and middleware.  |
+| `set(key, value)` | Store a value under a key.         |
+| `get(key)`        | Get the value for a key.           |
+| `stream(key)`     | Get a stream for a key.            |
+| `has(key)`        | Check whether a key exists.        |
+| `delete(key)`     | Delete a key.                      |
+| `clear()`         | Delete all data.                   |
+
+All operations support cancellation via `AbortSignal` and per-operation runtime variables (`vars`). Arguments can be passed either as an options object or positionally.
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("foo", new Uint8Array([0, 1, 2]), {
+  signal: ac.signal,
+  vars: { traceId: "abc-123" },
+});
+
+const bytes = await kvs.get("foo", { signal: ac.signal });
+```
+
+## Value types [#value-types]
+
+`PlainValue`, `StreamValue`, and `Value` are both types and functions. As types they restrict which methods each key supports; as functions they infer types from Valibot schemas.
+
+| Type             | Write                              | Read          | Stream read                   |
+| ---------------- | ---------------------------------- | ------------- | ----------------------------- |
+| `PlainValue<T>`  | `set(key, T)`                      | `get(key): T` | Not allowed.                  |
+| `StreamValue<T>` | `set(key, T \| ReadableStream<T>)` | Not allowed.  | `stream(key): ValueStream<T>` |
+| `Value<T>`       | `set(key, T \| ReadableStream<T>)` | `get(key): T` | `stream(key): ValueStream<T>` |
+
+`Value<T>` is sugar for both, equivalent to `PlainValue<T> | StreamValue<T>`.
+
+<Tabs>
+  <Tab title="Specify with types">
+    ```ts
+    import * as unikvs from "unikvs";
+
+    const kvs = new unikvs.Builder<{
+      message: unikvs.PlainValue<string>;
+      logs: unikvs.StreamValue<Uint8Array>;
+    }>()
+      .persist(storage)
+      .build();
+
+    await kvs.open();
+
+    await kvs.set("message", "hello");
+    const msg = await kvs.get("message");
+    // msg is a string
+
+    await kvs.set("logs", new Uint8Array([0x01]));
+    const valueStream = await kvs.stream("logs");
+    ```
+
+  </Tab>
+  <Tab title="Specify with schema">
+    ```ts
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: {
+        message: unikvs.PlainValue(v.string()),
+        logs: unikvs.StreamValue(v.instance(Uint8Array)),
+      },
+    })
+      .persist(storage)
+      .build();
+
+    await kvs.open();
+
+    await kvs.set("message", "hello");
+    const msg = await kvs.get("message");
+    // msg is a string
+    ```
+
+  </Tab>
+</Tabs>
+
+Disallowed combinations are type errors. With `schema`, they also throw `InvalidInputError` at runtime.
+
+```ts
+// Type error: stream() cannot be used on a PlainValue key
+kvs.stream("message");
+
+// Type error: get() cannot be used on a StreamValue key
+kvs.get("logs");
+```
+
+## Schema validation [#schema-validation]
+
+When `schema` is given, input and output values are validated with Valibot schemas.
+
+| Operation      | What is validated                   | Error on failure     |
+| -------------- | ----------------------------------- | -------------------- |
+| `set`          | Validates the input value.          | `InvalidInputError`  |
+| `get`          | Validates the output value.         | `InvalidOutputError` |
+| `stream`       | Validates each chunk.               | `InvalidOutputError` |
+| `has`/`delete` | Array form only: validates the key. | `InvalidInputError`  |
+
+```ts
+import * as unikvs from "unikvs";
+import * as v from "valibot";
+
+const kvs = new unikvs.Builder({
+  schema: {
+    message: unikvs.PlainValue(v.pipe(v.string(), v.minLength(1))),
+  },
+})
+  .persist(storage)
+  .build();
+
+await kvs.open();
+
+await kvs.set("message", "hello");
+await kvs.get("message"); // "hello"
+
+// Fails input validation and throws InvalidInputError
+await kvs.set("message", "");
+```
+
+:::note[Plain/stream mismatch]
+Passing a `ReadableStream` for a plain-only key, a plain value for a stream-only key, or a key matching no key schema in array form throws `InvalidInputError`.
+:::
+
+## ValueStream [#value-stream]
+
+`stream()` returns a `ValueStream<T>`, a wrapper around `ReadableStream`. It supports `for await...of` and auto-disposal with `await using`.
+
+<Tabs>
+  <Tab title="getReader">
+
+```ts
+const reader = (await kvs.stream("logs")).getReader();
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) {
+    break;
+  }
+  console.log(value); // Uint8Array
+}
+```
+
+  </Tab>
+  <Tab title="for-await">
+
+```ts
+for await (const chunk of await kvs.stream("logs")) {
+  console.log(chunk); // Uint8Array
+}
+```
+
+  </Tab>
+  <Tab title="await using">
+
+```ts
+await using valueStream = await kvs.stream("logs");
+const reader = valueStream.getReader();
+const { value } = await reader.read();
+console.log(value);
+```
+
+  </Tab>
+</Tabs>
+
+:::warning[Dispose streams when done]
+Do not forget auto-disposal with `await using` or `dispose()`.
+:::
+
+## Variables and cancellation [#variables-and-cancellation]
+
+Pass per-operation settings with `vars`.
+
+```ts
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>().persist(storage).build();
+
+await kvs.open();
+
+// Pass vars per operation
+await kvs.set("foo", new Uint8Array([1]), {
+  vars: { region: "us-east-1" },
+});
+
+// Array form also works
+await kvs.get("foo", {
+  vars: [["region", "us-east-1"]],
+});
+```
+
+Cancel with an `AbortSignal`; an aborted operation fails with the abort reason.
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 1000);
+
+await kvs.set("foo", new Uint8Array([1]), { signal: ac.signal });
+```
+
+## Base vars [#base-vars]
+
+Set base vars with `new Builder({ vars })`. They are merged with each operation's `vars`, with the per-operation side winning. You can pass a `Record`, `Map`, entry array, or `Variables`. Malformed input throws `InvalidInputError`.
+
+```ts
+const kvs = new unikvs.Builder<{ foo: unikvs.Value<Uint8Array> }>({
+  vars: { region: "us-east-1" },
+})
+  .persist(storage)
+  .build();
+
+await kvs.open();
+
+// Merged with per-operation vars. The per-operation `region` wins
+await kvs.set("foo", new Uint8Array([1]), {
+  vars: { region: "eu-west-1", traceId: "abc-123" },
+});
+// Runtime variables are { region: "eu-west-1", traceId: "abc-123" }
+```
+
+`build()` snapshots the base vars at call time. Builders are reusable; later builder changes do not affect already created clients.
+
+Both the builder (`Builder`) and the client (`UniKvs`) have same-named methods to change base vars. Each returns itself for chaining. Client-side changes take effect from subsequent operations.
+
+### `setVars` [#base-vars-set-vars]
+
+Replace base vars entirely.
+
+```ts
+builder.setVars({ region: "us-east-1" });
+kvs.setVars({ region: "us-east-1" });
+```
+
+### `assignVars` [#base-vars-assign-vars]
+
+Overwrite base vars with the given `vars`. Keys in the argument win.
+
+```ts
+// When base vars are { a: 1, b: 2 }
+builder.assignVars({ b: 20, c: 3 });
+// Base vars become { a: 1, b: 20, c: 3 }
+```
+
+### `defaultsVars` [#base-vars-defaults-vars]
+
+Fill defaults: the current base vars win over the given `vars`.
+
+```ts
+// When base vars are { a: 1, b: 2 }
+builder.defaultsVars({ b: 20, c: 3 });
+// Base vars become { a: 1, b: 2, c: 3 }
+```
+
+## Read repair [#read-repair]
+
+`get` and `stream` accept `repair: true` to write values found in later storage back to earlier storage (default `false`). A denied write-back still succeeds the read by default and leaves a warning log. Pass `throwOnRepairDenied: true` to fail the read instead (default `false`). Control write-back eligibility with [`@unikvs/allow-repair`](/packages/allow-repair); on denial, `meta.names` holds the display names of the write-back targets. See [using multiple backends](/how-to/multi-storage) for details.
+
+```ts
+const bytes = await kvs.get("foo", { repair: true });
+```
+
+## Errors [#errors]
+
+| Error class                        | Description                                  |
+| ---------------------------------- | -------------------------------------------- |
+| `KeyNotFoundError`                 | The key exists in no storage.                |
+| `UniKvsIsNotOpenError`             | Operated before opening.                     |
+| `UniKvsIsOpenError`                | Called `open()` while already open.          |
+| `MissingStorageError`              | Called `build()` with no storage registered. |
+| `StorageIsNotOpenError`            | Storage is not open.                         |
+| `TransformerIsNotOpenError`        | Middleware is not open.                      |
+| `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.  |
+| `InvalidInputError`                | Malformed input.                             |
+| `InvalidOutputError`               | Malformed output.                            |
+| `ReadableStreamNotSupportedError`  | Read streaming is not supported.             |
+| `WritableStreamNotSupportedError`  | Write streaming is not supported.            |
+| `EncodableStreamNotSupportedError` | Encoding streams are not supported.          |
+| `DecodableStreamNotSupportedError` | Decoding streams are not supported.          |
+
+```ts
+import * as unikvs from "unikvs";
+
+try {
+  const bytes = await kvs.get("missing-key");
+} catch (ex) {
+  if (ex instanceof KeyNotFoundError) {
+    console.log("Key not found");
+  } else {
+    throw ex;
+  }
+}
+```
+
+For error classification and handling, see [handling errors](/how-to/handle-errors).
+
+## Examples [#examples]
+
+Minimal example using `@unikvs/memory`.
+
+<Tabs>
+  <Tab title="Minimal">
+    ```ts
+    import { Memory } from "@unikvs/memory";
+    import * as unikvs from "unikvs";
+
+    const kvs = new unikvs.Builder<{
+      foo: unikvs.Value<Uint8Array>;
+    }>()
+      .persist(new Memory())
+      .build();
+
+    await kvs.open();
+
+    await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+    console.log(await kvs.has("foo")); // true
+
+    await kvs.delete("foo");
+    await kvs.close();
+    ```
+
+  </Tab>
+  <Tab title="With validation">
+    ```ts
+    import { Memory } from "@unikvs/memory";
+    import * as unikvs from "unikvs";
+    import * as v from "valibot";
+
+    const kvs = new unikvs.Builder({
+      schema: {
+        foo: unikvs.PlainValue(v.instance(Uint8Array)),
+      },
+    })
+      .persist(new Memory())
+      .build();
+
+    await kvs.open();
+
+    await kvs.set("foo", new Uint8Array([0, 1, 2]));
+
+    const bytes = await kvs.get("foo");
+    console.log(bytes); // Uint8Array(3) [0, 1, 2]
+
+    await kvs.close();
+    ```
+
+  </Tab>
+</Tabs>

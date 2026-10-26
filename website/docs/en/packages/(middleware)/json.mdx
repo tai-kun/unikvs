@@ -1,0 +1,89 @@
+---
+title: "@unikvs/json"
+description: "How to use @unikvs/json, middleware that serializes values as JSON (JSON Lines for streams)."
+---
+
+## Overview [#overview]
+
+Middleware that serializes values as JSON. <Badge>Middleware</Badge>
+
+Single reads/writes convert a value directly to a JSON string, while streams convert each item to one JSON Lines row.
+
+- `name` is `"Json"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/json
+```
+
+## Usage [#usage]
+
+Json implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Json } from "@unikvs/json";
+```
+
+The following example stores an object as JSON and restores its original shape on read.
+
+```ts
+import { Json } from "@unikvs/json";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ greeting: unikvs.Value<{ readonly text: string }> }>()
+  .use(new Json())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("greeting", { text: "hello" });
+const greeting = await kvs.get("greeting");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` converts a value to a JSON string and encodes it as UTF-8 bytes.
+- `decode` converts bytes back to a UTF-8 string and parses it as JSON.
+- `encodeStream` emits one line per input item (`<JSON>\n`) in JSON Lines format.
+- `decodeStream` buffers received bytes as a string and parses lines as newlines become available.
+- One trailing CR is stripped per line, and empty lines are skipped.
+- If there is no trailing newline, the remaining buffer is processed as the final line.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `JsonUnsupportedValueError` [#error-json-unsupported-value]
+
+Values for which `JSON.stringify` returns `undefined` cannot be represented as JSON, so this middleware cannot encode them.
+
+<TypeTable
+  type={{
+    type: {
+      type: "[#json-unsupported-value-type] string",
+      required: true,
+      description: "`typeof` of the value being converted.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Passing `undefined`, functions, symbols, or similar as the root value throws this error. `meta.type` holds the target's `typeof`.
+
+#### How to fix
+
+Pass a JSON-representable value such as an object, array, string, number, boolean, or `null`.
+
+Invalid JSON or UTF-8 received while decoding propagates native errors such as `SyntaxError` unchanged.

@@ -1,0 +1,141 @@
+---
+title: "@unikvs/readonly"
+description: "How to use @unikvs/readonly, which rejects writes to make storage read-only."
+---
+
+## Overview [#overview]
+
+`@unikvs/readonly` <Badge>Middleware</Badge> rejects writes to make storage read-only.
+
+It rejects write-direction operations (`set` / `encode`) and passes reads through. When `allowDelete` is `false`, it also rejects deletion.
+
+- `name` is `ReadOnly`.
+- `isOpen` is always `true`.
+- `allowDelete` defaults to `false`.
+
+Install with:
+
+```package-install
+npm install @unikvs/readonly
+```
+
+## Usage [#usage]
+
+ReadOnly implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { ReadOnly } from "@unikvs/readonly";
+```
+
+### `ReadOnly` [#readonly]
+
+Middleware that rejects writes to make storage read-only.
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    allowDelete: {
+      type: "[#readonly-allow-delete] boolean",
+      default: "false",
+      description: "Whether to allow delete operations. When false, delete and clear are rejected.",
+    },
+  }}
+/>
+
+The following reads back stored values:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { ReadOnly } from "@unikvs/readonly";
+import * as unikvs from "unikvs";
+
+const storage = new Memory();
+const writer = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .persist(storage)
+  .build();
+
+await writer.open();
+await writer.set("foo", new Uint8Array([0, 1, 2]));
+await writer.close();
+
+const kvs = new unikvs.Builder<{
+  foo: unikvs.Value<Uint8Array>;
+}>()
+  .use(new ReadOnly())
+  .persist(storage)
+  .build();
+
+await kvs.open();
+
+const data = await kvs.get("foo");
+console.log(data); // Uint8Array(3) [0, 1, 2]
+
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input       | Output                                     |
+| -------------- | ----------- | ------------------------------------------ |
+| `encode`       | write value | Always throws `ReadOnlySetNotAllowedError` |
+| `decode`       | read value  | Read value (passed through)                |
+| `getEncodable` | write chunk | Always throws `ReadOnlySetNotAllowedError` |
+| `getDecodable` | read chunk  | Read chunk (passed through)                |
+
+- The write direction always fails; the read direction performs no conversion and passes through.
+- Deletion is controlled by `use()`: when `allowDelete` is `false`, `delete` and `clear` are rejected.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### ReadOnlySetNotAllowedError [#error-read-only-set-not-allowed]
+
+#### Meaning
+
+Thrown when a write-direction operation (`set` / `encode`) is called.
+
+#### How to fix
+
+Do not use this middleware when writes are needed.
+
+#### Example
+
+Catching `ReadOnlySetNotAllowedError`:
+
+```ts
+import { ReadOnlySetNotAllowedError } from "@unikvs/readonly";
+
+try {
+  await kvs.set("foo", new Uint8Array([0, 1, 2]));
+} catch (ex) {
+  if (ex instanceof ReadOnlySetNotAllowedError) {
+    console.log("writes are not allowed");
+  } else {
+    throw ex;
+  }
+}
+```
+
+### ReadOnlyDeleteNotAllowedError [#error-read-only-delete-not-allowed]
+
+#### Meaning
+
+Thrown when `delete` is called while `allowDelete` is `false`.
+
+#### How to fix
+
+Pass `allowDelete: true` when deletion is needed.
+
+### ReadOnlyClearNotAllowedError [#error-read-only-clear-not-allowed]
+
+#### Meaning
+
+Thrown when `clear` is called while `allowDelete` is `false`.
+
+#### How to fix
+
+Pass `allowDelete: true` when clearing everything is needed.

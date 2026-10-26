@@ -1,0 +1,225 @@
+---
+title: "@unikvs/checksum"
+description: "How to use @unikvs/checksum middleware, which hashes byte sequences and verifies them against expectations."
+---
+
+## Overview [#overview]
+
+Middleware that hashes byte sequences and verifies them against expected values.<Badge>Middleware</Badge>
+
+It passes data through unchanged and only verifies when a checksum var holds an expected hash. Six variants exist: MD5, SHA-1, SHA-224, SHA-256, SHA-384, and SHA-512.
+
+- Each concrete class's `name` matches the class name (e.g. `"ChecksumSha256"`).
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/checksum @noble/hashes@2.0.0
+```
+
+## Usage [#usage]
+
+ChecksumSha256 implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+```
+
+The other five work the same way. Constructor arguments:
+
+<TypeTable
+  type={{
+    required: {
+      type: "[#checksum-required] boolean",
+      description: "Whether to throw when no checksum var is present. Defaults to `false`.",
+    },
+  }}
+/>
+
+The following stores data with an expected SHA-256 hash and verifies it on reads:
+
+```ts
+import { ChecksumSha256 } from "@unikvs/checksum";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .use(new ChecksumSha256())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+
+const data = new TextEncoder().encode("abc");
+const sha256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+await kvs.set("file", data, {
+  vars: { "@unikvs/checksum:sha256": sha256 },
+});
+const file = await kvs.get("file", {
+  vars: { "@unikvs/checksum:sha256": sha256 },
+});
+await kvs.close();
+```
+
+### `Checksum` [#checksum]
+
+Abstract base class for the six variants. Never use it directly; use a concrete class.
+
+### `ChecksumMd5` [#checksum-md5]
+
+Middleware verifying with MD5. The checksum var is `"@unikvs/checksum:md5"`.
+
+### `ChecksumSha1` [#checksum-sha1]
+
+Middleware verifying with SHA-1. The checksum var is `"@unikvs/checksum:sha1"`.
+
+### `ChecksumSha224` [#checksum-sha224]
+
+Middleware verifying with SHA-224. The checksum var is `"@unikvs/checksum:sha224"`.
+
+### `ChecksumSha256` [#checksum-sha256]
+
+Middleware verifying with SHA-256. The checksum var is `"@unikvs/checksum:sha256"`.
+
+### `ChecksumSha384` [#checksum-sha384]
+
+Middleware verifying with SHA-384. The checksum var is `"@unikvs/checksum:sha384"`.
+
+### `ChecksumSha512` [#checksum-sha512]
+
+Middleware verifying with SHA-512. The checksum var is `"@unikvs/checksum:sha512"`.
+
+### `IHasher` [#ihasher]
+
+Interface for incremental hash computation. Matches `@noble/hashes` hashers.
+
+<TypeTable
+  type={{
+    update: {
+      type: "[#ihasher-update] (data: Uint8Array<ArrayBuffer>) => void",
+      required: true,
+      description: "Feeds data into the hash computation.",
+    },
+    digest: {
+      type: "[#ihasher-digest] () => Uint8Array",
+      required: true,
+      description: "Returns the computed hash.",
+    },
+  }}
+/>
+
+### `IHash` [#ihash]
+
+Interface holding a one-shot hash function and a `create` hasher factory.
+
+<TypeTable
+  type={{
+    create: {
+      type: "[#ihash-create] () => IHasher",
+      required: true,
+      description: "Creates a hasher for incremental computation.",
+    },
+  }}
+/>
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` and `decode` pass data through unchanged.
+- This middleware computes the hash (lowercase hex) and verifies it only when the matching checksum var holds a string.
+- It throws when the value does not match the expectation.
+- It throws when no checksum var exists and `required` is `true`.
+- `encodeStream` and `decodeStream` stream chunks downstream unchanged while updating the hash, verifying on completion.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `ChecksumMismatchError` [#error-checksum-mismatch]
+
+Thrown when the computed hash does not match the expectation.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-mismatch-actual] string",
+      required: true,
+      description: "Computed hash (lowercase hex).",
+    },
+    expected: {
+      type: "[#checksum-mismatch-expected] string",
+      required: true,
+      description: "Expected hash from the checksum var.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Either the data or the expectation is wrong.
+
+#### How to fix
+
+Check which of the data and the expected hash is correct.
+
+### `ChecksumRequiredError` [#error-checksum-required]
+
+#### Meaning
+
+Thrown when `required` is `true` but no checksum var was given.
+
+#### How to fix
+
+Set the expected hash in the matching checksum var, or set `required` to `false`.
+
+### `ChecksumInvalidVarNameError` [#error-checksum-invalid-var-name]
+
+Thrown when a checksum var name is not a string.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-invalid-var-name-actual] unknown",
+      required: true,
+      description: "The given var-name value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+This is a usage error, so it extends `InvalidUsageErrorBase`. `meta.actual` keeps the given value as-is.
+
+#### How to fix
+
+This never happens when using the published concrete classes as-is. In a custom subclass, set `CHECKSUM_VAR_NAME` to a string.
+
+### `ChecksumInvalidRequiredError` [#error-checksum-invalid-required]
+
+Thrown when `required` is not a boolean.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-invalid-required-actual] unknown",
+      required: true,
+      description: "The given `required` value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+This is a usage error, so it extends `InvalidUsageErrorBase`. `meta.actual` keeps the given value as-is.
+
+#### How to fix
+
+Pass `true` or `false` to `required`. It defaults to `false`.

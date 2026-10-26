@@ -1,0 +1,132 @@
+---
+title: "Streams"
+description: "@unikvs/core stream types: aliases of Web standard streams, chunk-type handling, and the relationship to conversion."
+---
+
+## Overview [#overview]
+
+Stream types are aliases of Web standards. They add no implementation of their own. They appear in `IStorage` stream acquisition and in the `source` / `destination` of conversion contexts.
+
+| Type                          | Entity                   | Description                                                                    |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------------------------ |
+| `IReadableStream<T>`          | `ReadableStream<T>`      | Readable stream                                                                |
+| `IWritableStream<T>`          | `WritableStream<T>`      | Writable stream                                                                |
+| `ITransformStream<TIn, TOut>` | `{ readable, writable }` | Pair of `readable: IReadableStream<TOut>` and `writable: IWritableStream<TIn>` |
+
+```ts
+import type { IReadableStream, IWritableStream, ITransformStream } from "@unikvs/core";
+
+declare const readable: IReadableStream<Uint8Array>;
+declare const writable: IWritableStream<Uint8Array>;
+declare const transform: ITransformStream<ArrayBuffer, number>;
+
+const out: IReadableStream<number> = transform.readable;
+const input: IWritableStream<ArrayBuffer> = transform.writable;
+```
+
+## Chunks [#chunks]
+
+Chunk types come from the user's type arguments. Check the type-argument positions rather than confusing them with data types.
+
+| User                                                                | Chunk-deciding type args        | Defaults              |
+| ------------------------------------------------------------------- | ------------------------------- | --------------------- |
+| `IStorage<TWriteData, TReadData, TWriteChunk, TReadChunk>`          | `TWriteChunk` / `TReadChunk`    | `any` / `TWriteChunk` |
+| `IMiddleware<TEncodeData, TDecodeData, TEncodeChunk, TDecodeChunk>` | `TEncodeChunk` / `TDecodeChunk` | `any`                 |
+
+```ts
+import type { IStorage } from "@unikvs/core";
+
+// write chunks are ArrayBuffer, read chunks are number
+type Foursome = IStorage<Uint8Array, string, ArrayBuffer, number>;
+
+// getWritable returns IWritableStream<ArrayBuffer>,
+// getReadable returns IReadableStream<number>
+```
+
+Omitting `TReadChunk` reuses `TWriteChunk`. Storages and middleware without chunks leave the chunk type arguments out as `any`.
+
+## Relation to conversion [#transform]
+
+In conversion contexts, data conversion and stream conversion differ in what `source` / `destination` hold.
+
+| Conversion kind | Contexts                                        | `source` / `destination` hold |
+| --------------- | ----------------------------------------------- | ----------------------------- |
+| Data            | `IEncodeContext` / `IDecodeContext`             | values themselves             |
+| Stream          | `IEncodeStreamContext` / `IDecodeStreamContext` | `IReadableStream`             |
+
+```ts
+import type { IEncodeContext, IEncodeStreamContext, IReadableStream } from "@unikvs/core";
+
+declare const dataCtx: IEncodeContext<string, number>;
+const srcValue: string = dataCtx.source; // value
+const destValue: number | undefined = dataCtx.destination;
+
+declare const streamCtx: IEncodeStreamContext<ArrayBuffer, number>;
+const srcStream: IReadableStream<ArrayBuffer> = streamCtx.source; // stream
+const destStream: IReadableStream<number> | undefined = streamCtx.destination;
+```
+
+In stream conversion, note that you swap whole streams, not chunks. For per-chunk conversion, build something like a `TransformStream` inside and assign it to `destination`.
+
+## Example [#example]
+
+Example implementing stream acquisition on the storage side. `getReadable` returns a readable stream; `getWritable` returns a writable stream.
+
+```ts
+import type { IReadableStream, IStorage, IWritableStream } from "@unikvs/core";
+
+export class ChunkedMemory implements IStorage<Uint8Array, Uint8Array, Uint8Array> {
+  public readonly name = "ChunkedMemory";
+  public isOpen = false;
+  private readonly data = new Map<string, Uint8Array[]>();
+
+  public getWritable(c: IStorage.GetWritableContext): IWritableStream<Uint8Array> {
+    const chunks: Uint8Array[] = [];
+    return new WritableStream<Uint8Array>({
+      write: (chunk) => {
+        chunks.push(chunk);
+      },
+      close: () => {
+        this.data.set(c.key, chunks);
+      },
+    });
+  }
+
+  public getReadable(c: IStorage.GetReadableContext): IReadableStream<Uint8Array> {
+    const chunks = this.data.get(c.key) ?? [];
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk);
+        }
+        controller.close();
+      },
+    });
+  }
+}
+```
+
+:::note[Reject when aborted before start]
+Calls with an already-aborted signal reject immediately with [`StorageAbortedError`](./errors#error-storage-aborted). See [Storage › Stream acquisition](./storage#streams).
+:::
+
+## API reference [#api]
+
+### `ITransformStream` [#itransformstream]
+
+A pair of readable and writable streams.
+
+<TypeTable
+  type={{
+    readable: {
+      type: "[#itransformstream-readable] IReadableStream<TOut>",
+      required: true,
+      description: "Readable stream.",
+    },
+    writable: {
+      type: "[#itransformstream-writable] IWritableStream<TIn>",
+      required: true,
+      description: "Writable stream.",
+    },
+  }}
+/>

@@ -1,0 +1,85 @@
+---
+title: "@unikvs/cbor"
+description: "How to use @unikvs/cbor, middleware that serializes values as CBOR."
+---
+
+## Overview [#overview]
+
+Middleware that serializes values as CBOR. <Badge>Middleware</Badge>
+
+Single reads/writes convert a value directly to CBOR bytes, while streams convert values to a sequence of concatenated CBOR items.
+
+- `name` is `"Cbor"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/cbor
+```
+
+## Usage [#usage]
+
+Cbor implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+```
+
+The following example stores an object as CBOR and restores its original shape on read.
+
+```ts
+import { Cbor } from "@unikvs/cbor";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ item: unikvs.Value<{ readonly id: number }> }>()
+  .use(new Cbor())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("item", { id: 1 });
+const item = await kvs.get("item");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+| `encodeStream` | `unknown`                 | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `unknown`                 |
+
+- `encode` converts a value to CBOR bytes.
+- `decode` converts CBOR bytes back to a value.
+- `encodeStream` emits one CBOR item per input item, concatenated in order.
+- `decodeStream` accumulates received bytes and emits completed values in order.
+- Truncated data waits for the next chunk; leftover bytes at the end throw an error.
+- Empty chunks do not affect decoding, so this middleware ignores them.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `CborEncodeError` [#error-cbor-encode]
+
+#### Meaning
+
+Thrown when CBOR encoding of a value fails. The cause is preserved in `cause`.
+
+#### How to fix
+
+Check `cause` and pass a CBOR-representable value.
+
+### `CborDecodeError` [#error-cbor-decode]
+
+#### Meaning
+
+Thrown when decoding CBOR data fails. This covers corrupted input and incomplete data left at the end of a stream. The cause is preserved in `cause`.
+
+#### How to fix
+
+Make sure the input is valid CBOR data and the stream was not cut off midway.

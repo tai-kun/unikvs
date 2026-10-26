@@ -277,11 +277,10 @@ for await (const chunk of await kvs.stream("logs")) {
   <Tab title="await using">
 
 ```ts
-await using (const valueStream = await kvs.stream("logs")) {
-  const reader = valueStream.getReader();
-  const { value } = await reader.read();
-  console.log(value);
-}
+await using valueStream = await kvs.stream("logs");
+const reader = valueStream.getReader();
+const { value } = await reader.read();
+console.log(value);
 ```
 
   </Tab>
@@ -375,7 +374,7 @@ builder.defaultsVars({ b: 20, c: 3 });
 
 ## 読み取り時の書き戻し [#read-repair]
 
-`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しが拒否されても既定では読み取りは成功し、警告ログに残ります。拒否時に読み取りも失敗させる場合は `throwOnRepairDenied: true` を指定します (既定は `false`)。書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御し、拒否時の `meta.names` に書き戻し先の表示名が入ります。詳細は複数ストレージのガイドを参照してください。
+`get` と `stream` は `repair: true` を指定すると、後段のストレージで見つかった値を前段のストレージへ書き戻します (既定は `false`)。書き戻しが拒否されても既定では読み取りは成功し、警告ログに残ります。拒否時に読み取りも失敗させる場合は `throwOnRepairDenied: true` を指定します (既定は `false`)。書き戻しの可否は [`@unikvs/allow-repair`](/packages/allow-repair) で制御し、拒否時の `meta.names` に書き戻し先の表示名が入ります。詳細は[複数の保存先を使う](/how-to/multi-storage)を参照してください。
 
 ```ts
 const bytes = await kvs.get("foo", { repair: true });
@@ -413,7 +412,7 @@ try {
 }
 ```
 
-エラーの分類や対処は、[エラーと診断](/guides/errors)のガイドを参照してください。
+エラーの分類や対処は、[エラーを処理する](/how-to/handle-errors)を参照してください。
 
 ## 使用例 [#examples]
 

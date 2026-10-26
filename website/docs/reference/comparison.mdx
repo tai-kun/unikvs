@@ -1,0 +1,49 @@
+---
+title: "ストレージ比較"
+description: "保存先の対応データ型と実行環境と永続性を比較します。"
+---
+
+保存先の選択に迷った場合は、この表で対応データ型と実行環境を比較してください。導入手順は[インストール](/how-to/installation)を参照してください。
+
+## 選び方 [#selection]
+
+- テストや一時的な保存には[メモリー](/packages/memory)を使います。
+- ブラウザーでは [OPFS](/packages/opfs) や [IndexedDB](/packages/indexeddb) を優先し、文字列だけなら [Local Storage](/packages/localstorage) を使います。
+- Node.js では [Node.js ファイルシステム](/packages/fs-node)、Bun では [Bun ファイルシステム](/packages/fs-bun) を使います。
+- 外部サービスを使う場合は、運用環境に合わせて S3、Redis、Valkey、Memcached、etcd、Cloudflare、Vercel の各保存先を選びます。
+- 一時的な失敗に備える場合は [リトライ](/packages/retry) でラップし、削除を残したい場合は [論理削除](/packages/soft-delete) でラップします。
+
+## 対応表 [#comparison]
+
+| 保存先                                                        | 対応データ型              | ストリーム                                           | 実行環境                                     |
+| ------------------------------------------------------------- | ------------------------- | ---------------------------------------------------- | -------------------------------------------- |
+| [メモリー](/packages/memory)                                  | 任意の値                  | 対応。チャンクは `Uint8Array` です。                 | 制限なし。                                   |
+| [Null](/packages/null)                                        | 保存しません              | 書き込みのみ受け付けます。読み取りは常に失敗します。 | 制限なし。                                   |
+| [LRU キャッシュ](/packages/lru-cache)                         | 任意の値                  | 対応。チャンクは `Uint8Array` です。                 | 制限なし。                                   |
+| [HTTP](/packages/http)                                        | `Uint8Array`              | 対応。                                               | 制限なし。接続先サーバーが必要です。         |
+| [OPFS](/packages/opfs)                                        | `Uint8Array`              | 対応。                                               | ブラウザーとワーカー専用です。               |
+| [IndexedDB](/packages/indexeddb)                              | 任意の値                  | 対応。                                               | ブラウザー専用です。                         |
+| [Local Storage](/packages/localstorage)                       | 文字列                    | 非対応です。                                         | ブラウザー専用です。                         |
+| [Session Storage](/packages/session-storage)                  | 文字列                    | 非対応です。                                         | ブラウザー専用です。                         |
+| [Cache Storage](/packages/cache-storage)                      | `Response`                | 対応。                                               | ブラウザーとワーカー専用です。               |
+| [Cookie](/packages/cookies)                                   | 文字列または `Uint8Array` | 非対応です。                                         | ブラウザー専用です。                         |
+| [Node.js ファイルシステム](/packages/fs-node)                 | `Uint8Array`              | 対応。                                               | Node.js 専用です。                           |
+| [Bun ファイルシステム](/packages/fs-bun)                      | `Uint8Array`              | 対応。                                               | Bun 専用です。                               |
+| [S3 Node.js](/packages/s3-node)                               | `Uint8Array`              | 対応。                                               | Node.js で使います。外部サービスが必要です。 |
+| [S3 Bun](/packages/s3-bun)                                    | `Uint8Array`              | 対応。                                               | Bun 専用です。外部サービスが必要です。       |
+| [Redis Node.js](/packages/redis-node)                         | `Uint8Array`              | 対応。                                               | Node.js で使います。外部サービスが必要です。 |
+| [Redis Bun](/packages/redis-bun)                              | `Uint8Array`              | 対応。                                               | Bun 専用です。外部サービスが必要です。       |
+| [Valkey](/packages/valkey)                                    | `Uint8Array`              | 対応。                                               | Node.js で使います。外部サービスが必要です。 |
+| [Memcached](/packages/memcached)                              | `Uint8Array`              | 非対応です。                                         | 制限なし。外部サーバーが必要です。           |
+| [etcd](/packages/etcd)                                        | `Uint8Array`              | 対応。                                               | 制限なし。外部サーバーが必要です。           |
+| [Cloudflare Cache](/packages/cloudflare-cache)                | `Uint8Array`              | 対応。                                               | Cloudflare Workers 専用です。                |
+| [Cloudflare KV](/packages/cloudflare-kv)                      | `Uint8Array`              | 非対応です。                                         | Cloudflare Workers 専用です。                |
+| [Cloudflare R2](/packages/cloudflare-r2)                      | `Uint8Array`              | 対応。                                               | Cloudflare Workers 専用です。                |
+| [Vercel Blob](/packages/vercel-blob)                          | `Uint8Array`              | 対応。書き込み時に結合します。                       | 制限なし。トークンが必要です。               |
+| [Vercel ランタイムキャッシュ](/packages/vercel-runtime-cache) | 任意の値                  | 対応。                                               | Vercel 実行環境を想定します。                |
+| [リトライ](/packages/retry)                                   | ラップ先に依存します      | ラップ先に依存します。                               | 制限なし。                                   |
+| [論理削除](/packages/soft-delete)                             | ラップ先に依存します      | ラップ先に依存します。                               | 制限なし。                                   |
+
+:::note[詳細は各パッケージを参照]
+コンストラクターの引数や上限などの詳細は、各[パッケージリファレンス](/packages)を参照してください。
+:::

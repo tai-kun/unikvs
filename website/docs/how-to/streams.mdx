@@ -1,0 +1,71 @@
+---
+title: "ストリームを使う"
+description: "大きな値を ReadableStream で分割して読み書きする手順です。"
+---
+
+大きなバイト列を扱う場合は、ストリームで分割して読み書きします。
+
+## ストリーム用のキーを定義する [#define-stream-key]
+
+ストリームを使うキーは `StreamValue` または `Value` で定義します。`PlainValue` のキーでは `stream()` を使えません。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{
+  logs: unikvs.StreamValue<Uint8Array>;
+}>()
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+```
+
+## ストリームで書き込む [#write-stream]
+
+`set()` に `ReadableStream` を渡します。メモリーストレージのチャンク型は `Uint8Array` です。
+
+```ts
+const stream = new ReadableStream<Uint8Array>({
+  start(controller) {
+    controller.enqueue(new Uint8Array([0x01, 0x02]));
+    controller.enqueue(new Uint8Array([0x03, 0x04]));
+    controller.close();
+  },
+});
+
+await kvs.set("logs", stream);
+```
+
+## ストリームで読み取る [#read-stream]
+
+`stream()` の戻り値は `ValueStream` です。`for await...of` でチャンクを順に処理します。
+
+```ts
+for await (const chunk of await kvs.stream("logs")) {
+  console.log(chunk); // Uint8Array
+}
+```
+
+使い終わったストリームは破棄してください。`await using` による自動破棄か `dispose()` を使います。
+
+```ts
+await using vs = await kvs.stream("logs");
+const reader = vs.getReader();
+const { value } = await reader.read();
+console.log(value);
+```
+
+:::warning[使い終わったストリームは破棄してください]
+`await using` による自動破棄か `dispose()` を忘れないでください。
+:::
+
+## 対応状況を確認する [#check-support]
+
+保存先によってストリームの対応状況とチャンク型が異なります。たとえば Local Storage 系と Cookie と Memcached と Cloudflare KV はストリームに対応しません。利用前に各[パッケージリファレンス](/packages)のデータ型を確認してください。
+
+## 関連情報 [#related]
+
+- 値の型の使い分けは[値のモデル](/explanation/value-model)を参照してください。
+- 保存先の対応状況は[ストレージ比較](/reference/comparison)を参照してください。

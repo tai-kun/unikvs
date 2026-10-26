@@ -1,0 +1,289 @@
+---
+title: "@unikvs/retry"
+description: "A storage wrapper that retries transient failures with exponential backoff."
+---
+
+## Overview [#overview]
+
+`Retry` retries transient failures of a delegated storage with exponential backoff, making reads and writes more likely to succeed.
+
+Use it to retry operations failing from flaky networks or temporary overload. Retry eligibility and delays are tunable.
+
+- `name` is `Retry`.
+- `isOpen` returns `inner.isOpen`.
+- Retries `write`, `read`, `exists`, `delete`, `clear`, `getWritable`, and `getReadable`; `open`, `close`, and `onOtherWriteError` are only delegated.
+- Performs no data or chunk conversion; preserves the delegated types as-is.
+
+Install with:
+
+```package-install
+npm install @unikvs/retry
+```
+
+## Usage [#usage]
+
+Retry implements IStorage. Pass it to UniKvs with persist().
+
+```ts
+import { Retry } from "@unikvs/retry";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    inner: {
+      type: "[#retry-inner] IStorage",
+      required: true,
+      description: "The delegated storage.",
+    },
+    maxRetries: {
+      type: "[#retry-options-max-retries] number",
+      default: "3",
+      description: "Number of retries after the first attempt. 0 disables retries.",
+    },
+    initialDelayMs: {
+      type: "[#retry-options-initial-delay-ms] number",
+      default: "100",
+      description: "First delay (milliseconds).",
+    },
+    maxDelayMs: {
+      type: "[#retry-options-max-delay-ms] number",
+      default: "5000",
+      description: "Maximum delay (milliseconds).",
+    },
+    factor: {
+      type: "[#retry-options-factor] number",
+      default: "2",
+      description: "Delay growth factor.",
+    },
+    jitter: {
+      type: "[#retry-options-jitter] boolean",
+      default: "true",
+      description: "Whether to add jitter to delays.",
+    },
+    retryable: {
+      type: "[#retry-options-retryable] RetryablePredicate",
+      description:
+        "Predicate deciding whether an error is retryable. Uses isRetryableError by default.",
+    },
+    onRetry: {
+      type: "[#retry-options-on-retry] (info: RetryAttemptInfo) => void",
+      description: "Notification called just before a retry.",
+    },
+  }}
+/>
+
+The following example retries transient failures of the delegate.
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Retry } from "@unikvs/retry";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .persist(new Retry(new Memory(), { maxRetries: 3 }))
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `Retry` [#retry]
+
+Storage wrapper that retries transient failures with exponential backoff. The delay grows as `initialDelayMs * factor^(attempt-1)` up to `maxDelayMs`.
+
+### `RetryOptions` [#retry-options]
+
+Options accepted by the `Retry` constructor. Specify retry counts, delays, and the eligibility predicate.
+
+### `RetryOperation` [#retry-operation]
+
+Name of a retried operation: `"write"`, `"read"`, `"exists"`, `"delete"`, `"clear"`, `"getWritable"`, or `"getReadable"`.
+
+### `RetryablePredicate` [#retryable-predicate]
+
+Predicate deciding whether an error is retryable.
+
+### `RetryAttemptInfo` [#retry-attempt-info]
+
+Attempt info reported when a retry happens.
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-attempt-info-operation] RetryOperation",
+      required: true,
+      description: "Name of the failed operation.",
+    },
+    attempt: {
+      type: "[#retry-attempt-info-attempt] number",
+      required: true,
+      description: "Failed attempt count (1-based).",
+    },
+    error: {
+      type: "[#retry-attempt-info-error] unknown",
+      required: true,
+      description: "The error that occurred.",
+    },
+    nextDelayMs: {
+      type: "[#retry-attempt-info-next-delay-ms] number",
+      required: true,
+      description: "Delay (milliseconds) before the next attempt.",
+    },
+  }}
+/>
+
+### `isRetryableError` [#is-retryable-error]
+
+Default retry eligibility. Permanent failures such as missing keys and abort-driven failures are not retried.
+
+## Data types [#data-types]
+
+| Operation                          | Supported data type             |
+| ---------------------------------- | ------------------------------- |
+| `write`/`read`                     | Same data type as the delegate  |
+| `getWritable`/`getReadable` chunks | Same chunk type as the delegate |
+
+- All operations preserve the delegate types; no data or chunk conversion is performed.
+- Retried operations are reads, writes, existence checks, deletes, clears, and stream acquisitions.
+- `open` and `close` failures are not retried and propagate as-is.
+- Delays grow exponentially up to the cap; when `jitter` is `true` they vary between half the cap and the cap.
+
+## Errors [#errors]
+
+This package throws the following errors.
+
+### RetryExhaustedError [#error-retry-exhausted]
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-exhausted-operation] string",
+      required: true,
+      description: "Name of the failed operation.",
+    },
+    attempts: {
+      type: "[#retry-exhausted-attempts] number",
+      required: true,
+      description: "Number of attempts made.",
+    },
+  }}
+/>
+
+#### Meaning [#error-retry-exhausted-meaning]
+
+Thrown when the operation still fails after exhausting the maximum attempts. The last error is kept in `cause`.
+
+#### How to fix [#error-retry-exhausted-howto]
+
+Inspect the original failure via `cause` and determine whether it is transient. If it happens often, review `maxRetries`, delays, and the `retryable` predicate.
+
+#### Example [#error-retry-exhausted-example]
+
+The following example catches `RetryExhaustedError`.
+
+```ts
+import { RetryExhaustedError } from "@unikvs/retry";
+
+try {
+  await kvs.set("k1", "hello");
+} catch (ex) {
+  if (ex instanceof RetryExhaustedError) {
+    console.log(ex.meta); // { operation: "write", attempts: 4 }
+    console.log(ex.cause); // last error
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RetryInvalidOptionError [#error-retry-invalid-option]
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#retry-invalid-option-name] string",
+      required: true,
+      description: "Name of the invalid option.",
+    },
+    actual: {
+      type: "[#retry-invalid-option-actual] unknown",
+      required: true,
+      description: "The given value.",
+    },
+  }}
+/>
+
+#### Meaning [#error-retry-invalid-option-meaning]
+
+Thrown when invalid options are passed to the constructor: negative or non-integer retry counts, negative delays, or a factor below 1.
+
+#### How to fix [#error-retry-invalid-option-howto]
+
+Check `meta.name`: use a non-negative integer for `maxRetries`, non-negative finite numbers for `initialDelayMs` and `maxDelayMs`, and a finite number >= 1 for `factor`.
+
+#### Example [#error-retry-invalid-option-example]
+
+The following example catches `RetryInvalidOptionError`.
+
+```ts
+import { RetryInvalidOptionError } from "@unikvs/retry";
+
+try {
+  const retry = new Retry(inner, { maxRetries: -1 });
+} catch (ex) {
+  if (ex instanceof RetryInvalidOptionError) {
+    console.log(ex.meta); // { name: "maxRetries", actual: -1 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RetryUnsupportedOperationError [#error-retry-unsupported-operation]
+
+<TypeTable
+  type={{
+    operation: {
+      type: "[#retry-unsupported-operation-operation] string",
+      required: true,
+      description: "Name of the unimplemented operation.",
+    },
+    storage: {
+      type: "[#retry-unsupported-operation-storage] string",
+      required: true,
+      description: "Name of the delegated storage.",
+    },
+  }}
+/>
+
+#### Meaning [#error-retry-unsupported-operation-meaning]
+
+Thrown when the delegated storage does not implement `getWritable` or `getReadable`.
+
+#### How to fix [#error-retry-unsupported-operation-howto]
+
+Check whether the delegate supports stream operations; use plain reads and writes when it does not.
+
+#### Example [#error-retry-unsupported-operation-example]
+
+The following example catches `RetryUnsupportedOperationError`.
+
+```ts
+import { RetryUnsupportedOperationError } from "@unikvs/retry";
+
+try {
+  await kvs.stream("logs");
+} catch (ex) {
+  if (ex instanceof RetryUnsupportedOperationError) {
+    console.log(ex.meta); // { operation: "getReadable", storage: "Bare" }
+  } else {
+    throw ex;
+  }
+}
+```
+
+`KeyNotFoundError` and abort-driven `AbortError` are not retried by default and propagate as-is.

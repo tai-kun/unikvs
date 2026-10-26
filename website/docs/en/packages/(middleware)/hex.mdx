@@ -1,0 +1,93 @@
+---
+title: "@unikvs/hex"
+description: "How to use @unikvs/hex, middleware that encodes bytes as a hexadecimal string."
+---
+
+## Overview [#overview]
+
+Middleware that returns bytes as a hexadecimal string. <Badge>Middleware</Badge>
+
+Encoding always emits lowercase, while decoding accepts both uppercase and lowercase.
+
+- `name` is `"Hex"`.
+- `isOpen` is always `true`.
+
+Install with:
+
+```package-install
+npm install @unikvs/hex
+```
+
+## Usage [#usage]
+
+Hex implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { Hex } from "@unikvs/hex";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    encoder: {
+      type: "[#hex-encoder] FastUtf8",
+      description: "Implementation used to encode strings to bytes. Uses the default when omitted.",
+    },
+    decoder: {
+      type: "[#hex-decoder] FastUtf8",
+      description: "Implementation used to decode bytes to strings. Uses the default when omitted.",
+    },
+  }}
+/>
+
+The following example stores bytes as a hexadecimal string and restores the original bytes on read.
+
+```ts
+import { Hex } from "@unikvs/hex";
+import { Memory } from "@unikvs/memory";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ file: unikvs.Value<Uint8Array> }>()
+  .use(new Hex())
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("file", new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
+const file = await kvs.get("file");
+await kvs.close();
+```
+
+## Data types [#data-types]
+
+| Method         | Input                     | Output                    |
+| -------------- | ------------------------- | ------------------------- |
+| `encode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decode`       | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `encodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+| `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
+
+- `encode` converts bytes to a lowercase hexadecimal string and encodes it as UTF-8 bytes.
+- `decode` converts hex-encoded bytes back to the original bytes.
+- Decoding accepts both uppercase and lowercase.
+- `encodeStream` converts each chunk and concatenates them in order.
+- Empty chunks do not affect encoding, so this middleware ignores them.
+- `decodeStream` restores 2 characters at a time, carrying a trailing odd character to the next call.
+- If bytes remain when the stream ends, this middleware throws an error.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### `HexDecodeError` [#error-hex-decode]
+
+#### Meaning
+
+Thrown when the input cannot be interpreted as a hexadecimal string. This covers odd-length input and input containing non-hex characters.
+
+#### How to fix
+
+Make sure the input is an even-length hexadecimal string.
+
+A `TypeError` propagates unchanged when trailing partial UTF-8 bytes remain at the end of a stream.

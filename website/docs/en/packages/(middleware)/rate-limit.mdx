@@ -1,0 +1,204 @@
+---
+title: "@unikvs/rate-limit"
+description: "Middleware that limits operation frequency with a token bucket."
+---
+
+## Overview [#overview]
+
+`RateLimit` limits operation frequency with a token bucket, protecting storage from excessive reads and writes.<Badge>Middleware</Badge>
+
+Use it to allow bursts while capping the average rate. On exhaustion, choose waiting or an immediate error.
+
+- `name` is `RateLimit`.
+- `isOpen` is always `true`.
+- The bucket is shared per middleware instance (not per key), consuming 1 token for every operation (`set` / `get` / `stream` / `has` / `delete` / `clear`).
+- `encode` / `decode` / `encodeStream` / `decodeStream` pass data through.
+
+Install with:
+
+```package-install
+npm install @unikvs/rate-limit
+```
+
+## Usage [#usage]
+
+RateLimit implements IMiddleware. Pass it to UniKvs with use().
+
+```ts
+import { RateLimit } from "@unikvs/rate-limit";
+```
+
+Constructor arguments:
+
+<TypeTable
+  type={{
+    tokensPerInterval: {
+      type: "[#rate-limit-options-tokens-per-interval] number",
+      default: "1",
+      description: "Tokens refilled per interval.",
+    },
+    intervalMs: {
+      type: "[#rate-limit-options-interval-ms] number",
+      default: "1000",
+      description: "Refill interval (ms).",
+    },
+    maxTokens: {
+      type: "[#rate-limit-options-max-tokens] number",
+      description: "Maximum tokens held. Defaults to tokensPerInterval.",
+    },
+    burst: {
+      type: "[#rate-limit-options-burst] number",
+      description: "Alias of maxTokens. When both are given, maxTokens wins.",
+    },
+    strategy: {
+      type: "[#rate-limit-options-strategy] RateLimitStrategy",
+      default: '"wait"',
+      description: 'Behavior on exhaustion. "wait" waits for refill; "throw" throws immediately.',
+    },
+    now: {
+      type: "[#rate-limit-options-now] () => number",
+      default: "Date.now",
+      description: "Returns the current time (epoch ms). Defaults to Date.now.",
+    },
+    sleep: {
+      type: "[#rate-limit-options-sleep] IRateLimitSleep",
+      description:
+        "Wait implementation. Uses setTimeout by default; swap it to control time in tests.",
+    },
+  }}
+/>
+
+The following caps usage at 5 operations per second, waiting on exhaustion:
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { RateLimit } from "@unikvs/rate-limit";
+import * as unikvs from "unikvs";
+
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(new RateLimit({ tokensPerInterval: 5, intervalMs: 1000 }))
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+await kvs.close();
+```
+
+### `RateLimit` [#rate-limit]
+
+Middleware that limits operation frequency with a token bucket. It extends `PassThrough` and performs no data conversion.
+
+### `RateLimitOptions` [#rate-limit-options]
+
+Options accepted by the `RateLimit` constructor. Specifies token counts, refill interval, and exhaustion behavior.
+
+### `RateLimitStrategy` [#rate-limit-strategy]
+
+Behavior on exhaustion. `"wait"` waits until tokens refill; `"throw"` throws immediately.
+
+### `IRateLimitSleep` [#irate-limit-sleep]
+
+Wait implementation. Swap it to control time in tests.
+
+## Data types [#data-types]
+
+| Method         | Input | Output |
+| -------------- | ----- | ------ |
+| `encode`       | `any` | `any`  |
+| `decode`       | `any` | `any`  |
+| `encodeStream` | `any` | `any`  |
+| `decodeStream` | `any` | `any`  |
+
+- `use` consumes one token per operation and never touches data.
+- `encode` / `decode` / `encodeStream` / `decodeStream` pass input through unchanged.
+- Tokens refill with elapsed time and never exceed the cap. A clock moving backward never adds tokens.
+- The `wait` strategy waits until recovery, serving requests FIFO. It aborts waiting on the abort signal.
+
+## Errors [#errors]
+
+Errors thrown by this package:
+
+### RateLimitExceededError [#error-rate-limit-exceeded]
+
+<TypeTable
+  type={{
+    retryAfterMs: {
+      type: "[#rate-limit-exceeded-retry-after-ms] number",
+      required: true,
+      description: "Time to wait before retrying (ms).",
+    },
+  }}
+/>
+
+#### Meaning [#error-rate-limit-exceeded-meaning]
+
+Thrown when an operation arrives with no tokens left and `strategy` is `"throw"`. `next` is not called and the operation never runs.
+
+#### How to fix [#error-rate-limit-exceeded-howto]
+
+Wait `meta.retryAfterMs` before retrying, or use `strategy: "wait"` for automatic waiting. If this happens often, revisit `tokensPerInterval` or `maxTokens`.
+
+#### Example [#error-rate-limit-exceeded-example]
+
+Catching `RateLimitExceededError`:
+
+```ts
+import { RateLimitExceededError } from "@unikvs/rate-limit";
+
+try {
+  await kvs.set("k1", "hello");
+} catch (ex) {
+  if (ex instanceof RateLimitExceededError) {
+    console.log(ex.meta); // { retryAfterMs: 500 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+### RateLimitInvalidOptionError [#error-rate-limit-invalid-option]
+
+<TypeTable
+  type={{
+    name: {
+      type: "[#rate-limit-invalid-option-name] string",
+      required: true,
+      description: "The offending option name.",
+    },
+    actual: {
+      type: "[#rate-limit-invalid-option-actual] unknown",
+      required: true,
+      description: "The given value.",
+    },
+  }}
+/>
+
+#### Meaning [#error-rate-limit-invalid-option-meaning]
+
+Thrown when the constructor receives invalid options: non-positive-finite numbers, a `strategy` other than `"wait"` / `"throw"`, or a non-function `now` / `sleep`.
+
+#### How to fix [#error-rate-limit-invalid-option-howto]
+
+Check `meta.name`: pass positive finite numbers, a valid enum value, or functions. When both `maxTokens` and `burst` are given, `maxTokens` wins.
+
+#### Example [#error-rate-limit-invalid-option-example]
+
+Catching `RateLimitInvalidOptionError`:
+
+```ts
+import { RateLimit, RateLimitInvalidOptionError } from "@unikvs/rate-limit";
+
+try {
+  const limiter = new RateLimit({ intervalMs: 0 });
+} catch (ex) {
+  if (ex instanceof RateLimitInvalidOptionError) {
+    console.log(ex.meta); // { name: "intervalMs", actual: 0 }
+  } else {
+    throw ex;
+  }
+}
+```
+
+`AbortError` from the abort signal propagates as-is, and this middleware consumes no token in that case.
