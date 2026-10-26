@@ -8,7 +8,12 @@ export type OpfsOptions = {};
 
 /**
  * 失敗しても無視してよい非同期処理の拒否を握りつぶします。
+ *
  * 中断時の後始末など、失敗を呼び出し元へ伝える必要がない場合に使用します。
+ *
+ * @param promise 結果を無視するプロミスです。
+ *
+ * @returns 完了を知らせるプロミスです。
  */
 async function ignoreRejection(promise: Promise<unknown>): Promise<void> {
   try {
@@ -22,6 +27,9 @@ async function ignoreRejection(promise: Promise<unknown>): Promise<void> {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/opfs#usage)
  */
 export default class Opfs implements IStorage {
+  /**
+   * ストレージ名です。常に `Opfs` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -80,10 +88,22 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns ルートハンドルを保持していれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#rootHandle !== null;
   }
 
+  /**
+   * OPFS のディレクトリーを開きルートハンドルを保持します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -107,6 +127,14 @@ export default class Opfs implements IStorage {
     this.#rootHandle = handle;
   }
 
+  /**
+   * 指定したキーに Uint8Array を保存します。失敗時は変更を破棄します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
@@ -131,6 +159,13 @@ export default class Opfs implements IStorage {
     await writable.close();
   }
 
+  /**
+   * 指定したキーのファイルを読み出します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容のバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
@@ -146,6 +181,13 @@ export default class Opfs implements IStorage {
     return new Uint8Array(buff);
   }
 
+  /**
+   * 指定したキーのファイルがあるかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns ファイルがあれば true を返します。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
@@ -163,6 +205,13 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * 指定したキーのファイルを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
@@ -170,6 +219,13 @@ export default class Opfs implements IStorage {
     await this.#getRootHandle().removeEntry(c.key);
   }
 
+  /**
+   * 保存データをすべて削除します。サブディレクトリー使用時は作り直します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -207,6 +263,13 @@ export default class Opfs implements IStorage {
     }
   }
 
+  /**
+   * ファイルへ書き込むためのストリームを作成します。中断時は変更を破棄します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public async getWritable(
     c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
@@ -270,6 +333,13 @@ export default class Opfs implements IStorage {
     });
   }
 
+  /**
+   * ファイルを読み出すためのストリームを作成します。中断時は読み取りを打ち切ります。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容を送出する読み取りストリームです。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -331,8 +401,11 @@ export default class Opfs implements IStorage {
     });
   }
 
-  // 開いているルートディレクトリーハンドルを返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いているルートディレクトリーハンドルを返します。未オープン時はエラーを投げます。
+   *
+   * @returns 開いているルートディレクトリーハンドルです。
+   */
   #getRootHandle(): FileSystemDirectoryHandle {
     const handle = this.#rootHandle;
 

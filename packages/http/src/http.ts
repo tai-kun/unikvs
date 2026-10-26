@@ -49,7 +49,13 @@ export type HttpOptions = {
   readonly token?: string | undefined;
 };
 
-// `headers` 値が文字列のみのレコードであることを検証します。
+/**
+ * ヘッダー値が文字列のみのレコードであることを検証します。
+ *
+ * @param value 検証する値です。
+ *
+ * @returns 検証済みのヘッダーレコードです。
+ */
 function assertHeadersRecord(value: unknown): Record<string, string> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new InvalidHeadersError({ actual: value });
@@ -68,7 +74,13 @@ function assertHeadersRecord(value: unknown): Record<string, string> {
   return result;
 }
 
-// `token` 値が空でない文字列であることを検証します。
+/**
+ * トークン値が空でない文字列であることを検証します。
+ *
+ * @param value 検証する値です。
+ *
+ * @returns 検証済みのトークンです。未指定時は undefined です。
+ */
 function assertTokenValue(value: unknown): string | undefined {
   let result: string | undefined;
 
@@ -87,6 +99,9 @@ function assertTokenValue(value: unknown): string | undefined {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
  */
 export default class Http implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/http#usage)
+   */
   public readonly name: string;
 
   /**
@@ -94,21 +109,33 @@ export default class Http implements IStorage {
    */
   public readonly allowClearWithoutPrefix: boolean;
 
-  // 正規化済みのベース URL です。
-  // 末尾の `/` を除去しています。
+  /**
+   * 正規化済みのベース URL です。
+   *
+   * 末尾の `/` を除去しています。
+   */
   readonly #baseUrl: string;
 
-  // すべてのキーに付与する接頭辞です。
+  /**
+   * すべてのキーに付与する接頭辞です。
+   */
   readonly #keyPrefix: string;
 
-  // 注入された `fetch` 実装です。
-  // 未指定の場合は `globalThis.fetch` を使います。
+  /**
+   * 注入された `fetch` 実装です。
+   *
+   * 未指定の場合は `globalThis.fetch` を使います。
+   */
   readonly #fetchImpl: IFetch | undefined;
 
-  // 既定のリクエストヘッダー群です。
+  /**
+   * 既定の要求ヘッダー群です。
+   */
   readonly #baseHeaders: Record<string, string>;
 
-  // 既定のベアラートークンです。
+  /**
+   * 既定のベアラートークンです。
+   */
   readonly #baseToken: string | undefined;
 
   /**
@@ -169,26 +196,66 @@ export default class Http implements IStorage {
     this.#baseToken = assertTokenValue(token);
   }
 
-  // 中断済みなら中断例外を再送出します。
-  // `fetch` の `catch` 直後に呼びます。
+  /**
+   * 中断済みなら中断例外を再送出します。
+   *
+   * `fetch` の `catch` 直後に呼びます。
+   *
+   * @param signal 確認するシグナルです。
+   */
   static #rethrowIfAborted(signal: AbortSignal): void {
     signal.throwIfAborted();
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * 常に真を返します。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
     await Promise.resolve();
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
     await Promise.resolve();
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * `PUT` でオブジェクトを上書きします。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -230,6 +297,15 @@ export default class Http implements IStorage {
     }
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * `GET` でオブジェクトを取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
@@ -275,6 +351,15 @@ export default class Http implements IStorage {
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * `HEAD` で確認し、未対応時は範囲 `GET` で代替します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
@@ -368,6 +453,15 @@ export default class Http implements IStorage {
     });
   }
 
+  /**
+   * キーを削除します。
+   *
+   * `DELETE` で削除し、存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -410,6 +504,15 @@ export default class Http implements IStorage {
     }
   }
 
+  /**
+   * 接頭辞配下のキーをすべて削除します。
+   *
+   * サーバー側の接頭辞削除で一括削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     // 空 prefix での無条件全削除の事故を防ぐため送信前に拒否します。
     if (this.#keyPrefix === "" && !this.allowClearWithoutPrefix) {
@@ -462,6 +565,15 @@ export default class Http implements IStorage {
     });
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * チャンクを蓄積し、`close` 時に一括で `PUT` します。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
@@ -534,6 +646,15 @@ export default class Http implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * `GET` で取得したボディをそのまま返します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームを解決します。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -588,12 +709,24 @@ export default class Http implements IStorage {
     return response.body;
   }
 
-  // 使用する `fetch` 実装を解決します。
+  /**
+   * 使用する `fetch` 実装を解決します。
+   *
+   * @returns 要求送信に使う実装です。
+   */
   #resolveFetch(): IFetch {
     return this.#fetchImpl ?? globalThis.fetch;
   }
 
-  // 送信ヘッダーを三層優先度で解決します。
+  /**
+   * 送信ヘッダーを三層優先度で解決します。
+   *
+   * 既定値、共通変数、固有変数の順に上書きします。
+   *
+   * @param c パイプラインコンテキストです。
+   *
+   * @returns 解決したヘッダー群です。
+   */
   #resolveHeaders(c: Pick<IPipelineContext, "get">): Record<string, string> {
     const headers: Record<string, string> = { ...this.#baseHeaders };
     const commonHeaders = c.get("@unikvs/fetch:headers");
@@ -630,8 +763,15 @@ export default class Http implements IStorage {
     return headers;
   }
 
-  // キーに対応する完全 URL を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  /**
+   * キーに対応する完全 URL を組み立てます。
+   *
+   * 符号化に失敗した場合は例外を投げます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns キーに対応する完全 URL です。
+   */
   #keyUrl(key: string): string {
     let segment: string;
 
@@ -647,8 +787,13 @@ export default class Http implements IStorage {
     return `${this.#baseUrl}/${segment}`;
   }
 
-  // `clear` 用の完全 URL を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  /**
+   * `clear` 用の完全 URL を組み立てます。
+   *
+   * 符号化に失敗した場合は例外を投げます。
+   *
+   * @returns クリア要求に使う完全 URL です。
+   */
   #clearUrl(): string {
     let encoded: string;
 

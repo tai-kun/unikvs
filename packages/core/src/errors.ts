@@ -239,6 +239,15 @@ export class RepairNotAllowedError extends ErrorBase<RepairNotAllowedErrorMeta> 
 
 // 書き戻し拒否の表示名を組み立てます。
 // 空のときは不明名を返します。
+/**
+ * 書き戻し拒否先の一覧を表示用の文字列にまとめます。
+ *
+ * 空の一覧では不明名を返します。
+ *
+ * @param names 書き戻し先の名前一覧です。
+ *
+ * @returns 表示用の名前文字列です。
+ */
 function formatRepairNames(names: readonly string[]): string {
   const joined = names.join(", ");
 

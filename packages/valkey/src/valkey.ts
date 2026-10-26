@@ -18,26 +18,114 @@ import {
 } from "./errors.js";
 
 /**
- * Valkey との通信に使う最小限のクライアント形状です。
- *
- * Valkey は Redis プロトコルと互換性があるため、`ioredis` の `Redis` クライアントをそのまま使えます。
- * テストではこの形状を満たすフェイクを `client` オプションに渡せます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclient)
  */
 export interface ValkeyClient {
+  /**
+   * クライアントを接続します。
+   *
+   * @returns 接続が完了したら解決します。
+   */
   connect(): Promise<unknown>;
+
+  /**
+   * クライアントを丁寧に切断します。
+   *
+   * @returns 切断が完了したら解決します。
+   */
   quit(): Promise<unknown>;
+
+  /**
+   * クライアントを即時に切断します。
+   */
   disconnect(): void;
+
+  /**
+   * イベントリスナーを登録します。
+   *
+   * @param event 購読するイベント名です。
+   * @param listener 呼び出すリスナーです。
+   *
+   * @returns 登録結果です。
+   */
   on(event: string, listener: (...args: any[]) => void): unknown;
   // `value` と末尾引数はそのままクライアントへ透過するため `any` とします。
+  /**
+   * 値を保存します。
+   *
+   * @param key 保存先のキーです。
+   * @param value 保存する値です。
+   * @param args 透過する追加引数です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
   set(key: string, value: any, ...args: any[]): Promise<unknown>;
+
+  /**
+   * 値をバイト列で取得します。
+   *
+   * @param key 取得するキーです。
+   *
+   * @returns 取得したバイト列です。欠番時は null です。
+   */
   getBuffer(key: string): Promise<Buffer | null>;
+
+  /**
+   * キーの存在を確認します。
+   *
+   * @param key 確認するキーです。
+   *
+   * @returns 存在するキー数です。
+   */
   exists(key: string): Promise<number>;
+
+  /**
+   * キーを削除します。
+   *
+   * @param keys 削除するキーです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   del(...keys: string[]): Promise<unknown>;
+
+  /**
+   * キーを走査します。
+   *
+   * @param cursor 走査の再開位置です。
+   * @param args 透過する追加引数です。
+   *
+   * @returns 次のカーソルとキーの組です。
+   */
   scan(cursor: string, ...args: any[]): Promise<[string, string[]]>;
+
+  /**
+   * 値に追記します。
+   *
+   * @param key 追記先のキーです。
+   * @param value 追記する値です。
+   *
+   * @returns 追記が完了したら解決します。
+   */
   append(key: string, value: any): Promise<unknown>;
+
+  /**
+   * キーを置き換えます。
+   *
+   * @param src 置き換え元のキーです。
+   * @param dest 置き換え先のキーです。
+   *
+   * @returns 置き換えが完了したら解決します。
+   */
   rename(src: string, dest: string): Promise<unknown>;
+
+  /**
+   * キーに有効期限を付与します。
+   *
+   * @param key 対象のキーです。
+   * @param ms 有効期限 (ミリ秒) です。
+   *
+   * @returns 付与が完了したら解決します。
+   */
   pexpire(key: string, ms: number): Promise<unknown>;
 }
 
@@ -46,15 +134,11 @@ export interface ValkeyClient {
  */
 export type ValkeyClusterSpec = {
   /**
-   * 接続先のクラスターノードです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclusterspec-nodes)
    */
   readonly nodes: readonly ClusterNode[];
 
   /**
-   * `ioredis` の `Cluster` に渡すオプションです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeyclusterspec-options)
    */
   readonly options?: ClusterOptions | undefined;
@@ -65,54 +149,62 @@ export type ValkeyClusterSpec = {
  */
 export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"> & {
   /**
-   * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * Valkey Cluster の接続先です。
-   *
-   * v1 では未対応のため、指定するとエラーになります。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-cluster)
    */
   readonly cluster?: ValkeyClusterSpec | undefined;
 
   /**
-   * `close` 時の切断待ち時間 (ミリ秒) です。既定値は 5000 です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-closetimeout)
    */
   readonly closeTimeout?: number | undefined;
 
   /**
-   * ストレージが使うクライアントです。
-   *
-   * 指定したときは `open()` での接続確立も `close()` での切断も行わず、呼び出し側が所有します。
-   * テスト用のフェイクや共有接続の持ち込みに使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-client)
    */
   readonly client?: ValkeyClient | undefined;
 
   /**
-   * 書き込んだキーに付与する有効期限 (ミリ秒) です。
-   *
-   * 未指定のときはキーは失効しません。単発書き込みは `SET ... PX` で、ストリーム書き込みは確定 (`RENAME`) 後の `PEXPIRE` で付与します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkeystorageoptions-ttl)
    */
   readonly ttl?: number | undefined;
 };
 
+/**
+ * `SCAN` 1 回あたりにヒントとして渡すキー数です。
+ *
+ * 削除の往復回数と 1 回の `DEL` に渡す引数数を抑えるために使用します。
+ */
 const SCAN_COUNT = 1000;
+
+/**
+ * 接続確立の既定タイムアウト (ミリ秒) です。
+ */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
+
+/**
+ * 切断処理の既定タイムアウト (ミリ秒) です。
+ */
 const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 
+/**
+ * ストレージの動作に必要な接続を保持する型定義です。
+ *
+ * 所有権の有無で `close` 時の切断要否を切り替えます。
+ */
 type Connection = {
+  /**
+   * クライアントを所有しているかどうかです。
+   */
   readonly owned: boolean;
+
+  /**
+   * Valkey 操作に使うクライアントです。
+   */
   readonly client: ValkeyClient;
 };
 
@@ -125,30 +217,57 @@ export default class Valkey implements IStorage {
    */
   public readonly name: string;
 
+  /**
+   * Valkey への接続を保持します。
+   *
+   * ストレージがオープンされるまで null です。
+   */
   #con: Connection | null;
 
+  /**
+   * 接続先の URL です。
+   *
+   * 未指定の場合は環境変数 (`VALKEY_URL`、`REDIS_URL`) から解決します。
+   */
   readonly #url: string | undefined;
 
   // `closeTimeout` と `client` と `ttl` は本パッケージ固有の拡張です。
   // `this.#options` には含めず、別フィールドで保管します。
   // `this.#options` は `new Ioredis` にそのまま spread できる透過バッグです。
+  /**
+   * `ioredis` に透過する接続オプションです。
+   */
   readonly #options: Omit<
     ValkeyStorageOptions,
     "keyPrefix" | "cluster" | "closeTimeout" | "client" | "ttl"
   >;
 
   // `ioredis` の `disconnectTimeout` (ソケット切断待機) とは別物です。
+  /**
+   * `close` 時の切断待ち時間 (ミリ秒) です。
+   */
   readonly #closeTimeout: number;
 
+  /**
+   * 書き込んだキーに付与する有効期限 (ミリ秒) です。
+   *
+   * 未指定のときはキーは失効しません。
+   */
   readonly #ttl: number | undefined;
 
+  /**
+   * 注入されたクライアントです。
+   *
+   * 指定時は接続確立も切断も行いません。
+   */
   readonly #injected: ValkeyClient | undefined;
 
+  /**
+   * すべてのキーの先頭に付与するプレフィックスです。
+   */
   readonly #keyPrefix: string;
 
   /**
-   * Valkey ストレージを作成します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/valkey#valkey)
    */
   public constructor(url?: string, options: ValkeyStorageOptions = {}) {
@@ -189,10 +308,24 @@ export default class Valkey implements IStorage {
     this.#keyPrefix = keyPrefix;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 注入クライアントがなければ新規接続を確立します。
+   *
+   * @param _c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -269,6 +402,15 @@ export default class Valkey implements IStorage {
     };
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 所有する接続のみ切断し、注入クライアントは残します。
+   *
+   * @param _c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
@@ -304,6 +446,16 @@ export default class Valkey implements IStorage {
     }
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 有効期限があれば `PX` 付きで保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -316,6 +468,15 @@ export default class Valkey implements IStorage {
     }
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーの値を取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -331,6 +492,13 @@ export default class Valkey implements IStorage {
     return new Uint8Array(data);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#getConnection();
 
@@ -340,6 +508,15 @@ export default class Valkey implements IStorage {
     return (await Promise.race([client.exists(this.#toKey(c.key)), abortPromise])) > 0;
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -348,6 +525,15 @@ export default class Valkey implements IStorage {
     await client.del(this.#toKey(c.key));
   }
 
+  /**
+   * 接頭辞に一致するキーをすべて削除します。
+   *
+   * `SCAN` で列挙しながら削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -358,6 +544,15 @@ export default class Valkey implements IStorage {
     await this.#clearPattern(client, pattern, c.signal);
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * 一時キーに追記し、`close` 時に最終キーへ置き換えて期限を付けます。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
     const ttl = this.#ttl;
@@ -436,6 +631,15 @@ export default class Valkey implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * 取得した値を単一チャンクとして送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -469,8 +673,13 @@ export default class Valkey implements IStorage {
     });
   }
 
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている接続を返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの接続です。
+   */
   #getConnection(): Connection {
     const con = this.#con;
 
@@ -481,10 +690,28 @@ export default class Valkey implements IStorage {
     return con;
   }
 
+  /**
+   * unikvs のキーにプレフィックスを付与し、Valkey のキーへ変換します。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns Valkey 上の実キーです。
+   */
   #toKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }
 
+  /**
+   * 接頭辞に一致するキーを走査して削除します。
+   *
+   * `SCAN` で頁送りしながら `DEL` します。
+   *
+   * @param client 操作に使うクライアントです。
+   * @param pattern 削除対象の一致パターンです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   async #clearPattern(client: ValkeyClient, pattern: string, signal: AbortSignal): Promise<void> {
     using abortPromise = toAbortPromise(signal);
 

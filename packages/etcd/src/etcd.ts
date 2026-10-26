@@ -5,22 +5,16 @@ import { Etcd3 } from "etcd3";
 import { InvalidLeaseTtlError, InvalidEndpointsError } from "./errors.js";
 
 /**
- * `put` に渡せる etcd 固有のオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdputoptions)
  */
 export type EtcdPutOptions = {
   /**
-   * キーに付与するリースの TTL (秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdputoptions-leasettlseconds)
    */
   readonly leaseTtlSeconds?: number | undefined;
 };
 
 /**
- * `getAll` が返すキーと値の組の形式です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdgetallresult)
  */
 export type EtcdGetAllResult =
@@ -29,59 +23,124 @@ export type EtcdGetAllResult =
   | Iterable<readonly [string, Uint8Array | string | Buffer]>;
 
 /**
- * etcd クライアントの最小インターフェースです。
- *
- * テストではこのインターフェースを満たすフェイクを注入し、実環境では `endpoints` から組み立てた etcd3 クライアントを使います。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdclientlike)
  */
 export type EtcdClientLike = {
+  /**
+   * キーの値を取り出します。
+   *
+   * @param key 取得するキーです。
+   *
+   * @returns 取得した値です。欠番時は null や undefined です。
+   */
   get(key: string): Promise<Uint8Array | string | Buffer | null | undefined>;
 
+  /**
+   * キーに値を保存します。
+   *
+   * @param key 保存先のキーです。
+   * @param value 保存する値です。
+   * @param options 保存に渡す任意項目です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
   put(key: string, value: Uint8Array | string | Buffer, options?: EtcdPutOptions): Promise<unknown>;
 
+  /**
+   * キーを削除します。
+   *
+   * @param key 削除するキーです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   delete(key: string): Promise<unknown>;
 
+  /**
+   * 接頭辞に一致する値をまとめて取得します。
+   *
+   * @param prefix 取得する接頭辞です。
+   *
+   * @returns 取得したキーと値の組です。
+   */
   getAll(prefix: string): Promise<EtcdGetAllResult>;
 
+  /**
+   * 接頭辞に一致する値をまとめて削除します。
+   *
+   * @param prefix 削除する接頭辞です。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   deletePrefix?(prefix: string): Promise<unknown>;
 
+  /**
+   * クライアントを閉じます。
+   *
+   * @returns 閉じた結果です。
+   */
   close?(): unknown;
 };
 
 /**
- * etcd3 パッケージのクライアントのうち、本パッケージが使う最小部分です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#nativeetcdclientlike)
  */
 export type NativeEtcdClientLike = {
+  /**
+   * キーの取得要求を作ります。
+   *
+   * @param key 取得するキーです。
+   *
+   * @returns 取得要求です。
+   */
   get(key: string | Buffer): { buffer(): Promise<Buffer | null> };
 
+  /**
+   * まとめて取得する要求を作ります。
+   *
+   * @returns 一覧取得要求です。
+   */
   getAll(): {
     prefix(value: string | Buffer): { buffers(): Promise<Record<string, Buffer>> };
   };
 
+  /**
+   * 保存要求を作ります。
+   *
+   * @param key 保存先のキーです。
+   *
+   * @returns 保存要求です。
+   */
   put(key: string | Buffer): { value(value: string | Buffer): unknown };
 
+  /**
+   * 削除要求を作ります。
+   *
+   * @returns 削除要求です。
+   */
   delete(): {
     key(value: string | Buffer): { exec(): unknown };
     prefix(value: string | Buffer): { exec(): unknown };
   };
 
+  /**
+   * リース付き操作の要求を作ります。
+   *
+   * @param ttl リースの TTL (秒) です。
+   *
+   * @returns リース付き要求です。
+   */
   lease(ttl: number): {
     put(key: string | Buffer): { value(value: string | Buffer): unknown };
     release(): void;
   };
 
+  /**
+   * クライアントを閉じます。
+   */
   close(): void;
 };
 
 /**
- * etcd3 のネイティブクライアントを `EtcdClientLike` に適合させます。
- *
- * `leaseTtlSeconds` が指定されているとき、書き込みはリース付きで行われます。
- * リースは遅延生成して使い回し、`close` で解放します (キーは TTL で自然消滅します)。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#wrapnativeetcdclient)
  */
 export function wrapNativeEtcdClient(
@@ -149,6 +208,15 @@ export function wrapNativeEtcdClient(
   };
 }
 
+/**
+ * 取得結果からキーの一覧を取り出します。
+ *
+ * 配列や Map や反復可能のいずれにも対応します。
+ *
+ * @param result 取得結果です。
+ *
+ * @returns 取り出したキーの一覧です。
+ */
 function collectKeys(result: EtcdGetAllResult): readonly string[] {
   if (result instanceof Map) {
     return [...result.keys()];
@@ -166,6 +234,15 @@ function collectKeys(result: EtcdGetAllResult): readonly string[] {
   return Object.keys(result);
 }
 
+/**
+ * 取得値をバイト列へ変換します。
+ *
+ * 文字列は UTF-8 として復元し、複写して返します。
+ *
+ * @param data 変換する取得値です。
+ *
+ * @returns 変換したバイト列です。
+ */
 function toBytes(data: Uint8Array | string | Buffer): Uint8Array<ArrayBuffer> {
   // etcd3 の値はバイト列 (`Buffer`) で返ります。
   // 文字列で返された場合は UTF-8 として復元します。
@@ -174,61 +251,52 @@ function toBytes(data: Uint8Array | string | Buffer): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * etcd ストレージのオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions)
  */
 export type EtcdStorageOptions = {
   /**
-   * 注入する etcd クライアントです。
-   *
-   * 指定したときは `endpoints` を使った接続は行われず、`open` / `close` でこのクライアントを開閉したことになります。
-   * 所有権は呼び出し側に残るため、`close` しても破棄されません。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-client)
    */
   readonly client?: EtcdClientLike | undefined;
 
   /**
-   * 接続先の etcd エンドポイントです。
-   *
-   * `client` を指定したときは使われません。
-   * 未指定のときは `ETCD_ENDPOINTS` 環境変数 (カンマ区切り)、さらに未指定のときは `http://127.0.0.1:2379` を使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-endpoints)
    */
   readonly endpoints?: string | readonly string[] | undefined;
 
   /**
-   * すべてのキーに付与する接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * すべての書き込みに付与するリースの TTL (秒) です。
-   *
-   * サービスディスカバリーや分散ロックなど、自動失効させたい用途に使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-leasettlseconds)
    */
   readonly leaseTtlSeconds?: number | undefined;
 
   /**
-   * `keyPrefix` の前に付与する名前空間です。
-   *
-   * 複数のテナントや用途で etcd クラスターを共有するときに使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcdstorageoptions-namespace)
    */
   readonly namespace?: string | undefined;
 };
 
+/**
+ * 既定のキー接頭辞です。
+ */
 const DEFAULT_KEY_PREFIX = "unikvs:";
 
+/**
+ * 既定の接続先エンドポイントです。
+ */
 const DEFAULT_ENDPOINT = "http://127.0.0.1:2379";
 
+/**
+ * エンドポイント指定を配列へ正規化します。
+ *
+ * @param endpoints 正規化するエンドポイント指定です。
+ *
+ * @returns 正規化したエンドポイントの一覧です。
+ */
 function normalizeEndpoints(endpoints: string | readonly string[] | undefined): readonly string[] {
   if (endpoints === undefined) {
     return [];
@@ -237,18 +305,22 @@ function normalizeEndpoints(endpoints: string | readonly string[] | undefined): 
   return typeof endpoints === "string" ? [endpoints] : [...endpoints];
 }
 
+/**
+ * ストレージの動作に必要な接続を保持する型定義です。
+ */
 type Connection = {
+  /**
+   * 操作に使うクライアントです。
+   */
   readonly client: EtcdClientLike;
 
+  /**
+   * クローズ時に呼び出す後始末です。不要なら null です。
+   */
   readonly onClose: (() => unknown) | null;
 };
 
 /**
- * etcd 上のストレージです。
- *
- * 値はバイト列として保存し、キーには `namespace` と `keyPrefix` を付与します。
- * 注入した `client` は呼び出し側が所有し、`close` しても破棄されません。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
  */
 export default class Etcd implements IStorage {
@@ -257,19 +329,38 @@ export default class Etcd implements IStorage {
    */
   public readonly name: string;
 
+  /**
+   * etcd への接続を保持します。
+   *
+   * ストレージがオープンされるまで null です。
+   */
   #con: Connection | null;
 
+  /**
+   * 注入されたクライアントです。
+   *
+   * 指定時は接続確立も破棄も行いません。
+   */
   readonly #injected: EtcdClientLike | undefined;
 
+  /**
+   * 接続先エンドポイントの一覧です。
+   */
   readonly #endpoints: readonly string[];
 
+  /**
+   * 名前空間と接頭辞を結合した実キーの接頭辞です。
+   */
   readonly #prefix: string;
 
+  /**
+   * すべての書き込みに付与するリースの TTL (秒) です。
+   *
+   * 未指定のときはリースを付けません。
+   */
   readonly #leaseTtlSeconds: number | undefined;
 
   /**
-   * etcd ストレージを作成します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#etcd)
    */
   public constructor(options: EtcdStorageOptions = {}) {
@@ -305,10 +396,24 @@ export default class Etcd implements IStorage {
     this.#leaseTtlSeconds = leaseTtlSeconds;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 注入クライアントがなければエンドポイントへ接続します。
+   *
+   * @param _c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -350,6 +455,15 @@ export default class Etcd implements IStorage {
     };
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 所有する接続のみ破棄し、注入クライアントは残します。
+   *
+   * @param _c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
@@ -362,6 +476,16 @@ export default class Etcd implements IStorage {
     await onClose?.();
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * リース設定があれば期限付きで保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -371,6 +495,15 @@ export default class Etcd implements IStorage {
     await client.put(this.#toKey(c.key), Buffer.from(data), this.#putOptions());
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーの値を取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -386,6 +519,13 @@ export default class Etcd implements IStorage {
     return toBytes(data);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#getConnection();
 
@@ -397,6 +537,15 @@ export default class Etcd implements IStorage {
     return data !== null && data !== undefined;
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -406,6 +555,15 @@ export default class Etcd implements IStorage {
     await client.delete(this.#toKey(c.key));
   }
 
+  /**
+   * 接頭辞配下のキーをすべて削除します。
+   *
+   * 範囲削除があれば使い、なければ列挙して削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -431,6 +589,15 @@ export default class Etcd implements IStorage {
     }
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * チャンクを蓄積し、close 時に単発で保存します。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -468,6 +635,15 @@ export default class Etcd implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * 取得した値を単一チャンクとして送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -502,8 +678,13 @@ export default class Etcd implements IStorage {
     });
   }
 
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている接続を返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの接続です。
+   */
   #getConnection(): Connection {
     const con = this.#con;
 
@@ -514,10 +695,24 @@ export default class Etcd implements IStorage {
     return con;
   }
 
+  /**
+   * 論理キーに接頭辞を付与して実キーを組み立てます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns etcd 上の実キーです。
+   */
   #toKey(key: string): string {
     return `${this.#prefix}${key}`;
   }
 
+  /**
+   * 書き込み時に付与するリース設定を組み立てます。
+   *
+   * 未設定時は undefined を返します。
+   *
+   * @returns 書き込みに使うリース設定です。
+   */
   #putOptions(): EtcdPutOptions | undefined {
     return this.#leaseTtlSeconds === undefined
       ? undefined

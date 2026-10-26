@@ -1,44 +1,31 @@
 import type { IMiddleware } from "@unikvs/core";
 
 /**
- * スパンの状態コードです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-status-code)
  */
 export type SpanStatusCode = "unset" | "ok" | "error";
 
 /**
- * スパンに設定する状態です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-status)
  */
 export type SpanStatus = {
   /**
-   * スパンの状態コードです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-status-code-prop)
    */
   readonly code: SpanStatusCode;
 
   /**
-   * 状態に付与するメッセージです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-status-message)
    */
   readonly message?: string | undefined;
 };
 
 /**
- * スパン属性に設定できる値の型です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-attribute-value)
  */
 export type SpanAttributeValue = string | number | boolean;
 
 /**
- * トレーサーから発行されるスパンの最小インターフェースです。
- * OpenTelemetry の Span と構造的に互換性があります。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#span-like)
  */
 export interface SpanLike {
@@ -59,9 +46,6 @@ export interface SpanLike {
 }
 
 /**
- * スパンを発行するトレーサーの最小インターフェースです。
- * OpenTelemetry の Tracer と構造的に互換性があります。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracer-like)
  */
 export interface TracerLike {
@@ -101,23 +85,15 @@ class NoopTracer implements TracerLike {
 const defaultTracer: TracerLike = new NoopTracer();
 
 /**
- * Tracing ミドルウェアのオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing-options)
  */
 export type TracingOptions = {
   /**
-   * スパンを発行するトレーサーです。
-   * 省略した場合は何も記録しません。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing-options-tracer)
    */
   readonly tracer?: TracerLike | undefined;
 
   /**
-   * スパン名の先頭に付ける接頭辞です。
-   * 既定値は `"unikvs."` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing-options-span-name-prefix)
    */
   readonly spanNamePrefix?: string | undefined;
@@ -147,9 +123,6 @@ function keyOf(c: IMiddleware.UseContext): string {
 }
 
 /**
- * 操作ごとにトレーススパンを発行するミドルウェアです。
- * スパンには `key`、`action`、`success`、`durationMs` を属性として含めます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing)
  */
 export default class Tracing implements IMiddleware {
@@ -159,23 +132,16 @@ export default class Tracing implements IMiddleware {
   public readonly name: string = "Tracing";
 
   /**
-   * スパンを発行するトレーサーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing)
    */
   public readonly tracer: TracerLike;
 
   /**
-   * スパン名の先頭に付ける接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing)
    */
   public readonly spanNamePrefix: string;
 
   /**
-   * Tracing ミドルウェアを作成します。
-   *
-   * @param options トレーサーとスパン名の接頭辞です。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/tracing#tracing)
    */
   public constructor(options: TracingOptions = {}) {

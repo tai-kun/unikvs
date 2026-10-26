@@ -6,17 +6,48 @@ import { type IDBPDatabase, openDB } from "idb";
  */
 export type IndexeddbOptions = {};
 
-// WebKit で `Blob` を直接保存できない場合があるため、中間形式で保持します。
+/**
+ * WebKit で Blob を直接保存できない場合があるため、中間形式で保持します。
+ */
 type StoredBlob = {
+  /**
+   * File のときに保持するファイル名です。
+   */
   readonly name: string;
+
+  /**
+   * 元の Blob の MIME 種別です。
+   */
   readonly type: string;
+
+  /**
+   * Blob のバイト列です。
+   */
   readonly buffer: ArrayBuffer;
+
+  /**
+   * 中間形式であることを示す目印です。
+   */
   readonly unikvsBlob: true;
+
+  /**
+   * File 由来かどうかを示す目印です。
+   */
   readonly unikvsFile: boolean;
+
+  /**
+   * File のときに保持する更新時刻です。
+   */
   readonly lastModified: number;
 };
 
-// 保存した中間形式かどうかを判定します。
+/**
+ * 保存した中間形式かどうかを判定します。
+ *
+ * @param value 判定する値です。
+ *
+ * @returns 中間形式であれば true を返します。
+ */
 function isStoredBlob(value: unknown): value is StoredBlob {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -25,8 +56,14 @@ function isStoredBlob(value: unknown): value is StoredBlob {
   return (value as Record<string, unknown>)["unikvsBlob"] === true;
 }
 
-// `Blob` を IndexedDB に保存できる中間形式に変換します。
-// `File` の名前と更新時刻も保持します。
+/**
+ * Blob を IndexedDB に保存できる中間形式に変換します。File の名前と更新時刻も保持します。
+ *
+ * @param signal 中断を知らせるシグナルです。
+ * @param data 変換する Blob です。
+ *
+ * @returns 中間形式に変換した値です。
+ */
 async function toStoredBlob(signal: AbortSignal, data: Blob): Promise<StoredBlob> {
   const buffer = await data.arrayBuffer();
 
@@ -44,7 +81,13 @@ async function toStoredBlob(signal: AbortSignal, data: Blob): Promise<StoredBlob
   };
 }
 
-// 中間形式を `Blob` または `File` に戻します。
+/**
+ * 中間形式を Blob または File に戻します。
+ *
+ * @param stored 中間形式の値です。
+ *
+ * @returns 復元した Blob または File です。
+ */
 function fromStoredBlob(stored: StoredBlob): Blob {
   if (stored.unikvsFile) {
     return new File([stored.buffer], stored.name, {
@@ -60,6 +103,9 @@ function fromStoredBlob(stored: StoredBlob): Blob {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
  */
 export default class Indexeddb implements IStorage {
+  /**
+   * ストレージ名です。常に `Indexeddb` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -99,10 +145,22 @@ export default class Indexeddb implements IStorage {
     this.#storeName = storeName;
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns データベース接続があれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#db !== null;
   }
 
+  /**
+   * データベースを開きます。並行した呼び出しは一つの接続処理に束ねます。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -149,6 +207,13 @@ export default class Indexeddb implements IStorage {
     }
   }
 
+  /**
+   * データベース接続を閉じます。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -163,6 +228,14 @@ export default class Indexeddb implements IStorage {
     this.#db = null;
   }
 
+  /**
+   * 指定したキーに値を保存します。Blob は中間形式に変換して保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存する値です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -182,6 +255,13 @@ export default class Indexeddb implements IStorage {
     c.signal.throwIfAborted();
   }
 
+  /**
+   * 指定したキーの値を読み出します。中間形式は Blob または File に戻します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns 保存されている値です。
+   */
   public async read(c: IStorage.ReadContext): Promise<any> {
     c.signal.throwIfAborted();
 
@@ -211,6 +291,13 @@ export default class Indexeddb implements IStorage {
     return value;
   }
 
+  /**
+   * 指定したキーが存在するかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns キーが存在すれば true を返します。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
@@ -224,6 +311,13 @@ export default class Indexeddb implements IStorage {
     return count > 0;
   }
 
+  /**
+   * 指定したキーを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -233,6 +327,13 @@ export default class Indexeddb implements IStorage {
     c.signal.throwIfAborted();
   }
 
+  /**
+   * オブジェクトストアのすべての値を削除します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -242,6 +343,13 @@ export default class Indexeddb implements IStorage {
     c.signal.throwIfAborted();
   }
 
+  /**
+   * Uint8Array を書き込むためのストリームを作成します。close 時にまとめて保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array> {
     c.signal.throwIfAborted();
 
@@ -276,6 +384,13 @@ export default class Indexeddb implements IStorage {
     });
   }
 
+  /**
+   * 保存済みの値を読み出すストリームを作成します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を送出する読み取りストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array> {
     c.signal.throwIfAborted();
 
@@ -294,8 +409,11 @@ export default class Indexeddb implements IStorage {
     });
   }
 
-  // 開いているデータベースを返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いているデータベースを返します。未オープン時はエラーを投げます。
+   *
+   * @returns 開いているデータベースです。
+   */
   #getDb(): IDBPDatabase {
     const db = this.#db;
 

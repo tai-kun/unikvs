@@ -7,7 +7,9 @@ import {
   CacheStorageNotAvailableError,
 } from "./errors.js";
 
-// DOM の `CacheStorage` とクラス名が衝突するため、型参照用の別名を用意します。
+/**
+ * DOM の CacheStorage とクラス名が衝突するため、型参照用の別名です。
+ */
 type NativeCacheStorage = typeof globalThis.caches;
 
 /**
@@ -80,10 +82,22 @@ export default class CacheStorage implements IStorage {
     this.#injectedCaches = caches;
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns Cache インスタンスを保持していれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#cache !== null;
   }
 
+  /**
+   * Cache を開きます。注入された backed を優先しなければ実行環境から探します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     using abortPromise = toAbortPromise(c.signal);
 
@@ -105,10 +119,23 @@ export default class CacheStorage implements IStorage {
     this.#cache = await Promise.race([caches.open(this.#cacheName), abortPromise]);
   }
 
+  /**
+   * 保持している Cache を破棄して閉じます。
+   *
+   * @returns 値を返しません。
+   */
   public close(): void {
     this.#cache = null;
   }
 
+  /**
+   * 指定したキーに Response を保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param response 保存する Response です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async write(c: IStorage.WriteContext, response: Response): Promise<void> {
     // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
     const cache = this.#getCache();
@@ -116,10 +143,24 @@ export default class CacheStorage implements IStorage {
     await cache.put(request, response);
   }
 
+  /**
+   * 指定したキーの Response を読み出します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns 保存されている Response です。
+   */
   public read(c: IStorage.ReadContext): Promise<Response> {
     return this.#read(c);
   }
 
+  /**
+   * 指定したキーが存在するかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns キーが存在すれば true を返します。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     using abortPromise = toAbortPromise(c.signal);
 
@@ -131,6 +172,13 @@ export default class CacheStorage implements IStorage {
     return response !== undefined;
   }
 
+  /**
+   * 指定したキーを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
     const cache = this.#getCache();
@@ -142,6 +190,13 @@ export default class CacheStorage implements IStorage {
     }
   }
 
+  /**
+   * 専用の Cache 内の要求をすべて削除します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     using abortPromise = toAbortPromise(c.signal);
 
@@ -156,6 +211,13 @@ export default class CacheStorage implements IStorage {
     }
   }
 
+  /**
+   * Uint8Array を書き込むためのストリームを作成します。close 時に Response として保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
@@ -200,6 +262,13 @@ export default class CacheStorage implements IStorage {
     });
   }
 
+  /**
+   * 保存済みの Response をバイト列として読み出すストリームを作成します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を送出する読み取りストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: async (
@@ -221,8 +290,11 @@ export default class CacheStorage implements IStorage {
     });
   }
 
-  // 使用中の `Cache` を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 使用中の Cache を返します。未オープン時はエラーを投げます。
+   *
+   * @returns 開いている Cache です。
+   */
   #getCache(): Cache {
     const cache = this.#cache;
 
@@ -233,6 +305,13 @@ export default class CacheStorage implements IStorage {
     return cache;
   }
 
+  /**
+   * 指定したキーの Response を読み出します。存在しない場合はエラーを投げます。
+   *
+   * @param c 読み出すキーと中断信号を持つコンテキストです。
+   *
+   * @returns 保存されている Response です。
+   */
   async #read(c: IKeyedActionContext): Promise<Response> {
     using abortPromise = toAbortPromise(c.signal);
 

@@ -7,21 +7,24 @@ import { type IEnv, api } from "./_core.js";
 import { BrotliInvalidLevelError, UnsupportedRuntimeError } from "./errors.js";
 
 /**
- * Brotli ミドルウェアのオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
  */
 export type BrotliOptions = {
   /**
-   * 圧縮レベルです。0 から 11 までの整数を指定します。
-   * 値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。
-   * 省略した場合は Node.js の既定値である 11 を使用します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#level)
    */
   readonly level?: number | undefined;
 };
 
+/**
+ * バイト列と所有化バイト列の変換を中継するストリームを作成します。
+ *
+ * Node の Buffer ストリームと Web の `Uint8Array` ストリームの差を吸収します。
+ *
+ * @param transform 変換元の Node ストリームです。
+ *
+ * @returns 所有化バイト列を扱うストリームを返します。
+ */
 function toOwnedBytesTransformStream(
   transform: ITransformStream<Buffer, Buffer>,
 ): ITransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
@@ -47,14 +50,10 @@ function toOwnedBytesTransformStream(
 }
 
 /**
- * Node.js の `node:zlib` を使って Brotli で圧縮・展開するミドルウェアです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
  */
 export default class Brotli implements IMiddleware {
   /**
-   * 実行環境の解決結果を保持するキャッシュです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
    */
   static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
@@ -65,17 +64,20 @@ export default class Brotli implements IMiddleware {
   public readonly name: string = "Brotli";
 
   /**
-   * 実行環境です。
+   * 解決済みの実行環境です。
+   *
+   * `open()` で解決されるまでは null です。
    */
   #env: IEnv | null;
 
   /**
    * 圧縮レベルです。
+   *
+   * 0 から 11 の整数を保持します。
    */
   readonly #level: number;
 
   /**
-   * @param options コンストラクターオプションです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-node#usage)
    */
   public constructor(options: BrotliOptions = {}) {
@@ -90,10 +92,22 @@ export default class Brotli implements IMiddleware {
     this.#level = level;
   }
 
+  /**
+   * 開いているかどうかを表します。
+   *
+   * @returns 実行環境が設定済みなら true を返します。
+   */
   public get isOpen(): boolean {
     return this.#env !== null;
   }
 
+  /**
+   * `node:zlib` の実行環境を解決します。
+   *
+   * @param c オープン時のコンテキストです。
+   *
+   * @returns 初期化が完了したら解決するプロミスを返します。
+   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -117,6 +131,14 @@ export default class Brotli implements IMiddleware {
     }
   }
 
+  /**
+   * バイト列を brotli で圧縮します。
+   *
+   * @param c エンコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -129,6 +151,14 @@ export default class Brotli implements IMiddleware {
     await next();
   }
 
+  /**
+   * brotli で圧縮されたバイト列を展開します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -141,6 +171,14 @@ export default class Brotli implements IMiddleware {
     await next();
   }
 
+  /**
+   * バイト列ストリームを brotli で圧縮したストリームへ変換します。
+   *
+   * @param c エンコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -154,6 +192,14 @@ export default class Brotli implements IMiddleware {
     await next();
   }
 
+  /**
+   * brotli で圧縮されたバイト列ストリームを展開したストリームへ変換します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -167,8 +213,13 @@ export default class Brotli implements IMiddleware {
     await next();
   }
 
-  // 開いている実行環境を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている実行環境を返します。
+   *
+   * 未オープン時は `TypeError` を投げます。
+   *
+   * @returns 開いている実行環境を返します。
+   */
   #getEnv(): IEnv {
     const env = this.#env;
 

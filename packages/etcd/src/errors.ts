@@ -4,14 +4,10 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * 無効な `leaseTtlSeconds` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#error-invalid-lease-ttl)
  */
 export type InvalidLeaseTtlErrorMeta = {
   /**
-   * 受け取った `leaseTtlSeconds` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#invalid-lease-ttl-actual)
    */
   readonly actual: unknown;
@@ -23,8 +19,6 @@ export type InvalidLeaseTtlErrorMeta = {
 export type InvalidLeaseTtlErrorArgs = ErrorOptions & InvalidLeaseTtlErrorMeta;
 
 /**
- * `leaseTtlSeconds` が正の整数ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#error-invalid-lease-ttl)
  */
 export class InvalidLeaseTtlError extends InvalidUsageErrorBase<InvalidLeaseTtlErrorMeta> {
@@ -55,14 +49,10 @@ setErrorMessage(
 );
 
 /**
- * 無効な `endpoints` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#error-invalid-endpoints)
  */
 export type InvalidEndpointsErrorMeta = {
   /**
-   * 受け取った `endpoints` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#invalid-endpoints-actual)
    */
   readonly actual: unknown;
@@ -74,8 +64,6 @@ export type InvalidEndpointsErrorMeta = {
 export type InvalidEndpointsErrorArgs = ErrorOptions & InvalidEndpointsErrorMeta;
 
 /**
- * `endpoints` が空の文字列や空の配列のときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#error-invalid-endpoints)
  */
 export class InvalidEndpointsError extends InvalidUsageErrorBase<InvalidEndpointsErrorMeta> {

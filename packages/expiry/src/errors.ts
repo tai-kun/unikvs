@@ -4,21 +4,15 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * 無効な `expiresAt` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#error-expiry-invalid-expires-at)
  */
 export type ExpiryInvalidExpiresAtErrorMeta = {
   /**
-   * 対象のキーです。コンストラクターの既定値では `undefined` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-invalid-expires-at-key)
    */
   readonly key?: string | undefined;
 
   /**
-   * 受け取った `expiresAt` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#expiry-invalid-expires-at-actual)
    */
   readonly actual: unknown;
@@ -30,8 +24,6 @@ export type ExpiryInvalidExpiresAtErrorMeta = {
 export type ExpiryInvalidExpiresAtErrorArgs = ErrorOptions & ExpiryInvalidExpiresAtErrorMeta;
 
 /**
- * `expiresAt` が Date・エポックミリ秒・ISO 8601 文字列のいずれでもないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/expiry#error-expiry-invalid-expires-at)
  */
 export class ExpiryInvalidExpiresAtError extends InvalidUsageErrorBase<ExpiryInvalidExpiresAtErrorMeta> {

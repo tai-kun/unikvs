@@ -9,17 +9,11 @@ import {
 } from "./errors.js";
 
 /**
- * `get` の戻り値として受け付ける値の形です。
- * `memjs` は `{ value: Buffer | null, flags }` を返します。
- * 欠落キーは `null`/`undefined` または `value` が空の形で表されます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedgetresultvalue)
  */
 export type MemcachedGetResultValue = Uint8Array | string | null | undefined;
 
 /**
- * `get` の戻り値として受け付ける形です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedgetresult)
  */
 export type MemcachedGetResult =
@@ -30,95 +24,139 @@ export type MemcachedGetResult =
   | MemcachedGetResultValue;
 
 /**
- * 注入できる Memcached クライアントの最小形です。
- * `memjs` の `Client` はこの形を満たします。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedclientlike)
  */
 export type MemcachedClientLike = {
+  /**
+   * キーの値を取り出します。
+   *
+   * @param key 取得するキーです。
+   *
+   * @returns 取得した値です。
+   */
   readonly get: (key: string) => Promise<MemcachedGetResult>;
+
+  /**
+   * キーに値を保存します。
+   *
+   * @param key 保存先のキーです。
+   * @param value 保存する値です。
+   * @param options 保存に渡す任意項目です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
   readonly set: (
     key: string,
     value: string | Uint8Array,
     options?: { readonly expires?: number | undefined },
   ) => Promise<unknown>;
+
+  /**
+   * クライアントを終了します。
+   *
+   * @returns 終了結果です。
+   */
   readonly quit?: (() => unknown) | undefined;
+
+  /**
+   * クライアントを閉じます。
+   *
+   * @returns 閉じた結果です。
+   */
   readonly close?: (() => unknown) | undefined;
+
+  /**
+   * 保持する値をすべて削除します。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   readonly flush: () => Promise<unknown>;
+
+  /**
+   * キーを削除します。
+   *
+   * @param key 削除するキーです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   readonly delete: (key: string) => Promise<unknown>;
 };
 
 /**
- * `servers` 引数として受け付ける形です。
- * 文字列 (`"host:port,host:port"`) またはその配列です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedservers)
  */
 export type MemcachedServers = string | readonly string[];
 
 /**
- * `Memcached` のコンストラクターオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions)
  */
 export type MemcachedStorageOptions = {
   /**
-   * 既存のクライアントを注入します。
-   * 指定時は `servers`/`host`/`port` による接続作成を行いません。
-   * `close()` は注入クライアントも解放 (`quit`/`close`/`end`) します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-client)
    */
   readonly client?: MemcachedClientLike | undefined;
 
   /**
-   * 接続先サーバーです。コンストラクターの第 1 引数が優先されます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-servers)
    */
   readonly servers?: MemcachedServers | undefined;
 
   /**
-   * `servers` の代わりにホストを直接指定します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-host)
    */
   readonly host?: string | undefined;
 
   /**
-   * `servers` の代わりにポートを直接指定します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-port)
    */
   readonly port?: number | undefined;
 
   /**
-   * 書き込んだ値の有効期限 (秒) です。
-   * `0` は無期限を表します。30 日を超える値は UNIX 時刻として扱われます (memcached 仕様)。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-ttlseconds)
    */
   readonly ttlSeconds?: number | undefined;
 
   /**
-   * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-keyprefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * `open` 時の接続確認が打ち切られるまでの時間 (ミリ秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcachedstorageoptions-connecttimeout)
    */
   readonly connectTimeout?: number | undefined;
 };
 
+/**
+ * 既定のキー接頭辞です。
+ *
+ * 未指定時に全キーへ付与します。
+ */
 const DEFAULT_KEY_PREFIX = "unikvs:";
+
+/**
+ * `open` 時の接続確認の既定タイムアウト (ミリ秒) です。
+ */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
+
+/**
+ * 接続確認に使うプローブキーです。
+ *
+ * 存在しないキーへの `get` で疎通を確認します。
+ */
 const PROBE_KEY = "__unikvs_memcached_probe__";
 
+/**
+ * 接続先サーバーを解決します。
+ *
+ * 引数・オプション・環境変数の順に優先して単一文字列へまとめます。
+ *
+ * @param servers サーバー指定です。
+ * @param host ホスト指定です。
+ * @param port ポート指定です。
+ *
+ * @returns 接続先サーバーの文字列表現です。
+ */
 function resolveServers(
   servers: MemcachedServers | undefined,
   host: string | undefined,
@@ -144,12 +182,27 @@ function resolveServers(
   );
 }
 
+/**
+ * 接続先から Memcached クライアントを作成します。
+ *
+ * @param servers 接続先サーバーの文字列表現です。
+ *
+ * @returns 作成したクライアントです。
+ */
 function createClient(servers: string): MemcachedClientLike {
   return Client.create(servers);
 }
 
 /**
  * 別名 (`quit`/`close`/`end`、`flush`/`flushAll`、`delete`/`del`) を吸収して呼び出します。
+ *
+ * 実装差で名前が異なるメソッドを順に探して実行します。
+ *
+ * @param client 操作対象のクライアントです。
+ * @param names 試行するメソッド名です。
+ * @param key キーを渡す操作の対象キーです。
+ *
+ * @returns 呼び出し結果を解決します。
  */
 function invokeClient(
   client: MemcachedClientLike,
@@ -175,6 +228,15 @@ function invokeClient(
   );
 }
 
+/**
+ * クライアントを解放します。
+ *
+ * 失敗しても後始末として無視します。
+ *
+ * @param client 解放するクライアントです。
+ *
+ * @returns 解放が完了したら解決します。
+ */
 async function releaseClient(client: MemcachedClientLike): Promise<void> {
   try {
     await invokeClient(client, ["quit", "close", "end"]);
@@ -183,10 +245,26 @@ async function releaseClient(client: MemcachedClientLike): Promise<void> {
   }
 }
 
+/**
+ * バイト列を Base64 文字列へ符号化します。
+ *
+ * @param data 符号化するバイト列です。
+ *
+ * @returns Base64 文字列です。
+ */
 function encodeBase64(data: Uint8Array): string {
   return Buffer.from(data).toString("base64");
 }
 
+/**
+ * `get` の戻り値をバイト列へ正規化します。
+ *
+ * 欠番は null で表します。
+ *
+ * @param result 正規化する取得結果です。
+ *
+ * @returns 正規化したバイト列です。欠番時は null です。
+ */
 function normalizeGetResult(result: unknown): Uint8Array<ArrayBuffer> | null {
   const raw: unknown =
     result !== null && typeof result === "object" && "value" in result
@@ -203,11 +281,6 @@ function normalizeGetResult(result: unknown): Uint8Array<ArrayBuffer> | null {
 }
 
 /**
- * Memcached 上のストレージです。
- *
- * 値は Base64 でエンコードした文字列として保存します。
- * memcached にはキー列挙の手段がないため、`clear` はサーバー上の全キーを削除します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
  */
 export default class Memcached implements IStorage {
@@ -216,21 +289,41 @@ export default class Memcached implements IStorage {
    */
   public readonly name = "Memcached";
 
+  /**
+   * Memcached への接続を保持します。
+   *
+   * ストレージがオープンされるまで null です。
+   */
   #con: { readonly client: MemcachedClientLike } | null = null;
 
+  /**
+   * 注入されたクライアントです。
+   *
+   * 未指定のときは接続先から作成します。
+   */
   readonly #injectedClient: MemcachedClientLike | undefined;
 
+  /**
+   * 接続先サーバーの文字列表現です。
+   */
   readonly #servers: string;
 
+  /**
+   * 書き込んだ値の有効期限 (秒) です。
+   */
   readonly #ttlSeconds: number;
 
+  /**
+   * `open` 時の接続確認のタイムアウト (ミリ秒) です。
+   */
   readonly #connectTimeout: number;
 
+  /**
+   * すべてのキーの先頭に付与するプレフィックスです。
+   */
   readonly #keyPrefix: string;
 
   /**
-   * Memcached ストレージを作成します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#memcached)
    */
   public constructor(servers?: MemcachedServers, options: MemcachedStorageOptions = {}) {
@@ -263,10 +356,24 @@ export default class Memcached implements IStorage {
     this.#keyPrefix = keyPrefix;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 疎通確認で接続可否を検証します。
+   *
+   * @param c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -312,6 +419,15 @@ export default class Memcached implements IStorage {
     this.#con = { client };
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * クライアントを解放して参照を外します。
+   *
+   * @param _c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
@@ -323,6 +439,16 @@ export default class Memcached implements IStorage {
     await invokeClient(client, ["quit", "close", "end"]);
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * Base64 文字列に変換して保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -332,6 +458,15 @@ export default class Memcached implements IStorage {
     await client.set(this.#toKey(c.key), encodeBase64(data), { expires: this.#ttlSeconds });
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 保存した Base64 文字列を復元します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -349,6 +484,15 @@ export default class Memcached implements IStorage {
     return data;
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * `get` の成否で判定します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#getConnection();
 
@@ -362,6 +506,13 @@ export default class Memcached implements IStorage {
     );
   }
 
+  /**
+   * キーを削除します。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -370,6 +521,15 @@ export default class Memcached implements IStorage {
     await invokeClient(client, ["delete", "del"], this.#toKey(c.key));
   }
 
+  /**
+   * サーバー上の全キーを削除します。
+   *
+   * 列挙手段がないため `flush` で削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -380,8 +540,13 @@ export default class Memcached implements IStorage {
     await invokeClient(client, ["flush", "flushAll"]);
   }
 
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている接続を返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの接続です。
+   */
   #getConnection(): { readonly client: MemcachedClientLike } {
     const con = this.#con;
 
@@ -392,6 +557,13 @@ export default class Memcached implements IStorage {
     return con;
   }
 
+  /**
+   * unikvs のキーにプレフィックスを付与し、Memcached のキーへ変換します。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns Memcached 上の実キーです。
+   */
   #toKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }

@@ -1,4 +1,3 @@
-// oxlint-disable typescript/no-unnecessary-type-assertion
 /**
  * `subarray` で範囲ビューを作れるバイナリーデータの形です。
  */
@@ -52,9 +51,8 @@ function* chunkRanges(totalSize: number, maxSize: number): Generator<readonly [n
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#chunks)
- *
- * @yields データを指定サイズで区切ったビューを順に生成します。
  */
+// oxlint-disable-next-line jsdoc/require-yields
 export default function* chunks<TData extends DataView | ITypedArray>(
   data: TData,
   maxChunkByteSize: number,

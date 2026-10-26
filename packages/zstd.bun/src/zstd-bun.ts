@@ -7,30 +7,20 @@ import { type IEnv, api } from "./_core.js";
 import { UnsupportedRuntimeError, ZstdBunInvalidLevelError } from "./errors.js";
 
 /**
- * `ZstdBun` のコンストラクターオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#usage)
  */
 export type ZstdBunOptions = {
   /**
-   * zstd の圧縮レベルです。1 から 22 の整数を指定します。既定値は 3 です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#level)
    */
   readonly level?: number | undefined;
 };
 
 /**
- * Zstandard で圧縮・展開するミドルウェアです。
- *
- * Bun ランタイムでは `Bun.zstdCompressSync` と `Bun.zstdDecompressSync` を使い、それ以外の環境では `node:zlib` の zstd 系 API へフォールバックします。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#usage)
  */
 export default class ZstdBun implements IMiddleware {
   /**
-   * 実行環境の解決結果を保持するキャッシュです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#usage)
    */
   static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
@@ -41,17 +31,20 @@ export default class ZstdBun implements IMiddleware {
   public readonly name: string = "ZstdBun";
 
   /**
-   * 実行環境です。
+   * 解決済みの実行環境です。
+   *
+   * `open()` で解決されるまでは null です。
    */
   #env: IEnv | null;
 
   /**
    * 圧縮レベルです。
+   *
+   * 1 から 22 の整数を保持します。
    */
   readonly #level: number;
 
   /**
-   * @param options コンストラクターオプションです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/zstd-bun#usage)
    */
   public constructor(options: ZstdBunOptions = {}) {
@@ -66,10 +59,22 @@ export default class ZstdBun implements IMiddleware {
     this.#level = level;
   }
 
+  /**
+   * 開いているかどうかを表します。
+   *
+   * @returns 実行環境が設定済みなら true を返します。
+   */
   public get isOpen(): boolean {
     return this.#env !== null;
   }
 
+  /**
+   * zstd の実行環境を解決します。
+   *
+   * @param c オープン時のコンテキストです。
+   *
+   * @returns 初期化が完了したら解決するプロミスを返します。
+   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -93,6 +98,14 @@ export default class ZstdBun implements IMiddleware {
     }
   }
 
+  /**
+   * バイト列を zstd で圧縮します。
+   *
+   * @param c エンコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -105,6 +118,14 @@ export default class ZstdBun implements IMiddleware {
     await next();
   }
 
+  /**
+   * zstd で圧縮されたバイト列を展開します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -117,6 +138,14 @@ export default class ZstdBun implements IMiddleware {
     await next();
   }
 
+  /**
+   * バイト列ストリームを zstd で圧縮したストリームへ変換します。
+   *
+   * @param c エンコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -129,6 +158,14 @@ export default class ZstdBun implements IMiddleware {
     await next();
   }
 
+  /**
+   * zstd で圧縮されたバイト列ストリームを展開したストリームへ変換します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -141,8 +178,13 @@ export default class ZstdBun implements IMiddleware {
     await next();
   }
 
-  // 開いている実行環境を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている実行環境を返します。
+   *
+   * 未オープン時は `TypeError` を投げます。
+   *
+   * @returns 開いている実行環境を返します。
+   */
   #getEnv(): IEnv {
     const env = this.#env;
 

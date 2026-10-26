@@ -180,12 +180,28 @@ function drain(
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
  */
 export default class Cbor implements IMiddleware {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cbor#usage)
+   */
   public readonly name: string = "Cbor";
 
+  /**
+   * 常に利用可能であることを表します。
+   *
+   * @returns 常に true を返します。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * 値を CBOR のバイト列へ変換します。
+   *
+   * @param c エンコード対象の値を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -195,6 +211,14 @@ export default class Cbor implements IMiddleware {
     await next();
   }
 
+  /**
+   * CBOR のバイト列を値へ戻します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -208,6 +232,14 @@ export default class Cbor implements IMiddleware {
     await next();
   }
 
+  /**
+   * 値のストリームを CBOR のバイト列ストリームへ変換します。
+   *
+   * @param c エンコード対象の値ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -223,6 +255,14 @@ export default class Cbor implements IMiddleware {
     await next();
   }
 
+  /**
+   * CBOR のバイト列ストリームを値のストリームへ戻します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,

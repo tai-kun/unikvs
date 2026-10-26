@@ -26,6 +26,9 @@ export type SessionStorageOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/session-storage#usage)
  */
 export default class SessionStorage implements IStorage<string> {
+  /**
+   * ストレージ名です。常に `SessionStorage` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -33,11 +36,14 @@ export default class SessionStorage implements IStorage<string> {
    */
   public readonly allowClearWithoutPrefix: boolean;
 
-  // 注入された `Storage` です。
-  // 未指定の場合は `globalThis.sessionStorage` を使います。
+  /**
+   * 注入された Storage です。未指定の場合は `globalThis.sessionStorage` を使います。
+   */
   readonly #injectedStorage: Storage | undefined;
 
-  // すべてのキーに付与する接頭辞です。
+  /**
+   * すべてのキーに付与する接頭辞です。
+   */
   readonly #keyPrefix: string;
 
   /**
@@ -52,24 +58,52 @@ export default class SessionStorage implements IStorage<string> {
     this.#keyPrefix = keyPrefix;
   }
 
+  /**
+   * ストレージが利用可能かどうかを返します。SessionStorage は常に利用可能です。
+   *
+   * @returns 常に true を返します。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * ストレージを開き sessionStorage が使えることを確認します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   */
   public open(c: IStorage.OpenContext): void {
     c.signal.throwIfAborted();
     this.#backend();
   }
 
+  /**
+   * ストレージを閉じます。保持する状態がないため何もしません。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   */
   public close(c: IStorage.CloseContext): void {
     c.signal.throwIfAborted();
   }
 
+  /**
+   * 指定したキーに文字列を保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存する文字列です。
+   */
   public write(c: IStorage.WriteContext, data: string): void {
     c.signal.throwIfAborted();
     this.#backend().setItem(this.#toRealKey(c.key), data);
   }
 
+  /**
+   * 指定したキーの文字列を読み出します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns 保存されている文字列です。
+   */
   public read(c: IStorage.ReadContext): string {
     c.signal.throwIfAborted();
 
@@ -82,12 +116,24 @@ export default class SessionStorage implements IStorage<string> {
     return value;
   }
 
+  /**
+   * 指定したキーが存在するかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns キーが存在すれば true を返します。
+   */
   public exists(c: IStorage.ExistsContext): boolean {
     c.signal.throwIfAborted();
 
     return this.#backend().getItem(this.#toRealKey(c.key)) !== null;
   }
 
+  /**
+   * 指定したキーを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   */
   public delete(c: IStorage.DeleteContext): void {
     c.signal.throwIfAborted();
 
@@ -100,6 +146,11 @@ export default class SessionStorage implements IStorage<string> {
     backend.removeItem(this.#toRealKey(c.key));
   }
 
+  /**
+   * 接頭辞に一致するキーをすべて削除します。空の接頭辞では既定で拒否します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   */
   public clear(c: IStorage.ClearContext): void {
     // 空 prefix での無条件全削除の事故を防ぐため、走査前に拒否します。
     // `http` と同形の初期中断検証である。
@@ -129,8 +180,11 @@ export default class SessionStorage implements IStorage<string> {
     }
   }
 
-  // 使用する `Storage` を解決します。
-  // 実行時の意味は `#injectedStorage ?? globalThis.sessionStorage` です。
+  /**
+   * 使用する Storage を解決します。未注入時は `globalThis.sessionStorage` を使います。
+   *
+   * @returns 使用する Storage です。利用できない場合はエラーを投げます。
+   */
   #backend(): Storage {
     const backend =
       this.#injectedStorage ??
@@ -143,7 +197,13 @@ export default class SessionStorage implements IStorage<string> {
     return backend;
   }
 
-  // 論理キーに接頭辞を付与して実キーに変換します。
+  /**
+   * 論理キーに接頭辞を付与して実キーに変換します。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns 接頭辞付きの実キーです。
+   */
   #toRealKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }

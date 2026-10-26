@@ -7,12 +7,39 @@ declare global {
   interface UniKvsPipelineContextTypes {}
 }
 
+/**
+ * 型一覧から該当名がなければ `unknown` へ丸める補助型です。
+ *
+ * @param T 型一覧から取り出した型です。
+ * @param U 型一覧に該当がないときの代替型です。
+ *
+ * @returns 該当する型か代替型です。
+ */
 type $NeverOr<T, U> = [T] extends [never] ? U : T;
 
+/**
+ * 変数名として扱える文字列を集めた型です。
+ *
+ * `TTypes` と全体拡張点のキーを合わせ、未知の文字列も許容します。
+ *
+ * @param TTypes 変数名と値の対応表です。
+ *
+ * @returns 変数名として使える文字列型です。
+ */
 type ParamName<TTypes> =
   | Extract<keyof TTypes | keyof UniKvsPipelineContextTypes, string>
   | (string & {});
 
+/**
+ * 変数名に対応する値の型を取り出す補助型です。
+ *
+ * `TTypes` と全体拡張点の両方を探し、見つからなければ `unknown` になります。
+ *
+ * @param TTypes 変数名と値の対応表です。
+ * @param TName 取得する変数の名前です。
+ *
+ * @returns 変数の値の型です。
+ */
 type ParamValue<TTypes, TName extends string> = $NeverOr<
   | (TName extends keyof TTypes ? TTypes[TName] : never)
   | (TName extends keyof UniKvsPipelineContextTypes ? UniKvsPipelineContextTypes[TName] : never),
@@ -131,13 +158,27 @@ interface IRepairable {
    */
   readonly repair:
     | {
+        /**
+         * 書き戻しが無効であることを表します。
+         */
         readonly enabled: false;
 
+        /**
+         * 空の対象一覧です。
+         */
         readonly targets: readonly [];
       }
     | {
+        /**
+         * 書き戻しが有効であることを表します。
+         */
         readonly enabled: true;
 
+        /**
+         * 書き戻し先の名前一覧です。
+         *
+         * 少なくとも 1 件を含みます。
+         */
         readonly targets: readonly [string, ...string[]];
       };
 }

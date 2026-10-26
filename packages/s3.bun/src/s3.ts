@@ -23,6 +23,10 @@ const DELETE_CONCURRENCY = 25;
 /**
  * 書き込みストリームのパートサイズをコンテキストから解決します。
  * パッケージ固有の変数を優先し、なければ共通の変数を参照します。
+ *
+ * @param c パイプラインコンテキストです。
+ *
+ * @returns 解決したパートサイズです。未指定のときは undefined です。
  */
 function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
   const rawPartSize =
@@ -46,6 +50,9 @@ function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
  */
 export default class S3 implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3)
+   */
   public readonly name: string;
 
   /**
@@ -77,10 +84,24 @@ export default class S3 implements IStorage {
     this.#options = { ...options };
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return Boolean(this.#client);
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * Bun の S3 クライアントを初期化します。
+   *
+   * @param _c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
@@ -102,6 +123,13 @@ export default class S3 implements IStorage {
     });
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 参照を外してクライアントを破棄します。
+   *
+   * @param _c クローズコンテキストです。
+   */
   public close(_c: IStorage.CloseContext): void {
     if (!this.#client) {
       throw new StorageNotOpenError();
@@ -111,12 +139,31 @@ export default class S3 implements IStorage {
     this.#client = null;
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 指定したキーでオブジェクトを上書きします。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     c.signal.throwIfAborted();
 
     await this.#getClient().write(c.key, data);
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーのオブジェクトを取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
@@ -125,18 +172,43 @@ export default class S3 implements IStorage {
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
     return this.#getClient().exists(c.key);
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     c.signal.throwIfAborted();
 
     await this.#getClient().delete(c.key);
   }
 
+  /**
+   * バケット内のオブジェクトをすべて削除します。
+   *
+   * 一覧を頁送りで取得し、並列数を抑えて削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const client = this.#getClient();
 
@@ -165,6 +237,15 @@ export default class S3 implements IStorage {
     } while (continuationToken !== undefined);
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * コンテキストのパートサイズ設定でマルチパート書き込みを行います。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     if (c.signal.aborted) {
       throw new StorageAbortedError({ key: c.key });
@@ -191,6 +272,15 @@ export default class S3 implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * S3 オブジェクトの内容を順次送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
@@ -216,8 +306,13 @@ export default class S3 implements IStorage {
     });
   }
 
-  // 開いているクライアントを返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * オープン済みのクライアントを返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの S3 クライアントです。
+   */
   #getClient(): S3Client {
     const client = this.#client;
 

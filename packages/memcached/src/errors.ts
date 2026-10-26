@@ -4,14 +4,10 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * 無効な `ttlSeconds` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-invalid-ttl-seconds)
  */
 export type InvalidTtlSecondsErrorMeta = {
   /**
-   * 受け取った `ttlSeconds` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#invalid-ttl-seconds-actual)
    */
   readonly actual: unknown;
@@ -23,8 +19,6 @@ export type InvalidTtlSecondsErrorMeta = {
 export type InvalidTtlSecondsErrorArgs = ErrorOptions & InvalidTtlSecondsErrorMeta;
 
 /**
- * `ttlSeconds` が 0 以上の有限数ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-invalid-ttl-seconds)
  */
 export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSecondsErrorMeta> {
@@ -55,14 +49,10 @@ setErrorMessage(
 );
 
 /**
- * 無効な `connectTimeout` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-invalid-connect-timeout)
  */
 export type InvalidConnectTimeoutErrorMeta = {
   /**
-   * 受け取った `connectTimeout` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#invalid-connect-timeout-actual)
    */
   readonly actual: unknown;
@@ -74,8 +64,6 @@ export type InvalidConnectTimeoutErrorMeta = {
 export type InvalidConnectTimeoutErrorArgs = ErrorOptions & InvalidConnectTimeoutErrorMeta;
 
 /**
- * `connectTimeout` が有限の正数ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-invalid-connect-timeout)
  */
 export class InvalidConnectTimeoutError extends InvalidUsageErrorBase<InvalidConnectTimeoutErrorMeta> {
@@ -106,14 +94,10 @@ setErrorMessage(
 );
 
 /**
- * 接続タイムアウトのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-connect-timeout)
  */
 export type ConnectTimeoutErrorMeta = {
   /**
-   * タイムアウトまでの時間 (ミリ秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#connect-timeout-timeoutms)
    */
   readonly timeoutMs: number;
@@ -125,8 +109,6 @@ export type ConnectTimeoutErrorMeta = {
 export type ConnectTimeoutErrorArgs = ErrorOptions & ConnectTimeoutErrorMeta;
 
 /**
- * Memcached への接続がタイムアウトしたときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/memcached#error-connect-timeout)
  */
 export class ConnectTimeoutError extends ErrorBase<ConnectTimeoutErrorMeta> {

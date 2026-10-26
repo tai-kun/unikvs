@@ -37,6 +37,9 @@ export type BunFsOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfs)
  */
 export default class BunFs implements IStorage {
+  /**
+   * ストレージ名です。常に `BunFs` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -60,10 +63,22 @@ export default class BunFs implements IStorage {
     this.#con = null;
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns 接続情報を保持していれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
+  /**
+   * ルートディレクトリーを作成してストレージを開きます。Bun 以外ではエラーを投げます。
+   *
+   * @param _c 使用しないオープン用コンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // Bun 以外のランタイムで誤って使われた場合に、原因の分かるエラーを返します。
     if (typeof Bun === "undefined") {
@@ -83,6 +98,14 @@ export default class BunFs implements IStorage {
     };
   }
 
+  /**
+   * 指定したキーに Uint8Array を保存します。一時ファイル経由で原子的に置き換えます。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { fs } = this.#getConnection();
 
@@ -108,6 +131,13 @@ export default class BunFs implements IStorage {
     }
   }
 
+  /**
+   * 指定したキーのファイルを読み出します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容のバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     this.#getConnection();
 
@@ -121,6 +151,13 @@ export default class BunFs implements IStorage {
     return data;
   }
 
+  /**
+   * 指定したキーのファイルがあるかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns ファイルがあれば true を返します。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     this.#getConnection();
 
@@ -132,6 +169,13 @@ export default class BunFs implements IStorage {
     return Bun.file(file).exists();
   }
 
+  /**
+   * 指定したキーのファイルを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.#getConnection();
 
@@ -142,6 +186,13 @@ export default class BunFs implements IStorage {
     await Bun.file(file).delete();
   }
 
+  /**
+   * ルートディレクトリーを作り直してすべてのファイルを削除します。
+   *
+   * @param _c 使用しないクリア用コンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async clear(_c: IStorage.ClearContext): Promise<void> {
     const { fs } = this.#getConnection();
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
@@ -152,6 +203,13 @@ export default class BunFs implements IStorage {
     await fs.mkdir(this.#root, { recursive: true });
   }
 
+  /**
+   * 一時ファイルへ書き込み close 時に置き換えるストリームを作成します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { fs } = this.#getConnection();
 
@@ -243,6 +301,13 @@ export default class BunFs implements IStorage {
     return writable;
   }
 
+  /**
+   * ファイルを読み出すためのストリームを作成します。中断時は読み取りを打ち切ります。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容を送出する読み取りストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     this.#getConnection();
 
@@ -307,8 +372,11 @@ export default class BunFs implements IStorage {
     });
   }
 
-  // オープン済みかを確認します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * オープン済みの接続情報を返します。未オープン時はエラーを投げます。
+   *
+   * @returns Node.js 互換モジュールをまとめた接続情報です。
+   */
   #getConnection(): Connection {
     if (this.#con === null) {
       throw new TypeError("BunFs is not open. Call open() first.");
@@ -321,9 +389,20 @@ export default class BunFs implements IStorage {
    * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
    *
    * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
+   *
+   * @param key 解決するキーです。
+   *
+   * @returns 一時ファイルと最終パスの組み合わせです。
    */
   #resolvePath(key: string): {
+    /**
+     * 書き込み途中に使用する一時ファイルのパスです。
+     */
     tmp: string;
+
+    /**
+     * 最終的に公開するファイルのパスです。
+     */
     dest: string;
   } {
     const { path } = this.#getConnection();

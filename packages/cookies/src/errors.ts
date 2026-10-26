@@ -4,28 +4,20 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * Cookie 値がサイズ上限を超えたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
  */
 export type CookieTooLargeErrorMeta = {
   /**
-   * 対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
    */
   readonly key: string;
 
   /**
-   * 実際のサイズ (バイト) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
    */
   readonly actual: number;
 
   /**
-   * サイズ上限 (バイト) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
    */
   readonly limit: number;
@@ -37,8 +29,6 @@ export type CookieTooLargeErrorMeta = {
 export type CookieTooLargeErrorArgs = ErrorOptions & CookieTooLargeErrorMeta;
 
 /**
- * Cookie 値がサイズ上限を超えたときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
  */
 export class CookieTooLargeError extends ErrorBase<CookieTooLargeErrorMeta> {
@@ -73,8 +63,6 @@ setErrorMessage(
 );
 
 /**
- * Cookie API が利用できないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-not-available)
  */
 export class CookieNotAvailableError extends InvalidUsageErrorBase<undefined> {

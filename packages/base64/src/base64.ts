@@ -5,20 +5,32 @@ import type { FastUtf8 } from "fast-utf8";
 
 import { Base64DecodeError, Base64InvalidPaddingError } from "./errors.js";
 
-// base64 の alphabet です。
-// RFC 4648 §4 の 64 文字であり、`+` と `/` を含みます。
+/**
+ * base64 の alphabet です。
+ *
+ * RFC 4648 §4 の 64 文字であり、`+` と `/` を含みます。
+ */
 const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-// alphabet の検査用正規表現です。
-// `=` を含まない省略形のみに合致します。
+/**
+ * alphabet の検査用正規表現です。
+ *
+ * `=` を含まない省略形のみに合致します。
+ */
 const UNPADDED_PATTERN = /^[A-Za-z0-9+/]*$/u;
 
-// alphabet と `=` 配置の検査用正規表現です。
-// `=` は末尾の 1 文字から 2 文字にのみ現れます。
+/**
+ * alphabet と `=` 配置の検査用正規表現です。
+ *
+ * `=` は末尾の 1 文字から 2 文字にのみ現れます。
+ */
 const PADDED_PATTERN = /^[A-Za-z0-9+/]*={1,2}$/u;
 
-// 文字コードから 6 ビット値へ変換する参照表です。
-// 検証済みの入力のみを通すため、不正文字の検査は行いません。
+/**
+ * 文字コードから 6 ビット値へ変換する参照表です。
+ *
+ * 検証済みの入力のみを通すため、不正文字の検査は行いません。
+ */
 const DECODE_TABLE: number[] = Array.from({ length: 128 }, () => 0);
 
 for (let index = 0; index < BASE64_ALPHABET.length; index++) {
@@ -191,6 +203,9 @@ export type Base64Options = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
  */
 export default class Base64 implements IMiddleware {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/base64#usage)
+   */
   public readonly name: string = "Base64";
 
   /**
@@ -223,10 +238,23 @@ export default class Base64 implements IMiddleware {
     this.#padding = padding;
   }
 
+  /**
+   * 常に利用可能であることを表します。
+   *
+   * @returns 常に true を返します。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * バイト列を base64 文字列のバイト列へ変換します。
+   *
+   * @param c エンコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -236,6 +264,14 @@ export default class Base64 implements IMiddleware {
     await next();
   }
 
+  /**
+   * base64 文字列のバイト列を元のバイト列へ戻します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -251,6 +287,14 @@ export default class Base64 implements IMiddleware {
     await next();
   }
 
+  /**
+   * バイト列ストリームを base64 文字列のバイト列ストリームへ変換します。
+   *
+   * @param c エンコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -302,6 +346,14 @@ export default class Base64 implements IMiddleware {
     await next();
   }
 
+  /**
+   * base64 文字列のバイト列ストリームを元のバイト列ストリームへ戻します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,

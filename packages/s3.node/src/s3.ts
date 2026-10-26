@@ -21,6 +21,9 @@ export type S3StorageOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
  */
 export default class S3 implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
+   */
   public readonly name: string;
 
   /**
@@ -52,15 +55,34 @@ export default class S3 implements IStorage {
     this.#config = config;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return Boolean(this.#client);
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * AWS SDK の S3 クライアントを初期化します。
+   *
+   * @param _c オープンコンテキストです。
+   */
   public open(_c: IStorage.OpenContext): void {
     this.#client?.destroy();
     this.#client = new S3Client(this.#config);
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * クライアントを破棄して参照を外します。
+   *
+   * @param _c クローズコンテキストです。
+   */
   public close(_c: IStorage.CloseContext): void {
     const client = this.#getClient();
     client.destroy();
@@ -68,6 +90,16 @@ export default class S3 implements IStorage {
     this.#client = null;
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 指定したキーでオブジェクトを上書きします。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const command = new PutObjectCommand({
       Key: c.key,
@@ -77,6 +109,15 @@ export default class S3 implements IStorage {
     await this.#getClient().send(command, { abortSignal: c.signal });
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーのオブジェクトを取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const command = new GetObjectCommand({
       Key: c.key,
@@ -94,6 +135,15 @@ export default class S3 implements IStorage {
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * 存在しないときは偽を返します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     try {
       const command = new HeadObjectCommand({
@@ -117,6 +167,15 @@ export default class S3 implements IStorage {
     }
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const command = new DeleteObjectCommand({
       Key: c.key,
@@ -125,6 +184,15 @@ export default class S3 implements IStorage {
     await this.#getClient().send(command, { abortSignal: c.signal });
   }
 
+  /**
+   * バケット内のオブジェクトをすべて削除します。
+   *
+   * 一覧を頁送りで取得し、まとめて削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     let isTruncated = true;
     let continuationToken: string | undefined = undefined;
@@ -163,6 +231,15 @@ export default class S3 implements IStorage {
     }
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * コンテキストのパートサイズ設定でマルチパートアップロードを行います。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     if (c.signal.aborted) {
       throw new StorageAbortedError({ key: c.key });
@@ -245,6 +322,15 @@ export default class S3 implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * S3 オブジェクトの内容をストリームで送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームを解決します。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -262,8 +348,13 @@ export default class S3 implements IStorage {
     return body.transformToWebStream();
   }
 
-  // 開いているクライアントを返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * オープン済みのクライアントを返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの S3 クライアントです。
+   */
   #getClient(): S3Client {
     const client = this.#client;
 

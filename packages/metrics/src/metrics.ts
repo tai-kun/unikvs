@@ -1,32 +1,21 @@
 import type { IMiddleware } from "@unikvs/core";
 
 /**
- * メトリクスミドルウェアが観測する操作名です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action)
  */
 export type MetricsAction = IMiddleware.UseContext["action"];
 
 /**
- * 観測した操作が成功したか失敗したかを表します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-outcome)
  */
 export type MetricsOutcome = "success" | "error";
 
 /**
- * 名前で選択する組み込みのエクスポーターです。
- *
- * - `"otel"`: `meterProvider` から作成した OTel の計器へすべての記録を転送します。
- * - `"prometheus"`: 記録をメモリーに保持し、`toPrometheusString()` で公開用テキストを出力します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-exporter-kind)
  */
 export type MetricsExporterKind = "otel" | "prometheus";
 
 /**
- * 記録されたすべての測定値を受け取るカスタム出力先です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-exporter)
  */
 export interface MetricsExporter {
@@ -34,52 +23,36 @@ export interface MetricsExporter {
 }
 
 /**
- * 1 回の操作で観測した測定値です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record)
  */
 export type MetricRecord = {
   /**
-   * 観測した操作です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record-action)
    */
   readonly action: MetricsAction;
 
   /**
-   * 操作が成功したか失敗したかです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record-outcome)
    */
   readonly outcome: MetricsOutcome;
 
   /**
-   * 実時間での経過時間 (ミリ秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record-duration-ms)
    */
   readonly durationMs: number;
 
   /**
-   * 観測したバイト数です。不明な場合は `undefined` です (encode/decode とストリームのチャンク)。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record-bytes)
    */
   readonly bytes: number | undefined;
 
   /**
-   * 操作対象のキーです。キーを持たない `clear` では `undefined` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metric-record-key)
    */
   readonly key: string | undefined;
 };
 
 /**
- * OTel のカウンターのうち、本パッケージが使う最小の構造です。
- *
- * OTel への依存を避けるため、構造的な部分集合として定義します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
  */
 export type MetricsCounter = {
@@ -90,10 +63,6 @@ export type MetricsCounter = {
 };
 
 /**
- * OTel のヒストグラムのうち、本パッケージが使う最小の構造です。
- *
- * OTel への依存を避けるため、構造的な部分集合として定義します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
  */
 export type MetricsHistogram = {
@@ -104,10 +73,6 @@ export type MetricsHistogram = {
 };
 
 /**
- * OTel のメーターのうち、本パッケージが使う最小の構造です。
- *
- * OTel への依存を避けるため、構造的な部分集合として定義します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
  */
 export type MetricsMeter = {
@@ -129,11 +94,6 @@ export type MetricsMeter = {
 };
 
 /**
- * OTel の MeterProvider のうち、本パッケージが使う最小の構造です。
- *
- * OTel への依存を避けるため、構造的な部分集合として定義します。
- * `@opentelemetry/api` (任意のピア依存) の `metrics.getMeterProvider()` や、互換性のある任意のオブジェクトを渡せます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
  */
 export type MetricsMeterProvider = {
@@ -144,121 +104,85 @@ export type MetricsMeterProvider = {
 };
 
 /**
- * 操作名ごとに集計したカウンターです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary)
  */
 export type MetricsActionSummary = {
   /**
-   * 操作名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-action)
    */
   readonly action: string;
 
   /**
-   * 記録した操作の総数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-count)
    */
   readonly count: number;
 
   /**
-   * 成功した操作の数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-success)
    */
   readonly success: number;
 
   /**
-   * 失敗した操作の数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-error)
    */
   readonly error: number;
 
   /**
-   * 観測したバイト数の合計です (サイズが判明した操作だけが加算されます)。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-total-bytes)
    */
   readonly totalBytes: number;
 
   /**
-   * 観測した経過時間の合計 (ミリ秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-action-summary-total-duration-ms)
    */
   readonly totalDurationMs: number;
 };
 
 /**
- * これまでに記録したすべての測定値のスナップショットです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-snapshot)
  */
 export type MetricsSnapshot = {
   /**
-   * 記録した測定値の総数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-snapshot-total)
    */
   readonly total: number;
 
   /**
-   * 操作名をキーにした集計結果です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-snapshot-by-action)
    */
   readonly byAction: Record<string, MetricsActionSummary>;
 
   /**
-   * 記録したすべての測定値です (記録順)。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-snapshot-records)
    */
   readonly records: readonly MetricRecord[];
 };
 
 /**
- * メトリクスミドルウェアのオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options)
  */
 export type MetricsOptions = {
   /**
-   * 測定値の転送先です。組み込みのエクスポーター名かカスタム出力関数を指定します。
-   * この設定にかかわらず、測定値は常にメモリーに保持されます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options-exporter)
    */
   readonly exporter?: MetricsExporterKind | MetricsExporter | undefined;
 
   /**
-   * `exporter` が `"otel"` のときに使う OTel の MeterProvider です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options-meter-provider)
    */
   readonly meterProvider?: MetricsMeterProvider | undefined;
 
   /**
-   * 外部の Prometheus 連携のために保持する、不透明なレジストリーハンドルです。
-   * Prometheus の公開用テキストは `toPrometheusString()` から取得できます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options-registry)
    */
   readonly registry?: unknown;
 
   /**
-   * 測定値を記録するたびに呼び出されるコールバックです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options-on-record)
    */
   readonly onRecord?: ((record: MetricRecord) => void) | undefined;
 
   /**
-   * ミリ秒を返す時計です。既定では `performance.now()` を使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics-options-clock)
    */
   readonly clock?: (() => number) | undefined;
@@ -310,25 +234,15 @@ function escapeLabelValue(value: string): string {
 }
 
 /**
- * 操作のメトリクスを記録するミドルウェアです。
- *
- * `use` フックはすべての操作 (`set`/`get`/`stream`/`has`/`delete`/`clear`) のレイテンシーと成否を測定します。`encode`/`decode` フックはバイトサイズも記録し、ストリームのフックはストリームが確定するまでチャンクサイズを合計します。
- * 測定値はメモリーに保持され (`getMetrics()` と `toPrometheusString()` を参照)、必要に応じて OTel の計器やカスタム出力先へ転送されます。
- * 記録処理は決して例外を投げません。出力先の失敗は握りつぶすため、メトリクスが操作のパイプラインを壊すことはありません。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
  */
 export default class Metrics implements IMiddleware {
   /**
-   * ミドルウェア名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public readonly name: string = "Metrics";
 
   /**
-   * オプションで渡された、外部連携用の不透明なレジストリーハンドルです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public readonly registry: unknown;
@@ -356,11 +270,7 @@ export default class Metrics implements IMiddleware {
   #otelBytes: MetricsCounter | undefined;
 
   /**
-   * メトリクスミドルウェアを作成します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
-   *
-   * @param options エクスポーター、プロバイダー、レジストリー、記録コールバック、時計の設定です。
    */
   public constructor(options: MetricsOptions = {}) {
     this.registry = options.registry;
@@ -372,8 +282,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * 常に `true` です。このミドルウェアはライフサイクルを必要としません。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public get isOpen(): boolean {
@@ -381,10 +289,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * 操作全体を測定し、成功または失敗としてレイテンシーとともに記録します。
-   *
-   * @param c 操作の種類 (と `clear` 以外ではキー) を持つ操作コンテキストです。
-   * @param next 次の操作です。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
@@ -415,10 +319,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * データをそのまま通し、サイズが判明している場合はバイト数を記録します。
-   *
-   * @param c 変換元のサイズを観測する encode コンテキストです。
-   * @param next 次のトランスフォーマーです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
@@ -450,10 +350,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * データをそのまま通し、サイズが判明している場合はバイト数を記録します。
-   *
-   * @param c 変換元のサイズを観測する decode コンテキストです。
-   * @param next 次のトランスフォーマーです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
@@ -485,10 +381,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * ストリームをそのまま通し、確定時に合計チャンクサイズを記録します。
-   *
-   * @param c チャンクを測定する encode ストリームのコンテキストです。
-   * @param next 次のトランスフォーマーです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async encodeStream(
@@ -499,10 +391,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * ストリームをそのまま通し、確定時に合計チャンクサイズを記録します。
-   *
-   * @param c チャンクを測定する decode ストリームのコンテキストです。
-   * @param next 次のトランスフォーマーです。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async decodeStream(
@@ -513,11 +401,7 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * 集計したカウンターと、記録したすべての測定値を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
-   *
-   * @returns 記録時点のメトリクスのスナップショットを返します。
    */
   public getMetrics(): MetricsSnapshot {
     const byAction: Record<string, MetricsActionSummary> = {};
@@ -541,14 +425,7 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * 記録したメトリクスを Prometheus の公開用フォーマットで出力します。
-   *
-   * キーラベルは意図的に省略し、カーディナリティーが無制限に増えないようにしています。
-   * キーごとの詳細は `getMetrics()` と `onRecord` から取得できます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
-   *
-   * @returns 操作・経過時間・バイト数の系列を含む公開用テキストを返します。
    */
   public toPrometheusString(): string {
     const lines: string[] = [
@@ -588,8 +465,6 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * 記録したすべての測定値と集計結果を破棄します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public reset(): void {

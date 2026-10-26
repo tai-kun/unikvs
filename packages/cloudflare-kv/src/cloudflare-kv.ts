@@ -4,44 +4,83 @@ import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { InvalidBindingError, InvalidKeyPrefixError, InvalidTtlSecondsError } from "./errors.js";
 
 /**
- * `KVNamespace.list` が返すキーの最小形状です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceListKey {
+  /**
+   * 列挙したキー名です。
+   */
   readonly name: string;
 }
 
 /**
- * `KVNamespace.list` が返すページの最小形状です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceListResult {
+  /**
+   * 取得したキーの一覧です。
+   */
   readonly keys: readonly KVNamespaceListKey[];
+
+  /**
+   * 列挙が完了したかどうかです。
+   */
   readonly list_complete: boolean;
+
+  /**
+   * 次のページを取得するためのカーソルです。
+   */
   readonly cursor: string;
 }
 
 /**
- * Cloudflare Workers の `KVNamespace` binding の最小形状です。
- *
- * `wrangler` への依存を避けるため、必要な `get` / `put` / `delete` / `list` だけを定義します。
- * 実物の binding はこの形状を満たすため、そのまま渡せます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export interface KVNamespaceLike {
+  /**
+   * キーの値をバイト列で取得します。
+   *
+   * @param key 取得するキーです。
+   * @param type 取得形式です。
+   *
+   * @returns 取得したバイト列です。欠番時は null です。
+   */
   get(
     key: string,
     type: "arrayBuffer" | { readonly type: "arrayBuffer" },
   ): Promise<ArrayBuffer | null>;
+
+  /**
+   * キーに値を保存します。
+   *
+   * @param key 保存先のキーです。
+   * @param value 保存するバイト列です。
+   * @param options 保存に渡す任意項目です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
   put(
     key: string,
     value: ArrayBuffer,
     options?: { readonly expirationTtl?: number },
   ): Promise<void>;
+
+  /**
+   * キーを削除します。
+   *
+   * @param key 削除するキーです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   delete(key: string): Promise<void>;
+
+  /**
+   * キーを頁単位で列挙します。
+   *
+   * @param options 列挙に渡す任意項目です。
+   *
+   * @returns 列挙したページです。
+   */
   list(options?: {
     readonly cursor?: string | undefined;
     readonly prefix?: string | undefined;
@@ -49,44 +88,26 @@ export interface KVNamespaceLike {
 }
 
 /**
- * `CloudflareKv` の構築引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export type CloudflareKvOptions = {
   /**
-   * 注入する KV binding です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-binding)
    */
   readonly binding: KVNamespaceLike;
 
   /**
-   * すべてのキーに付与する接頭辞です。既定値は `"unikvs:"` です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * 書き込み時に付与する有効期限 (秒) です。未指定なら無期限です。
-   * `put` の `expirationTtl` としてそのまま渡します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv-ttl-seconds)
    */
   readonly ttlSeconds?: number | undefined;
 };
 
 /**
- * Cloudflare KV binding 上のストレージです。
- *
- * 注意 : Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
- * 書き込み・削除の直後に別ロケーションから読むと古い値が見えることがあります。
- * 同一コロケーション内からの読み取りは強い一貫性が保たれます。
- * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、厳密な一貫性が必要な用途には使わないでください。
- *
- * 値はバイナリーセーフな `ArrayBuffer` としてそのまま `put` / `get` します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export default class CloudflareKv implements IStorage {
@@ -95,24 +116,24 @@ export default class CloudflareKv implements IStorage {
    */
   public readonly name: string;
 
-  // 注入された KV binding です。
+  /**
+   * 注入された KV binding です。
+   */
   readonly #binding: KVNamespaceLike;
 
-  // すべてのキーに付与する接頭辞です。
+  /**
+   * すべてのキーに付与する接頭辞です。
+   */
   readonly #keyPrefix: string;
 
-  // 書き込み時に付与する有効期限 (秒) です。
-  // 未指定なら無期限です。
+  /**
+   * 書き込み時に付与する有効期限 (秒) です。
+   *
+   * 未指定なら無期限です。
+   */
   readonly #ttlSeconds: number | undefined;
 
   /**
-   * Cloudflare KV binding 上のストレージです。
-   *
-   * 注意 : Cloudflare KV は結果整合性 (eventual consistency) のストレージです。
-   * 書き込み・削除の直後に別ロケーションから読むと古い値が見えることがあります。
-   * 同一コロケーション内からの読み取りは強い一貫性が保たれます。
-   * `clear` 直後の `list` / `read` も古い結果を返すことがあるため、厳密な一貫性が必要な用途には使わないでください。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
    */
   public constructor(options: CloudflareKvOptions) {
@@ -150,18 +171,53 @@ export default class CloudflareKv implements IStorage {
     this.#ttlSeconds = ttlSeconds;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * 常に真を返します。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 期限付きなら有効期限を添えて保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -175,6 +231,15 @@ export default class CloudflareKv implements IStorage {
     );
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーの値を取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -191,6 +256,15 @@ export default class CloudflareKv implements IStorage {
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * `get` の成否で判定します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -204,6 +278,15 @@ export default class CloudflareKv implements IStorage {
     return buffer !== null;
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -211,6 +294,15 @@ export default class CloudflareKv implements IStorage {
     await this.#binding.delete(this.#fullKey(c.key));
   }
 
+  /**
+   * 接頭辞配下のキーをすべて削除します。
+   *
+   * `list` で列挙してから削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -246,7 +338,13 @@ export default class CloudflareKv implements IStorage {
     }
   }
 
-  // 論理キーに接頭辞を付けた実キーを組み立てます。
+  /**
+   * 論理キーに接頭辞を付けた実キーを組み立てます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns KV 上の実キーです。
+   */
   #fullKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }

@@ -1,83 +1,62 @@
 // oxlint-disable unicorn/number-literal-case
 /**
- * 決定的な擬似乱数生成器の操作一式です。
- * 乱数に依存するテストで固定 seed から再現可能な入力を組み立てるために使用します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random)
  */
 export type Random = {
   /**
-   * 0 以上 1 未満の小数を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-next)
    */
   next(): number;
 
   /**
-   * min 以上 max 以下の整数を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-int)
    */
   int(min: number, max: number): number;
 
   /**
-   * 0 以上 max 以下の整数を返します。
-   *
-   * @default 0xffffffff
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-uint)
    */
   uint(max?: number): number;
 
   /**
-   * 真偽値を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-bool)
    */
   bool(): boolean;
 
   /**
-   * 配列から 1 要素を選んで返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-pick)
    */
   pick<T>(items: readonly T[]): T;
 
   /**
-   * 指定した長さのランダムなバイト列を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-bytes)
    */
   bytes(length: number): Uint8Array<ArrayBuffer>;
 
   /**
-   * 指定した長さの文字列を返します。
-   * alphabet を省略すると英小文字と数字になります。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-string)
    */
   string(length: number, alphabet?: string | readonly string[]): string;
 
   /**
-   * generate を length 回呼び出して作った配列を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-array)
    */
   array<T>(length: number, generate: (random: Random, index: number) => T): T[];
 
   /**
-   * 要素を複製してシャッフルした配列を返します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#random-shuffle)
    */
   shuffle<T>(items: readonly T[]): T[];
 };
 
+/**
+ * 文字列生成で使う既定の文字集合です。
+ *
+ * 英小文字と数字からなります。
+ */
 const DEFAULT_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 /**
- * mulberry32 による決定的な擬似乱数生成器を作成します。
- * 同じ seed と同じ呼び出し順に対して常に同じ値を返すため、失敗を再現可能にするために使用します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-random)
  */
 export function createRandom(seed: number): Random {
@@ -190,15 +169,17 @@ export function createRandom(seed: number): Random {
 
 /**
  * seed とケース番号から再現可能な派生 seed を作ります。
+ *
+ * @param seed 元になる種です。
+ * @param index ケース番号です。
+ *
+ * @returns 派生した種です。
  */
 function deriveSeed(seed: number, index: number): number {
   return (seed ^ Math.imul(index + 1, 0x9e_37_79_b9)) >>> 0;
 }
 
 /**
- * 同じ seed から派生した乱数を使い、count 回テスト本体を実行します。
- * 失敗したケースの seed と index をメッセージに含め、元の例外を cause に保持します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#for-cases)
  */
 export function forCases(
@@ -216,9 +197,6 @@ export function forCases(
 }
 
 /**
- * forCases の非同期版です。
- * 非同期処理を含むケースの失敗を seed と index 付きで報告するために使用します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#for-cases-async)
  */
 export async function forCasesAsync(

@@ -70,6 +70,9 @@ export type HexOptions = {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
  */
 export default class Hex implements IMiddleware {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/hex#usage)
+   */
   public readonly name: string = "Hex";
 
   /**
@@ -91,10 +94,23 @@ export default class Hex implements IMiddleware {
     this.#decoder = decoder;
   }
 
+  /**
+   * 常に利用可能であることを表します。
+   *
+   * @returns 常に true を返します。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * バイト列を 16 進文字列のバイト列へ変換します。
+   *
+   * @param c エンコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -104,6 +120,14 @@ export default class Hex implements IMiddleware {
     await next();
   }
 
+  /**
+   * 16 進文字列のバイト列を元のバイト列へ戻します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -119,6 +143,14 @@ export default class Hex implements IMiddleware {
     await next();
   }
 
+  /**
+   * バイト列ストリームを 16 進文字列のバイト列ストリームへ変換します。
+   *
+   * @param c エンコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -139,6 +171,14 @@ export default class Hex implements IMiddleware {
     await next();
   }
 
+  /**
+   * 16 進文字列のバイト列ストリームを元のバイト列ストリームへ戻します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,

@@ -2,9 +2,6 @@ import { readdir } from "node:fs/promises";
 import { Socket, createServer } from "node:net";
 
 /**
- * OS から空きポートを 1 つ取得します。
- *
- * @returns 空きポート番号で解決する Promise です。
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#acquire-free-port)
  */
 export async function acquireFreePort(): Promise<number> {
@@ -30,12 +27,6 @@ export async function acquireFreePort(): Promise<number> {
 }
 
 /**
- * 指定されたポートが接続可能になるまで待機します。
- *
- * @param port 接続先のポート番号です。
- * @param timeoutMs 待機する最大時間 (ミリ秒) です。
- *
- * @returns ポートが開放された場合に解決する Promise です。
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#wait-for-port)
  */
 export async function waitForPort(port: number, timeoutMs = 10e3): Promise<void> {
@@ -64,9 +55,6 @@ export async function waitForPort(port: number, timeoutMs = 10e3): Promise<void>
 }
 
 /**
- * ルート直下に残っている一時ファイル (*.tmp) の名前を返します。
- * swap-on-close の後始末が正しいことを検証するために使用します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#list-temporary-files)
  */
 export async function listTemporaryFiles(root: string): Promise<string[]> {

@@ -12,10 +12,6 @@ import {
 } from "./errors.js";
 
 /**
- * `fetch` 実装の最小形状です。
- *
- * Blob URL からのダウンロードに使います。未指定のときは `globalThis.fetch` を使います。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface IFetch {
@@ -23,181 +19,132 @@ export interface IFetch {
 }
 
 /**
- * Blob の公開範囲です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export type BlobAccess = "public" | "private";
 
 /**
- * クライアントへ渡す操作の共通項目です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobRequestOptions {
   /**
-   * 操作に使うトークンです。
-   *
-   * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly token?: string | undefined;
 
   /**
-   * 操作の中断に使うシグナルです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly abortSignal?: AbortSignal | undefined;
 }
 
 /**
- * `put` へ渡す項目です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobPutRequestOptions extends BlobRequestOptions {
   /**
-   * Blob の公開範囲です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly access: BlobAccess;
 
   /**
-   * Blob の内容形式です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly contentType?: string | undefined;
 }
 
 /**
- * `list` へ渡す項目です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListRequestOptions extends BlobRequestOptions {
   /**
-   * 一致する pathname の接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly prefix?: string | undefined;
 
   /**
-   * 取得の再開位置です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly cursor?: string | undefined;
 }
 
 /**
- * `put` の結果の最小形状です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobPutResult {
   /**
-   * 保存した Blob の URL です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
-   * 保存した Blob の pathname です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
 
 /**
- * `head` の結果の最小形状です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobHeadResult {
   /**
-   * Blob の URL です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
-   * Blob の pathname です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
 
 /**
- * `list` の項目の最小形状です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListItem {
   /**
-   * Blob の URL です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly url: string;
 
   /**
-   * Blob の pathname です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly pathname: string;
 }
 
 /**
- * `list` の結果の最小形状です。
- *
- * `hasMore` が `true` のときは次の頁を取得する `cursor` を返します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobListResult {
   /**
-   * 取得した Blob の一覧です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly blobs: readonly BlobListItem[];
 
   /**
-   * 次の頁の再開位置です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly cursor?: string | undefined;
 
   /**
-   * 残りの頁があるかどうかです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   readonly hasMore: boolean;
 }
 
 /**
- * Vercel Blob クライアントが満たすべき最小形状です。
- *
- * `@vercel/blob` の `put` / `head` / `del` / `list` はこの形状を満たすため、そのまま渡せます。
- * テストではネットワークを使わない疑似実装を渡します。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobClientLike {
   /**
    * `pathname` にバイト列を保存します。
+   *
+   * @param pathname 保存先の pathname です。
+   * @param body 保存するバイト列です。
+   * @param options 保存に渡す項目です。
+   *
+   * @returns 保存結果です。
    */
   put(
     pathname: string,
@@ -207,75 +154,78 @@ export interface BlobClientLike {
 
   /**
    * `pathname` のメタ情報を取得します。存在しないときは拒否します。
+   *
+   * @param pathname 取得する pathname です。
+   * @param options 取得に渡す項目です。
+   *
+   * @returns 取得したメタ情報です。
    */
   head(pathname: string, options: BlobRequestOptions): Promise<BlobHeadResult>;
 
   /**
    * `pathname` の Blob を削除します。
+   *
+   * @param pathname 削除する pathname です。
+   * @param options 削除に渡す項目です。
+   *
+   * @returns 削除が完了したら解決します。
    */
   del(pathname: string | readonly string[], options: BlobRequestOptions): Promise<void>;
 
   /**
    * Blob の一覧を頁単位で取得します。
+   *
+   * @param options 一覧取得に渡す項目です。
+   *
+   * @returns 取得した一覧です。
    */
   list(options: BlobListRequestOptions): Promise<BlobListResult>;
 }
 
 /**
- * `VercelBlob` のコンストラクターオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export type VercelBlobOptions = {
   /**
-   * 操作に使うトークンです。
-   *
-   * 未指定のときは `BLOB_READ_WRITE_TOKEN` などの環境変数を使います。
-   * コンテキスト変数 `@unikvs/vercel-blob:token` / `@unikvs/fetch:token` が優先されます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-token)
    */
   readonly token?: string | undefined;
 
   /**
-   * 使用する Vercel Blob クライアントです。
-   *
-   * 未指定のときは `@vercel/blob` の関数を使います。
-   * テストではネットワークを使わない疑似実装を渡します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-client)
    */
   readonly client?: BlobClientLike | undefined;
 
   /**
-   * すべてのキーに付与する接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
 
   /**
-   * 保存する Blob の公開範囲です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-access)
    */
   readonly access?: BlobAccess | undefined;
 
   /**
-   * Blob URL からのダウンロードに使う `fetch` 実装です。
-   *
-   * 未指定のときは `globalThis.fetch` を使います。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob-fetch)
    */
   readonly fetch?: IFetch | undefined;
 };
 
+/**
+ * 既定の公開範囲です。
+ *
+ * 未指定時は非公開として保存します。
+ */
 const DEFAULT_ACCESS: BlobAccess = "private";
 
-// 既定のクライアントとして `@vercel/blob` の関数を使います。
-// `undefined` の項目を取り除いて渡します。
-// 実クライアントの型が `exactOptionalPropertyTypes` のもとで明示 `undefined` を拒否するためです。
+/**
+ * 既定のクライアントを作成します。
+ *
+ * `@vercel/blob` の関数を使い、未定義項目を取り除いて渡します。
+ *
+ * @returns 作成したクライアントです。
+ */
 function createDefaultClient(): BlobClientLike {
   return {
     del: (pathname, options) =>
@@ -306,7 +256,13 @@ function createDefaultClient(): BlobClientLike {
   };
 }
 
-// `token` 値が空でない文字列であることを検証します。
+/**
+ * トークン値が空でない文字列であることを検証します。
+ *
+ * @param value 検証する値です。
+ *
+ * @returns 検証済みのトークンです。未指定時は undefined です。
+ */
 function assertTokenValue(value: unknown): string | undefined {
   let token: string | undefined = undefined;
 
@@ -321,7 +277,13 @@ function assertTokenValue(value: unknown): string | undefined {
   return token;
 }
 
-// `access` 値が公開範囲のどちらかであることを検証します。
+/**
+ * 公開範囲の値がどちらかであることを検証します。
+ *
+ * @param value 検証する値です。
+ *
+ * @returns 検証済みの公開範囲です。
+ */
 function assertAccessValue(value: unknown): BlobAccess {
   if (value === undefined) {
     return DEFAULT_ACCESS;
@@ -334,8 +296,15 @@ function assertAccessValue(value: unknown): BlobAccess {
   throw new InvalidAccessError({ actual: value });
 }
 
-// 欠番を表す失敗かどうかを判定します。
-// 実クライアントの `BlobNotFoundError` と疑似実装の同名・同状態の失敗に対応します。
+/**
+ * 欠番を表す失敗かどうかを判定します。
+ *
+ * 実クライアントと疑似実装の双方に対応します。
+ *
+ * @param ex 判定する失敗です。
+ *
+ * @returns 欠番を表せば真です。
+ */
 function isBlobNotFound(ex: unknown): boolean {
   if (typeof ex !== "object" || ex === null) {
     return false;
@@ -360,11 +329,6 @@ function isBlobNotFound(ex: unknown): boolean {
 }
 
 /**
- * Vercel Blob にバイト列を保存するストレージです。
- *
- * キーを `${keyPrefix}${key}` の pathname に変換し、`put` / `head` / `del` / `list` します。
- * 読み取りは `head` で解決した URL を `fetch` でダウンロードします。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
@@ -373,24 +337,34 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
    */
   public readonly name: string;
 
-  // 使用する Vercel Blob クライアントです。
+  /**
+   * 使用する Vercel Blob クライアントです。
+   */
   readonly #client: BlobClientLike;
 
-  // すべてのキーに付与する接頭辞です。
+  /**
+   * すべてのキーに付与する接頭辞です。
+   */
   readonly #keyPrefix: string;
 
-  // 保存する Blob の公開範囲です。
+  /**
+   * 保存する Blob の公開範囲です。
+   */
   readonly #access: BlobAccess;
 
-  // 既定のトークンです。
+  /**
+   * 既定のトークンです。
+   */
   readonly #token: string | undefined;
 
-  // ダウンロードに使う `fetch` 実装です。
+  /**
+   * ダウンロードに使う `fetch` 実装です。
+   *
+   * 未指定のときは `globalThis.fetch` を使います。
+   */
   readonly #fetchImpl: IFetch | undefined;
 
   /**
-   * Vercel Blob にバイト列を保存するストレージです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
   public constructor(options: VercelBlobOptions = {}) {
@@ -404,18 +378,53 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     this.#fetchImpl = fetchImpl;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * 常に真を返します。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * `put` で Blob として保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -438,6 +447,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * `head` で URL を解決してダウンロードします。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
@@ -468,6 +486,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * `head` の成否で判定します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     throwIfAborted(c.signal);
 
@@ -494,6 +521,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -519,6 +555,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
   }
 
+  /**
+   * 接頭辞に一致する Blob をすべて削除します。
+   *
+   * `list` で全件集めてから削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -568,6 +613,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * チャンクを蓄積し、`close` 時に一括保存します。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
@@ -605,6 +659,15 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * `head` で URL を解決してダウンロードします。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームを解決します。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -645,12 +708,24 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     return response.body;
   }
 
-  // 使用する `fetch` 実装を解決します。
+  /**
+   * 使用する `fetch` 実装を解決します。
+   *
+   * @returns 要求送信に使う実装です。
+   */
   #resolveFetch(): IFetch {
     return this.#fetchImpl ?? globalThis.fetch;
   }
 
-  // 送信トークンを三層優先度で解決します。
+  /**
+   * 送信トークンを三層優先度で解決します。
+   *
+   * 固有変数、共通変数、既定値の順に優先します。
+   *
+   * @param c パイプラインコンテキストです。
+   *
+   * @returns 解決したトークンです。未指定時は undefined です。
+   */
   #resolveToken(c: Pick<IPipelineContext, "get">): string | undefined {
     const specificToken = assertTokenValue(c.get("@unikvs/vercel-blob:token"));
     const commonToken = assertTokenValue(c.get("@unikvs/fetch:token"));
@@ -658,12 +733,26 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     return specificToken ?? commonToken ?? this.#token;
   }
 
-  // キーに対応する pathname を組み立てます。
+  /**
+   * キーに対応する pathname を組み立てます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns Blob 上の pathname です。
+   */
   #pathname(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }
 
-  // ダウンロード要求を組み立てます。
+  /**
+   * ダウンロード要求を組み立てます。
+   *
+   * @param url 要求先の URL です。
+   * @param token 送信に使うトークンです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 組み立てた要求です。
+   */
   #downloadRequest(url: string, token: string | undefined, signal: AbortSignal): Request {
     const headers: Record<string, string> = {};
 
@@ -677,7 +766,17 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     });
   }
 
-  // URL からバイト列をダウンロードします。
+  /**
+   * URL からバイト列をダウンロードします。
+   *
+   * 失敗時は専用エラーに包んで投げます。
+   *
+   * @param c 読み取りや取得のコンテキストです。
+   * @param url ダウンロード元の URL です。
+   * @param token 送信に使うトークンです。
+   *
+   * @returns ダウンロードした応答です。
+   */
   async #download(
     c: IStorage.ReadContext | IStorage.GetReadableContext,
     url: string,

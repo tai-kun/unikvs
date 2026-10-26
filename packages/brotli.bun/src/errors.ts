@@ -5,29 +5,21 @@ export type { UnsupportedRuntimeErrorArgs, UnsupportedRuntimeErrorMeta } from "@
 export { UnsupportedRuntimeError } from "@unikvs/core";
 
 /**
- * 無効な brotli 圧縮レベルが指定されたときに投げられるエラーです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#error-brotli-bun-invalid-level)
  */
 export type BrotliBunInvalidLevelErrorMeta = {
   /**
-   * 指定された圧縮レベルです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#brotli-bun-invalid-level-actual)
    */
   readonly actual: unknown;
 };
 
 /**
- * 無効な brotli 圧縮レベルが指定されたときに投げられるエラーの引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#error-brotli-bun-invalid-level)
  */
 export type BrotliBunInvalidLevelErrorArgs = ErrorOptions & BrotliBunInvalidLevelErrorMeta;
 
 /**
- * 無効な brotli 圧縮レベルが指定されたときに投げられるエラーです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#error-brotli-bun-invalid-level)
  */
 export class BrotliBunInvalidLevelError extends InvalidUsageErrorBase<BrotliBunInvalidLevelErrorMeta> {
@@ -36,7 +28,6 @@ export class BrotliBunInvalidLevelError extends InvalidUsageErrorBase<BrotliBunI
   }
 
   /**
-   * @param args エラーの引数です。
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-bun#error-brotli-bun-invalid-level)
    */
   public constructor(args: BrotliBunInvalidLevelErrorArgs) {

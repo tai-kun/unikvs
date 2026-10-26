@@ -14,29 +14,21 @@ import { TombstoneNotFoundError, SoftDeleteInvalidRetentionError } from "./error
  */
 export type SoftDeleteOptions = {
   /**
-   * 削除墓標を保持する期間 (ミリ秒) です。未指定なら保持し続けます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete-retention-ms)
    */
   readonly retentionMs?: number | undefined;
 };
 
 /**
- * `listTombstones` が返す削除墓標の 1 件分です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
  */
 export type TombstoneEntry = {
   /**
-   * 削除されたキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   readonly key: string;
 
   /**
-   * 削除された時刻 (UNIX エポックからのミリ秒) です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   readonly deletedAt: number;
@@ -140,15 +132,11 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   public readonly retentionMs: number | undefined;
 
   /**
-   * 下層ストレージが対応している場合の読み取りストリーム取得関数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public getReadable?: (c: IStorage.GetReadableContext) => Promise<IReadableStream>;
 
   /**
-   * 下層ストレージが対応している場合の書き込みストリーム取得関数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
    */
   public getWritable?: (c: IStorage.GetWritableContext) => Promise<IWritableStream>;

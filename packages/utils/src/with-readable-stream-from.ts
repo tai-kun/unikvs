@@ -2,6 +2,8 @@ import { logger } from "./_logger.js";
 
 /**
  * `from` 静的メソッドを持つ `ReadableStream` の拡張型定義です。
+ *
+ * 不足環境への一時的な補完で受け渡すために使います。
  */
 interface ReadableStreamWithFrom extends ReadableStream {
   /**

@@ -50,15 +50,11 @@ setErrorMessage(
  */
 export type RateLimitInvalidOptionErrorMeta = {
   /**
-   * 不正だったオプション名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-invalid-option-name)
    */
   readonly name: string;
 
   /**
-   * 指定された値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#rate-limit-invalid-option-actual)
    */
   readonly actual: unknown;
@@ -70,8 +66,6 @@ export type RateLimitInvalidOptionErrorMeta = {
 export type RateLimitInvalidOptionErrorArgs = ErrorOptions & RateLimitInvalidOptionErrorMeta;
 
 /**
- * コンストラクターに不正なオプションが渡されたときのエラーです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/rate-limit#error-rate-limit-invalid-option)
  */
 export class RateLimitInvalidOptionError extends InvalidUsageErrorBase<RateLimitInvalidOptionErrorMeta> {

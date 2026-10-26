@@ -1,13 +1,31 @@
 import { FastUtf8 } from "fast-utf8";
 import filenameReservedRegex, { windowsReservedNameRegex } from "filename-reserved-regex";
 
-const FILENAME_RESERVED_REGEX = /* #__PURE__ */ filenameReservedRegex();
+/**
+ * ファイル名に使う予約済み表現の正規表現です。
+ *
+ * 判定のたびに作り直さないよう共有します。
+ */
+const FILENAME_RESERVED_REGEX = /*#__PURE__*/ filenameReservedRegex();
 
-const WINDOWS_RESERVED_NAME_REGEX = /* #__PURE__ */ windowsReservedNameRegex();
+/**
+ * Windows の予約名に合致するかを判定する正規表現です。
+ *
+ * 判定のたびに作り直さないよう共有します。
+ */
+const WINDOWS_RESERVED_NAME_REGEX = /*#__PURE__*/ windowsReservedNameRegex();
 
+/**
+ * ファイル名として許容する最大バイト数です。
+ */
 const MAX_BYTES = 255;
 
-const utf8 = /* #__PURE__ */ new FastUtf8({
+/**
+ * 検証用の共有 UTF-8 インスタンスです。
+ *
+ * BOM 付き入力の検出とバイト数測定に使います。
+ */
+const utf8 = /*#__PURE__*/ new FastUtf8({
   strict: true,
   ignoreBOM: true,
   allocateSize: MAX_BYTES,

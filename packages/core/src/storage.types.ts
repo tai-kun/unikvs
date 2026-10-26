@@ -80,8 +80,16 @@ export namespace IStorage {
      * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#iotherwriteerror-errors)
      */
     readonly errors: readonly {
+      /**
+       * エラーを起こしたプラグイン種別です。
+       *
+       * 常に `"storage"` です。
+       */
       readonly plugin: "storage";
 
+      /**
+       * 失敗の原因となった元の値です。
+       */
       readonly reason: unknown;
     }[];
   }

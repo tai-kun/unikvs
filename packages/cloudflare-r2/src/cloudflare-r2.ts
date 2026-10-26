@@ -4,142 +4,128 @@ import { throwIfAborted, toAbortPromise } from "abort-signal-utils";
 import { InvalidChunkTypeError } from "./errors.js";
 
 /**
- * Workers の `R2Object` に対応する最小の構造です。
- *
- * wrangler への依存なしに実バインディングを受け取れるようにします。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectLike {
   /**
-   * オブジェクトのキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly key: string;
 }
 
 /**
- * Workers の `R2ObjectBody` に対応する最小の構造です。
- *
- * `get` が `null` ではなくボディ付きで返る点が S3 互換 API との差分です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectBodyLike extends R2ObjectLike {
   /**
    * オブジェクトの内容を `ArrayBuffer` として読み取ります。
+   *
+   * @returns 読み取ったバイト列です。
    */
   arrayBuffer(): Promise<ArrayBuffer>;
 }
 
 /**
- * `list` のオプションに対応する最小の構造です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ListOptions {
   /**
-   * 列挙するキーの接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly prefix?: string | undefined;
 
   /**
-   * 前ページの継続カーソルです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly cursor?: string | undefined;
 
   /**
-   * 1 ページあたりの最大件数です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly limit?: number | undefined;
 }
 
 /**
- * Workers の `R2Objects` に対応する最小の構造です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2ObjectsLike {
   /**
-   * 列挙されたオブジェクトの一覧です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly objects: readonly R2ObjectLike[];
 
   /**
-   * 続きのページが存在するかどうかです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly truncated: boolean;
 
   /**
-   * 続きのページを取得するためのカーソルです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   readonly cursor?: string | undefined;
 }
 
 /**
- * Workers の `R2Bucket` バインディングに対応する最小の構造です。
- *
- * wrangler への依存なしに実バインディングを受け取れるようにします。
- * 実バインディングはこの構造の部分型であるため、そのまま渡せます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export interface R2BucketLike {
   /**
    * オブジェクトを保存します。
+   *
+   * @param key 保存先のキーです。
+   * @param value 保存するバイト列です。
+   *
+   * @returns 保存したオブジェクトです。
    */
   put(key: string, value: Uint8Array<ArrayBuffer>): Promise<R2ObjectLike | null>;
 
   /**
    * オブジェクトをボディ付きで取得します。存在しない場合は `null` を返します。
+   *
+   * @param key 取得するキーです。
+   *
+   * @returns 取得したオブジェクトです。欠番時は null です。
    */
   get(key: string): Promise<R2ObjectBodyLike | null>;
 
   /**
    * オブジェクトの存在を確認します。存在しない場合は `null` を返します。
+   *
+   * @param key 確認するキーです。
+   *
+   * @returns 存在するオブジェクトです。欠番時は null です。
    */
   head(key: string): Promise<R2ObjectLike | null>;
 
   /**
    * オブジェクトを削除します。存在しないキーも成功扱いにします。
+   *
+   * @param keys 削除するキーです。
+   *
+   * @returns 削除が完了したら解決します。
    */
   delete(keys: string | readonly string[]): Promise<void>;
 
   /**
    * オブジェクトを列挙します。
+   *
+   * @param options 列挙に渡す任意項目です。
+   *
+   * @returns 列挙したページです。
    */
   list(options?: R2ListOptions): Promise<R2ObjectsLike>;
 }
 
 /**
- * `CloudflareR2` のオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export type CloudflareR2Options = {
   /**
-   * 使用する R2 バケットのバインディングです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2-bucket)
    */
   readonly bucket: R2BucketLike;
 
   /**
-   * すべてのキーに付与する接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2-key-prefix)
    */
   readonly keyPrefix?: string | undefined;
@@ -153,8 +139,6 @@ export type CloudflareR2Options = {
 const CLEAR_BATCH_SIZE = 1000;
 
 /**
- * Workers の R2 バインディングにバイト列を保存するストレージです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
  */
 export default class CloudflareR2 implements IStorage {
@@ -166,18 +150,25 @@ export default class CloudflareR2 implements IStorage {
   /**
    * 使用する R2 バケットのバインディングです。
    */
+  /**
+   * 使用する R2 バケットのバインディングです。
+   */
   readonly #bucket: R2BucketLike;
 
   /**
    * すべてのキーに付与する接頭辞です。
    */
+  /**
+   * すべてのキーに付与する接頭辞です。
+   */
   readonly #keyPrefix: string;
 
+  /**
+   * ストレージがオープン済みかどうかを保持します。
+   */
   #open: boolean;
 
   /**
-   * Cloudflare R2 ストレージを作成します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public constructor(options: CloudflareR2Options) {
@@ -190,8 +181,6 @@ export default class CloudflareR2 implements IStorage {
   }
 
   /**
-   * 使用する R2 バケットのバインディングです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public get bucket(): R2BucketLike {
@@ -199,28 +188,55 @@ export default class CloudflareR2 implements IStorage {
   }
 
   /**
-   * すべてのキーに付与する接頭辞です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#cloudflare-r2)
    */
   public get keyPrefix(): string {
     return this.#keyPrefix;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return this.#open;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 開済みフラグを立てるのみで接続は行いません。
+   *
+   * @param c オープンコンテキストです。
+   */
   public open(c: IStorage.OpenContext): void {
     throwIfAborted(c.signal);
     this.#open = true;
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 開済みフラグを降ろすのみで切断は行いません。
+   *
+   * @param c クローズコンテキストです。
+   */
   public close(c: IStorage.CloseContext): void {
     throwIfAborted(c.signal);
     this.#open = false;
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 指定したキーでオブジェクトを上書きします。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -228,6 +244,15 @@ export default class CloudflareR2 implements IStorage {
     await this.#bucket.put(this.#resolveKey(c.key), data.slice());
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーのオブジェクトを取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -243,6 +268,13 @@ export default class CloudflareR2 implements IStorage {
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -252,12 +284,30 @@ export default class CloudflareR2 implements IStorage {
     );
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     throwIfAborted(c.signal);
 
     await this.#bucket.delete(this.#resolveKey(c.key));
   }
 
+  /**
+   * 接頭辞に一致するオブジェクトをすべて削除します。
+   *
+   * `list` で列挙しながら削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -294,6 +344,15 @@ export default class CloudflareR2 implements IStorage {
     } while (cursor !== undefined);
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * チャンクを蓄積し、`close` 時に一括保存します。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     if (c.signal.aborted) {
       throw new StorageAbortedError({ key: c.key });
@@ -338,6 +397,15 @@ export default class CloudflareR2 implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * 取得した内容を単一チャンクとして送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームを解決します。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -365,7 +433,13 @@ export default class CloudflareR2 implements IStorage {
     });
   }
 
-  // 論理キーに接頭辞を付与して実キーを組み立てます。
+  /**
+   * 論理キーに接頭辞を付与して実キーを組み立てます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns R2 上の実キーです。
+   */
   #resolveKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }

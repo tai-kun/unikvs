@@ -15,6 +15,9 @@ export type NodeFsOptions = {};
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefs)
  */
 export default class NodeFs implements IStorage {
+  /**
+   * ストレージ名です。常に `NodeFs` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -38,10 +41,22 @@ export default class NodeFs implements IStorage {
     this.#con = false;
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns open 済みであれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#con;
   }
 
+  /**
+   * ルートディレクトリーを作成してストレージを開きます。
+   *
+   * @param _c 使用しないオープン用コンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     const root = resolve(this.#root);
     await fs.mkdir(root, { recursive: true });
@@ -50,6 +65,14 @@ export default class NodeFs implements IStorage {
     this.#con = true;
   }
 
+  /**
+   * 指定したキーに Uint8Array を保存します。一時ファイル経由で原子的に置き換えます。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     this.#getConnection();
 
@@ -73,6 +96,13 @@ export default class NodeFs implements IStorage {
     }
   }
 
+  /**
+   * 指定したキーのファイルを読み出します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容のバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     this.#getConnection();
 
@@ -84,6 +114,13 @@ export default class NodeFs implements IStorage {
     return data;
   }
 
+  /**
+   * 指定したキーのファイルがあるかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns ファイルがあれば true を返します。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     this.#getConnection();
 
@@ -100,6 +137,13 @@ export default class NodeFs implements IStorage {
     }
   }
 
+  /**
+   * 指定したキーのファイルを削除します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     this.#getConnection();
 
@@ -109,6 +153,13 @@ export default class NodeFs implements IStorage {
     await fs.unlink(file);
   }
 
+  /**
+   * ルートディレクトリーを作り直してすべてのファイルを削除します。
+   *
+   * @param _c 使用しないクリア用コンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.#getConnection();
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
@@ -119,6 +170,13 @@ export default class NodeFs implements IStorage {
     await fs.mkdir(this.#root, { recursive: true });
   }
 
+  /**
+   * 一時ファイルへ書き込み close 時に置き換えるストリームを作成します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     this.#getConnection();
 
@@ -224,6 +282,13 @@ export default class NodeFs implements IStorage {
     });
   }
 
+  /**
+   * ファイルを読み出すためのストリームを作成します。中断信号を読み取りに伝えます。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns ファイル内容を送出する読み取りストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     this.#getConnection();
 
@@ -238,8 +303,11 @@ export default class NodeFs implements IStorage {
     return readableStream as ReadableStream<Uint8Array<ArrayBuffer>>;
   }
 
-  // オープン済みかを確認します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * オープン済みかを確認します。未オープン時はエラーを投げます。
+   *
+   * @returns 値を返しません。未オープン時はエラーを投げます。
+   */
   #getConnection(): void {
     if (!this.#con) {
       throw new TypeError("NodeFs is not open. Call open() first.");
@@ -250,9 +318,20 @@ export default class NodeFs implements IStorage {
    * キーに対応する最終パスとアトミックな書き込み用の一時ファイルパスを解決します。
    *
    * 一時ファイルは最終パスと同じディレクトリーに作成します。rename が同じファイルシステム上で完結し、アトミックに行われることを保証するためです。
+   *
+   * @param key 解決するキーです。
+   *
+   * @returns 一時ファイルと最終パスの組み合わせです。
    */
   #resolvePath(key: string): {
+    /**
+     * 書き込み途中に使用する一時ファイルのパスです。
+     */
     tmp: string;
+
+    /**
+     * 最終的に公開するファイルのパスです。
+     */
     dest: string;
   } {
     const dest = join(this.#root, key);

@@ -11,58 +11,71 @@ import {
 } from "./errors.js";
 
 /**
- * Workers の `Cache` binding が満たすべき最小形状です。
- *
- * `workers-types` への依存を避けるため、`put` / `match` / `delete` のみを定義します。
- * 標準の `Cache` はこの形状を満たすため、そのまま渡せます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export interface CacheLike {
   /**
    * `request` に対応する `response` を保存します。
+   *
+   * @param request 保存先の要求です。
+   * @param response 保存する応答です。
+   *
+   * @returns 保存が完了したら解決します。
    */
   put(request: Request, response: Response): Promise<void>;
 
   /**
    * `request` に対応する応答を探します。存在しないときは `undefined` を返します。
+   *
+   * @param request 照合する要求です。
+   * @param options 照合に渡す任意項目です。
+   *
+   * @returns 一致する応答です。欠番時は undefined です。
    */
   match(request: Request, options?: unknown): Promise<Response | undefined>;
 
   /**
    * `request` に対応する項目を削除します。削除したかどうかを返します。
+   *
+   * @param request 削除する要求です。
+   * @param options 削除に渡す任意項目です。
+   *
+   * @returns 削除したかどうかです。
    */
   delete(request: Request, options?: unknown): Promise<boolean>;
 }
 
 /**
- * `CloudflareCache` のコンストラクターオプションです。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export type CloudflareCacheOptions = {
   /**
-   * 使用する `Cache` binding です。
-   *
-   * 未指定のときは `caches.default` を使います。どちらも存在しないときは構築時に拒否します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache-cache)
    */
   readonly cache?: CacheLike | undefined;
 
   /**
-   * キーを要求 URL に変換するときの起点 URL です。
-   *
-   * クエリー・フラグメントなしの絶対 URL を指定します。末尾の `/` は除去して正規化します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache-origin)
    */
   readonly origin?: string | undefined;
 };
 
+/**
+ * 既定の起点 URL です。
+ *
+ * `origin` 未指定時にキー要求の起点として使います。
+ */
 const DEFAULT_ORIGIN = "https://unikvs.cloudflare-cache";
 
-// `origin` を検証して末尾の `/` を除去した値を返します。
+/**
+ * 起点 URL を検証して正規化します。
+ *
+ * 末尾の `/` を除去した値を返します。
+ *
+ * @param origin 検証する起点 URL です。
+ *
+ * @returns 正規化した起点 URL です。
+ */
 function normalizeOrigin(origin: unknown): string {
   if (typeof origin !== "string") {
     throw new InvalidOriginError({ actual: origin });
@@ -97,7 +110,11 @@ function normalizeOrigin(origin: unknown): string {
   return normalized;
 }
 
-// 未指定の `cache` を `caches.default` から解決します。
+/**
+ * 未指定のキャッシュを `caches.default` から解決します。
+ *
+ * @returns 解決したキャッシュ binding です。
+ */
 function resolveDefaultCache(): CacheLike {
   const caches = (globalThis as { caches?: { default?: CacheLike } }).caches;
 
@@ -109,10 +126,6 @@ function resolveDefaultCache(): CacheLike {
 }
 
 /**
- * Workers Cache API binding にバイト列を保存するストレージです。
- *
- * キーを `${origin}/<符号化キー>` の `Request` URL に変換し、バイナリーボディを持つ `Response` として `put` / `match` / `delete` します。Cache API にキー列挙がないため `clear` は未対応です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
  */
 export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>> {
@@ -121,15 +134,19 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
    */
   public readonly name: string;
 
-  // 正規化済みの起点 URL です。末尾の `/` を除去しています。
+  /**
+   * 正規化済みの起点 URL です。
+   *
+   * 末尾の `/` を除去しています。
+   */
   readonly #origin: string;
 
-  // 使用する `Cache` binding です。
+  /**
+   * 使用する `Cache` binding です。
+   */
   readonly #cache: CacheLike;
 
   /**
-   * Workers Cache API binding にバイト列を保存するストレージです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-cache#cloudflare-cache)
    */
   public constructor(options: CloudflareCacheOptions = {}) {
@@ -140,7 +157,13 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     this.#origin = normalizeOrigin(origin);
   }
 
-  // バイト列を保存用の応答に包みます。
+  /**
+   * バイト列を保存用の応答に包みます。
+   *
+   * @param data 包むバイト列です。
+   *
+   * @returns 保存用の応答です。
+   */
   static #toResponse(data: Uint8Array<ArrayBuffer>): Response {
     return new Response(data, {
       status: 200,
@@ -148,18 +171,53 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     });
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * 常に真を返します。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * 接続を持たないため中断確認のみ行います。
+   *
+   * @param c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     throwIfAborted(c.signal);
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 要求 URL へ応答として保存します。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -176,6 +234,15 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     }
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 要求 URL に一致する応答を取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -192,6 +259,15 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     return new Uint8Array(buffer);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * 一致する応答の有無で判定します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     throwIfAborted(c.signal);
     using abortPromise = toAbortPromise(c.signal);
@@ -209,6 +285,15 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     return true;
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 要求 URL に一致する項目を削除します。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     throwIfAborted(c.signal);
 
@@ -225,10 +310,28 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     }
   }
 
+  /**
+   * 未対応のため常に例外を投げます。
+   *
+   * 列挙手段がないため `clear` には対応しません。
+   *
+   * @param _c クリアコンテキストです。
+   *
+   * @returns 常に例外を投げるため戻りません。
+   */
   public clear(_c: IStorage.ClearContext): never {
     throw new ClearNotSupportedError();
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * チャンクを蓄積し、`close` 時に一括保存します。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
@@ -279,6 +382,15 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * 一致する応答のボディをそのまま返します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームを解決します。
+   */
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
@@ -304,8 +416,15 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     return response.body as ReadableStream<Uint8Array<ArrayBuffer>>;
   }
 
-  // キーに対応する要求を組み立てます。
-  // 符号化に失敗した場合は `InvalidKeyError` を投げます。
+  /**
+   * キーに対応する要求を組み立てます。
+   *
+   * 符号化に失敗した場合は例外を投げます。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns キーに対応する要求です。
+   */
   #requestFor(key: string): Request {
     let segment: string;
 
@@ -321,8 +440,16 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     return new Request(`${this.#origin}/${segment}`);
   }
 
-  // `match` の失敗を `CacheOperationError` に包みます。
-  // 中断の打ち切りは呼び出し側で `toAbortPromise` と競争させるため、ここでは判定しません。
+  /**
+   * 一致する応答を探します。
+   *
+   * 失敗時は専用エラーに包んで投げます。
+   *
+   * @param c 読み取りや存在確認のコンテキストです。
+   * @param request 照合する要求です。
+   *
+   * @returns 一致する応答です。欠番時は undefined です。
+   */
   async #match(
     c: IStorage.ReadContext | IStorage.ExistsContext | IStorage.GetReadableContext,
     request: Request,

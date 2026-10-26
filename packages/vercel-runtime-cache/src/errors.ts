@@ -5,28 +5,20 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * チャンクの型が不正なときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * 対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-chunk-type)
    */
   readonly key: string;
 
   /**
-   * 受け取ったチャンクです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-chunk-type)
    */
   readonly chunk: unknown;
 
   /**
-   * 受け取ったチャンクの型名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-chunk-type)
    */
   readonly chunkType: string;
@@ -38,8 +30,6 @@ export type InvalidChunkTypeErrorMeta = {
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-chunk-type)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
@@ -74,14 +64,10 @@ setErrorMessage(
 );
 
 /**
- * 無効な `ttlSeconds` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-ttl-seconds)
  */
 export type InvalidTtlSecondsErrorMeta = {
   /**
-   * 受け取った `ttlSeconds` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-ttl-seconds)
    */
   readonly actual: unknown;
@@ -93,8 +79,6 @@ export type InvalidTtlSecondsErrorMeta = {
 export type InvalidTtlSecondsErrorArgs = ErrorOptions & InvalidTtlSecondsErrorMeta;
 
 /**
- * `ttlSeconds` が 0 より大きい有限数ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-ttl-seconds)
  */
 export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSecondsErrorMeta> {
@@ -125,14 +109,10 @@ setErrorMessage(
 );
 
 /**
- * 無効な `maxEntries` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-max-entries)
  */
 export type InvalidMaxEntriesErrorMeta = {
   /**
-   * 受け取った `maxEntries` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-max-entries)
    */
   readonly actual: unknown;
@@ -144,8 +124,6 @@ export type InvalidMaxEntriesErrorMeta = {
 export type InvalidMaxEntriesErrorArgs = ErrorOptions & InvalidMaxEntriesErrorMeta;
 
 /**
- * `maxEntries` が 0 以上の整数ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-max-entries)
  */
 export class InvalidMaxEntriesError extends InvalidUsageErrorBase<InvalidMaxEntriesErrorMeta> {
@@ -175,14 +153,10 @@ setErrorMessage(
 );
 
 /**
- * 無効な `namespace` が指定されたときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-namespace)
  */
 export type InvalidNamespaceErrorMeta = {
   /**
-   * 受け取った `namespace` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-namespace)
    */
   readonly actual: unknown;
@@ -194,8 +168,6 @@ export type InvalidNamespaceErrorMeta = {
 export type InvalidNamespaceErrorArgs = ErrorOptions & InvalidNamespaceErrorMeta;
 
 /**
- * `namespace` が文字列ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#error-invalid-namespace)
  */
 export class InvalidNamespaceError extends InvalidUsageErrorBase<InvalidNamespaceErrorMeta> {

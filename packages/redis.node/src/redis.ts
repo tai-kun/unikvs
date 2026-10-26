@@ -50,30 +50,74 @@ export type RedisStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"
   readonly closeTimeout?: number | undefined;
 };
 
+/**
+ * `SCAN` 1 回あたりにヒントとして渡すキー数です。
+ *
+ * 削除の往復回数と 1 回の `DEL` に渡す引数数を抑えるために使用します。
+ */
 const SCAN_COUNT = 1000;
+
+/**
+ * 接続確立の既定タイムアウト (ミリ秒) です。
+ */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
+
+/**
+ * 切断処理の既定タイムアウト (ミリ秒) です。
+ */
 const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 
-type Connection = { readonly client: Ioredis };
+/**
+ * ストレージの動作に必要な接続を保持する型定義です。
+ */
+type Connection = {
+  /**
+   * 操作に使うクライアントです。
+   */
+  readonly client: Ioredis;
+};
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
  */
 export default class Redis implements IStorage {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-node#redis)
+   */
   public readonly name: string;
 
+  /**
+   * Redis への接続を保持します。
+   *
+   * ストレージがオープンされるまで null です。
+   */
   #con: Connection | null;
 
+  /**
+   * 接続先の URL です。
+   *
+   * 未指定の場合はクライアントが環境変数 (`REDIS_URL`、`VALKEY_URL`) から解決します。
+   */
   readonly #url: string | undefined;
 
-  // `closeTimeout` は本パッケージ固有の拡張です。
-  // `this.#options` には含めず、別フィールドで保管します。
-  // `this.#options` は `new Ioredis` にそのまま spread できる透過バッグです。
+  /**
+   * `closeTimeout` は本パッケージ固有の拡張です。
+   *
+   * `this.#options` には含めず、別フィールドで保管します。
+   * `this.#options` は `new Ioredis` にそのまま spread できる透過バッグです。
+   */
   readonly #options: Omit<RedisStorageOptions, "keyPrefix" | "cluster" | "closeTimeout">;
 
-  // `ioredis` の `disconnectTimeout` (ソケット切断待機) とは別物です。
+  /**
+   * `close` 時の切断待ち時間 (ミリ秒) です。
+   *
+   * `ioredis` の `disconnectTimeout` (ソケット切断待機) とは別物です。
+   */
   readonly #closeTimeout: number;
 
+  /**
+   * すべてのキーの先頭に付与するプレフィックスです。
+   */
   readonly #keyPrefix: string;
 
   /**
@@ -107,10 +151,24 @@ export default class Redis implements IStorage {
     this.#keyPrefix = keyPrefix;
   }
 
+  /**
+   * ストレージがオープン済みかどうかです。
+   *
+   * @returns オープン済みなら真です。
+   */
   public get isOpen(): boolean {
     return this.#con !== null;
   }
 
+  /**
+   * ストレージをオープンします。
+   *
+   * `ioredis` クライアントを作成して接続します。
+   *
+   * @param _c オープンコンテキストです。
+   *
+   * @returns オープンが完了したら解決します。
+   */
   public async open(_c: IStorage.OpenContext): Promise<void> {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
@@ -174,6 +232,15 @@ export default class Redis implements IStorage {
     this.#con = { client: raw };
   }
 
+  /**
+   * ストレージをクローズします。
+   *
+   * `quit` で丁寧に閉じ、失敗時は `disconnect` で掃除します。
+   *
+   * @param _c クローズコンテキストです。
+   *
+   * @returns クローズが完了したら解決します。
+   */
   public async close(_c: IStorage.CloseContext): Promise<void> {
     // 未 `open`・二重 `close` は `TypeError` で reject されます。
     // 必ず `await` し、結果を浮かせないでください。
@@ -204,6 +271,16 @@ export default class Redis implements IStorage {
     }
   }
 
+  /**
+   * バイト列を書き込みます。
+   *
+   * 指定したキーで値を上書きします。
+   *
+   * @param c 書き込みコンテキストです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 書き込みが完了したら解決します。
+   */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -212,6 +289,15 @@ export default class Redis implements IStorage {
     await client.set(this.#toKey(c.key), Buffer.from(data));
   }
 
+  /**
+   * バイト列を読み取ります。
+   *
+   * 指定したキーの値を取得します。
+   *
+   * @param c 読み取りコンテキストです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -226,6 +312,13 @@ export default class Redis implements IStorage {
     return new Uint8Array(data);
   }
 
+  /**
+   * キーの存在を確認します。
+   *
+   * @param c 存在確認コンテキストです。
+   *
+   * @returns 存在すれば真です。
+   */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     const { client } = this.#getConnection();
 
@@ -234,6 +327,15 @@ export default class Redis implements IStorage {
     return (await client.exists(this.#toKey(c.key))) > 0;
   }
 
+  /**
+   * キーを削除します。
+   *
+   * 存在しないキーも成功扱いにします。
+   *
+   * @param c 削除コンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -242,6 +344,15 @@ export default class Redis implements IStorage {
     await client.del(this.#toKey(c.key));
   }
 
+  /**
+   * 接頭辞に一致するキーをすべて削除します。
+   *
+   * `SCAN` で列挙しながら削除します。
+   *
+   * @param c クリアコンテキストです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   public async clear(c: IStorage.ClearContext): Promise<void> {
     const { client } = this.#getConnection();
 
@@ -252,6 +363,15 @@ export default class Redis implements IStorage {
     await this.#clearPattern(client, pattern, c.signal);
   }
 
+  /**
+   * 書き込み用ストリームを取得します。
+   *
+   * 一時キーに追記し、`close` 時に最終キーへ置き換えます。
+   *
+   * @param c 書き込みストリーム取得コンテキストです。
+   *
+   * @returns 書き込み用ストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -326,6 +446,15 @@ export default class Redis implements IStorage {
     });
   }
 
+  /**
+   * 読み取り用ストリームを取得します。
+   *
+   * 取得した値を単一チャンクとして送出します。
+   *
+   * @param c 読み取りストリーム取得コンテキストです。
+   *
+   * @returns 読み取り用ストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
@@ -358,8 +487,13 @@ export default class Redis implements IStorage {
     });
   }
 
-  // 開いている接続を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている接続を返します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns オープン済みの接続です。
+   */
   #getConnection(): Connection {
     const con = this.#con;
 
@@ -370,10 +504,28 @@ export default class Redis implements IStorage {
     return con;
   }
 
+  /**
+   * unikvs のキーにプレフィックスを付与し、Redis のキーへ変換します。
+   *
+   * @param key 変換する論理キーです。
+   *
+   * @returns Redis 上の実キーです。
+   */
   #toKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
   }
 
+  /**
+   * 接頭辞に一致するキーを走査して削除します。
+   *
+   * `SCAN` で頁送りしながら `DEL` します。
+   *
+   * @param client 操作に使うクライアントです。
+   * @param pattern 削除対象の一致パターンです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
   async #clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
     let cursor = "0";
 

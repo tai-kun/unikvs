@@ -4,29 +4,21 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * Binding の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-binding)
  */
 export type InvalidBindingErrorMeta = {
   /**
-   * 受け取った `binding` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-binding)
    */
   readonly actual: unknown;
 };
 
 /**
- * Binding の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-binding)
  */
 export type InvalidBindingErrorArgs = ErrorOptions & InvalidBindingErrorMeta;
 
 /**
- * Binding の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-binding)
  */
 export class InvalidBindingError extends InvalidUsageErrorBase<InvalidBindingErrorMeta> {
@@ -35,8 +27,6 @@ export class InvalidBindingError extends InvalidUsageErrorBase<InvalidBindingErr
   }
 
   /**
-   * Binding の検証に失敗したときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-binding)
    */
   public constructor(args: InvalidBindingErrorArgs) {
@@ -58,29 +48,21 @@ setErrorMessage(
 );
 
 /**
- * `keyPrefix` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-key-prefix)
  */
 export type InvalidKeyPrefixErrorMeta = {
   /**
-   * 受け取った `keyPrefix` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-key-prefix)
    */
   readonly actual: unknown;
 };
 
 /**
- * `keyPrefix` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-key-prefix)
  */
 export type InvalidKeyPrefixErrorArgs = ErrorOptions & InvalidKeyPrefixErrorMeta;
 
 /**
- * `keyPrefix` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-key-prefix)
  */
 export class InvalidKeyPrefixError extends InvalidUsageErrorBase<InvalidKeyPrefixErrorMeta> {
@@ -89,8 +71,6 @@ export class InvalidKeyPrefixError extends InvalidUsageErrorBase<InvalidKeyPrefi
   }
 
   /**
-   * `keyPrefix` の検証に失敗したときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-key-prefix)
    */
   public constructor(args: InvalidKeyPrefixErrorArgs) {
@@ -113,29 +93,21 @@ setErrorMessage(
 );
 
 /**
- * `ttlSeconds` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-ttl-seconds)
  */
 export type InvalidTtlSecondsErrorMeta = {
   /**
-   * 受け取った `ttlSeconds` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-ttl-seconds)
    */
   readonly actual: unknown;
 };
 
 /**
- * `ttlSeconds` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-ttl-seconds)
  */
 export type InvalidTtlSecondsErrorArgs = ErrorOptions & InvalidTtlSecondsErrorMeta;
 
 /**
- * `ttlSeconds` の検証に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-ttl-seconds)
  */
 export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSecondsErrorMeta> {
@@ -144,8 +116,6 @@ export class InvalidTtlSecondsError extends InvalidUsageErrorBase<InvalidTtlSeco
   }
 
   /**
-   * `ttlSeconds` の検証に失敗したときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#error-invalid-ttl-seconds)
    */
   public constructor(args: InvalidTtlSecondsErrorArgs) {

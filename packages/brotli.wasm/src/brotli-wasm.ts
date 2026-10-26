@@ -11,10 +11,6 @@ import { BrotliWasmInitError, BrotliWasmInvalidLevelError } from "./errors.js";
  */
 export type BrotliWasmOptions = {
   /**
-   * 圧縮レベルです。0 から 11 までの整数を指定します。
-   * 値が大きいほど圧縮率は高くなりますが、処理時間も長くなります。
-   * 省略した場合は既定値である 11 を使用します。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#level)
    */
   readonly level?: number | undefined;
@@ -25,16 +21,10 @@ export type BrotliWasmOptions = {
 // テストでも非提供が契約として検証されています。
 
 /**
- * WASM 実装の brotli で圧縮・展開するミドルウェアです。
- *
- * `brotli-wasm` を動的 import し、圧縮・展開のたびに同期的な API を使います。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#usage)
  */
 export default class BrotliWasm implements IMiddleware {
   /**
-   * 実行環境の解決結果を保持するキャッシュです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/brotli-wasm#usage)
    */
   static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
@@ -45,12 +35,16 @@ export default class BrotliWasm implements IMiddleware {
   public readonly name: string = "BrotliWasm";
 
   /**
-   * 実行環境です。
+   * 解決済みの実行環境です。
+   *
+   * `open()` で解決されるまでは null です。
    */
   #env: IEnv | null;
 
   /**
    * 圧縮レベルです。
+   *
+   * 0 から 11 の整数を保持します。
    */
   readonly #level: number;
 
@@ -69,10 +63,22 @@ export default class BrotliWasm implements IMiddleware {
     this.#level = level;
   }
 
+  /**
+   * 開いているかどうかを表します。
+   *
+   * @returns 実行環境が設定済みなら true を返します。
+   */
   public get isOpen(): boolean {
     return this.#env !== null;
   }
 
+  /**
+   * brotli-wasm の実行環境を解決します。
+   *
+   * @param c オープン時のコンテキストです。
+   *
+   * @returns 初期化が完了したら解決するプロミスを返します。
+   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -93,6 +99,14 @@ export default class BrotliWasm implements IMiddleware {
     }
   }
 
+  /**
+   * バイト列を brotli で圧縮します。
+   *
+   * @param c エンコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -107,6 +121,14 @@ export default class BrotliWasm implements IMiddleware {
     await next();
   }
 
+  /**
+   * brotli で圧縮されたバイト列を展開します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -119,8 +141,13 @@ export default class BrotliWasm implements IMiddleware {
     await next();
   }
 
-  // 開いている実行環境を返します。
-  // 未オープン時は `TypeError` を投げます。
+  /**
+   * 開いている実行環境を返します。
+   *
+   * 未オープン時は `TypeError` を投げます。
+   *
+   * @returns 開いている実行環境を返します。
+   */
   #getEnv(): IEnv {
     const env = this.#env;
 

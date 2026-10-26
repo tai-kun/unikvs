@@ -24,6 +24,11 @@ export namespace IMiddleware {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/middleware#next)
    */
   export interface INext {
+    /**
+     * 次の処理を実行します。
+     *
+     * @returns 完了すると解決する値です。
+     */
     (): Promise<void>;
   }
 

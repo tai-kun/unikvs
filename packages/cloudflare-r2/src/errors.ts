@@ -8,43 +8,31 @@ export type { StorageAbortedErrorArgs, StorageAbortedErrorMeta } from "@unikvs/c
 export { StorageAbortedError } from "@unikvs/core";
 
 /**
- * チャンクの型が不正なときのメタ情報です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * 書き込み対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
    */
   readonly key: string;
 
   /**
-   * 受け取ったチャンクです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
    */
   readonly chunk: unknown;
 
   /**
-   * 受け取ったチャンクの型名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * チャンクの型が不正なときの引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
@@ -53,8 +41,6 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-r2#error-invalid-chunk-type)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {

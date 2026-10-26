@@ -41,12 +41,28 @@ function parseLine(line: string, controller: TransformStreamDefaultController<un
  * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
  */
 export default class Json implements IMiddleware {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/json#usage)
+   */
   public readonly name: string = "Json";
 
+  /**
+   * 常に利用可能であることを表します。
+   *
+   * @returns 常に true を返します。
+   */
   public get isOpen(): boolean {
     return true;
   }
 
+  /**
+   * 値を JSON 文字列のバイト列へ変換します。
+   *
+   * @param c エンコード対象の値を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -56,6 +72,14 @@ export default class Json implements IMiddleware {
     await next();
   }
 
+  /**
+   * JSON 文字列のバイト列を値へ戻します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -66,6 +90,14 @@ export default class Json implements IMiddleware {
     await next();
   }
 
+  /**
+   * 値のストリームを JSON Lines のバイト列ストリームへ変換します。
+   *
+   * @param c エンコード対象の値ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -82,6 +114,14 @@ export default class Json implements IMiddleware {
     await next();
   }
 
+  /**
+   * JSON Lines のバイト列ストリームを値のストリームへ戻します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,

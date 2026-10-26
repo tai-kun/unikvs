@@ -144,20 +144,39 @@ function drain(
 export default class V8Serde implements IMiddleware {
   /**
    * 実行環境の解決結果を保持するキャッシュです。
+   *
+   * 同じ実行環境を使い回すために利用します。
    */
   static readonly #cache: callAbortableFnOnce.CacheMap = new Map();
 
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/v8-serde#usage)
+   */
   public readonly name: string = "V8Serde";
 
   /**
    * 実行環境です。
+   *
+   * `open()` で解決されるまでは null です。
    */
   #env: IEnv | null = null;
 
+  /**
+   * 開いているかどうかを表します。
+   *
+   * @returns 実行環境が設定済みなら true を返します。
+   */
   public get isOpen(): boolean {
     return this.#env !== null;
   }
 
+  /**
+   * `node:v8` の実行環境を解決します。
+   *
+   * @param c オープン時のコンテキストです。
+   *
+   * @returns 初期化が完了したら解決するプロミスを返します。
+   */
   public async open(c: IMiddleware.OpenContext): Promise<void> {
     try {
       this.#env = await callAbortableFnOnce(
@@ -181,6 +200,14 @@ export default class V8Serde implements IMiddleware {
     }
   }
 
+  /**
+   * 値を `node:v8` のバイト列へ変換します。
+   *
+   * @param c エンコード対象の値を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async encode(
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -197,6 +224,14 @@ export default class V8Serde implements IMiddleware {
     await next();
   }
 
+  /**
+   * `node:v8` のバイト列を値へ戻します。
+   *
+   * @param c デコード対象のバイト列を持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換が完了したら解決するプロミスを返します。
+   */
   public async decode(
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
@@ -213,6 +248,14 @@ export default class V8Serde implements IMiddleware {
     await next();
   }
 
+  /**
+   * 値のストリームをフレーム化したバイト列ストリームへ変換します。
+   *
+   * @param c エンコード対象の値ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async encodeStream(
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
@@ -231,6 +274,14 @@ export default class V8Serde implements IMiddleware {
     await next();
   }
 
+  /**
+   * フレーム化したバイト列ストリームを値のストリームへ戻します。
+   *
+   * @param c デコード対象のバイト列ストリームを持つコンテキストです。
+   * @param next 次のミドルウェアへ処理を渡す関数です。
+   *
+   * @returns 変換の設定が完了したら解決するプロミスを返します。
+   */
   public async decodeStream(
     c: IMiddleware.DecodeStreamContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,

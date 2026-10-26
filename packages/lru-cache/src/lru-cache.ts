@@ -33,7 +33,13 @@ export type LruCacheOptions = {
 };
 
 /**
+ * 追い出し時のサイズ計算に使う既定の関数です。
+ *
  * 値が Uint8Array のときは byteLength を返し、それ以外は 1 を返します。
+ *
+ * @param value サイズを測る値です。
+ *
+ * @returns 値の大きさです。
  */
 function defaultSizeOf(value: any): number {
   if (value instanceof Uint8Array) {
@@ -47,6 +53,9 @@ function defaultSizeOf(value: any): number {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/lru-cache#usage)
  */
 export default class LruCache implements IStorage {
+  /**
+   * ストレージ名です。常に `LruCache` を返します。
+   */
   public readonly name: string;
 
   /**
@@ -141,10 +150,22 @@ export default class LruCache implements IStorage {
     return this.#totalBytes;
   }
 
+  /**
+   * ストレージが開いているかどうかを返します。
+   *
+   * @returns open 済みであれば true を返します。
+   */
   public get isOpen(): boolean {
     return this.#opened;
   }
 
+  /**
+   * ストレージを開き操作可能にします。二重に開いても何もしません。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -155,6 +176,13 @@ export default class LruCache implements IStorage {
     this.#opened = true;
   }
 
+  /**
+   * ストレージを閉じ保持データを破棄します。
+   *
+   * @param c 中断を知らせるシグナルを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
   public async close(c: IStorage.CloseContext): Promise<void> {
     c.signal.throwIfAborted();
 
@@ -164,6 +192,12 @@ export default class LruCache implements IStorage {
     this.#opened = false;
   }
 
+  /**
+   * 指定したキーに値を保存します。保存後に上限の超過分を追い出します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   * @param data 保存する値です。
+   */
   public write(c: IStorage.WriteContext, data: any): void {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -172,6 +206,13 @@ export default class LruCache implements IStorage {
     this.#commit(c.key, storedValue);
   }
 
+  /**
+   * 指定したキーの値を読み出します。読み出したキーを最も新しいものとして扱います。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns 複製した保存値です。
+   */
   public read(c: IStorage.ReadContext): any {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -188,6 +229,13 @@ export default class LruCache implements IStorage {
     return cloned;
   }
 
+  /**
+   * 指定したキーが存在するかどうかを返します。
+   *
+   * @param c 確認するキーを持つコンテキストです。
+   *
+   * @returns キーが存在すれば true を返します。
+   */
   public exists(c: IStorage.ExistsContext): boolean {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -197,6 +245,11 @@ export default class LruCache implements IStorage {
     return exists;
   }
 
+  /**
+   * 指定したキーを削除します。バイト数の記録も更新します。
+   *
+   * @param c 削除するキーを持つコンテキストです。
+   */
   public delete(c: IStorage.DeleteContext): void {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -208,12 +261,24 @@ export default class LruCache implements IStorage {
     this.#removeEntry(c.key);
   }
 
+  /**
+   * すべてのキーを削除しバイト数の記録を初期化します。
+   *
+   * @param _c 使用しないクリア用コンテキストです。
+   */
   public clear(_c: IStorage.ClearContext): void {
     this.#map.clear();
     this.#sizes.clear();
     this.#totalBytes = 0;
   }
 
+  /**
+   * Uint8Array を書き込むためのストリームを作成します。close 時に結合して保存します。
+   *
+   * @param c 書き込み対象のキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を受け付ける書き込みストリームです。
+   */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -249,6 +314,13 @@ export default class LruCache implements IStorage {
     return stream;
   }
 
+  /**
+   * 保存済みの値を単一チャンクとして送出するストリームを作成します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns Uint8Array を送出する読み取りストリームです。
+   */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
     this.#assertOpen();
@@ -280,6 +352,8 @@ export default class LruCache implements IStorage {
 
   /**
    * 未オープン状態での操作を TypeError で拒否します。
+   *
+   * @returns 値を返しません。未オープン時はエラーを投げます。
    */
   #assertOpen(): void {
     if (!this.#opened) {
@@ -291,6 +365,8 @@ export default class LruCache implements IStorage {
    * 指定したキーを最も新しいものとして登録し直します。
    *
    * @param key 登録し直すキーです。
+   *
+   * @returns 値を返しません。
    */
   #touch(key: string): void {
     const value = this.#map.get(key);
@@ -303,6 +379,8 @@ export default class LruCache implements IStorage {
    * 指定したキーを取り除き、バイト数の記録を更新します。
    *
    * @param key 取り除くキーです。
+   *
+   * @returns 値を返しません。
    */
   #removeEntry(key: string): void {
     const size = this.#sizes.get(key);
@@ -320,6 +398,8 @@ export default class LruCache implements IStorage {
    *
    * @param key 保存するキーです。
    * @param storedValue 複製済みの保存値です。
+   *
+   * @returns 値を返しません。
    */
   #commit(key: string, storedValue: any): void {
     this.#assertOpen();
@@ -356,6 +436,8 @@ export default class LruCache implements IStorage {
    * 上限を超えた分を先頭から追い出します。
    *
    * @param justWritten 今回書き込んだキーです。
+   *
+   * @returns 値を返しません。
    */
   #evictIfNeeded(justWritten: string): void {
     if (this.maxEntries !== undefined) {

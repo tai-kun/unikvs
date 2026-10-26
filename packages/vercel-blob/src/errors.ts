@@ -5,29 +5,21 @@ export type { KeyNotFoundErrorArgs, KeyNotFoundErrorMeta } from "@unikvs/core";
 export { KeyNotFoundError } from "@unikvs/core";
 
 /**
- * `token` オプションの値の形式です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-token)
  */
 export type InvalidTokenErrorMeta = {
   /**
-   * 受け取った `token` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-token)
    */
   readonly actual: unknown;
 };
 
 /**
- * `token` オプションの値の引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-token)
  */
 export type InvalidTokenErrorArgs = ErrorOptions & InvalidTokenErrorMeta;
 
 /**
- * `token` が空でない文字列ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-token)
  */
 export class InvalidTokenError extends InvalidUsageErrorBase<InvalidTokenErrorMeta> {
@@ -36,8 +28,6 @@ export class InvalidTokenError extends InvalidUsageErrorBase<InvalidTokenErrorMe
   }
 
   /**
-   * `token` が空でない文字列ではないときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-token)
    */
   public constructor(args: InvalidTokenErrorArgs) {
@@ -59,29 +49,21 @@ setErrorMessage(
 );
 
 /**
- * `access` オプションの値の形式です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-access)
  */
 export type InvalidAccessErrorMeta = {
   /**
-   * 受け取った `access` の値です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-access)
    */
   readonly actual: unknown;
 };
 
 /**
- * `access` オプションの値の引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-access)
  */
 export type InvalidAccessErrorArgs = ErrorOptions & InvalidAccessErrorMeta;
 
 /**
- * `access` が `"public"` でも `"private"` でもないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-access)
  */
 export class InvalidAccessError extends InvalidUsageErrorBase<InvalidAccessErrorMeta> {
@@ -90,8 +72,6 @@ export class InvalidAccessError extends InvalidUsageErrorBase<InvalidAccessError
   }
 
   /**
-   * `access` が `"public"` でも `"private"` でもないときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-access)
    */
   public constructor(args: InvalidAccessErrorArgs) {
@@ -114,36 +94,26 @@ setErrorMessage(
 );
 
 /**
- * Blob 操作の失敗内容です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
  */
 export type BlobOperationErrorMeta = {
   /**
-   * 失敗した操作の名前です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
    */
   readonly operation: "put" | "head" | "del" | "list";
 
   /**
-   * 操作対象のキーです。`clear` の `list` / `del` では存在しません。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
    */
   readonly key?: string | undefined;
 };
 
 /**
- * Blob 操作の失敗引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
  */
 export type BlobOperationErrorArgs = ErrorOptions & BlobOperationErrorMeta;
 
 /**
- * Vercel Blob クライアントの操作に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
  */
 export class BlobOperationError extends ErrorBase<BlobOperationErrorMeta> {
@@ -152,8 +122,6 @@ export class BlobOperationError extends ErrorBase<BlobOperationErrorMeta> {
   }
 
   /**
-   * Vercel Blob クライアントの操作に失敗したときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
    */
   public constructor(args: BlobOperationErrorArgs) {
@@ -183,36 +151,26 @@ setErrorMessage(
 );
 
 /**
- * ダウンロード要求の失敗内容です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
  */
 export type BlobNetworkErrorMeta = {
   /**
-   * 要求先の URL です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
    */
   readonly url: string;
 
   /**
-   * 操作対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
    */
   readonly key: string;
 };
 
 /**
- * ダウンロード要求の失敗引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
  */
 export type BlobNetworkErrorArgs = ErrorOptions & BlobNetworkErrorMeta;
 
 /**
- * Blob のダウンロード要求自体に失敗したときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
  */
 export class BlobNetworkError extends ErrorBase<BlobNetworkErrorMeta> {
@@ -221,8 +179,6 @@ export class BlobNetworkError extends ErrorBase<BlobNetworkErrorMeta> {
   }
 
   /**
-   * Blob のダウンロード要求自体に失敗したときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-network)
    */
   public constructor(args: BlobNetworkErrorArgs) {
@@ -238,50 +194,36 @@ export class BlobNetworkError extends ErrorBase<BlobNetworkErrorMeta> {
 setErrorMessage(BlobNetworkError, ({ url }) => `${url} のダウンロード要求に失敗しました`, "ja");
 
 /**
- * ダウンロード応答の失敗内容です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
  */
 export type BlobResponseErrorMeta = {
   /**
-   * 要求先の URL です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
    */
   readonly url: string;
 
   /**
-   * 操作対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
    */
   readonly key: string;
 
   /**
-   * 応答のステータスコードです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
    */
   readonly status: number;
 
   /**
-   * 応答のステータステキストです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
    */
   readonly statusText: string;
 };
 
 /**
- * ダウンロード応答の失敗引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
  */
 export type BlobResponseErrorArgs = ErrorOptions & BlobResponseErrorMeta;
 
 /**
- * Blob のダウンロード応答が失敗ステータスのときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
  */
 export class BlobResponseError extends ErrorBase<BlobResponseErrorMeta> {
@@ -290,8 +232,6 @@ export class BlobResponseError extends ErrorBase<BlobResponseErrorMeta> {
   }
 
   /**
-   * Blob のダウンロード応答が失敗ステータスのときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-response)
    */
   public constructor(args: BlobResponseErrorArgs) {
@@ -319,43 +259,31 @@ setErrorMessage(
 );
 
 /**
- * チャンクの形式です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorMeta = {
   /**
-   * 操作対象のキーです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
    */
   readonly key: string;
 
   /**
-   * 受け取ったチャンクです。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
    */
   readonly chunk: unknown;
 
   /**
-   * 受け取ったチャンクの型名です。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
    */
   readonly chunkType: string;
 };
 
 /**
- * チャンクの引数です。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
  */
 export type InvalidChunkTypeErrorArgs = ErrorOptions & Omit<InvalidChunkTypeErrorMeta, "chunkType">;
 
 /**
- * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
- *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
  */
 export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> {
@@ -364,8 +292,6 @@ export class InvalidChunkTypeError extends ErrorBase<InvalidChunkTypeErrorMeta> 
   }
 
   /**
-   * チャンクが `Uint8Array<ArrayBuffer>` ではないときに投げます。
-   *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-invalid-chunk-type)
    */
   public constructor(args: InvalidChunkTypeErrorArgs) {
