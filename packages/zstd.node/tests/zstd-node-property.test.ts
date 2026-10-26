@@ -69,5 +69,5 @@ describe("決定的ファズテスト", () => {
       const decoded = await decode(target, encoded);
       expect(bytesEqual(decoded, input)).toBe(true);
     });
-  });
+  }, 30_000);
 });

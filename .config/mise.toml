@@ -6,6 +6,7 @@ node = "24"
 pnpm = "11"
 bun = "1"
 redis = "8"
+rustfs = "1.0.1"
 
 [tasks.init]
 description = "テンプレートを初期化します"

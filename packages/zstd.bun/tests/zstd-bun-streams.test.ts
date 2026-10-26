@@ -282,7 +282,8 @@ describe("ストリーム API の提供", () => {
     const decoded = await pumpDecode(target, splitIntoChunks(encoded, 1024));
 
     // 検証：
-    expect(decoded).toStrictEqual(input);
+    // 1 MiB の toStrictEqual は数秒かかるため、高速な bytesEqual で比較する。
+    expect(bytesEqual(decoded, input)).toBe(true);
   }, 30_000);
 
   test("異なるレベルのストリーム出力は互いに展開できる", async ({ expect, signal }) => {
