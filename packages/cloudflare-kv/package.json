@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/cloudflare-kv",
-  "version": "0.0.1",
+  "version": "0.0.13",
   "description": "Storage plugin that stores byte arrays in Cloudflare KV via a Workers binding.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

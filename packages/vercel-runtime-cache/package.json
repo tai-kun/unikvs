@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/vercel-runtime-cache",
-  "version": "0.0.1",
+  "version": "0.0.13",
   "description": "Storage plugin that caches data in the Vercel runtime cache with an in-memory fallback.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/expiry",
-  "version": "0.0.1",
+  "version": "0.0.13",
   "description": "Transformer plugin that expires keys at an absolute point in time.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
