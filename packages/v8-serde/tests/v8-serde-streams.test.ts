@@ -1,5 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
+  bytesEqual,
   createNext,
   sourceFrom,
   concatBytes,
@@ -521,7 +522,10 @@ describe("チャンク境界", () => {
     // 検証：
     expect(decoded.writeError).toBeUndefined();
     expect(decoded.readError).toBeUndefined();
-    expect(decoded.outputChunks).toStrictEqual([input]);
+    expect(decoded.outputChunks).toHaveLength(1);
+    expect(decoded.outputChunks[0]).toBeInstanceOf(Uint8Array);
+    // 1 MiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(decoded.outputChunks[0] as Uint8Array, input)).toBe(true);
   });
 });
 

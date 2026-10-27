@@ -1,5 +1,6 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
+  bytesEqual,
   createNext,
   sourceFrom,
   concatBytes,
@@ -528,12 +529,14 @@ describe("複合値のラウンドトリップ", () => {
 
     // 実行：
     const encoded = await encode(target, input);
-    const output = await decode(target, encoded);
+    const output = (await decode(target, encoded)) as Uint8Array;
 
     // 検証：
     expect(encoded).toBeInstanceOf(Uint8Array);
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
-    expect(output).toStrictEqual(input);
+    expect(output).toBeInstanceOf(Uint8Array);
+    // 1 MiB のデータを toStrictEqual で比較すると遅いため bytesEqual を使います。
+    expect(bytesEqual(output, input)).toBe(true);
   });
 
   test("循環参照を往復すると循環が維持される", async ({ expect, signal }) => {
