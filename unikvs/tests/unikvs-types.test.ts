@@ -350,6 +350,27 @@ describe("UniKvs - 型: fork の互換検査", () => {
   });
 });
 
+describe("UniKvs - 型: build オプション", () => {
+  test("beforeAll と beforeStorage はミドルウェアの配列のみを受け付ける", ({ expect }) => {
+    // 準備：
+    const builder = new Builder().persist(new Memory());
+
+    // 実行と検証：
+    expect(
+      typeOf(() =>
+        builder.build({
+          beforeAll: [],
+          beforeStorage: [],
+        }),
+      ),
+    ).toBeUndefined();
+    // @ts-expect-error: 配列以外は受け付けません。
+    expect(typeOf(() => builder.build({ beforeAll: new StringToNumber() }))).toBeUndefined();
+    // @ts-expect-error: 配列以外は受け付けません。
+    expect(typeOf(() => builder.build({ beforeStorage: new StringToNumber() }))).toBeUndefined();
+  });
+});
+
 describe("UniKvs - 型: コンテキスト", () => {
   test("IPipelineContext はカスタム変数の型を解決する", () => {
     // 検証：

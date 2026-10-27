@@ -80,8 +80,10 @@ npm i unikvs
     分岐したパイプラインでストレージを追加します
     (任意)。分岐先での追加は親パイプラインに漏れません。
   </Step>
-  <Step title="`build()`">
-    `UniKvs` クライアントを作ります。ストレージがなければ `MissingStorageError` を投げます。
+  <Step title="`build(options?)`">
+    `UniKvs` クライアントを作ります。`options.beforeAll` で先頭、`options.beforeStorage`
+    で全ストレージの直前にミドルウェアを挿入できます。ストレージがなければ `MissingStorageError`
+    を投げます。
   </Step>
 </Steps>
 
@@ -111,6 +113,29 @@ const kvs = new unikvs.Builder({
   .persist(new Storage())
   .build();
 ```
+
+### 先頭のミドルウェア [#builder-before-all]
+
+`build()` の `beforeAll` にミドルウェアの配列を渡すと、構成済みのすべてのミドルウェアより前に挿入されます。メインのパイプラインと `fork()` したすべての分岐が対象です。利用側のデータに最も近い位置で共通の変換を適用したい場合に使えます。
+
+```ts
+const kvs = new unikvs.Builder()
+  .use(new Middleware())
+  .persist(storage)
+  .build({ beforeAll: [new Middleware()] });
+```
+
+配列の先頭ほど手前、末尾ほど後続のミドルウェアに近づくように挿入されます。
+
+### ストレージ直前のミドルウェア [#builder-before-storage]
+
+`build()` の `beforeStorage` にミドルウェアの配列を渡すと、構成済みのすべてのストレージの直前に挿入されます。メインのパイプラインと `fork()` したすべての分岐が対象です。複数のストレージへ共通の変換を最後に適用したい場合に使えます。
+
+```ts
+const kvs = new unikvs.Builder().persist(storage).build({ beforeStorage: [new Middleware()] });
+```
+
+配列の先頭ほど既存のパイプライン側、末尾ほどストレージ側に近づくように挿入されます。
 
 ### 構成の検証 [#builder-is-valid]
 

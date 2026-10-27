@@ -344,6 +344,105 @@ describe("Builder - fork", () => {
   });
 });
 
+describe("Builder - build 時のミドルウェア", () => {
+  test("beforeAll はメインとすべての分岐の先頭に挿入される", async ({ expect }) => {
+    // 準備：
+    await using storageMain = new FakeStorage("main");
+    await using storageA = new FakeStorage("A");
+    await using storageN = new FakeStorage("N");
+    await using before = new TagMiddleware("0");
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new TagMiddleware("1"))
+      .fork(
+        new Branch()
+          .use(new TagMiddleware("A"))
+          .persist(storageA)
+          .fork(new Branch().use(new TagMiddleware("N")).persist(storageN)),
+      )
+      .persist(storageMain)
+      .build({ beforeAll: [before] });
+    await kvs.open();
+
+    // 実行：
+    await kvs.set("foo", "x");
+
+    // 検証：
+    expect(storageMain.map.get("foo")).toBe("x01");
+    expect(storageA.map.get("foo")).toBe("x01A");
+    expect(storageN.map.get("foo")).toBe("x01AN");
+    await expect(kvs.get("foo")).resolves.toBe("x");
+  });
+
+  test("beforeStorage はメインとすべての分岐のストレージ直前に挿入される", async ({ expect }) => {
+    // 準備：
+    await using storageMain = new FakeStorage("main");
+    await using storageA = new FakeStorage("A");
+    await using storageN = new FakeStorage("N");
+    await using before = new TagMiddleware("Z");
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new TagMiddleware("1"))
+      .fork(
+        new Branch()
+          .use(new TagMiddleware("A"))
+          .persist(storageA)
+          .fork(new Branch().use(new TagMiddleware("N")).persist(storageN)),
+      )
+      .persist(storageMain)
+      .build({ beforeStorage: [before] });
+    await kvs.open();
+
+    // 実行：
+    await kvs.set("foo", "x");
+
+    // 検証：
+    expect(storageMain.map.get("foo")).toBe("x1Z");
+    expect(storageA.map.get("foo")).toBe("x1AZ");
+    expect(storageN.map.get("foo")).toBe("x1ANZ");
+    await expect(kvs.get("foo")).resolves.toBe("x");
+  });
+
+  test("beforeStorage は先頭から順に挿入される", async ({ expect }) => {
+    // 準備：
+    await using storage = new FakeStorage();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new TagMiddleware("1"))
+      .persist(storage)
+      .build({ beforeStorage: [new TagMiddleware("X"), new TagMiddleware("Y")] });
+    await kvs.open();
+
+    // 実行：
+    await kvs.set("foo", "a");
+
+    // 検証：
+    expect(storage.map.get("foo")).toBe("a1XY");
+    await expect(kvs.get("foo")).resolves.toBe("a");
+  });
+
+  test("build 時のミドルウェアは build ごとに適用されビルダーを変更しない", async ({ expect }) => {
+    // 準備：
+    await using storage = new FakeStorage();
+    const builder = new Builder<{ foo: PlainValue<string> }>().persist(storage);
+    await using withTag = builder.build({
+      beforeAll: [new TagMiddleware("A")],
+      beforeStorage: [new TagMiddleware("Z")],
+    });
+    await withTag.open();
+
+    // 実行：
+    await withTag.set("foo", "x");
+    expect(storage.map.get("foo")).toBe("xAZ");
+    await withTag.close();
+
+    await using plain = builder.build();
+    await plain.open();
+    await plain.set("foo", "y");
+
+    // 検証：
+    expect(storage.map.get("foo")).toBe("y");
+    await expect(plain.get("foo")).resolves.toBe("y");
+  });
+});
+
 describe("Builder - 状態の検証", () => {
   test("メインとすべての分岐にストレージがあるとき isValid は true を返す", ({ expect }) => {
     // 準備：

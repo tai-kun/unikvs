@@ -364,7 +364,16 @@ export interface IUniKvsBuilderFinalizer<
    */
   isValid(): boolean;
 
-  build(): UniKvs<TKeyValueMapping>;
+  /**
+   * `UniKvs` クライアントを作成します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
+   *
+   * @param options ビルドオプションです。
+   *
+   * @returns 作成したクライアントを返します。
+   */
+  build(options?: UniKvsBuildOptions): UniKvs<TKeyValueMapping>;
 }
 
 /**
@@ -376,6 +385,25 @@ export type UniKvsBuilderOptions = {
    */
   readonly vars?: VariablesInit | undefined;
   readonly schema?: UniKvsSchema | undefined;
+};
+
+/**
+ * `build()` のオプションです。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
+ */
+export type UniKvsBuildOptions = {
+  /**
+   * 既存のすべてのミドルウェアより前に挿入するミドルウェアの配列です。
+   * 先頭ほど手前、末尾ほど後続のミドルウェアに近づくように挿入されます。
+   */
+  readonly beforeAll?: readonly IMiddleware[] | undefined;
+
+  /**
+   * すべてのストレージの直前に挿入するミドルウェアの配列です。
+   * 先頭ほど既存のパイプライン側、末尾ほどストレージ側に近づくように挿入されます。
+   */
+  readonly beforeStorage?: readonly IMiddleware[] | undefined;
 };
 
 /**
@@ -721,17 +749,28 @@ export default class UniKvsBuilder<
     return this.#destinations.length > 0 && !this.#hasInvalidFork;
   }
 
-  public build(): UniKvs<TKeyValueMapping> {
+  public build(options: UniKvsBuildOptions = {}): UniKvs<TKeyValueMapping> {
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (this.#destinations.length === 0) {
       throw new MissingStorageError();
     }
 
+    const beforeAll = options.beforeAll?.map((mw) => UniKvsMiddleware.from(mw)) ?? [];
+    const beforeStorage = options.beforeStorage?.map((mw) => UniKvsMiddleware.from(mw)) ?? [];
+    // ビルダーを再利用できるよう、挿入は build ごとの複製に対して行います。
+    const destinations =
+      beforeAll.length === 0 && beforeStorage.length === 0
+        ? this.#destinations
+        : this.#destinations.map((dest) => ({
+            storage: dest.storage,
+            middlewares: [...beforeAll, ...dest.middlewares, ...beforeStorage],
+          }));
+
     return new UniKvs(
       [...this.#vars.entries()],
       // ビルダーを再利用できるよう、build のたびに trie をコンパイルします。コンパイル後の登録内容は変更しません。
       // 同じミドルウェアインスタンスに対するラッパーは共有します。
-      PipelineGraph.compile([...this.#destinations]),
+      PipelineGraph.compile(destinations),
       this.#valueSchemaResolver,
     );
   }

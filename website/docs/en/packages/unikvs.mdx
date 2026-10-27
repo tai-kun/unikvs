@@ -80,8 +80,10 @@ Configure in the following order.
     Add storage on a branched pipeline (optional). Additions on a branch do not leak to the parent
     pipeline.
   </Step>
-  <Step title="`build()`">
-    Create a `UniKvs` client. Throws `MissingStorageError` when no storage is registered.
+  <Step title="`build(options?)`">
+    Create a `UniKvs` client. Pass `options.beforeAll` to insert middleware at the beginning, or
+    `options.beforeStorage` to insert it immediately before every storage. Throws
+    `MissingStorageError` when no storage is registered.
   </Step>
 </Steps>
 
@@ -111,6 +113,29 @@ const kvs = new unikvs.Builder({
   .persist(new Storage())
   .build();
 ```
+
+### Middleware at the beginning [#builder-before-all]
+
+Pass an array of middleware to `beforeAll` in `build()` to insert it before every configured middleware. It applies to the main pipeline and every forked branch. Use it when you want to apply a common transformation at the position closest to the caller's data.
+
+```ts
+const kvs = new unikvs.Builder()
+  .use(new Middleware())
+  .persist(storage)
+  .build({ beforeAll: [new Middleware()] });
+```
+
+The first element is closest to the caller and the last element is closest to the following middleware.
+
+### Middleware immediately before storage [#builder-before-storage]
+
+Pass an array of middleware to `beforeStorage` in `build()` to insert it immediately before every configured storage. It applies to the main pipeline and every forked branch. Use it when you want to apply a common transformation to multiple storages at the final stage.
+
+```ts
+const kvs = new unikvs.Builder().persist(storage).build({ beforeStorage: [new Middleware()] });
+```
+
+The first element is closer to the existing pipeline and the last element is closer to the storage.
 
 ### Validating the configuration [#builder-is-valid]
 
