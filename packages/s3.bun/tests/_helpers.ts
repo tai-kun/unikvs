@@ -11,6 +11,37 @@ import { test as vitest, afterAll, beforeAll } from "vite-plus/test";
 
 import S3, { type S3StorageOptions } from "../src/s3.js";
 
+/**
+ * rustfs が S3 リクエストを受け付けられるようになるまで待機します。
+ *
+ * TCP ポートが開いただけではストレージや IAM の初期化が終わっていません。
+ * その状態で S3 リクエストを送ると 503 になることがあります。
+ * ヘルスチェックが成功するまで待ってからテストを開始します。
+ *
+ * @param port rustfs の待ち受けポートです。
+ */
+async function waitForRustfsReady(port: number): Promise<void> {
+  const url = `http://127.0.0.1:${port}/health/ready`;
+  const deadline = Date.now() + 15_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      await response.body?.cancel();
+
+      if (response.ok) {
+        return;
+      }
+    } catch {
+      // 起動直後は接続が拒否されるため、間隔を空けて再試行します。
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`rustfs の準備がタイムアウトしました: ${url}`);
+}
+
 let bucketId = 0;
 let server: ChildProcess | undefined;
 let volumeDir: string;
@@ -24,6 +55,7 @@ beforeAll(async () => {
   });
 
   await waitForPort(portNumber);
+  await waitForRustfsReady(portNumber);
 });
 afterAll(() => {
   if (server && !server.killed) {
