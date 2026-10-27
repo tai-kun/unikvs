@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/readonly",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Transformer plugin that rejects writes and allows reads.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

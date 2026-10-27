@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/zstd.wasm",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Transformer plugin that compresses and decompresses byte arrays with Zstandard.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

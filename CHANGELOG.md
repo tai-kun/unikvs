@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.0.14
+
+### 新機能
+
+- **unikvs:** build 時にストレージで終わっていないパイプラインを検出する ([fa7c793](https://github.com/tai-kun/unikvs/commit/fa7c793117881128ea8b1607fcc82acbfee90dcf))
+- **unikvs:** ビルダーに構成を検証する assertValid を追加 ([fba7dc3](https://github.com/tai-kun/unikvs/commit/fba7dc3c88ae279327115a6636953b1b7c1f2cfa))
+- **unikvs:** build 時にパイプライン両端へミドルウェアを挿入可能にする ([f7c7585](https://github.com/tai-kun/unikvs/commit/f7c758530ebff04958a78bc6a5cd5cbbd9a576e8))
+- **unikvs:** ビルダーに構成の検証メソッドを追加 ([b4f63e2](https://github.com/tai-kun/unikvs/commit/b4f63e2a031e38336c67153fbe364c778b4c419f))
+
+### バグ修正
+
+- **v8-serde:** 大きなデータの比較を高速化しタイムアウトを延長する ([610a892](https://github.com/tai-kun/unikvs/commit/610a89238ff49744d7e75cd31a52510ad31934bd))
+- **s3.bun:** rustfs の準備完了を待ってからテストを開始する ([6496180](https://github.com/tai-kun/unikvs/commit/64961801ac8bbb051558d502ebbb8a511a550a22))
+- **unikvs:** 不正な fork を fork 時に検出する ([184ce03](https://github.com/tai-kun/unikvs/commit/184ce03d693b3eb3b2e112c52bcb9647690bdb37))
+
+### リファクタリング
+
+- **unikvs:** _valibot のインポートを名前空間に統一 ([f6ebbc2](https://github.com/tai-kun/unikvs/commit/f6ebbc2e124cad3ebd03cdff717f0fbebad83bf0))
+
+### ドキュメント
+
+- 公開 ([69cfcbb](https://github.com/tai-kun/unikvs/commit/69cfcbb1618f890db94c1cbc9f2156251ec802c1))
+- 内部向けに日本語 JSDoc を整備し API Reference はリンク単体化 ([5bee480](https://github.com/tai-kun/unikvs/commit/5bee480947091437c6c466fcf303df5ee21b4c9d))
+
+### ビルド・CI
+
+- コンテナーの git で safe.directory を設定する ([dbe84e8](https://github.com/tai-kun/unikvs/commit/dbe84e80f6c90e31b5569aa476125344dcc83150))
+- ステップ名を修正 ([7563b17](https://github.com/tai-kun/unikvs/commit/7563b17ee8ab22b7e6aacd548853e7a6ec0230d1))
+- playwright をインストールしなくても良いようにする ([0a3552d](https://github.com/tai-kun/unikvs/commit/0a3552d5b0ce9ceff9bbaaf99f2717be5effc5a3))
+
+### その他
+
+- 整備 ([f535f89](https://github.com/tai-kun/unikvs/commit/f535f89f8ee82b5c5aef592f37276218dddae163))
+- 全パッケージの lint を通す ([f0fb88f](https://github.com/tai-kun/unikvs/commit/f0fb88fe6a5c9f78451199f2a84cfa99b68f5a51))
+
+**Full Changelog**: https://github.com/tai-kun/unikvs/compare/@unikvs/core@0.0.13...@unikvs/core@0.0.14
+
 ## v0.0.13
 
 ### 新機能

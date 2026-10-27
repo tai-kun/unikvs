@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/fs.node",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Storage plugin that stores byte arrays locally on Node.js.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

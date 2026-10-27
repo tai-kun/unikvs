@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/cache-storage",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Storage plugin that stores byte arrays in the Cache API.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/cookies",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Storage plugin that stores strings and bytes in HTTP cookies.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

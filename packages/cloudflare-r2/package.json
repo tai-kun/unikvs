@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/cloudflare-r2",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Storage plugin that stores byte arrays in Cloudflare R2 via the Workers binding.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

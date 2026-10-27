@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/brotli.bun",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "Transformer plugin that compresses and decompresses byte arrays with Brotli via Bun, falling back to node:zlib.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
