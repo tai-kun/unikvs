@@ -83,6 +83,11 @@ describe("ChecksumSha256", () => {
     expect(ChecksumSha256.CHECKSUM_VAR_NAME).toBe("@unikvs/checksum:sha256");
   });
 
+  test("CHECKSUM_ON_HASH_VAR_NAME が定義されている", ({ expect }) => {
+    // 検証：
+    expect(ChecksumSha256.CHECKSUM_ON_HASH_VAR_NAME).toBe("@unikvs/checksum:sha256:onHash");
+  });
+
   test("指定した名前が name プロパティに設定される", ({ expect }) => {
     // 準備：
     const checksum = new ChecksumSha256();
@@ -161,6 +166,128 @@ describe("ChecksumSha256", () => {
 
     // 実行と検証：
     await expect(encode(checksum, TEST_DATA)).rejects.toThrow(ChecksumRequiredError);
+  });
+});
+
+describe("onHash コールバック", () => {
+  const ON_HASH_VAR_NAME = ChecksumSha256.CHECKSUM_ON_HASH_VAR_NAME;
+  test("期待値なしでもハッシュを計算してコールバックへ渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+
+    // 実行：
+    const result = await encode(checksum, TEST_DATA, {
+      [ON_HASH_VAR_NAME]: (hash: string): void => {
+        hashes.push(hash);
+      },
+    });
+
+    // 検証：
+    expect(result).toStrictEqual(TEST_DATA);
+    expect(hashes).toStrictEqual([VALID_HASH]);
+  });
+  test("第二引数に実行時変数のスナップショットを渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    let snapshot: ReadonlyMap<string, unknown> | undefined;
+
+    // 実行：
+    await encode(checksum, TEST_DATA, {
+      [ON_HASH_VAR_NAME]: (_hash: string, variables: ReadonlyMap<string, unknown>): void => {
+        snapshot = variables;
+      },
+      region: "us-east-1",
+    });
+
+    // 検証：
+    expect(snapshot?.get("region")).toBe("us-east-1");
+    expect(snapshot?.has(ON_HASH_VAR_NAME)).toBe(true);
+    expect(snapshot?.has(ChecksumSha256.CHECKSUM_VAR_NAME)).toBe(false);
+  });
+  test("期待値と一致したときもコールバックへハッシュを渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+
+    // 実行：
+    await encode(checksum, TEST_DATA, {
+      [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH,
+      [ON_HASH_VAR_NAME]: (hash: string): void => {
+        hashes.push(hash);
+      },
+    });
+
+    // 検証：
+    expect(hashes).toStrictEqual([VALID_HASH]);
+  });
+  test("期待値と一致しないときはコールバックを呼ばず ChecksumMismatchError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+
+    // 実行と検証：
+    await expect(
+      encode(checksum, TEST_DATA, {
+        [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH,
+        [ON_HASH_VAR_NAME]: (hash: string): void => {
+          hashes.push(hash);
+        },
+      }),
+    ).rejects.toThrow(ChecksumMismatchError);
+    expect(hashes).toStrictEqual([]);
+  });
+  test("required が true で期待値がないときはコールバックを指定しても ChecksumRequiredError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha256({ required: true });
+
+    // 実行と検証：
+    await expect(
+      encode(checksum, TEST_DATA, {
+        [ON_HASH_VAR_NAME]: (): void => {},
+      }),
+    ).rejects.toThrow(ChecksumRequiredError);
+  });
+  test("非同期コールバックが拒否されると encode も失敗する", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const error = new Error("onHash failed");
+
+    // 実行と検証：
+    await expect(
+      encode(checksum, TEST_DATA, {
+        [ON_HASH_VAR_NAME]: async (): Promise<void> => {
+          await Promise.resolve();
+          throw error;
+        },
+      }),
+    ).rejects.toBe(error);
+  });
+  test("decode でもコールバックへハッシュを渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+    const c = createDecodeContext(TEST_DATA, "", {
+      values: {
+        [ON_HASH_VAR_NAME]: (hash: string): void => {
+          hashes.push(hash);
+        },
+      },
+    });
+
+    // 実行：
+    await checksum.decode(
+      c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+      createNext(),
+    );
+
+    // 検証：
+    expect(c.destination).toStrictEqual(TEST_DATA);
+    expect(hashes).toStrictEqual([VALID_HASH]);
   });
 });
 

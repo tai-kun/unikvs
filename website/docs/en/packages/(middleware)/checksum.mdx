@@ -67,6 +67,8 @@ await kvs.close();
 
 Abstract base class for the six variants. Never use it directly; use a concrete class.
 
+`CHECKSUM_ON_HASH_VAR_NAME` is the name of the callback var that receives the computed hash and a snapshot of the runtime variables. Its value is `CHECKSUM_VAR_NAME` followed by `:onHash`.
+
 ### `ChecksumMd5` [#checksum-md5]
 
 Middleware verifying with MD5. The checksum var is `"@unikvs/checksum:md5"`.
@@ -124,6 +126,39 @@ Interface holding a one-shot hash function and a `create` hasher factory.
   }}
 />
 
+### `ChecksumOnHash` [#checksum-on-hash]
+
+Callback that receives the computed hash and a snapshot of the runtime variables. Pass a function in the `"<CHECKSUM_VAR_NAME>:onHash"` var, separate from the checksum var. For SHA-256, that is `"@unikvs/checksum:sha256:onHash"`.
+
+The callback is called when hashing and verification succeed. If you specify only the callback without an expected checksum, the middleware still computes the hash and calls the callback. If `required` is `true` and no expected checksum is present, it throws `ChecksumRequiredError` and does not call the callback.
+
+The second argument is a snapshot of the runtime variables at call time ([`VariablesSnapshot`](/packages/core/pipeline-context#variables-snapshot)). The snapshot is a shallow copy; object values share the same references.
+
+The following example receives the SHA-256 hash and runtime variables during a write.
+
+```ts
+const hashes: string[] = [];
+
+await kvs.set("file", data, {
+  vars: {
+    region: "us-east-1",
+    "@unikvs/checksum:sha256:onHash": (
+      hash: string,
+      variables: ReadonlyMap<string, unknown>,
+    ): void => {
+      hashes.push(hash);
+      console.log(variables.get("region"));
+    },
+  },
+});
+```
+
+If the callback value is not a function, the middleware throws `ChecksumInvalidOnHashError`. Exceptions or rejections thrown by the callback propagate as operation failures.
+
+:::note[Call timing]
+The callback is called when hash computation completes. It does not guarantee that the storage write has completed. For streams, it is called when the stream ends.
+:::
+
 ## Data types [#data-types]
 
 | Method         | Input                     | Output                    |
@@ -134,10 +169,11 @@ Interface holding a one-shot hash function and a `create` hasher factory.
 | `decodeStream` | `Uint8Array<ArrayBuffer>` | `Uint8Array<ArrayBuffer>` |
 
 - `encode` and `decode` pass data through unchanged.
-- This middleware computes the hash (lowercase hex) and verifies it only when the matching checksum var holds a string.
+- This middleware computes the hash (lowercase hex) when the matching checksum var holds a string or when the `onHash` callback is specified.
 - It throws when the value does not match the expectation.
-- It throws when no checksum var exists and `required` is `true`.
-- `encodeStream` and `decodeStream` stream chunks downstream unchanged while updating the hash, verifying on completion.
+- It throws when no checksum var exists and `required` is `true`, even if the `onHash` callback is specified.
+- The `onHash` callback receives the computed hash (lowercase hex) and a snapshot of the runtime variables. If the callback returns a `Promise`, the middleware waits for it.
+- `encodeStream` and `decodeStream` stream chunks downstream unchanged while updating the hash, verifying on completion, and calling the `onHash` callback.
 
 ## Errors [#errors]
 
@@ -201,6 +237,28 @@ This is a usage error, so it extends `InvalidUsageErrorBase`. `meta.actual` keep
 #### How to fix
 
 This never happens when using the published concrete classes as-is. In a custom subclass, set `CHECKSUM_VAR_NAME` to a string.
+
+### `ChecksumInvalidOnHashError` [#error-checksum-invalid-on-hash]
+
+Thrown when the `"<CHECKSUM_VAR_NAME>:onHash"` value is not a function.
+
+<TypeTable
+  type={{
+    actual: {
+      type: "[#checksum-invalid-on-hash-actual] unknown",
+      required: true,
+      description: "The given callback value.",
+    },
+  }}
+/>
+
+#### Meaning
+
+This is a usage error, so it extends `InvalidUsageErrorBase`. `meta.actual` keeps the given value as-is.
+
+#### How to fix
+
+Set a function in the `onHash` var, or omit the var.
 
 ### `ChecksumInvalidRequiredError` [#error-checksum-invalid-required]
 

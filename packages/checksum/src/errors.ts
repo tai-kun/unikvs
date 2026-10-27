@@ -93,6 +93,49 @@ setErrorMessage(
 );
 
 /**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-on-hash)
+ */
+export type ChecksumInvalidOnHashErrorMeta = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-invalid-on-hash-actual)
+   */
+  readonly actual: unknown;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-on-hash)
+ */
+export type ChecksumInvalidOnHashErrorArgs = ErrorOptions & ChecksumInvalidOnHashErrorMeta;
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-on-hash)
+ */
+export class ChecksumInvalidOnHashError extends InvalidUsageErrorBase<ChecksumInvalidOnHashErrorMeta> {
+  static {
+    this.prototype.name = "UniKvsChecksumInvalidOnHashError";
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-invalid-on-hash)
+   */
+  public constructor(args: ChecksumInvalidOnHashErrorArgs) {
+    const { actual, ...options } = args;
+    const meta: ChecksumInvalidOnHashErrorMeta = { actual };
+    super(
+      meta,
+      ({ actual: actualValue }) => `Invalid checksum onHash callback: ${inspect(actualValue)}`,
+      options,
+    );
+  }
+}
+
+setErrorMessage(
+  ChecksumInvalidOnHashError,
+  ({ actual }) => `無効な checksum onHash コールバック: ${inspect(actual)}`,
+  "ja",
+);
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#error-checksum-required)
  */
 export class ChecksumRequiredError extends ErrorBase<undefined> {

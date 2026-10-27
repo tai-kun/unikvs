@@ -18,6 +18,7 @@ import {
   Checksum,
   ChecksumSha256,
   ChecksumMismatchError,
+  ChecksumRequiredError,
 } from "../src/index.js";
 
 const VAR_NAME = ChecksumSha256.CHECKSUM_VAR_NAME;
@@ -283,6 +284,100 @@ describe("不一致の検出", () => {
 
     // 検証：
     expect(pipeError).toBeInstanceOf(ChecksumMismatchError);
+  });
+});
+
+describe("onHash コールバック", () => {
+  const ON_HASH_VAR_NAME = ChecksumSha256.CHECKSUM_ON_HASH_VAR_NAME;
+  test("ストリームの終了時にハッシュをコールバックへ渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+    const chunks = [DATA.subarray(0, 10), DATA.subarray(10)];
+    let snapshot: ReadonlyMap<string, unknown> | undefined;
+
+    // 実行：
+    const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
+      [ON_HASH_VAR_NAME]: (hash: string, variables: ReadonlyMap<string, unknown>): void => {
+        hashes.push(hash);
+        snapshot = variables;
+      },
+      region: "stream",
+    });
+
+    // 検証：
+    expect(closeError).toBeUndefined();
+    expect(outputChunks).toStrictEqual(chunks);
+    expect(hashes).toStrictEqual([DIGEST]);
+    expect(snapshot?.get("region")).toBe("stream");
+  });
+  test("decodeStream の終了時にもハッシュをコールバックへ渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+
+    // 実行：
+    const { closeError } = await runDecodeStream(checksum, [DATA], {
+      [ON_HASH_VAR_NAME]: (hash: string): void => {
+        hashes.push(hash);
+      },
+    });
+
+    // 検証：
+    expect(closeError).toBeUndefined();
+    expect(hashes).toStrictEqual([DIGEST]);
+  });
+  test("期待値と一致しないときはコールバックを呼ばない", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const hashes: string[] = [];
+
+    // 実行：
+    const { closeError } = await runEncodeStream(checksum, [DATA], {
+      [VAR_NAME]: "0".repeat(DIGEST.length),
+      [ON_HASH_VAR_NAME]: (hash: string): void => {
+        hashes.push(hash);
+      },
+    });
+
+    // 検証：
+    expect(closeError).toBeInstanceOf(ChecksumMismatchError);
+    expect(hashes).toStrictEqual([]);
+  });
+  test("required が true で期待値がないときはコールバックを指定しても ChecksumRequiredError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const checksum = new ChecksumSha256({ required: true });
+    const c = createEncodeStreamContext(sourceFrom([DATA]), "", {
+      values: {
+        [ON_HASH_VAR_NAME]: (): void => {},
+      },
+    });
+
+    // 実行と検証：
+    await expect(
+      checksum.encodeStream(
+        c as IMiddleware.EncodeStreamContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+        createNext(),
+      ),
+    ).rejects.toThrow(ChecksumRequiredError);
+  });
+  test("非同期コールバックが拒否されるとストリームも失敗する", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const error = new Error("onHash failed");
+
+    // 実行：
+    const { closeError } = await runEncodeStream(checksum, [DATA], {
+      [ON_HASH_VAR_NAME]: async (): Promise<void> => {
+        await Promise.resolve();
+        throw error;
+      },
+    });
+
+    // 検証：
+    expect(closeError).toBe(error);
   });
 });
 

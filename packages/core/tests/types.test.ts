@@ -260,11 +260,14 @@ describe("IPipelineContext の宣言マージと形状", () => {
     expectTypeOf(getMerged).returns.toEqualTypeOf<[number, unknown]>();
   });
 
-  test("IPipelineContext は get/set/setReadonly を持つ", () => {
+  test("IPipelineContext は get/set/setReadonly/snapshot を持つ", () => {
     // 実行と検証：
     expectTypeOf<IPipelineContext>().toHaveProperty("get");
     expectTypeOf<IPipelineContext>().toHaveProperty("set");
     expectTypeOf<IPipelineContext>().toHaveProperty("setReadonly");
+    expectTypeOf<IPipelineContext["snapshot"]>().toEqualTypeOf<
+      () => ReadonlyMap<string, unknown>
+    >();
   });
 });
 

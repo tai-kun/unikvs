@@ -5,6 +5,7 @@ import Checksum from "../src/checksum.js";
 import {
   ChecksumMismatchError,
   ChecksumRequiredError,
+  ChecksumInvalidOnHashError,
   ChecksumInvalidVarNameError,
   ChecksumInvalidRequiredError,
 } from "../src/errors.js";
@@ -33,6 +34,7 @@ describe("index のエクスポート", () => {
     expect(index.ChecksumMismatchError).toBe(ChecksumMismatchError);
     expect(index.ChecksumRequiredError).toBe(ChecksumRequiredError);
     expect(index.ChecksumInvalidVarNameError).toBe(ChecksumInvalidVarNameError);
+    expect(index.ChecksumInvalidOnHashError).toBe(ChecksumInvalidOnHashError);
     expect(index.ChecksumInvalidRequiredError).toBe(ChecksumInvalidRequiredError);
   });
 });

@@ -1,9 +1,10 @@
-import type { IMiddleware, IPipelineContext } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext, VariablesSnapshot } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
   ChecksumMismatchError,
   ChecksumRequiredError,
+  ChecksumInvalidOnHashError,
   ChecksumInvalidVarNameError,
   ChecksumInvalidRequiredError,
 } from "./errors.js";
@@ -66,6 +67,13 @@ export interface IHash {
 }
 
 /**
+ * 計算したハッシュと実行時変数のスナップショットを受け取るコールバックです。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-on-hash)
+ */
+export type ChecksumOnHash = (hash: string, variables: VariablesSnapshot) => void | Promise<void>;
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
  */
 export type ChecksumOptions = {
@@ -111,6 +119,17 @@ export default abstract class Checksum implements IMiddleware {
     this.required = required;
   }
 
+  /**
+   * 計算したハッシュと実行時変数のスナップショットを受け取るコールバック変数の名前です。
+   *
+   * `CHECKSUM_VAR_NAME` に `:onHash` を付けた値になります。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-on-hash)
+   */
+  public static get CHECKSUM_ON_HASH_VAR_NAME(): string {
+    return `${this.CHECKSUM_VAR_NAME}:onHash`;
+  }
+
   public get isOpen(): boolean {
     return true;
   }
@@ -119,7 +138,7 @@ export default abstract class Checksum implements IMiddleware {
     c: IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = this.#checksum(c.source, c);
+    c.destination = await this.#checksum(c.source, c);
 
     await next();
   }
@@ -128,7 +147,7 @@ export default abstract class Checksum implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = this.#checksum(c.source, c);
+    c.destination = await this.#checksum(c.source, c);
 
     await next();
   }
@@ -159,7 +178,10 @@ export default abstract class Checksum implements IMiddleware {
    *
    * @returns 入力されたデータをそのまま返します。
    */
-  #checksum(data: Uint8Array<ArrayBuffer>, c: IPipelineContext): Uint8Array<ArrayBuffer> {
+  async #checksum(
+    data: Uint8Array<ArrayBuffer>,
+    c: IPipelineContext,
+  ): Promise<Uint8Array<ArrayBuffer>> {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
 
     if (typeof CHECKSUM_VAR_NAME !== "string") {
@@ -168,22 +190,50 @@ export default abstract class Checksum implements IMiddleware {
 
     const checksum = c.get(CHECKSUM_VAR_NAME);
 
-    if (typeof checksum === "string") {
-      // チェックサムの指定がある場合のみ検証ロジックを走らせます。
-      const hash = bytesToHex(this.#hash(data));
-
-      if (checksum !== hash) {
-        throw new ChecksumMismatchError({
-          actual: hash,
-          expected: checksum,
-        });
-      }
-    } else if (this.required) {
+    if (typeof checksum !== "string" && this.required) {
       throw new ChecksumRequiredError();
+    }
+
+    const onHash = this.#getOnHash(c);
+
+    if (typeof checksum !== "string" && !onHash) {
+      // 検証もコールバックも不要な場合は何もせずデータを透過させます。
+      return data;
+    }
+
+    const hash = bytesToHex(this.#hash(data));
+
+    if (typeof checksum === "string" && checksum !== hash) {
+      throw new ChecksumMismatchError({
+        actual: hash,
+        expected: checksum,
+      });
+    }
+
+    if (onHash) {
+      await onHash(hash, c.snapshot());
     }
 
     // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
     return data;
+  }
+
+  /**
+   * 計算結果を受け取るコールバックをコンテキストから取得します。
+   *
+   * @param c コールバック変数を保持するコンテキストです。
+   *
+   * @returns コールバックです。指定されていない場合は `undefined` を返します。
+   */
+  #getOnHash(c: IPipelineContext): ChecksumOnHash | undefined {
+    const { CHECKSUM_ON_HASH_VAR_NAME } = this.constructor as typeof Checksum;
+    const onHash = c.get(CHECKSUM_ON_HASH_VAR_NAME);
+
+    if (onHash !== undefined && typeof onHash !== "function") {
+      throw new ChecksumInvalidOnHashError({ actual: onHash });
+    }
+
+    return onHash as ChecksumOnHash | undefined;
   }
 
   /**
@@ -204,12 +254,14 @@ export default abstract class Checksum implements IMiddleware {
 
     const checksum = c.get(CHECKSUM_VAR_NAME);
 
-    if (typeof checksum !== "string") {
-      if (this.required) {
-        throw new ChecksumRequiredError();
-      }
+    if (typeof checksum !== "string" && this.required) {
+      throw new ChecksumRequiredError();
+    }
 
-      // チェックサムが指定されていない場合は、何も処理をしない透過ストリームを返します。
+    const onHash = this.#getOnHash(c);
+
+    if (typeof checksum !== "string" && !onHash) {
+      // 検証もコールバックも不要な場合は、何も処理をしない透過ストリームを返します。
       return new TransformStream();
     }
 
@@ -234,14 +286,18 @@ export default abstract class Checksum implements IMiddleware {
       /**
        * ストリームが終了する直前の処理です。
        */
-      flush() {
+      async flush() {
         const hash = bytesToHex(hasher.digest());
 
-        if (checksum !== hash) {
+        if (typeof checksum === "string" && checksum !== hash) {
           throw new ChecksumMismatchError({
             actual: hash,
             expected: checksum,
           });
+        }
+
+        if (onHash) {
+          await onHash(hash, c.snapshot());
         }
       },
     });

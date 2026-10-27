@@ -11,7 +11,7 @@ Plugin authors take keys and signals from the context passed as hook arguments, 
 
 ## Reading and writing variables [#variables]
 
-Use the three methods `get`, `set`, and `setReadonly`. The `set` family returns `this`, so calls can chain.
+Use the four methods `get`, `set`, `setReadonly`, and `snapshot`. The `set` family returns `this`, so calls can chain.
 
 ```ts
 import type { IPipelineContext } from "@unikvs/core";
@@ -22,6 +22,8 @@ const count: number = ctx.get("count"); // typed read
 const unknownValue: unknown = ctx.get("anything-else"); // undeclared keys are unknown
 
 ctx.set("count", 1).setReadonly("count", 2); // returns this, so calls chain
+
+const snapshot = ctx.snapshot(); // shallow copy of the current variables
 ```
 
 Declaring type arguments like `{ count: number }` types getting and setting that key. Undeclared keys are `unknown`, and assigning a wrong type is a type error.
@@ -191,8 +193,17 @@ Gateway for reading and writing runtime variables (`vars`). Every context extend
       required: true,
       description: "Sets a variable as readonly. Returns `this`.",
     },
+    snapshot: {
+      type: "[#ipipelinecontext-snapshot] snapshot(): VariablesSnapshot",
+      required: true,
+      description: "Creates a shallow copy of the current runtime variables.",
+    },
   }}
 />
+
+### `VariablesSnapshot` [#variables-snapshot]
+
+Shallow copy of the runtime variables returned by `snapshot()`. It can be used as `ReadonlyMap<string, unknown>`. Values are not cloned, so object values share the same reference.
 
 ### `IMapKeyContext` [#imapkeycontext]
 

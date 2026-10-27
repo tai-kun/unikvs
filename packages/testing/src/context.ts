@@ -2,6 +2,7 @@ import {
   type IGetContext,
   type IActionContext,
   type IPipelineContext,
+  type VariablesSnapshot,
   ReadonlyVariableError,
 } from "@unikvs/core";
 
@@ -171,6 +172,13 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
     this.readonlyKeys.add(name);
 
     return this;
+  }
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-snapshot)
+   */
+  public snapshot(): VariablesSnapshot {
+    return new Map(this.data);
   }
 }
 

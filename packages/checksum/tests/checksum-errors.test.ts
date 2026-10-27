@@ -17,6 +17,7 @@ import {
   ChecksumSha256,
   ChecksumMismatchError,
   ChecksumRequiredError,
+  ChecksumInvalidOnHashError,
   ChecksumInvalidVarNameError,
   ChecksumInvalidRequiredError,
 } from "../src/index.js";
@@ -239,6 +240,42 @@ describe("ChecksumInvalidVarNameError", () => {
 
     // 検証：
     expect(error.message).toBe("無効な変数キー: 42");
+  });
+});
+
+describe("ChecksumInvalidOnHashError", () => {
+  test("meta に actual を保持し、既定では英語メッセージを返す", ({ expect }) => {
+    // 実行：
+    const error = new ChecksumInvalidOnHashError({ actual: "not a function" });
+
+    // 検証：
+    expect(error).toBeInstanceOf(globalThis.Error);
+    expect(error.name).toBe("UniKvsChecksumInvalidOnHashError");
+    expect(error.meta).toStrictEqual({ actual: "not a function" });
+    expect(error.message).toBe("Invalid checksum onHash callback: 'not a function'");
+  });
+
+  test("言語設定が日本語なら日本語メッセージを返す", ({ expect, setLang }) => {
+    // 準備：
+    const error = new ChecksumInvalidOnHashError({ actual: 42 });
+
+    // 実行：
+    setLang("ja");
+
+    // 検証：
+    expect(error.message).toBe("無効な checksum onHash コールバック: 42");
+  });
+
+  test("onHash 変数が関数でない場合は encode で拒否する", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+
+    // 実行と検証：
+    await expect(
+      encode(checksum, DATA, {
+        [ChecksumSha256.CHECKSUM_ON_HASH_VAR_NAME]: "not a function",
+      }),
+    ).rejects.toThrow(ChecksumInvalidOnHashError);
   });
 });
 

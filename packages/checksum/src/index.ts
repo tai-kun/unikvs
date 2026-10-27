@@ -4,6 +4,8 @@ export { default as Checksum } from "./checksum.js";
 export type {
   ChecksumMismatchErrorArgs,
   ChecksumMismatchErrorMeta,
+  ChecksumInvalidOnHashErrorArgs,
+  ChecksumInvalidOnHashErrorMeta,
   ChecksumInvalidVarNameErrorArgs,
   ChecksumInvalidVarNameErrorMeta,
   ChecksumInvalidRequiredErrorArgs,
@@ -12,6 +14,7 @@ export type {
 export {
   ChecksumMismatchError,
   ChecksumRequiredError,
+  ChecksumInvalidOnHashError,
   ChecksumInvalidVarNameError,
   ChecksumInvalidRequiredError,
 } from "./errors.js";

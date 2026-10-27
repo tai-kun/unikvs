@@ -102,7 +102,7 @@ console.log(bytesEqual(concatBytes(chunks), bytes)); // true
 
 ## Test contexts [#context]
 
-[`TestContext`](#test-context) is a concrete test-only `IPipelineContext`. It holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, and `setReadonly`. Structurally assignable to each context type, it works as-is in storage/middleware unit tests. Pass initial values via [`TestContextInit`](#test-context-init). [`TestContextValues`](#test-context-values) is the `values` form (a `Record` or an iterable of entries).
+[`TestContext`](#test-context) is a concrete test-only `IPipelineContext`. It holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. Structurally assignable to each context type, it works as-is in storage/middleware unit tests. Pass initial values via [`TestContextInit`](#test-context-init). [`TestContextValues`](#test-context-values) is the `values` form (a `Record` or an iterable of entries).
 
 Per-operation factories:
 
@@ -344,7 +344,7 @@ Constructor arguments for [`TestContext`](#test-context):
 
 ### `TestContext` [#test-context]
 
-Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeline-context#contexts)): holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, and `setReadonly`. `repair` has the `TestContextRepair` shape, same as [`IGetContext`](/packages/core/pipeline-context#igetcontext) `repair`.
+Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeline-context#contexts)): holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. `repair` has the `TestContextRepair` shape, same as [`IGetContext`](/packages/core/pipeline-context#igetcontext) `repair`.
 
 <TypeTable
   type={{
@@ -393,6 +393,11 @@ Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeli
       required: true,
       description:
         "Sets a variable value as readonly. Returns `this`. Throws `ReadonlyVariableError` on readonly-pinned variables.",
+    },
+    snapshot: {
+      type: "[#test-context-snapshot] snapshot(): VariablesSnapshot",
+      required: true,
+      description: "Creates a shallow copy of the current runtime variables.",
     },
   }}
 />

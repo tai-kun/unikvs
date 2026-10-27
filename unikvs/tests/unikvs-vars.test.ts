@@ -136,6 +136,36 @@ describe("UniKvs - vars の伝播", () => {
     expect(storage.callsOf("write")[0]?.vars?.get("tag")).toBe("t4");
   });
 
+  test("middleware は操作中の変数スナップショットを取得できる", async ({ expect }) => {
+    // 準備：
+    const storage = new FakeStorage();
+    const middleware = new FakeMiddleware("snapshot");
+    let snapshot: ReadonlyMap<string, unknown> | undefined;
+    middleware.hook = (call): void => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- 対象の encode フックだけを観測するため。
+      if (call.method === "encode") {
+        snapshot = call.vars?.snapshot();
+        call.vars?.set("after", "value");
+      }
+    };
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>({
+      vars: { base: "base" },
+    })
+      .use(middleware)
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行：
+    await kvs.set("foo", "value", { vars: { op: "op" } });
+
+    // 検証：
+    expect(snapshot?.get("base")).toBe("base");
+    expect(snapshot?.get("op")).toBe("op");
+    expect(snapshot?.has("after")).toBe(false);
+  });
+
   test("open/close の vars 変異は並列プラグイン間で分離される", async ({ expect }) => {
     // 準備 : open をゲートで保留し、並列プラグイン間の分離を確認する。
     const a = new FakeStorage("a");

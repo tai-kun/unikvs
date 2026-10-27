@@ -47,6 +47,15 @@ type ParamValue<TTypes, TName extends string> = $NeverOr<
 >;
 
 /**
+ * 実行時変数のスナップショットです。
+ *
+ * 値は浅くコピーされます。
+ *
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#variables-snapshot)
+ */
+export type VariablesSnapshot = ReadonlyMap<string, unknown>;
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ipipelinecontext)
  */
 export interface IPipelineContext<TTypes = {}> {
@@ -67,6 +76,11 @@ export interface IPipelineContext<TTypes = {}> {
     name: TName,
     value: ParamValue<TTypes, TName>,
   ): this;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ipipelinecontext-snapshot)
+   */
+  snapshot(): VariablesSnapshot;
 }
 
 /**

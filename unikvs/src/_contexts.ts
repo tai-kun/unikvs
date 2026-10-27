@@ -15,6 +15,7 @@ import {
   type IPipelineContext,
   type ILifecycleContext,
   type ITransformContext,
+  type VariablesSnapshot,
   type IKeyedActionContext,
   type IDecodeStreamContext,
   type IEncodeStreamContext,
@@ -195,6 +196,15 @@ class PipelineContext implements IPipelineContext {
     this.#readonly.add(name);
 
     return this;
+  }
+
+  /**
+   * 現在の実行時変数の浅いコピーを作成します。
+   *
+   * @returns 実行時変数のスナップショットを返します。
+   */
+  public snapshot(): VariablesSnapshot {
+    return new Map(this.#data);
   }
 }
 

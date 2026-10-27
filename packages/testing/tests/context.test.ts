@@ -68,6 +68,31 @@ describe("TestContext の基本", () => {
     expect(c.get("c")).toBe(3);
   });
 
+  test("snapshot は現在の変数の浅いコピーを返す", ({ expect }) => {
+    // 準備：
+    const shared = { count: 1 };
+    const c = new TestContext({
+      values: {
+        a: 1,
+        shared,
+      },
+    });
+    c.set("b", 2);
+
+    // 実行：
+    const snapshot = c.snapshot();
+
+    c.set("c", 3);
+
+    // 検証：
+    expect([...snapshot]).toStrictEqual([
+      ["a", 1],
+      ["shared", shared],
+      ["b", 2],
+    ]);
+    expect(snapshot.get("shared")).toBe(shared);
+  });
+
   test("読み取り専用の変数への再設定は ReadonlyVariableError を投げる", ({ expect }) => {
     // 準備：
     const c = new TestContext();

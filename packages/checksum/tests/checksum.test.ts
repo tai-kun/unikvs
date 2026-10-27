@@ -199,6 +199,11 @@ describe("Checksum", () => {
       expect(checksum.isOpen).toBe(true);
     });
 
+    test("CHECKSUM_ON_HASH_VAR_NAME は CHECKSUM_VAR_NAME から導出される", ({ expect }) => {
+      // 実行と検証：
+      expect(TestChecksum.CHECKSUM_ON_HASH_VAR_NAME).toBe(`${VAR_NAME}:onHash`);
+    });
+
     test("required オプションの指定内容が required プロパティに反映される", ({ expect }) => {
       // 準備と実行：
       const { hash } = createHashMock();
