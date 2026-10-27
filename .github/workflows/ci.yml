@@ -128,11 +128,22 @@ jobs:
             directory: "packages/s3.bun"
           - name: "zstd.bun"
             directory: "packages/zstd.bun"
-    timeout-minutes: 15
+    timeout-minutes: 30
     runs-on: ubuntu-latest
+    container:
+      # pnpm-workspace.yaml の playwright と同じバージョンに合わせます。
+      # ブラウザーとシステム依存関係が導入済みのため、Playwright 用の apt 処理は不要です。
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+      options: --ipc=host --init
     steps:
       - name: "チェックアウト"
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: "CLI ツールをインストール"
+        run: |
+          # Playwright イメージには gh と jq が含まれていないため、CI 処理用に導入します。
+          apt-get update
+          apt-get install -y --no-install-recommends gh jq
 
       - name: "mise をセットアップ"
         uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
@@ -234,13 +245,6 @@ jobs:
             echo
           done
 
-      - name: "依存関係をインストール（パッケージ）"
-        run: |
-          if grep -q "playwright" package.json; then
-            npx playwright install --with-deps
-          fi
-        working-directory: ${{ matrix.package.directory }}
-
       - name: "テスト準備"
         run: |
           if [ -f ./scripts/pretest.sh ]; then
@@ -254,6 +258,9 @@ jobs:
 
       - name: "テスト"
         run: mise run test
+        env:
+          # Firefox は HOME が現在のユーザー所有でないと起動できません。
+          HOME: /root
         working-directory: ${{ matrix.package.directory }}
 
       - name: "カバレッジをアップロード"
