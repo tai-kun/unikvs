@@ -1,7 +1,7 @@
 import { Memory } from "@unikvs/memory";
 import { test, describe } from "vite-plus/test";
 
-import { InvalidForkError, MissingStorageError } from "../src/errors.js";
+import { InvalidForkError, MissingStorageError, UnterminatedPipelineError } from "../src/errors.js";
 import { Branch, Builder } from "../src/index.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
@@ -196,27 +196,16 @@ describe("Builder - ミドルウェアとストレージの捕捉", () => {
     expect(value).toBe("x");
   });
 
-  test("persist なし末尾 use は破棄され読み書きに影響しない", async ({ expect }) => {
+  test("persist なし末尾 use があると build で UnterminatedPipelineError を投げる", ({
+    expect,
+  }) => {
     // 準備：
-    await using storage = new FakeStorage();
-    await using trailing = new TagMiddleware("Z");
-    const kvs = new Builder<{ foo: PlainValue<string> }>().persist(storage).use(trailing).build();
-    await kvs.open();
+    const storage = new FakeStorage();
+    const trailing = new TagMiddleware("Z");
+    const builder = new Builder<{ foo: PlainValue<string> }>().persist(storage).use(trailing);
 
-    // 実行：
-    await kvs.set("foo", "x");
-
-    const value = await kvs.get("foo");
-
-    // 検証：
-    expect(storage.map.get("foo")).toBe("x");
-    expect(value).toBe("x");
-    expect(trailing.callsOf("encode")).toHaveLength(0);
-    expect(trailing.callsOf("open")).toHaveLength(0);
-
-    // 後片付け。
-    await kvs.close();
-    expect(trailing.callsOf("close")).toHaveLength(0);
+    // 実行と検証：
+    expect(() => builder.build()).toThrow(UnterminatedPipelineError);
   });
 });
 
@@ -466,6 +455,19 @@ describe("Builder - 状態の検証", () => {
   test("ストレージが 1 件もないとき isValid は false を返す", ({ expect }) => {
     // 準備：
     const builder = new Builder();
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(false);
+  });
+
+  test("末尾にストレージへ接続されていないミドルウェアがあるとき isValid は false を返す", ({
+    expect,
+  }) => {
+    // 準備：
+    const builder = new Builder().persist(new FakeStorage()).use(new TagMiddleware("Z"));
 
     // 実行：
     const isValid = builder.isValid();

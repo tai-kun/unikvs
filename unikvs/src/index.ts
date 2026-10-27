@@ -44,6 +44,7 @@ export {
   InvalidUsageErrorBase,
   StorageIsNotOpenError,
   MiddlewareIsNotOpenError,
+  UnterminatedPipelineError,
   MiddlewareNextNotCalledError,
   MiddlewareNextNotAwaitedError,
   PluginOperationAggregateError,

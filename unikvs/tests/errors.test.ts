@@ -11,6 +11,7 @@ import {
   InvalidUsageErrorBase,
   StorageIsNotOpenError,
   MiddlewareIsNotOpenError,
+  UnterminatedPipelineError,
   PluginOperationAggregateError,
   MultipartWriteNotSupportedError,
   ReadableStreamNotSupportedError,
@@ -288,5 +289,14 @@ describe("MissingStorageError", () => {
   test("エラーメッセージがストレージ不足を伝える", ({ expect }) => {
     // 実行と検証：
     expect(new MissingStorageError().message).toMatch(/At least one storage is required/u);
+  });
+});
+
+describe("UnterminatedPipelineError", () => {
+  test("エラーメッセージがストレージで終わっていないパイプラインを伝える", ({ expect }) => {
+    // 実行と検証：
+    expect(new UnterminatedPipelineError().message).toMatch(
+      /pipeline does not end with a storage/u,
+    );
   });
 });

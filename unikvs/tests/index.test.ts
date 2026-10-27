@@ -12,6 +12,7 @@ import {
   InvalidUsageErrorBase,
   StorageIsNotOpenError,
   MiddlewareIsNotOpenError,
+  UnterminatedPipelineError,
   PluginOperationAggregateError,
   ReadableStreamNotSupportedError,
   StreamDecodingNotSupportedError,
@@ -60,5 +61,6 @@ describe("index のエクスポート", () => {
     expect(index.PluginOperationAggregateError).toBe(PluginOperationAggregateError);
     expect(index.InvalidForkError).toBe(InvalidForkError);
     expect(index.MissingStorageError).toBe(MissingStorageError);
+    expect(index.UnterminatedPipelineError).toBe(UnterminatedPipelineError);
   });
 });

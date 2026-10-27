@@ -878,3 +878,22 @@ setErrorMessage(
   "UniKvs を使用するためには最低 1 つのストレージが必要です",
   "ja",
 );
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
+export class UnterminatedPipelineError extends ErrorBase<undefined> {
+  static {
+    this.prototype.name = "UniKvsUnterminatedPipelineError";
+  }
+
+  public constructor(options?: ErrorOptions) {
+    super("The pipeline does not end with a storage", options);
+  }
+}
+
+setErrorMessage(
+  UnterminatedPipelineError,
+  "パイプラインがストレージで終わっていません。use() の後に persist() または fork() を呼び出してください",
+  "ja",
+);

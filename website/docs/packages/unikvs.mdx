@@ -82,13 +82,14 @@ npm i unikvs
   </Step>
   <Step title="`build(options?)`">
     `UniKvs` クライアントを作ります。`options.beforeAll` で先頭、`options.beforeStorage`
-    で全ストレージの直前にミドルウェアを挿入できます。ストレージがなければ `MissingStorageError`
+    で全ストレージの直前にミドルウェアを挿入できます。ストレージがなければ
+    `MissingStorageError`、パイプラインがストレージで終わっていなければ `UnterminatedPipelineError`
     を投げます。
   </Step>
 </Steps>
 
 :::warning[ストレージ未登録に注意]
-`build()` の前に `persist()` を少なくとも 1 回呼んでください。
+`build()` の前に `persist()` を少なくとも 1 回呼んでください。`use()` を追加した場合は、その後に `persist()` または `fork()` を呼んでストレージへ接続してください。
 :::
 
 各ストレージは、`persist()` 呼び出し時点のパイプラインのスナップショットを使います。
@@ -139,7 +140,7 @@ const kvs = new unikvs.Builder().persist(storage).build({ beforeStorage: [new Mi
 
 ### 構成の検証 [#builder-is-valid]
 
-`isValid()` は、1 件以上のストレージが登録されているかどうかを返します。ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
+`isValid()` は、1 件以上のストレージが登録され、パイプラインがストレージで終わっているかどうかを返します。ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
 
 ```ts
 const withStorage = new unikvs.Builder().persist(mainStorage);
@@ -419,22 +420,23 @@ const bytes = await kvs.get("foo", { repair: true });
 
 ## エラー [#errors]
 
-| エラークラス                       | 説明                                             |
-| ---------------------------------- | ------------------------------------------------ |
-| `KeyNotFoundError`                 | キーがどのストレージにもありません。             |
-| `UniKvsIsNotOpenError`             | 未オープンで操作しました。                       |
-| `UniKvsIsOpenError`                | オープン済みで再度 `open()` しました。           |
-| `MissingStorageError`              | ストレージ未登録で `build()` しました。          |
-| `InvalidForkError`                 | ストレージに到達しない分岐を `fork()` しました。 |
-| `StorageIsNotOpenError`            | ストレージが未オープンです。                     |
-| `TransformerIsNotOpenError`        | ミドルウェアが未オープンです。                   |
-| `PluginOperationAggregateError`    | 複数プラグイン操作の集約エラーです。             |
-| `InvalidInputError`                | 入力形式が不正です。                             |
-| `InvalidOutputError`               | 出力形式が不正です。                             |
-| `ReadableStreamNotSupportedError`  | 読み取りストリーム未対応です。                   |
-| `WritableStreamNotSupportedError`  | 書き込みストリーム未対応です。                   |
-| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。               |
-| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。                 |
+| エラークラス                       | 説明                                                                |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `KeyNotFoundError`                 | キーがどのストレージにもありません。                                |
+| `UniKvsIsNotOpenError`             | 未オープンで操作しました。                                          |
+| `UniKvsIsOpenError`                | オープン済みで再度 `open()` しました。                              |
+| `MissingStorageError`              | ストレージ未登録で `build()` しました。                             |
+| `UnterminatedPipelineError`        | パイプラインがストレージで終わっていない状態で `build()` しました。 |
+| `InvalidForkError`                 | ストレージに到達しない分岐を `fork()` しました。                    |
+| `StorageIsNotOpenError`            | ストレージが未オープンです。                                        |
+| `TransformerIsNotOpenError`        | ミドルウェアが未オープンです。                                      |
+| `PluginOperationAggregateError`    | 複数プラグイン操作の集約エラーです。                                |
+| `InvalidInputError`                | 入力形式が不正です。                                                |
+| `InvalidOutputError`               | 出力形式が不正です。                                                |
+| `ReadableStreamNotSupportedError`  | 読み取りストリーム未対応です。                                      |
+| `WritableStreamNotSupportedError`  | 書き込みストリーム未対応です。                                      |
+| `EncodableStreamNotSupportedError` | エンコード用ストリーム未対応です。                                  |
+| `DecodableStreamNotSupportedError` | デコード用ストリーム未対応です。                                    |
 
 ```ts
 import * as unikvs from "unikvs";

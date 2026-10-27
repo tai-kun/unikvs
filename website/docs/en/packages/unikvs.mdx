@@ -83,12 +83,13 @@ Configure in the following order.
   <Step title="`build(options?)`">
     Create a `UniKvs` client. Pass `options.beforeAll` to insert middleware at the beginning, or
     `options.beforeStorage` to insert it immediately before every storage. Throws
-    `MissingStorageError` when no storage is registered.
+    `MissingStorageError` when no storage is registered, or `UnterminatedPipelineError` when the
+    pipeline does not end with a storage.
   </Step>
 </Steps>
 
 :::warning[Register storage first]
-Call `persist()` at least once before `build()`.
+Call `persist()` at least once before `build()`. If you add middleware with `use()`, connect it to a storage with `persist()` or `fork()` before calling `build()`.
 :::
 
 Each storage uses a snapshot of the pipeline taken when `persist()` was called.
@@ -139,7 +140,7 @@ The first element is closer to the existing pipeline and the last element is clo
 
 ### Validating the configuration [#builder-is-valid]
 
-`isValid()` reports whether at least one storage is registered. A branch that reaches no storage throws `InvalidForkError` at `fork()` time, so branch validity is guaranteed when the fork is added.
+`isValid()` reports whether at least one storage is registered and the pipeline ends with a storage. A branch that reaches no storage throws `InvalidForkError` at `fork()` time, so branch validity is guaranteed when the fork is added.
 
 ```ts
 const withStorage = new unikvs.Builder().persist(mainStorage);
@@ -419,22 +420,23 @@ const bytes = await kvs.get("foo", { repair: true });
 
 ## Errors [#errors]
 
-| Error class                        | Description                                            |
-| ---------------------------------- | ------------------------------------------------------ |
-| `KeyNotFoundError`                 | The key exists in no storage.                          |
-| `UniKvsIsNotOpenError`             | Operated before opening.                               |
-| `UniKvsIsOpenError`                | Called `open()` while already open.                    |
-| `MissingStorageError`              | Called `build()` with no storage registered.           |
-| `InvalidForkError`                 | Called `fork()` with a branch that reaches no storage. |
-| `StorageIsNotOpenError`            | Storage is not open.                                   |
-| `TransformerIsNotOpenError`        | Middleware is not open.                                |
-| `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.            |
-| `InvalidInputError`                | Malformed input.                                       |
-| `InvalidOutputError`               | Malformed output.                                      |
-| `ReadableStreamNotSupportedError`  | Read streaming is not supported.                       |
-| `WritableStreamNotSupportedError`  | Write streaming is not supported.                      |
-| `EncodableStreamNotSupportedError` | Encoding streams are not supported.                    |
-| `DecodableStreamNotSupportedError` | Decoding streams are not supported.                    |
+| Error class                        | Description                                                     |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `KeyNotFoundError`                 | The key exists in no storage.                                   |
+| `UniKvsIsNotOpenError`             | Operated before opening.                                        |
+| `UniKvsIsOpenError`                | Called `open()` while already open.                             |
+| `MissingStorageError`              | Called `build()` with no storage registered.                    |
+| `UnterminatedPipelineError`        | Called `build()` while the pipeline did not end with a storage. |
+| `InvalidForkError`                 | Called `fork()` with a branch that reaches no storage.          |
+| `StorageIsNotOpenError`            | Storage is not open.                                            |
+| `TransformerIsNotOpenError`        | Middleware is not open.                                         |
+| `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.                     |
+| `InvalidInputError`                | Malformed input.                                                |
+| `InvalidOutputError`               | Malformed output.                                               |
+| `ReadableStreamNotSupportedError`  | Read streaming is not supported.                                |
+| `WritableStreamNotSupportedError`  | Write streaming is not supported.                               |
+| `EncodableStreamNotSupportedError` | Encoding streams are not supported.                             |
+| `DecodableStreamNotSupportedError` | Decoding streams are not supported.                             |
 
 ```ts
 import * as unikvs from "unikvs";

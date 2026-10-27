@@ -28,7 +28,7 @@ import {
   VALUE_SCHEMA_BRAND,
   createValueSchemaResolver,
 } from "./_value-schemas.js";
-import { MissingStorageError } from "./errors.js";
+import { MissingStorageError, UnterminatedPipelineError } from "./errors.js";
 import type { IUniKvsBranch, KeyValueMapping } from "./unikvs-branch.js";
 import UniKvs from "./unikvs.js";
 import type { Value } from "./value-schemas.js";
@@ -201,7 +201,7 @@ export interface IUniKvsBuilder<
   /**
    * 現在の構成が有効かどうかを判定します。
    *
-   * 有効とは、1 件以上のストレージが登録されている状態です。
+   * 有効とは、1 件以上のストレージが登録され、パイプラインがストレージで終わっている状態です。
    * ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
@@ -360,7 +360,7 @@ export interface IUniKvsBuilderFinalizer<
   /**
    * 現在の構成が有効かどうかを判定します。
    *
-   * 有効とは、1 件以上のストレージが登録されている状態です。
+   * 有効とは、1 件以上のストレージが登録され、パイプラインがストレージで終わっている状態です。
    * ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
@@ -375,6 +375,9 @@ export interface IUniKvsBuilderFinalizer<
    * @param options ビルドオプションです。
    *
    * @returns 作成したクライアントを返します。
+   *
+   * @throws ストレージが 1 件もない場合に `MissingStorageError` を投げます。
+   * @throws パイプラインがストレージで終わっていない場合に `UnterminatedPipelineError` を投げます。
    */
   build(options?: UniKvsBuildOptions): UniKvs<TKeyValueMapping>;
 }
@@ -537,6 +540,12 @@ export default class UniKvsBuilder<
   readonly #middlewares: UniKvsMiddleware[];
 
   /**
+   * 最後の `persist()` または `fork()` 以降に追加されたミドルウェアがあるかどうかです。
+   * `build()` 時にストレージで終わっていないパイプラインを検出するために使用します。
+   */
+  #hasUnboundMiddlewares: boolean;
+
+  /**
    * キーに対応する値のスキーマ情報を解決するリゾルバーです。
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
@@ -555,6 +564,7 @@ export default class UniKvsBuilder<
 
     this.#destinations = [];
     this.#middlewares = [];
+    this.#hasUnboundMiddlewares = false;
     this.#valueSchemaResolver = null;
     this.#vars = new Map(vars);
     if (schema) {
@@ -626,6 +636,7 @@ export default class UniKvsBuilder<
   >;
   public fork(branch: IUniKvsBranch): IUniKvsBuilder {
     appendForkDestinations(this.#destinations, this.#middlewares, branch);
+    this.#hasUnboundMiddlewares = false;
 
     return this;
   }
@@ -659,6 +670,7 @@ export default class UniKvsBuilder<
   >;
   public use(middleware: IMiddleware): IUniKvsBuilder {
     this.#middlewares.push(UniKvsMiddleware.from(middleware));
+    this.#hasUnboundMiddlewares = true;
 
     return this;
   }
@@ -697,6 +709,7 @@ export default class UniKvsBuilder<
       // 登録時点のチェーンをスナップショットして保持するため、以降の use はこの登録に影響しません。
       middlewares: [...this.#middlewares],
     });
+    this.#hasUnboundMiddlewares = false;
 
     return this;
   }
@@ -744,13 +757,18 @@ export default class UniKvsBuilder<
   }
 
   public isValid(): boolean {
-    return this.#destinations.length > 0;
+    return this.#destinations.length > 0 && !this.#hasUnboundMiddlewares;
   }
 
   public build(options: UniKvsBuildOptions = {}): UniKvs<TKeyValueMapping> {
     // ストレージが空の場合は UniKvs として機能できないため、例外を投げます。
     if (this.#destinations.length === 0) {
       throw new MissingStorageError();
+    }
+
+    // 最後の persist()/fork() 以降に追加されたミドルウェアはどのストレージにも接続されないため、例外を投げます。
+    if (this.#hasUnboundMiddlewares) {
+      throw new UnterminatedPipelineError();
     }
 
     const beforeAll = options.beforeAll?.map((mw) => UniKvsMiddleware.from(mw)) ?? [];
