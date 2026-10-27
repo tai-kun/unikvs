@@ -5,7 +5,7 @@ import type {
   ClearOptionsSchema,
   CloseOptionsSchema,
 } from "./_unikvs.schemas.js";
-import type { InferInput } from "./_valibot.js";
+import type * as v from "./_valibot.js";
 import type { $InferPlainValueInput } from "./_value-schemas.js";
 import type { KeyValueMapping } from "./unikvs-branch.js";
 import type { Value, PlainValue, StreamValue } from "./value-schemas.js";
@@ -53,12 +53,12 @@ export type KeyofKeyValueMappingHasStreamValue<TKeyValueMapping extends KeyValue
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type OpenOptions = InferInput<typeof OpenOptionsSchema>;
+export type OpenOptions = v.InferInput<typeof OpenOptionsSchema>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type CloseOptions = InferInput<typeof CloseOptionsSchema>;
+export type CloseOptions = v.InferInput<typeof CloseOptionsSchema>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
@@ -191,4 +191,4 @@ export type DeleteOptions<TKey = string> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
-export type ClearOptions = InferInput<typeof ClearOptionsSchema>;
+export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;

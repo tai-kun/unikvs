@@ -9,34 +9,20 @@ import type {
 } from "valibot";
 
 import type { VariablesEntry } from "./_contexts.js";
-import {
-  omit,
-  pipe,
-  tuple,
-  union,
-  custom,
-  object,
-  record,
-  string,
-  boolean,
-  unknown,
-  instance,
-  optional,
-  transform,
-} from "./_valibot.js";
+import * as v from "./_valibot.js";
 
-export const VariablesKeySchema: StringSchema<undefined> = string();
+export const VariablesKeySchema: StringSchema<undefined> = v.string();
 
-export const VariablesInitSchema: GenericSchema<any, readonly VariablesEntry[]> = pipe(
-  union([
-    custom<Iterable<VariablesEntry>>(
+export const VariablesInitSchema: GenericSchema<any, readonly VariablesEntry[]> = v.pipe(
+  v.union([
+    v.custom<Iterable<VariablesEntry>>(
       // 各アイテムの検証は今後の課題です。
       (input) => typeof input === "object" && input !== null && Symbol.iterator in input,
       "Expected a Iterable object",
     ),
-    record(VariablesKeySchema, unknown()),
+    v.record(VariablesKeySchema, v.unknown()),
   ]),
-  transform(
+  v.transform(
     (input: Iterable<VariablesEntry> | Record<string, unknown>): readonly VariablesEntry[] => {
       if (Symbol.iterator in input) {
         return [...input];
@@ -47,7 +33,7 @@ export const VariablesInitSchema: GenericSchema<any, readonly VariablesEntry[]> 
   ),
 );
 
-export const VariablesArgsSchema: TupleSchema<[typeof VariablesInitSchema], undefined> = tuple([
+export const VariablesArgsSchema: TupleSchema<[typeof VariablesInitSchema], undefined> = v.tuple([
   VariablesInitSchema,
 ]);
 
@@ -57,22 +43,22 @@ export const OpenOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
+> = v.object({
   /**
    * 処理の中断を通知するためのシグナルです。
    */
-  signal: optional(instance(AbortSignal)),
+  signal: v.optional(v.instance(AbortSignal)),
 
   /**
    * 実行時の変数です。
    */
-  vars: optional(VariablesInitSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 export const OpenArgsSchema: TupleSchema<
   [OptionalSchema<typeof OpenOptionsSchema, undefined>],
   undefined
-> = tuple([optional(OpenOptionsSchema)]);
+> = v.tuple([v.optional(OpenOptionsSchema)]);
 
 export const CloseOptionsSchema: ObjectSchema<
   {
@@ -80,22 +66,22 @@ export const CloseOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
+> = v.object({
   /**
    * 処理の中断を通知するためのシグナルです。
    */
-  signal: optional(instance(AbortSignal)),
+  signal: v.optional(v.instance(AbortSignal)),
 
   /**
    * 実行時の変数です。
    */
-  vars: optional(VariablesInitSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 export const CloseArgsSchema: TupleSchema<
   [OptionalSchema<typeof CloseOptionsSchema, undefined>],
   undefined
-> = tuple([optional(CloseOptionsSchema)]);
+> = v.tuple([v.optional(CloseOptionsSchema)]);
 
 export const SetOptionsSchema: ObjectSchema<
   {
@@ -105,11 +91,11 @@ export const SetOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
-  key: string(),
-  vars: optional(VariablesInitSchema),
-  value: unknown(),
-  signal: optional(instance(AbortSignal)),
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  value: v.unknown(),
+  signal: v.optional(v.instance(AbortSignal)),
 });
 
 export const SetArgsSchema: GenericSchema<
@@ -130,15 +116,15 @@ export const SetArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = union([
-  tuple([SetOptionsSchema]),
-  pipe(
-    tuple([
+> = v.union([
+  v.tuple([SetOptionsSchema]),
+  v.pipe(
+    v.tuple([
       SetOptionsSchema.entries.key,
       SetOptionsSchema.entries.value,
-      optional(omit(SetOptionsSchema, ["key", "value"])),
+      v.optional(v.omit(SetOptionsSchema, ["key", "value"])),
     ]),
-    transform(
+    v.transform(
       ([key, value, options]: [
         string,
         unknown,
@@ -176,12 +162,12 @@ export const GetOptionsSchema: ObjectSchema<
     readonly throwOnRepairDenied: OptionalSchema<BooleanSchema<undefined>, undefined>;
   },
   undefined
-> = object({
-  key: string(),
-  vars: optional(VariablesInitSchema),
-  repair: optional(boolean()),
-  signal: optional(instance(AbortSignal)),
-  throwOnRepairDenied: optional(boolean()),
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  repair: v.optional(v.boolean()),
+  signal: v.optional(v.instance(AbortSignal)),
+  throwOnRepairDenied: v.optional(v.boolean()),
 });
 
 export const GetArgsSchema: GenericSchema<
@@ -204,11 +190,11 @@ export const GetArgsSchema: GenericSchema<
         readonly throwOnRepairDenied?: boolean | undefined;
       },
     ]
-> = union([
-  tuple([GetOptionsSchema]),
-  pipe(
-    tuple([GetOptionsSchema.entries.key, optional(omit(GetOptionsSchema, ["key"]))]),
-    transform(
+> = v.union([
+  v.tuple([GetOptionsSchema]),
+  v.pipe(
+    v.tuple([GetOptionsSchema.entries.key, v.optional(v.omit(GetOptionsSchema, ["key"]))]),
+    v.transform(
       ([key, options]: [
         string,
         (
@@ -247,12 +233,12 @@ export const StreamOptionsSchema: ObjectSchema<
     readonly throwOnRepairDenied: OptionalSchema<BooleanSchema<undefined>, undefined>;
   },
   undefined
-> = object({
-  key: string(),
-  vars: optional(VariablesInitSchema),
-  repair: optional(boolean()),
-  signal: optional(instance(AbortSignal)),
-  throwOnRepairDenied: optional(boolean()),
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  repair: v.optional(v.boolean()),
+  signal: v.optional(v.instance(AbortSignal)),
+  throwOnRepairDenied: v.optional(v.boolean()),
 });
 
 export const StreamArgsSchema: GenericSchema<
@@ -275,11 +261,11 @@ export const StreamArgsSchema: GenericSchema<
         readonly throwOnRepairDenied?: boolean | undefined;
       },
     ]
-> = union([
-  tuple([StreamOptionsSchema]),
-  pipe(
-    tuple([StreamOptionsSchema.entries.key, optional(omit(StreamOptionsSchema, ["key"]))]),
-    transform(
+> = v.union([
+  v.tuple([StreamOptionsSchema]),
+  v.pipe(
+    v.tuple([StreamOptionsSchema.entries.key, v.optional(v.omit(StreamOptionsSchema, ["key"]))]),
+    v.transform(
       ([key, options]: [
         string,
         (
@@ -316,10 +302,10 @@ export const HasOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
-  key: string(),
-  vars: optional(VariablesInitSchema),
-  signal: optional(instance(AbortSignal)),
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  signal: v.optional(v.instance(AbortSignal)),
 });
 
 export const HasArgsSchema: GenericSchema<
@@ -338,11 +324,11 @@ export const HasArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = union([
-  tuple([HasOptionsSchema]),
-  pipe(
-    tuple([HasOptionsSchema.entries.key, optional(omit(HasOptionsSchema, ["key"]))]),
-    transform(
+> = v.union([
+  v.tuple([HasOptionsSchema]),
+  v.pipe(
+    v.tuple([HasOptionsSchema.entries.key, v.optional(v.omit(HasOptionsSchema, ["key"]))]),
+    v.transform(
       ([key, options]: [
         string,
         (
@@ -375,10 +361,10 @@ export const DeleteOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
-  key: string(),
-  vars: optional(VariablesInitSchema),
-  signal: optional(instance(AbortSignal)),
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  signal: v.optional(v.instance(AbortSignal)),
 });
 
 export const DeleteArgsSchema: GenericSchema<
@@ -397,11 +383,11 @@ export const DeleteArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = union([
-  tuple([DeleteOptionsSchema]),
-  pipe(
-    tuple([DeleteOptionsSchema.entries.key, optional(omit(DeleteOptionsSchema, ["key"]))]),
-    transform(
+> = v.union([
+  v.tuple([DeleteOptionsSchema]),
+  v.pipe(
+    v.tuple([DeleteOptionsSchema.entries.key, v.optional(v.omit(DeleteOptionsSchema, ["key"]))]),
+    v.transform(
       ([key, options]: [
         string,
         (
@@ -433,19 +419,19 @@ export const ClearOptionsSchema: ObjectSchema<
     readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
   },
   undefined
-> = object({
+> = v.object({
   /**
    * 処理の中断を通知するためのシグナルです。
    */
-  signal: optional(instance(AbortSignal)),
+  signal: v.optional(v.instance(AbortSignal)),
 
   /**
    * 実行時の変数です。
    */
-  vars: optional(VariablesInitSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
 export const ClearArgsSchema: TupleSchema<
   [OptionalSchema<typeof ClearOptionsSchema, undefined>],
   undefined
-> = tuple([optional(ClearOptionsSchema)]);
+> = v.tuple([v.optional(ClearOptionsSchema)]);

@@ -4,7 +4,7 @@ import { callFnOnce } from "call-fn-once";
 
 import { PluginLifecycle } from "./_plugin-lifecycle.js";
 import { ReadableStreamSchema, WritableStreamSchema } from "./_streams.schemas.js";
-import { parseOutput } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import {
   type PluginOperationAggregateError,
   StorageIsNotOpenError,
@@ -175,7 +175,7 @@ export default class UniKvsStorage {
 
     const output = await this.#io.getReadable(c);
 
-    return parseOutput(ReadableStreamSchema, output);
+    return v.parseOutput(ReadableStreamSchema, output);
   }
 
   /**
@@ -196,7 +196,7 @@ export default class UniKvsStorage {
 
     const output = await this.#io.getWritable(c);
 
-    return parseOutput(WritableStreamSchema, output);
+    return v.parseOutput(WritableStreamSchema, output);
   }
 
   /**

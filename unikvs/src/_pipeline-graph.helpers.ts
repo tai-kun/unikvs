@@ -16,7 +16,7 @@ import type {
   IActiveLeafChecker,
 } from "./_pipeline-graph.types.js";
 import { ReadableStreamSchema } from "./_streams.schemas.js";
-import { parseOutput } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import { MiddlewareDestinationFrozenError, MiddlewareDestinationMissingError } from "./errors.js";
 
 /**
@@ -130,7 +130,7 @@ export function requireStreamDestination(
 ): IReadableStream {
   const destination = requireDestination(middleware, ctx, operation);
 
-  return parseOutput(ReadableStreamSchema, destination);
+  return v.parseOutput(ReadableStreamSchema, destination);
 }
 
 /**

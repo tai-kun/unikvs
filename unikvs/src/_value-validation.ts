@@ -1,13 +1,13 @@
 import { isReadableStream } from "./_streams.js";
-import { pipe, check, unknown, parseInput } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import type { ValueSchemaInfo } from "./_value-schemas.js";
 
 /**
  * プレーン値専用のスキーマに ReadableStream が渡されたことを報告するためのスキーマです。
  */
-const PlainValueInputSchema = pipe(
-  unknown(),
-  check(
+const PlainValueInputSchema = v.pipe(
+  v.unknown(),
+  v.check(
     (input) => !isReadableStream(input),
     "Expected a plain value, but received a ReadableStream",
   ),
@@ -16,9 +16,9 @@ const PlainValueInputSchema = pipe(
 /**
  * ストリーム専用のスキーマにプレーン値が渡されたことを報告するためのスキーマです。
  */
-const StreamValueInputSchema = pipe(
-  unknown(),
-  check(isReadableStream, "Expected a ReadableStream, but received a plain value"),
+const StreamValueInputSchema = v.pipe(
+  v.unknown(),
+  v.check(isReadableStream, "Expected a ReadableStream, but received a plain value"),
 );
 
 /**
@@ -35,14 +35,14 @@ export function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
   if (isReadableStream(value)) {
     if (info.kind === "plain") {
       // 必ず検証に失敗するため、InvalidInputError が投げられます。
-      parseInput(PlainValueInputSchema, value);
+      v.parseInput(PlainValueInputSchema, value);
     }
 
     // 入力チャンクを検証し、変換後の値を後続のパイプラインへ流します。
     return value.pipeThrough(
       new TransformStream({
         transform(chunk, controller) {
-          controller.enqueue(parseInput(info.schema, chunk));
+          controller.enqueue(v.parseInput(info.schema, chunk));
         },
       }),
     );
@@ -50,8 +50,8 @@ export function parseSetValue(info: ValueSchemaInfo, value: unknown): unknown {
 
   if (info.kind === "stream") {
     // 必ず検証に失敗するため、InvalidInputError が投げられます。
-    parseInput(StreamValueInputSchema, value);
+    v.parseInput(StreamValueInputSchema, value);
   }
 
-  return parseInput(info.schema, value);
+  return v.parseInput(info.schema, value);
 }

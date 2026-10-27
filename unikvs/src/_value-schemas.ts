@@ -1,5 +1,4 @@
-import type { GenericSchema } from "./_valibot.js";
-import { union, safeParse } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import { InvalidInputError } from "./errors.js";
 import type { PlainValue, StreamValue } from "./value-schemas.js";
 
@@ -71,7 +70,7 @@ export type ValueSchemaInfo = {
   /**
    * データの検証に使用するスキーマです。
    */
-  readonly schema: GenericSchema;
+  readonly schema: v.GenericSchema;
 };
 
 // -------------------------------------------------------------------------------------------------。
@@ -88,7 +87,7 @@ type UniKvsSchemaInfoRecord = Readonly<Record<string, ValueSchemaInfo>>;
 /**
  * 検証済みの配列形式のスキーマ定義です。
  */
-type UniKvsSchemaInfoEntries = readonly (readonly [GenericSchema, ValueSchemaInfo])[];
+type UniKvsSchemaInfoEntries = readonly (readonly [v.GenericSchema, ValueSchemaInfo])[];
 
 /**
  * 検証済みのスキーマ定義です。
@@ -140,12 +139,12 @@ class RecordValueSchemaResolver implements IValueSchemaResolver {
 class EntriesValueSchemaResolver implements IValueSchemaResolver {
   readonly #entries: UniKvsSchemaInfoEntries;
 
-  readonly #keySchema: GenericSchema | undefined;
+  readonly #keySchema: v.GenericSchema | undefined;
 
   public constructor(entries: UniKvsSchemaInfoEntries) {
     this.#entries = entries;
     if (entries.length > 0) {
-      this.#keySchema = union(entries.map(([keySchema]) => keySchema));
+      this.#keySchema = v.union(entries.map(([keySchema]) => keySchema));
     }
   }
 
@@ -153,7 +152,7 @@ class EntriesValueSchemaResolver implements IValueSchemaResolver {
     let resolved: ValueSchemaInfo | undefined;
 
     for (const [keySchema, valueSchema] of this.#entries) {
-      const result = safeParse(keySchema, key);
+      const result = v.safeParse(keySchema, key);
 
       if (result.success) {
         resolved = valueSchema;
@@ -162,7 +161,7 @@ class EntriesValueSchemaResolver implements IValueSchemaResolver {
     }
 
     if (resolved === undefined && this.#keySchema) {
-      const result = safeParse(this.#keySchema, key);
+      const result = v.safeParse(this.#keySchema, key);
 
       if (!result.success) {
         throw new InvalidInputError({

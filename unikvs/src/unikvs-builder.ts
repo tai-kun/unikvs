@@ -19,18 +19,7 @@ import type {
 } from "./_types.js";
 import { appendForkDestinations } from "./_unikvs-branch.js";
 import { VariablesArgsSchema, VariablesInitSchema } from "./_unikvs.schemas.js";
-import type { GenericSchema } from "./_valibot.js";
-import {
-  array,
-  tuple,
-  union,
-  custom,
-  object,
-  record,
-  string,
-  optional,
-  parseInput,
-} from "./_valibot.js";
+import * as v from "./_valibot.js";
 import {
   type ValueSchemaInfo,
   type $InferPlainValueData,
@@ -414,7 +403,7 @@ export type UniKvsSchemaRecord = Readonly<Record<string, Value>>;
 /**
  * 配列形式のスキーマ定義です。キーのスキーマと値のスキーマの組を並べます。
  */
-export type UniKvsSchemaEntries = readonly (readonly [GenericSchema, Value])[];
+export type UniKvsSchemaEntries = readonly (readonly [v.GenericSchema, Value])[];
 
 /**
  * `new Builder()` の `schema` オプションに指定できるスキーマ定義です。
@@ -427,7 +416,7 @@ export type UniKvsSchema = UniKvsSchemaRecord | UniKvsSchemaEntries;
  * @template TSchema 対象となるスキーマ定義の型です。
  */
 export type $InferKeyValueMapping<TSchema extends UniKvsSchema> =
-  TSchema extends readonly (readonly [GenericSchema, infer TValue extends Value])[]
+  TSchema extends readonly (readonly [v.GenericSchema, infer TValue extends Value])[]
     ? Readonly<Record<string, TValue>>
     : TSchema extends Readonly<Record<string, Value>>
       ? { readonly [TKey in keyof TSchema]: TSchema[TKey] }
@@ -436,7 +425,7 @@ export type $InferKeyValueMapping<TSchema extends UniKvsSchema> =
 /**
  * 値が Valibot のスキーマであるかどうかを判定します。
  */
-function isGenericSchema(input: unknown): input is GenericSchema {
+function isGenericSchema(input: unknown): input is v.GenericSchema {
   return (
     typeof input === "object" &&
     input !== null &&
@@ -458,26 +447,29 @@ function isValueSchemaInfo(input: unknown): input is ValueSchemaInfo {
   );
 }
 
-const UniKvsBuilderOptionsSchema = object({
+const UniKvsBuilderOptionsSchema = v.object({
   /**
    * キーと値のスキーマ定義です。
    */
-  schema: optional(
-    union([
-      array(
-        tuple([custom<GenericSchema>(isGenericSchema), custom<ValueSchemaInfo>(isValueSchemaInfo)]),
+  schema: v.optional(
+    v.union([
+      v.array(
+        v.tuple([
+          v.custom<v.GenericSchema>(isGenericSchema),
+          v.custom<ValueSchemaInfo>(isValueSchemaInfo),
+        ]),
       ),
-      record(string(), custom<ValueSchemaInfo>(isValueSchemaInfo)),
+      v.record(v.string(), v.custom<ValueSchemaInfo>(isValueSchemaInfo)),
     ]),
   ),
 
   /**
    * 基本となる実行時変数です。
    */
-  vars: optional(VariablesInitSchema),
+  vars: v.optional(VariablesInitSchema),
 });
 
-const UniKvsBuilderArgsSchema = tuple([optional(UniKvsBuilderOptionsSchema)]);
+const UniKvsBuilderArgsSchema = v.tuple([v.optional(UniKvsBuilderOptionsSchema)]);
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder)
@@ -549,7 +541,7 @@ export default class UniKvsBuilder<
 
   public constructor(options?: Omit<UniKvsBuilderOptions, "schema"> & { readonly schema?: TInit });
   public constructor(...args: unknown[]) {
-    const [options = {}] = parseInput(UniKvsBuilderArgsSchema, args);
+    const [options = {}] = v.parseInput(UniKvsBuilderArgsSchema, args);
     const { vars, schema } = options;
 
     this.#destinations = [];
@@ -705,7 +697,7 @@ export default class UniKvsBuilder<
 
   public setVars(vars: VariablesInit): this;
   public setVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     this.#vars.clear();
     for (const [name, value] of vars) {
@@ -717,7 +709,7 @@ export default class UniKvsBuilder<
 
   public assignVars(vars: VariablesInit): this;
   public assignVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const target = this.#vars;
     const source = vars;
@@ -731,7 +723,7 @@ export default class UniKvsBuilder<
 
   public defaultsVars(vars: VariablesInit): this;
   public defaultsVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const target = new Map(vars);
     const source = this.#vars;

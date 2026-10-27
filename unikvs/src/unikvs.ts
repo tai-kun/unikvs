@@ -33,7 +33,7 @@ import {
   StreamArgsSchema,
   VariablesArgsSchema,
 } from "./_unikvs.schemas.js";
-import { parseInput, parseOutput } from "./_valibot.js";
+import * as v from "./_valibot.js";
 import type {
   ValueSchemaInfo,
   $InferPlainValueData,
@@ -182,7 +182,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   public setVars(vars: VariablesInit): this;
   public setVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
     this.#baseVars = vars;
 
     return this;
@@ -193,7 +193,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   public assignVars(vars: VariablesInit): this;
   public assignVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const map = new Map(this.#baseVars);
 
@@ -211,7 +211,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    */
   public defaultsVars(vars: VariablesInit): this;
   public defaultsVars(...args: unknown[]): this {
-    const [vars] = parseInput(VariablesArgsSchema, args);
+    const [vars] = v.parseInput(VariablesArgsSchema, args);
 
     const map = new Map(vars);
 
@@ -234,7 +234,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsOpenError();
     }
 
-    const [options = {}] = parseInput(OpenArgsSchema, args);
+    const [options = {}] = v.parseInput(OpenArgsSchema, args);
     const { vars: varsOption, signal: signalOption } = options;
 
     const ac = new AbortController();
@@ -379,7 +379,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   public close(options?: CloseOptions): Promise<void>;
   public close(...args: any): Promise<void> {
     try {
-      const [options = {}] = parseInput(CloseArgsSchema, args);
+      const [options = {}] = v.parseInput(CloseArgsSchema, args);
       const { vars: varsOption, signal = AbortSignal.timeout(10e3) } = options;
 
       const operationVars = this.#createOperationVars(varsOption);
@@ -471,7 +471,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parseInput(SetArgsSchema, args);
+    const [options] = v.parseInput(SetArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
 
     const valueSchema = this.#resolveValueSchema(key);
@@ -538,7 +538,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parseInput(GetArgsSchema, args);
+    const [options] = v.parseInput(GetArgsSchema, args);
     const {
       key,
       vars: varsOption,
@@ -673,7 +673,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     // デコード後のデータを検証します。
     if (valueSchema) {
-      data = parseOutput(valueSchema.schema, data);
+      data = v.parseOutput(valueSchema.schema, data);
     }
 
     return data;
@@ -691,7 +691,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parseInput(StreamArgsSchema, args);
+    const [options] = v.parseInput(StreamArgsSchema, args);
     const {
       key,
       vars: varsOption,
@@ -958,7 +958,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           r = r.pipeThrough(
             new TransformStream({
               transform(chunk, controller): void {
-                controller.enqueue(parseOutput(valueSchema.schema, chunk));
+                controller.enqueue(v.parseOutput(valueSchema.schema, chunk));
               },
             }),
           );
@@ -1060,7 +1060,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parseInput(HasArgsSchema, args);
+    const [options] = v.parseInput(HasArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
 
     // キーがキースキーマに一致するかを検証します。
@@ -1147,7 +1147,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options] = parseInput(DeleteArgsSchema, args);
+    const [options] = v.parseInput(DeleteArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
 
     // キーがキースキーマに一致するかを検証します。
@@ -1228,7 +1228,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       throw new UniKvsIsNotOpenError();
     }
 
-    const [options = {}] = parseInput(ClearArgsSchema, args);
+    const [options = {}] = v.parseInput(ClearArgsSchema, args);
     const { vars: varsOption, signal: signalOption } = options;
 
     const { ac, io } = this.#con;
@@ -1291,8 +1291,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     const map = new Map(this.#baseVars);
 
     if (vars) {
-      for (const [k, v] of vars) {
-        map.set(k, v);
+      for (const [k, value] of vars) {
+        map.set(k, value);
       }
     }
 
