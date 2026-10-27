@@ -343,3 +343,76 @@ describe("Builder - fork", () => {
     expect(storage.callsOf("write")).toHaveLength(1);
   });
 });
+
+describe("Builder - 状態の検証", () => {
+  test("メインとすべての分岐にストレージがあるとき isValid は true を返す", ({ expect }) => {
+    // 準備：
+    const builder = new Builder()
+      .persist(new FakeStorage())
+      .fork(new Branch().persist(new FakeStorage()).fork(new Branch().persist(new FakeStorage())));
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(true);
+  });
+
+  test("分岐にのみストレージがある構成でも isValid は true を返す", ({ expect }) => {
+    // 準備：
+    const builder = new Builder().fork(new Branch().persist(new FakeStorage()));
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(true);
+  });
+
+  test("ストレージが 1 件もないとき isValid は false を返す", ({ expect }) => {
+    // 準備：
+    const builder = new Builder();
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(false);
+  });
+
+  test("ストレージのない分岐を fork すると isValid は false を返す", ({ expect }) => {
+    // 準備：
+    const builder = new Builder().persist(new FakeStorage()).fork(new Branch());
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(false);
+  });
+
+  test("分岐内のストレージのない分岐を fork すると isValid は false を返す", ({ expect }) => {
+    // 準備：
+    const builder = new Builder()
+      .persist(new FakeStorage())
+      .fork(new Branch().persist(new FakeStorage()).fork(new Branch()));
+
+    // 実行：
+    const isValid = builder.isValid();
+
+    // 検証：
+    expect(isValid).toBe(false);
+  });
+
+  test("fork 後に分岐を変更しても isValid は fork 時点の構成で判定する", ({ expect }) => {
+    // 準備：
+    const branch = new Branch();
+    const builder = new Builder().persist(new FakeStorage()).fork(branch);
+
+    // 実行：
+    branch.persist(new FakeStorage());
+
+    // 検証：
+    expect(builder.isValid()).toBe(false);
+  });
+});

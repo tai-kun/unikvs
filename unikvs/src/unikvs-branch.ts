@@ -242,6 +242,7 @@ export default class UniKvsBranch<
     branchStates.set(this, {
       middlewares: [],
       destinations: [],
+      hasInvalidFork: false,
     });
   }
 
@@ -328,7 +329,11 @@ export default class UniKvsBranch<
   >;
   public fork(branch: IUniKvsBranch): IUniKvsBranch {
     const state = this.#branchState();
-    appendForkDestinations(state.destinations, state.middlewares, branch);
+
+    if (!appendForkDestinations(state.destinations, state.middlewares, branch)) {
+      // 取り込んだ分岐がストレージに到達しない場合、この分岐も無効として保持します。
+      state.hasInvalidFork = true;
+    }
 
     return this;
   }

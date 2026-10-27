@@ -112,6 +112,16 @@ const kvs = new unikvs.Builder({
   .build();
 ```
 
+### 構成の検証 [#builder-is-valid]
+
+`isValid()` は、全体で 1 件以上のストレージに到達し、`fork()` したすべての分岐も 1 件以上のストレージに到達するかどうかを返します。ストレージに到達しない分岐を含む場合は `false` になります。判定は `fork()` 時点の分岐の構成を基準にするため、fork 後に分岐を変更しても結果は変わりません。
+
+```ts
+const builder = new unikvs.Builder().persist(mainStorage).fork(new unikvs.Branch());
+
+builder.isValid(); // false
+```
+
 ## クライアント操作 [#client-operations]
 
 作成したクライアントは次の操作を提供します。`open()` で初期化し、使い終わったら `close()` で閉じます (`await using` でも自動クローズできます)。

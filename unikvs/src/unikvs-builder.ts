@@ -201,6 +201,16 @@ export interface IUniKvsBuilder<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#base-vars-defaults-vars)
    */
   defaultsVars(vars: VariablesInit): this;
+
+  /**
+   * 現在の構成が有効かどうかを判定します。
+   *
+   * 有効とは、全体で 1 件以上のストレージに到達し、fork したすべての分岐も 1 件以上のストレージに到達する状態です。
+   * fork 時点の分岐の構成で判定するため、fork 後に分岐を変更しても結果は変わりません。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
+   */
+  isValid(): boolean;
 }
 
 /**
@@ -344,6 +354,16 @@ export interface IUniKvsBuilderFinalizer<
    */
   defaultsVars(vars: VariablesInit): this;
 
+  /**
+   * 現在の構成が有効かどうかを判定します。
+   *
+   * 有効とは、全体で 1 件以上のストレージに到達し、fork したすべての分岐も 1 件以上のストレージに到達する状態です。
+   * fork 時点の分岐の構成で判定するため、fork 後に分岐を変更しても結果は変わりません。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
+   */
+  isValid(): boolean;
+
   build(): UniKvs<TKeyValueMapping>;
 }
 
@@ -483,6 +503,11 @@ export default class UniKvsBuilder<
   readonly #middlewares: UniKvsMiddleware[];
 
   /**
+   * ストレージに到達しない分岐を取り込んだかどうかです。
+   */
+  #hasInvalidFork: boolean;
+
+  /**
    * キーに対応する値のスキーマ情報を解決するリゾルバーです。
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
@@ -501,6 +526,7 @@ export default class UniKvsBuilder<
 
     this.#destinations = [];
     this.#middlewares = [];
+    this.#hasInvalidFork = false;
     this.#valueSchemaResolver = null;
     this.#vars = new Map(vars);
     if (schema) {
@@ -571,7 +597,9 @@ export default class UniKvsBuilder<
     TLastMiddlewareEncodeChunkOutput
   >;
   public fork(branch: IUniKvsBranch): IUniKvsBuilder {
-    appendForkDestinations(this.#destinations, this.#middlewares, branch);
+    if (!appendForkDestinations(this.#destinations, this.#middlewares, branch)) {
+      this.#hasInvalidFork = true;
+    }
 
     return this;
   }
@@ -687,6 +715,10 @@ export default class UniKvsBuilder<
     this.setVars(target);
 
     return this;
+  }
+
+  public isValid(): boolean {
+    return this.#destinations.length > 0 && !this.#hasInvalidFork;
   }
 
   public build(): UniKvs<TKeyValueMapping> {

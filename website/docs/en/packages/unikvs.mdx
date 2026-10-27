@@ -112,6 +112,16 @@ const kvs = new unikvs.Builder({
   .build();
 ```
 
+### Validating the configuration [#builder-is-valid]
+
+`isValid()` reports whether the configuration reaches at least one storage and every forked branch also reaches at least one storage. It returns `false` when a forked branch reaches no storage. The check uses the branch configuration at the time of `fork()`, so later changes to a branch do not affect the result.
+
+```ts
+const builder = new unikvs.Builder().persist(mainStorage).fork(new unikvs.Branch());
+
+builder.isValid(); // false
+```
+
 ## Client operations [#client-operations]
 
 The created client provides the following operations. Call `open()` to initialize and `close()` when done (`await using` also auto-closes).
