@@ -97,7 +97,7 @@ Writes run against all storages in parallel; reads decode by applying the preced
 
 ### Branching [#builder-fork]
 
-Use `fork()` to add storage on a branched pipeline. Create branches with `new Branch()`. Additions on a branch do not leak to the parent pipeline.
+Use `fork()` to add storage on a branched pipeline. Create branches with `new Branch()`. Additions on a branch do not leak to the parent pipeline. Calling `fork()` with a branch that reaches no storage throws `InvalidForkError`.
 
 The following example registers different storages on a branch and on the parent.
 
@@ -139,15 +139,15 @@ The first element is closer to the existing pipeline and the last element is clo
 
 ### Validating the configuration [#builder-is-valid]
 
-`isValid()` reports whether the configuration reaches at least one storage and every forked branch also reaches at least one storage. It returns `false` when a forked branch reaches no storage. The check uses the branch configuration at the time of `fork()`, so later changes to a branch do not affect the result.
+`isValid()` reports whether at least one storage is registered. A branch that reaches no storage throws `InvalidForkError` at `fork()` time, so branch validity is guaranteed when the fork is added.
 
 ```ts
-const builder = new unikvs.Builder().persist(mainStorage).fork(new unikvs.Branch());
+const withStorage = new unikvs.Builder().persist(mainStorage);
+withStorage.isValid(); // true
 
-builder.isValid(); // false
+const withoutStorage = new unikvs.Builder();
+withoutStorage.isValid(); // false
 ```
-
-`assertValid()` checks the same conditions and throws when the configuration is invalid. It throws `MissingStorageError` when there is no storage, and `InvalidForkError` when a forked branch reaches no storage.
 
 ## Client operations [#client-operations]
 
@@ -419,22 +419,22 @@ const bytes = await kvs.get("foo", { repair: true });
 
 ## Errors [#errors]
 
-| Error class                        | Description                                  |
-| ---------------------------------- | -------------------------------------------- |
-| `KeyNotFoundError`                 | The key exists in no storage.                |
-| `UniKvsIsNotOpenError`             | Operated before opening.                     |
-| `UniKvsIsOpenError`                | Called `open()` while already open.          |
-| `MissingStorageError`              | Called `build()` with no storage registered. |
-| `InvalidForkError`                 | A forked branch reaches no storage.          |
-| `StorageIsNotOpenError`            | Storage is not open.                         |
-| `TransformerIsNotOpenError`        | Middleware is not open.                      |
-| `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.  |
-| `InvalidInputError`                | Malformed input.                             |
-| `InvalidOutputError`               | Malformed output.                            |
-| `ReadableStreamNotSupportedError`  | Read streaming is not supported.             |
-| `WritableStreamNotSupportedError`  | Write streaming is not supported.            |
-| `EncodableStreamNotSupportedError` | Encoding streams are not supported.          |
-| `DecodableStreamNotSupportedError` | Decoding streams are not supported.          |
+| Error class                        | Description                                            |
+| ---------------------------------- | ------------------------------------------------------ |
+| `KeyNotFoundError`                 | The key exists in no storage.                          |
+| `UniKvsIsNotOpenError`             | Operated before opening.                               |
+| `UniKvsIsOpenError`                | Called `open()` while already open.                    |
+| `MissingStorageError`              | Called `build()` with no storage registered.           |
+| `InvalidForkError`                 | Called `fork()` with a branch that reaches no storage. |
+| `StorageIsNotOpenError`            | Storage is not open.                                   |
+| `TransformerIsNotOpenError`        | Middleware is not open.                                |
+| `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.            |
+| `InvalidInputError`                | Malformed input.                                       |
+| `InvalidOutputError`               | Malformed output.                                      |
+| `ReadableStreamNotSupportedError`  | Read streaming is not supported.                       |
+| `WritableStreamNotSupportedError`  | Write streaming is not supported.                      |
+| `EncodableStreamNotSupportedError` | Encoding streams are not supported.                    |
+| `DecodableStreamNotSupportedError` | Decoding streams are not supported.                    |
 
 ```ts
 import * as unikvs from "unikvs";

@@ -28,7 +28,7 @@ import {
   VALUE_SCHEMA_BRAND,
   createValueSchemaResolver,
 } from "./_value-schemas.js";
-import { InvalidForkError, MissingStorageError } from "./errors.js";
+import { MissingStorageError } from "./errors.js";
 import type { IUniKvsBranch, KeyValueMapping } from "./unikvs-branch.js";
 import UniKvs from "./unikvs.js";
 import type { Value } from "./value-schemas.js";
@@ -56,6 +56,13 @@ export interface IUniKvsBuilder<
   TLastMiddlewareDecodeChunkInput = TUniKvsChunkOutput,
   TLastMiddlewareEncodeChunkOutput = TUniKvsChunkInput,
 > {
+  /**
+   * 分岐したパイプラインを追加します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-fork)
+   *
+   * @throws 分岐がストレージに到達しない場合に `InvalidForkError` を投げます。
+   */
   fork<
     TBranchChunkInput,
     TBranchChunkOutput,
@@ -194,22 +201,12 @@ export interface IUniKvsBuilder<
   /**
    * 現在の構成が有効かどうかを判定します。
    *
-   * 有効とは、全体で 1 件以上のストレージに到達し、fork したすべての分岐も 1 件以上のストレージに到達する状態です。
-   * fork 時点の分岐の構成で判定するため、fork 後に分岐を変更しても結果は変わりません。
+   * 有効とは、1 件以上のストレージが登録されている状態です。
+   * ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
    */
   isValid(): boolean;
-
-  /**
-   * 現在の構成を検証し、不正な場合は例外を投げます。
-   *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
-   *
-   * @throws ストレージが 1 件もない場合に `MissingStorageError` を投げます。
-   * @throws ストレージに到達しない分岐がある場合に `InvalidForkError` を投げます。
-   */
-  assertValid(): void;
 }
 
 /**
@@ -226,6 +223,13 @@ export interface IUniKvsBuilderFinalizer<
   TLastMiddlewareDecodeChunkInput = TReadChunkOutput,
   TLastMiddlewareEncodeChunkOutput = TWriteChunkInput,
 > {
+  /**
+   * 分岐したパイプラインを追加します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-fork)
+   *
+   * @throws 分岐がストレージに到達しない場合に `InvalidForkError` を投げます。
+   */
   fork<
     TBranchChunkInput,
     TBranchChunkOutput,
@@ -356,22 +360,12 @@ export interface IUniKvsBuilderFinalizer<
   /**
    * 現在の構成が有効かどうかを判定します。
    *
-   * 有効とは、全体で 1 件以上のストレージに到達し、fork したすべての分岐も 1 件以上のストレージに到達する状態です。
-   * fork 時点の分岐の構成で判定するため、fork 後に分岐を変更しても結果は変わりません。
+   * 有効とは、1 件以上のストレージが登録されている状態です。
+   * ストレージに到達しない分岐は `fork()` の時点で `InvalidForkError` になるため、分岐の有効性は fork 時に保証されます。
    *
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
    */
   isValid(): boolean;
-
-  /**
-   * 現在の構成を検証し、不正な場合は例外を投げます。
-   *
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
-   *
-   * @throws ストレージが 1 件もない場合に `MissingStorageError` を投げます。
-   * @throws ストレージに到達しない分岐がある場合に `InvalidForkError` を投げます。
-   */
-  assertValid(): void;
 
   /**
    * `UniKvs` クライアントを作成します。
@@ -543,11 +537,6 @@ export default class UniKvsBuilder<
   readonly #middlewares: UniKvsMiddleware[];
 
   /**
-   * ストレージに到達しない分岐を取り込んだかどうかです。
-   */
-  #hasInvalidFork: boolean;
-
-  /**
    * キーに対応する値のスキーマ情報を解決するリゾルバーです。
    */
   readonly #valueSchemaResolver: IValueSchemaResolver | null;
@@ -566,7 +555,6 @@ export default class UniKvsBuilder<
 
     this.#destinations = [];
     this.#middlewares = [];
-    this.#hasInvalidFork = false;
     this.#valueSchemaResolver = null;
     this.#vars = new Map(vars);
     if (schema) {
@@ -637,9 +625,7 @@ export default class UniKvsBuilder<
     TLastMiddlewareEncodeChunkOutput
   >;
   public fork(branch: IUniKvsBranch): IUniKvsBuilder {
-    if (!appendForkDestinations(this.#destinations, this.#middlewares, branch)) {
-      this.#hasInvalidFork = true;
-    }
+    appendForkDestinations(this.#destinations, this.#middlewares, branch);
 
     return this;
   }
@@ -758,17 +744,7 @@ export default class UniKvsBuilder<
   }
 
   public isValid(): boolean {
-    return this.#destinations.length > 0 && !this.#hasInvalidFork;
-  }
-
-  public assertValid(): void {
-    if (this.#destinations.length === 0) {
-      throw new MissingStorageError();
-    }
-
-    if (this.#hasInvalidFork) {
-      throw new InvalidForkError();
-    }
+    return this.#destinations.length > 0;
   }
 
   public build(options: UniKvsBuildOptions = {}): UniKvs<TKeyValueMapping> {

@@ -322,25 +322,20 @@ describe("Builder - fork", () => {
     await valueStream.dispose();
   });
 
-  test("空の branch を fork してもストレージは増えず読み書きできる", async ({ expect }) => {
+  test("ストレージのない branch を fork すると InvalidForkError を投げる", ({ expect }) => {
     // 準備：
-    await using storage = new FakeStorage();
-    await using kvs = new Builder<{ foo: PlainValue<string> }>()
-      .persist(storage)
-      .fork(new Branch())
-      .build();
-    await kvs.open();
+    const builder = new Builder().persist(new FakeStorage());
 
-    // 実行：
-    await kvs.set("foo", "x");
+    // 実行と検証：
+    expect(() => builder.fork(new Branch())).toThrow(InvalidForkError);
+  });
 
-    const value = await kvs.get("foo");
+  test("分岐内のストレージのない branch を fork すると InvalidForkError を投げる", ({ expect }) => {
+    // 準備：
+    const branch = new Branch().persist(new FakeStorage());
 
-    // 検証：
-    expect(value).toBe("x");
-
-    expect(storage.map.get("foo")).toBe("x");
-    expect(storage.callsOf("write")).toHaveLength(1);
+    // 実行と検証：
+    expect(() => branch.fork(new Branch())).toThrow(InvalidForkError);
   });
 });
 
@@ -477,87 +472,5 @@ describe("Builder - 状態の検証", () => {
 
     // 検証：
     expect(isValid).toBe(false);
-  });
-
-  test("ストレージのない分岐を fork すると isValid は false を返す", ({ expect }) => {
-    // 準備：
-    const builder = new Builder().persist(new FakeStorage()).fork(new Branch());
-
-    // 実行：
-    const isValid = builder.isValid();
-
-    // 検証：
-    expect(isValid).toBe(false);
-  });
-
-  test("分岐内のストレージのない分岐を fork すると isValid は false を返す", ({ expect }) => {
-    // 準備：
-    const builder = new Builder()
-      .persist(new FakeStorage())
-      .fork(new Branch().persist(new FakeStorage()).fork(new Branch()));
-
-    // 実行：
-    const isValid = builder.isValid();
-
-    // 検証：
-    expect(isValid).toBe(false);
-  });
-
-  test("fork 後に分岐を変更しても isValid は fork 時点の構成で判定する", ({ expect }) => {
-    // 準備：
-    const branch = new Branch();
-    const builder = new Builder().persist(new FakeStorage()).fork(branch);
-
-    // 実行：
-    branch.persist(new FakeStorage());
-
-    // 検証：
-    expect(builder.isValid()).toBe(false);
-  });
-
-  test("有効な構成のとき assertValid は例外を投げない", ({ expect }) => {
-    // 準備：
-    const builder = new Builder()
-      .persist(new FakeStorage())
-      .fork(new Branch().persist(new FakeStorage()));
-
-    // 実行と検証：
-    expect(() => {
-      builder.assertValid();
-    }).not.toThrow();
-  });
-
-  test("ストレージが 1 件もないとき assertValid は MissingStorageError を投げる", ({ expect }) => {
-    // 準備：
-    const builder = new Builder();
-
-    // 実行と検証：
-    expect(() => {
-      builder.assertValid();
-    }).toThrow(MissingStorageError);
-  });
-
-  test("ストレージに到達しない分岐があるとき assertValid は InvalidForkError を投げる", ({
-    expect,
-  }) => {
-    // 準備：
-    const builder = new Builder().persist(new FakeStorage()).fork(new Branch());
-
-    // 実行と検証：
-    expect(() => {
-      builder.assertValid();
-    }).toThrow(InvalidForkError);
-  });
-
-  test("ストレージがなく不正な分岐もあるとき assertValid は MissingStorageError を投げる", ({
-    expect,
-  }) => {
-    // 準備：
-    const builder = new Builder().fork(new Branch());
-
-    // 実行と検証：
-    expect(() => {
-      builder.assertValid();
-    }).toThrow(MissingStorageError);
   });
 });

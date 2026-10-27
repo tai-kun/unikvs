@@ -46,6 +46,13 @@ export interface IUniKvsBranch<
   TLastEncodeChunkOutput = any,
   TBranchHasPersist extends boolean = false,
 > {
+  /**
+   * 分岐したパイプラインを追加します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-fork)
+   *
+   * @throws 分岐がストレージに到達しない場合に `InvalidForkError` を投げます。
+   */
   fork<
     TSubChunkInput,
     TSubChunkOutput,
@@ -242,7 +249,6 @@ export default class UniKvsBranch<
     branchStates.set(this, {
       middlewares: [],
       destinations: [],
-      hasInvalidFork: false,
     });
   }
 
@@ -329,11 +335,7 @@ export default class UniKvsBranch<
   >;
   public fork(branch: IUniKvsBranch): IUniKvsBranch {
     const state = this.#branchState();
-
-    if (!appendForkDestinations(state.destinations, state.middlewares, branch)) {
-      // 取り込んだ分岐がストレージに到達しない場合、この分岐も無効として保持します。
-      state.hasInvalidFork = true;
-    }
+    appendForkDestinations(state.destinations, state.middlewares, branch);
 
     return this;
   }

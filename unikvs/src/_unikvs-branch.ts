@@ -1,5 +1,6 @@
 import type UniKvsMiddleware from "./_middleware.js";
 import type UniKvsStorage from "./_storage.js";
+import { InvalidForkError } from "./errors.js";
 import type { IUniKvsBranch } from "./unikvs-branch.js";
 
 /**
@@ -34,12 +35,6 @@ export type BranchState = {
    * 自前の分岐先と各登録時点の相対パイプラインのスナップショットです。
    */
   readonly destinations: BranchDestination[];
-
-  /**
-   * ストレージに到達しない分岐を取り込んだかどうかです。
-   * fork 時点の状態を保持します。
-   */
-  hasInvalidFork: boolean;
 };
 
 /**
@@ -52,7 +47,7 @@ export const branchStates: WeakMap<IUniKvsBranch, BranchState> = /* #__PURE__ */
 >();
 
 /**
- * 分岐先を親の接頭辞付きで追加し、分岐がストレージに到達するかどうかを返します。
+ * 分岐先を親の接頭辞付きで追加します。
  *
  * `new Branch()` で作成された分岐以外の値が渡されたときは例外を投げます。
  * 外部からは使用しません。
@@ -61,17 +56,21 @@ export const branchStates: WeakMap<IUniKvsBranch, BranchState> = /* #__PURE__ */
  * @param prefix 親のミドルウェア列です。
  * @param branch 追加する分岐です。
  *
- * @returns 分岐先が 1 件以上あり、取り込んだ分岐がすべて有効なら `true` を返します。
+ * @throws 分岐がストレージに到達しない場合に `InvalidForkError` を投げます。
  */
 export function appendForkDestinations(
   destinations: BranchDestination[],
   prefix: readonly UniKvsMiddleware[],
   branch: IUniKvsBranch,
-): boolean {
+): void {
   const state = branchStates.get(branch);
 
   if (!state) {
     throw new TypeError("fork() expects a branch created by new Branch().");
+  }
+
+  if (state.destinations.length === 0) {
+    throw new InvalidForkError();
   }
 
   const prefixSnapshot = [...prefix];
@@ -84,6 +83,4 @@ export function appendForkDestinations(
       middlewares: [...prefixSnapshot, ...dest.middlewares],
     });
   }
-
-  return state.destinations.length > 0 && !state.hasInvalidFork;
 }

@@ -316,13 +316,13 @@ describe("UniKvs - 型: fork の互換検査", () => {
   });
 
   test("persist なし分岐は型エラーにならない", ({ expect }) => {
-    // 準備 : 空分岐は no-op のため検査を素通りします。
+    // 準備 : 空分岐は型レベルでは受け付けられます (実行時は InvalidForkError)。
     const empty = new Branch();
 
     // 実行と検証 : 空分岐の fork は型エラーになりません。
     expect(typeOf(() => new Builder<{ foo: PlainValue<string> }>().fork(empty))).toBeUndefined();
 
-    // 準備 : 未使用 middleware のみで persist なしの分岐も no-op のため検査しません。
+    // 準備 : 未使用 middleware のみで persist なしの分岐も型レベルでは受け付けられます。
     const unused = new Branch().use(new StringToNumber());
 
     // 実行と検証 : persist なし分岐の不一致は型エラーになりません。
