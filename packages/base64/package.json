@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/base64",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Transformer plugin that encodes byte arrays as base64 strings.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

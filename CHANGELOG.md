@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.15
+
+### 新機能
+
+- **checksum:** onHash コールバックと変数スナップショットを追加 ([d68bb6b](https://github.com/tai-kun/unikvs/commit/d68bb6b6152cffec80ddbe0f9203d1f385888b9e))
+
+**Full Changelog**: https://github.com/tai-kun/unikvs/compare/@unikvs/core@0.0.14...@unikvs/core@0.0.15
+
 ## v0.0.14
 
 ### 新機能

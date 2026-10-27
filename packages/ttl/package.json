@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/ttl",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Transformer plugin that attaches TTL expiry to written data and treats expired reads as missing.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/hex",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Transformer plugin that encodes byte arrays as hexadecimal strings.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

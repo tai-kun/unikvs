@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/writeonly",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "Transformer plugin that rejects reads and optionally denies deletion.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
