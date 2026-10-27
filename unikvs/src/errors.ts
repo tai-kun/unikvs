@@ -848,6 +848,21 @@ setErrorMessage(
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
  */
+export class InvalidForkError extends ErrorBase<undefined> {
+  static {
+    this.prototype.name = "UniKvsInvalidForkError";
+  }
+
+  public constructor(options?: ErrorOptions) {
+    super("A forked branch does not reach any storage", options);
+  }
+}
+
+setErrorMessage(InvalidForkError, "ストレージに到達しない分岐があります", "ja");
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
+ */
 export class MissingStorageError extends ErrorBase<undefined> {
   static {
     this.prototype.name = "UniKvsMissingStorageError";

@@ -2,6 +2,7 @@
 import { test, describe } from "vite-plus/test";
 
 import {
+  InvalidForkError,
   KeyNotFoundError,
   InvalidInputError,
   UniKvsIsOpenError,
@@ -57,6 +58,7 @@ describe("index のエクスポート", () => {
     expect(index.StreamEncodingNotSupportedError).toBe(StreamEncodingNotSupportedError);
     expect(index.StreamDecodingNotSupportedError).toBe(StreamDecodingNotSupportedError);
     expect(index.PluginOperationAggregateError).toBe(PluginOperationAggregateError);
+    expect(index.InvalidForkError).toBe(InvalidForkError);
     expect(index.MissingStorageError).toBe(MissingStorageError);
   });
 });

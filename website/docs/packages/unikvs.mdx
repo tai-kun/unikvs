@@ -147,6 +147,8 @@ const builder = new unikvs.Builder().persist(mainStorage).fork(new unikvs.Branch
 builder.isValid(); // false
 ```
 
+`assertValid()` は同じ条件を検証し、不正な場合は例外を投げます。ストレージが 1 件もない場合は `MissingStorageError`、ストレージに到達しない分岐がある場合は `InvalidForkError` を投げます。
+
 ## クライアント操作 [#client-operations]
 
 作成したクライアントは次の操作を提供します。`open()` で初期化し、使い終わったら `close()` で閉じます (`await using` でも自動クローズできます)。
@@ -423,6 +425,7 @@ const bytes = await kvs.get("foo", { repair: true });
 | `UniKvsIsNotOpenError`             | 未オープンで操作しました。              |
 | `UniKvsIsOpenError`                | オープン済みで再度 `open()` しました。  |
 | `MissingStorageError`              | ストレージ未登録で `build()` しました。 |
+| `InvalidForkError`                 | ストレージに到達しない分岐があります。  |
 | `StorageIsNotOpenError`            | ストレージが未オープンです。            |
 | `TransformerIsNotOpenError`        | ミドルウェアが未オープンです。          |
 | `PluginOperationAggregateError`    | 複数プラグイン操作の集約エラーです。    |

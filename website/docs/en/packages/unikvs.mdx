@@ -147,6 +147,8 @@ const builder = new unikvs.Builder().persist(mainStorage).fork(new unikvs.Branch
 builder.isValid(); // false
 ```
 
+`assertValid()` checks the same conditions and throws when the configuration is invalid. It throws `MissingStorageError` when there is no storage, and `InvalidForkError` when a forked branch reaches no storage.
+
 ## Client operations [#client-operations]
 
 The created client provides the following operations. Call `open()` to initialize and `close()` when done (`await using` also auto-closes).
@@ -423,6 +425,7 @@ const bytes = await kvs.get("foo", { repair: true });
 | `UniKvsIsNotOpenError`             | Operated before opening.                     |
 | `UniKvsIsOpenError`                | Called `open()` while already open.          |
 | `MissingStorageError`              | Called `build()` with no storage registered. |
+| `InvalidForkError`                 | A forked branch reaches no storage.          |
 | `StorageIsNotOpenError`            | Storage is not open.                         |
 | `TransformerIsNotOpenError`        | Middleware is not open.                      |
 | `PluginOperationAggregateError`    | Aggregate error of multi-plugin operations.  |

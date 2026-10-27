@@ -34,6 +34,7 @@ export type {
   MiddlewareNextCalledMultipleTimesErrorMeta,
 } from "./errors.js";
 export {
+  InvalidForkError,
   KeyNotFoundError,
   InvalidInputError,
   UniKvsIsOpenError,

@@ -1,6 +1,7 @@
 import { test, describe } from "vite-plus/test";
 
 import {
+  InvalidForkError,
   KeyNotFoundError,
   InvalidInputError,
   UniKvsIsOpenError,
@@ -273,6 +274,13 @@ describe("PluginOperationAggregateError", () => {
     ]);
     expect(error.meta.errors[0]).not.toHaveProperty("name");
     expect(error.meta.errors[0]).not.toHaveProperty("index");
+  });
+});
+
+describe("InvalidForkError", () => {
+  test("エラーメッセージが不正な分岐を伝える", ({ expect }) => {
+    // 実行と検証：
+    expect(new InvalidForkError().message).toMatch(/forked branch does not reach any storage/u);
   });
 });
 

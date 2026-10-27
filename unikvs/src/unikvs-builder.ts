@@ -28,7 +28,7 @@ import {
   VALUE_SCHEMA_BRAND,
   createValueSchemaResolver,
 } from "./_value-schemas.js";
-import { MissingStorageError } from "./errors.js";
+import { InvalidForkError, MissingStorageError } from "./errors.js";
 import type { IUniKvsBranch, KeyValueMapping } from "./unikvs-branch.js";
 import UniKvs from "./unikvs.js";
 import type { Value } from "./value-schemas.js";
@@ -200,6 +200,16 @@ export interface IUniKvsBuilder<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
    */
   isValid(): boolean;
+
+  /**
+   * 現在の構成を検証し、不正な場合は例外を投げます。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
+   *
+   * @throws ストレージが 1 件もない場合に `MissingStorageError` を投げます。
+   * @throws ストレージに到達しない分岐がある場合に `InvalidForkError` を投げます。
+   */
+  assertValid(): void;
 }
 
 /**
@@ -352,6 +362,16 @@ export interface IUniKvsBuilderFinalizer<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
    */
   isValid(): boolean;
+
+  /**
+   * 現在の構成を検証し、不正な場合は例外を投げます。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#builder-is-valid)
+   *
+   * @throws ストレージが 1 件もない場合に `MissingStorageError` を投げます。
+   * @throws ストレージに到達しない分岐がある場合に `InvalidForkError` を投げます。
+   */
+  assertValid(): void;
 
   /**
    * `UniKvs` クライアントを作成します。
@@ -739,6 +759,16 @@ export default class UniKvsBuilder<
 
   public isValid(): boolean {
     return this.#destinations.length > 0 && !this.#hasInvalidFork;
+  }
+
+  public assertValid(): void {
+    if (this.#destinations.length === 0) {
+      throw new MissingStorageError();
+    }
+
+    if (this.#hasInvalidFork) {
+      throw new InvalidForkError();
+    }
   }
 
   public build(options: UniKvsBuildOptions = {}): UniKvs<TKeyValueMapping> {

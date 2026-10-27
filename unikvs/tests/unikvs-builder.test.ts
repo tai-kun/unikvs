@@ -1,7 +1,7 @@
 import { Memory } from "@unikvs/memory";
 import { test, describe } from "vite-plus/test";
 
-import { MissingStorageError } from "../src/errors.js";
+import { InvalidForkError, MissingStorageError } from "../src/errors.js";
 import { Branch, Builder } from "../src/index.js";
 import UniKvs from "../src/unikvs.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
@@ -513,5 +513,51 @@ describe("Builder - 状態の検証", () => {
 
     // 検証：
     expect(builder.isValid()).toBe(false);
+  });
+
+  test("有効な構成のとき assertValid は例外を投げない", ({ expect }) => {
+    // 準備：
+    const builder = new Builder()
+      .persist(new FakeStorage())
+      .fork(new Branch().persist(new FakeStorage()));
+
+    // 実行と検証：
+    expect(() => {
+      builder.assertValid();
+    }).not.toThrow();
+  });
+
+  test("ストレージが 1 件もないとき assertValid は MissingStorageError を投げる", ({ expect }) => {
+    // 準備：
+    const builder = new Builder();
+
+    // 実行と検証：
+    expect(() => {
+      builder.assertValid();
+    }).toThrow(MissingStorageError);
+  });
+
+  test("ストレージに到達しない分岐があるとき assertValid は InvalidForkError を投げる", ({
+    expect,
+  }) => {
+    // 準備：
+    const builder = new Builder().persist(new FakeStorage()).fork(new Branch());
+
+    // 実行と検証：
+    expect(() => {
+      builder.assertValid();
+    }).toThrow(InvalidForkError);
+  });
+
+  test("ストレージがなく不正な分岐もあるとき assertValid は MissingStorageError を投げる", ({
+    expect,
+  }) => {
+    // 準備：
+    const builder = new Builder().fork(new Branch());
+
+    // 実行と検証：
+    expect(() => {
+      builder.assertValid();
+    }).toThrow(MissingStorageError);
   });
 });
