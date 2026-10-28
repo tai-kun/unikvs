@@ -4,6 +4,8 @@ import type {
   IGetContext,
   IHasContext,
   ISetContext,
+  ICopyContext,
+  IMoveContext,
   IOpenContext,
   IClearContext,
   ICloseContext,
@@ -56,6 +58,8 @@ export namespace IMiddleware {
     | IStreamContext
     | IHasContext
     | IDeleteContext
+    | ICopyContext
+    | IMoveContext
     | IClearContext;
 
   /**

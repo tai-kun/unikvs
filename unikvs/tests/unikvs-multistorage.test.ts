@@ -573,6 +573,35 @@ describe("UniKvs - onOtherWriteError 非対応ストレージ", () => {
         this.map.delete(c.key);
       }
 
+      public copy(c: IStorage.CopyContext): void {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (!this.map.has(c.key)) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (c.key === c.destinationKey) {
+          return;
+        }
+
+        this.map.set(c.destinationKey, this.map.get(c.key) as string);
+      }
+
+      public move(c: IStorage.MoveContext): void {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (!this.map.has(c.key)) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (c.key === c.destinationKey) {
+          return;
+        }
+
+        this.map.set(c.destinationKey, this.map.get(c.key) as string);
+        this.map.delete(c.key);
+      }
+
       public clear(): void {
         this.map.clear();
       }

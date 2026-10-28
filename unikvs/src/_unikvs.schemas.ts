@@ -413,6 +413,130 @@ export const DeleteArgsSchema: GenericSchema<
   ),
 ]);
 
+export const CopyOptionsSchema: ObjectSchema<
+  {
+    readonly key: StringSchema<undefined>;
+    readonly vars: OptionalSchema<typeof VariablesInitSchema, undefined>;
+    readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
+    readonly destinationKey: StringSchema<undefined>;
+  },
+  undefined
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  signal: v.optional(v.instance(AbortSignal)),
+  destinationKey: v.string(),
+});
+
+export const CopyArgsSchema: GenericSchema<
+  any,
+  readonly [
+    {
+      readonly key: string;
+      readonly vars?: readonly VariablesEntry[] | undefined;
+      readonly signal?: AbortSignal | undefined;
+      readonly destinationKey: string;
+    },
+  ]
+> = v.union([
+  v.tuple([CopyOptionsSchema]),
+  v.pipe(
+    v.tuple([
+      CopyOptionsSchema.entries.key,
+      CopyOptionsSchema.entries.destinationKey,
+      v.optional(v.omit(CopyOptionsSchema, ["key", "destinationKey"])),
+    ]),
+    v.transform(
+      ([key, destinationKey, options]: [
+        string,
+        string,
+        (
+          | {
+              vars?: readonly VariablesEntry[] | undefined;
+              signal?: AbortSignal | undefined;
+            }
+          | undefined
+        ),
+      ]): [
+        {
+          key: string;
+          vars?: readonly VariablesEntry[] | undefined;
+          signal?: AbortSignal | undefined;
+          destinationKey: string;
+        },
+      ] => [
+        {
+          ...options,
+          key,
+          destinationKey,
+        },
+      ],
+    ),
+  ),
+]);
+
+export const MoveOptionsSchema: ObjectSchema<
+  {
+    readonly key: StringSchema<undefined>;
+    readonly vars: OptionalSchema<typeof VariablesInitSchema, undefined>;
+    readonly signal: OptionalSchema<InstanceSchema<typeof AbortSignal, undefined>, undefined>;
+    readonly destinationKey: StringSchema<undefined>;
+  },
+  undefined
+> = v.object({
+  key: v.string(),
+  vars: v.optional(VariablesInitSchema),
+  signal: v.optional(v.instance(AbortSignal)),
+  destinationKey: v.string(),
+});
+
+export const MoveArgsSchema: GenericSchema<
+  any,
+  readonly [
+    {
+      readonly key: string;
+      readonly vars?: readonly VariablesEntry[] | undefined;
+      readonly signal?: AbortSignal | undefined;
+      readonly destinationKey: string;
+    },
+  ]
+> = v.union([
+  v.tuple([MoveOptionsSchema]),
+  v.pipe(
+    v.tuple([
+      MoveOptionsSchema.entries.key,
+      MoveOptionsSchema.entries.destinationKey,
+      v.optional(v.omit(MoveOptionsSchema, ["key", "destinationKey"])),
+    ]),
+    v.transform(
+      ([key, destinationKey, options]: [
+        string,
+        string,
+        (
+          | {
+              vars?: readonly VariablesEntry[] | undefined;
+              signal?: AbortSignal | undefined;
+            }
+          | undefined
+        ),
+      ]): [
+        {
+          key: string;
+          vars?: readonly VariablesEntry[] | undefined;
+          signal?: AbortSignal | undefined;
+          destinationKey: string;
+        },
+      ] => [
+        {
+          ...options,
+          key,
+          destinationKey,
+        },
+      ],
+    ),
+  ),
+]);
+
 export const ClearOptionsSchema: ObjectSchema<
   {
     readonly vars: OptionalSchema<typeof VariablesInitSchema, undefined>;

@@ -191,4 +191,54 @@ export type DeleteOptions<TKey = string> = {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
  */
+export type CopyOptions<TKey = string> = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   */
+  readonly key: TKey;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   */
+  readonly destinationKey: TKey;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
+   */
+  readonly signal?: AbortSignal | undefined;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
+   */
+  readonly vars?: VariablesInit | undefined;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+ */
+export type MoveOptions<TKey = string> = {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   */
+  readonly key: TKey;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   */
+  readonly destinationKey: TKey;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
+   */
+  readonly signal?: AbortSignal | undefined;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#variables-and-cancellation)
+   */
+  readonly vars?: VariablesInit | undefined;
+};
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+ */
 export type ClearOptions = v.InferInput<typeof ClearOptionsSchema>;

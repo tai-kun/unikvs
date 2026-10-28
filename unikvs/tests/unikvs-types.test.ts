@@ -75,6 +75,10 @@ class NumberStorage implements IStorage<number> {
 
   public delete(): void {}
 
+  public copy(): void {}
+
+  public move(): void {}
+
   public clear(): void {}
 }
 
@@ -98,6 +102,10 @@ class BytesStorage implements IStorage<Bytes> {
   }
 
   public delete(): void {}
+
+  public copy(): void {}
+
+  public move(): void {}
 
   public clear(): void {}
 }
@@ -165,6 +173,24 @@ describe("UniKvs - 型: 基本契約", () => {
     >();
     expectTypeOf(typeOf(() => kvs.has("message"))).toEqualTypeOf<Promise<boolean>>();
     expectTypeOf(typeOf(() => kvs.delete("message"))).toEqualTypeOf<Promise<void>>();
+    expectTypeOf(typeOf(() => kvs.copy("message", "data"))).toEqualTypeOf<Promise<void>>();
+    expectTypeOf(
+      typeOf(() =>
+        kvs.copy({
+          key: "message",
+          destinationKey: "data",
+        }),
+      ),
+    ).toEqualTypeOf<Promise<void>>();
+    expectTypeOf(typeOf(() => kvs.move("message", "data"))).toEqualTypeOf<Promise<void>>();
+    expectTypeOf(
+      typeOf(() =>
+        kvs.move({
+          key: "message",
+          destinationKey: "data",
+        }),
+      ),
+    ).toEqualTypeOf<Promise<void>>();
     expectTypeOf(typeOf(() => kvs.clear())).toEqualTypeOf<Promise<void>>();
   });
 
@@ -237,6 +263,14 @@ describe("UniKvs - 型: 不正な組み合わせ", () => {
     expect(typeOf(() => kvs.has("unknown"))).toBeUndefined();
     // @ts-expect-error 未知のキー
     expect(typeOf(() => kvs.delete("unknown"))).toBeUndefined();
+    // @ts-expect-error 未知のコピー元
+    expect(typeOf(() => kvs.copy("unknown", "message"))).toBeUndefined();
+    // @ts-expect-error 未知のコピー先
+    expect(typeOf(() => kvs.copy("message", "unknown"))).toBeUndefined();
+    // @ts-expect-error 未知の移動元
+    expect(typeOf(() => kvs.move("unknown", "message"))).toBeUndefined();
+    // @ts-expect-error 未知の移動先
+    expect(typeOf(() => kvs.move("message", "unknown"))).toBeUndefined();
   });
 });
 

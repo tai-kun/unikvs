@@ -13,6 +13,7 @@ import {
 } from "../src/_contexts.js";
 import UniKvsStorage from "../src/_storage.js";
 import {
+  KeyNotFoundError,
   StorageIsNotOpenError,
   ReadableStreamNotSupportedError,
   WritableStreamNotSupportedError,
@@ -98,6 +99,31 @@ class MockStorage implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
+  }
+
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+  }
+
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
     this.map.delete(c.key);
   }
 

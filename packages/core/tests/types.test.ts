@@ -9,6 +9,8 @@ import {
   type IMiddleware,
   type ISetContext,
   type ErrorOptions,
+  type ICopyContext,
+  type IMoveContext,
   type IOpenContext,
   type IClearContext,
   type ICloseContext,
@@ -74,6 +76,14 @@ describe("IStorage", () => {
     expectTypeOf<AnyStorage["exists"]>().returns.toEqualTypeOf<MaybePromise<boolean>>();
     expectTypeOf<AnyStorage["delete"]>().returns.toEqualTypeOf<MaybePromise<void>>();
     expectTypeOf<AnyStorage["clear"]>().returns.toEqualTypeOf<MaybePromise<void>>();
+  });
+
+  test("IStorage の copy と move は必須である", () => {
+    // 実行と検証：
+    expectTypeOf<AnyStorage["copy"]>().returns.toEqualTypeOf<MaybePromise<void>>();
+    expectTypeOf<AnyStorage["move"]>().returns.toEqualTypeOf<MaybePromise<void>>();
+    expectTypeOf<AnyStorage["copy"]>().parameter(0).toEqualTypeOf<IStorage.CopyContext>();
+    expectTypeOf<AnyStorage["move"]>().parameter(0).toEqualTypeOf<IStorage.MoveContext>();
   });
 
   test("IStorage の write はコンテキストとデータを受け取る", () => {
@@ -160,6 +170,8 @@ describe("IStorage", () => {
     expectTypeOf<IStorage.GetReadableContext>().toEqualTypeOf<IStreamContext>();
     expectTypeOf<IStorage.ExistsContext>().toEqualTypeOf<IHasContext>();
     expectTypeOf<IStorage.DeleteContext>().toEqualTypeOf<IDeleteContext>();
+    expectTypeOf<IStorage.CopyContext>().toEqualTypeOf<ICopyContext>();
+    expectTypeOf<IStorage.MoveContext>().toEqualTypeOf<IMoveContext>();
     expectTypeOf<IStorage.ClearContext>().toEqualTypeOf<IClearContext>();
   });
 
@@ -204,7 +216,14 @@ describe("IMiddleware", () => {
     expectTypeOf<IMiddleware.OpenContext>().toEqualTypeOf<IOpenContext>();
     expectTypeOf<IMiddleware.CloseContext>().toEqualTypeOf<ICloseContext>();
     expectTypeOf<IMiddleware.UseContext>().toEqualTypeOf<
-      ISetContext | IGetContext | IStreamContext | IHasContext | IDeleteContext | IClearContext
+      | ISetContext
+      | IGetContext
+      | IStreamContext
+      | IHasContext
+      | IDeleteContext
+      | ICopyContext
+      | IMoveContext
+      | IClearContext
     >();
     expectTypeOf<IMiddleware.EncodeContext<string>>().toEqualTypeOf<
       IEncodeContext<string, string>
@@ -278,13 +297,13 @@ describe("pipeline-context とストリーム", () => {
     expectTypeOf<IKeyedActionContext["key"]>().toEqualTypeOf<string>();
     expectTypeOf<IActionContext["signal"]>().toEqualTypeOf<AbortSignal>();
     expectTypeOf<IActionContext["action"]>().toEqualTypeOf<
-      "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"
+      "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"
     >();
     expectTypeOf<ILifecycleContext["action"]>().toEqualTypeOf<"open" | "close">();
     expectTypeOf<IOpenContext["action"]>().toEqualTypeOf<"open">();
     expectTypeOf<ICloseContext["action"]>().toEqualTypeOf<"close">();
     expectTypeOf<IKeyedActionContext["action"]>().toEqualTypeOf<
-      "set" | "get" | "stream" | "has" | "delete"
+      "set" | "get" | "stream" | "has" | "delete" | "copy" | "move"
     >();
     expectTypeOf<ISetContext["action"]>().toEqualTypeOf<"set">();
     expectTypeOf<IGetContext["action"]>().toEqualTypeOf<"get">();
@@ -292,6 +311,10 @@ describe("pipeline-context とストリーム", () => {
     expectTypeOf<IHasContext["action"]>().toEqualTypeOf<"has">();
     expectTypeOf<IDeleteContext["action"]>().toEqualTypeOf<"delete">();
     expectTypeOf<IClearContext["action"]>().toEqualTypeOf<"clear">();
+    expectTypeOf<ICopyContext["action"]>().toEqualTypeOf<"copy">();
+    expectTypeOf<IMoveContext["action"]>().toEqualTypeOf<"move">();
+    expectTypeOf<ICopyContext["destinationKey"]>().toEqualTypeOf<string>();
+    expectTypeOf<IMoveContext["destinationKey"]>().toEqualTypeOf<string>();
   });
 
   test("IGetContext と IStreamContext は書き戻し要求を持つ", () => {

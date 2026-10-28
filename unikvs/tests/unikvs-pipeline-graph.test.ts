@@ -1,5 +1,10 @@
 import { AllowRepair } from "@unikvs/allow-repair";
-import { type IStorage, type IMiddleware, RepairNotAllowedError } from "@unikvs/core";
+import {
+  type IStorage,
+  type IMiddleware,
+  KeyNotFoundError,
+  RepairNotAllowedError,
+} from "@unikvs/core";
 import { vi, test, describe } from "vite-plus/test";
 
 import { Branch, Builder } from "../src/index.js";
@@ -87,6 +92,31 @@ class CancelObservableStorage implements IStorage {
   }
 
   public delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
+  }
+
+  public copy(c: IStorage.CopyContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
+  }
+
+  public move(c: IStorage.MoveContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
     this.entries.delete(c.key);
   }
 

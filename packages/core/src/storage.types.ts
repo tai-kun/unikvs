@@ -4,6 +4,8 @@ import type {
   IGetContext,
   IHasContext,
   ISetContext,
+  ICopyContext,
+  IMoveContext,
   IOpenContext,
   IClearContext,
   ICloseContext,
@@ -55,6 +57,16 @@ export namespace IStorage {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ideletecontext)
    */
   export type DeleteContext = IDeleteContext;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext)
+   */
+  export type CopyContext = ICopyContext;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext)
+   */
+  export type MoveContext = IMoveContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#iclearcontext)
@@ -171,6 +183,16 @@ export interface IStorage<
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-clear)
    */
   clear(c: IStorage.ClearContext): MaybePromise<void>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-copy)
+   */
+  copy(c: IStorage.CopyContext): MaybePromise<void>;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-move)
+   */
+  move(c: IStorage.MoveContext): MaybePromise<void>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-onotherwriteerror)

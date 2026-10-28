@@ -105,7 +105,17 @@ export interface IActionContext extends IPipelineContext {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#iactioncontext-action)
    */
-  readonly action: "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear";
+  readonly action:
+    | "open"
+    | "close"
+    | "set"
+    | "get"
+    | "stream"
+    | "has"
+    | "delete"
+    | "clear"
+    | "copy"
+    | "move";
 }
 
 /**
@@ -145,7 +155,7 @@ export interface IKeyedActionContext extends IActionContext {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ikeyedactioncontext-action)
    */
-  readonly action: "set" | "get" | "stream" | "has" | "delete";
+  readonly action: "set" | "get" | "stream" | "has" | "delete" | "copy" | "move";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ikeyedactioncontext-key)
@@ -235,6 +245,46 @@ export interface IDeleteContext extends IKeyedActionContext {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ideletecontext-action)
    */
   readonly action: "delete";
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext)
+ */
+export interface ICopyContext extends IKeyedActionContext {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-action)
+   */
+  readonly action: "copy";
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-key)
+   */
+  readonly key: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-destination-key)
+   */
+  readonly destinationKey: string;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext)
+ */
+export interface IMoveContext extends IKeyedActionContext {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-action)
+   */
+  readonly action: "move";
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-key)
+   */
+  readonly key: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-destination-key)
+   */
+  readonly destinationKey: string;
 }
 
 /**

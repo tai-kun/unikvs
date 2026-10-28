@@ -10,6 +10,7 @@ import {
 } from "@unikvs/testing";
 
 import { CloseContext } from "../src/_contexts.js";
+import { KeyNotFoundError } from "../src/errors.js";
 
 /**
  * 任意のタイミングでテスト側から解放できるゲートです。
@@ -54,6 +55,8 @@ export type StorageMethod =
   | "read"
   | "exists"
   | "delete"
+  | "copy"
+  | "move"
   | "clear"
   | "getWritable"
   | "getReadable"
@@ -66,6 +69,7 @@ export type StorageCall = {
   readonly action: string | undefined;
   readonly method: StorageMethod;
   readonly signal: AbortSignal | undefined;
+  readonly destinationKey: string | undefined;
 };
 
 /**
@@ -147,6 +151,35 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
     this.map.delete(c.key);
   }
 
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    await this.record("copy", c);
+
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key) as TData);
+  }
+
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    await this.record("move", c);
+
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key) as TData);
+    this.map.delete(c.key);
+  }
+
   public async clear(c: IStorage.ClearContext): Promise<void> {
     await this.record("clear", c);
     this.map.clear();
@@ -167,6 +200,7 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
       readonly key?: string;
       readonly action?: string;
       readonly signal?: AbortSignal;
+      readonly destinationKey?: string;
     } & IPipelineContext,
     data?: unknown,
   ): Promise<void> {
@@ -177,6 +211,7 @@ export class FakeStorage<TData = any> implements IStorage<TData> {
       action: (c as { readonly action?: string }).action,
       method,
       signal: c.signal,
+      destinationKey: c.destinationKey,
     };
     this.calls.push(call);
     await this.hook?.(call);
@@ -224,6 +259,7 @@ export class FakeStreamStorage extends FakeStorage {
       action: c.action,
       method: "getWritable",
       signal: c.signal,
+      destinationKey: undefined,
     });
     this.onGetWritable?.(c.key);
     const chunks: Uint8Array[] = [];
@@ -256,6 +292,7 @@ export class FakeStreamStorage extends FakeStorage {
       action: c.action,
       method: "getReadable",
       signal: c.signal,
+      destinationKey: undefined,
     });
     const chunks = (this.map.get(c.key) as Uint8Array[] | undefined) ?? [];
 

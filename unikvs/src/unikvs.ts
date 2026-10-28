@@ -9,6 +9,8 @@ import {
   GetContext,
   HasContext,
   SetContext,
+  CopyContext,
+  MoveContext,
   OpenContext,
   ClearContext,
   CloseContext,
@@ -26,6 +28,8 @@ import {
   GetArgsSchema,
   HasArgsSchema,
   SetArgsSchema,
+  CopyArgsSchema,
+  MoveArgsSchema,
   OpenArgsSchema,
   ClearArgsSchema,
   CloseArgsSchema,
@@ -58,6 +62,8 @@ import type {
   GetOptions,
   HasOptions,
   SetOptions,
+  CopyOptions,
+  MoveOptions,
   OpenOptions,
   ClearOptions,
   CloseOptions,
@@ -1222,6 +1228,56 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }
   }
 
+  /**
+   * キーの値を別のキーへ複製します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   *
+   * @param options コピー元とコピー先のキーを持つオプションです。
+   *
+   * @returns コピーが完了したら解決します。
+   */
+  public copy<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
+    options: CopyOptions<TKey>,
+  ): Promise<void>;
+  public copy<
+    const TSourceKey extends KeyofKeyValueMapping<TKeyValueMapping>,
+    const TDestinationKey extends KeyofKeyValueMapping<TKeyValueMapping>,
+  >(
+    key: TSourceKey,
+    destinationKey: TDestinationKey,
+    options?: Omit<CopyOptions<TSourceKey | TDestinationKey>, "key" | "destinationKey">,
+  ): Promise<void>;
+  public async copy(...args: any): Promise<void> {
+    const [options] = v.parseInput(CopyArgsSchema, args);
+    await this.#transfer("copy", options);
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#client-operations)
+   *
+   * @param options 移動元と移動先のキーを持つオプションです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public move<const TKey extends KeyofKeyValueMapping<TKeyValueMapping>>(
+    options: MoveOptions<TKey>,
+  ): Promise<void>;
+  public move<
+    const TSourceKey extends KeyofKeyValueMapping<TKeyValueMapping>,
+    const TDestinationKey extends KeyofKeyValueMapping<TKeyValueMapping>,
+  >(
+    key: TSourceKey,
+    destinationKey: TDestinationKey,
+    options?: Omit<MoveOptions<TSourceKey | TDestinationKey>, "key" | "destinationKey">,
+  ): Promise<void>;
+  public async move(...args: any): Promise<void> {
+    const [options] = v.parseInput(MoveArgsSchema, args);
+    await this.#transfer("move", options);
+  }
+
   public async clear(options?: ClearOptions): Promise<void>;
   public async clear(...args: any): Promise<void> {
     if (this.#con === null) {
@@ -1281,6 +1337,187 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * コピーまたは移動を実行します。
+   *
+   * @param action 実行する操作です。
+   * @param options コピー元・移動元とコピー先・移動先のキーを持つオプションです。
+   *
+   * @returns 操作が完了したら解決します。
+   */
+  async #transfer(
+    action: "copy" | "move",
+    options: {
+      readonly key: string;
+      readonly vars?: readonly VariablesEntry[] | undefined;
+      readonly signal?: AbortSignal | undefined;
+      readonly destinationKey: string;
+    },
+  ): Promise<void> {
+    if (this.#con === null) {
+      throw new UniKvsIsNotOpenError();
+    }
+
+    const { key, destinationKey } = options;
+
+    // コピー元・移動元とコピー先・移動先の両方がスキーマに適合するか検証します。
+    this.#resolveValueSchema(key);
+    this.#resolveValueSchema(destinationKey);
+
+    const { ac, io } = this.#con;
+    const signal = combineSignals([ac.signal, options.signal]);
+    const store = this.#createOperationStore(options.vars);
+
+    using _lock = await asyncmux.readonly(this, signal);
+    // ロック待機中に接続状態が変更されていないか再確認します。
+    if (this.#con === null) {
+      throw new UniKvsIsNotOpenError();
+    }
+
+    const useContext =
+      action === "copy"
+        ? new CopyContext({
+            key,
+            store,
+            signal,
+            destinationKey,
+          })
+        : new MoveContext({
+            key,
+            store,
+            signal,
+            destinationKey,
+          });
+    await this.#use(action, useContext);
+
+    throwIfAborted(signal);
+
+    const sourceResolver = this.#pipeline.createResolver({
+      key,
+      store,
+      signal,
+    });
+    const destinationResolver =
+      key === destinationKey
+        ? sourceResolver
+        : this.#pipeline.createResolver({
+            key: destinationKey,
+            store,
+            signal,
+          });
+
+    if (key === destinationKey) {
+      // 同一キーへのコピー・移動は存在確認だけを行います。
+      using _ioLock = await io.lock({
+        key,
+        signal,
+      });
+
+      await this.#transferLeaves(action, key, store, signal, sourceResolver, destinationResolver);
+
+      return;
+    }
+
+    // デッドロックを避けるため、キーを常に同じ順序でロックします。
+    const firstLockKey = key < destinationKey ? key : destinationKey;
+    const secondLockKey = key < destinationKey ? destinationKey : key;
+    using _firstLock = await io.lock({
+      key: firstLockKey,
+      signal,
+    });
+    using _secondLock = await io.lock({
+      key: secondLockKey,
+      signal,
+    });
+
+    await this.#transferLeaves(action, key, store, signal, sourceResolver, destinationResolver);
+  }
+
+  /**
+   * 各ストレージへコピーまたは移動を適用します。
+   *
+   * @param action 実行する操作です。
+   * @param key コピー元または移動元の論理キーです。
+   * @param store 操作内で共有される変数ストアです。
+   * @param signal 中断シグナルです。
+   * @param sourceResolver コピー元・移動元のキーを解決するリゾルバーです。
+   * @param destinationResolver コピー先・移動先のキーを解決するリゾルバーです。
+   *
+   * @returns 操作が完了したら解決します。
+   */
+  async #transferLeaves(
+    action: "copy" | "move",
+    key: string,
+    store: VariablesStore,
+    signal: AbortSignal,
+    sourceResolver: ReturnType<PipelineGraph["createResolver"]>,
+    destinationResolver: ReturnType<PipelineGraph["createResolver"]>,
+  ): Promise<void> {
+    const errors: PluginErrorRecord[] = [];
+    let found = 0;
+    await Promise.all(
+      this.#pipeline.leaves.map(async (leaf) => {
+        const sourceKey = sourceResolver.resolve(leaf).key;
+        const destinationKey = destinationResolver.resolve(leaf).key;
+
+        try {
+          const existsContext = new HasContext({
+            key: sourceKey,
+            store,
+            signal,
+          });
+
+          if (!(await leaf.storage.exists(existsContext))) {
+            return;
+          }
+
+          found += 1;
+
+          if (action === "copy") {
+            const c = new CopyContext({
+              key: sourceKey,
+              store,
+              signal,
+              destinationKey,
+            });
+            await leaf.storage.copy(c);
+          } else {
+            const c = new MoveContext({
+              key: sourceKey,
+              store,
+              signal,
+              destinationKey,
+            });
+            await leaf.storage.move(c);
+          }
+        } catch (ex) {
+          if (signal.aborted) {
+            throw ex;
+          }
+
+          errors.push({
+            name: leaf.name,
+            index: leaf.index,
+            reason: ex,
+          });
+          logger.error`Failed to ${action} in a storage: ${ex}`;
+        }
+      }),
+    );
+
+    if (found === 0) {
+      throw this.#notFound(key, errors, action);
+    }
+
+    if (errors.length > 0) {
+      throw new PluginOperationAggregateError({
+        action,
+        errors,
+        plugin: "storage",
+      });
+    }
+  }
+
+  /**
    * 基本変数と操作固有変数を結合した実行時変数マップを作成します。
    *
    * @param vars 操作固有の変数です。
@@ -1328,10 +1565,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    *
    * @param key 読み取ったキーです。
    * @param errors 収集した失敗です。
+   * @param action 失敗を集約する操作です。
    *
    * @returns `KeyNotFoundError` を返します。
    */
-  #notFound(key: string, errors: readonly PluginErrorRecord[]): KeyNotFoundError {
+  #notFound(
+    key: string,
+    errors: readonly PluginErrorRecord[],
+    action: "read" | "copy" | "move" = "read",
+  ): KeyNotFoundError {
     const args: KeyNotFoundErrorArgs = { key };
 
     switch (errors.length) {
@@ -1351,7 +1593,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       default: {
         args.cause = new PluginOperationAggregateError({
-          action: "read",
+          action,
           errors,
           plugin: "storage",
         });
@@ -1543,7 +1785,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param c 共有の `use` コンテキストです。
    */
   async #use(
-    action: "read" | "write" | "delete" | "clear",
+    action: "read" | "write" | "delete" | "copy" | "move" | "clear",
     c: IMiddleware.UseContext,
   ): Promise<void> {
     throwIfAborted(c.signal);

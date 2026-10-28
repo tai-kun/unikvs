@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
 import { Builder } from "../src/index.js";
@@ -59,6 +59,31 @@ class GatedExistsStorage implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
+  }
+
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+  }
+
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
     this.map.delete(c.key);
   }
 

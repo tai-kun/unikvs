@@ -715,7 +715,7 @@ export type PluginOperationAggregateErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
+  readonly action: "open" | "close" | "write" | "read" | "delete" | "copy" | "move" | "clear";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
@@ -755,7 +755,7 @@ export type PluginOperationAggregateErrorArgs = ErrorOptions & {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)
    */
-  readonly action: "open" | "close" | "write" | "read" | "delete" | "clear";
+  readonly action: "open" | "close" | "write" | "read" | "delete" | "copy" | "move" | "clear";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/unikvs#errors)

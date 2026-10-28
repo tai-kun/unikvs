@@ -2,6 +2,8 @@ import {
   type IGetContext,
   type IHasContext,
   type ISetContext,
+  type ICopyContext,
+  type IMoveContext,
   type IOpenContext,
   type IClearContext,
   type ICloseContext,
@@ -729,6 +731,81 @@ export class DeleteContext extends KeyedActionContext<"delete"> implements IDele
     super({
       ...init,
       action: "delete",
+    });
+  }
+}
+
+/**
+ * コピー・移動系コンテキストの初期値です。
+ */
+type TransferContextInit<TAction extends "copy" | "move"> = KeyedActionContextInit<TAction> & {
+  /**
+   * コピー先または移動先のキーです。
+   */
+  readonly destinationKey: string;
+};
+
+/**
+ * コピー・移動で共通のコンテキストです。
+ */
+class TransferContext<TAction extends "copy" | "move"> extends KeyedActionContext<TAction> {
+  /**
+   * コピー先または移動先のキーです。
+   */
+  public readonly destinationKey: string;
+
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: TransferContextInit<TAction>) {
+    const { destinationKey, ...superInit } = init;
+    super(superInit);
+    this.destinationKey = destinationKey;
+  }
+}
+
+/**
+ * `CopyContext` の初期値です。
+ */
+type CopyContextInit = Omit<TransferContextInit<"copy">, "action">;
+
+/**
+ * コピー処理のコンテキストです。
+ */
+export class CopyContext extends TransferContext<"copy"> implements ICopyContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: CopyContextInit) {
+    super({
+      ...init,
+      action: "copy",
+    });
+  }
+}
+
+/**
+ * `MoveContext` の初期値です。
+ */
+type MoveContextInit = Omit<TransferContextInit<"move">, "action">;
+
+/**
+ * 移動処理のコンテキストです。
+ */
+export class MoveContext extends TransferContext<"move"> implements IMoveContext {
+  /**
+   * コンテキストを作成します。
+   *
+   * @param init 初期値です。
+   */
+  public constructor(init: MoveContextInit) {
+    super({
+      ...init,
+      action: "move",
     });
   }
 }

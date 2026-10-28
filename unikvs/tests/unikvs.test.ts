@@ -82,6 +82,31 @@ class MockStorage implements IStorage {
     this.map.delete(c.key);
   }
 
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+  }
+
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+    this.map.delete(c.key);
+  }
+
   public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
   }
@@ -136,6 +161,31 @@ class MemoryStreamStorage implements IStorage {
   }
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
+  }
+
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key) as unknown[]);
+  }
+
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key) as unknown[]);
     this.map.delete(c.key);
   }
 
@@ -219,6 +269,10 @@ class HangUntilAbortOpenStorage implements IStorage {
 
   public async delete(_c: IStorage.DeleteContext): Promise<void> {}
 
+  public async copy(_c: IStorage.CopyContext): Promise<void> {}
+
+  public async move(_c: IStorage.MoveContext): Promise<void> {}
+
   public async clear(_c: IStorage.ClearContext): Promise<void> {}
 }
 
@@ -245,6 +299,31 @@ class CancelObservableStorage implements IStorage {
   }
 
   public delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
+  }
+
+  public copy(c: IStorage.CopyContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
+  }
+
+  public move(c: IStorage.MoveContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
     this.entries.delete(c.key);
   }
 
@@ -371,6 +450,31 @@ class FailGetWritableStorage implements IStorage {
     this.map.delete(c.key);
   }
 
+  public copy(c: IStorage.CopyContext): void {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+  }
+
+  public move(c: IStorage.MoveContext): void {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.map.set(c.destinationKey, this.map.get(c.key));
+    this.map.delete(c.key);
+  }
+
   public clear(): void {
     this.map.clear();
   }
@@ -401,6 +505,31 @@ class ErrorMidwayReadableStorage implements IStorage {
   }
 
   public delete(c: IStorage.DeleteContext): void {
+    this.entries.delete(c.key);
+  }
+
+  public copy(c: IStorage.CopyContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
+  }
+
+  public move(c: IStorage.MoveContext): void {
+    if (!this.entries.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.entries.set(c.destinationKey, this.entries.get(c.key) as Uint8Array[]);
     this.entries.delete(c.key);
   }
 
@@ -656,6 +785,10 @@ describe("UniKvs - オープン / クローズ", () => {
       }
 
       public delete(_args: IStorage.DeleteContext): void {}
+
+      public copy(_args: IStorage.CopyContext): void {}
+
+      public move(_args: IStorage.MoveContext): void {}
 
       public clear(_args: IStorage.ClearContext): void {}
     }

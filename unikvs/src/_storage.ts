@@ -158,6 +158,32 @@ export default class UniKvsStorage {
   }
 
   /**
+   * データを別のキーへ複製します。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.#io.isOpen) {
+      throw new StorageIsNotOpenError({ name: this.name });
+    }
+
+    await this.#io.copy(c);
+  }
+
+  /**
+   * データを別のキーへ移動します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (!this.#io.isOpen) {
+      throw new StorageIsNotOpenError({ name: this.name });
+    }
+
+    await this.#io.move(c);
+  }
+
+  /**
    * 読み取り用のストリームを取得します。
    *
    * @param c ストリーム取得コンテキストです。
