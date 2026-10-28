@@ -194,7 +194,7 @@ export default class UniKvsStorage {
 
     if (this.#io.move === undefined) {
       if (c.key === c.destinationKey) {
-        // move 操作に伴う読み取りであることを伝えるために、必ず MoceContext を渡します。
+        // move 操作に伴う読み取りであることを伝えるために、必ず MoveContext を渡します。
         await this.#io.read(c);
 
         return;
@@ -202,14 +202,14 @@ export default class UniKvsStorage {
 
       if (this.#io.copy === undefined) {
         const data = await this.#io.read(c);
-        // move 操作に伴う書き込みであることを伝えるために、必ず MoceContext を渡します。
+        // move 操作に伴う書き込みであることを伝えるために、必ず MoveContext を渡します。
         await this.#io.write(c, data);
       } else {
-        // move 操作に伴う複製であることを伝えるために、必ず MoceContext を渡します。
+        // move 操作に伴う複製であることを伝えるために、必ず MoveContext を渡します。
         await this.#io.copy(c);
       }
 
-      // move 操作に伴う削除であることを伝えるために、必ず MoceContext を渡します。
+      // move 操作に伴う削除であることを伝えるために、必ず MoveContext を渡します。
       await this.#io.delete(c);
 
       return;
