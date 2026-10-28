@@ -23,6 +23,7 @@ import {
   type IReadableStream,
   type IWritableStream,
   type IPipelineContext,
+  type ITransferContext,
   type ITransformStream,
   type ILifecycleContext,
   type IKeyedActionContext,
@@ -78,12 +79,14 @@ describe("IStorage", () => {
     expectTypeOf<AnyStorage["clear"]>().returns.toEqualTypeOf<MaybePromise<void>>();
   });
 
-  test("IStorage の copy と move は必須である", () => {
+  test("IStorage の copy と move は省略できる", () => {
     // 実行と検証：
-    expectTypeOf<AnyStorage["copy"]>().returns.toEqualTypeOf<MaybePromise<void>>();
-    expectTypeOf<AnyStorage["move"]>().returns.toEqualTypeOf<MaybePromise<void>>();
-    expectTypeOf<AnyStorage["copy"]>().parameter(0).toEqualTypeOf<IStorage.CopyContext>();
-    expectTypeOf<AnyStorage["move"]>().parameter(0).toEqualTypeOf<IStorage.MoveContext>();
+    expectTypeOf<AnyStorage["copy"]>().toEqualTypeOf<
+      ((c: IStorage.CopyContext) => MaybePromise<void>) | undefined
+    >();
+    expectTypeOf<AnyStorage["move"]>().toEqualTypeOf<
+      ((c: IStorage.MoveContext) => MaybePromise<void>) | undefined
+    >();
   });
 
   test("IStorage の write はコンテキストとデータを受け取る", () => {
@@ -164,13 +167,17 @@ describe("IStorage", () => {
     // 実行と検証：
     expectTypeOf<IStorage.OpenContext>().toEqualTypeOf<IOpenContext>();
     expectTypeOf<IStorage.CloseContext>().toEqualTypeOf<ICloseContext>();
-    expectTypeOf<IStorage.WriteContext>().toEqualTypeOf<ISetContext>();
+    expectTypeOf<IStorage.WriteContext>().toEqualTypeOf<
+      ISetContext | ICopyContext | IMoveContext
+    >();
     expectTypeOf<IStorage.GetWritableContext>().toEqualTypeOf<ISetContext>();
-    expectTypeOf<IStorage.ReadContext>().toEqualTypeOf<IGetContext>();
+    expectTypeOf<IStorage.ReadContext>().toEqualTypeOf<IGetContext | ICopyContext | IMoveContext>();
     expectTypeOf<IStorage.GetReadableContext>().toEqualTypeOf<IStreamContext>();
     expectTypeOf<IStorage.ExistsContext>().toEqualTypeOf<IHasContext>();
-    expectTypeOf<IStorage.DeleteContext>().toEqualTypeOf<IDeleteContext>();
-    expectTypeOf<IStorage.CopyContext>().toEqualTypeOf<ICopyContext>();
+    expectTypeOf<IStorage.DeleteContext>().toEqualTypeOf<
+      IDeleteContext | ICopyContext | IMoveContext
+    >();
+    expectTypeOf<IStorage.CopyContext>().toEqualTypeOf<ICopyContext | IMoveContext>();
     expectTypeOf<IStorage.MoveContext>().toEqualTypeOf<IMoveContext>();
     expectTypeOf<IStorage.ClearContext>().toEqualTypeOf<IClearContext>();
   });
@@ -311,6 +318,9 @@ describe("pipeline-context とストリーム", () => {
     expectTypeOf<IHasContext["action"]>().toEqualTypeOf<"has">();
     expectTypeOf<IDeleteContext["action"]>().toEqualTypeOf<"delete">();
     expectTypeOf<IClearContext["action"]>().toEqualTypeOf<"clear">();
+    expectTypeOf<ITransferContext["action"]>().toEqualTypeOf<"copy" | "move">();
+    expectTypeOf<ITransferContext["key"]>().toEqualTypeOf<string>();
+    expectTypeOf<ITransferContext["destinationKey"]>().toEqualTypeOf<string>();
     expectTypeOf<ICopyContext["action"]>().toEqualTypeOf<"copy">();
     expectTypeOf<IMoveContext["action"]>().toEqualTypeOf<"move">();
     expectTypeOf<ICopyContext["destinationKey"]>().toEqualTypeOf<string>();

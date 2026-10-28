@@ -435,7 +435,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   public copy(c: IStorage.CopyContext): void {
     throwIfAborted(c.signal);
 
-    const data = this.read(c as unknown as IStorage.ReadContext);
+    const data = this.read(c);
 
     // 同じキーへのコピーは値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
@@ -455,7 +455,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   public move(c: IStorage.MoveContext): void {
     throwIfAborted(c.signal);
 
-    const data = this.read(c as unknown as IStorage.ReadContext);
+    const data = this.read(c);
 
     // 同じキーへの移動は値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
@@ -463,7 +463,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
     }
 
     this.#writeValue(c.destinationKey, data);
-    this.delete(c as unknown as IStorage.DeleteContext);
+    this.delete(c);
   }
 
   /**

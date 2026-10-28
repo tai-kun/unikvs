@@ -627,7 +627,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         return;
       }
 
-      const data = await this.read(c as unknown as IStorage.ReadContext);
+      const data = await this.read(c);
       await this.#put(c, c.destinationKey, data);
     } catch (ex) {
       if (ex instanceof KeyNotFoundError) {
@@ -668,9 +668,9 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       return;
     }
 
-    await this.copy(c as unknown as IStorage.CopyContext);
+    await this.copy(c);
     throwIfAborted(c.signal);
-    await this.delete(c as unknown as IStorage.DeleteContext);
+    await this.delete(c);
   }
 
   /**

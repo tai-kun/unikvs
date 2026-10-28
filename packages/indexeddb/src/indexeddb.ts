@@ -346,7 +346,7 @@ export default class Indexeddb implements IStorage {
     }
 
     await this.#put(c.signal, c.destinationKey, value);
-    await this.delete(c as unknown as IStorage.DeleteContext);
+    await this.delete(c);
   }
 
   /**

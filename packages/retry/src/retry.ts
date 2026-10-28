@@ -2,6 +2,7 @@ import {
   type IStorage,
   type IReadableStream,
   type IWritableStream,
+  type VariablesSnapshot,
   KeyNotFoundError,
 } from "@unikvs/core";
 import { getAbortReason, throwIfAborted } from "abort-signal-utils";
@@ -95,6 +96,47 @@ export type RetryOptions = {
    */
   readonly onRetry?: ((info: RetryAttemptInfo) => void) | undefined;
 };
+
+/**
+ * copy/move のフォールバック用に、操作種別とキーを差し替えたコンテキストを作成します。
+ *
+ * 実行時変数は元のコンテキストへ委譲します。
+ *
+ * @param c コピーまたは移動のコンテキストです。
+ * @param action 差し替える操作種別です。
+ * @param key 差し替えるキーです。
+ *
+ * @returns 差し替えたコンテキストです。
+ */
+function createFallbackContext(
+  c: IStorage.CopyContext | IStorage.MoveContext,
+  action: "copy" | "move",
+  key: string,
+): IStorage.ReadContext | IStorage.WriteContext | IStorage.DeleteContext {
+  const context = {
+    get: (name: string): unknown => c.get(name),
+    key,
+    set: (name: string, value: unknown): unknown => {
+      c.set(name, value);
+
+      return context;
+    },
+    action,
+    signal: c.signal,
+    snapshot: (): VariablesSnapshot => c.snapshot(),
+    setReadonly: (name: string, value: unknown): unknown => {
+      c.setReadonly(name, value);
+
+      return context;
+    },
+    destinationKey: c.destinationKey,
+  };
+
+  return context as unknown as
+    | IStorage.ReadContext
+    | IStorage.WriteContext
+    | IStorage.DeleteContext;
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/retry#is-retryable-error)
@@ -290,7 +332,24 @@ export default class Retry<
    * @returns コピーが完了したら解決します。
    */
   public copy(c: IStorage.CopyContext): Promise<void> {
-    return this.#run(c, "copy", () => this.inner.copy(c));
+    const copy = this.inner.copy?.bind(this.inner);
+
+    if (copy === undefined) {
+      return this.#run(c, "copy", async () => {
+        const data = await this.inner.read(
+          createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
+        );
+
+        if (c.key !== c.destinationKey) {
+          await this.inner.write(
+            createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
+            data as unknown as TWriteData,
+          );
+        }
+      });
+    }
+
+    return this.#run(c, "copy", () => copy(c));
   }
 
   /**
@@ -301,7 +360,29 @@ export default class Retry<
    * @returns 移動が完了したら解決します。
    */
   public move(c: IStorage.MoveContext): Promise<void> {
-    return this.#run(c, "move", () => this.inner.move(c));
+    const move = this.inner.move?.bind(this.inner);
+
+    if (move === undefined) {
+      return this.#run(c, "move", async () => {
+        const data = await this.inner.read(
+          createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
+        );
+
+        if (c.key === c.destinationKey) {
+          return;
+        }
+
+        await this.inner.write(
+          createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
+          data as unknown as TWriteData,
+        );
+        await this.inner.delete(
+          createFallbackContext(c, c.action, c.key) as IStorage.DeleteContext,
+        );
+      });
+    }
+
+    return this.#run(c, "move", () => move(c));
   }
 
   public clear(c: IStorage.ClearContext): Promise<void> {

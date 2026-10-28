@@ -518,12 +518,12 @@ export default class Http implements IStorage {
 
     // 同じキーへのコピーは有効な値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
-      await this.read(c as unknown as IStorage.ReadContext);
+      await this.read(c);
 
       return;
     }
 
-    const data = await this.read(c as unknown as IStorage.ReadContext);
+    const data = await this.read(c);
     await this.write(this.#keyedContext(c, "set", c.destinationKey), data);
   }
 
@@ -541,12 +541,12 @@ export default class Http implements IStorage {
 
     // 同じキーへの移動は有効な値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
-      await this.read(c as unknown as IStorage.ReadContext);
+      await this.read(c);
 
       return;
     }
 
-    await this.copy(c as unknown as IStorage.CopyContext);
+    await this.copy(c);
     await this.delete(this.#keyedContext(c, "delete", c.key));
   }
 

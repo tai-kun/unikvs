@@ -73,8 +73,9 @@ flowchart TB
   E --> J[IStreamContext]
   E --> K[IHasContext]
   E --> L[IDeleteContext]
-  E --> U[ICopyContext]
-  E --> V[IMoveContext]
+  E --> U[ITransferContext]
+  U --> V[ICopyContext]
+  U --> W[IMoveContext]
   C --> M[IClearContext]
   E --> N[ITransformContext]
   N --> O[ITransformDataContext]
@@ -102,6 +103,7 @@ Each operation kind carries fixed info.
 | [`IStreamContext`](#istreamcontext)             | `"stream"`          | `key` / `signal` / `repair`                                  |
 | [`IHasContext`](#ihascontext)                   | `"has"`             | `key` / `signal`                                             |
 | [`IDeleteContext`](#ideletecontext)             | `"delete"`          | `key` / `signal`                                             |
+| [`ITransferContext`](#itransfercontext)         | `"copy" \| "move"`  | `key` / `destinationKey` / `signal`                          |
 | [`ICopyContext`](#icopycontext)                 | `"copy"`            | `key` / `destinationKey` / `signal`                          |
 | [`IMoveContext`](#imovecontext)                 | `"move"`            | `key` / `destinationKey` / `signal`                          |
 | [`IClearContext`](#iclearcontext)               | `"clear"`           | `signal`                                                     |
@@ -118,7 +120,7 @@ Each operation kind carries fixed info.
 
 ### Keyed operations [#contexts-keyed]
 
-`IKeyedActionContext` adds `key: string` and narrows `action` to the 7 kinds `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"`. The following `ISetContext`, `IGetContext`, `IStreamContext`, `IHasContext`, and `IDeleteContext` each pin `action` to one kind. `ICopyContext` and `IMoveContext` also carry the destination key in `destinationKey`. `IClearContext` carries no key, so it extends `IActionContext` directly with `action` `"clear"`.
+`IKeyedActionContext` adds `key: string` and narrows `action` to the 7 kinds `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"`. The following `ISetContext`, `IGetContext`, `IStreamContext`, `IHasContext`, and `IDeleteContext` each pin `action` to one kind. `ITransferContext` narrows `action` to `"copy" | "move"` and adds the destination key in `destinationKey`. `ICopyContext` and `IMoveContext` pin `action` to `"copy"` and `"move"` respectively. `IClearContext` carries no key, so it extends `IActionContext` directly with `action` `"clear"`.
 
 The middleware `use` hook receives these 8 kinds (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`) together. Narrowing by `action` gives type-safe access to each operation's `key`, `repair`, and `destinationKey`.
 
@@ -375,9 +377,33 @@ Delete context with `action` pinned to `"delete"`.
   }}
 />
 
+### `ITransferContext` [#itransfercontext]
+
+Shared context for copy and move. `action` is `"copy" | "move"`; `key` is the source key, and `destinationKey` is the destination key.
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#itransfercontext-action] "copy" | "move"',
+      required: true,
+      description: "The operation kind.",
+    },
+    key: {
+      type: "[#itransfercontext-key] string",
+      required: true,
+      description: "The source key.",
+    },
+    destinationKey: {
+      type: "[#itransfercontext-destination-key] string",
+      required: true,
+      description: "The destination key.",
+    },
+  }}
+/>
+
 ### `ICopyContext` [#icopycontext]
 
-Copy context with `action` pinned to `"copy"`. `key` is the source key, and `destinationKey` is the destination key.
+Copy context with `action` pinned to `"copy"`. `key` and `destinationKey` are inherited from [`ITransferContext`](#itransfercontext).
 
 <TypeTable
   type={{
@@ -386,22 +412,12 @@ Copy context with `action` pinned to `"copy"`. `key` is the source key, and `des
       required: true,
       description: "The operation kind.",
     },
-    key: {
-      type: "[#icopycontext-key] string",
-      required: true,
-      description: "The source key.",
-    },
-    destinationKey: {
-      type: "[#icopycontext-destination-key] string",
-      required: true,
-      description: "The destination key.",
-    },
   }}
 />
 
 ### `IMoveContext` [#imovecontext]
 
-Move context with `action` pinned to `"move"`. `key` is the source key, and `destinationKey` is the destination key.
+Move context with `action` pinned to `"move"`. `key` and `destinationKey` are inherited from [`ITransferContext`](#itransfercontext).
 
 <TypeTable
   type={{
@@ -409,16 +425,6 @@ Move context with `action` pinned to `"move"`. `key` is the source key, and `des
       type: '[#imovecontext-action] "move"',
       required: true,
       description: "The operation kind.",
-    },
-    key: {
-      type: "[#imovecontext-key] string",
-      required: true,
-      description: "The source key.",
-    },
-    destinationKey: {
-      type: "[#imovecontext-destination-key] string",
-      required: true,
-      description: "The destination key.",
     },
   }}
 />

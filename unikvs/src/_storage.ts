@@ -167,6 +167,16 @@ export default class UniKvsStorage {
       throw new StorageIsNotOpenError({ name: this.name });
     }
 
+    if (this.#io.copy === undefined) {
+      const data = await this.#io.read(c);
+
+      if (c.key !== c.destinationKey) {
+        await this.#io.write(c, data);
+      }
+
+      return;
+    }
+
     await this.#io.copy(c);
   }
 
@@ -178,6 +188,25 @@ export default class UniKvsStorage {
   public async move(c: IStorage.MoveContext): Promise<void> {
     if (!this.#io.isOpen) {
       throw new StorageIsNotOpenError({ name: this.name });
+    }
+
+    if (this.#io.move === undefined) {
+      if (c.key === c.destinationKey) {
+        await this.#io.read(c);
+
+        return;
+      }
+
+      if (this.#io.copy === undefined) {
+        const data = await this.#io.read(c);
+        await this.#io.write(c, data);
+      } else {
+        await this.#io.copy(c);
+      }
+
+      await this.#io.delete(c);
+
+      return;
     }
 
     await this.#io.move(c);

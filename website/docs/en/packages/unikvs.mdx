@@ -186,7 +186,7 @@ await kvs.move({ key: "backup", destinationKey: "archive" });
 
 `copy` and `move` take the source `key` and the destination `destinationKey`. An existing destination value is overwritten. `move` removes the source only after the destination write succeeds. If the source does not exist, they throw `KeyNotFoundError`. If both keys are the same, they only verify that the source exists and do not delete it.
 
-With multiple storages, the operation is applied to every storage where the source exists. Middleware `mapKey` is applied to both the source and destination keys.
+With multiple storages, the operation is applied to every storage where the source exists. Middleware `mapKey` is applied to both the source and destination keys. When a storage does not implement `copy` or `move`, the operation is reproduced with `read`, `write`, and `delete`.
 
 ## Value types [#value-types]
 

@@ -149,6 +149,7 @@ Default retry eligibility. Permanent failures such as missing keys and abort-dri
 
 - All operations preserve the delegate types; no data or chunk conversion is performed.
 - Retried operations are reads, writes, existence checks, deletes, copies, moves, clears, and stream acquisitions.
+- When the inner storage lacks `copy` or `move`, Retry reproduces the behavior with `read`, `write`, and `delete`.
 - `open` and `close` failures are not retried and propagate as-is.
 - Delays grow exponentially up to the cap; when `jitter` is `true` they vary between half the cap and the cap.
 

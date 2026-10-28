@@ -140,6 +140,42 @@ class FlakyStorage implements IStorage {
   }
 }
 
+/**
+ * copy/move を持たない基本操作のみのストレージです。
+ * Retry のフォールバックを検証するために使用します。
+ */
+class BasicStorage implements IStorage {
+  public readonly name = "Basic";
+
+  public readonly map = new Map<string, unknown>();
+
+  public readonly isOpen = true;
+
+  public write(c: IStorage.WriteContext, data: unknown): void {
+    this.map.set(c.key, data);
+  }
+
+  public read(c: IStorage.ReadContext): unknown {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    return this.map.get(c.key);
+  }
+
+  public exists(c: IStorage.ExistsContext): boolean {
+    return this.map.has(c.key);
+  }
+
+  public delete(c: IStorage.DeleteContext): void {
+    this.map.delete(c.key);
+  }
+
+  public clear(_c: IStorage.ClearContext): void {
+    this.map.clear();
+  }
+}
+
 describe("初期化と基本属性", () => {
   test("name は Retry である", ({ expect }) => {
     // 実行と検証：
@@ -835,6 +871,38 @@ describe("再試行しない委譲", () => {
     await expect(
       retry.getReadable(createStreamContext("k1") as IStorage.GetReadableContext),
     ).rejects.toThrow(RetryUnsupportedOperationError);
+  });
+});
+
+describe("copy と move のフォールバック", () => {
+  test("内側ストレージが copy を持たないとき read と write で複製する", async ({ expect }) => {
+    // 準備：
+    const inner = new BasicStorage();
+    inner.map.set("source", "value");
+
+    const retry = new Retry(inner);
+
+    // 実行：
+    await retry.copy(createCopyContext("source", "destination") as IStorage.CopyContext);
+
+    // 検証：
+    expect(inner.map.get("destination")).toBe("value");
+    expect(inner.map.get("source")).toBe("value");
+  });
+
+  test("内側ストレージが move を持たないとき read/write/delete で移動する", async ({ expect }) => {
+    // 準備：
+    const inner = new BasicStorage();
+    inner.map.set("source", "value");
+
+    const retry = new Retry(inner);
+
+    // 実行：
+    await retry.move(createMoveContext("source", "destination") as IStorage.MoveContext);
+
+    // 検証：
+    expect(inner.map.get("destination")).toBe("value");
+    expect(inner.map.has("source")).toBe(false);
   });
 });
 

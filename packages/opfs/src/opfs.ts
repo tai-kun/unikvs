@@ -218,7 +218,7 @@ export default class Opfs implements IStorage {
       return;
     }
 
-    const data = await this.read(c as unknown as IStorage.ReadContext);
+    const data = await this.read(c);
     await this.#writeFile(c.signal, c.destinationKey, data);
   }
 
@@ -241,10 +241,10 @@ export default class Opfs implements IStorage {
       return;
     }
 
-    const data = await this.read(c as unknown as IStorage.ReadContext);
+    const data = await this.read(c);
     await this.#writeFile(c.signal, c.destinationKey, data);
 
-    await this.delete(c as unknown as IStorage.DeleteContext);
+    await this.delete(c);
   }
 
   /**

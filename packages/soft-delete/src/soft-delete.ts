@@ -344,13 +344,13 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   public async copy(c: IStorage.CopyContext): Promise<void> {
     // 同じキーへのコピーは有効な値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
-      await this.#requireLive(c as unknown as IStorage.ReadContext);
+      await this.#requireLive(c);
 
       return;
     }
 
     // 読み出し経路を通すことで、墓標を存在しないキーとして扱います。
-    const value = await this.read(c as unknown as IStorage.ReadContext);
+    const value = await this.read(c);
     // コピー先が墓標のときは通常の書き込みとして復活させます。
     await this.write(
       {
@@ -373,12 +373,12 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   public async move(c: IStorage.MoveContext): Promise<void> {
     // 同じキーへの移動は有効な値の存在確認だけを行い、墓標化しません。
     if (c.key === c.destinationKey) {
-      await this.#requireLive(c as unknown as IStorage.ReadContext);
+      await this.#requireLive(c);
 
       return;
     }
 
-    await this.copy(c as unknown as IStorage.CopyContext);
+    await this.copy(c);
     // 移動元は削除墓標として残し、復元できる状態にします。
     await this.delete({
       ...this.#scopedKey(c, c.key),

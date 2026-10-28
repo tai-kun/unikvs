@@ -248,43 +248,43 @@ export interface IDeleteContext extends IKeyedActionContext {
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext)
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#itransfercontext)
  */
-export interface ICopyContext extends IKeyedActionContext {
+export interface ITransferContext extends IKeyedActionContext {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-action)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#itransfercontext-action)
    */
-  readonly action: "copy";
+  readonly action: "copy" | "move";
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-key)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#itransfercontext-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-destination-key)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#itransfercontext-destination-key)
    */
   readonly destinationKey: string;
 }
 
 /**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext)
+ */
+export interface ICopyContext extends ITransferContext {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext-action)
+   */
+  readonly action: "copy";
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext)
  */
-export interface IMoveContext extends IKeyedActionContext {
+export interface IMoveContext extends ITransferContext {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-action)
    */
   readonly action: "move";
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-key)
-   */
-  readonly key: string;
-
-  /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext-destination-key)
-   */
-  readonly destinationKey: string;
 }
 
 /**

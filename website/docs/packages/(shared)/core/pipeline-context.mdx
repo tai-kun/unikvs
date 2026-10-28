@@ -73,8 +73,9 @@ flowchart TB
   E --> J[IStreamContext]
   E --> K[IHasContext]
   E --> L[IDeleteContext]
-  E --> U[ICopyContext]
-  E --> V[IMoveContext]
+  E --> U[ITransferContext]
+  U --> V[ICopyContext]
+  U --> W[IMoveContext]
   C --> M[IClearContext]
   E --> N[ITransformContext]
   N --> O[ITransformDataContext]
@@ -102,6 +103,7 @@ flowchart TB
 | [`IStreamContext`](#istreamcontext)             | `"stream"`          | `key`・`signal`・`repair`                           |
 | [`IHasContext`](#ihascontext)                   | `"has"`             | `key`・`signal`                                     |
 | [`IDeleteContext`](#ideletecontext)             | `"delete"`          | `key`・`signal`                                     |
+| [`ITransferContext`](#itransfercontext)         | `"copy" \| "move"`  | `key`・`destinationKey`・`signal`                   |
 | [`ICopyContext`](#icopycontext)                 | `"copy"`            | `key`・`destinationKey`・`signal`                   |
 | [`IMoveContext`](#imovecontext)                 | `"move"`            | `key`・`destinationKey`・`signal`                   |
 | [`IClearContext`](#iclearcontext)               | `"clear"`           | `signal`                                            |
@@ -118,7 +120,7 @@ flowchart TB
 
 ### キー操作 [#contexts-keyed]
 
-`IKeyedActionContext` は `key: string` を加え、`action` を `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"` の 7 種に絞ります。以降の `ISetContext`・`IGetContext`・`IStreamContext`・`IHasContext`・`IDeleteContext` は `action` を 1 種に固定します。`ICopyContext` と `IMoveContext` はコピー先・移動先の `destinationKey` も持ちます。`IClearContext` はキーを伴わないため `IKeyedActionContext` ではなく `IActionContext` を直接継承し、`action` は `"clear"` です。
+`IKeyedActionContext` は `key: string` を加え、`action` を `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"` の 7 種に絞ります。以降の `ISetContext`・`IGetContext`・`IStreamContext`・`IHasContext`・`IDeleteContext` は `action` を 1 種に固定します。`ITransferContext` は `action` を `"copy" | "move"` に絞り、コピー先・移動先の `destinationKey` を加えます。`ICopyContext` と `IMoveContext` はそれぞれ `action` を `"copy"`・`"move"` に固定します。`IClearContext` はキーを伴わないため `IKeyedActionContext` ではなく `IActionContext` を直接継承し、`action` は `"clear"` です。
 
 ミドルウェアの `use` フックはこれら 8 種 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) をまとめて受けます。`action` で絞り込むと、各操作の `key` や `repair`、`destinationKey` に型安全に触れます。
 
@@ -375,9 +377,33 @@ if (ctx.repair.enabled) {
   }}
 />
 
+### `ITransferContext` [#itransfercontext]
+
+コピー・移動に共通するコンテキストです。`action` は `"copy" | "move"` で、`key` がコピー元・移動元、`destinationKey` がコピー先・移動先です。
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#itransfercontext-action] "copy" | "move"',
+      required: true,
+      description: "操作の種類です。",
+    },
+    key: {
+      type: "[#itransfercontext-key] string",
+      required: true,
+      description: "コピー元または移動元のキーです。",
+    },
+    destinationKey: {
+      type: "[#itransfercontext-destination-key] string",
+      required: true,
+      description: "コピー先または移動先のキーです。",
+    },
+  }}
+/>
+
 ### `ICopyContext` [#icopycontext]
 
-`action` を `"copy"` に固定したコピー用コンテキストです。`key` がコピー元、`destinationKey` がコピー先です。
+`action` を `"copy"` に固定したコピー用コンテキストです。`key` と `destinationKey` は [`ITransferContext`](#itransfercontext) から継承します。
 
 <TypeTable
   type={{
@@ -386,22 +412,12 @@ if (ctx.repair.enabled) {
       required: true,
       description: "操作の種類です。",
     },
-    key: {
-      type: "[#icopycontext-key] string",
-      required: true,
-      description: "コピー元のキーです。",
-    },
-    destinationKey: {
-      type: "[#icopycontext-destination-key] string",
-      required: true,
-      description: "コピー先のキーです。",
-    },
   }}
 />
 
 ### `IMoveContext` [#imovecontext]
 
-`action` を `"move"` に固定した移動用コンテキストです。`key` が移動元、`destinationKey` が移動先です。
+`action` を `"move"` に固定した移動用コンテキストです。`key` と `destinationKey` は [`ITransferContext`](#itransfercontext) から継承します。
 
 <TypeTable
   type={{
@@ -409,16 +425,6 @@ if (ctx.repair.enabled) {
       type: '[#imovecontext-action] "move"',
       required: true,
       description: "操作の種類です。",
-    },
-    key: {
-      type: "[#imovecontext-key] string",
-      required: true,
-      description: "移動元のキーです。",
-    },
-    destinationKey: {
-      type: "[#imovecontext-destination-key] string",
-      required: true,
-      description: "移動先のキーです。",
     },
   }}
 />

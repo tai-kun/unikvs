@@ -154,7 +154,7 @@ export default class SessionStorage implements IStorage<string> {
   public copy(c: IStorage.CopyContext): void {
     c.signal.throwIfAborted();
 
-    const data = this.read(c as unknown as IStorage.ReadContext);
+    const data = this.read(c);
 
     // 同じキーへのコピーは値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
@@ -174,7 +174,7 @@ export default class SessionStorage implements IStorage<string> {
   public move(c: IStorage.MoveContext): void {
     c.signal.throwIfAborted();
 
-    const data = this.read(c as unknown as IStorage.ReadContext);
+    const data = this.read(c);
 
     // 同じキーへの移動は値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
@@ -182,7 +182,7 @@ export default class SessionStorage implements IStorage<string> {
     }
 
     this.#writeValue(c.destinationKey, data);
-    this.delete(c as unknown as IStorage.DeleteContext);
+    this.delete(c);
   }
 
   /**

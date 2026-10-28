@@ -244,7 +244,7 @@ export default class CacheStorage implements IStorage {
     await Promise.race([cache.put(request, response), abortPromise]);
 
     throwIfAborted(c.signal);
-    await this.delete(c as unknown as IStorage.DeleteContext);
+    await this.delete(c);
   }
 
   /**

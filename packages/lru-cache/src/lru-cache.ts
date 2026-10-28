@@ -270,7 +270,7 @@ export default class LruCache implements IStorage {
     c.signal.throwIfAborted();
     this.#assertOpen();
 
-    const value = this.read(c as unknown as IStorage.ReadContext);
+    const value = this.read(c);
 
     // 同じキーへのコピーは値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
@@ -291,7 +291,7 @@ export default class LruCache implements IStorage {
     c.signal.throwIfAborted();
     this.#assertOpen();
 
-    const value = this.read(c as unknown as IStorage.ReadContext);
+    const value = this.read(c);
 
     // 同じキーへの移動は値の存在確認だけを行います。
     if (c.key === c.destinationKey) {

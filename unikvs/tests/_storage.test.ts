@@ -5,6 +5,8 @@ import {
   GetContext,
   HasContext,
   SetContext,
+  CopyContext,
+  MoveContext,
   OpenContext,
   ClearContext,
   CloseContext,
@@ -129,6 +131,60 @@ class MockStorage implements IStorage {
 
   public async clear(_c: IStorage.ClearContext): Promise<void> {
     this.map.clear();
+  }
+}
+
+/**
+ * copy/move を実装しない基本操作のみのストレージです。
+ * UniKvsStorage のフォールバックを検証するために使用します。
+ */
+class BasicStorage implements IStorage {
+  public readonly name = "BasicStorage";
+
+  public isOpen = true;
+
+  public readonly map = new Map<string, unknown>();
+
+  public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    // copy/move context では書き込み先が destinationKey になる。
+    const key = c.action === "copy" || c.action === "move" ? c.destinationKey : c.key;
+    this.map.set(key, data);
+  }
+
+  public async read(c: IStorage.ReadContext): Promise<unknown> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    return this.map.get(c.key);
+  }
+
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    return this.map.has(c.key);
+  }
+
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.map.delete(c.key);
+  }
+
+  public async clear(_c: IStorage.ClearContext): Promise<void> {
+    this.map.clear();
+  }
+}
+
+/**
+ * copy だけを実装し、move を持たないストレージです。
+ * copy が使える場合に move フォールバックが copy + delete を使うことを検証します。
+ */
+class CopyOnlyStorage extends BasicStorage {
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (!this.map.has(c.key)) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    if (c.key !== c.destinationKey) {
+      this.map.set(c.destinationKey, this.map.get(c.key));
+    }
   }
 }
 
@@ -636,6 +692,102 @@ describe("UniKvsStorage - 異常系・エラーハンドリング", () => {
       signal: new AbortController().signal,
     });
     await expect(storage.getWritable(c)).rejects.toThrow(WritableStreamNotSupportedError);
+  });
+});
+
+describe("UniKvsStorage - copy と move のフォールバック", () => {
+  test("copy を持たないストレージでは read と write で複製する", async ({ expect }) => {
+    // 準備：
+    const mock = new BasicStorage();
+    mock.map.set("source", "value");
+
+    const storage = UniKvsStorage.from(mock);
+    await storage.open(openContext());
+
+    // 実行：
+    await storage.copy(
+      new CopyContext({
+        key: "source",
+        signal: new AbortController().signal,
+        destinationKey: "destination",
+      }),
+    );
+
+    // 検証：
+    expect(mock.map.get("destination")).toBe("value");
+    expect(mock.map.get("source")).toBe("value");
+  });
+
+  test("move を持たないストレージでは read/write/delete で移動する", async ({ expect }) => {
+    // 準備：
+    const mock = new BasicStorage();
+    mock.map.set("source", "value");
+
+    const storage = UniKvsStorage.from(mock);
+    await storage.open(openContext());
+
+    // 実行：
+    await storage.move(
+      new MoveContext({
+        key: "source",
+        signal: new AbortController().signal,
+        destinationKey: "destination",
+      }),
+    );
+
+    // 検証：
+    expect(mock.map.get("destination")).toBe("value");
+    expect(mock.map.has("source")).toBe(false);
+  });
+
+  test("copy だけを持つストレージでは move を copy と delete で再現する", async ({ expect }) => {
+    // 準備：
+    const mock = new CopyOnlyStorage();
+    mock.map.set("source", "value");
+
+    const storage = UniKvsStorage.from(mock);
+    await storage.open(openContext());
+
+    // 実行：
+    await storage.move(
+      new MoveContext({
+        key: "source",
+        signal: new AbortController().signal,
+        destinationKey: "destination",
+      }),
+    );
+
+    // 検証：
+    expect(mock.map.get("destination")).toBe("value");
+    expect(mock.map.has("source")).toBe(false);
+  });
+
+  test("同じキーへの copy と move は存在確認だけで終わる", async ({ expect }) => {
+    // 準備：
+    const mock = new BasicStorage();
+    mock.map.set("key", "value");
+
+    const storage = UniKvsStorage.from(mock);
+    await storage.open(openContext());
+
+    // 実行：
+    await storage.copy(
+      new CopyContext({
+        key: "key",
+        signal: new AbortController().signal,
+        destinationKey: "key",
+      }),
+    );
+    await storage.move(
+      new MoveContext({
+        key: "key",
+        signal: new AbortController().signal,
+        destinationKey: "key",
+      }),
+    );
+
+    // 検証：
+    expect(mock.map.get("key")).toBe("value");
   });
 });
 

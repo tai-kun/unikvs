@@ -5,7 +5,7 @@ description: "@unikvs/core IStorage: the interface destination plugins implement
 
 ## Overview [#overview]
 
-`IStorage` is the interface destination plugins implement. It has `name`, `isOpen`, CRUD operations, and `copy`/`move`; lifecycle and stream acquisition are optional. Four type arguments tune data and chunk types.
+`IStorage` is the interface destination plugins implement. It has `name`, `isOpen`, and CRUD operations; lifecycle, `copy`/`move`, and stream acquisition are optional. Four type arguments tune data and chunk types.
 
 ```ts
 import type { IStorage } from "@unikvs/core";
@@ -65,15 +65,17 @@ Every method returns `MaybePromise` (`T | PromiseLike<T>`), so sync and async im
 
 | Member | Required | Signature                                | Description                 |
 | ------ | -------- | ---------------------------------------- | --------------------------- |
-| `copy` | required | `(c: CopyContext) => MaybePromise<void>` | Copies a key to another key |
-| `move` | required | `(c: MoveContext) => MaybePromise<void>` | Moves a key to another key  |
+| `copy` | optional | `(c: CopyContext) => MaybePromise<void>` | Copies a key to another key |
+| `move` | optional | `(c: MoveContext) => MaybePromise<void>` | Moves a key to another key  |
 
 `CopyContext` and `MoveContext` hold the source key in `key` and the destination key in `destinationKey`. An existing destination value is overwritten.
 
 `move` removes the source only after the destination write succeeds. If the destination write fails, leave the source in place. If the source does not exist, throw [`KeyNotFoundError`](./errors#error-key-not-found). When `key` and `destinationKey` are the same, only verify that the source exists and do not delete it.
 
+When `copy` or `move` is omitted, the internal `UniKvsStorage` reproduces the behavior with `read`, `write`, and `delete`. Implement them only when the backend has a more efficient native operation.
+
 :::tip[Prefer native APIs]
-If the backend provides copy or rename operations, prefer them over combining reads and writes. Otherwise, implement the operation with `read`, `write`, and `delete`.
+If the backend provides copy or rename operations, prefer them over combining reads and writes. Otherwise, omit the implementation and let UniKvs reproduce it with `read`, `write`, and `delete`.
 :::
 
 ## Stream acquisition [#streams]
@@ -122,16 +124,18 @@ The `IStorage` namespace provides aliases of [pipeline contexts](./pipeline-cont
 | ---------------------------------------- | ----------------------------------------------------- | ------------------- |
 | `IStorage.OpenContext`                   | [`IOpenContext`](./pipeline-context#iopencontext)     | `open`              |
 | `IStorage.CloseContext`                  | [`ICloseContext`](./pipeline-context#iclosecontext)   | `close`             |
-| `IStorage.WriteContext`                  | [`ISetContext`](./pipeline-context#isetcontext)       | `write`             |
+| `IStorage.WriteContext`                  | `ISetContext \| ICopyContext \| IMoveContext`         | `write`             |
 | `IStorage.GetWritableContext`            | [`ISetContext`](./pipeline-context#isetcontext)       | `getWritable`       |
-| `IStorage.ReadContext`                   | [`IGetContext`](./pipeline-context#igetcontext)       | `read`              |
+| `IStorage.ReadContext`                   | `IGetContext \| ICopyContext \| IMoveContext`         | `read`              |
 | `IStorage.GetReadableContext`            | [`IStreamContext`](./pipeline-context#istreamcontext) | `getReadable`       |
 | `IStorage.ExistsContext`                 | [`IHasContext`](./pipeline-context#ihascontext)       | `exists`            |
-| `IStorage.DeleteContext`                 | [`IDeleteContext`](./pipeline-context#ideletecontext) | `delete`            |
-| `IStorage.CopyContext`                   | [`ICopyContext`](./pipeline-context#icopycontext)     | `copy`              |
+| `IStorage.DeleteContext`                 | `IDeleteContext \| ICopyContext \| IMoveContext`      | `delete`            |
+| `IStorage.CopyContext`                   | `ICopyContext \| IMoveContext`                        | `copy`              |
 | `IStorage.MoveContext`                   | [`IMoveContext`](./pipeline-context#imovecontext)     | `move`              |
 | `IStorage.ClearContext`                  | [`IClearContext`](./pipeline-context#iclearcontext)   | `clear`             |
 | `IStorage.OtherWriteErrorHandlerContext` | `WriteContext \| GetWritableContext`                  | `onOtherWriteError` |
+
+During the `copy` / `move` fallback, `read`, `write`, and `delete` receive contexts with the original action (`"copy"` or `"move"`) and the key appropriate for the call. Therefore `ReadContext`, `WriteContext`, and `DeleteContext` also include the copy/move contexts.
 
 ## Example [#example]
 
@@ -273,7 +277,7 @@ Implementation points:
     Declare the stored value type as `IStorage<T>`. When read/write types differ or you use streams, specify all four.
   </Step>
   <Step title="Implement required members">
-    `name`, `isOpen`, the 5 CRUD methods, and `copy`/`move` are required. Throw `KeyNotFoundError` when a read source or the copy/move source is missing.
+    `name`, `isOpen`, and the 5 CRUD methods are required. `read` throws `KeyNotFoundError` for missing keys. `copy` and `move` are optional; when omitted, `read`/`write`/`delete` provide the fallback.
   </Step>
   <Step title="Add optional members">
     Implement `open` / `close` only with setup needs, `getWritable` / `getReadable` for streams, and `onOtherWriteError` when you need other storages' failure reports.
@@ -333,13 +337,11 @@ Interface implemented by destination plugins. Four type arguments tune data and 
     },
     copy: {
       type: "[#istorage-copy] (c: IStorage.CopyContext) => MaybePromise<void>",
-      required: true,
-      description: "Copies a key to another key.",
+      description: "Copies a key to another key. Falls back to read/write when omitted.",
     },
     move: {
       type: "[#istorage-move] (c: IStorage.MoveContext) => MaybePromise<void>",
-      required: true,
-      description: "Moves a key to another key.",
+      description: "Moves a key to another key. Falls back to copy/delete when omitted.",
     },
     onOtherWriteError: {
       type: "[#istorage-onotherwriteerror] (c: IStorage.OtherWriteErrorHandlerContext, errors: readonly IStorage.IOtherWriteError[]) => MaybePromise<void>",

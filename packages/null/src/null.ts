@@ -74,7 +74,7 @@ export default class Null implements IStorage {
    * @returns 値を返さず常にエラーを投げます。
    */
   public copy(c: IStorage.CopyContext): never {
-    return this.read(c as unknown as IStorage.ReadContext);
+    return this.read(c);
   }
 
   /**
@@ -85,7 +85,7 @@ export default class Null implements IStorage {
    * @returns 値を返さず常にエラーを投げます。
    */
   public move(c: IStorage.MoveContext): never {
-    return this.read(c as unknown as IStorage.ReadContext);
+    return this.read(c);
   }
 
   /**

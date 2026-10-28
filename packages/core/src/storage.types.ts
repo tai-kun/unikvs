@@ -31,7 +31,7 @@ export namespace IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#isetcontext)
    */
-  export type WriteContext = ISetContext;
+  export type WriteContext = ISetContext | ICopyContext | IMoveContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#isetcontext)
@@ -41,7 +41,7 @@ export namespace IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#igetcontext)
    */
-  export type ReadContext = IGetContext;
+  export type ReadContext = IGetContext | ICopyContext | IMoveContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#istreamcontext)
@@ -56,12 +56,12 @@ export namespace IStorage {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#ideletecontext)
    */
-  export type DeleteContext = IDeleteContext;
+  export type DeleteContext = IDeleteContext | ICopyContext | IMoveContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#icopycontext)
    */
-  export type CopyContext = ICopyContext;
+  export type CopyContext = ICopyContext | IMoveContext;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/pipeline-context#imovecontext)
@@ -187,12 +187,12 @@ export interface IStorage<
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-copy)
    */
-  copy(c: IStorage.CopyContext): MaybePromise<void>;
+  copy?(c: IStorage.CopyContext): MaybePromise<void>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-move)
    */
-  move(c: IStorage.MoveContext): MaybePromise<void>;
+  move?(c: IStorage.MoveContext): MaybePromise<void>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/core/storage#istorage-onotherwriteerror)

@@ -15,6 +15,7 @@ import {
   type IStreamContext,
   type IReadableStream,
   type IPipelineContext,
+  type ITransferContext,
   type ILifecycleContext,
   type ITransformContext,
   type VariablesSnapshot,
@@ -748,7 +749,10 @@ type TransferContextInit<TAction extends "copy" | "move"> = KeyedActionContextIn
 /**
  * コピー・移動で共通のコンテキストです。
  */
-class TransferContext<TAction extends "copy" | "move"> extends KeyedActionContext<TAction> {
+class TransferContext<TAction extends "copy" | "move">
+  extends KeyedActionContext<TAction>
+  implements ITransferContext
+{
   /**
    * コピー先または移動先のキーです。
    */

@@ -79,6 +79,7 @@ describe("exports", () => {
     expectTypeOf<pipelineContext.IStreamContext>().toEqualTypeOf<core.IStreamContext>();
     expectTypeOf<pipelineContext.IHasContext>().toEqualTypeOf<core.IHasContext>();
     expectTypeOf<pipelineContext.IDeleteContext>().toEqualTypeOf<core.IDeleteContext>();
+    expectTypeOf<pipelineContext.ITransferContext>().toEqualTypeOf<core.ITransferContext>();
     expectTypeOf<pipelineContext.ICopyContext>().toEqualTypeOf<core.ICopyContext>();
     expectTypeOf<pipelineContext.IMoveContext>().toEqualTypeOf<core.IMoveContext>();
     expectTypeOf<pipelineContext.IClearContext>().toEqualTypeOf<core.IClearContext>();
