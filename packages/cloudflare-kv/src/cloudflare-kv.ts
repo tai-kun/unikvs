@@ -219,16 +219,7 @@ export default class CloudflareKv implements IStorage {
    * @returns 書き込みが完了したら解決します。
    */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    throwIfAborted(c.signal);
-
-    // ビューの `byteOffset` を持ち込まないよう正確な長さで複製します。
-    const buffer = new ArrayBuffer(data.byteLength);
-    new Uint8Array(buffer).set(data);
-    await this.#binding.put(
-      this.#fullKey(c.key),
-      buffer,
-      this.#ttlSeconds === undefined ? undefined : { expirationTtl: this.#ttlSeconds },
-    );
+    await this.#put(c.signal, c.key, data);
   }
 
   /**
@@ -295,6 +286,43 @@ export default class CloudflareKv implements IStorage {
   }
 
   /**
+   * 指定したキーのバイト列を別のキーへ複製します。複製先が存在する場合は上書きします。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, data);
+  }
+
+  /**
+   * 指定したキーのバイト列を別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, data);
+    await this.delete(c as unknown as IStorage.DeleteContext);
+  }
+
+  /**
    * 接頭辞配下のキーをすべて削除します。
    *
    * `list` で列挙してから削除します。
@@ -336,6 +364,28 @@ export default class CloudflareKv implements IStorage {
       throwIfAborted(c.signal);
       await this.#binding.delete(name);
     }
+  }
+
+  /**
+   * 指定したキーへバイト列を保存します。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 保存先のキーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #put(signal: AbortSignal, key: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    throwIfAborted(signal);
+
+    // ビューの `byteOffset` を持ち込まないよう正確な長さで複製します。
+    const buffer = new ArrayBuffer(data.byteLength);
+    new Uint8Array(buffer).set(data);
+    await this.#binding.put(
+      this.#fullKey(key),
+      buffer,
+      this.#ttlSeconds === undefined ? undefined : { expirationTtl: this.#ttlSeconds },
+    );
   }
 
   /**
