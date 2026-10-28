@@ -3,6 +3,8 @@
  *
  * 要求 URL をキーにして応答ボディのバイト列を保持します。呼び出し記録は URL 符号化の表明に使います。
  */
+import { type TestContextInit, TestContext } from "@unikvs/testing";
+
 import type { CacheLike } from "../src/cloudflare-cache.js";
 
 export type RecordedCall = {
@@ -19,6 +21,40 @@ export type FakeCache = CacheLike & {
   readonly calls: RecordedCall[];
   readonly store: Map<string, Uint8Array>;
 };
+
+/**
+ * テスト用のコピーコンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  });
+}
+
+/**
+ * テスト用の移動コンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createMoveContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "move",
+    key,
+    destinationKey,
+  });
+}
 
 /**
  * 要求 URL をキーにする疑似 `Cache` を作ります。
