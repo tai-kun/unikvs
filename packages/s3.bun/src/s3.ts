@@ -1,6 +1,7 @@
 import {
   type IStorage,
   type IPipelineContext,
+  KeyNotFoundError,
   StorageAbortedError,
   InvalidPartSizeError,
   UnsupportedRuntimeError,
@@ -13,6 +14,41 @@ import { StorageNotOpenError } from "./errors.js";
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-bun#s3storageoptions)
  */
 export type S3StorageOptions = Omit<S3Options, "bucket">;
+
+/**
+ * Bun の S3 クライアントの失敗がキーの欠番を表すかどうかを判定します。
+ *
+ * バケット自体が存在しない失敗は、キーの欠番と区別します。
+ *
+ * @param ex 判定する失敗です。
+ *
+ * @returns キーが存在しなければ真です。
+ */
+function isKeyNotFoundError(ex: unknown): boolean {
+  if (typeof ex !== "object" || ex === null) {
+    return false;
+  }
+
+  const error = ex as {
+    code?: unknown;
+    name?: unknown;
+    status?: unknown;
+    statusCode?: unknown;
+  };
+
+  if (error.name === "NoSuchBucket" || error.code === "NoSuchBucket") {
+    return false;
+  }
+
+  return (
+    error.name === "NoSuchKey" ||
+    error.code === "NoSuchKey" ||
+    error.name === "NotFound" ||
+    error.code === "NotFound" ||
+    error.status === 404 ||
+    error.statusCode === 404
+  );
+}
 
 /**
  * `clear()` で同時に削除するオブジェクト数の上限です。
@@ -201,6 +237,53 @@ export default class S3 implements IStorage {
   }
 
   /**
+   * キーの値を別のキーへ複製します。
+   *
+   * コピー先に既存のオブジェクトがあるときは上書きします。
+   * コピー元が存在しないときは `KeyNotFoundError` を投げます。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    if (c.key === c.destinationKey) {
+      await this.#assertKeyExists(c.key, c.signal);
+
+      return;
+    }
+
+    await this.#copyKey(c.key, c.destinationKey, c.signal);
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * 複製先の書き込みが完了してから複製元を削除します。
+   * 複製先の書き込みに失敗したときは複製元を残します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    if (c.key === c.destinationKey) {
+      await this.#assertKeyExists(c.key, c.signal);
+
+      return;
+    }
+
+    await this.#copyKey(c.key, c.destinationKey, c.signal);
+    c.signal.throwIfAborted();
+
+    await this.#getClient().delete(c.key);
+  }
+
+  /**
    * バケット内のオブジェクトをすべて削除します。
    *
    * 一覧を頁送りで取得し、並列数を抑えて削除します。
@@ -304,6 +387,56 @@ export default class S3 implements IStorage {
         await reader.cancel(reason);
       },
     });
+  }
+
+  /**
+   * キーのオブジェクトが存在することを確認します。
+   *
+   * 同じキーへの複製や移動で、欠番を成功扱いにしないために使用します。
+   *
+   * @param key 確認するキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns キーが存在すれば解決します。
+   */
+  async #assertKeyExists(key: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+
+    if (!(await this.#getClient().exists(key))) {
+      throw new KeyNotFoundError({ key });
+    }
+  }
+
+  /**
+   * 読み取りと書き込みでオブジェクトを複製します。
+   *
+   * コピー元の欠番は `KeyNotFoundError` に変換します。
+   *
+   * @param sourceKey 複製元のキーです。
+   * @param destinationKey 複製先のキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  async #copyKey(sourceKey: string, destinationKey: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+
+    const client = this.#getClient();
+    let data: Uint8Array<ArrayBuffer>;
+
+    try {
+      const buffer = await client.file(sourceKey).arrayBuffer();
+      data = new Uint8Array(buffer);
+    } catch (ex) {
+      if (isKeyNotFoundError(ex)) {
+        throw new KeyNotFoundError({ key: sourceKey });
+      }
+
+      throw ex;
+    }
+
+    signal.throwIfAborted();
+    await client.write(destinationKey, data);
   }
 
   /**
