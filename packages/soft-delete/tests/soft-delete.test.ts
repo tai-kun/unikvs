@@ -10,6 +10,8 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createClearContext,
   createDecodeContext,
   createDeleteContext,
@@ -72,7 +74,32 @@ class MinimalStorage implements IStorage {
 
   public async delete(_c: IStorage.DeleteContext): Promise<void> {}
 
+  public async copy(_c: IStorage.CopyContext): Promise<void> {}
+
+  public async move(_c: IStorage.MoveContext): Promise<void> {}
+
   public async clear(_c: IStorage.ClearContext): Promise<void> {}
+}
+
+/**
+ * 指定キーへの書き込みだけを失敗させる下層ストレージです。
+ * 移動先への書き込み失敗時に移動元が残ることの検証に使います。
+ */
+class FailOnWriteStorage extends Memory {
+  readonly #failKey: string;
+
+  public constructor(failKey: string) {
+    super();
+    this.#failKey = failKey;
+  }
+
+  public override write(c: IStorage.WriteContext, data: unknown): void {
+    if (c.key === this.#failKey) {
+      throw new Error("write failed");
+    }
+
+    super.write(c, data);
+  }
 }
 
 describe("初期化と基本属性", () => {
@@ -288,12 +315,20 @@ function createUseContext(action: IMiddleware.UseContext["action"]): IMiddleware
       return createDeleteContext("k1") as IMiddleware.UseContext;
     }
 
+    case "copy": {
+      return createCopyContext("k1", "k2") as IMiddleware.UseContext;
+    }
+
+    case "move": {
+      return createMoveContext("k1", "k2") as IMiddleware.UseContext;
+    }
+
     case "clear": {
       return createClearContext() as unknown as IMiddleware.UseContext;
     }
 
     default: {
-      throw new Error(`Unknown action: ${String(action)}`);
+      throw new Error("Unknown action");
     }
   }
 }
@@ -403,6 +438,161 @@ describe("下層ストレージへの委譲", () => {
         errors,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("copy と move", () => {
+  test("copy はコピー元とコピー先の両方に有効な値を残す", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行：
+    await softDelete.copy(createCopyContext("k1", "k2") as IStorage.CopyContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
+    expect(await softDelete.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(true);
+  });
+
+  test("copy はコピー先の墓標を上書きして台帳から外す", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.write(createSetContext("k2") as IStorage.WriteContext, "old");
+    await softDelete.delete(createDeleteContext("k2") as IStorage.DeleteContext);
+
+    // 実行：
+    await softDelete.copy(createCopyContext("k1", "k2") as IStorage.CopyContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(true);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+  });
+
+  test("copy のコピー元が墓標のとき、KeyNotFoundError を投げてコピー先を作らない", async ({
+    expect,
+  }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 実行：
+    const error = await captureRejection(
+      softDelete.copy(createCopyContext("k1", "k2") as IStorage.CopyContext),
+    );
+
+    // 検証：
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "k1" });
+
+    expect(await softDelete.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(false);
+  });
+
+  test("copy のコピー元とコピー先が同じとき、有効な値は削除せずに残る", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行：
+    await softDelete.copy(createCopyContext("k1", "k1") as IStorage.CopyContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
+  });
+
+  test("copy のコピー元とコピー先が同じで墓標のとき、KeyNotFoundError を投げる", async ({
+    expect,
+  }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 実行と検証：
+    await expect(
+      softDelete.copy(createCopyContext("k1", "k1") as IStorage.CopyContext),
+    ).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("move は移動先へ書き込んだ後に移動元を墓標化する", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行：
+    await softDelete.move(createMoveContext("k1", "k2") as IStorage.MoveContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(await softDelete.listTombstones()).toMatchObject([{ key: "k1" }]);
+    // 移動元は復元できる墓標として残る。
+    expect(await softDelete.restore("k1")).toBe("v1");
+  });
+
+  test("move は移動先の墓標を上書きし、移動元だけを墓標化する", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.write(createSetContext("k2") as IStorage.WriteContext, "old");
+    await softDelete.delete(createDeleteContext("k2") as IStorage.DeleteContext);
+
+    // 実行：
+    await softDelete.move(createMoveContext("k1", "k2") as IStorage.MoveContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k2") as IStorage.ReadContext)).toBe("v1");
+
+    const tombstones = await softDelete.listTombstones();
+    expect(tombstones).toHaveLength(1);
+    expect(tombstones[0]?.key).toBe("k1");
+  });
+
+  test("move の移動元が墓標のとき、KeyNotFoundError を投げる", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 実行と検証：
+    await expect(
+      softDelete.move(createMoveContext("k1", "k2") as IStorage.MoveContext),
+    ).rejects.toThrow(KeyNotFoundError);
+    expect(await softDelete.exists(createHasContext("k2") as IStorage.ExistsContext)).toBe(false);
+  });
+
+  test("move の移動元と移動先が同じとき、墓標化せずに値を残す", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行：
+    await softDelete.move(createMoveContext("k1", "k1") as IStorage.MoveContext);
+
+    // 検証：
+    expect(await softDelete.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+  });
+
+  test("move の移動先への書き込みが失敗したとき、移動元は墓標化されず残る", async ({ expect }) => {
+    // 準備：移動先への書き込みだけ失敗する下層ストレージ。
+    const softDelete = new SoftDelete(new FailOnWriteStorage("k2"));
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行と検証：
+    await expect(
+      softDelete.move(createMoveContext("k1", "k2") as IStorage.MoveContext),
+    ).rejects.toThrow("write failed");
+    expect(await softDelete.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v1");
+    expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(true);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
   });
 });
 

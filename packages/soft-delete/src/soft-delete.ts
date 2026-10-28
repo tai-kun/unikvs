@@ -224,6 +224,8 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
       case "stream":
       case "has":
       case "delete":
+      case "copy":
+      case "move":
       case "clear": {
         break;
       }
@@ -328,6 +330,60 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
     await this.#inner.clear(c);
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ複製します。
+   *
+   * 下層ストレージの複製機能は墓標を考慮しないため使わず、読み出しを経由して墓標を除外します。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   *
+   * @returns コピーが完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    // 同じキーへのコピーは有効な値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      await this.#requireLive(c as unknown as IStorage.ReadContext);
+
+      return;
+    }
+
+    // 読み出し経路を通すことで、墓標を存在しないキーとして扱います。
+    const value = await this.read(c as unknown as IStorage.ReadContext);
+    // コピー先が墓標のときは通常の書き込みとして復活させます。
+    await this.write(
+      {
+        ...this.#scopedKey(c, c.destinationKey),
+        action: "set",
+      } as unknown as IStorage.WriteContext,
+      value,
+    );
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ移動します。
+   *
+   * 移動先への書き込みが成功した後に移動元を墓標化するため、失敗時には移動元が残ります。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    // 同じキーへの移動は有効な値の存在確認だけを行い、墓標化しません。
+    if (c.key === c.destinationKey) {
+      await this.#requireLive(c as unknown as IStorage.ReadContext);
+
+      return;
+    }
+
+    await this.copy(c as unknown as IStorage.CopyContext);
+    // 移動元は削除墓標として残し、復元できる状態にします。
+    await this.delete({
+      ...this.#scopedKey(c, c.key),
+      action: "delete",
+    } as unknown as IStorage.DeleteContext);
   }
 
   public async onOtherWriteError(
