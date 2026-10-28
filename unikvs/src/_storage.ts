@@ -2,6 +2,7 @@ import type { IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
 import { asyncmux } from "asyncmux";
 import { callFnOnce } from "call-fn-once";
 
+import { CopyContext, MoveContext, getVariablesStore } from "./_contexts.js";
 import { PluginLifecycle } from "./_plugin-lifecycle.js";
 import { ReadableStreamSchema, WritableStreamSchema } from "./_streams.schemas.js";
 import * as v from "./_valibot.js";
@@ -173,7 +174,16 @@ export default class UniKvsStorage {
 
       if (c.key !== c.destinationKey) {
         // copy 操作に伴う書き込みであることを伝えるために、必ず CopyContext を渡します。
-        await this.#io.write(c, data);
+        // 書き込み先がコピー先になるように、キーを差し替えたコンテキストを作成します。
+        await this.#io.write(
+          new CopyContext({
+            key: c.destinationKey,
+            store: getVariablesStore(c),
+            signal: c.signal,
+            destinationKey: c.destinationKey,
+          }),
+          data,
+        );
       }
 
       return;
@@ -203,7 +213,16 @@ export default class UniKvsStorage {
       if (this.#io.copy === undefined) {
         const data = await this.#io.read(c);
         // move 操作に伴う書き込みであることを伝えるために、必ず MoveContext を渡します。
-        await this.#io.write(c, data);
+        // 書き込み先が移動先になるように、キーを差し替えたコンテキストを作成します。
+        await this.#io.write(
+          new MoveContext({
+            key: c.destinationKey,
+            store: getVariablesStore(c),
+            signal: c.signal,
+            destinationKey: c.destinationKey,
+          }),
+          data,
+        );
       } else {
         // move 操作に伴う複製であることを伝えるために、必ず MoveContext を渡します。
         await this.#io.copy(c);

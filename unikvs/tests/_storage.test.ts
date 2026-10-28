@@ -146,9 +146,8 @@ class BasicStorage implements IStorage {
   public readonly map = new Map<string, unknown>();
 
   public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
-    // copy/move context では書き込み先が destinationKey になる。
-    const key = c.action === "copy" || c.action === "move" ? c.destinationKey : c.key;
-    this.map.set(key, data);
+    // copy/move のフォールバックでは、書き込み先がコピー先・移動先になるキーを持つコンテキストが渡される。
+    this.map.set(c.key, data);
   }
 
   public async read(c: IStorage.ReadContext): Promise<unknown> {

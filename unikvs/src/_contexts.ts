@@ -119,14 +119,9 @@ type PipelineContextInit = {
  */
 class PipelineContext implements IPipelineContext {
   /**
-   * 変数のマップです。共有ストアの参照である場合があります。
+   * 実行時変数のストアです。共有する場合は参照を共有します。
    */
-  readonly #data: Map<string, unknown>;
-
-  /**
-   * 読み取り専用の変数名の集合です。共有ストアの参照である場合があります。
-   */
-  readonly #readonly: Set<string>;
+  readonly #store: VariablesStore;
 
   /**
    * コンテキストを作成します。
@@ -136,20 +131,23 @@ class PipelineContext implements IPipelineContext {
   public constructor(init: PipelineContextInit) {
     const { store } = init;
 
-    if (store) {
-      // 共有ストアを参照し、下流の変更が上流に見えるようにします。
-      this.#data = store.data;
-      this.#readonly = store.readonly;
-    } else {
-      this.#data = new Map();
-      this.#readonly = new Set();
-    }
+    // 共有ストアを参照し、下流の変更が上流に見えるようにします。
+    this.#store = store ?? createVariablesStore();
 
     const vars = normalizeVariablesInit(init.vars);
 
     for (const [name, value] of vars) {
-      this.#data.set(name, value);
+      this.#store.data.set(name, value);
     }
+  }
+
+  /**
+   * 共有する実行時変数のストアを取得します。
+   *
+   * @returns 実行時変数のストアを返します。
+   */
+  public get store(): VariablesStore {
+    return this.#store;
   }
 
   /**
@@ -160,7 +158,7 @@ class PipelineContext implements IPipelineContext {
    * @returns 変数の値を返します。
    */
   public get(name: string): unknown {
-    return this.#data.get(name);
+    return this.#store.data.get(name);
   }
 
   /**
@@ -172,11 +170,11 @@ class PipelineContext implements IPipelineContext {
    * @returns 自身を返します。
    */
   public set(name: string, value: unknown): this {
-    if (this.#readonly.has(name)) {
+    if (this.#store.readonly.has(name)) {
       throw new ReadonlyVariableError({ name });
     }
 
-    this.#data.set(name, value);
+    this.#store.data.set(name, value);
 
     return this;
   }
@@ -190,15 +188,28 @@ class PipelineContext implements IPipelineContext {
    * @returns 自身を返します。
    */
   public setReadonly(name: string, value: unknown): this {
-    if (this.#readonly.has(name)) {
+    if (this.#store.readonly.has(name)) {
       throw new ReadonlyVariableError({ name });
     }
 
-    this.#data.set(name, value);
-    this.#readonly.add(name);
+    this.#store.data.set(name, value);
+    this.#store.readonly.add(name);
 
     return this;
   }
+}
+
+/**
+ * コンテキストが共有する実行時変数のストアを取得します。
+ *
+ * 外部実装のコンテキストは共有ストアを公開しないため、独立したストアを返します。
+ *
+ * @param context 対象のコンテキストです。
+ *
+ * @returns 実行時変数のストアを返します。
+ */
+export function getVariablesStore(context: IPipelineContext): VariablesStore {
+  return context instanceof PipelineContext ? context.store : createVariablesStore();
 }
 
 /**
