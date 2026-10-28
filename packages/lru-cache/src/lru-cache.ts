@@ -262,6 +262,47 @@ export default class LruCache implements IStorage {
   }
 
   /**
+   * 指定したキーの値を別のキーへ複製します。コピー先の既存値は上書きします。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   */
+  public copy(c: IStorage.CopyContext): void {
+    c.signal.throwIfAborted();
+    this.#assertOpen();
+
+    const value = this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへのコピーは値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.#commit(c.destinationKey, value);
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ移動します。移動先の既存値は上書きします。
+   *
+   * 移動先への書き込みが成功した後に移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   */
+  public move(c: IStorage.MoveContext): void {
+    c.signal.throwIfAborted();
+    this.#assertOpen();
+
+    const value = this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.#commit(c.destinationKey, value);
+    this.#removeEntry(c.key);
+  }
+
+  /**
    * すべてのキーを削除しバイト数の記録を初期化します。
    *
    * @param _c 使用しないクリア用コンテキストです。
