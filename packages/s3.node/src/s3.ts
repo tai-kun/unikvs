@@ -4,18 +4,54 @@ import {
   S3Client,
   GetObjectCommand,
   PutObjectCommand,
+  CopyObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
-import { type IStorage, StorageAbortedError, InvalidPartSizeError } from "@unikvs/core";
+import {
+  type IStorage,
+  KeyNotFoundError,
+  StorageAbortedError,
+  InvalidPartSizeError,
+} from "@unikvs/core";
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3storageoptions)
  */
 export type S3StorageOptions = {};
+
+/**
+ * S3 の失敗がキーの欠番を表すかどうかを判定します。
+ *
+ * バケット自体が存在しない失敗は、キーの欠番と区別します。
+ *
+ * @param ex 判定する失敗です。
+ *
+ * @returns キーが存在しなければ真です。
+ */
+function isKeyNotFoundError(ex: unknown): boolean {
+  if (typeof ex !== "object" || ex === null) {
+    return false;
+  }
+
+  const error = ex as {
+    name?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+
+  if (error.name === "NoSuchBucket") {
+    return false;
+  }
+
+  return (
+    error.name === "NoSuchKey" ||
+    error.name === "NotFound" ||
+    error.$metadata?.httpStatusCode === 404
+  );
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/s3-node#s3)
@@ -185,6 +221,53 @@ export default class S3 implements IStorage {
   }
 
   /**
+   * キーの値を別のキーへ複製します。
+   *
+   * コピー先に既存のオブジェクトがあるときは上書きします。
+   * コピー元が存在しないときは `KeyNotFoundError` を投げます。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    if (c.key === c.destinationKey) {
+      await this.#assertKeyExists(c.key, c.signal);
+
+      return;
+    }
+
+    await this.#copyObject(c.key, c.destinationKey, c.signal);
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * 複製先の書き込みが完了してから複製元を削除します。
+   * 複製先の書き込みに失敗したときは複製元を残します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    if (c.key === c.destinationKey) {
+      await this.#assertKeyExists(c.key, c.signal);
+
+      return;
+    }
+
+    await this.#copyObject(c.key, c.destinationKey, c.signal);
+    c.signal.throwIfAborted();
+
+    const command = new DeleteObjectCommand({
+      Key: c.key,
+      Bucket: this.#bucket,
+    });
+    await this.#getClient().send(command, { abortSignal: c.signal });
+  }
+
+  /**
    * バケット内のオブジェクトをすべて削除します。
    *
    * 一覧を頁送りで取得し、まとめて削除します。
@@ -346,6 +429,63 @@ export default class S3 implements IStorage {
     }
 
     return body.transformToWebStream();
+  }
+
+  /**
+   * キーのオブジェクトが存在することを確認します。
+   *
+   * 同じキーへの複製や移動で、欠番を成功扱いにしないために使用します。
+   *
+   * @param key 確認するキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns キーが存在すれば解決します。
+   */
+  async #assertKeyExists(key: string, signal: AbortSignal): Promise<void> {
+    const command = new HeadObjectCommand({
+      Key: key,
+      Bucket: this.#bucket,
+    });
+
+    try {
+      await this.#getClient().send(command, { abortSignal: signal });
+    } catch (ex) {
+      if (isKeyNotFoundError(ex)) {
+        throw new KeyNotFoundError({ key });
+      }
+
+      throw ex;
+    }
+  }
+
+  /**
+   * S3 の CopyObject でオブジェクトを複製します。
+   *
+   * コピー元の欠番は `KeyNotFoundError` に変換します。
+   * メタデータは S3 の既定動作でコピー元から引き継ぎます。
+   *
+   * @param sourceKey 複製元のキーです。
+   * @param destinationKey 複製先のキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  async #copyObject(sourceKey: string, destinationKey: string, signal: AbortSignal): Promise<void> {
+    const command = new CopyObjectCommand({
+      Key: destinationKey,
+      Bucket: this.#bucket,
+      CopySource: encodeURIComponent(`${this.#bucket}/${sourceKey}`),
+    });
+
+    try {
+      await this.#getClient().send(command, { abortSignal: signal });
+    } catch (ex) {
+      if (isKeyNotFoundError(ex)) {
+        throw new KeyNotFoundError({ key: sourceKey });
+      }
+
+      throw ex;
+    }
   }
 
   /**
