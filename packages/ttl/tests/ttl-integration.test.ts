@@ -167,6 +167,44 @@ describe("透過と有効期限", () => {
     expect(await kvs.has("report")).toBe(false);
     await kvs.close();
   });
+
+  test("copy はコピー元の有効期限を引き継ぐ", async ({ expect }) => {
+    const { kvs, clock } = await createTtlKvs({ defaultTtl: 60 });
+    await kvs.set("report", "hello");
+    await kvs.copy("report", "archived");
+    clock.advance(59_999);
+    expect(await kvs.get("archived")).toBe("hello");
+    clock.advance(1);
+    await expect(kvs.get("archived")).rejects.toThrow(KeyNotFoundError);
+    await kvs.close();
+  });
+
+  test("move は移動元の有効期限を引き継ぐ", async ({ expect }) => {
+    const { kvs, clock } = await createTtlKvs({ defaultTtl: 60 });
+    await kvs.set("report", "hello");
+    await kvs.move("report", "archived");
+    clock.advance(59_999);
+    expect(await kvs.get("archived")).toBe("hello");
+    clock.advance(1);
+    await expect(kvs.get("archived")).rejects.toThrow(KeyNotFoundError);
+    await kvs.close();
+  });
+
+  test("期限切れの copy は KeyNotFoundError で失敗する", async ({ expect }) => {
+    const { kvs, clock } = await createTtlKvs({ defaultTtl: 60 });
+    await kvs.set("report", "hello");
+    clock.advance(60_000);
+    await expect(kvs.copy("report", "archived")).rejects.toThrow(KeyNotFoundError);
+    await kvs.close();
+  });
+
+  test("期限切れの move は KeyNotFoundError で失敗する", async ({ expect }) => {
+    const { kvs, clock } = await createTtlKvs({ defaultTtl: 60 });
+    await kvs.set("report", "hello");
+    clock.advance(60_000);
+    await expect(kvs.move("report", "archived")).rejects.toThrow(KeyNotFoundError);
+    await kvs.close();
+  });
 });
 
 describe("ストリームの有効期限", () => {

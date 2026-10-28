@@ -145,6 +145,26 @@ export default class Ttl implements IMiddleware {
         break;
       }
 
+      case "copy":
+      case "move": {
+        const expiresAt = this.#expiry.get(c.key);
+
+        if (expiresAt === undefined) {
+          break;
+        }
+
+        if (this.#now() >= expiresAt) {
+          this.#expiry.delete(c.key);
+          // 失効済みのコピー元・移動元は実在しないキーへ写像し、存在確認を不発にします。
+          c.set(EXPIRED_FLAG, true);
+          break;
+        }
+
+        // 移動先にも同じ有効期限を引き継ぎます。
+        this.#expiry.set(c.destinationKey, expiresAt);
+        break;
+      }
+
       case "set":
       case "delete":
       case "clear": {
