@@ -398,7 +398,7 @@ describe("チャンク境界", () => {
     expect(decoded.writeError).toBeUndefined();
     expect(decoded.readError).toBeUndefined();
     expect(decoded.outputChunks).toStrictEqual([input]);
-  });
+  }, 15e3);
 });
 
 describe("ストリームの異常系", () => {

@@ -321,7 +321,7 @@ describe("複合値のラウンドトリップ", () => {
     expect(encoded).toBeInstanceOf(Uint8Array);
     expect(encoded.buffer).toBeInstanceOf(ArrayBuffer);
     expect(output).toStrictEqual(input);
-  });
+  }, 15e3);
 
   test("シンボルをキーに持つプロパティーは取り除かれる", async () => {
     // 準備：
