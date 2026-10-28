@@ -1,5 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import { createCloseContext } from "@unikvs/testing";
+import { type TestContextInit, TestContext, createCloseContext } from "@unikvs/testing";
 import { test as vitest } from "vite-plus/test";
 
 import IndexeddbStorage from "../src/indexeddb.js";
@@ -58,6 +58,40 @@ export async function createEmptyDatabase(name: string, version: number): Promis
     request.addEventListener("error", (): void => {
       reject(new Error("Failed to open database.", { cause: request.error }));
     });
+  });
+}
+
+/**
+ * テスト用のコピーコンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  });
+}
+
+/**
+ * テスト用の移動コンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createMoveContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "move",
+    key,
+    destinationKey,
   });
 }
 

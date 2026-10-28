@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { type IDBPDatabase, openDB } from "idb";
 
 /**
@@ -237,22 +237,7 @@ export default class Indexeddb implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
-    c.signal.throwIfAborted();
-
-    const db = this.#getDb();
-
-    if (typeof Blob !== "undefined" && data instanceof Blob) {
-      const stored = await toStoredBlob(c.signal, data);
-      await db.put(this.#storeName, stored, c.key);
-
-      c.signal.throwIfAborted();
-
-      return;
-    }
-
-    await db.put(this.#storeName, data, c.key);
-
-    c.signal.throwIfAborted();
+    await this.#put(c.signal, c.key, data);
   }
 
   /**
@@ -325,6 +310,43 @@ export default class Indexeddb implements IStorage {
     await db.delete(this.#storeName, c.key);
 
     c.signal.throwIfAborted();
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ複製します。複製先が存在する場合は上書きします。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const value = await this.#getStored(c.key, c.signal);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, value);
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const value = await this.#getStored(c.key, c.signal);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, value);
+    await this.delete(c as unknown as IStorage.DeleteContext);
   }
 
   /**
@@ -407,6 +429,61 @@ export default class Indexeddb implements IStorage {
         }
       },
     });
+  }
+
+  /**
+   * 指定したキーの値をストアに保存します。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 保存先のキーです。
+   * @param data 保存する値です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  async #put(signal: AbortSignal, key: string, data: any): Promise<void> {
+    signal.throwIfAborted();
+
+    const db = this.#getDb();
+
+    if (typeof Blob !== "undefined" && data instanceof Blob) {
+      const stored = await toStoredBlob(signal, data);
+      await db.put(this.#storeName, stored, key);
+
+      signal.throwIfAborted();
+
+      return;
+    }
+
+    await db.put(this.#storeName, data, key);
+
+    signal.throwIfAborted();
+  }
+
+  /**
+   * 指定したキーの保存値を読み出します。存在しない場合はエラーを投げます。
+   *
+   * @param key 読み出すキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 保存されている値です。
+   */
+  async #getStored(key: string, signal: AbortSignal): Promise<any> {
+    signal.throwIfAborted();
+
+    const db = this.#getDb();
+    const count = await db.count(this.#storeName, key);
+
+    signal.throwIfAborted();
+
+    if (count === 0) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    const value = await db.get(this.#storeName, key);
+
+    signal.throwIfAborted();
+
+    return value;
   }
 
   /**

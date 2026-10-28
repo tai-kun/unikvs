@@ -31,6 +31,8 @@ describe("IStorage としての型契約", () => {
     expectTypeOf<IndexeddbStorage["exists"]>().returns.toEqualTypeOf<Promise<boolean>>();
     expectTypeOf<IndexeddbStorage["delete"]>().returns.toEqualTypeOf<Promise<void>>();
     expectTypeOf<IndexeddbStorage["clear"]>().returns.toEqualTypeOf<Promise<void>>();
+    expectTypeOf<IndexeddbStorage["copy"]>().returns.toEqualTypeOf<Promise<void>>();
+    expectTypeOf<IndexeddbStorage["move"]>().returns.toEqualTypeOf<Promise<void>>();
     expect(storage.name).toBe("Indexeddb");
   });
 
