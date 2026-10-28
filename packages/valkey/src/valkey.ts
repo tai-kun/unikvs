@@ -526,6 +526,92 @@ export default class Valkey implements IStorage {
   }
 
   /**
+   * キーの値を別のキーへ複製します。
+   *
+   * 複製先が存在する場合は上書きします。
+   * このパッケージのクライアント契約に `COPY` がないため、読み書きで複製します。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
+
+    const src = this.#toKey(c.key);
+    const dest = this.#toKey(c.destinationKey);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      if ((await Promise.race([client.exists(src), abortPromise])) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    const data = await Promise.race([client.getBuffer(src), abortPromise]);
+
+    if (data === null) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    // 設定された TTL を複製先にも適用します。
+    if (this.#ttl === undefined) {
+      await client.set(dest, Buffer.from(data));
+    } else {
+      await client.set(dest, Buffer.from(data), "PX", this.#ttl);
+    }
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * `RENAME` で移動先を上書きし、移動元を削除します。
+   * TTL が設定されている場合は移動先へ付け直します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    throwIfAborted(c.signal);
+
+    const src = this.#toKey(c.key);
+    const dest = this.#toKey(c.destinationKey);
+
+    // 同じキーへの移動は値の存在確認だけを行い、削除しません。
+    if (c.key === c.destinationKey) {
+      if ((await client.exists(src)) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    try {
+      // `RENAME` は移動先を上書きし、移動元を削除します。
+      await client.rename(src, dest);
+    } catch (ex) {
+      // `RENAME` は移動元が存在しないときサーバーエラーを返すため、欠番を統一します。
+      if ((await client.exists(src)) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      throw ex;
+    }
+
+    if (this.#ttl !== undefined) {
+      await client.pexpire(dest, this.#ttl);
+    }
+  }
+
+  /**
    * 接頭辞に一致するキーをすべて削除します。
    *
    * `SCAN` で列挙しながら削除します。
