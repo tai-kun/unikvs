@@ -12,7 +12,8 @@ Use it for short-lived caches or session-like data. Plain values and streams exp
 - `name` is `Ttl`.
 - `isOpen` is always `true`.
 - Set the expiry per operation with the `@unikvs/ttl:ttl` / `@unikvs/ttl:expiresAt` vars (bare `ttl` / `expiresAt` are also accepted for backward compatibility), or with `defaultTtl`.
-- Expired `get` / `has` / `stream` behave as `KeyNotFoundError`.
+- Expired `get` / `has` / `stream` / `copy` / `move` behave as `KeyNotFoundError`.
+- `copy` and `move` carry the source expiry to the destination.
 
 Install with:
 
@@ -88,6 +89,7 @@ Per-write TTL value. A `number` is relative seconds (fractions allowed; zero or 
 - `encode` wraps the value as `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` when a TTL applies, and stores the expiry in the operation record. Overwrites without a TTL clear the record and pass data through.
 - `decode` unwraps the envelope while it is valid, and throws `KeyNotFoundError` once expired. When the record is missing (e.g. after a restart), it restores the record from the envelope.
 - Streams never embed the expiry in-band (to fit chunk type constraints) and are managed by records only. `encodeStream` and `decodeStream` pass data through.
+- `copy` and `move` carry the recorded expiry to the destination. Only a live source can be copied or moved; an expired source throws `KeyNotFoundError`.
 - TTL resolution prefers the `ttl` var, then the `expiresAt` var, then `defaultTtl`. Namespaced vars take precedence over bare names.
 
 ## Errors [#errors]

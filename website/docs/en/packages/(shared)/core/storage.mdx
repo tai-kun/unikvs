@@ -5,7 +5,7 @@ description: "@unikvs/core IStorage: the interface destination plugins implement
 
 ## Overview [#overview]
 
-`IStorage` is the interface destination plugins implement. It has `name`, `isOpen`, and CRUD operations; lifecycle and stream acquisition are optional. Four type arguments tune data and chunk types.
+`IStorage` is the interface destination plugins implement. It has `name`, `isOpen`, CRUD operations, and `copy`/`move`; lifecycle and stream acquisition are optional. Four type arguments tune data and chunk types.
 
 ```ts
 import type { IStorage } from "@unikvs/core";
@@ -61,6 +61,21 @@ Every method returns `MaybePromise` (`T | PromiseLike<T>`), so sync and async im
 `read` throws [`KeyNotFoundError`](./errors#error-key-not-found) for missing keys. Do not return `undefined` or embed an `exists`-like check; leave post-missing handling (such as read-time repair) to the caller.
 :::
 
+## Copy and move [#transfer]
+
+| Member | Required | Signature                                | Description                 |
+| ------ | -------- | ---------------------------------------- | --------------------------- |
+| `copy` | required | `(c: CopyContext) => MaybePromise<void>` | Copies a key to another key |
+| `move` | required | `(c: MoveContext) => MaybePromise<void>` | Moves a key to another key  |
+
+`CopyContext` and `MoveContext` hold the source key in `key` and the destination key in `destinationKey`. An existing destination value is overwritten.
+
+`move` removes the source only after the destination write succeeds. If the destination write fails, leave the source in place. If the source does not exist, throw [`KeyNotFoundError`](./errors#error-key-not-found). When `key` and `destinationKey` are the same, only verify that the source exists and do not delete it.
+
+:::tip[Prefer native APIs]
+If the backend provides copy or rename operations, prefer them over combining reads and writes. Otherwise, implement the operation with `read`, `write`, and `delete`.
+:::
+
 ## Stream acquisition [#streams]
 
 | Member        | Required | Signature                                                               | Description                |
@@ -113,6 +128,8 @@ The `IStorage` namespace provides aliases of [pipeline contexts](./pipeline-cont
 | `IStorage.GetReadableContext`            | [`IStreamContext`](./pipeline-context#istreamcontext) | `getReadable`       |
 | `IStorage.ExistsContext`                 | [`IHasContext`](./pipeline-context#ihascontext)       | `exists`            |
 | `IStorage.DeleteContext`                 | [`IDeleteContext`](./pipeline-context#ideletecontext) | `delete`            |
+| `IStorage.CopyContext`                   | [`ICopyContext`](./pipeline-context#icopycontext)     | `copy`              |
+| `IStorage.MoveContext`                   | [`IMoveContext`](./pipeline-context#imovecontext)     | `move`              |
 | `IStorage.ClearContext`                  | [`IClearContext`](./pipeline-context#iclearcontext)   | `clear`             |
 | `IStorage.OtherWriteErrorHandlerContext` | `WriteContext \| GetWritableContext`                  | `onOtherWriteError` |
 
@@ -157,6 +174,23 @@ The `IStorage` namespace provides aliases of [pipeline contexts](./pipeline-cont
 
       public delete(c: IStorage.DeleteContext): void {
         this.data.delete(c.key);
+      }
+
+      public copy(c: IStorage.CopyContext): void {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        if (c.key !== c.destinationKey) {
+          this.data.set(c.destinationKey, value);
+        }
+      }
+
+      public move(c: IStorage.MoveContext): void {
+        this.copy(c as unknown as IStorage.CopyContext);
+        if (c.key !== c.destinationKey) {
+          this.data.delete(c.key);
+        }
       }
 
       public clear(): void {
@@ -206,6 +240,23 @@ The `IStorage` namespace provides aliases of [pipeline contexts](./pipeline-cont
         this.data.delete(c.key);
       }
 
+      public async copy(c: IStorage.CopyContext): Promise<void> {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        if (c.key !== c.destinationKey) {
+          this.data.set(c.destinationKey, value);
+        }
+      }
+
+      public async move(c: IStorage.MoveContext): Promise<void> {
+        await this.copy(c as unknown as IStorage.CopyContext);
+        if (c.key !== c.destinationKey) {
+          this.data.delete(c.key);
+        }
+      }
+
       public async clear(): Promise<void> {
         this.data.clear();
       }
@@ -222,7 +273,7 @@ Implementation points:
     Declare the stored value type as `IStorage<T>`. When read/write types differ or you use streams, specify all four.
   </Step>
   <Step title="Implement required members">
-    `name`, `isOpen`, and the 5 CRUD methods are required. `read` throws `KeyNotFoundError` for missing keys.
+    `name`, `isOpen`, the 5 CRUD methods, and `copy`/`move` are required. Throw `KeyNotFoundError` when a read source or the copy/move source is missing.
   </Step>
   <Step title="Add optional members">
     Implement `open` / `close` only with setup needs, `getWritable` / `getReadable` for streams, and `onOtherWriteError` when you need other storages' failure reports.
@@ -279,6 +330,16 @@ Interface implemented by destination plugins. Four type arguments tune data and 
       type: "[#istorage-clear] (c: IStorage.ClearContext) => MaybePromise<void>",
       required: true,
       description: "Deletes all data.",
+    },
+    copy: {
+      type: "[#istorage-copy] (c: IStorage.CopyContext) => MaybePromise<void>",
+      required: true,
+      description: "Copies a key to another key.",
+    },
+    move: {
+      type: "[#istorage-move] (c: IStorage.MoveContext) => MaybePromise<void>",
+      required: true,
+      description: "Moves a key to another key.",
     },
     onOtherWriteError: {
       type: "[#istorage-onotherwriteerror] (c: IStorage.OtherWriteErrorHandlerContext, errors: readonly IStorage.IOtherWriteError[]) => MaybePromise<void>",

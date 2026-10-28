@@ -73,6 +73,8 @@ flowchart TB
   E --> J[IStreamContext]
   E --> K[IHasContext]
   E --> L[IDeleteContext]
+  E --> U[ICopyContext]
+  E --> V[IMoveContext]
   C --> M[IClearContext]
   E --> N[ITransformContext]
   N --> O[ITransformDataContext]
@@ -90,16 +92,18 @@ Each operation kind carries fixed info.
 | Type                                            | `action`            | Main added properties                                        |
 | ----------------------------------------------- | ------------------- | ------------------------------------------------------------ |
 | [`IMapKeyContext`](#imapkeycontext)             | —                   | `key: string`                                                |
-| [`IActionContext`](#iactioncontext)             | 8 operations        | `signal: AbortSignal`                                        |
+| [`IActionContext`](#iactioncontext)             | 10 operations       | `signal: AbortSignal`                                        |
 | [`ILifecycleContext`](#ilifecyclecontext)       | `"open" \| "close"` | `signal`                                                     |
 | [`IOpenContext`](#iopencontext)                 | `"open"`            | `signal`                                                     |
 | [`ICloseContext`](#iclosecontext)               | `"close"`           | `signal`                                                     |
-| [`IKeyedActionContext`](#ikeyedactioncontext)   | 5 keyed operations  | `key` / `signal`                                             |
+| [`IKeyedActionContext`](#ikeyedactioncontext)   | 7 keyed operations  | `key` / `signal`                                             |
 | [`ISetContext`](#isetcontext)                   | `"set"`             | `key` / `signal`                                             |
 | [`IGetContext`](#igetcontext)                   | `"get"`             | `key` / `signal` / `repair`                                  |
 | [`IStreamContext`](#istreamcontext)             | `"stream"`          | `key` / `signal` / `repair`                                  |
 | [`IHasContext`](#ihascontext)                   | `"has"`             | `key` / `signal`                                             |
 | [`IDeleteContext`](#ideletecontext)             | `"delete"`          | `key` / `signal`                                             |
+| [`ICopyContext`](#icopycontext)                 | `"copy"`            | `key` / `destinationKey` / `signal`                          |
+| [`IMoveContext`](#imovecontext)                 | `"move"`            | `key` / `destinationKey` / `signal`                          |
 | [`IClearContext`](#iclearcontext)               | `"clear"`           | `signal`                                                     |
 | [`IEncodeContext`](#iencodecontext)             | `"set"`             | `source` / `destination?` (for data conversion)              |
 | [`IDecodeContext`](#idecodecontext)             | `"get"`             | `source` / `destination?` (for data conversion)              |
@@ -110,13 +114,13 @@ Each operation kind carries fixed info.
 
 `IMapKeyContext` is key-mapping only and carries just `key` (used by [middleware `mapKey`](./middleware#hooks)). It carries no `signal`.
 
-`IActionContext` carries `signal: AbortSignal` and 8 kinds of `action` (`"open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"`). `ILifecycleContext` narrows to `"open" | "close"`, and `IOpenContext` / `ICloseContext` each pin to one kind.
+`IActionContext` carries `signal: AbortSignal` and 10 kinds of `action` (`"open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"`). `ILifecycleContext` narrows to `"open" | "close"`, and `IOpenContext` / `ICloseContext` each pin to one kind.
 
 ### Keyed operations [#contexts-keyed]
 
-`IKeyedActionContext` adds `key: string` and narrows `action` to the 5 kinds `"set" | "get" | "stream" | "has" | "delete"`. The following `ISetContext`, `IGetContext`, `IStreamContext`, `IHasContext`, and `IDeleteContext` each pin `action` to one kind. `IClearContext` carries no key, so it extends `IActionContext` directly with `action` `"clear"`.
+`IKeyedActionContext` adds `key: string` and narrows `action` to the 7 kinds `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"`. The following `ISetContext`, `IGetContext`, `IStreamContext`, `IHasContext`, and `IDeleteContext` each pin `action` to one kind. `ICopyContext` and `IMoveContext` also carry the destination key in `destinationKey`. `IClearContext` carries no key, so it extends `IActionContext` directly with `action` `"clear"`.
 
-The middleware `use` hook receives these 6 kinds (`set` / `get` / `stream` / `has` / `delete` / `clear`) together. Narrowing by `action` gives type-safe access to each operation's `key` and `repair`.
+The middleware `use` hook receives these 8 kinds (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`) together. Narrowing by `action` gives type-safe access to each operation's `key`, `repair`, and `destinationKey`.
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -127,7 +131,9 @@ export function describe(use: IMiddleware.UseContext): string {
     case "get":
     case "stream":
     case "has":
-    case "delete": {
+    case "delete":
+    case "copy":
+    case "move": {
       return `${use.action}: ${use.key}`;
     }
     case "clear": {
@@ -221,7 +227,7 @@ Key-mapping-only context carrying just `key`.
 
 ### `IActionContext` [#iactioncontext]
 
-`signal` with 8 kinds of `action`, shared by all operations.
+`signal` with 10 kinds of `action`, shared by all operations.
 
 <TypeTable
   type={{
@@ -231,7 +237,7 @@ Key-mapping-only context carrying just `key`.
       description: "The signal aborting the operation.",
     },
     action: {
-      type: '[#iactioncontext-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#iactioncontext-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       required: true,
       description: "The operation kind.",
     },
@@ -282,12 +288,12 @@ Teardown context with `action` pinned to `"close"`.
 
 ### `IKeyedActionContext` [#ikeyedactioncontext]
 
-Context adding `key` and narrowing `action` to the 5 keyed operations.
+Context adding `key` and narrowing `action` to the 7 keyed operations.
 
 <TypeTable
   type={{
     action: {
-      type: '[#ikeyedactioncontext-action] "set" | "get" | "stream" | "has" | "delete"',
+      type: '[#ikeyedactioncontext-action] "set" | "get" | "stream" | "has" | "delete" | "copy" | "move"',
       required: true,
       description: "The operation kind.",
     },
@@ -365,6 +371,54 @@ Delete context with `action` pinned to `"delete"`.
       type: '[#ideletecontext-action] "delete"',
       required: true,
       description: "The operation kind.",
+    },
+  }}
+/>
+
+### `ICopyContext` [#icopycontext]
+
+Copy context with `action` pinned to `"copy"`. `key` is the source key, and `destinationKey` is the destination key.
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#icopycontext-action] "copy"',
+      required: true,
+      description: "The operation kind.",
+    },
+    key: {
+      type: "[#icopycontext-key] string",
+      required: true,
+      description: "The source key.",
+    },
+    destinationKey: {
+      type: "[#icopycontext-destination-key] string",
+      required: true,
+      description: "The destination key.",
+    },
+  }}
+/>
+
+### `IMoveContext` [#imovecontext]
+
+Move context with `action` pinned to `"move"`. `key` is the source key, and `destinationKey` is the destination key.
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#imovecontext-action] "move"',
+      required: true,
+      description: "The operation kind.",
+    },
+    key: {
+      type: "[#imovecontext-key] string",
+      required: true,
+      description: "The source key.",
+    },
+    destinationKey: {
+      type: "[#imovecontext-destination-key] string",
+      required: true,
+      description: "The destination key.",
     },
   }}
 />

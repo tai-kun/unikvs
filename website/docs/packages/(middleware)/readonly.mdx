@@ -7,7 +7,7 @@ description: "書き込みを拒否して読み取り専用にする @unikvs/rea
 
 `@unikvs/readonly` <Badge>Middleware</Badge> は書き込みを拒否して読み取り専用にするミドルウェアです。
 
-このミドルウェアは書き込み方向の操作 (`set`・`encode`) を拒否し、読み取りはそのまま透過させます。`allowDelete` が `false` のときは削除も拒否します。
+このミドルウェアは書き込み方向の操作 (`set`・`copy`・`move`・`encode`) を拒否し、読み取りはそのまま透過させます。`allowDelete` が `false` のときは削除も拒否します。
 
 - `name` は `ReadOnly` です。
 - `isOpen` は常に `true` です。
@@ -86,6 +86,7 @@ await kvs.close();
 | `getDecodable` | 読み取りチャンク | 読み取りチャンク（そのまま透過します）       |
 
 - 書き込み方向は常に拒否し、読み取り方向の変換は行わず透過させます。
+- `copy` と `move` はコピー先・移動先への書き込みを伴うため拒否します。
 - 削除の可否は `use()` で制御し、`allowDelete` が `false` のときは `delete`・`clear` を拒否します。
 
 ## エラー [#errors]
@@ -96,7 +97,7 @@ await kvs.close();
 
 #### 意味
 
-書き込み方向の操作 (`set`・`encode`) が呼ばれたときに、このエラーが投げられます。
+書き込み方向の操作 (`set`・`copy`・`move`・`encode`) が呼ばれたときに、このエラーが投げられます。
 
 #### 対処方法
 

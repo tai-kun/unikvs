@@ -11,7 +11,7 @@ Use it to allow bursts while capping the average rate. On exhaustion, choose wai
 
 - `name` is `RateLimit`.
 - `isOpen` is always `true`.
-- The bucket is shared per middleware instance (not per key), consuming 1 token for every operation (`set` / `get` / `stream` / `has` / `delete` / `clear`).
+- The bucket is shared per middleware instance (not per key), consuming 1 token for every operation (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`).
 - `encode` / `decode` / `encodeStream` / `decodeStream` pass data through.
 
 Install with:

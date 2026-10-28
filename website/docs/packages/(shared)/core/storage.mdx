@@ -5,7 +5,7 @@ description: "@unikvs/core の IStorage。保存先プラグインが実装す�
 
 ## 概要 [#overview]
 
-`IStorage` は保存先プラグインが実装するインターフェースです。`name` と `isOpen`、CRUD 操作を持ち、ライフサイクルやストリーム取得は任意です。4 つの型引数でデータとチャンクの型を調整します。
+`IStorage` は保存先プラグインが実装するインターフェースです。`name` と `isOpen`、CRUD 操作、`copy`・`move` を持ち、ライフサイクルやストリーム取得は任意です。4 つの型引数でデータとチャンクの型を調整します。
 
 ```ts
 import type { IStorage } from "@unikvs/core";
@@ -61,6 +61,21 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
 `read` はキーがない場合に [`KeyNotFoundError`](./errors#error-key-not-found) を投げます。`undefined` を返したり `exists` 相当の判定を埋め込んだりせず、見つからない場合の後処理 (読み取り時の書き戻しなど) は呼び出し側に任せます。
 :::
 
+## コピーと移動 [#transfer]
+
+| メンバー | 必須 | シグネチャ                               | 説明                     |
+| -------- | ---- | ---------------------------------------- | ------------------------ |
+| `copy`   | 必須 | `(c: CopyContext) => MaybePromise<void>` | キーを別のキーへ複製する |
+| `move`   | 必須 | `(c: MoveContext) => MaybePromise<void>` | キーを別のキーへ移動する |
+
+`CopyContext` と `MoveContext` は、コピー元・移動元のキーを `key`、コピー先・移動先のキーを `destinationKey` に持ちます。コピー先・移動先に既存の値がある場合は上書きします。
+
+`move` は移動先への書き込みが成功した後に移動元を削除します。移動先への書き込みに失敗した場合は移動元を残してください。コピー元・移動元が存在しない場合は [`KeyNotFoundError`](./errors#error-key-not-found) を投げます。`key` と `destinationKey` が同じ場合は、存在確認だけを行い、値を削除しません。
+
+:::tip[ネイティブ API を優先する]
+ストレージに複製や名前変更の API がある場合は、読み書きを組み合わせる代わりにそれらを使うと効率的です。API がない場合でも、`read`・`write`・`delete` を組み合わせて実装できます。
+:::
+
 ## ストリーム取得 [#streams]
 
 | メンバー      | 必須 | シグネチャ                                                              | 説明                           |
@@ -113,6 +128,8 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
 | `IStorage.GetReadableContext`            | [`IStreamContext`](./pipeline-context#istreamcontext) | `getReadable`       |
 | `IStorage.ExistsContext`                 | [`IHasContext`](./pipeline-context#ihascontext)       | `exists`            |
 | `IStorage.DeleteContext`                 | [`IDeleteContext`](./pipeline-context#ideletecontext) | `delete`            |
+| `IStorage.CopyContext`                   | [`ICopyContext`](./pipeline-context#icopycontext)     | `copy`              |
+| `IStorage.MoveContext`                   | [`IMoveContext`](./pipeline-context#imovecontext)     | `move`              |
 | `IStorage.ClearContext`                  | [`IClearContext`](./pipeline-context#iclearcontext)   | `clear`             |
 | `IStorage.OtherWriteErrorHandlerContext` | `WriteContext \| GetWritableContext`                  | `onOtherWriteError` |
 
@@ -157,6 +174,23 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
 
       public delete(c: IStorage.DeleteContext): void {
         this.data.delete(c.key);
+      }
+
+      public copy(c: IStorage.CopyContext): void {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        if (c.key !== c.destinationKey) {
+          this.data.set(c.destinationKey, value);
+        }
+      }
+
+      public move(c: IStorage.MoveContext): void {
+        this.copy(c as unknown as IStorage.CopyContext);
+        if (c.key !== c.destinationKey) {
+          this.data.delete(c.key);
+        }
       }
 
       public clear(): void {
@@ -206,6 +240,23 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
         this.data.delete(c.key);
       }
 
+      public async copy(c: IStorage.CopyContext): Promise<void> {
+        const value = this.data.get(c.key);
+        if (value === undefined) {
+          throw new KeyNotFoundError({ key: c.key });
+        }
+        if (c.key !== c.destinationKey) {
+          this.data.set(c.destinationKey, value);
+        }
+      }
+
+      public async move(c: IStorage.MoveContext): Promise<void> {
+        await this.copy(c as unknown as IStorage.CopyContext);
+        if (c.key !== c.destinationKey) {
+          this.data.delete(c.key);
+        }
+      }
+
       public async clear(): Promise<void> {
         this.data.clear();
       }
@@ -222,7 +273,7 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
     保存する値の型を `IStorage<T>` に指定します。読み書きで型が変わる場合やストリームを使う場合は、4 つすべてを指定します。
   </Step>
   <Step title="必須メンバーを実装する">
-    `name`・`isOpen` と CRUD の 5 メソッドは必須です。`read` では見つからないキーに `KeyNotFoundError` を投げます。
+    `name`・`isOpen`、CRUD の 5 メソッド、`copy`・`move` は必須です。`read` とコピー元・移動元が見つからない場合には `KeyNotFoundError` を投げます。
   </Step>
   <Step title="任意メンバーを足す">
     初期化が必要なら `open`・`close`、ストリーム対応なら `getWritable`・`getReadable`、他ストレージの失敗通知が要れば `onOtherWriteError` を実装します。
@@ -279,6 +330,16 @@ type ChunkedStorage = IStorage<Uint8Array, string, ArrayBuffer, number>;
       type: "[#istorage-clear] (c: IStorage.ClearContext) => MaybePromise<void>",
       required: true,
       description: "すべてのデータを削除します。",
+    },
+    copy: {
+      type: "[#istorage-copy] (c: IStorage.CopyContext) => MaybePromise<void>",
+      required: true,
+      description: "キーの値を別のキーへ複製します。",
+    },
+    move: {
+      type: "[#istorage-move] (c: IStorage.MoveContext) => MaybePromise<void>",
+      required: true,
+      description: "キーの値を別のキーへ移動します。",
     },
     onOtherWriteError: {
       type: "[#istorage-onotherwriteerror] (c: IStorage.OtherWriteErrorHandlerContext, errors: readonly IStorage.IOtherWriteError[]) => MaybePromise<void>",

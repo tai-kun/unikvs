@@ -154,16 +154,18 @@ withoutStorage.isValid(); // false
 
 The created client provides the following operations. Call `open()` to initialize and `close()` when done (`await using` also auto-closes).
 
-| Method            | Description                        |
-| ----------------- | ---------------------------------- |
-| `open()`          | Initialize storage and middleware. |
-| `close()`         | Close all storage and middleware.  |
-| `set(key, value)` | Store a value under a key.         |
-| `get(key)`        | Get the value for a key.           |
-| `stream(key)`     | Get a stream for a key.            |
-| `has(key)`        | Check whether a key exists.        |
-| `delete(key)`     | Delete a key.                      |
-| `clear()`         | Delete all data.                   |
+| Method                      | Description                        |
+| --------------------------- | ---------------------------------- |
+| `open()`                    | Initialize storage and middleware. |
+| `close()`                   | Close all storage and middleware.  |
+| `set(key, value)`           | Store a value under a key.         |
+| `get(key)`                  | Get the value for a key.           |
+| `stream(key)`               | Get a stream for a key.            |
+| `has(key)`                  | Check whether a key exists.        |
+| `delete(key)`               | Delete a key.                      |
+| `copy(key, destinationKey)` | Copy a key's value to another key. |
+| `move(key, destinationKey)` | Move a key's value to another key. |
+| `clear()`                   | Delete all data.                   |
 
 All operations support cancellation via `AbortSignal` and per-operation runtime variables (`vars`). Arguments can be passed either as an options object or positionally.
 
@@ -177,7 +179,14 @@ await kvs.set("foo", new Uint8Array([0, 1, 2]), {
 });
 
 const bytes = await kvs.get("foo", { signal: ac.signal });
+
+await kvs.copy("foo", "backup");
+await kvs.move({ key: "backup", destinationKey: "archive" });
 ```
+
+`copy` and `move` take the source `key` and the destination `destinationKey`. An existing destination value is overwritten. `move` removes the source only after the destination write succeeds. If the source does not exist, they throw `KeyNotFoundError`. If both keys are the same, they only verify that the source exists and do not delete it.
+
+With multiple storages, the operation is applied to every storage where the source exists. Middleware `mapKey` is applied to both the source and destination keys.
 
 ## Value types [#value-types]
 
@@ -252,12 +261,13 @@ kvs.get("logs");
 
 When `schema` is given, input and output values are validated with Valibot schemas.
 
-| Operation      | What is validated                   | Error on failure     |
-| -------------- | ----------------------------------- | -------------------- |
-| `set`          | Validates the input value.          | `InvalidInputError`  |
-| `get`          | Validates the output value.         | `InvalidOutputError` |
-| `stream`       | Validates each chunk.               | `InvalidOutputError` |
-| `has`/`delete` | Array form only: validates the key. | `InvalidInputError`  |
+| Operation      | What is validated                               | Error on failure     |
+| -------------- | ----------------------------------------------- | -------------------- |
+| `set`          | Validates the input value.                      | `InvalidInputError`  |
+| `get`          | Validates the output value.                     | `InvalidOutputError` |
+| `stream`       | Validates each chunk.                           | `InvalidOutputError` |
+| `has`/`delete` | Array form only: validates the key.             | `InvalidInputError`  |
+| `copy`/`move`  | Validates both the source and destination keys. | `InvalidInputError`  |
 
 ```ts
 import * as unikvs from "unikvs";

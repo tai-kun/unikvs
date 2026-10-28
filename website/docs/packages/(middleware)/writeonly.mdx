@@ -7,7 +7,7 @@ description: "読み取りを拒否して書き込み専用にする @unikvs/wri
 
 `@unikvs/writeonly` <Badge>Middleware</Badge> は読み取りを拒否して書き込み専用にするミドルウェアです。
 
-読み取り方向の操作 (`get`・`has`・`stream`・`decode`) は存在しないキーとして扱って拒否し、書き込みはそのまま透過させます。`allowDelete` が `false` のときは削除も拒否します。
+読み取り方向の操作 (`get`・`has`・`stream`・`decode`) は存在しないキーとして扱って拒否し、書き込み方向の操作 (`set`・`copy`・`move`) はそのまま透過させます。`allowDelete` が `false` のときは削除も拒否します。
 
 - `name` は `WriteOnly` です。
 - `isOpen` は常に `true` です。
@@ -72,6 +72,7 @@ await kvs.close();
 | `getDecodable` | 読み取りチャンク | 常に `KeyNotFoundError` を投げます     |
 
 - 書き込み方向の変換は行わず、値をそのまま透過させます。
+- `copy` と `move` は値を返さないため、書き込み方向の操作として許可します。
 - 読み取り方向は常に拒否し、キーが存在しないものとして扱います。
 - 削除の可否は `use()` で制御し、`allowDelete` が `false` のときは `delete`・`clear` を拒否します。
 

@@ -11,7 +11,7 @@ description: "一時的な失敗を指数バックオフで再試行するスト
 
 - `name` は `Retry` です。
 - `isOpen` は委譲先の `inner.isOpen` を返します。
-- `write`・`read`・`exists`・`delete`・`clear`・`getWritable`・`getReadable` を再試行し、`open`・`close`・`onOtherWriteError` は委譲のみ行います。
+- `write`・`read`・`exists`・`delete`・`copy`・`move`・`clear`・`getWritable`・`getReadable` を再試行し、`open`・`close`・`onOtherWriteError` は委譲のみ行います。
 - データとチャンクの変換は行わず、委譲先の型をそのまま保ちます。
 
 インストールは次のコマンドで行います。
@@ -101,7 +101,7 @@ await kvs.close();
 
 ### `RetryOperation` [#retry-operation]
 
-リトライ対象の操作名です。`"write"`・`"read"`・`"exists"`・`"delete"`・`"clear"`・`"getWritable"`・`"getReadable"` のいずれかです。
+リトライ対象の操作名です。`"write"`・`"read"`・`"exists"`・`"delete"`・`"copy"`・`"move"`・`"clear"`・`"getWritable"`・`"getReadable"` のいずれかです。
 
 ### `RetryablePredicate` [#retryable-predicate]
 
@@ -144,11 +144,11 @@ await kvs.close();
 
 | 操作                                    | 対応するデータ型                 |
 | --------------------------------------- | -------------------------------- |
-| `write`・`read`                         | 委譲先のデータ型をそのまま保つ   |
+| `write`・`read`・`copy`・`move`         | 委譲先のデータ型をそのまま保つ   |
 | `getWritable`・`getReadable` のチャンク | 委譲先のチャンク型をそのまま保つ |
 
 - すべての操作は委譲先の型をそのまま保ち、データとチャンクの変換を行いません。
-- 再試行対象は読み書きと存在確認、削除、全削除、ストリーム取得です。
+- 再試行対象は読み書きと存在確認、削除、コピー、移動、全削除、ストリーム取得です。
 - `open` と `close` の失敗は再試行せず、そのまま伝播します。
 - 待機時間は指数関数的に増加して上限で抑えられ、`jitter` が `true` の場合は上限の半分から上限までの範囲で変動します。
 

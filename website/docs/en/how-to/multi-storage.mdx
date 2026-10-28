@@ -24,6 +24,8 @@ const kvs = new unikvs.Builder<{
 
 In this example, writes go to both memory and files, while reads check memory first.
 
+`copy()` and `move()` also apply to every backend where the source exists. If the source exists in only some backends, only those backends are updated. If it exists in none, the operation throws `KeyNotFoundError`.
+
 :::note[Registration order sets priority]
 Read priority follows the order of `persist()` calls. Register fast or temporary backends first.
 :::

@@ -102,7 +102,7 @@ console.log(bytesEqual(concatBytes(chunks), bytes)); // true
 
 ## テスト用コンテキスト [#context]
 
-[`TestContext`](#test-context) はテスト用の `IPipelineContext` の具象クラスです。`signal`・`action`・`key`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。[`TestContextInit`](#test-context-init) で初期値を渡します。[`TestContextValues`](#test-context-values) は `values` の形式 (`Record` またはエントリーの反復可能オブジェクト) を表します。
+[`TestContext`](#test-context) はテスト用の `IPipelineContext` の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。[`TestContextInit`](#test-context-init) で初期値を渡します。[`TestContextValues`](#test-context-values) は `values` の形式 (`Record` またはエントリーの反復可能オブジェクト) を表します。
 
 操作ごとの生成関数は次のとおりです。
 
@@ -116,6 +116,8 @@ console.log(bytesEqual(concatBytes(chunks), bytes)); // true
 | `createStreamContext`       | `"stream"` | ストリーム読み取り     | [詳細](#create-stream-context)        |
 | `createHasContext`          | `"has"`    | 存在確認               | [詳細](#create-has-context)           |
 | `createDeleteContext`       | `"delete"` | 削除                   | [詳細](#create-delete-context)        |
+| `createCopyContext`         | `"copy"`   | コピー                 | [詳細](#create-copy-context)          |
+| `createMoveContext`         | `"move"`   | 移動                   | [詳細](#create-move-context)          |
 | `createClearContext`        | `"clear"`  | 全削除                 | [詳細](#create-clear-context)         |
 | `createRepairContext`       | `"get"`    | 書き戻し付きの読み取り | [詳細](#create-repair-context)        |
 | `createMapKeyContext`       | `"set"`    | キー変換               | [詳細](#create-map-key-context)       |
@@ -316,12 +318,16 @@ const fromEntries: TestContextValues = [["count", 1]];
         "操作の中断に使うシグナルです。省略時は新しい `AbortController` のシグナルになります。",
     },
     action: {
-      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       description: '実行する操作の種類です。省略時は `"set"` です。',
     },
     key: {
       type: "[#test-context-init-key] string",
       description: '操作対象の論理キーです。省略時は `""` です。',
+    },
+    destinationKey: {
+      type: "[#test-context-init-destination-key] string",
+      description: 'コピー先または移動先のキーです。省略時は `""` です。',
     },
     repair: {
       type: "[#test-context-init-repair] TestContextRepair",
@@ -345,7 +351,7 @@ const fromEntries: TestContextValues = [["count", 1]];
 
 ### `TestContext` [#test-context]
 
-テスト用の `IPipelineContext` ([パイプラインコンテキスト](/packages/core/pipeline-context#contexts)) の具象クラスです。`signal`・`action`・`key`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。`repair` の形状は `TestContextRepair` で、[`IGetContext`](/packages/core/pipeline-context#igetcontext) の `repair` と同じ形状です。
+テスト用の `IPipelineContext` ([パイプラインコンテキスト](/packages/core/pipeline-context#contexts)) の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。`repair` の形状は `TestContextRepair` で、[`IGetContext`](/packages/core/pipeline-context#igetcontext) の `repair` と同じ形状です。
 
 <TypeTable
   type={{
@@ -355,7 +361,7 @@ const fromEntries: TestContextValues = [["count", 1]];
       description: "操作の中断に使うシグナルです。",
     },
     action: {
-      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       required: true,
       description: "実行する操作の種類です。",
     },
@@ -363,6 +369,11 @@ const fromEntries: TestContextValues = [["count", 1]];
       type: "[#test-context-key] string",
       required: true,
       description: "操作対象の論理キーです。",
+    },
+    destinationKey: {
+      type: "[#test-context-destination-key] string",
+      required: true,
+      description: "コピー先または移動先のキーです。",
     },
     repair: {
       type: "[#test-context-repair] TestContextRepair",
@@ -440,6 +451,26 @@ const ctx = createSetContext("key", { source: data });
 ### `createDeleteContext()` [#create-delete-context]
 
 `delete` 用のコンテキストを作成します。第 1 引数のキーを設定し、`action` を `"delete"` にして返します。
+
+### `createCopyContext()` [#create-copy-context]
+
+`copy` 用のコンテキストを作成します。第 1 引数のキーをコピー元、第 2 引数のキーをコピー先に設定し、`action` を `"copy"` にして返します。
+
+```ts
+import { createCopyContext } from "@unikvs/testing";
+
+const ctx = createCopyContext("source", "destination");
+```
+
+### `createMoveContext()` [#create-move-context]
+
+`move` 用のコンテキストを作成します。第 1 引数のキーを移動元、第 2 引数のキーを移動先に設定し、`action` を `"move"` にして返します。
+
+```ts
+import { createMoveContext } from "@unikvs/testing";
+
+const ctx = createMoveContext("source", "destination");
+```
 
 ### `createClearContext()` [#create-clear-context]
 

@@ -7,7 +7,7 @@ description: "How to use @unikvs/writeonly, which rejects reads to make storage 
 
 `@unikvs/writeonly` <Badge>Middleware</Badge> rejects reads to make storage write-only.
 
-Read-direction operations (`get` / `has` / `stream` / `decode`) are rejected as if the key did not exist, while writes pass through. When `allowDelete` is `false`, deletion is also rejected.
+Read-direction operations (`get` / `has` / `stream` / `decode`) are rejected as if the key did not exist, while write-direction operations (`set` / `copy` / `move`) pass through. When `allowDelete` is `false`, deletion is also rejected.
 
 - `name` is `WriteOnly`.
 - `isOpen` is always `true`.
@@ -72,6 +72,7 @@ await kvs.close();
 | `getDecodable` | read chunk  | Always throws `KeyNotFoundError` |
 
 - The write direction performs no conversion and passes values through.
+- `copy` and `move` are allowed as write-direction operations because they do not return values.
 - The read direction always fails, as if the key did not exist.
 - Deletion is controlled by `use()`: when `allowDelete` is `false`, `delete` and `clear` are rejected.
 

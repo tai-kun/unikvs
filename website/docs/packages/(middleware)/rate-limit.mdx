@@ -11,7 +11,7 @@ description: "トークンバケットで操作頻度を制限するミドルウ
 
 - `name` は `RateLimit` です。
 - `isOpen` は常に `true` です。
-- バケットはキーごとではなくミドルウェアインスタンスで共有され、すべての操作 (`set`・`get`・`stream`・`has`・`delete`・`clear`) で 1 トークンを消費します。
+- バケットはキーごとではなくミドルウェアインスタンスで共有され、すべての操作 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) で 1 トークンを消費します。
 - `encode`・`decode`・`encodeStream`・`decodeStream` はデータを透過します。
 
 インストールは次のコマンドで行います。

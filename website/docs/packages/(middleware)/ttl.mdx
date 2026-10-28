@@ -12,7 +12,8 @@ description: "相対秒数や絶対時刻で TTL を付与し、期限切れを�
 - `name` は `Ttl` です。
 - `isOpen` は常に `true` です。
 - 期限の指定は操作ごとの変数 `@unikvs/ttl:ttl`・`@unikvs/ttl:expiresAt` (非名前空間名 `ttl`・`expiresAt` も後方互換で受付) と、既定値 `defaultTtl` で行います。
-- 期限切れの `get`・`has`・`stream` は `KeyNotFoundError` 相当として扱います。
+- 期限切れの `get`・`has`・`stream`・`copy`・`move` は `KeyNotFoundError` 相当として扱います。
+- `copy` と `move` はコピー元・移動元の有効期限をコピー先・移動先へ引き継ぎます。
 
 インストールは次のコマンドで行います。
 
@@ -88,6 +89,7 @@ await kvs.close();
 - `encode` は TTL があるときに `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` の形に包み、操作内記録にも失効時刻を保存します。TTL がない上書きでは記録を消し、データを透過させます。
 - `decode` は期限内であれば包みを剥がして元の値を返し、期限切れでは `KeyNotFoundError` を投げます。再起動後などで記録が欠けているときはエンベロープから記録を復元します。
 - ストリームはチャンクの型制約に合わせるため帯域内に期限を埋め込まず、記録だけで管理します。`encodeStream` と `decodeStream` はデータを透過します。
+- `copy` と `move` は記録上の有効期限をコピー先・移動先へ引き継ぎます。期限内のコピー元・移動元だけを操作でき、期限切れの場合は `KeyNotFoundError` を投げます。
 - TTL の解決は `ttl` 変数を優先し、次に `expiresAt` 変数、最後に `defaultTtl` を使います。名前空間付き変数が非名前空間名より優先されます。
 
 ## エラー [#errors]

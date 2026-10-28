@@ -11,7 +11,7 @@ Use it to retry operations failing from flaky networks or temporary overload. Re
 
 - `name` is `Retry`.
 - `isOpen` returns `inner.isOpen`.
-- Retries `write`, `read`, `exists`, `delete`, `clear`, `getWritable`, and `getReadable`; `open`, `close`, and `onOtherWriteError` are only delegated.
+- Retries `write`, `read`, `exists`, `delete`, `copy`, `move`, `clear`, `getWritable`, and `getReadable`; `open`, `close`, and `onOtherWriteError` are only delegated.
 - Performs no data or chunk conversion; preserves the delegated types as-is.
 
 Install with:
@@ -101,7 +101,7 @@ Options accepted by the `Retry` constructor. Specify retry counts, delays, and t
 
 ### `RetryOperation` [#retry-operation]
 
-Name of a retried operation: `"write"`, `"read"`, `"exists"`, `"delete"`, `"clear"`, `"getWritable"`, or `"getReadable"`.
+Name of a retried operation: `"write"`, `"read"`, `"exists"`, `"delete"`, `"copy"`, `"move"`, `"clear"`, `"getWritable"`, or `"getReadable"`.
 
 ### `RetryablePredicate` [#retryable-predicate]
 
@@ -144,11 +144,11 @@ Default retry eligibility. Permanent failures such as missing keys and abort-dri
 
 | Operation                          | Supported data type             |
 | ---------------------------------- | ------------------------------- |
-| `write`/`read`                     | Same data type as the delegate  |
+| `write`/`read`/`copy`/`move`       | Same data type as the delegate  |
 | `getWritable`/`getReadable` chunks | Same chunk type as the delegate |
 
 - All operations preserve the delegate types; no data or chunk conversion is performed.
-- Retried operations are reads, writes, existence checks, deletes, clears, and stream acquisitions.
+- Retried operations are reads, writes, existence checks, deletes, copies, moves, clears, and stream acquisitions.
 - `open` and `close` failures are not retried and propagate as-is.
 - Delays grow exponentially up to the cap; when `jitter` is `true` they vary between half the cap and the cap.
 

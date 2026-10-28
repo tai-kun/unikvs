@@ -52,7 +52,7 @@ Transforms the key itself. Synchronously returns a `string`. Unlike other hooks,
 
 ### `use` [#hooks-use]
 
-Runs around read/write operations (`set` / `get` / `stream` / `has` / `delete` / `clear`). Narrow by `action` for type-safe access to each operation's `key` or `repair`.
+Runs around read/write operations (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`). Narrow by `action` for type-safe access to each operation's `key`, `repair`, or `destinationKey`.
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -124,16 +124,16 @@ Write pre/post processing around `next()`. The return is `PromiseLike<void>` —
 
 The `IMiddleware` namespace provides aliases of [pipeline contexts](./pipeline-context#contexts).
 
-| Alias                                | Entity                                                                                           |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `IMiddleware.MapKeyContext`          | [`IMapKeyContext`](./pipeline-context#imapkeycontext)                                            |
-| `IMiddleware.OpenContext`            | [`IOpenContext`](./pipeline-context#iopencontext)                                                |
-| `IMiddleware.CloseContext`           | [`ICloseContext`](./pipeline-context#iclosecontext)                                              |
-| `IMiddleware.UseContext`             | `ISetContext \| IGetContext \| IStreamContext \| IHasContext \| IDeleteContext \| IClearContext` |
-| `IMiddleware.EncodeContext<T>`       | [`IEncodeContext<T, T>`](./pipeline-context#iencodecontext)                                      |
-| `IMiddleware.DecodeContext<T>`       | [`IDecodeContext<T, T>`](./pipeline-context#idecodecontext)                                      |
-| `IMiddleware.EncodeStreamContext<T>` | [`IEncodeStreamContext<T, T>`](./pipeline-context#iencodestreamcontext)                          |
-| `IMiddleware.DecodeStreamContext<T>` | [`IDecodeStreamContext<T, T>`](./pipeline-context#idecodestreamcontext)                          |
+| Alias                                | Entity                                                                                                                           |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `IMiddleware.MapKeyContext`          | [`IMapKeyContext`](./pipeline-context#imapkeycontext)                                                                            |
+| `IMiddleware.OpenContext`            | [`IOpenContext`](./pipeline-context#iopencontext)                                                                                |
+| `IMiddleware.CloseContext`           | [`ICloseContext`](./pipeline-context#iclosecontext)                                                                              |
+| `IMiddleware.UseContext`             | `ISetContext \| IGetContext \| IStreamContext \| IHasContext \| IDeleteContext \| ICopyContext \| IMoveContext \| IClearContext` |
+| `IMiddleware.EncodeContext<T>`       | [`IEncodeContext<T, T>`](./pipeline-context#iencodecontext)                                                                      |
+| `IMiddleware.DecodeContext<T>`       | [`IDecodeContext<T, T>`](./pipeline-context#idecodecontext)                                                                      |
+| `IMiddleware.EncodeStreamContext<T>` | [`IEncodeStreamContext<T, T>`](./pipeline-context#iencodestreamcontext)                                                          |
+| `IMiddleware.DecodeStreamContext<T>` | [`IDecodeStreamContext<T, T>`](./pipeline-context#idecodestreamcontext)                                                          |
 
 ## Example [#example]
 

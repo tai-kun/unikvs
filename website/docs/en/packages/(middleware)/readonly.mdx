@@ -7,7 +7,7 @@ description: "How to use @unikvs/readonly, which rejects writes to make storage 
 
 `@unikvs/readonly` <Badge>Middleware</Badge> rejects writes to make storage read-only.
 
-It rejects write-direction operations (`set` / `encode`) and passes reads through. When `allowDelete` is `false`, it also rejects deletion.
+It rejects write-direction operations (`set` / `copy` / `move` / `encode`) and passes reads through. When `allowDelete` is `false`, it also rejects deletion.
 
 - `name` is `ReadOnly`.
 - `isOpen` is always `true`.
@@ -86,6 +86,7 @@ await kvs.close();
 | `getDecodable` | read chunk  | Read chunk (passed through)                |
 
 - The write direction always fails; the read direction performs no conversion and passes through.
+- `copy` and `move` are rejected because they write to the destination key.
 - Deletion is controlled by `use()`: when `allowDelete` is `false`, `delete` and `clear` are rejected.
 
 ## Errors [#errors]
@@ -96,7 +97,7 @@ Errors thrown by this package:
 
 #### Meaning
 
-Thrown when a write-direction operation (`set` / `encode`) is called.
+Thrown when a write-direction operation (`set` / `copy` / `move` / `encode`) is called.
 
 #### How to fix
 

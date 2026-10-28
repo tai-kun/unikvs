@@ -52,7 +52,7 @@ type MyMiddleware = IMiddleware<string, string, ArrayBuffer, ArrayBuffer>;
 
 ### `use` [#hooks-use]
 
-読み書き操作 (`set`・`get`・`stream`・`has`・`delete`・`clear`) の前後処理です。`action` で絞り込むと、各操作の `key` や `repair` に型安全に触れます。
+読み書き操作 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) の前後処理です。`action` で絞り込むと、各操作の `key` や `repair`、`destinationKey` に型安全に触れます。
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -124,16 +124,16 @@ public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<vo
 
 `IMiddleware` 名前空間は [パイプラインコンテキスト](./pipeline-context#contexts) の別名を提供します。
 
-| 別名                                 | 実体                                                                                             |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `IMiddleware.MapKeyContext`          | [`IMapKeyContext`](./pipeline-context#imapkeycontext)                                            |
-| `IMiddleware.OpenContext`            | [`IOpenContext`](./pipeline-context#iopencontext)                                                |
-| `IMiddleware.CloseContext`           | [`ICloseContext`](./pipeline-context#iclosecontext)                                              |
-| `IMiddleware.UseContext`             | `ISetContext \| IGetContext \| IStreamContext \| IHasContext \| IDeleteContext \| IClearContext` |
-| `IMiddleware.EncodeContext<T>`       | [`IEncodeContext<T, T>`](./pipeline-context#iencodecontext)                                      |
-| `IMiddleware.DecodeContext<T>`       | [`IDecodeContext<T, T>`](./pipeline-context#idecodecontext)                                      |
-| `IMiddleware.EncodeStreamContext<T>` | [`IEncodeStreamContext<T, T>`](./pipeline-context#iencodestreamcontext)                          |
-| `IMiddleware.DecodeStreamContext<T>` | [`IDecodeStreamContext<T, T>`](./pipeline-context#idecodestreamcontext)                          |
+| 別名                                 | 実体                                                                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `IMiddleware.MapKeyContext`          | [`IMapKeyContext`](./pipeline-context#imapkeycontext)                                                                            |
+| `IMiddleware.OpenContext`            | [`IOpenContext`](./pipeline-context#iopencontext)                                                                                |
+| `IMiddleware.CloseContext`           | [`ICloseContext`](./pipeline-context#iclosecontext)                                                                              |
+| `IMiddleware.UseContext`             | `ISetContext \| IGetContext \| IStreamContext \| IHasContext \| IDeleteContext \| ICopyContext \| IMoveContext \| IClearContext` |
+| `IMiddleware.EncodeContext<T>`       | [`IEncodeContext<T, T>`](./pipeline-context#iencodecontext)                                                                      |
+| `IMiddleware.DecodeContext<T>`       | [`IDecodeContext<T, T>`](./pipeline-context#idecodecontext)                                                                      |
+| `IMiddleware.EncodeStreamContext<T>` | [`IEncodeStreamContext<T, T>`](./pipeline-context#iencodestreamcontext)                                                          |
+| `IMiddleware.DecodeStreamContext<T>` | [`IDecodeStreamContext<T, T>`](./pipeline-context#idecodestreamcontext)                                                          |
 
 ## 実装例 [#example]
 

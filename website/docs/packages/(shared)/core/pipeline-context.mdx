@@ -73,6 +73,8 @@ flowchart TB
   E --> J[IStreamContext]
   E --> K[IHasContext]
   E --> L[IDeleteContext]
+  E --> U[ICopyContext]
+  E --> V[IMoveContext]
   C --> M[IClearContext]
   E --> N[ITransformContext]
   N --> O[ITransformDataContext]
@@ -90,16 +92,18 @@ flowchart TB
 | 型                                              | `action`            | 主な追加プロパティー                                |
 | ----------------------------------------------- | ------------------- | --------------------------------------------------- |
 | [`IMapKeyContext`](#imapkeycontext)             | —                   | `key: string`                                       |
-| [`IActionContext`](#iactioncontext)             | 8 種の操作          | `signal: AbortSignal`                               |
+| [`IActionContext`](#iactioncontext)             | 10 種の操作         | `signal: AbortSignal`                               |
 | [`ILifecycleContext`](#ilifecyclecontext)       | `"open" \| "close"` | `signal`                                            |
 | [`IOpenContext`](#iopencontext)                 | `"open"`            | `signal`                                            |
 | [`ICloseContext`](#iclosecontext)               | `"close"`           | `signal`                                            |
-| [`IKeyedActionContext`](#ikeyedactioncontext)   | 5 種のキー操作      | `key`・`signal`                                     |
+| [`IKeyedActionContext`](#ikeyedactioncontext)   | 7 種のキー操作      | `key`・`signal`                                     |
 | [`ISetContext`](#isetcontext)                   | `"set"`             | `key`・`signal`                                     |
 | [`IGetContext`](#igetcontext)                   | `"get"`             | `key`・`signal`・`repair`                           |
 | [`IStreamContext`](#istreamcontext)             | `"stream"`          | `key`・`signal`・`repair`                           |
 | [`IHasContext`](#ihascontext)                   | `"has"`             | `key`・`signal`                                     |
 | [`IDeleteContext`](#ideletecontext)             | `"delete"`          | `key`・`signal`                                     |
+| [`ICopyContext`](#icopycontext)                 | `"copy"`            | `key`・`destinationKey`・`signal`                   |
+| [`IMoveContext`](#imovecontext)                 | `"move"`            | `key`・`destinationKey`・`signal`                   |
 | [`IClearContext`](#iclearcontext)               | `"clear"`           | `signal`                                            |
 | [`IEncodeContext`](#iencodecontext)             | `"set"`             | `source`・`destination?` (データ変換用)             |
 | [`IDecodeContext`](#idecodecontext)             | `"get"`             | `source`・`destination?` (データ変換用)             |
@@ -110,13 +114,13 @@ flowchart TB
 
 `IMapKeyContext` はキー変換専用で `key` のみを持ちます ([ミドルウェアの `mapKey`](./middleware#hooks) で使います)。`signal` は持ちません。
 
-`IActionContext` は `signal: AbortSignal` と 8 種の `action` (`"open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"`) を持ちます。`ILifecycleContext` は `"open" | "close"` に絞られ、`IOpenContext`・`ICloseContext` はそれぞれ 1 種に絞られます。
+`IActionContext` は `signal: AbortSignal` と 10 種の `action` (`"open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"`) を持ちます。`ILifecycleContext` は `"open" | "close"` に絞られ、`IOpenContext`・`ICloseContext` はそれぞれ 1 種に絞られます。
 
 ### キー操作 [#contexts-keyed]
 
-`IKeyedActionContext` は `key: string` を加え、`action` を `"set" | "get" | "stream" | "has" | "delete"` の 5 種に絞ります。以降の `ISetContext`・`IGetContext`・`IStreamContext`・`IHasContext`・`IDeleteContext` は `action` を 1 種に固定します。`IClearContext` はキーを伴わないため `IKeyedActionContext` ではなく `IActionContext` を直接継承し、`action` は `"clear"` です。
+`IKeyedActionContext` は `key: string` を加え、`action` を `"set" | "get" | "stream" | "has" | "delete" | "copy" | "move"` の 7 種に絞ります。以降の `ISetContext`・`IGetContext`・`IStreamContext`・`IHasContext`・`IDeleteContext` は `action` を 1 種に固定します。`ICopyContext` と `IMoveContext` はコピー先・移動先の `destinationKey` も持ちます。`IClearContext` はキーを伴わないため `IKeyedActionContext` ではなく `IActionContext` を直接継承し、`action` は `"clear"` です。
 
-ミドルウェアの `use` フックはこれら 6 種 (`set`・`get`・`stream`・`has`・`delete`・`clear`) をまとめて受けます。`action` で絞り込むと、各操作の `key` や `repair` に型安全に触れます。
+ミドルウェアの `use` フックはこれら 8 種 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) をまとめて受けます。`action` で絞り込むと、各操作の `key` や `repair`、`destinationKey` に型安全に触れます。
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -127,7 +131,9 @@ export function describe(use: IMiddleware.UseContext): string {
     case "get":
     case "stream":
     case "has":
-    case "delete": {
+    case "delete":
+    case "copy":
+    case "move": {
       return `${use.action}: ${use.key}`;
     }
     case "clear": {
@@ -221,7 +227,7 @@ if (ctx.repair.enabled) {
 
 ### `IActionContext` [#iactioncontext]
 
-`signal` と 8 種の `action` を持つ、すべての操作に共通するコンテキストです。
+`signal` と 10 種の `action` を持つ、すべての操作に共通するコンテキストです。
 
 <TypeTable
   type={{
@@ -231,7 +237,7 @@ if (ctx.repair.enabled) {
       description: "操作の中断信号です。",
     },
     action: {
-      type: '[#iactioncontext-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#iactioncontext-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       required: true,
       description: "操作の種類です。",
     },
@@ -282,12 +288,12 @@ if (ctx.repair.enabled) {
 
 ### `IKeyedActionContext` [#ikeyedactioncontext]
 
-`key` を加え、`action` をキー操作の 5 種に絞ったコンテキストです。
+`key` を加え、`action` をキー操作の 7 種に絞ったコンテキストです。
 
 <TypeTable
   type={{
     action: {
-      type: '[#ikeyedactioncontext-action] "set" | "get" | "stream" | "has" | "delete"',
+      type: '[#ikeyedactioncontext-action] "set" | "get" | "stream" | "has" | "delete" | "copy" | "move"',
       required: true,
       description: "操作の種類です。",
     },
@@ -365,6 +371,54 @@ if (ctx.repair.enabled) {
       type: '[#ideletecontext-action] "delete"',
       required: true,
       description: "操作の種類です。",
+    },
+  }}
+/>
+
+### `ICopyContext` [#icopycontext]
+
+`action` を `"copy"` に固定したコピー用コンテキストです。`key` がコピー元、`destinationKey` がコピー先です。
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#icopycontext-action] "copy"',
+      required: true,
+      description: "操作の種類です。",
+    },
+    key: {
+      type: "[#icopycontext-key] string",
+      required: true,
+      description: "コピー元のキーです。",
+    },
+    destinationKey: {
+      type: "[#icopycontext-destination-key] string",
+      required: true,
+      description: "コピー先のキーです。",
+    },
+  }}
+/>
+
+### `IMoveContext` [#imovecontext]
+
+`action` を `"move"` に固定した移動用コンテキストです。`key` が移動元、`destinationKey` が移動先です。
+
+<TypeTable
+  type={{
+    action: {
+      type: '[#imovecontext-action] "move"',
+      required: true,
+      description: "操作の種類です。",
+    },
+    key: {
+      type: "[#imovecontext-key] string",
+      required: true,
+      description: "移動元のキーです。",
+    },
+    destinationKey: {
+      type: "[#imovecontext-destination-key] string",
+      required: true,
+      description: "移動先のキーです。",
     },
   }}
 />

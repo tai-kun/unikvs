@@ -102,7 +102,7 @@ console.log(bytesEqual(concatBytes(chunks), bytes)); // true
 
 ## Test contexts [#context]
 
-[`TestContext`](#test-context) is a concrete test-only `IPipelineContext`. It holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. Structurally assignable to each context type, it works as-is in storage/middleware unit tests. Pass initial values via [`TestContextInit`](#test-context-init). [`TestContextValues`](#test-context-values) is the `values` form (a `Record` or an iterable of entries).
+[`TestContext`](#test-context) is a concrete test-only `IPipelineContext`. It holds `signal`, `action`, `key`, `destinationKey`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. Structurally assignable to each context type, it works as-is in storage/middleware unit tests. Pass initial values via [`TestContextInit`](#test-context-init). [`TestContextValues`](#test-context-values) is the `values` form (a `Record` or an iterable of entries).
 
 Per-operation factories:
 
@@ -116,6 +116,8 @@ Per-operation factories:
 | `createStreamContext`       | `"stream"` | Stream reading      | [Details](#create-stream-context)        |
 | `createHasContext`          | `"has"`    | Presence check      | [Details](#create-has-context)           |
 | `createDeleteContext`       | `"delete"` | Deleting            | [Details](#create-delete-context)        |
+| `createCopyContext`         | `"copy"`   | Copying             | [Details](#create-copy-context)          |
+| `createMoveContext`         | `"move"`   | Moving              | [Details](#create-move-context)          |
 | `createClearContext`        | `"clear"`  | Clearing all        | [Details](#create-clear-context)         |
 | `createRepairContext`       | `"get"`    | Reading with repair | [Details](#create-repair-context)        |
 | `createMapKeyContext`       | `"set"`    | Key mapping         | [Details](#create-map-key-context)       |
@@ -315,12 +317,16 @@ Constructor arguments for [`TestContext`](#test-context):
       description: "Signal aborting the operation. Defaults to a fresh `AbortController` signal.",
     },
     action: {
-      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#test-context-init-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       description: 'Operation kind. Defaults to `"set"`.',
     },
     key: {
       type: "[#test-context-init-key] string",
       description: 'Logical target key. Defaults to `""`.',
+    },
+    destinationKey: {
+      type: "[#test-context-init-destination-key] string",
+      description: 'Copy or move destination key. Defaults to `""`.',
     },
     repair: {
       type: "[#test-context-init-repair] TestContextRepair",
@@ -344,7 +350,7 @@ Constructor arguments for [`TestContext`](#test-context):
 
 ### `TestContext` [#test-context]
 
-Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeline-context#contexts)): holds `signal`, `action`, `key`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. `repair` has the `TestContextRepair` shape, same as [`IGetContext`](/packages/core/pipeline-context#igetcontext) `repair`.
+Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeline-context#contexts)): holds `signal`, `action`, `key`, `destinationKey`, `repair`, `source`, and `destination`, with variables handled via `get`, `set`, `setReadonly`, and `snapshot`. `repair` has the `TestContextRepair` shape, same as [`IGetContext`](/packages/core/pipeline-context#igetcontext) `repair`.
 
 <TypeTable
   type={{
@@ -354,7 +360,7 @@ Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeli
       description: "Signal aborting the operation.",
     },
     action: {
-      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear"',
+      type: '[#test-context-action] "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear" | "copy" | "move"',
       required: true,
       description: "Operation kind.",
     },
@@ -362,6 +368,11 @@ Test-only concrete `IPipelineContext` ([pipeline contexts](/packages/core/pipeli
       type: "[#test-context-key] string",
       required: true,
       description: "Logical target key.",
+    },
+    destinationKey: {
+      type: "[#test-context-destination-key] string",
+      required: true,
+      description: "Copy or move destination key.",
     },
     repair: {
       type: "[#test-context-repair] TestContextRepair",
@@ -439,6 +450,26 @@ Creates a context for `has`. Sets the first-argument key and returns it with `ac
 ### `createDeleteContext()` [#create-delete-context]
 
 Creates a context for `delete`. Sets the first-argument key and returns it with `action` `"delete"`.
+
+### `createCopyContext()` [#create-copy-context]
+
+Creates a context for `copy`. Sets the first-argument key as the source and the second-argument key as the destination, and returns it with `action` `"copy"`.
+
+```ts
+import { createCopyContext } from "@unikvs/testing";
+
+const ctx = createCopyContext("source", "destination");
+```
+
+### `createMoveContext()` [#create-move-context]
+
+Creates a context for `move`. Sets the first-argument key as the source and the second-argument key as the destination, and returns it with `action` `"move"`.
+
+```ts
+import { createMoveContext } from "@unikvs/testing";
+
+const ctx = createMoveContext("source", "destination");
+```
 
 ### `createClearContext()` [#create-clear-context]
 
