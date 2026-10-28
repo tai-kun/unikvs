@@ -19,6 +19,7 @@ export default defineMeta({
     "checksum",
     "debug",
     "passthrough",
+    "tap",
     "allow-repair",
     "key-prefix",
     "writeonly",

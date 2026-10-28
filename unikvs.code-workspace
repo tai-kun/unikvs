@@ -236,6 +236,10 @@
       "path": "packages/passthrough",
     },
     {
+      "name": "@unikvs/tap",
+      "path": "packages/tap",
+    },
+    {
       "name": "@unikvs/allow-repair",
       "path": "packages/allow-repair",
     },

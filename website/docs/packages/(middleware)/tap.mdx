@@ -1,0 +1,119 @@
+---
+title: "@unikvs/tap"
+description: "データを変換せず、Context を受け取るコールバックを実行するミドルウェアです。"
+---
+
+## 概要 [#overview]
+
+`@unikvs/tap` はデータをそのまま透過させながら、データを扱う各フックでコンテキストを受け取るコールバックを実行するミドルウェアです。<Badge>Middleware</Badge>
+
+保存内容は [`@unikvs/passthrough`](/packages/passthrough) と同じく変更しません。コールバックでログの記録、値の検証、実行時変数の操作などを行えます。
+
+- `name` は `Tap` です。
+- `isOpen` は常に `true` です。`open()` は不要です。
+- コールバックは `encode`・`decode`・`encodeStream`・`decodeStream` の実行前に呼ばれます。
+- コールバックの戻り値は無視され、データは常に入力のまま透過します。
+- コールバックが `Promise` を返した場合、完了するまで次の処理へ進みません。
+- コールバックが投げた例外や拒否は、操作の失敗としてそのまま伝播します。
+
+インストールは次のコマンドで行います。
+
+```package-install
+npm install @unikvs/tap
+```
+
+## 使い方 [#usage]
+
+`Tap` は IMiddleware を実装しています。UniKvs には use() で渡します。
+
+```ts
+import { Tap } from "@unikvs/tap";
+```
+
+コンストラクターの引数は次のとおりです。
+
+<TypeTable
+  type={{
+    callback: {
+      type: "[#tap-callback] TapCallback",
+      required: true,
+      description: "各データフックの実行前に呼ばれるコールバックです。",
+    },
+  }}
+/>
+
+以下は、読み書きのたびに操作とキーを記録する例です。
+
+```ts
+import { Memory } from "@unikvs/memory";
+import { Tap } from "@unikvs/tap";
+import * as unikvs from "unikvs";
+
+const events: string[] = [];
+
+const kvs = new unikvs.Builder<{ k1: unikvs.PlainValue<string> }>()
+  .use(
+    new Tap((c) => {
+      events.push(`${c.action}:${c.key}`);
+    }),
+  )
+  .persist(new Memory())
+  .build();
+
+await kvs.open();
+await kvs.set("k1", "hello");
+console.log(await kvs.get("k1")); // "hello"
+console.log(events); // ["set:k1", "get:k1"] など
+await kvs.close();
+```
+
+コールバックには [`TapContext`](#tap-context) が渡されるため、`source`・`key`・`action` のほか、`get`・`set`・`setReadonly` で実行時変数も扱えます。
+
+## API リファレンス [#api]
+
+### `Tap` [#tap]
+
+データを変換せず、各データフックの実行前にコールバックを呼ぶミドルウェアです。
+
+- `name` は `"Tap"` です。
+- `isOpen` は常に `true` です。
+- `callback` はコンストラクターに渡したコールバックです。
+
+### `TapCallback` [#tap-callback]
+
+`Tap` のコンストラクターに渡すコールバックです。
+
+```ts
+type TapCallback = (c: TapContext) => void | Promise<void>;
+```
+
+コールバックが `Promise` を返した場合は、その完了を待ってからデータを下流へ流します。コールバックが投げた例外や拒否は、操作の失敗として呼び出し元へ伝播します。
+
+### `TapContext` [#tap-context]
+
+コールバックが受け取るコンテキストです。次のいずれかです。
+
+- `IMiddleware.EncodeContext`
+- `IMiddleware.DecodeContext`
+- `IMiddleware.EncodeStreamContext`
+- `IMiddleware.DecodeStreamContext`
+
+## データ型 [#data-types]
+
+| メソッド       | 入力     | 出力     |
+| -------------- | -------- | -------- |
+| `encode`       | `TData`  | `TData`  |
+| `decode`       | `TData`  | `TData`  |
+| `encodeStream` | `TChunk` | `TChunk` |
+| `decodeStream` | `TChunk` | `TChunk` |
+
+- `encode` と `decode` は入力データをそのまま出力します。
+- `encodeStream` と `decodeStream` は入力ストリームをそのまま出力します。チャンクの順序と参照は保たれます。
+- ストリームでは、コールバックはストリームの構築前に 1 回だけ呼ばれます。チャンクごとには呼ばれません。
+- コールバックが `destination` を変更しても、データは入力のまま上書きされて透過します。
+
+## エラー [#errors]
+
+このパッケージ固有のエラーはありません。
+
+コールバックが投げた例外や拒否は、そのまま操作の失敗として伝播します。

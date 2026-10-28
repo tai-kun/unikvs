@@ -34,6 +34,7 @@
     "packages/session-storage",
     "packages/soft-delete",
     "packages/superjson",
+    "packages/tap",
     "packages/testing",
     "packages/tracing",
     "packages/ttl",

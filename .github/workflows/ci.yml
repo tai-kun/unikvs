@@ -128,6 +128,8 @@ jobs:
             directory: "packages/s3.bun"
           - name: "zstd.bun"
             directory: "packages/zstd.bun"
+          - name: "tap"
+            directory: "packages/tap"
     timeout-minutes: 30
     runs-on: ubuntu-latest
     container:
