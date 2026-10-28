@@ -69,7 +69,9 @@ export default class ReadOnly implements IMiddleware {
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     switch (c.action) {
-      case "set": {
+      case "set":
+      case "copy":
+      case "move": {
         throw new ReadOnlySetNotAllowedError({ key: c.key });
       }
 

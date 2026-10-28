@@ -167,6 +167,45 @@ describe("書き込みの拒否", () => {
     // 後片付け。
     await kvs.close();
   });
+
+  test("copy も集約エラーで失敗しデータが変更されない", async ({ expect }) => {
+    // 準備：
+    const { kvs, storage } = await createReadOnlyKvs();
+
+    // 実行：
+    const error = await captureRejection(kvs.copy("report", "archived"));
+
+    // 検証：
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("copy");
+    expect((error as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
+      ReadOnlySetNotAllowedError,
+    );
+    expect(storage.exists(createHasContext("archived") as IStorage.ExistsContext)).toBe(false);
+
+    // 後片付け。
+    await kvs.close();
+  });
+
+  test("move も集約エラーで失敗し元データが残る", async ({ expect }) => {
+    // 準備：
+    const { kvs, storage } = await createReadOnlyKvs();
+
+    // 実行：
+    const error = await captureRejection(kvs.move("report", "archived"));
+
+    // 検証：
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect((error as PluginOperationAggregateError).meta.action).toBe("move");
+    expect((error as PluginOperationAggregateError).meta.errors[0]?.reason).toBeInstanceOf(
+      ReadOnlySetNotAllowedError,
+    );
+    expect(storage.exists(createHasContext("report") as IStorage.ExistsContext)).toBe(true);
+    expect(storage.exists(createHasContext("archived") as IStorage.ExistsContext)).toBe(false);
+
+    // 後片付け。
+    await kvs.close();
+  });
 });
 
 describe("削除の拒否", () => {
