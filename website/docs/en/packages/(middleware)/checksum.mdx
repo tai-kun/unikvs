@@ -67,7 +67,7 @@ await kvs.close();
 
 Abstract base class for the six variants. Never use it directly; use a concrete class.
 
-`CHECKSUM_ON_HASH_VAR_NAME` is the name of the callback var that receives the computed hash and a snapshot of the runtime variables. Its value is `CHECKSUM_VAR_NAME` followed by `:onHash`.
+`CHECKSUM_ON_HASH_VAR_NAME` is the name of the callback var that receives the computed hash. Its value is `CHECKSUM_VAR_NAME` followed by `:onHash`.
 
 ### `ChecksumMd5` [#checksum-md5]
 
@@ -128,26 +128,19 @@ Interface holding a one-shot hash function and a `create` hasher factory.
 
 ### `ChecksumOnHash` [#checksum-on-hash]
 
-Callback that receives the computed hash and a snapshot of the runtime variables. Pass a function in the `"<CHECKSUM_VAR_NAME>:onHash"` var, separate from the checksum var. For SHA-256, that is `"@unikvs/checksum:sha256:onHash"`.
+Callback that receives the computed hash. Pass a function in the `"<CHECKSUM_VAR_NAME>:onHash"` var, separate from the checksum var. For SHA-256, that is `"@unikvs/checksum:sha256:onHash"`.
 
 The callback is called when hashing and verification succeed. If you specify only the callback without an expected checksum, the middleware still computes the hash and calls the callback. If `required` is `true` and no expected checksum is present, it throws `ChecksumRequiredError` and does not call the callback.
 
-The second argument is a snapshot of the runtime variables at call time ([`VariablesSnapshot`](/packages/core/pipeline-context#variables-snapshot)). The snapshot is a shallow copy; object values share the same references.
-
-The following example receives the SHA-256 hash and runtime variables during a write.
+The following example receives the SHA-256 hash during a write.
 
 ```ts
 const hashes: string[] = [];
 
 await kvs.set("file", data, {
   vars: {
-    region: "us-east-1",
-    "@unikvs/checksum:sha256:onHash": (
-      hash: string,
-      variables: ReadonlyMap<string, unknown>,
-    ): void => {
+    "@unikvs/checksum:sha256:onHash": (hash: string): void => {
       hashes.push(hash);
-      console.log(variables.get("region"));
     },
   },
 });
@@ -172,7 +165,7 @@ The callback is called when hash computation completes. It does not guarantee th
 - This middleware computes the hash (lowercase hex) when the matching checksum var holds a string or when the `onHash` callback is specified.
 - It throws when the value does not match the expectation.
 - It throws when no checksum var exists and `required` is `true`, even if the `onHash` callback is specified.
-- The `onHash` callback receives the computed hash (lowercase hex) and a snapshot of the runtime variables. If the callback returns a `Promise`, the middleware waits for it.
+- The `onHash` callback receives the computed hash (lowercase hex). If the callback returns a `Promise`, the middleware waits for it.
 - `encodeStream` and `decodeStream` stream chunks downstream unchanged while updating the hash, verifying on completion, and calling the `onHash` callback.
 
 ## Errors [#errors]

@@ -187,24 +187,6 @@ describe("onHash コールバック", () => {
     expect(result).toStrictEqual(TEST_DATA);
     expect(hashes).toStrictEqual([VALID_HASH]);
   });
-  test("第二引数に実行時変数のスナップショットを渡す", async ({ expect }) => {
-    // 準備：
-    const checksum = new ChecksumSha256();
-    let snapshot: ReadonlyMap<string, unknown> | undefined;
-
-    // 実行：
-    await encode(checksum, TEST_DATA, {
-      [ON_HASH_VAR_NAME]: (_hash: string, variables: ReadonlyMap<string, unknown>): void => {
-        snapshot = variables;
-      },
-      region: "us-east-1",
-    });
-
-    // 検証：
-    expect(snapshot?.get("region")).toBe("us-east-1");
-    expect(snapshot?.has(ON_HASH_VAR_NAME)).toBe(true);
-    expect(snapshot?.has(ChecksumSha256.CHECKSUM_VAR_NAME)).toBe(false);
-  });
   test("期待値と一致したときもコールバックへハッシュを渡す", async ({ expect }) => {
     // 準備：
     const checksum = new ChecksumSha256();

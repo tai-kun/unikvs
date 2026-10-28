@@ -66,7 +66,6 @@ describe("exports", () => {
 
   test("pipeline-context の型はエントリーポイントから同一に解決される", () => {
     // 実行と検証：
-    expectTypeOf<pipelineContext.VariablesSnapshot>().toEqualTypeOf<core.VariablesSnapshot>();
     expectTypeOf<pipelineContext.IPipelineContext>().toEqualTypeOf<core.IPipelineContext>();
     expectTypeOf<pipelineContext.IMapKeyContext>().toEqualTypeOf<core.IMapKeyContext>();
     expectTypeOf<pipelineContext.IActionContext>().toEqualTypeOf<core.IActionContext>();

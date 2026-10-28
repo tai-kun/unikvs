@@ -294,22 +294,18 @@ describe("onHash コールバック", () => {
     const checksum = new ChecksumSha256();
     const hashes: string[] = [];
     const chunks = [DATA.subarray(0, 10), DATA.subarray(10)];
-    let snapshot: ReadonlyMap<string, unknown> | undefined;
 
     // 実行：
     const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
-      [ON_HASH_VAR_NAME]: (hash: string, variables: ReadonlyMap<string, unknown>): void => {
+      [ON_HASH_VAR_NAME]: (hash: string): void => {
         hashes.push(hash);
-        snapshot = variables;
       },
-      region: "stream",
     });
 
     // 検証：
     expect(closeError).toBeUndefined();
     expect(outputChunks).toStrictEqual(chunks);
     expect(hashes).toStrictEqual([DIGEST]);
-    expect(snapshot?.get("region")).toBe("stream");
   });
   test("decodeStream の終了時にもハッシュをコールバックへ渡す", async ({ expect }) => {
     // 準備：

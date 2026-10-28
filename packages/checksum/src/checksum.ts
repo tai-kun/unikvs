@@ -1,4 +1,4 @@
-import type { IMiddleware, IPipelineContext, VariablesSnapshot } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import { chunks, bytesToHex } from "@unikvs/utils";
 
 import {
@@ -67,11 +67,11 @@ export interface IHash {
 }
 
 /**
- * 計算したハッシュと実行時変数のスナップショットを受け取るコールバックです。
+ * 計算したハッシュを受け取るコールバックです。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-on-hash)
  */
-export type ChecksumOnHash = (hash: string, variables: VariablesSnapshot) => void | Promise<void>;
+export type ChecksumOnHash = (hash: string) => void | Promise<void>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
@@ -120,7 +120,7 @@ export default abstract class Checksum implements IMiddleware {
   }
 
   /**
-   * 計算したハッシュと実行時変数のスナップショットを受け取るコールバック変数の名前です。
+   * 計算したハッシュを受け取るコールバック変数の名前です。
    *
    * `CHECKSUM_VAR_NAME` に `:onHash` を付けた値になります。
    *
@@ -211,7 +211,7 @@ export default abstract class Checksum implements IMiddleware {
     }
 
     if (onHash) {
-      await onHash(hash, c.snapshot());
+      await onHash(hash);
     }
 
     // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
@@ -297,7 +297,7 @@ export default abstract class Checksum implements IMiddleware {
         }
 
         if (onHash) {
-          await onHash(hash, c.snapshot());
+          await onHash(hash);
         }
       },
     });

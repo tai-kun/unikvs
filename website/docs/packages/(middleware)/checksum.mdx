@@ -68,7 +68,7 @@ await kvs.close();
 
 6 種類の抽象基底クラスです。直接は使わず、具象クラスを経由して使います。
 
-`CHECKSUM_ON_HASH_VAR_NAME` は、計算したハッシュと実行時変数のスナップショットを受け取るコールバック変数の名前です。値は `CHECKSUM_VAR_NAME` に `:onHash` を付けたものになります。
+`CHECKSUM_ON_HASH_VAR_NAME` は、計算したハッシュを受け取るコールバック変数の名前です。値は `CHECKSUM_VAR_NAME` に `:onHash` を付けたものになります。
 
 ### `ChecksumMd5` [#checksum-md5]
 
@@ -129,26 +129,19 @@ SHA-512 で検証するミドルウェアです。チェックサム変数は `"
 
 ### `ChecksumOnHash` [#checksum-on-hash]
 
-計算したハッシュと実行時変数のスナップショットを受け取るコールバックです。チェックサム変数とは別に、`"<CHECKSUM_VAR_NAME>:onHash"` という変数へ関数を渡します。たとえば SHA-256 では `"@unikvs/checksum:sha256:onHash"` です。
+計算したハッシュを受け取るコールバックです。チェックサム変数とは別に、`"<CHECKSUM_VAR_NAME>:onHash"` という変数へ関数を渡します。たとえば SHA-256 では `"@unikvs/checksum:sha256:onHash"` です。
 
 コールバックは、ハッシュの計算と検証が成功したときに呼ばれます。期待値を指定せずにコールバックだけを指定した場合も、ハッシュを計算して呼び出します。`required` が `true` で期待値がない場合は `ChecksumRequiredError` を投げ、コールバックは呼びません。
 
-第二引数には、呼び出し時点の実行時変数のスナップショット ([`VariablesSnapshot`](/packages/core/pipeline-context#variables-snapshot)) が渡されます。スナップショットは浅いコピーであり、値のオブジェクトは同じ参照を共有します。
-
-以下は、SHA-256 の計算結果と実行時変数を受け取る例です。
+以下は、SHA-256 の計算結果を受け取る例です。
 
 ```ts
 const hashes: string[] = [];
 
 await kvs.set("file", data, {
   vars: {
-    region: "us-east-1",
-    "@unikvs/checksum:sha256:onHash": (
-      hash: string,
-      variables: ReadonlyMap<string, unknown>,
-    ): void => {
+    "@unikvs/checksum:sha256:onHash": (hash: string): void => {
       hashes.push(hash);
-      console.log(variables.get("region"));
     },
   },
 });
@@ -173,7 +166,7 @@ await kvs.set("file", data, {
 - このミドルウェアは対応するチェックサム変数に文字列がある場合、または `onHash` コールバックが指定されている場合に、ハッシュ (16 進小文字) を計算します。
 - 期待値と一致しない場合はエラーを投げます。
 - チェックサム変数がなく `required` が `true` の場合は、`onHash` コールバックが指定されていてもエラーを投げます。
-- `onHash` コールバックには計算したハッシュ (16 進小文字) と実行時変数のスナップショットを渡します。コールバックが `Promise` を返す場合は完了を待ちます。
+- `onHash` コールバックには計算したハッシュ (16 進小文字) を渡します。コールバックが `Promise` を返す場合は完了を待ちます。
 - `encodeStream` と `decodeStream` はチャンクをそのまま下流へ流しながらハッシュを更新し、終了時に照合して `onHash` コールバックを呼びます。
 
 ## エラー [#errors]

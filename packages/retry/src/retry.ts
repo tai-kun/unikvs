@@ -2,7 +2,6 @@ import {
   type IStorage,
   type IReadableStream,
   type IWritableStream,
-  type VariablesSnapshot,
   KeyNotFoundError,
 } from "@unikvs/core";
 import { getAbortReason, throwIfAborted } from "abort-signal-utils";
@@ -123,7 +122,6 @@ function createFallbackContext(
     },
     action,
     signal: c.signal,
-    snapshot: (): VariablesSnapshot => c.snapshot(),
     setReadonly: (name: string, value: unknown): unknown => {
       c.setReadonly(name, value);
 

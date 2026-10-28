@@ -11,7 +11,7 @@ description: "@unikvs/core のパイプラインコンテキスト。IPipelineCo
 
 ## 変数の読み書き [#variables]
 
-`get`・`set`・`setReadonly`・`snapshot` の 4 メソッドで変数を扱います。`set` 系は `this` を返すため、メソッドチェーンできます。
+`get`・`set`・`setReadonly` の 3 メソッドで変数を扱います。`set` 系は `this` を返すため、メソッドチェーンできます。
 
 ```ts
 import type { IPipelineContext } from "@unikvs/core";
@@ -22,8 +22,6 @@ const count: number = ctx.get("count"); // 型付きで取得
 const unknownValue: unknown = ctx.get("anything-else"); // 未登録のキーは unknown
 
 ctx.set("count", 1).setReadonly("count", 2); // this を返すため連鎖できる
-
-const snapshot = ctx.snapshot(); // 現在の変数の浅いコピー
 ```
 
 型引数で `{ count: number }` のように宣言すると、そのキーの取得と設定が型付けされます。宣言にないキーは `unknown` として扱われ、誤った型の代入は型エラーになります。
@@ -201,17 +199,8 @@ if (ctx.repair.enabled) {
       required: true,
       description: "変数を読み取り専用で設定します。`this` を返します。",
     },
-    snapshot: {
-      type: "[#ipipelinecontext-snapshot] snapshot(): VariablesSnapshot",
-      required: true,
-      description: "現在の実行時変数の浅いコピーを作成します。",
-    },
   }}
 />
-
-### `VariablesSnapshot` [#variables-snapshot]
-
-`snapshot()` が返す実行時変数の浅いコピーです。`ReadonlyMap<string, unknown>` として扱えます。値の参照はコピーされないため、値がオブジェクトの場合は同じ参照を共有します。
 
 ### `IMapKeyContext` [#imapkeycontext]
 

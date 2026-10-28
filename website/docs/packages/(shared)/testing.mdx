@@ -102,7 +102,7 @@ console.log(bytesEqual(concatBytes(chunks), bytes)); // true
 
 ## テスト用コンテキスト [#context]
 
-[`TestContext`](#test-context) はテスト用の `IPipelineContext` の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。[`TestContextInit`](#test-context-init) で初期値を渡します。[`TestContextValues`](#test-context-values) は `values` の形式 (`Record` またはエントリーの反復可能オブジェクト) を表します。
+[`TestContext`](#test-context) はテスト用の `IPipelineContext` の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly` で変数を扱います。各コンテキスト型に構造的に代入できるため、ストレージとミドルウェアの単体テストでそのまま使えます。[`TestContextInit`](#test-context-init) で初期値を渡します。[`TestContextValues`](#test-context-values) は `values` の形式 (`Record` またはエントリーの反復可能オブジェクト) を表します。
 
 操作ごとの生成関数は次のとおりです。
 
@@ -351,7 +351,7 @@ const fromEntries: TestContextValues = [["count", 1]];
 
 ### `TestContext` [#test-context]
 
-テスト用の `IPipelineContext` ([パイプラインコンテキスト](/packages/core/pipeline-context#contexts)) の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly`・`snapshot` で変数を扱います。`repair` の形状は `TestContextRepair` で、[`IGetContext`](/packages/core/pipeline-context#igetcontext) の `repair` と同じ形状です。
+テスト用の `IPipelineContext` ([パイプラインコンテキスト](/packages/core/pipeline-context#contexts)) の具象クラスです。`signal`・`action`・`key`・`destinationKey`・`repair`・`source`・`destination` を保持し、`get`・`set`・`setReadonly` で変数を扱います。`repair` の形状は `TestContextRepair` で、[`IGetContext`](/packages/core/pipeline-context#igetcontext) の `repair` と同じ形状です。
 
 <TypeTable
   type={{
@@ -405,11 +405,6 @@ const fromEntries: TestContextValues = [["count", 1]];
       required: true,
       description:
         "変数の値を読み取り専用として設定します。`this` を返します。読み取り専用化済みの変数では `ReadonlyVariableError` を投げます。",
-    },
-    snapshot: {
-      type: "[#test-context-snapshot] snapshot(): VariablesSnapshot",
-      required: true,
-      description: "現在の実行時変数の浅いコピーを作成します。",
     },
   }}
 />
