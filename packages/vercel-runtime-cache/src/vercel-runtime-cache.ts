@@ -294,39 +294,7 @@ export default class VercelRuntimeCache implements IStorage {
    */
   public async write(c: IStorage.WriteContext, data: any): Promise<void> {
     throwIfAborted(c.signal);
-    const storedValue = this.#clone(data);
-    const expiresAt = this.#expiresAt();
-
-    if (this.#backend !== undefined) {
-      const storedKey = this.#storageKey(c.key);
-      const envelope: CacheEntry = {
-        value: storedValue,
-        expiresAt,
-      };
-      await this.#backend.set(storedKey, envelope, { ttlSeconds: this.ttlSeconds });
-      this.#backendKeys.add(storedKey);
-
-      return;
-    }
-
-    const storedKey = this.#storageKey(c.key);
-
-    if (this.#fallback.has(storedKey)) {
-      this.#fallback.delete(storedKey);
-    }
-
-    this.#fallback.set(storedKey, {
-      value: storedValue,
-      expiresAt,
-    });
-
-    if (this.maxEntries === 0) {
-      this.#fallback.delete(storedKey);
-
-      return;
-    }
-
-    this.#evictFallbackIfNeeded();
+    await this.#writeValue(c.key, data, c.signal);
   }
 
   /**
@@ -341,35 +309,7 @@ export default class VercelRuntimeCache implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<any> {
     throwIfAborted(c.signal);
 
-    if (this.#backend !== undefined) {
-      using abortPromise = toAbortPromise(c.signal);
-      const storedKey = this.#storageKey(c.key);
-      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
-
-      if (raw === undefined) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      const entry = raw as CacheEntry;
-
-      if (
-        entry === null ||
-        typeof entry !== "object" ||
-        !("value" in (entry as Record<string, unknown>))
-      ) {
-        return this.#clone(raw);
-      }
-
-      if (this.#isExpired(entry)) {
-        await this.#backend.delete(storedKey);
-        this.#backendKeys.delete(storedKey);
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      return this.#clone(entry.value);
-    }
-
-    return this.#readFallback(c.key);
+    return this.#readValue(c.key, c.signal);
   }
 
   /**
@@ -440,48 +380,54 @@ export default class VercelRuntimeCache implements IStorage {
    */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     throwIfAborted(c.signal);
+    await this.#deleteValue(c.key, c.signal);
+  }
 
-    if (this.#backend !== undefined) {
-      using abortPromise = toAbortPromise(c.signal);
-      const storedKey = this.#storageKey(c.key);
-      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+  /**
+   * キーの値を別のキーへ複製します。
+   *
+   * 複製先に既存の値があるときは上書きし、新しい有効期限を設定します。
+   * 複製元が存在しないときは `KeyNotFoundError` を投げます。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    throwIfAborted(c.signal);
 
-      if (raw === undefined) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
+    const value = await this.#readValue(c.key, c.signal);
 
-      const entry = raw as CacheEntry;
-
-      if (
-        entry !== null &&
-        typeof entry === "object" &&
-        "value" in (entry as Record<string, unknown>) &&
-        this.#isExpired(entry)
-      ) {
-        await this.#backend.delete(storedKey);
-        this.#backendKeys.delete(storedKey);
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      await this.#backend.delete(storedKey);
-      this.#backendKeys.delete(storedKey);
-
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
       return;
     }
 
-    const storedKey = this.#storageKey(c.key);
-    const entry = this.#fallback.get(storedKey);
+    await this.#writeValue(c.destinationKey, value, c.signal);
+  }
 
-    if (entry === undefined) {
-      throw new KeyNotFoundError({ key: c.key });
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * 移動先の書き込みが完了してから移動元を削除します。
+   * 移動先の書き込みに失敗したときは移動元を残します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    throwIfAborted(c.signal);
+
+    const value = await this.#readValue(c.key, c.signal);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
     }
 
-    if (this.#isExpired(entry)) {
-      this.#fallback.delete(storedKey);
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    this.#fallback.delete(storedKey);
+    await this.#writeValue(c.destinationKey, value, c.signal);
+    await this.#removeValue(c.key, c.signal);
   }
 
   /**
@@ -587,6 +533,176 @@ export default class VercelRuntimeCache implements IStorage {
     });
 
     return stream;
+  }
+
+  /**
+   * 値をバックエンドまたはフォールバックへ保存します。
+   *
+   * @param key 保存先の論理キーです。
+   * @param data 保存する値です。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #writeValue(key: string, data: any, signal: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
+    const storedValue = this.#clone(data);
+    const expiresAt = this.#expiresAt();
+
+    if (this.#backend !== undefined) {
+      const storedKey = this.#storageKey(key);
+      const envelope: CacheEntry = {
+        value: storedValue,
+        expiresAt,
+      };
+      await this.#backend.set(storedKey, envelope, { ttlSeconds: this.ttlSeconds });
+      this.#backendKeys.add(storedKey);
+
+      return;
+    }
+
+    const storedKey = this.#storageKey(key);
+
+    if (this.#fallback.has(storedKey)) {
+      this.#fallback.delete(storedKey);
+    }
+
+    this.#fallback.set(storedKey, {
+      value: storedValue,
+      expiresAt,
+    });
+
+    if (this.maxEntries === 0) {
+      this.#fallback.delete(storedKey);
+
+      return;
+    }
+
+    this.#evictFallbackIfNeeded();
+  }
+
+  /**
+   * バックエンドまたはフォールバックから値を読み取ります。
+   *
+   * 失効済みや欠番は `KeyNotFoundError` として扱います。
+   *
+   * @param key 読み取る論理キーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 読み取った値です。
+   */
+  async #readValue(key: string, signal: AbortSignal): Promise<any> {
+    throwIfAborted(signal);
+
+    if (this.#backend !== undefined) {
+      using abortPromise = toAbortPromise(signal);
+      const storedKey = this.#storageKey(key);
+      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+
+      if (raw === undefined) {
+        throw new KeyNotFoundError({ key });
+      }
+
+      const entry = raw as CacheEntry;
+
+      if (
+        entry === null ||
+        typeof entry !== "object" ||
+        !("value" in (entry as Record<string, unknown>))
+      ) {
+        return this.#clone(raw);
+      }
+
+      if (this.#isExpired(entry)) {
+        await this.#backend.delete(storedKey);
+        this.#backendKeys.delete(storedKey);
+        throw new KeyNotFoundError({ key });
+      }
+
+      return this.#clone(entry.value);
+    }
+
+    return this.#readFallback(key);
+  }
+
+  /**
+   * バックエンドまたはフォールバックから値を削除します。
+   *
+   * 失効済みや欠番は `KeyNotFoundError` として扱います。
+   *
+   * @param key 削除する論理キーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
+  async #deleteValue(key: string, signal: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
+
+    if (this.#backend !== undefined) {
+      using abortPromise = toAbortPromise(signal);
+      const storedKey = this.#storageKey(key);
+      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+
+      if (raw === undefined) {
+        throw new KeyNotFoundError({ key });
+      }
+
+      const entry = raw as CacheEntry;
+
+      if (
+        entry !== null &&
+        typeof entry === "object" &&
+        "value" in (entry as Record<string, unknown>) &&
+        this.#isExpired(entry)
+      ) {
+        await this.#backend.delete(storedKey);
+        this.#backendKeys.delete(storedKey);
+        throw new KeyNotFoundError({ key });
+      }
+
+      await this.#backend.delete(storedKey);
+      this.#backendKeys.delete(storedKey);
+
+      return;
+    }
+
+    const storedKey = this.#storageKey(key);
+    const entry = this.#fallback.get(storedKey);
+
+    if (entry === undefined) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    if (this.#isExpired(entry)) {
+      this.#fallback.delete(storedKey);
+      throw new KeyNotFoundError({ key });
+    }
+
+    this.#fallback.delete(storedKey);
+  }
+
+  /**
+   * 移動元の値を存在確認せずに削除します。
+   *
+   * 移動先の書き込みでフォールバックが追い出された場合でも、移動を完了させるために使用します。
+   *
+   * @param key 削除する論理キーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
+  async #removeValue(key: string, signal: AbortSignal): Promise<void> {
+    throwIfAborted(signal);
+    const storedKey = this.#storageKey(key);
+
+    if (this.#backend !== undefined) {
+      await this.#backend.delete(storedKey);
+      this.#backendKeys.delete(storedKey);
+
+      return;
+    }
+
+    this.#fallback.delete(storedKey);
   }
 
   /**

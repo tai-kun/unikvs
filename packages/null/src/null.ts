@@ -67,6 +67,28 @@ export default class Null implements IStorage {
   }
 
   /**
+   * 常にキーが見つからないエラーを投げます。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   *
+   * @returns 値を返さず常にエラーを投げます。
+   */
+  public copy(c: IStorage.CopyContext): never {
+    return this.read(c as unknown as IStorage.ReadContext);
+  }
+
+  /**
+   * 常にキーが見つからないエラーを投げます。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 値を返さず常にエラーを投げます。
+   */
+  public move(c: IStorage.MoveContext): never {
+    return this.read(c as unknown as IStorage.ReadContext);
+  }
+
+  /**
    * クリアを受け付けますが何もしません。
    *
    * @param _c 使用しないクリア用コンテキストです。
