@@ -556,6 +556,70 @@ export default class Etcd implements IStorage {
   }
 
   /**
+   * キーの値を別のキーへ複製します。
+   *
+   * 複製先が存在する場合は上書きします。
+   * etcd に複製コマンドはないため、読み出した値を書き込み直します。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
+
+    const data = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
+
+    if (data === null || data === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    // 同じキーへの複製は値の存在確認だけで十分です。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    // 書き込み時のリース設定を複製先にも適用します。
+    await client.put(this.#toKey(c.destinationKey), Buffer.from(toBytes(data)), this.#putOptions());
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * 移動先を書き込んでから移動元を削除します。
+   * 移動先の書き込みに失敗した場合は移動元を残します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    throwIfAborted(c.signal);
+    using abortPromise = toAbortPromise(c.signal);
+
+    const src = this.#toKey(c.key);
+    const data = await Promise.race([client.get(src), abortPromise]);
+
+    if (data === null || data === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    // 同じキーへの移動は値の存在確認だけを行い、削除しません。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    // 移動先の書き込みを先に行い、失敗時は移動元を残します。
+    await client.put(this.#toKey(c.destinationKey), Buffer.from(toBytes(data)), this.#putOptions());
+    await client.delete(src);
+  }
+
+  /**
    * 接頭辞配下のキーをすべて削除します。
    *
    * 範囲削除があれば使い、なければ列挙して削除します。
