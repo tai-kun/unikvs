@@ -34,7 +34,15 @@ describe("index のエクスポート", () => {
     // 実行と検証：
     // `index.js` から型を import できることで型の再輸出を確認する。
     expectTypeOf<RetryOperation>().toEqualTypeOf<
-      "write" | "read" | "exists" | "delete" | "clear" | "getWritable" | "getReadable"
+      | "write"
+      | "read"
+      | "exists"
+      | "delete"
+      | "copy"
+      | "move"
+      | "clear"
+      | "getWritable"
+      | "getReadable"
     >();
     expectTypeOf<RetryablePredicate>().toBeFunction();
     expectTypeOf<RetryAttemptInfo>().toBeObject();

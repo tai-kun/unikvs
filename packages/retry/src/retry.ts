@@ -20,6 +20,8 @@ export type RetryOperation =
   | "read"
   | "exists"
   | "delete"
+  | "copy"
+  | "move"
   | "clear"
   | "getWritable"
   | "getReadable";
@@ -278,6 +280,28 @@ export default class Retry<
 
   public delete(c: IStorage.DeleteContext): Promise<void> {
     return this.#run(c, "delete", () => this.inner.delete(c));
+  }
+
+  /**
+   * コピーを再試行付きで実行します。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   *
+   * @returns コピーが完了したら解決します。
+   */
+  public copy(c: IStorage.CopyContext): Promise<void> {
+    return this.#run(c, "copy", () => this.inner.copy(c));
+  }
+
+  /**
+   * 移動を再試行付きで実行します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public move(c: IStorage.MoveContext): Promise<void> {
+    return this.#run(c, "move", () => this.inner.move(c));
   }
 
   public clear(c: IStorage.ClearContext): Promise<void> {

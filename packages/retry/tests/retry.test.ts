@@ -4,6 +4,8 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createOpenContext,
   createClearContext,
   createCloseContext,
@@ -86,6 +88,14 @@ class FlakyStorage implements IStorage {
 
   public delete(c: IStorage.DeleteContext): void {
     this.#maybeFail(`delete:${c.key}`);
+  }
+
+  public copy(c: IStorage.CopyContext): void {
+    this.#maybeFail(`copy:${c.key}->${c.destinationKey}`);
+  }
+
+  public move(c: IStorage.MoveContext): void {
+    this.#maybeFail(`move:${c.key}->${c.destinationKey}`);
   }
 
   public clear(c: IStorage.ClearContext): void {
@@ -279,6 +289,65 @@ describe("再試行", () => {
 
     // 検証：
     expect(inner.calls).toStrictEqual(["delete:k1", "delete:k1"]);
+  });
+
+  test("copy は一時的な失敗の後に成功する", async ({ expect }) => {
+    // 準備：
+    const inner = new FlakyStorage();
+    inner.fail("copy:k1->k2", 1);
+
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
+    await retry.copy(createCopyContext("k1", "k2") as IStorage.CopyContext);
+
+    // 検証：
+    expect(inner.calls).toStrictEqual(["copy:k1->k2", "copy:k1->k2"]);
+  });
+
+  test("move は一時的な失敗の後に成功する", async ({ expect }) => {
+    // 準備：
+    const inner = new FlakyStorage();
+    inner.fail("move:k1->k2", 1);
+
+    const retry = new Retry(inner, {
+      jitter: false,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
+    await retry.move(createMoveContext("k1", "k2") as IStorage.MoveContext);
+
+    // 検証：
+    expect(inner.calls).toStrictEqual(["move:k1->k2", "move:k1->k2"]);
+  });
+
+  test("copy の枯渇は操作名 copy を持つ RetryExhaustedError になる", async ({ expect }) => {
+    // 準備：
+    const lastError = new Error("boom");
+    const inner = new FlakyStorage();
+    inner.fail("copy:k1->k2", 2, lastError);
+
+    const retry = new Retry(inner, {
+      jitter: false,
+      maxRetries: 1,
+      initialDelayMs: 1,
+    });
+
+    // 実行：
+    const error = await retry
+      .copy(createCopyContext("k1", "k2") as IStorage.CopyContext)
+      .catch((caught: unknown) => caught);
+
+    // 検証：
+    expect(error).toBeInstanceOf(RetryExhaustedError);
+    expect((error as RetryExhaustedError).meta).toStrictEqual({
+      attempts: 2,
+      operation: "copy",
+    });
   });
 
   test("clear は一時的な失敗の後に成功する", async ({ expect }) => {
