@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/json",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Transformer plugin that serializes values with JSON, or with JSON Lines in streams.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.0.18
+
+### 新機能
+
+- **checksum:** onHash コールバックにコンテキストと this を渡す ([256e26d](https://github.com/tai-kun/unikvs/commit/256e26dc793e957714e4b34081b995f7766bfdbe))
+
+**Full Changelog**: https://github.com/tai-kun/unikvs/compare/@unikvs/core@0.0.17...@unikvs/core@0.0.18
+
 ## v0.0.17
 
 ### 新機能

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/retry",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Storage wrapper that retries transient failures with exponential backoff.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

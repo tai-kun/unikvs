@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/tap",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Middleware plugin that passes data through while invoking a context callback.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

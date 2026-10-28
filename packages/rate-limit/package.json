@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/rate-limit",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Transformer plugin that limits operations per time window with a token bucket.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/metrics",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Middleware plugin that records operation metrics (counts, bytes, latency) with optional OTel/Prometheus export.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

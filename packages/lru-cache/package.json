@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/lru-cache",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Storage plugin that stores data in memory with entry and byte limits.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

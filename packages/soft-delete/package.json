@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/soft-delete",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Middleware plugin that turns deletion into a restorable tombstone record kept in the same store.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

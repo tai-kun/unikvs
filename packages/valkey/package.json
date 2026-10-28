@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/valkey",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "description": "Storage plugin that stores byte arrays in Valkey on Node.js.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
