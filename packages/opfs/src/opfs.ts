@@ -1,4 +1,4 @@
-import { type IStorage, KeyNotFoundError } from "@unikvs/core";
+import type { IStorage } from "@unikvs/core";
 import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
@@ -197,54 +197,6 @@ export default class Opfs implements IStorage {
     c.signal.throwIfAborted();
 
     await this.#getRootHandle().removeEntry(c.key);
-  }
-
-  /**
-   * 指定したキーのファイルを別のキーへ複製します。複製先が存在する場合は上書きします。
-   *
-   * @param c 複製元と複製先のキーを持つコンテキストです。
-   *
-   * @returns 完了を知らせるプロミスです。
-   */
-  public async copy(c: IStorage.CopyContext): Promise<void> {
-    c.signal.throwIfAborted();
-
-    if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    // 同じキーへの複製はファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    const data = await this.read(c);
-    await this.#writeFile(c.signal, c.destinationKey, data);
-  }
-
-  /**
-   * 指定したキーのファイルを別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
-   *
-   * @param c 移動元と移動先のキーを持つコンテキストです。
-   *
-   * @returns 完了を知らせるプロミスです。
-   */
-  public async move(c: IStorage.MoveContext): Promise<void> {
-    c.signal.throwIfAborted();
-
-    if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    // 同じキーへの移動はファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    const data = await this.read(c);
-    await this.#writeFile(c.signal, c.destinationKey, data);
-
-    await this.delete(c);
   }
 
   /**

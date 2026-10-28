@@ -505,52 +505,6 @@ export default class Http implements IStorage {
   }
 
   /**
-   * キーを別のキーへ複製します。
-   *
-   * サーバー側に複製 API がないため、読み取りと書き込みを組み合わせて実現します。
-   *
-   * @param c コピー元とコピー先のキーを持つコンテキストです。
-   *
-   * @returns コピーが完了したら解決します。
-   */
-  public async copy(c: IStorage.CopyContext): Promise<void> {
-    c.signal.throwIfAborted();
-
-    // 同じキーへのコピーは有効な値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.read(c);
-
-      return;
-    }
-
-    const data = await this.read(c);
-    await this.write(this.#keyedContext(c, "set", c.destinationKey), data);
-  }
-
-  /**
-   * キーを別のキーへ移動します。
-   *
-   * 移動先への書き込みが成功した後に移動元を削除するため、失敗時には移動元が残ります。
-   *
-   * @param c 移動元と移動先のキーを持つコンテキストです。
-   *
-   * @returns 移動が完了したら解決します。
-   */
-  public async move(c: IStorage.MoveContext): Promise<void> {
-    c.signal.throwIfAborted();
-
-    // 同じキーへの移動は有効な値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.read(c);
-
-      return;
-    }
-
-    await this.copy(c);
-    await this.delete(this.#keyedContext(c, "delete", c.key));
-  }
-
-  /**
    * 接頭辞配下のキーをすべて削除します。
    *
    * サーバー側の接頭辞削除で一括削除します。
@@ -753,33 +707,6 @@ export default class Http implements IStorage {
     }
 
     return response.body;
-  }
-
-  /**
-   * キーと操作種別を差し替えたコンテキストを作成します。
-   *
-   * 実行時変数は元のコンテキストへ委譲し、複製・移動でも引き継ぎます。
-   *
-   * @param c 元のコピーまたは移動コンテキストです。
-   * @param action 差し替える操作種別です。
-   * @param key 差し替えるキーです。
-   *
-   * @returns キーと操作種別を差し替えたコンテキストです。
-   */
-  #keyedContext(
-    c: IStorage.CopyContext | IStorage.MoveContext,
-    action: "set" | "delete",
-    key: string,
-  ): IStorage.WriteContext & IStorage.DeleteContext {
-    return {
-      get: (name: string): unknown => c.get(name),
-      key,
-      set: (name: string, value: unknown): unknown => c.set(name, value),
-      action,
-      signal: c.signal,
-      snapshot: () => c.snapshot(),
-      setReadonly: (name: string, value: unknown): unknown => c.setReadonly(name, value),
-    } as unknown as IStorage.WriteContext & IStorage.DeleteContext;
   }
 
   /**

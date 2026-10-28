@@ -105,43 +105,6 @@ export default class Memory implements IStorage {
   }
 
   /**
-   * 指定したキーの値を別のキーへ複製します。
-   *
-   * @param c コピー元とコピー先のキーを持つコンテキストです。
-   */
-  public copy(c: IStorage.CopyContext): void {
-    if (!this.#map.has(c.key)) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    // 同じキーへのコピーは値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    this.#map.set(c.destinationKey, this.#clone(this.#map.get(c.key)));
-  }
-
-  /**
-   * 指定したキーの値を別のキーへ移動します。
-   *
-   * @param c 移動元と移動先のキーを持つコンテキストです。
-   */
-  public move(c: IStorage.MoveContext): void {
-    if (!this.#map.has(c.key)) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    // 同じキーへの移動は値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    this.#map.set(c.destinationKey, this.#map.get(c.key));
-    this.#map.delete(c.key);
-  }
-
-  /**
    * すべてのキーを削除します。
    *
    * @param _c 使用しないクリア用コンテキストです。

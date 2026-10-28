@@ -384,53 +384,6 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   /**
-   * キーの値を別のキーへ複製します。
-   *
-   * 複製先に既存の値があるときは上書きし、新しい有効期限を設定します。
-   * 複製元が存在しないときは `KeyNotFoundError` を投げます。
-   *
-   * @param c 複製元と複製先のキーを持つコンテキストです。
-   *
-   * @returns 複製が完了したら解決します。
-   */
-  public async copy(c: IStorage.CopyContext): Promise<void> {
-    throwIfAborted(c.signal);
-
-    const value = await this.#readValue(c.key, c.signal);
-
-    // 同じキーへの複製は値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    await this.#writeValue(c.destinationKey, value, c.signal);
-  }
-
-  /**
-   * キーの値を別のキーへ移動します。
-   *
-   * 移動先の書き込みが完了してから移動元を削除します。
-   * 移動先の書き込みに失敗したときは移動元を残します。
-   *
-   * @param c 移動元と移動先のキーを持つコンテキストです。
-   *
-   * @returns 移動が完了したら解決します。
-   */
-  public async move(c: IStorage.MoveContext): Promise<void> {
-    throwIfAborted(c.signal);
-
-    const value = await this.#readValue(c.key, c.signal);
-
-    // 同じキーへの移動は値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    await this.#writeValue(c.destinationKey, value, c.signal);
-    await this.#removeValue(c.key, c.signal);
-  }
-
-  /**
    * 保持する値をすべて削除します。
    *
    * バックエンドとフォールバックの双方を掃除します。
@@ -676,30 +629,6 @@ export default class VercelRuntimeCache implements IStorage {
     if (this.#isExpired(entry)) {
       this.#fallback.delete(storedKey);
       throw new KeyNotFoundError({ key });
-    }
-
-    this.#fallback.delete(storedKey);
-  }
-
-  /**
-   * 移動元の値を存在確認せずに削除します。
-   *
-   * 移動先の書き込みでフォールバックが追い出された場合でも、移動を完了させるために使用します。
-   *
-   * @param key 削除する論理キーです。
-   * @param signal 中断を知らせるシグナルです。
-   *
-   * @returns 削除が完了したら解決します。
-   */
-  async #removeValue(key: string, signal: AbortSignal): Promise<void> {
-    throwIfAborted(signal);
-    const storedKey = this.#storageKey(key);
-
-    if (this.#backend !== undefined) {
-      await this.#backend.delete(storedKey);
-      this.#backendKeys.delete(storedKey);
-
-      return;
     }
 
     this.#fallback.delete(storedKey);

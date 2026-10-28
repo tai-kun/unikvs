@@ -4,8 +4,6 @@
  * `Map` バックで `get` / `put` / `delete` / `list` を処理します。
  * `list` は頁送りに対応し、`pageSize` で 1 ページの件数を変えられます。
  */
-import { type TestContextInit, TestContext } from "@unikvs/testing";
-
 import CloudflareKv, {
   type KVNamespaceLike,
   type CloudflareKvOptions,
@@ -85,40 +83,6 @@ export class FakeKVNamespace implements KVNamespaceLike {
       list_complete: next >= names.length,
     };
   }
-}
-
-/**
- * テスト用のコピーコンテキストを作成します。
- * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
- */
-export function createCopyContext(
-  key: string,
-  destinationKey: string,
-  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "copy",
-    key,
-    destinationKey,
-  });
-}
-
-/**
- * テスト用の移動コンテキストを作成します。
- * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
- */
-export function createMoveContext(
-  key: string,
-  destinationKey: string,
-  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "move",
-    key,
-    destinationKey,
-  });
 }
 
 /**

@@ -299,43 +299,6 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
   }
 
   /**
-   * 指定したキーのバイト列を別のキーへ複製します。複製先が存在する場合は上書きします。
-   *
-   * @param c 複製元と複製先のキーを持つコンテキストです。
-   *
-   * @returns 複製が完了したら解決します。
-   */
-  public async copy(c: IStorage.CopyContext): Promise<void> {
-    const data = await this.read(c);
-
-    // 同じキーへの複製は値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    await this.#put(c.signal, c.destinationKey, data);
-  }
-
-  /**
-   * 指定したキーのバイト列を別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
-   *
-   * @param c 移動元と移動先のキーを持つコンテキストです。
-   *
-   * @returns 移動が完了したら解決します。
-   */
-  public async move(c: IStorage.MoveContext): Promise<void> {
-    const data = await this.read(c);
-
-    // 同じキーへの移動は値の存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      return;
-    }
-
-    await this.#put(c.signal, c.destinationKey, data);
-    await this.delete(c);
-  }
-
-  /**
    * 未対応のため常に例外を投げます。
    *
    * 列挙手段がないため `clear` には対応しません。
