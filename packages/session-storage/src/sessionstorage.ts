@@ -94,7 +94,7 @@ export default class SessionStorage implements IStorage<string> {
    */
   public write(c: IStorage.WriteContext, data: string): void {
     c.signal.throwIfAborted();
-    this.#backend().setItem(this.#toRealKey(c.key), data);
+    this.#writeValue(c.key, data);
   }
 
   /**
@@ -144,6 +144,45 @@ export default class SessionStorage implements IStorage<string> {
     }
 
     backend.removeItem(this.#toRealKey(c.key));
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ複製します。コピー先の既存値は上書きします。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   */
+  public copy(c: IStorage.CopyContext): void {
+    c.signal.throwIfAborted();
+
+    const data = this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへのコピーは値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.#writeValue(c.destinationKey, data);
+  }
+
+  /**
+   * 指定したキーの値を別のキーへ移動します。移動先の既存値は上書きします。
+   *
+   * 移動先への書き込みが成功した後に移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   */
+  public move(c: IStorage.MoveContext): void {
+    c.signal.throwIfAborted();
+
+    const data = this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    this.#writeValue(c.destinationKey, data);
+    this.delete(c as unknown as IStorage.DeleteContext);
   }
 
   /**
@@ -206,5 +245,15 @@ export default class SessionStorage implements IStorage<string> {
    */
   #toRealKey(key: string): string {
     return `${this.#keyPrefix}${key}`;
+  }
+
+  /**
+   * 論理キーに接頭辞を付けて文字列を保存します。
+   *
+   * @param key 保存先の論理キーです。
+   * @param data 保存する文字列です。
+   */
+  #writeValue(key: string, data: string): void {
+    this.#backend().setItem(this.#toRealKey(key), data);
   }
 }
