@@ -131,6 +131,8 @@ SHA-512 で検証するミドルウェアです。チェックサム変数は `"
 
 計算したハッシュを受け取るコールバックです。チェックサム変数とは別に、`"<CHECKSUM_VAR_NAME>:onHash"` という変数へ関数を渡します。たとえば SHA-256 では `"@unikvs/checksum:sha256:onHash"` です。
 
+コールバックの `this` にはミドルウェアのインスタンスが割り当てられ、第一引数には実行コンテキスト、第二引数には計算したハッシュが渡されます。
+
 コールバックは、ハッシュの計算と検証が成功したときに呼ばれます。期待値を指定せずにコールバックだけを指定した場合も、ハッシュを計算して呼び出します。`required` が `true` で期待値がない場合は `ChecksumRequiredError` を投げ、コールバックは呼びません。
 
 以下は、SHA-256 の計算結果を受け取る例です。
@@ -140,7 +142,11 @@ const hashes: string[] = [];
 
 await kvs.set("file", data, {
   vars: {
-    "@unikvs/checksum:sha256:onHash": (hash: string): void => {
+    "@unikvs/checksum:sha256:onHash": function (
+      this: ChecksumSha256,
+      c: IPipelineContext,
+      hash: string,
+    ): void {
       hashes.push(hash);
     },
   },
@@ -166,7 +172,7 @@ await kvs.set("file", data, {
 - このミドルウェアは対応するチェックサム変数に文字列がある場合、または `onHash` コールバックが指定されている場合に、ハッシュ (16 進小文字) を計算します。
 - 期待値と一致しない場合はエラーを投げます。
 - チェックサム変数がなく `required` が `true` の場合は、`onHash` コールバックが指定されていてもエラーを投げます。
-- `onHash` コールバックには計算したハッシュ (16 進小文字) を渡します。コールバックが `Promise` を返す場合は完了を待ちます。
+- `onHash` コールバックの `this` にはミドルウェアのインスタンスが割り当てられ、第一引数に実行コンテキスト、第二引数に計算したハッシュ (16 進小文字) が渡されます。コールバックが `Promise` を返す場合は完了を待ちます。
 - `encodeStream` と `decodeStream` はチャンクをそのまま下流へ流しながらハッシュを更新し、終了時に照合して `onHash` コールバックを呼びます。
 
 ## エラー [#errors]

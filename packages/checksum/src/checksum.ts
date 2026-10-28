@@ -67,11 +67,17 @@ export interface IHash {
 }
 
 /**
- * 計算したハッシュを受け取るコールバックです。
+ * 実行コンテキストと計算したハッシュを受け取るコールバックです。
+ *
+ * `this` にはミドルウェアのインスタンスが割り当てられます。
  *
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum-on-hash)
  */
-export type ChecksumOnHash = (hash: string) => void | Promise<void>;
+export type ChecksumOnHash = (
+  this: Checksum,
+  c: IPipelineContext,
+  hash: string,
+) => void | Promise<void>;
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
@@ -120,7 +126,7 @@ export default abstract class Checksum implements IMiddleware {
   }
 
   /**
-   * 計算したハッシュを受け取るコールバック変数の名前です。
+   * 実行コンテキストと計算したハッシュを受け取るコールバック変数の名前です。
    *
    * `CHECKSUM_VAR_NAME` に `:onHash` を付けた値になります。
    *
@@ -211,7 +217,7 @@ export default abstract class Checksum implements IMiddleware {
     }
 
     if (onHash) {
-      await onHash(hash);
+      await onHash.call(this, c, hash);
     }
 
     // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
@@ -286,7 +292,7 @@ export default abstract class Checksum implements IMiddleware {
       /**
        * ストリームが終了する直前の処理です。
        */
-      async flush() {
+      flush: async () => {
         const hash = bytesToHex(hasher.digest());
 
         if (typeof checksum === "string" && checksum !== hash) {
@@ -297,7 +303,7 @@ export default abstract class Checksum implements IMiddleware {
         }
 
         if (onHash) {
-          await onHash(hash);
+          await onHash.call(this, c, hash);
         }
       },
     });

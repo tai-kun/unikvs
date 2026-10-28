@@ -1,4 +1,4 @@
-import type { IMiddleware } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import {
   type TestContextValues,
   createNext,
@@ -178,13 +178,44 @@ describe("onHash コールバック", () => {
 
     // 実行：
     const result = await encode(checksum, TEST_DATA, {
-      [ON_HASH_VAR_NAME]: (hash: string): void => {
+      [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
         hashes.push(hash);
       },
     });
 
     // 検証：
     expect(result).toStrictEqual(TEST_DATA);
+    expect(hashes).toStrictEqual([VALID_HASH]);
+  });
+  test("コールバックの this にインスタンスを、第一引数にコンテキストを渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const thisArgs: unknown[] = [];
+    const contexts: IPipelineContext[] = [];
+    const hashes: string[] = [];
+
+    function onHash(this: unknown, context: IPipelineContext, hash: string): void {
+      thisArgs.push(this);
+      contexts.push(context);
+      hashes.push(hash);
+    }
+
+    const c = createEncodeContext(TEST_DATA, "", {
+      values: {
+        [ON_HASH_VAR_NAME]: onHash,
+      },
+    });
+
+    // 実行：
+    await checksum.encode(
+      c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
+      createNext(),
+    );
+
+    // 検証：
+    expect(thisArgs).toHaveLength(1);
+    expect(thisArgs[0]).toBe(checksum);
+    expect(contexts).toStrictEqual([c]);
     expect(hashes).toStrictEqual([VALID_HASH]);
   });
   test("期待値と一致したときもコールバックへハッシュを渡す", async ({ expect }) => {
@@ -195,7 +226,7 @@ describe("onHash コールバック", () => {
     // 実行：
     await encode(checksum, TEST_DATA, {
       [ChecksumSha256.CHECKSUM_VAR_NAME]: VALID_HASH,
-      [ON_HASH_VAR_NAME]: (hash: string): void => {
+      [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
         hashes.push(hash);
       },
     });
@@ -214,7 +245,7 @@ describe("onHash コールバック", () => {
     await expect(
       encode(checksum, TEST_DATA, {
         [ChecksumSha256.CHECKSUM_VAR_NAME]: INVALID_HASH,
-        [ON_HASH_VAR_NAME]: (hash: string): void => {
+        [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
           hashes.push(hash);
         },
       }),
@@ -255,7 +286,7 @@ describe("onHash コールバック", () => {
     const hashes: string[] = [];
     const c = createDecodeContext(TEST_DATA, "", {
       values: {
-        [ON_HASH_VAR_NAME]: (hash: string): void => {
+        [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
           hashes.push(hash);
         },
       },

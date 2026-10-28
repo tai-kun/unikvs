@@ -1,5 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
-import type { IMiddleware } from "@unikvs/core";
+import type { IMiddleware, IPipelineContext } from "@unikvs/core";
 import {
   type TestContextValues,
   toHex,
@@ -71,6 +71,7 @@ async function runEncodeStream(
   inputChunks: readonly Uint8Array<ArrayBuffer>[],
   values?: TestContextValues,
 ): Promise<{
+  context: IPipelineContext;
   closeError: unknown;
   outputChunks: Uint8Array<ArrayBuffer>[];
 }> {
@@ -100,6 +101,7 @@ async function runEncodeStream(
   }
 
   return {
+    context: c,
     closeError,
     outputChunks,
   };
@@ -297,7 +299,7 @@ describe("onHash コールバック", () => {
 
     // 実行：
     const { closeError, outputChunks } = await runEncodeStream(checksum, chunks, {
-      [ON_HASH_VAR_NAME]: (hash: string): void => {
+      [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
         hashes.push(hash);
       },
     });
@@ -307,6 +309,32 @@ describe("onHash コールバック", () => {
     expect(outputChunks).toStrictEqual(chunks);
     expect(hashes).toStrictEqual([DIGEST]);
   });
+  test("コールバックの this にインスタンスを、第一引数にコンテキストを渡す", async ({ expect }) => {
+    // 準備：
+    const checksum = new ChecksumSha256();
+    const thisArgs: unknown[] = [];
+    const contexts: IPipelineContext[] = [];
+    const hashes: string[] = [];
+
+    function onHash(this: unknown, context: IPipelineContext, hash: string): void {
+      thisArgs.push(this);
+      contexts.push(context);
+      hashes.push(hash);
+    }
+
+    // 実行：
+    const { context, closeError } = await runEncodeStream(checksum, [DATA], {
+      [ON_HASH_VAR_NAME]: onHash,
+    });
+
+    // 検証：
+    expect(closeError).toBeUndefined();
+
+    expect(thisArgs).toHaveLength(1);
+    expect(thisArgs[0]).toBe(checksum);
+    expect(contexts).toStrictEqual([context]);
+    expect(hashes).toStrictEqual([DIGEST]);
+  });
   test("decodeStream の終了時にもハッシュをコールバックへ渡す", async ({ expect }) => {
     // 準備：
     const checksum = new ChecksumSha256();
@@ -314,7 +342,7 @@ describe("onHash コールバック", () => {
 
     // 実行：
     const { closeError } = await runDecodeStream(checksum, [DATA], {
-      [ON_HASH_VAR_NAME]: (hash: string): void => {
+      [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
         hashes.push(hash);
       },
     });
@@ -331,7 +359,7 @@ describe("onHash コールバック", () => {
     // 実行：
     const { closeError } = await runEncodeStream(checksum, [DATA], {
       [VAR_NAME]: "0".repeat(DIGEST.length),
-      [ON_HASH_VAR_NAME]: (hash: string): void => {
+      [ON_HASH_VAR_NAME]: (_c: IPipelineContext, hash: string): void => {
         hashes.push(hash);
       },
     });
