@@ -1,8 +1,12 @@
 import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
+import { OpenContext, CloseContext } from "../src/_contexts.js";
+import UniKvsMiddleware from "../src/_middleware.js";
+import acquireSignalLock from "../src/_signal-lock.js";
+import UniKvsStorage from "../src/_storage.js";
 import { Builder } from "../src/index.js";
-import { withTimeout } from "./_helpers.js";
+import { Gate, isPending, FakeStorage, withTimeout, FakeMiddleware } from "./_helpers.js";
 
 /**
  * gate() で指定したキーの exists 処理を保留状態にできるストレージモックです。
@@ -330,5 +334,219 @@ describe("UniKvs - 共有ロック", () => {
     } finally {
       storage.ungate();
     }
+  });
+});
+
+describe("UniKvs - 共有プラグインの open/close 待機中の中断", () => {
+  test("共有ストレージの open 待機中に中断すると即座に拒否する", async ({ expect }) => {
+    // 準備 : 実 open をゲートで保留するストレージを 2 クライアントが共有する。
+    const storage = new FakeStorage("shared-open");
+    const entered = new Gate();
+    const release = new Gate();
+    storage.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "open") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const builder = new Builder().persist(storage);
+    const a = builder.build();
+    const b = builder.build();
+    const aOpen = a.open();
+
+    try {
+      await entered.wait();
+
+      const reason = new Error("open aborted");
+      const ac = new AbortController();
+      const bOpen = b.open({ signal: ac.signal });
+
+      // 待機側が共有ロックの取得待ちに入るまでマイクロタスクを流します。
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ac.abort(reason);
+
+      // 検証 : 先行する open を待たず、中断理由で拒否する。
+      await expect(withTimeout(bOpen, 200, "aborted-open")).rejects.toBe(reason);
+      await expect(isPending(aOpen)).resolves.toBe(true);
+    } finally {
+      release.open();
+    }
+
+    await aOpen;
+    expect(storage.isOpen).toBe(true);
+
+    await a.close();
+  });
+
+  test("共有ミドルウェアの open 待機中に中断すると即座に拒否する", async ({ expect }) => {
+    // 準備 : 実 open をゲートで保留するミドルウェアを 2 クライアントが共有する。
+    const middleware = new FakeMiddleware("shared-open");
+    const entered = new Gate();
+    const release = new Gate();
+    middleware.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "open") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const builder = new Builder().use(middleware).persist(new FakeStorage());
+    const a = builder.build();
+    const b = builder.build();
+    const aOpen = a.open();
+
+    try {
+      await entered.wait();
+
+      const reason = new Error("open aborted");
+      const ac = new AbortController();
+      const bOpen = b.open({ signal: ac.signal });
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ac.abort(reason);
+
+      await expect(withTimeout(bOpen, 200, "aborted-open")).rejects.toBe(reason);
+      await expect(isPending(aOpen)).resolves.toBe(true);
+    } finally {
+      release.open();
+    }
+
+    await aOpen;
+    expect(middleware.isOpen).toBe(true);
+
+    await a.close();
+  });
+
+  test("共有ストレージの close 待機中に中断すると即座に拒否する", async ({ expect }) => {
+    // 準備 : 参照を 1 つ残した状態で実 close をゲートで保留する。
+    const storage = new FakeStorage("shared-close");
+    const wrapper = UniKvsStorage.from(storage);
+    const openSignal = AbortSignal.timeout(1000);
+    await wrapper.open(new OpenContext({ signal: openSignal }));
+    await wrapper.open(new OpenContext({ signal: openSignal }));
+    await wrapper.close(new CloseContext({ signal: openSignal }));
+
+    const entered = new Gate();
+    const release = new Gate();
+    storage.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "close") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const closing = wrapper.close(new CloseContext({ signal: openSignal }));
+
+    try {
+      await entered.wait();
+
+      const reason = new Error("close aborted");
+      const ac = new AbortController();
+      const waiting = wrapper.close(new CloseContext({ signal: ac.signal }));
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ac.abort(reason);
+
+      // 検証 : 先行する実 close を待たず、中断理由で拒否する。
+      await expect(withTimeout(waiting, 200, "aborted-close")).rejects.toBe(reason);
+    } finally {
+      release.open();
+    }
+
+    await closing;
+    expect(storage.isOpen).toBe(false);
+  });
+
+  test("共有ミドルウェアの close 待機中に中断すると即座に拒否する", async ({ expect }) => {
+    // 準備 : 参照を 1 つ残した状態で実 close をゲートで保留する。
+    const middleware = new FakeMiddleware("shared-close");
+    const wrapper = UniKvsMiddleware.from(middleware);
+    const openSignal = AbortSignal.timeout(1000);
+    await wrapper.open(new OpenContext({ signal: openSignal }));
+    await wrapper.open(new OpenContext({ signal: openSignal }));
+    await wrapper.close(new CloseContext({ signal: openSignal }));
+
+    const entered = new Gate();
+    const release = new Gate();
+    middleware.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "close") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const closing = wrapper.close(new CloseContext({ signal: openSignal }));
+
+    try {
+      await entered.wait();
+
+      const reason = new Error("close aborted");
+      const ac = new AbortController();
+      const waiting = wrapper.close(new CloseContext({ signal: ac.signal }));
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ac.abort(reason);
+
+      await expect(withTimeout(waiting, 200, "aborted-close")).rejects.toBe(reason);
+    } finally {
+      release.open();
+    }
+
+    await closing;
+    expect(middleware.isOpen).toBe(false);
+  });
+});
+
+describe("UniKvs - 共有ロック取得待機の中断", () => {
+  test("中断で待機をやめた要求が後からロックを取得して保持しない", async ({ expect }) => {
+    // 準備 : 先行要求がロックを保持している間に、後続要求を待機させて中断する。
+    const target = {};
+    const holder = await acquireSignalLock(target, AbortSignal.timeout(1000));
+    const reason = new Error("waiting aborted");
+    const ac = new AbortController();
+    const waiting = acquireSignalLock(target, ac.signal);
+
+    try {
+      // 待機キューへ入るまでマイクロタスクを流します。
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      ac.abort(reason);
+
+      // 検証 : 待機中の要求は即座に中断理由で失敗する。
+      await expect(withTimeout(waiting, 200, "waiting-aborted")).rejects.toBe(reason);
+    } finally {
+      holder.release();
+    }
+
+    // 検証 : 中断済みの要求が後からロックを取得して保持せず、次の要求へ即座に割り当てられる。
+    const next = await withTimeout(
+      acquireSignalLock(target, AbortSignal.timeout(1000)),
+      200,
+      "acquire-after-abort",
+    );
+    expect(next.released).toBe(false);
+    next.release();
+  });
+
+  test("中断済みの signal では待機キューに入らず即座に拒否する", async ({ expect }) => {
+    // 準備 :
+    const target = {};
+    const reason = new Error("already aborted");
+
+    // 実行と検証 : 中断済みの要求はロックを取得しない。
+    await expect(acquireSignalLock(target, AbortSignal.abort(reason))).rejects.toBe(reason);
+
+    // 検証 : 中断済みの要求がキューに残っていないため、次の要求は即座にロックを取得できる。
+    const next = await withTimeout(
+      acquireSignalLock(target, AbortSignal.timeout(1000)),
+      200,
+      "acquire-after-already-aborted",
+    );
+    expect(next.released).toBe(false);
+    next.release();
   });
 });

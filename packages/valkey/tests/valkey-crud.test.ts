@@ -11,7 +11,7 @@ import {
   createAllByteValues,
   createDeleteContext,
 } from "@unikvs/testing";
-import { describe } from "vite-plus/test";
+import { vi, describe } from "vite-plus/test";
 
 import { test, createStorage } from "./_helpers.js";
 
@@ -326,6 +326,105 @@ describe("基本データ操作 (CRUD)", () => {
     await expect(
       storage.clear(createClearContext("", { signal }) as IStorage.ClearContext),
     ).resolves.toBeUndefined();
+  });
+
+  test("keyPrefix に glob メタ文字を含んでも自キーだけを削除する", async ({
+    fake,
+    expect,
+    signal,
+  }) => {
+    const cases = [
+      {
+        name: "文字クラス",
+        decoy: "tenant1:decoy.bin",
+        prefix: "tenant[1]:",
+        pattern: "tenant\\[1\\]:*",
+      },
+      {
+        name: "アスタリスク",
+        decoy: "app-x:foreign.bin",
+        prefix: "app*:",
+        pattern: "app\\*:*",
+      },
+      {
+        name: "クエスチョン",
+        decoy: "axb:foreign.bin",
+        prefix: "a?b:",
+        pattern: "a\\?b:*",
+      },
+      {
+        name: "バックスラッシュ",
+        decoy: "backslash:foreign.bin",
+        prefix: "back\\slash:",
+        pattern: "back\\\\slash:*",
+      },
+    ];
+
+    for (const { name, decoy, prefix, pattern } of cases) {
+      // 準備：
+      const storage = createStorage(fake, prefix);
+      await storage.open(createOpenContext() as IStorage.OpenContext);
+
+      const scanSpy = vi.spyOn(fake, "scan");
+
+      try {
+        await storage.write(
+          createSetContext("own.bin", { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        );
+        // 未エスケープの glob では自キーとして一致してしまうキーを用意する。
+        await fake.set(decoy, new Uint8Array([9]));
+
+        // 実行：
+        await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+
+        // 検証：
+        // 接頭辞外は後段の startsWith フィルターでも除外されるため、MATCH パターン自体を検証する。
+        expect(scanSpy, name).toHaveBeenCalledWith(
+          "0",
+          "MATCH",
+          pattern,
+          "COUNT",
+          expect.any(Number),
+        );
+        expect(fake.entries.has(`${prefix}own.bin`), name).toBe(false);
+        expect(fake.entries.has(decoy), name).toBe(true);
+      } finally {
+        scanSpy.mockRestore();
+        await storage.close(createCloseContext() as IStorage.CloseContext);
+      }
+    }
+  });
+
+  test("SCAN が接頭辞外のキーを返しても削除しない", async ({ fake, expect, signal }) => {
+    // 準備：
+    const prefix = "filtered:";
+    const storage = createStorage(fake, prefix);
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      await storage.write(
+        createSetContext("own.bin", { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+      const foreign = "outside:foreign.bin";
+      await fake.set(foreign, new Uint8Array([9]));
+
+      // パターン解釈の実装差で接頭辞外のキーが混ざる状況を再現する。
+      vi.spyOn(fake, "scan").mockImplementationOnce(async () => [
+        "0",
+        [`${prefix}own.bin`, foreign],
+      ]);
+
+      // 実行：
+      await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+
+      // 検証：
+      expect(fake.entries.has(`${prefix}own.bin`)).toBe(false);
+      expect(fake.entries.has(foreign)).toBe(true);
+    } finally {
+      await storage.close(createCloseContext() as IStorage.CloseContext);
+    }
   });
 });
 

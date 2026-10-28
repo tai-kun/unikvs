@@ -56,6 +56,24 @@ export type CompressOptions = {
 };
 
 /**
+ * 空の入力を展開しようとしたときのエラーメッセージです。
+ */
+const EMPTY_INPUT_ERROR_MESSAGE = "Cannot decompress an empty input";
+
+/**
+ * 空の入力を拒否します。
+ *
+ * Bun の zstd API は空の入力を空の展開結果として受け入れるため、破損データとの取り違えを防ぐために呼び出し側で拒否します。
+ *
+ * @param data 検証するバイト列です。
+ */
+function assertNotEmpty(data: Uint8Array): void {
+  if (data.byteLength === 0) {
+    throw new Error(EMPTY_INPUT_ERROR_MESSAGE);
+  }
+}
+
+/**
  * Bun 名前空間の zstd API に関する部分です。
  *
  * `@types/bun` には zstd の宣言がまだないため、brotli 系 API と同じ `{ level }` 形式のオプションを受け付ける形状を想定して定義します。
@@ -238,6 +256,8 @@ export const api = {
   /**
    * データを展開します。
    *
+   * 空の入力は破損データとの取り違えを防ぐため拒否します。
+   *
    * 失敗時は上流のエラーをそのまま伝播させます。
    *
    * @param env 使用する実行環境です。
@@ -246,6 +266,8 @@ export const api = {
    * @returns 展開したバイト列を返します。
    */
   decompress(env: IEnv, data: Uint8Array): Uint8Array {
+    assertNotEmpty(data);
+
     return env.decompressSync(data);
   },
 
@@ -274,6 +296,7 @@ export const api = {
    * 展開用の TransformStream を作成します。
    *
    * Bun にストリーミング用の zstd API がないため、書き込まれたチャンクを蓄積し、flush 時に一括変換して 1 チャンクとして出力します。
+   * 空の入力は破損データとの取り違えを防ぐため拒否します。
    *
    * @param env 使用する実行環境です。
    *
@@ -283,6 +306,10 @@ export const api = {
     // open() 前の利用は TypeError で拒否されるよう、実行環境へ同期的に触れます。
     const decompressSync = env.decompressSync;
 
-    return createAccumulatingStream((data) => decompressSync(data));
+    return createAccumulatingStream((data) => {
+      assertNotEmpty(data);
+
+      return decompressSync(data);
+    });
   },
 };

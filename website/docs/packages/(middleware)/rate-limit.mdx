@@ -44,11 +44,13 @@ import { RateLimit } from "@unikvs/rate-limit";
     },
     maxTokens: {
       type: "[#rate-limit-options-max-tokens] number",
-      description: "保持できるトークンの上限です。既定値は tokensPerInterval です。",
+      description:
+        "保持できるトークンの上限です。既定値は max(1, tokensPerInterval) です。1 未満を明示すると構築に失敗します。",
     },
     burst: {
       type: "[#rate-limit-options-burst] number",
-      description: "maxTokens の別名です。両方を指定した場合は maxTokens が優先されます。",
+      description:
+        "maxTokens の別名です。両方を指定した場合は maxTokens が優先されます。1 未満を明示すると構築に失敗します。",
     },
     strategy: {
       type: "[#rate-limit-options-strategy] RateLimitStrategy",
@@ -115,6 +117,8 @@ await kvs.close();
 - `use` は操作ごとに 1 トークンを消費し、データ内容には触れません。
 - `encode`・`decode`・`encodeStream`・`decodeStream` は入力をそのまま通し、変換を行いません。
 - トークンは経過時間に応じて補充され、上限を超えて増えることはありません。時計が戻ってもトークンは増えません。
+- `maxTokens` を省略した場合の容量は `max(1, tokensPerInterval)` です。1 回の操作で 1 トークン消費するため、`tokensPerInterval` が 1 未満でも容量は 1 になります。
+- `maxTokens` または `burst` に 1 未満を明示すると、構築時に `RateLimitInvalidOptionError` を投げます。`tokensPerInterval` には 1 未満の小数を指定できます。
 - `wait` 戦略では回復まで待機し、要求は先着順に実行されます。このミドルウェアは中断シグナルでは待機を打ち切ります。
 
 ## エラー [#errors]
@@ -178,7 +182,7 @@ try {
 
 #### 意味 [#error-rate-limit-invalid-option-meaning]
 
-コンストラクターに不正なオプションが渡されると、このエラーが投げられます。正で有限の数値ではない値や `"wait"`・`"throw"` 以外の `strategy`、関数でない `now`・`sleep` が対象です。
+コンストラクターに不正なオプションが渡されると、このエラーが投げられます。正で有限の数値ではない値、1 未満の `maxTokens` と `burst`、`"wait"`・`"throw"` 以外の `strategy`、関数でない `now`・`sleep` が対象です。
 
 #### 対処方法 [#error-rate-limit-invalid-option-howto]
 

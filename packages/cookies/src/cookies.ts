@@ -507,16 +507,38 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
    */
   #writeValue(key: string, data: string | Uint8Array): void {
     const { payload, rawSize } = this.#encode(data);
+    const realKey = this.#toRealKey(key);
+
+    if (realKey === "") {
+      throw new TypeError("Cookie name must not be empty.");
+    }
 
     if (rawSize > this.sizeLimitBytes) {
       throw new CookieTooLargeError({
         key,
         limit: this.sizeLimitBytes,
         actual: rawSize,
+        measurement: "raw",
       });
     }
 
-    this.#backend().set(this.#toRealKey(key), encodeURIComponent(payload), this.#cookieAttributes);
+    // ブラウザーが保存するのは生の値ではなく、名前・値を URL 符号化した Set-Cookie 文字列です。
+    // 生サイズが上限内でもシリアル化後に上限を超える場合は、ブラウザーが黙って破棄するため事前に拒否します。
+    const encodedValue = encodeURIComponent(payload);
+    const serializedSize = textEncoder.encode(
+      serializeSetCookie(realKey, encodedValue, this.#cookieAttributes),
+    ).length;
+
+    if (serializedSize > this.sizeLimitBytes) {
+      throw new CookieTooLargeError({
+        key,
+        limit: this.sizeLimitBytes,
+        actual: serializedSize,
+        measurement: "serialized",
+      });
+    }
+
+    this.#backend().set(realKey, encodedValue, this.#cookieAttributes);
   }
 
   /**

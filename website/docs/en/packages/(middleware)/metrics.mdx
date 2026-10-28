@@ -1,18 +1,28 @@
 ---
 title: "@unikvs/metrics"
-description: "Middleware that records operation counts, byte sizes, and latency, forwardable to OTel or Prometheus."
+description: "Middleware that records operation counts, byte sizes, and use-hook duration, forwardable to OTel or Prometheus."
 ---
 
 ## Overview [#overview]
 
-`Metrics` records counts, byte sizes, and latency for every operation, with aggregation and external export.<Badge>Middleware</Badge>
+`Metrics` records operation counts, byte sizes, and use-hook duration, with aggregation and external export. The use-hook duration does not include storage I/O latency.<Badge>Middleware</Badge>
 
 Use it for performance visibility and operational monitoring. Measurements stay in memory and can be forwarded to OTel instruments or custom sinks.
 
 - `name` is `Metrics`.
 - `isOpen` is always `true`.
-- `use` measures every operation; `encode` / `decode` and streams also record byte sizes.
+- `use` measures each operation's use-hook chain success and duration; storage I/O latency is not included. `encode` / `decode` and streams also record byte sizes.
 - Recording never throws; sink failures are ignored.
+
+:::warning[`use` outcomes and latency are not storage-operation outcomes]
+`use` runs before storage I/O, and `next()` only runs downstream `use` hooks. Its `outcome` and `durationMs` therefore describe the `use` hook chain, not the storage operation or its latency.
+
+Storage I/O failures that run after the `use` hooks are not reflected in `use` records. This includes plain-value `set` write failures, `get` read failures other than missing keys, `stream` acquisition and missing-key failures, and `delete` / `has` / `clear` / `copy` / `move` failures. Metrics records only failures of the hooks themselves and read failures or cancellations of a wrapped stream; a missing-key `get` is not recorded as an error either. A plain-value `set` that fails during encoding can produce `use` success plus an `encode` error.
+
+Stream records settle at the earliest of stream completion, read failure, or cancellation. A destination failure that cancels the stream before completion is recorded as an `error`. Failures after settlement are not reflected, and a source that is already locked before wrapping records nothing.
+
+Metrics does not implement `afterUse`, so it emits no separate record for the outcome of mutating operations. Core `use` runs before storage I/O, so no middleware can observe storage-operation outcomes from `use`. Core provides an [`afterUse`](/packages/core/middleware#hooks-after-use) hook for post-I/O outcomes.
+:::
 
 Install with:
 
@@ -93,7 +103,7 @@ Operation names observed by the metrics middleware. Equivalent to `IMiddleware.U
 
 ### `MetricsOutcome` [#metrics-outcome]
 
-Whether an observed operation succeeded or failed. `"success"` or `"error"`.
+Whether the observed `use` hook chain, or the `encode`, `decode`, or stream operation, succeeded or failed. `"success"` or `"error"`. For `use`, this is not the storage operation's outcome.
 
 ### `MetricsExporterKind` [#metrics-exporter-kind]
 
@@ -105,7 +115,7 @@ Custom sink receiving every recorded measurement.
 
 ### `MetricRecord` [#metric-record]
 
-Measurement observed for a single operation.
+Measurement observed for a single hook execution.
 
 <TypeTable
   type={{
@@ -117,12 +127,14 @@ Measurement observed for a single operation.
     outcome: {
       type: "[#metric-record-outcome] MetricsOutcome",
       required: true,
-      description: "Whether the operation succeeded or failed.",
+      description:
+        "Whether the observed hook succeeded or failed. For the use hook, this is not the storage operation's outcome.",
     },
     durationMs: {
       type: "[#metric-record-duration-ms] number",
       required: true,
-      description: "Wall-clock elapsed time (ms).",
+      description:
+        "Wall-clock duration of the observed hook chain (ms). For use, this is the use-hook chain, not storage I/O latency. For streams, it runs from wrapping until settlement (source/transform completion, read failure, or cancellation) and can include stream consumption time. Completion here means the source/transform finished, not that the destination has been fully drained.",
     },
     bytes: {
       type: "[#metric-record-bytes] number | undefined",
@@ -150,17 +162,17 @@ Per-operation-name counters.
     count: {
       type: "[#metrics-action-summary-count] number",
       required: true,
-      description: "Total recorded operations.",
+      description: "Total recorded measurements.",
     },
     success: {
       type: "[#metrics-action-summary-success] number",
       required: true,
-      description: "Successful operations.",
+      description: "Successful measurements.",
     },
     error: {
       type: "[#metrics-action-summary-error] number",
       required: true,
-      description: "Failed operations.",
+      description: "Failed measurements.",
     },
     totalBytes: {
       type: "[#metrics-action-summary-total-bytes] number",
@@ -208,13 +220,18 @@ Snapshot of all measurements recorded so far.
 | `encodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
 | `decodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
 
-- `use` measures latency and success for every operation, recording bytes as `undefined`.
+- `use` records one measurement per operation, with bytes as `undefined`. `durationMs` is the use-hook chain duration and does not include storage I/O latency.
+- Storage I/O failures that run after the `use` hooks are not reflected in `use` records. This includes plain-value `set` write failures, `get` read failures other than missing keys, `stream` acquisition and missing-key failures, and `delete` / `has` / `clear` / `copy` / `move` failures.
+- Metrics records only failures of the hooks themselves and read failures or cancellations of a wrapped stream; a missing-key `get` is not recorded as an error either. A plain-value `set` that fails during encoding can produce `use` success plus an `encode` error.
+- Stream records settle at the earliest of stream completion, read failure, or cancellation. Completion records `success`; read failures and cancellations record `error`. A destination failure that cancels the stream before completion also records `error`. Failures after settlement are not reflected, and a source that is already locked before wrapping records nothing.
+- Stream `durationMs` runs from wrapping until settlement (source/transform completion, read failure, or cancellation) and can include stream consumption time. Completion here means the source/transform finished, not that the destination has been fully drained. For `use`, `encode`, and `decode`, `durationMs` is the hook-chain duration.
+- Metrics does not implement `afterUse`, so it emits no separate record for mutating-operation outcomes. Core `use` runs before storage I/O, so no middleware can observe storage-operation outcomes from `use`. Core provides an [`afterUse`](/packages/core/middleware#hooks-after-use) hook for post-I/O outcomes.
 - `encode` and `decode` pass data through, also recording bytes for strings, `ArrayBuffer`, and `ArrayBufferView`. Other types record `undefined`.
-- Streams pass chunks through and record the total chunk size as one record on completion. Cancellations and failures record as `error`.
+- Streams pass chunks through and record the total chunk size as one record on settlement.
 - This middleware deliberately omits key labels so `toPrometheusString()` cardinality stays flat. Per-key detail is available via `getMetrics()` and `onRecord`.
 
 ## Errors [#errors]
 
 This package has no package-specific errors.
 
-Recording never throws and sink failures are ignored, so metrics never break the operation pipeline. When the original operation fails, the error is rethrown after recording.
+Recording never throws and sink failures are ignored, so metrics never break the operation pipeline. When a hook fails, the error is recorded and then rethrown. For streams, read failures and cancellations are also recorded as `error`. However, `use` completes before storage I/O, so storage operation failures are not reflected in `use` records.

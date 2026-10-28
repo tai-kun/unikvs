@@ -1,4 +1,4 @@
-import type { rm, mkdir, rename, copyFile } from "node:fs/promises";
+import type { rm, stat, mkdir, rename, copyFile } from "node:fs/promises";
 import type { join, resolve } from "node:path";
 
 import { type IStorage, KeyNotFoundError, UnsupportedRuntimeError } from "@unikvs/core";
@@ -31,6 +31,7 @@ type Connection = {
    */
   readonly fs: {
     readonly rm: typeof rm;
+    readonly stat: typeof stat;
     readonly mkdir: typeof mkdir;
     readonly rename: typeof rename;
     readonly copyFile: typeof copyFile;
@@ -185,10 +186,11 @@ export default class BunFs implements IStorage {
     const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
     const file = path.join(this.#root, c.key);
 
-    return Bun.file(file).exists();
+    return this.#pathExists(file);
   }
 
   /**
@@ -202,6 +204,7 @@ export default class BunFs implements IStorage {
     const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
     const file = path.join(this.#root, c.key);
     await Bun.file(file).delete();
@@ -238,17 +241,21 @@ export default class BunFs implements IStorage {
   /**
    * ルートディレクトリーを作り直してすべてのファイルを削除します。
    *
-   * @param _c 使用しないクリア用コンテキストです。
+   * @param c クリア用コンテキストです。
    *
    * @returns 完了を知らせるプロミスです。
    */
-  public async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     const { fs } = this.#getConnection();
+    // 削除を始める前に中断を確認し、中断済みならデータを変更しません。
+    c.signal.throwIfAborted();
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
     await fs.rm(this.#root, {
       force: true,
       recursive: true,
     });
+    // 削除と再作成の間にも中断を確認し、中断時はディレクトリーを作り直しません。
+    c.signal.throwIfAborted();
     await fs.mkdir(this.#root, { recursive: true });
   }
 
@@ -490,8 +497,33 @@ export default class BunFs implements IStorage {
     const { path } = this.#getConnection();
     const file = path.join(this.#root, key);
 
-    if (!(await Bun.file(file).exists())) {
+    if (!(await this.#pathExists(file))) {
       throw new KeyNotFoundError({ key });
+    }
+  }
+
+  /**
+   * 指定したパスにファイルが存在するかどうかを確認します。
+   *
+   * 存在しない場合だけ false を返し、権限エラーなどの I/O エラーはそのまま投げます。
+   *
+   * @param file 確認するパスです。
+   *
+   * @returns 存在するとき true、存在しないとき false を返します。
+   */
+  async #pathExists(file: string): Promise<boolean> {
+    const { fs } = this.#getConnection();
+
+    try {
+      await fs.stat(file);
+
+      return true;
+    } catch (ex) {
+      if (isErrnoCode(ex, "ENOENT") || isErrnoCode(ex, "ENOTDIR")) {
+        return false;
+      }
+
+      throw ex;
     }
   }
 

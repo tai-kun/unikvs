@@ -165,16 +165,11 @@ export default class NodeFs implements IStorage {
     this.#getConnection();
 
     assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
     const file = this.#toPath(c.key);
 
-    try {
-      await fs.access(file);
-
-      return true;
-    } catch {
-      return false;
-    }
+    return this.#pathExists(file);
   }
 
   /**
@@ -188,6 +183,7 @@ export default class NodeFs implements IStorage {
     this.#getConnection();
 
     assertValidFilename(c.key);
+    c.signal.throwIfAborted();
 
     const file = this.#toPath(c.key);
     await fs.unlink(file);
@@ -224,17 +220,21 @@ export default class NodeFs implements IStorage {
   /**
    * ルートディレクトリーを作り直してすべてのファイルを削除します。
    *
-   * @param _c 使用しないクリア用コンテキストです。
+   * @param c クリア用コンテキストです。
    *
    * @returns 完了を知らせるプロミスです。
    */
-  public async clear(_c: IStorage.ClearContext): Promise<void> {
+  public async clear(c: IStorage.ClearContext): Promise<void> {
     this.#getConnection();
+    // 削除を始める前に中断を確認し、中断済みならデータを変更しません。
+    c.signal.throwIfAborted();
     // ルートディレクトリー自体を削除したあと、再度空のディレクトリーを作成することでクリアーとします。
     await fs.rm(this.#root, {
       force: true,
       recursive: true,
     });
+    // 削除と再作成の間にも中断を確認し、中断時はディレクトリーを作り直しません。
+    c.signal.throwIfAborted();
     await fs.mkdir(this.#root, { recursive: true });
   }
 
@@ -263,10 +263,36 @@ export default class NodeFs implements IStorage {
       state.error ??= err;
     });
 
-    const onAbort = (): void => {
-      writeStream.destroy(toError(c.signal.reason));
+    // 失敗・中断時の後始末です。write/close/abort のどこから呼ばれても一度だけ実行します。
+    let cleanupPromise: Promise<void> | undefined;
+    const cleanup = (reason?: unknown): Promise<void> => {
+      cleanupPromise ??= (async (): Promise<void> => {
+        c.signal.removeEventListener("abort", onAbort);
 
-      void removeTmp();
+        // 開いたままのファイルディスクリプターがあると Windows で削除できないため、先に閉じます。
+        if (!writeStream.destroyed) {
+          writeStream.destroy(reason === undefined ? undefined : toError(reason));
+        }
+
+        await new Promise<void>((succeed): void => {
+          if (writeStream.closed) {
+            succeed();
+
+            return;
+          }
+
+          writeStream.once("close", (): void => {
+            succeed();
+          });
+        });
+        await removeTmp();
+      })();
+
+      return cleanupPromise;
+    };
+
+    const onAbort = (): void => {
+      void cleanup(c.signal.reason);
     };
     c.signal.addEventListener("abort", onAbort, { once: true });
     // ストリームの終了後は中断を監視する必要がないため、リスナーを解除します。
@@ -276,68 +302,74 @@ export default class NodeFs implements IStorage {
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async abort(reason?: unknown): Promise<void> {
-        writeStream.destroy(toError(reason));
-        await removeTmp();
+        await cleanup(reason);
       },
       async close(): Promise<void> {
-        c.signal.throwIfAborted();
-
-        if (state.error !== undefined) {
-          throw state.error;
-        }
-
-        await new Promise<void>((succeed, fail): void => {
-          writeStream.end((err: Error | null | undefined): void => {
-            if (err !== null && err !== undefined) {
-              fail(err);
-            } else {
-              succeed();
-            }
-          });
-        });
-        // flush が完了した時点で初めて最終パスへ置き換えます (swap-on-close)。
         try {
+          c.signal.throwIfAborted();
+
+          if (state.error !== undefined) {
+            throw state.error;
+          }
+
+          await new Promise<void>((succeed, fail): void => {
+            writeStream.end((err: Error | null | undefined): void => {
+              if (err !== null && err !== undefined) {
+                fail(err);
+              } else {
+                succeed();
+              }
+            });
+          });
+          // flush が完了した時点で初めて最終パスへ置き換えます (swap-on-close)。
           await fs.rename(file.tmp, file.dest);
         } catch (ex) {
-          // rename に失敗した場合も一時ファイルを削除し、既存のデータを保全します。
-          await removeTmp();
+          // 失敗・中断時にはストリームを閉じて一時ファイルを削除し、既存のデータを保全します。
+          await cleanup();
 
           throw ex;
         }
       },
       async write(chunk: Uint8Array<ArrayBuffer>): Promise<void> {
-        c.signal.throwIfAborted();
-
-        if (state.error !== undefined) {
-          throw state.error;
-        }
-
-        // バッファーが一杯の場合は書き込めるようになるまで待機します (バックプレッシャー)。
-        // 中断やエラーでストリームが終了した場合も待機を打ち切ります。
-        if (!writeStream.write(chunk)) {
-          await new Promise<void>((succeed, fail): void => {
-            const cleanup = (): void => {
-              writeStream.off("drain", onDrain);
-              writeStream.off("error", onError);
-              writeStream.off("close", onClose);
-            };
-            const onDrain = (): void => {
-              cleanup();
-              succeed();
-            };
-            const onError = (err: Error): void => {
-              cleanup();
-              fail(err);
-            };
-            const onClose = (): void => {
-              cleanup();
-              succeed();
-            };
-            writeStream.once("drain", onDrain);
-            writeStream.once("error", onError);
-            writeStream.once("close", onClose);
-          });
+        try {
           c.signal.throwIfAborted();
+
+          if (state.error !== undefined) {
+            throw state.error;
+          }
+
+          // バッファーが一杯の場合は書き込めるようになるまで待機します (バックプレッシャー)。
+          // 中断やエラーでストリームが終了した場合も待機を打ち切ります。
+          if (!writeStream.write(chunk)) {
+            await new Promise<void>((succeed, fail): void => {
+              const cleanupWait = (): void => {
+                writeStream.off("drain", onDrain);
+                writeStream.off("error", onError);
+                writeStream.off("close", onClose);
+              };
+              const onDrain = (): void => {
+                cleanupWait();
+                succeed();
+              };
+              const onError = (err: Error): void => {
+                cleanupWait();
+                fail(err);
+              };
+              const onClose = (): void => {
+                cleanupWait();
+                succeed();
+              };
+              writeStream.once("drain", onDrain);
+              writeStream.once("error", onError);
+              writeStream.once("close", onClose);
+            });
+            c.signal.throwIfAborted();
+          }
+        } catch (ex) {
+          // WritableStream は write の失敗後に sink.abort を呼ばないため、ここで確実に後始末します。
+          await cleanup();
+
+          throw ex;
         }
       },
     });
@@ -422,11 +454,28 @@ export default class NodeFs implements IStorage {
 
     const file = this.#toPath(key);
 
+    if (!(await this.#pathExists(file))) {
+      throw new KeyNotFoundError({ key });
+    }
+  }
+
+  /**
+   * 指定したパスにファイルが存在するかどうかを確認します。
+   *
+   * 存在しない場合だけ false を返し、権限エラーなどの I/O エラーはそのまま投げます。
+   *
+   * @param path 確認するパスです。
+   *
+   * @returns 存在するとき true、存在しないとき false を返します。
+   */
+  async #pathExists(path: string): Promise<boolean> {
     try {
-      await fs.access(file);
+      await fs.stat(path);
+
+      return true;
     } catch (ex) {
-      if (isErrnoCode(ex, "ENOENT")) {
-        throw new KeyNotFoundError({ key });
+      if (isErrnoCode(ex, "ENOENT") || isErrnoCode(ex, "ENOTDIR")) {
+        return false;
       }
 
       throw ex;

@@ -1,3 +1,4 @@
+import { AllowRepair } from "@unikvs/allow-repair";
 import type { IMiddleware } from "@unikvs/core";
 import { test, describe } from "vite-plus/test";
 
@@ -924,5 +925,610 @@ describe("UniKvs - next の呼び出し規約", () => {
     // 後片付け : 切り離した next() の完了を待ってから閉じる。
     slow.gate.open();
     await fireAndForget.detached;
+  });
+});
+
+describe("UniKvs - 2 回目の next() の握り潰し", () => {
+  test("use で 2 回目の next() の拒否を握り潰しても操作を失敗させる", async ({ expect }) => {
+    // 準備 : 2 回目の next() の拒否を await して握り潰す。
+    class SwallowDoubleNextMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowDoubleNextUse");
+      }
+
+      public override async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+        await super.use(c, next);
+
+        try {
+          await next();
+        } catch {
+          // 規約違反の拒否を握り潰しても、操作全体は失敗しなければならない。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowDoubleNextMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "SwallowDoubleNextUse",
+          operation: "use",
+        },
+      }),
+    );
+
+    expect(storage.map.has("foo")).toBe(false);
+  });
+
+  test("encode で 2 回目の next() の拒否を握り潰しても書き込まない", async ({ expect }) => {
+    // 準備 : 2 回目の next() の拒否を await して握り潰す。
+    class SwallowDoubleNextMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowDoubleNextEncode");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 規約違反の拒否を握り潰しても、操作全体は失敗しなければならない。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowDoubleNextMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "SwallowDoubleNextEncode",
+          operation: "encode",
+        },
+      }),
+    );
+
+    expect(storage.map.has("foo")).toBe(false);
+  });
+
+  test("decode で 2 回目の next() の拒否を握り潰しても読み取りを失敗させる", async ({ expect }) => {
+    // 準備 : 2 回目の next() の拒否を await して握り潰す。
+    class SwallowDoubleNextMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowDoubleNextDecode");
+      }
+
+      public override async decode(
+        c: IMiddleware.DecodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 規約違反の拒否を握り潰しても、操作全体は失敗しなければならない。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowDoubleNextMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const getting = kvs.get("foo");
+    await expect(getting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "SwallowDoubleNextDecode",
+          operation: "decode",
+        },
+      }),
+    );
+
+    expect(storage.map.get("foo")).toBe("stored");
+  });
+
+  test("decodeStream が下流のセットアップ失敗を握り潰してもロックされたストリームを返さない", async ({
+    expect,
+  }) => {
+    // 準備 : 葉側はソースを pipeThrough して next() の失敗を握り潰し、根側はセットアップで失敗する。
+    class SwallowDownstreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("SwallowDownstream");
+      }
+
+      public override async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source.pipeThrough(new TransformStream());
+
+        try {
+          await next();
+        } catch {
+          // 下流のセットアップ失敗を握り潰しても、ロックされたパイプを呼び出し側へ返してはならない。
+        }
+      }
+    }
+
+    class FailingSetupMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("FailingSetup");
+      }
+
+      public override async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        _next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source.pipeThrough(new TransformStream());
+
+        throw new Error("downstream setup failed");
+      }
+    }
+
+    class CancelObservableStreamStorage extends FakeStreamStorage {
+      public cancelled = false;
+
+      public override getReadable(): ReadableStream<Uint8Array> {
+        return new ReadableStream<Uint8Array>({
+          pull(controller): void {
+            controller.enqueue(new Uint8Array([1]));
+          },
+          cancel: () => {
+            this.cancelled = true;
+          },
+        });
+      }
+    }
+
+    const storage = new CancelObservableStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
+      .use(new FailingSetupMiddleware())
+      .use(new SwallowDownstreamMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証 : ロックされたストリームの TypeError ではなく、下流の失敗理由で失敗する。
+    await expect(kvs.stream("logs")).rejects.toThrow("downstream setup failed");
+
+    // 検証 : 放棄されたパイプだけでなく、元のソースストリームもキャンセルされる。
+    expect(storage.cancelled).toBe(true);
+
+    // 検証 : ソースの解放後も後続の書き込みは成功する。
+    await expect(kvs.set("logs", streamOf([new Uint8Array([2])]))).resolves.toBeUndefined();
+
+    expect(storage.map.get("logs")).toStrictEqual([new Uint8Array([2])]);
+  });
+
+  test("上流の use が下流の 2 回目の next() を握り潰しても操作を失敗させる", async ({ expect }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextUseMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("DoubleNextUse");
+      }
+
+      public override async use(
+        _c: IMiddleware.UseContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowUseMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowUse");
+      }
+
+      public override async use(
+        _c: IMiddleware.UseContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowUseMiddleware())
+      .use(new DoubleNextUseMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextUse",
+          operation: "use",
+        },
+      }),
+    );
+
+    expect(storage.map.has("foo")).toBe(false);
+  });
+
+  test("上流の encode が下流の 2 回目の next() を握り潰しても書き込まない", async ({ expect }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextEncodeMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("DoubleNextEncode");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowEncodeMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowEncode");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowEncodeMiddleware())
+      .use(new DoubleNextEncodeMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const setting = kvs.set("foo", "value");
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextEncode",
+          operation: "encode",
+        },
+      }),
+    );
+
+    expect(storage.map.has("foo")).toBe(false);
+  });
+
+  test("上流の decode が下流の 2 回目の next() を握り潰しても読み取りを失敗させる", async ({
+    expect,
+  }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextDecodeMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("DoubleNextDecode");
+      }
+
+      public override async decode(
+        c: IMiddleware.DecodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowDecodeMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowDecode");
+      }
+
+      public override async decode(
+        c: IMiddleware.DecodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const storage = new FakeStorage();
+    storage.map.set("foo", "stored");
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new SwallowDecodeMiddleware())
+      .use(new DoubleNextDecodeMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const getting = kvs.get("foo");
+    await expect(getting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextDecode",
+          operation: "decode",
+        },
+      }),
+    );
+
+    expect(storage.map.get("foo")).toBe("stored");
+  });
+
+  test("上流の decodeStream が下流の 2 回目の next() を握り潰しても読み取りを失敗させる", async ({
+    expect,
+  }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextDecodeStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("DoubleNextDecodeStream");
+      }
+
+      public override async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowDecodeStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("SwallowDecodeStream");
+      }
+
+      public override async decodeStream(
+        c: IMiddleware.DecodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const storage = new FakeStreamStorage();
+    storage.map.set("logs", [new Uint8Array([1])]);
+
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
+      .use(new SwallowDecodeStreamMiddleware())
+      .use(new DoubleNextDecodeStreamMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const streaming = kvs.stream("logs");
+    await expect(streaming).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(streaming).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextDecodeStream",
+          operation: "decode",
+        },
+      }),
+    );
+
+    expect(storage.map.get("logs")).toStrictEqual([new Uint8Array([1])]);
+  });
+
+  test("上流の encodeStream が下流の 2 回目の next() を握り潰しても書き込まない", async ({
+    expect,
+  }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextEncodeStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("DoubleNextEncodeStream");
+      }
+
+      public override async encodeStream(
+        c: IMiddleware.EncodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowEncodeStreamMiddleware extends FakeStreamMiddleware<Uint8Array> {
+      public constructor() {
+        super("SwallowEncodeStream");
+      }
+
+      public override async encodeStream(
+        c: IMiddleware.EncodeStreamContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const storage = new FakeStreamStorage();
+    await using kvs = new Builder<{ logs: StreamValue<Uint8Array> }>()
+      .use(new SwallowEncodeStreamMiddleware())
+      .use(new DoubleNextEncodeStreamMiddleware())
+      .persist(storage)
+      .build();
+    await kvs.open();
+
+    // 実行と検証：
+    const setting = kvs.set("logs", streamOf([new Uint8Array([1])]));
+    await expect(setting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(setting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextEncodeStream",
+          operation: "encode",
+        },
+      }),
+    );
+
+    expect(storage.map.has("logs")).toBe(false);
+    expect(storage.callsOf("getWritable")).toHaveLength(0);
+  });
+
+  test("上流の repair が下流の 2 回目の next() を握り潰しても読み取りを失敗させる", async ({
+    expect,
+  }) => {
+    // 準備 : 内側は 2 回目の next() の拒否を握り潰し、外側は下流の規約違反を握り潰す。
+    class DoubleNextRepairMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("DoubleNextRepair");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+
+        try {
+          await next();
+        } catch {
+          // 自身の 2 回目の next() の拒否を握り潰す。
+        }
+      }
+    }
+
+    class SwallowRepairMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("SwallowRepair");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+
+        try {
+          await next();
+        } catch {
+          // 下流の規約違反を握り潰す。
+        }
+      }
+    }
+
+    const cache1 = new FakeStorage("cache1");
+    const cache2 = new FakeStorage("cache2");
+    const server = new FakeStorage("server");
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new AllowRepair())
+      .use(new SwallowRepairMiddleware())
+      .use(new DoubleNextRepairMiddleware())
+      .persist(cache1)
+      .persist(cache2)
+      .persist(server)
+      .build();
+    await kvs.open();
+    server.map.set("foo", "value");
+
+    // 実行と検証：
+    const getting = kvs.get("foo", { repair: true });
+    await expect(getting).rejects.toThrow(MiddlewareNextCalledMultipleTimesError);
+    await expect(getting).rejects.toEqual(
+      expect.objectContaining({
+        meta: {
+          name: "DoubleNextRepair",
+          operation: "encode",
+        },
+      }),
+    );
   });
 });

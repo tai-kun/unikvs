@@ -15,6 +15,7 @@ import {
   freezeDestination,
   requireDestination,
   requireStreamDestination,
+  MiddlewareContractTracker,
 } from "./_pipeline-graph.helpers.js";
 import type {
   MutableNode,
@@ -33,10 +34,13 @@ import { cancelStreams } from "./_streams.js";
 import {
   MiddlewareNextNotCalledError,
   MiddlewareNextNotAwaitedError,
-  MiddlewareDestinationFrozenError,
-  MiddlewareDestinationMissingError,
   MiddlewareNextCalledMultipleTimesError,
 } from "./errors.js";
+
+/**
+ * ミドルウェアが適用される葉がないときに返す空集合です。
+ */
+const EMPTY_INDEXES: ReadonlySet<number> = new Set();
 
 /**
  * 節を前順で列挙するための再帰ヘルパーです。
@@ -52,6 +56,23 @@ function* visit(node: PipelineNode): IterableIterator<PipelineNode> {
       yield* visit(entry.node);
     }
   }
+}
+
+/**
+ * 呼び出し側が await せずに切り離した場合でも未処理 rejection を残さない拒否 Promise を作成します。
+ *
+ * 返した Promise を await したときは、従来どおり拒否されます。
+ *
+ * @param ex 拒否理由です。
+ *
+ * @returns 拒否済みの Promise を返します。
+ */
+function rejectWithoutUnhandled(ex: unknown): Promise<never> {
+  const rejection = Promise.reject(ex);
+  // oxlint-disable-next-line promise/prefer-await-to-then
+  rejection.catch(() => {});
+
+  return rejection;
 }
 
 /**
@@ -135,6 +156,29 @@ function finalize(node: MutableNode): void {
 }
 
 /**
+ * 節の配下にある葉の登録順をミドルウェアごとに集計します。
+ *
+ * @param node 集計を開始する節です。
+ * @param indexes 集計先のマップです。
+ */
+function collectLeafIndexes(node: PipelineNode, indexes: Map<UniKvsMiddleware, Set<number>>): void {
+  let leafIndexes = indexes.get(node.middleware);
+
+  if (leafIndexes === undefined) {
+    leafIndexes = new Set();
+    indexes.set(node.middleware, leafIndexes);
+  }
+
+  for (const leaf of node.allLeaves) {
+    leafIndexes.add(leaf.index);
+  }
+
+  for (const child of node.children) {
+    collectLeafIndexes(child, indexes);
+  }
+}
+
+/**
  * コンパイル済みのパイプライン・グラフです。
  *
  * 宛先の変換チェーンをミドルウェアのインスタンス同一性で共有する根付き木として保持し、操作ごとの走査・エンコード・書き戻し・ストリーム構築を提供します。
@@ -143,7 +187,7 @@ function finalize(node: MutableNode): void {
  * - 葉（`leaves`）と各節の項目（`entries`）は宛先の登録順です。
  * - 名簿（`leafNames` / `nameNames`）は凍結された配列で、直通区間では参照を共有します。
  * - 共有節は 1 操作内で 1 回だけ `encode`/`encodeStream`/`mapKey` を実行します。分岐点ではプレーン値のエンコード結果を共有し、ストリームは tee で分岐します。
- * - 書き戻しの拒否は、走査中と書き込み中の 2 経路で分類します。いずれも即時に確定します。
+ * - 書き戻しの拒否は、走査中と書き込み中の 2 経路で分類します。どちらの経路でも開始済みの書き込みが完了してから確定します。
  */
 
 export class PipelineGraph {
@@ -168,15 +212,23 @@ export class PipelineGraph {
    */
   readonly #isSingleLeaf: boolean;
 
+  /**
+   * ミドルウェアごとに、その節の配下にある葉の登録順 (index) です。
+   * 同じインスタンスが複数の節に現れる場合は和集合を保持します。
+   */
+  readonly #leafIndexes: ReadonlyMap<UniKvsMiddleware, ReadonlySet<number>>;
+
   private constructor(
     leaves: readonly PipelineLeaf[],
     entries: readonly PipelineEntry[],
     middlewares: readonly UniKvsMiddleware[],
+    leafIndexes: ReadonlyMap<UniKvsMiddleware, ReadonlySet<number>>,
   ) {
     this.#leaves = leaves;
     this.#entries = entries;
     this.#middlewares = middlewares;
     this.#isSingleLeaf = leaves.length === 1;
+    this.#leafIndexes = leafIndexes;
   }
 
   /**
@@ -263,8 +315,13 @@ export class PipelineGraph {
       rootChildren,
       "根直下の子節が存在しません。",
     );
+    const mutableLeafIndexes = new Map<UniKvsMiddleware, Set<number>>();
 
-    return new PipelineGraph(rootAllLeaves, rootEntries, middlewares);
+    for (const child of rootChildren) {
+      collectLeafIndexes(child, mutableLeafIndexes);
+    }
+
+    return new PipelineGraph(rootAllLeaves, rootEntries, middlewares, mutableLeafIndexes);
   }
 
   /**
@@ -280,6 +337,19 @@ export class PipelineGraph {
    */
   public get middlewares(): readonly UniKvsMiddleware[] {
     return this.#middlewares;
+  }
+
+  /**
+   * ミドルウェアが適用される葉の登録順 (index) を返します。
+   *
+   * 同じインスタンスが複数の節に現れる場合は、すべての節の葉の和集合です。
+   *
+   * @param middleware 対象のミドルウェアです。
+   *
+   * @returns 葉の index の集合を返します。適用される葉がない場合は空集合です。
+   */
+  public leafIndexesOf(middleware: UniKvsMiddleware): ReadonlySet<number> {
+    return this.#leafIndexes.get(middleware) ?? EMPTY_INDEXES;
   }
 
   /**
@@ -356,6 +426,7 @@ export class PipelineGraph {
       }
 
       const node: PipelineNode = maybeNode;
+      const contract = new MiddlewareContractTracker();
 
       const ctx = new DecodeContext({
         key: scope.key,
@@ -367,15 +438,20 @@ export class PipelineGraph {
       let hasDownstream = false;
       let nextCalled = false;
       let nextSettled = false;
+      let nextCalledMultipleTimes = false;
 
       function next(): Promise<void> {
         if (nextCalled) {
-          return Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: node.middleware.name,
-              operation: "decode",
-            }),
-          );
+          // 規約違反は、呼び出し側が拒否を握り潰しても操作全体を失敗させます。
+          nextCalledMultipleTimes = true;
+
+          const ex = new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "decode",
+          });
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         nextCalled = true;
@@ -387,13 +463,19 @@ export class PipelineGraph {
           decoded = requireDestination(node.middleware, ctx, "decode");
           freezeDestination(ctx);
         } catch (ex) {
-          return Promise.reject(ex);
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         return Promise.try(async () => {
           try {
             downstreamResult = await run(index + 1, decoded);
             hasDownstream = true;
+          } catch (ex) {
+            // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+            contract.record(ex);
+            throw ex;
           } finally {
             nextSettled = true;
           }
@@ -403,21 +485,45 @@ export class PipelineGraph {
       await node.middleware.decode(ctx, next);
 
       scope.signal.throwIfAborted();
+      if (nextCalledMultipleTimes) {
+        contract.record(
+          new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "decode",
+          }),
+        );
+      }
+
       if (!nextCalled) {
-        throw new MiddlewareNextNotCalledError({
-          name: node.middleware.name,
-          operation: "decode",
-        });
+        contract.record(
+          new MiddlewareNextNotCalledError({
+            name: node.middleware.name,
+            operation: "decode",
+          }),
+        );
       }
 
       if (!nextSettled) {
-        throw new MiddlewareNextNotAwaitedError({
-          name: node.middleware.name,
-          operation: "decode",
-        });
+        contract.record(
+          new MiddlewareNextNotAwaitedError({
+            name: node.middleware.name,
+            operation: "decode",
+          }),
+        );
       }
 
-      const destination = requireDestination(node.middleware, ctx, "decode");
+      // 下流で記録された規約違反を上流が握り潰しても、操作全体を失敗させます。
+      contract.throwIfViolated();
+
+      let destination: unknown;
+
+      try {
+        destination = requireDestination(node.middleware, ctx, "decode");
+      } catch (ex) {
+        contract.record(ex);
+
+        throw ex;
+      }
 
       // 下流が実行されたときはその最終結果を返し、そうでなければ自らの出力を返す。
       // (下流の失敗を握り潰したミドルウェアでは自らの出力が最終となる。)。
@@ -459,6 +565,7 @@ export class PipelineGraph {
         }
 
         const node: PipelineNode = maybeNode;
+        const contract = new MiddlewareContractTracker();
 
         const ctx = new DecodeStreamContext({
           key: scope.key,
@@ -467,17 +574,24 @@ export class PipelineGraph {
           source: input,
         });
         let downstreamResult: IReadableStream | undefined;
+        let downstreamError: unknown;
+        let hasDownstreamError = false;
         let nextCalled = false;
         let nextSettled = false;
+        let nextCalledMultipleTimes = false;
 
         function next(): Promise<void> {
           if (nextCalled) {
-            return Promise.reject(
-              new MiddlewareNextCalledMultipleTimesError({
-                name: node.middleware.name,
-                operation: "decode",
-              }),
-            );
+            // 規約違反は、呼び出し側が拒否を握り潰しても操作全体を失敗させます。
+            nextCalledMultipleTimes = true;
+
+            const ex = new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "decode",
+            });
+            contract.record(ex);
+
+            return rejectWithoutUnhandled(ex);
           }
 
           nextCalled = true;
@@ -489,12 +603,21 @@ export class PipelineGraph {
             decoded = requireStreamDestination(node.middleware, ctx, "decode");
             freezeDestination(ctx);
           } catch (ex) {
-            return Promise.reject(ex);
+            contract.record(ex);
+
+            return rejectWithoutUnhandled(ex);
           }
 
           return Promise.try(async () => {
             try {
               downstreamResult = await run(index + 1, decoded);
+            } catch (ex) {
+              // 葉側のミドルウェアが下流の失敗を握り潰した場合も、放棄されたパイプを解放できるよう由来を記録します。
+              downstreamError = ex;
+              hasDownstreamError = true;
+              // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+              contract.record(ex);
+              throw ex;
             } finally {
               nextSettled = true;
             }
@@ -504,21 +627,51 @@ export class PipelineGraph {
         try {
           await node.middleware.decodeStream(ctx, next);
           scope.signal.throwIfAborted();
+          if (nextCalledMultipleTimes) {
+            contract.record(
+              new MiddlewareNextCalledMultipleTimesError({
+                name: node.middleware.name,
+                operation: "decode",
+              }),
+            );
+          }
+
           if (!nextCalled) {
-            throw new MiddlewareNextNotCalledError({
-              name: node.middleware.name,
-              operation: "decode",
-            });
+            contract.record(
+              new MiddlewareNextNotCalledError({
+                name: node.middleware.name,
+                operation: "decode",
+              }),
+            );
           }
 
           if (!nextSettled) {
-            throw new MiddlewareNextNotAwaitedError({
-              name: node.middleware.name,
-              operation: "decode",
-            });
+            contract.record(
+              new MiddlewareNextNotAwaitedError({
+                name: node.middleware.name,
+                operation: "decode",
+              }),
+            );
           }
 
-          const output = requireStreamDestination(node.middleware, ctx, "decode");
+          // 下流で記録された規約違反を上流が握り潰しても、操作全体を失敗させます。
+          contract.throwIfViolated();
+
+          // 下流のセットアップ失敗が握り潰されていても、ロックされたパイプを返さないよう全体を失敗させます。
+          if (hasDownstreamError) {
+            throw downstreamError;
+          }
+
+          let output: IReadableStream;
+
+          try {
+            output = requireStreamDestination(node.middleware, ctx, "decode");
+          } catch (ex) {
+            contract.record(ex);
+
+            throw ex;
+          }
+
           pipes.push(output);
 
           if (downstreamResult !== undefined) {
@@ -574,15 +727,21 @@ export class PipelineGraph {
       let nodeKey = parentKey;
       let nextCalled = false;
       let nextSettled = false;
+      let nextCalledMultipleTimes = false;
+      const contract = new MiddlewareContractTracker();
 
       function next(): Promise<void> {
         if (nextCalled) {
-          return Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: node.middleware.name,
-              operation: "encode",
-            }),
-          );
+          // 規約違反は、呼び出し側が拒否を握り潰しても操作全体を失敗させます。
+          nextCalledMultipleTimes = true;
+
+          const ex = new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         nextCalled = true;
@@ -594,7 +753,9 @@ export class PipelineGraph {
           encoded = requireDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
         } catch (ex) {
-          return Promise.reject(ex);
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         return Promise.try(async () => {
@@ -612,6 +773,10 @@ export class PipelineGraph {
                 });
               }
             }
+          } catch (ex) {
+            // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+            contract.record(ex);
+            throw ex;
           } finally {
             nextSettled = true;
           }
@@ -621,19 +786,35 @@ export class PipelineGraph {
       await node.middleware.encode(ctx, next);
 
       scope.signal.throwIfAborted();
+      if (nextCalledMultipleTimes) {
+        contract.record(
+          new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "encode",
+          }),
+        );
+      }
+
       if (!nextCalled) {
-        throw new MiddlewareNextNotCalledError({
-          name: node.middleware.name,
-          operation: "encode",
-        });
+        contract.record(
+          new MiddlewareNextNotCalledError({
+            name: node.middleware.name,
+            operation: "encode",
+          }),
+        );
       }
 
       if (!nextSettled) {
-        throw new MiddlewareNextNotAwaitedError({
-          name: node.middleware.name,
-          operation: "encode",
-        });
+        contract.record(
+          new MiddlewareNextNotAwaitedError({
+            name: node.middleware.name,
+            operation: "encode",
+          }),
+        );
       }
+
+      // 下流で記録された規約違反を上流が握り潰しても、操作全体を失敗させます。
+      contract.throwIfViolated();
     }
 
     for (const entry of this.#entries) {
@@ -658,7 +839,7 @@ export class PipelineGraph {
    * 書き戻し対象の葉へ、共有節を 1 回だけ実行しながら再エンコードして書き込みます。
    *
    * 葉への書き込みは並列に開始し、対象単位の拒否は記録だけして他の対象の開始を止めません。
-   * 走査中に確定した拒否は即座に投げます。書き込み中に判明した拒否も、応答のない他の書き込みを待たずに確定させます。
+   * 走査中の拒否と書き込み中の拒否は分類して保持しますが、どちらの経路でも開始済みの書き込みが完了してから投げます。
    * 拒否がなければ全タスクの終了を待ちます。
    *
    * @param scope 操作共通の実行時情報です。`key` は論理キーです。
@@ -681,9 +862,9 @@ export class PipelineGraph {
     const targetSet = new Set(targets);
     const isTarget = (leaf: PipelineLeaf): boolean => targetSet.has(leaf);
     const writeTasks: Promise<void>[] = [];
-    // 拒否は 2 経路です。走査中の拒否は即時に確定するため、書き込みの待機で get を止めません。
+    // 拒否は 2 経路です。走査中の拒否も書き込み中の拒否も、開始済みの書き込みを待ってから確定させます。
     let traversalDenial: RepairNotAllowedError | null = null;
-    // 書き込み中の拒否は 1 件目のシグナルで確定し、応答のない他タスクを待ちません。
+    // 書き込み中の拒否は 1 件目のシグナルで判定へ進み、finally で全タスクの終了を待ちます。
     const writeDenials: RepairNotAllowedError[] = [];
     const writeDenialSignal = Promise.withResolvers<void>();
 
@@ -709,7 +890,7 @@ export class PipelineGraph {
                     names: [leaf.name],
                   }),
                 );
-                // 他の書き込みの完了を待たずに拒否を確定させます。resolve は冪等です。
+                // 他の書き込みの完了判定へ早く進むためのシグナルです。resolve は冪等です。
                 writeDenialSignal.resolve();
               }
 
@@ -749,6 +930,7 @@ export class PipelineGraph {
       }
 
       const shared = activeLeaves.length >= 2;
+      const contract = new MiddlewareContractTracker();
 
       // 単一対象の節でも許可があれば再エンコードを行います。
       // 許可がなければ書き込みに到達しないため、副作用のないスキップに正規化しています。
@@ -757,6 +939,9 @@ export class PipelineGraph {
         scope.signal.throwIfAborted();
 
         for (const entry of node.entries) {
+          // 中断後に同じ節の次の項目を開始しません。
+          scope.signal.throwIfAborted();
+
           if (entry.kind === "node") {
             await walk(entry.node, input, parentKey);
           } else {
@@ -789,16 +974,21 @@ export class PipelineGraph {
       let nodeKey = parentKey;
       let nextCalled = false;
       let nextSettled = false;
+      let nextCalledMultipleTimes = false;
       let downstreamStarted = false;
 
       function next(): Promise<void> {
         if (nextCalled) {
-          return Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: node.middleware.name,
-              operation: "encode",
-            }),
-          );
+          // 規約違反は、呼び出し側が拒否を握り潰しても書き戻し全体を失敗させます。
+          nextCalledMultipleTimes = true;
+
+          const ex = new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         nextCalled = true;
@@ -810,7 +1000,9 @@ export class PipelineGraph {
           encoded = requireDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
         } catch (ex) {
-          return Promise.reject(ex);
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         return Promise.try(async () => {
@@ -822,6 +1014,9 @@ export class PipelineGraph {
             downstreamStarted = true;
 
             for (const entry of node.entries) {
+              // 中断後に同じ節の次の項目を開始しません。
+              scope.signal.throwIfAborted();
+
               if (entry.kind === "node") {
                 await walk(entry.node, encoded, nodeKey);
               } else {
@@ -837,6 +1032,10 @@ export class PipelineGraph {
                 writeLeaf(entry.leaf, encoded, nodeKey);
               }
             }
+          } catch (ex) {
+            // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+            contract.record(ex);
+            throw ex;
           } finally {
             nextSettled = true;
           }
@@ -846,19 +1045,35 @@ export class PipelineGraph {
       try {
         await node.middleware.encode(ctx, next);
         scope.signal.throwIfAborted();
+        if (nextCalledMultipleTimes) {
+          contract.record(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
+        }
+
         if (!nextCalled) {
-          throw new MiddlewareNextNotCalledError({
-            name: node.middleware.name,
-            operation: "encode",
-          });
+          contract.record(
+            new MiddlewareNextNotCalledError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
         }
 
         if (!nextSettled) {
-          throw new MiddlewareNextNotAwaitedError({
-            name: node.middleware.name,
-            operation: "encode",
-          });
+          contract.record(
+            new MiddlewareNextNotAwaitedError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
         }
+
+        // 下流で記録された規約違反を上流が握り潰しても、書き戻し全体を失敗させます。
+        contract.throwIfViolated();
       } catch (ex) {
         // 意図的な中断時は中断理由で失敗します。
         if (scope.signal.aborted) {
@@ -868,16 +1083,10 @@ export class PipelineGraph {
 
           return;
         }
-        // 規約違反はプログラミングエラーであり、握り潰さずに投げます。
-        if (
-          ex instanceof MiddlewareNextNotCalledError ||
-          ex instanceof MiddlewareNextNotAwaitedError ||
-          ex instanceof MiddlewareNextCalledMultipleTimesError ||
-          ex instanceof MiddlewareDestinationMissingError ||
-          ex instanceof MiddlewareDestinationFrozenError
-        ) {
-          throw ex;
-        }
+
+        // 規約違反はプログラミングエラーであり、下流の失敗として扱わず握り潰さずに投げます。
+        contract.record(ex);
+        contract.throwIfViolated();
         // 下流開始後の失敗は子節で確定済み (単一拒否は記録、共有拒否は投げ) です。
         // repair は補助処理のため、拒否以外の失敗は記録に留め、読み取りは成功させます。
         if (downstreamStarted) {
@@ -918,37 +1127,45 @@ export class PipelineGraph {
       }
     };
 
-    for (const entry of this.#entries) {
-      if (entry.kind === "node") {
-        await walk(entry.node, data, scope.key);
-      } else {
-        if (!isTarget(entry.leaf)) {
-          continue;
-        }
+    try {
+      for (const entry of this.#entries) {
+        // 中断後は新しい書き戻しを開始しません。開始済みの書き込みは finally で完了を待ちます。
+        scope.signal.throwIfAborted();
 
-        if (!entry.leaf.canRepair) {
-          skipDenied(entry.leaf);
-          continue;
-        }
+        if (entry.kind === "node") {
+          await walk(entry.node, data, scope.key);
+        } else {
+          if (!isTarget(entry.leaf)) {
+            continue;
+          }
 
-        writeLeaf(entry.leaf, data, scope.key);
+          if (!entry.leaf.canRepair) {
+            skipDenied(entry.leaf);
+            continue;
+          }
+
+          writeLeaf(entry.leaf, data, scope.key);
+        }
       }
-    }
 
-    // 走査中の拒否は開始済みの書き込みを待たずに投げます。タスクは自身で例外を処理します。
-    if (traversalDenial !== null) {
-      const denial: RepairNotAllowedError = traversalDenial;
+      // 走査中の拒否は開始済みの書き込みを待ってから投げます。待機しないとキーロックの解放後に書き込みが着地します。
+      if (traversalDenial !== null) {
+        const denial: RepairNotAllowedError = traversalDenial;
 
-      throw denial;
-    }
+        throw denial;
+      }
 
-    // 書き込み中の拒否はシグナルで確定し、拒否がなければ全タスクの終了を待ちます。
-    await Promise.race([Promise.allSettled(writeTasks), writeDenialSignal.promise]);
+      // 書き込み中の拒否はシグナルで確定しますが、開始済みの全タスクが終わるまで待ってから投げます。
+      await Promise.race([Promise.allSettled(writeTasks), writeDenialSignal.promise]);
 
-    const [firstDenial] = writeDenials;
+      const [firstDenial] = writeDenials;
 
-    if (firstDenial !== undefined) {
-      throw firstDenial;
+      if (firstDenial !== undefined) {
+        throw firstDenial;
+      }
+    } finally {
+      // 中断・走査拒否・書き込み拒否のどの経路でも、開始済みの書き込みが残ったままキーロックを解放しません。
+      await Promise.allSettled(writeTasks);
     }
   }
 
@@ -998,6 +1215,7 @@ export class PipelineGraph {
 
       scope.signal.throwIfAborted();
 
+      const contract = new MiddlewareContractTracker();
       const ctx = new EncodeStreamContext({
         key: scope.key,
         store: scope.store,
@@ -1008,6 +1226,7 @@ export class PipelineGraph {
       let output: IReadableStream | undefined;
       let nextCalled = false;
       let nextSettled = false;
+      let nextCalledMultipleTimes = false;
       let downstreamStarted = false;
       let downstreamError: unknown;
       let hasDownstreamError = false;
@@ -1015,12 +1234,16 @@ export class PipelineGraph {
 
       function next(): Promise<void> {
         if (nextCalled) {
-          return Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: node.middleware.name,
-              operation: "encode",
-            }),
-          );
+          // 規約違反は、呼び出し側が拒否を握り潰してもストリーム書き込み全体を失敗させます。
+          nextCalledMultipleTimes = true;
+
+          const ex = new MiddlewareNextCalledMultipleTimesError({
+            name: node.middleware.name,
+            operation: "encode",
+          });
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         nextCalled = true;
@@ -1032,7 +1255,9 @@ export class PipelineGraph {
           encoded = requireStreamDestination(node.middleware, ctx, "encode");
           freezeDestination(ctx);
         } catch (ex) {
-          return Promise.reject(ex);
+          contract.record(ex);
+
+          return rejectWithoutUnhandled(ex);
         }
 
         return Promise.try(async () => {
@@ -1107,6 +1332,8 @@ export class PipelineGraph {
             // 下流のセットアップ失敗を親の後処理失敗と取り違えないよう、由来を記録します。
             downstreamError = ex;
             hasDownstreamError = true;
+            // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+            contract.record(ex);
             throw ex;
           } finally {
             nextSettled = true;
@@ -1117,19 +1344,35 @@ export class PipelineGraph {
       try {
         await node.middleware.encodeStream(ctx, next);
         scope.signal.throwIfAborted();
+        if (nextCalledMultipleTimes) {
+          contract.record(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
+        }
+
         if (!nextCalled) {
-          throw new MiddlewareNextNotCalledError({
-            name: node.middleware.name,
-            operation: "encode",
-          });
+          contract.record(
+            new MiddlewareNextNotCalledError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
         }
 
         if (!nextSettled) {
-          throw new MiddlewareNextNotAwaitedError({
-            name: node.middleware.name,
-            operation: "encode",
-          });
+          contract.record(
+            new MiddlewareNextNotAwaitedError({
+              name: node.middleware.name,
+              operation: "encode",
+            }),
+          );
         }
+
+        // 下流で記録された規約違反を上流が握り潰しても、ストリーム書き込み全体を失敗させます。
+        contract.throwIfViolated();
       } catch (ex) {
         // next() を呼ぶ前に設定された destination は `streams` に未登録のため、投げる前に解放対象へ加えます。
         // pipeThrough で入力をロックした出力は、呼び出し側の `streams` のキャンセルでしか解放できません。
@@ -1142,16 +1385,10 @@ export class PipelineGraph {
         if (scope.signal.aborted) {
           throw ex;
         }
+
         // 規約違反はプログラミングエラーであり、`onNodeError` を経由せずに投げます。
-        if (
-          ex instanceof MiddlewareNextNotCalledError ||
-          ex instanceof MiddlewareNextNotAwaitedError ||
-          ex instanceof MiddlewareNextCalledMultipleTimesError ||
-          ex instanceof MiddlewareDestinationMissingError ||
-          ex instanceof MiddlewareDestinationFrozenError
-        ) {
-          throw ex;
-        }
+        contract.record(ex);
+        contract.throwIfViolated();
 
         // 下流開始後の失敗は子節で確定済みのため、そのまま伝播し、根直下で `onNodeError` に分類させます。
         if (downstreamStarted) {

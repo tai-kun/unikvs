@@ -22,10 +22,50 @@ type Connection = {
 };
 
 /**
+ * 進行中の `open()` を共有するための状態です。
+ */
+type OpenSession = {
+  /**
+   * 接続処理の完了を待つプロミスです。
+   */
+  promise: Promise<void>;
+
+  /**
+   * 接続処理が作成したクライアントです。
+   *
+   * 接続を公開した後は `null` になります。
+   */
+  client: RedisClient | null;
+
+  /**
+   * `close()` によって接続処理がキャンセルされたかどうかです。
+   */
+  cancelled: boolean;
+};
+
+/**
+ * `open()` の接続待ち中に `close()` されたときのエラーメッセージです。
+ */
+const OPEN_CANCELLED_MESSAGE = "Redis was closed while opening.";
+
+/**
  * Redis の `SCAN` 1 回あたりにヒントとして渡すキー数です。
  * 削除の往復回数と 1 回の `DEL` に渡す引数数を抑えるために使用します。
  */
 const SCAN_COUNT = 1000;
+
+/**
+ * Redis の `MATCH` でリテラル文字列として扱うため、グロブのメタ文字をエスケープします。
+ *
+ * `MATCH` は `*`、`?`、`[...]`、`\` を特別に解釈するため、キープレフィックスをそのまま連結すると意図しないキーが対象になります。
+ *
+ * @param value エスケープする文字列です。
+ *
+ * @returns グロブのメタ文字をエスケープした文字列です。
+ */
+function escapeRedisGlob(value: string): string {
+  return value.replaceAll(/[\\*?[\]]/gu, "\\$&");
+}
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/redis-bun#redis)
@@ -42,6 +82,13 @@ export default class Redis implements IStorage {
    * ストレージがオープンされるまで null です。
    */
   #con: Connection | null;
+
+  /**
+   * 進行中の `open()` です。
+   *
+   * 並行した `open()` は同じ接続処理を共有し、接続の二重作成を防ぎます。
+   */
+  #opening: OpenSession | null;
 
   /**
    * 接続先の URL です。
@@ -68,6 +115,7 @@ export default class Redis implements IStorage {
 
     this.name = "Redis";
     this.#con = null;
+    this.#opening = null;
     this.#url = url;
     this.#options = redisOptions;
     this.#keyPrefix = keyPrefix;
@@ -86,6 +134,7 @@ export default class Redis implements IStorage {
    * ストレージをオープンします。
    *
    * Bun の Redis クライアントを接続します。
+   * 並行して呼び出された場合は同じ接続処理を共有します。
    *
    * @param _c オープンコンテキストです。
    *
@@ -100,33 +149,56 @@ export default class Redis implements IStorage {
       });
     }
 
+    // すでに接続処理が進行中の場合は、その結果を共有して接続を二重に作らないようにします。
+    // 完了後に改めて呼ばれた場合は、従来どおり古い接続を閉じて開き直します。
+    const pending = this.#opening;
+
+    if (pending !== null) {
+      return pending.promise;
+    }
+
     // オープン済みの場合は古い接続を閉じ、開き直しでリークしないようにします。
     if (this.#con) {
       this.#closeClient();
     }
 
-    const { RedisClient: RedisClientImpl } = await import("bun");
-    const client = new RedisClientImpl(this.#url, this.#options);
+    const session: OpenSession = {
+      client: null,
+      promise: Promise.resolve(),
+      cancelled: false,
+    };
+    session.promise = this.#connect(session);
+    this.#opening = session;
 
     try {
-      // 最初のコマンドまで接続しないクライアントのため、open の時点で接続を確立します。
-      await client.connect();
-    } catch (ex) {
-      client.close();
-      throw ex;
+      await session.promise;
+    } finally {
+      // `close()` によるキャンセル後は別のセッションが登録されている可能性があるため、自分のセッションだけを外します。
+      if (this.#opening === session) {
+        this.#opening = null;
+      }
     }
-
-    this.#con = { client };
   }
 
   /**
    * ストレージをクローズします。
    *
    * クライアントを閉じて参照を外します。
+   * 接続処理が進行中の場合は、その処理をキャンセルします。
    *
    * @param _c クローズコンテキストです。
    */
   public close(_c: IStorage.CloseContext): void {
+    const pending = this.#opening;
+
+    if (pending !== null) {
+      pending.cancelled = true;
+      this.#opening = null;
+      this.#releaseSessionClient(pending);
+
+      return;
+    }
+
     this.#closeClient();
   }
 
@@ -287,7 +359,9 @@ export default class Redis implements IStorage {
     c.signal.throwIfAborted();
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
-    const pattern = `${this.#keyPrefix}*`;
+    // プレフィックスはリテラルとして扱う必要があるため、グロブのメタ文字をエスケープします。
+    const prefix = this.#keyPrefix;
+    const pattern = `${escapeRedisGlob(prefix)}*`;
 
     let cursor = "0";
 
@@ -296,8 +370,11 @@ export default class Redis implements IStorage {
 
       const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
 
-      if (keys.length > 0) {
-        await client.del(...keys);
+      // エスケープ漏れやサーバー実装差に備え、削除前にもプレフィックスを確認します。
+      const targets = keys.filter((key) => key.startsWith(prefix));
+
+      if (targets.length > 0) {
+        await client.del(...targets);
       }
 
       cursor = nextCursor;
@@ -458,6 +535,78 @@ export default class Redis implements IStorage {
    */
   async #keyExists(client: RedisClient, key: string): Promise<boolean> {
     return client.exists(this.#toKey(key));
+  }
+
+  /**
+   * セッションの接続を確立し、ストレージへ公開します。
+   *
+   * 接続待ちの間に `close()` された場合は接続を閉じ、状態を公開しません。
+   *
+   * @param session 接続処理の状態です。
+   *
+   * @returns オープンが完了したら解決します。
+   */
+  async #connect(session: OpenSession): Promise<void> {
+    const { RedisClient: RedisClientImpl } = await import("bun");
+
+    if (session.cancelled) {
+      throw new TypeError(OPEN_CANCELLED_MESSAGE);
+    }
+
+    const client = new RedisClientImpl(this.#url, this.#options);
+    session.client = client;
+
+    try {
+      // 最初のコマンドまで接続しないクライアントのため、open の時点で接続を確立します。
+      await client.connect();
+    } catch (ex) {
+      this.#releaseSessionClient(session);
+
+      // キャンセルによる切断は、接続失敗ではなくキャンセルとして統一します。
+      if (session.cancelled) {
+        throw new TypeError(OPEN_CANCELLED_MESSAGE, { cause: ex });
+      }
+
+      throw ex;
+    }
+
+    // 接続待ちの間に `close()` されていた場合は、接続を公開せずに閉じます。
+    if (session.cancelled) {
+      this.#releaseSessionClient(session);
+      throw new TypeError(OPEN_CANCELLED_MESSAGE);
+    }
+
+    // 所有権を `#con` へ移し、キャンセル時の後始末対象から外します。
+    session.client = null;
+    this.#con = { client };
+
+    // 接続を公開した時点で進行中セッションを解除します。
+    // `open()` の finally まで待つと、公開直後の `close()` が進行中セッションだけをキャンセルします。
+    // 公開済みの接続は閉じられません。
+    if (this.#opening === session) {
+      this.#opening = null;
+    }
+  }
+
+  /**
+   * セッションが保持するクライアントを閉じます。
+   *
+   * 未作成またはすでに閉じている場合は何もしません。
+   *
+   * @param session 接続処理の状態です。
+   */
+  #releaseSessionClient(session: OpenSession): void {
+    const client = session.client;
+
+    session.client = null;
+
+    if (client !== null) {
+      try {
+        client.close();
+      } catch {
+        // 後始末としてのクローズなので、失敗しても接続処理の結果を上書きしません。
+      }
+    }
   }
 
   /**

@@ -3,6 +3,7 @@ import {
   readAll,
   createNext,
   sourceFrom,
+  captureRejection,
   createDecodeContext,
   createEncodeContext,
   createDecodeStreamContext,
@@ -11,6 +12,32 @@ import {
 import { test, describe } from "vite-plus/test";
 
 import { Metrics } from "../src/index.js";
+
+/**
+ * 指定したチャンクを流した後に失敗するストリームを作成します。
+ *
+ * @param chunks 失敗前に流すチャンクです。
+ * @param error 読み取りを失敗させる値です。
+ *
+ * @returns 失敗するストリームを返します。
+ */
+function sourceThenError(chunks: readonly unknown[], error: unknown): ReadableStream<unknown> {
+  let index = 0;
+
+  return new ReadableStream<unknown>({
+    pull(controller: ReadableStreamDefaultController<unknown>): void {
+      if (index < chunks.length) {
+        controller.enqueue(chunks[index]);
+
+        index += 1;
+
+        return;
+      }
+
+      controller.error(error);
+    },
+  });
+}
 
 describe("encode/decode の透過とバイト数", () => {
   test.for([
@@ -193,6 +220,32 @@ describe("ストリームの透過とバイト数", () => {
       bytes: 3,
       action: "stream",
       outcome: "success",
+    });
+  });
+
+  test("encodeStream は読み取り中のソース失敗を部分バイト数付きで 1 件だけ error として記録する", async ({
+    expect,
+  }) => {
+    // 準備：
+    const metrics = new Metrics();
+    const failure = new Error("source failure");
+    const chunks = [new Uint8Array([1, 2])] as const;
+    const c = createEncodeStreamContext(sourceThenError(chunks, failure), "stream");
+
+    // 実行：
+    await metrics.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+
+    const caught = await captureRejection(readAll(c.destination as ReadableStream<unknown>));
+
+    // 検証：
+    expect(caught).toBe(failure);
+
+    expect(metrics.getMetrics().records).toHaveLength(1);
+    expect(metrics.getMetrics().records.at(0)).toMatchObject({
+      key: "stream",
+      bytes: 2,
+      action: "set",
+      outcome: "error",
     });
   });
 

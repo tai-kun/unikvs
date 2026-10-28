@@ -44,11 +44,13 @@ Constructor arguments:
     },
     maxTokens: {
       type: "[#rate-limit-options-max-tokens] number",
-      description: "Maximum tokens held. Defaults to tokensPerInterval.",
+      description:
+        "Maximum tokens held. Defaults to max(1, tokensPerInterval). An explicit value below 1 fails construction.",
     },
     burst: {
       type: "[#rate-limit-options-burst] number",
-      description: "Alias of maxTokens. When both are given, maxTokens wins.",
+      description:
+        "Alias of maxTokens. When both are given, maxTokens wins. An explicit value below 1 fails construction.",
     },
     strategy: {
       type: "[#rate-limit-options-strategy] RateLimitStrategy",
@@ -114,6 +116,8 @@ Wait implementation. Swap it to control time in tests.
 - `use` consumes one token per operation and never touches data.
 - `encode` / `decode` / `encodeStream` / `decodeStream` pass input through unchanged.
 - Tokens refill with elapsed time and never exceed the cap. A clock moving backward never adds tokens.
+- When `maxTokens` is omitted, the capacity is `max(1, tokensPerInterval)`. Since each operation consumes one token, a `tokensPerInterval` below 1 still yields a capacity of 1.
+- An explicit `maxTokens` or `burst` below 1 throws `RateLimitInvalidOptionError` at construction. `tokensPerInterval` may be a fractional value below 1.
 - The `wait` strategy waits until recovery, serving requests FIFO. It aborts waiting on the abort signal.
 
 ## Errors [#errors]
@@ -177,7 +181,7 @@ try {
 
 #### Meaning [#error-rate-limit-invalid-option-meaning]
 
-Thrown when the constructor receives invalid options: non-positive-finite numbers, a `strategy` other than `"wait"` / `"throw"`, or a non-function `now` / `sleep`.
+Thrown when the constructor receives invalid options: non-positive-finite numbers, an explicit `maxTokens` or `burst` below 1, a `strategy` other than `"wait"` / `"throw"`, or a non-function `now` / `sleep`.
 
 #### How to fix [#error-rate-limit-invalid-option-howto]
 

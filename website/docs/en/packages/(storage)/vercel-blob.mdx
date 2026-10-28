@@ -95,6 +95,7 @@ await kvs.close();
 
 - Only byte sequences can be stored. Convert strings or objects with middleware before passing them.
 - Stored with the `application/octet-stream` content type.
+- When `access` is `private`, downloads bypass the CDN cache so a read right after a write does not return stale data.
 - The stream from `getWritable` accumulates chunks and stores them at once on `close`.
 - The stream from `getReadable` returns the body of the download response.
 - `clear` collects every pathname under the prefix and then deletes them.

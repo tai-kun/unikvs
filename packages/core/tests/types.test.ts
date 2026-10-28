@@ -4,6 +4,7 @@ import { test, describe, expectTypeOf } from "vite-plus/test";
 import {
   type IStorage,
   type ErrorMeta,
+  type UseOutcome,
   type IGetContext,
   type IHasContext,
   type IMiddleware,
@@ -25,6 +26,7 @@ import {
   type IPipelineContext,
   type ITransferContext,
   type ITransformStream,
+  type UseTargetOutcome,
   type ILifecycleContext,
   type IKeyedActionContext,
   type IDecodeStreamContext,
@@ -208,6 +210,21 @@ describe("IMiddleware", () => {
     expectTypeOf<IMiddleware["use"]>().toEqualTypeOf<
       ((c: IMiddleware.UseContext, next: IMiddleware.INext) => PromiseLike<void>) | undefined
     >();
+    expectTypeOf<IMiddleware["afterUse"]>().toEqualTypeOf<
+      | ((c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome) => MaybePromise<void>)
+      | undefined
+    >();
+  });
+
+  test("afterUse の結果型はトップレベルからも参照できる", () => {
+    // 実行と検証：
+    expectTypeOf<UseOutcome>().toEqualTypeOf<IMiddleware.UseOutcome>();
+    expectTypeOf<UseTargetOutcome>().toEqualTypeOf<IMiddleware.UseTargetOutcome>();
+    expectTypeOf<UseTargetOutcome["status"]>().toEqualTypeOf<
+      "committed" | "notFound" | "skipped" | "failed"
+    >();
+    expectTypeOf<UseOutcome["status"]>().toEqualTypeOf<"success" | "error" | "aborted">();
+    expectTypeOf<UseOutcome["targets"]>().toEqualTypeOf<readonly UseTargetOutcome[]>();
   });
 
   test("IMiddleware のコンテキスト別名は pipeline-context と一致する", () => {

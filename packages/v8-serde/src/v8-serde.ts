@@ -251,7 +251,10 @@ export default class V8Serde implements IMiddleware {
     const env = this.#requireEnv();
 
     try {
-      c.destination = env.deserialize(c.source);
+      // deserialize した型付き配列は入力バッファーを参照します。
+      // 呼び出し元のバッファーを参照しないよう、必ず複写してから渡します。
+      // Buffer#slice はビューを返すため、複写には使用しません。
+      c.destination = env.deserialize(new Uint8Array(c.source));
     } catch (ex) {
       throw new V8SerdeDecodeError({ cause: ex });
     }

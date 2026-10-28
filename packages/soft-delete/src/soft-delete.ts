@@ -41,6 +41,13 @@ export type TombstoneEntry = {
  * 値のスナップショットを含むため、復元でデータを戻せます。
  */
 type TombstoneRecord = {
+  /**
+   * 同じミリ秒に作られた別の墓標と区別するための識別子です。
+   *
+   * この項目を持たない古い墓標は `deletedAt` で識別します。
+   */
+  readonly id?: string;
+
   readonly value: unknown;
   readonly hasValue: boolean;
   readonly deletedAt: number;
@@ -72,6 +79,37 @@ function isTombstoneRecord(value: unknown): value is TombstoneRecord {
   const record = value as Partial<TombstoneRecord>;
 
   return record.__tombstone === true && typeof record.deletedAt === "number";
+}
+
+/**
+ * 墓標の識別子を発行するための連番です。
+ */
+let tombstoneIdSequence = 0;
+
+/**
+ * 墓標の識別子を作成します。
+ *
+ * 同じミリ秒に複数の墓標が作られても衝突しないようにします。
+ *
+ * @returns 墓標の識別子を返します。
+ */
+function createTombstoneId(): string {
+  tombstoneIdSequence += 1;
+
+  return `${Date.now().toString(36)}-${tombstoneIdSequence.toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+/**
+ * 墓標を一意に識別する値を返します。
+ *
+ * @param record 識別する墓標の記録です。
+ *
+ * @returns 識別子を持つ墓標は識別子、持たない古い墓標は削除時刻を返します。
+ */
+function getTombstoneIdentity(record: TombstoneRecord): string | number {
+  return record.id ?? record.deletedAt;
 }
 
 /**
@@ -145,6 +183,20 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * 削除墓標の実体を保持する下層ストレージです。
    */
   readonly #inner: IStorage;
+
+  /**
+   * キーごとのデータ操作を直列化する待ち行列の末尾です。
+   *
+   * 同じキーの操作だけを待たせ、異なるキーの操作は並行して進めます。
+   */
+  readonly #keyTails = new Map<string, Promise<void>>();
+
+  /**
+   * 台帳の読み書きを直列化する待ち行列の末尾です。
+   *
+   * データ本体の読み書きは含めません。
+   */
+  #registryTail: Promise<void> = Promise.resolve();
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/soft-delete#soft-delete)
@@ -222,9 +274,17 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   }
 
   public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
-    // 墓標への上書きは復活とみなし、台帳から外してから委譲します。
-    await this.#untrackIfOverwritten(c.key, c);
-    await this.#inner.write(c, data);
+    await this.#withKeyLock(c.key, async (): Promise<void> => {
+      // 墓標への上書きは復活とみなします。
+      // 先に値を書き、成功してから台帳を更新することで、台帳の更新に失敗しても幽霊項目として回収できます。
+      const wasTombstone = isTombstoneRecord(await this.#readRaw(c.key, c));
+
+      await this.#inner.write(c, data);
+
+      if (wasTombstone) {
+        await this.#removeRegistryEntryLocked(c.key, c);
+      }
+    });
   }
 
   public async read(c: IStorage.ReadContext): Promise<unknown> {
@@ -235,7 +295,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     if (this.#isExpired(raw)) {
-      await this.#sweepTombstone(c.key, c);
+      await this.#sweepTombstone(c.key, raw, true, c);
     }
 
     throw new KeyNotFoundError({ key: c.key });
@@ -265,7 +325,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     if (this.#isExpired(raw)) {
-      await this.#sweepTombstone(c.key, c);
+      await this.#sweepTombstone(c.key, raw, true, c);
     }
 
     return false;
@@ -273,46 +333,61 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
 
   public async delete(c: IStorage.DeleteContext): Promise<void> {
     // 台帳自体は墓標化の対象外とし、そのまま委譲します。
+    // 台帳の更新と競合しないよう、台帳ロックで直列化します。
     if (c.key === REGISTRY_KEY) {
-      await this.#inner.delete(c);
+      await this.#withRegistryLock(async (): Promise<void> => {
+        await this.#inner.delete(c);
+      });
 
       return;
     }
 
-    let raw: unknown;
+    await this.#withKeyLock(c.key, async (): Promise<void> => {
+      let raw: unknown;
 
-    try {
-      // 下層へは同一キーの読み出しとして転送します。操作種別は下層では使いません。
-      raw = await this.#inner.read(c as unknown as IStorage.ReadContext);
-    } catch (ex) {
-      if (ex instanceof KeyNotFoundError) {
-        // 存在しないキーへの削除は下層の規約に委ねます。
-        await this.#inner.delete(c);
+      try {
+        // 下層へは同一キーの読み出しとして転送します。操作種別は下層では使いません。
+        raw = await this.#inner.read(c as unknown as IStorage.ReadContext);
+      } catch (ex) {
+        if (ex instanceof KeyNotFoundError) {
+          // 存在しないキーへの削除は下層の規約に委ねます。
+          await this.#inner.delete(c);
+          // 墓標が先に消えた古い台帳項目を掃除します。
+          await this.#removeRegistryEntryLocked(c.key, c);
+
+          return;
+        }
+
+        throw ex;
+      }
+
+      if (isTombstoneRecord(raw)) {
+        // 二重削除は冪等に扱い、最初の削除時刻を保ちます。
+        if (this.#isExpired(raw)) {
+          await this.#sweepTombstoneLocked(c.key, raw, true, c);
+
+          return;
+        }
+
+        // 墓標の書き込みに成功した後に台帳の追加が失敗した場合に備え、再削除でも台帳へ登録し直します。
+        await this.#ensureRegistryEntryLocked(c.key, raw.deletedAt, c);
 
         return;
       }
 
-      throw ex;
-    }
-
-    if (isTombstoneRecord(raw)) {
-      // 二重削除は冪等に扱い、最初の削除時刻を保ちます。
-      if (this.#isExpired(raw)) {
-        await this.#sweepTombstone(c.key, c);
-      }
-
-      return;
-    }
-
-    const record: TombstoneRecord = {
-      value: raw,
-      hasValue: true,
-      deletedAt: Date.now(),
-      __tombstone: true,
-    };
-    // 下層へは同一キーへの書き込みとして転送します。操作種別は下層では使いません。
-    await this.#inner.write(c as unknown as IStorage.WriteContext, record);
-    await this.#addRegistryEntry(c.key, record.deletedAt, c);
+      const record: TombstoneRecord = {
+        id: createTombstoneId(),
+        value: raw,
+        hasValue: true,
+        deletedAt: Date.now(),
+        __tombstone: true,
+      };
+      // 先に墓標を書き、成功してから台帳を更新します。
+      // 台帳の追加に失敗しても、再削除で台帳へ登録し直せます。
+      // 下層へは同一キーへの書き込みとして転送します。操作種別は下層では使いません。
+      await this.#inner.write(c as unknown as IStorage.WriteContext, record);
+      await this.#addRegistryEntryLocked(c.key, record.deletedAt, c);
+    });
   }
 
   public async clear(c: IStorage.ClearContext): Promise<void> {
@@ -385,27 +460,42 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    */
   public async restore(key: string): Promise<unknown> {
     const scope = createStandaloneScope();
-    const raw = await this.#readRaw(key, scope);
+    // 墓標がないときはキーロックを取らずに失敗させます。
+    const observed = await this.#readRaw(key, scope);
 
-    if (!isTombstoneRecord(raw) || !raw.hasValue) {
+    if (!isTombstoneRecord(observed) || !observed.hasValue) {
       throw new TombstoneNotFoundError({ key });
     }
 
-    if (this.#isExpired(raw)) {
-      await this.#sweepTombstone(key, scope);
-      throw new TombstoneNotFoundError({ key });
-    }
+    // 読み出しから書き込みまでの間に別の書き込みが入ると、古い値で新しい値を上書きしてしまいます。
+    // 書き込み直前にキーロック内で墓標を再検証し、観測した墓標のままのときだけ復元します。
+    return this.#withKeyLock(key, async (): Promise<unknown> => {
+      const raw = await this.#readRaw(key, scope);
 
-    await this.#inner.write(
-      {
-        ...this.#scopedKey(scope, key),
-        action: "set",
-      } as unknown as IStorage.WriteContext,
-      raw.value,
-    );
-    await this.#removeRegistryEntry(key, scope);
+      if (
+        !isTombstoneRecord(raw) ||
+        !raw.hasValue ||
+        getTombstoneIdentity(raw) !== getTombstoneIdentity(observed)
+      ) {
+        throw new TombstoneNotFoundError({ key });
+      }
 
-    return raw.value;
+      if (this.#isExpired(raw)) {
+        await this.#sweepTombstoneLocked(key, raw, true, scope);
+        throw new TombstoneNotFoundError({ key });
+      }
+
+      await this.#inner.write(
+        {
+          ...this.#scopedKey(scope, key),
+          action: "set",
+        } as unknown as IStorage.WriteContext,
+        raw.value,
+      );
+      await this.#removeRegistryEntryLocked(key, scope);
+
+      return raw.value;
+    });
   }
 
   /**
@@ -420,7 +510,8 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   public async purge(key?: string): Promise<number | boolean> {
     if (key === undefined) {
       const scope = createStandaloneScope();
-      const registry = await this.#loadRegistry(scope);
+      // 台帳のスナップショット取得だけを台帳ロックで行い、各キーの削除はキーロックで行います。
+      const registry = await this.#withRegistryLock(() => this.#loadRegistry(scope));
       let count = 0;
 
       for (const target of Object.keys(registry)) {
@@ -433,15 +524,18 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     const scope = createStandaloneScope();
-    const raw = await this.#readRaw(key, scope);
+    // 読み出し後の競合を検出できるよう、墓標の識別子を確認してからキーロック内で削除します。
+    const observed = await this.#readRaw(key, scope);
 
-    if (!isTombstoneRecord(raw)) {
+    if (!isTombstoneRecord(observed)) {
+      // 削除と purge の競合などで墓標だけが消えた古い台帳項目を掃除します。
+      await this.#withKeyLock(key, () => this.#removeRegistryEntryIfNotTombstoneLocked(key, scope));
+
       return false;
     }
 
-    await this.#sweepTombstone(key, scope);
-
-    return true;
+    // purge は保持期限に関係なく対象を消しますが、読み出し後に新しい墓標ができていたらその墓標は消さず、実際に掃除できたかどうかを返します。
+    return this.#sweepTombstone(key, observed, false, scope);
   }
 
   /**
@@ -449,26 +543,31 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    */
   public async listTombstones(): Promise<readonly TombstoneEntry[]> {
     const scope = createStandaloneScope();
-    const registry = await this.#loadRegistry(scope);
+    // 台帳のスナップショット取得だけを台帳ロックで行い、各キーの読み出しと掃除はキーロックで行います。
+    const registry = await this.#withRegistryLock(() => this.#loadRegistry(scope));
     const entries: TombstoneEntry[] = [];
 
     for (const key of Object.keys(registry)) {
-      const raw = await this.#readRaw(key, scope);
+      await this.#withKeyLock(key, async (): Promise<void> => {
+        const raw = await this.#readRaw(key, scope);
 
-      if (!isTombstoneRecord(raw)) {
-        // 台帳だけが残った古い項目を掃除します。
-        await this.#removeRegistryEntry(key, scope);
-        continue;
-      }
+        if (!isTombstoneRecord(raw)) {
+          // 台帳だけが残った古い項目を掃除します。
+          await this.#removeRegistryEntryIfNotTombstoneLocked(key, scope);
 
-      if (this.#isExpired(raw)) {
-        await this.#sweepTombstone(key, scope);
-        continue;
-      }
+          return;
+        }
 
-      entries.push({
-        key,
-        deletedAt: raw.deletedAt,
+        if (this.#isExpired(raw)) {
+          await this.#sweepTombstoneLocked(key, raw, true, scope);
+
+          return;
+        }
+
+        entries.push({
+          key,
+          deletedAt: raw.deletedAt,
+        });
       });
     }
 
@@ -494,7 +593,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     }
 
     if (this.#isExpired(raw)) {
-      await this.#sweepTombstone(c.key, c);
+      await this.#sweepTombstone(c.key, raw, true, c);
     }
 
     throw new KeyNotFoundError({ key: c.key });
@@ -507,13 +606,26 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * @param c 実行時変数の範囲です。
    */
   async #untrackIfOverwritten(key: string, c: ContextScope): Promise<void> {
+    await this.#withKeyLock(key, () => this.#untrackIfOverwrittenLocked(key, c));
+  }
+
+  /**
+   * 上書きで墓標が消えたときに台帳から外します。
+   *
+   * 呼び出し側でキーロックを保持している必要があります。
+   *
+   * @param key 対象のキーです。
+   * @param c 実行時変数の範囲です。
+   */
+  async #untrackIfOverwrittenLocked(key: string, c: ContextScope): Promise<void> {
     const raw = await this.#readRaw(key, c);
 
-    if (!isTombstoneRecord(raw)) {
+    if (isTombstoneRecord(raw)) {
+      // 上書き後に新しい墓標ができていたら、その墓標の台帳項目を残します。
       return;
     }
 
-    await this.#removeRegistryEntry(key, c);
+    await this.#removeRegistryEntryLocked(key, c);
   }
 
   /**
@@ -546,12 +658,62 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
   }
 
   /**
-   * 墓標を下層と台帳から取り除きます。
+   * 観測した墓標を下層と台帳から取り除きます。
    *
    * @param key 対象のキーです。
+   * @param observed キーロック取得前に読み出した墓標の記録です。
+   * @param requireExpired 保持期限切れの墓標だけを対象にするとき `true` です。
    * @param c 実行時変数の範囲です。
+   *
+   * @returns 実際に墓標を取り除いたとき `true` を返します。
    */
-  async #sweepTombstone(key: string, c: ContextScope): Promise<void> {
+  async #sweepTombstone(
+    key: string,
+    observed: TombstoneRecord,
+    requireExpired: boolean,
+    c: ContextScope,
+  ): Promise<boolean> {
+    return this.#withKeyLock(key, () =>
+      this.#sweepTombstoneLocked(key, observed, requireExpired, c),
+    );
+  }
+
+  /**
+   * 観測した墓標を下層と台帳から取り除きます。
+   *
+   * 呼び出し側でキーロックを保持している必要があります。
+   *
+   * @param key 対象のキーです。
+   * @param observed 観測した墓標の記録です。キーロック取得前に読み出したものと、キーロック内で読み出したものの両方があります。
+   * @param requireExpired 保持期限切れの墓標だけを対象にするとき `true` です。
+   * @param c 実行時変数の範囲です。
+   *
+   * @returns 実際に墓標を取り除いたとき `true` を返します。
+   */
+  async #sweepTombstoneLocked(
+    key: string,
+    observed: TombstoneRecord,
+    requireExpired: boolean,
+    c: ContextScope,
+  ): Promise<boolean> {
+    // 読み出しからキーロック取得までの間に復元や上書き、再削除が起きた可能性があるため、ロック内で同じ墓標のままかを再確認します。
+    const raw = await this.#readRaw(key, c);
+
+    if (!isTombstoneRecord(raw)) {
+      // 墓標でなくなっていたら有効値を消さず、台帳の項目だけを掃除します。
+      await this.#removeRegistryEntryLocked(key, c);
+
+      return false;
+    }
+
+    if (
+      getTombstoneIdentity(raw) !== getTombstoneIdentity(observed) ||
+      (requireExpired && !this.#isExpired(raw))
+    ) {
+      // 新しい墓標ができていたら、その値と台帳の項目を残します。
+      return false;
+    }
+
     try {
       await this.#inner.delete({
         ...this.#scopedKey(c, key),
@@ -563,48 +725,162 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
       }
     }
 
-    await this.#removeRegistryEntry(key, c);
+    await this.#removeRegistryEntryLocked(key, c);
+
+    return true;
   }
 
   /**
    * 台帳へ項目を追加します。
    *
+   * 呼び出し側でキーロックを保持している必要があります。台帳ロックは内部で取得します。
+   *
    * @param key 対象のキーです。
    * @param deletedAt 削除時刻です。
    * @param c 実行時変数の範囲です。
    */
-  async #addRegistryEntry(key: string, deletedAt: number, c: ContextScope): Promise<void> {
-    const registry = await this.#loadRegistry(c);
-    await this.#saveRegistry(
-      {
-        ...registry,
-        [key]: { deletedAt },
-      },
-      c,
-    );
+  async #addRegistryEntryLocked(key: string, deletedAt: number, c: ContextScope): Promise<void> {
+    await this.#withRegistryLock(async (): Promise<void> => {
+      const registry = await this.#loadRegistry(c);
+      await this.#saveRegistry(
+        {
+          ...registry,
+          [key]: { deletedAt },
+        },
+        c,
+      );
+    });
+  }
+
+  /**
+   * 台帳に項目がないときだけ追加します。
+   *
+   * 墓標の書き込み後に台帳の追加が失敗した場合の再削除で、台帳の項目を復旧するために使用します。
+   *
+   * @param key 対象のキーです。
+   * @param deletedAt 削除時刻です。
+   * @param c 実行時変数の範囲です。
+   */
+  async #ensureRegistryEntryLocked(key: string, deletedAt: number, c: ContextScope): Promise<void> {
+    await this.#withRegistryLock(async (): Promise<void> => {
+      const registry = await this.#loadRegistry(c);
+
+      if (Object.hasOwn(registry, key)) {
+        return;
+      }
+
+      await this.#saveRegistry(
+        {
+          ...registry,
+          [key]: { deletedAt },
+        },
+        c,
+      );
+    });
+  }
+
+  /**
+   * 墓標が存在しないときだけ台帳から項目を取り除きます。
+   *
+   * 台帳の項目を確認した後に削除が墓標を追加した場合に、その項目を消さないようにします。
+   *
+   * 呼び出し側でキーロックを保持している必要があります。
+   *
+   * @param key 対象のキーです。
+   * @param c 実行時変数の範囲です。
+   */
+  async #removeRegistryEntryIfNotTombstoneLocked(key: string, c: ContextScope): Promise<void> {
+    if (isTombstoneRecord(await this.#readRaw(key, c))) {
+      return;
+    }
+
+    await this.#removeRegistryEntryLocked(key, c);
   }
 
   /**
    * 台帳から項目を取り除きます。
    *
+   * 呼び出し側でキーロックを保持している必要があります。台帳ロックは内部で取得します。
+   *
    * @param key 対象のキーです。
    * @param c 実行時変数の範囲です。
    */
-  async #removeRegistryEntry(key: string, c: ContextScope): Promise<void> {
-    const registry = await this.#loadRegistry(c);
+  async #removeRegistryEntryLocked(key: string, c: ContextScope): Promise<void> {
+    await this.#withRegistryLock(async (): Promise<void> => {
+      const registry = await this.#loadRegistry(c);
 
-    if (!(key in registry)) {
-      return;
+      if (!Object.hasOwn(registry, key)) {
+        return;
+      }
+
+      const rest: RegistryRecord = Object.fromEntries(
+        Object.entries(registry).filter(([entryKey]) => entryKey !== key),
+      );
+      await this.#saveRegistry(rest, c);
+    });
+  }
+
+  /**
+   * キーごとのデータ操作を直列化して実行します。
+   *
+   * 同じキーの操作だけを待たせ、異なるキーの操作は並行して進めます。
+   * 直列化する範囲はこのインスタンス内だけです。同じ下層ストレージを共有する複数のインスタンス間では、データ操作が競合し得ます。
+   *
+   * @param key 対象のキーです。
+   * @param fn 実行するデータ操作です。
+   *
+   * @returns 操作の結果を返します。
+   */
+  async #withKeyLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    let release: (() => void) | undefined;
+    const previous = this.#keyTails.get(key) ?? Promise.resolve();
+    const tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.#keyTails.set(key, tail);
+    await previous;
+
+    try {
+      return await fn();
+    } finally {
+      release?.();
+
+      // 待ち行列が空になったキーだけを取り除き、待機中の操作を置き去りにしません。
+      if (this.#keyTails.get(key) === tail) {
+        this.#keyTails.delete(key);
+      }
     }
+  }
 
-    const rest: RegistryRecord = Object.fromEntries(
-      Object.entries(registry).filter(([entryKey]) => entryKey !== key),
-    );
-    await this.#saveRegistry(rest, c);
+  /**
+   * 台帳の読み書きを直列化して実行します。
+   *
+   * データ本体の読み書きは含めません。
+   * 直列化する範囲はこのインスタンス内だけです。同じ下層ストレージを共有する複数のインスタンス間では、台帳の更新が競合し得ます。
+   *
+   * @param fn 実行する台帳操作です。
+   *
+   * @returns 操作の結果を返します。
+   */
+  async #withRegistryLock<T>(fn: () => Promise<T>): Promise<T> {
+    let release: (() => void) | undefined;
+    const previous = this.#registryTail;
+    this.#registryTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
+    try {
+      return await fn();
+    } finally {
+      release?.();
+    }
   }
 
   /**
    * 台帳を下層から読みます。
+   *
+   * 呼び出し側で台帳ロックを保持している必要があります。
    *
    * @param c 実行時変数の範囲です。
    *
@@ -622,6 +898,8 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
 
   /**
    * 台帳を下層へ保存します。
+   *
+   * 呼び出し側で台帳ロックを保持している必要があります。
    *
    * @param registry 保存する台帳です。
    * @param c 実行時変数の範囲です。

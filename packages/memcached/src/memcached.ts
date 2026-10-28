@@ -147,6 +147,31 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
 const PROBE_KEY = "__unikvs_memcached_probe__";
 
 /**
+ * Memcached が相対秒として解釈する上限 (30 日) です。
+ *
+ * これを超える値は絶対 Unix 時刻として扱われます。
+ */
+export const MAX_RELATIVE_EXPIRATION_SECONDS = 60 * 60 * 24 * 30;
+
+/**
+ * Memcached の `set` に渡す有効期限を組み立てます。
+ *
+ * 30 日を超える TTL はプロトコル仕様に従い、現在時刻からの絶対 Unix 時刻へ変換します。
+ * 変換しない場合、値が 1970 年付近の過去時刻として解釈され即時失効します。
+ *
+ * @param ttlSeconds 相対的な有効期限 (秒) です。
+ *
+ * @returns Memcached に渡す有効期限です。
+ */
+function toMemcachedExpiration(ttlSeconds: number): number {
+  if (ttlSeconds > MAX_RELATIVE_EXPIRATION_SECONDS) {
+    return Math.floor(Date.now() / 1000) + ttlSeconds;
+  }
+
+  return ttlSeconds;
+}
+
+/**
  * 接続先サーバーを解決します。
  *
  * 引数・オプション・環境変数の順に優先して単一文字列へまとめます。
@@ -441,7 +466,9 @@ export default class Memcached implements IStorage {
     throwIfAborted(c.signal);
 
     // memcached テキスト互換のため、バイナリーは base64 文字列として格納します。
-    await client.set(this.#toKey(c.key), encodeBase64(data), { expires: this.#ttlSeconds });
+    await client.set(this.#toKey(c.key), encodeBase64(data), {
+      expires: toMemcachedExpiration(this.#ttlSeconds),
+    });
   }
 
   /**

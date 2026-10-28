@@ -12,6 +12,7 @@ import {
 } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
+import { InvalidChunkTypeError } from "../src/errors.js";
 import IndexeddbStorage from "../src/indexeddb.js";
 import { test, STORE_NAME, createEmptyDatabase } from "./_helpers.js";
 
@@ -262,6 +263,74 @@ describe("ストアが存在しないとき", () => {
     } finally {
       await storage.close(createCloseContext({ signal }) as IStorage.CloseContext);
     }
+  });
+});
+describe("InvalidChunkTypeError", () => {
+  test("name は IndexeddbInvalidChunkTypeError である", ({ expect }) => {
+    // 実行と検証：
+    expect(
+      new InvalidChunkTypeError({
+        key: "k1",
+        chunk: "x",
+      }).name,
+    ).toBe("IndexeddbInvalidChunkTypeError");
+  });
+
+  test("Error と InvalidChunkTypeError を継承している", ({ expect }) => {
+    // 実行：
+    const error = new InvalidChunkTypeError({
+      key: "k1",
+      chunk: "x",
+    });
+
+    // 検証：
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(InvalidChunkTypeError);
+  });
+
+  test("渡されたチャンクと型名を meta に保持する", ({ expect }) => {
+    // 準備：
+    const chunk = { invalid: true };
+
+    // 実行：
+    const error = new InvalidChunkTypeError({
+      key: "k1",
+      chunk,
+    });
+
+    // 検証：
+    expect(error.meta.key).toBe("k1");
+    expect(error.meta.chunk).toBe(chunk);
+    expect(error.meta.chunkType).toBe("Object");
+  });
+
+  test("既定の英語メッセージを返す", ({ expect }) => {
+    // 実行と検証：
+    expect(
+      new InvalidChunkTypeError({
+        key: "k1",
+        chunk: "x",
+      }).message,
+    ).toBe('Expected chunk for key "k1" is Uint8Array, but got string');
+  });
+
+  test("書き込み時に投げられたエラーはキーとチャンクを保持する", async ({ expect, storage }) => {
+    // 準備：
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const writer = storage
+      .getWritable(createSetContext("s1", { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行：
+    const error = await captureRejection(writer.write("invalid" as unknown as Uint8Array));
+
+    // 検証：
+    expect(error).toBeInstanceOf(InvalidChunkTypeError);
+    expect((error as InvalidChunkTypeError).meta).toStrictEqual({
+      key: "s1",
+      chunk: "invalid",
+      chunkType: "string",
+    });
   });
 });
 describe("open に失敗するとき", () => {

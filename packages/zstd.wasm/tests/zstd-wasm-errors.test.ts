@@ -193,6 +193,16 @@ describe("ZstdWasmInvalidLevelError", () => {
   });
 });
 describe("壊れた圧縮データの decode", () => {
+  test("空のバイト列をエラーで拒否する", async ({ expect, signal }) => {
+    // 準備：
+    const target = new ZstdWasm();
+    await openTarget(target, signal);
+
+    // 実行と検証：
+    // 上流は空の入力を空の展開結果として受け入れるため、破損データとの取り違えを防ぐ契約を検証する。
+    await expect(decode(target, new Uint8Array(0))).rejects.toThrow(Error);
+  });
+
   test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備：
     const target = new ZstdWasm();

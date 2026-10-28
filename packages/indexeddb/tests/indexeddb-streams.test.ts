@@ -10,6 +10,7 @@ import {
 } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
+import { InvalidChunkTypeError } from "../src/errors.js";
 import { test } from "./_helpers.js";
 
 /**
@@ -206,7 +207,26 @@ describe("getWritable", () => {
     ).toStrictEqual(concatChunks(chunks));
   });
 
-  test("Uint8Array 以外の文字列チャンクを書くと、長さぶんの 0 埋めとして保存される", async ({
+  test("書き込み後にチャンクを変更しても保存値は変わらない", async ({ expect, storage }) => {
+    // 準備：
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const chunk = new Uint8Array([1, 2, 3]);
+    const writer = storage
+      .getWritable(createSetContext("s1", { signal }) as IStorage.GetWritableContext)
+      .getWriter();
+
+    // 実行：
+    await writer.write(chunk);
+    chunk[0] = 99;
+    await writer.close();
+
+    // 検証：
+    expect(
+      await storage.read(createGetContext("s1", { signal }) as IStorage.ReadContext),
+    ).toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  test("Uint8Array 以外の文字列チャンクを書くと InvalidChunkTypeError で拒否される", async ({
     expect,
     storage,
   }) => {
@@ -217,16 +237,20 @@ describe("getWritable", () => {
       .getWriter();
 
     // 実行：
-    await writer.write("abc" as unknown as Uint8Array);
-    await writer.close();
+    const error = await captureRejection(writer.write("abc" as unknown as Uint8Array));
 
     // 検証：
-    expect(
-      await storage.read(createGetContext("s1", { signal }) as IStorage.ReadContext),
-    ).toStrictEqual(new Uint8Array([0, 0, 0]));
+    expect(error).toBeInstanceOf(InvalidChunkTypeError);
+
+    expect(await storage.exists(createHasContext("s1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 
-  test("Uint8Array 以外の数値チャンクを書くと close が拒否される", async ({ expect, storage }) => {
+  test("Uint8Array 以外の数値チャンクを書くと InvalidChunkTypeError で拒否される", async ({
+    expect,
+    storage,
+  }) => {
     // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const writer = storage
@@ -236,12 +260,10 @@ describe("getWritable", () => {
     // 実行：
     await writer.write(new Uint8Array([1]));
 
-    const error = await captureRejection(
-      writer.write(5 as unknown as Uint8Array).then(() => writer.close()),
-    );
+    const error = await captureRejection(writer.write(5 as unknown as Uint8Array));
 
     // 検証：
-    expect(error).toBeInstanceOf(Error);
+    expect(error).toBeInstanceOf(InvalidChunkTypeError);
 
     expect(await storage.exists(createHasContext("s1", { signal }) as IStorage.ExistsContext)).toBe(
       false,

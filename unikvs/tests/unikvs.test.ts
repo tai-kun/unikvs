@@ -734,8 +734,10 @@ describe("UniKvs - オープン / クローズ", () => {
     );
     const controller = new AbortController();
 
-    // 実行：
+    // 実行 : 通常の失敗が記録され、中断待ちのストレージが残るまで待ってから中断する。
     const p = kvs.open({ signal: controller.signal });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
     controller.abort(cancel);
 
     // 実行と検証：

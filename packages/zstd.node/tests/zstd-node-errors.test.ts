@@ -294,6 +294,16 @@ describe("UnsupportedRuntimeError", () => {
 });
 
 describe("壊れた圧縮データの decode", () => {
+  test("空のバイト列をエラーで拒否する", async ({ expect, signal }) => {
+    // 準備：
+    const target = new ZstdNode();
+    await openTarget(target, signal);
+
+    // 実行と検証：
+    // 上流の node:zlib は空の入力を展開エラーにするため、その契約を維持する。
+    await expect(decode(target, new Uint8Array(0))).rejects.toThrow(Error);
+  });
+
   test("圧縮データではないバイト列をエラーで拒否する", async ({ expect, signal }) => {
     // 準備：
     const target = new ZstdNode();

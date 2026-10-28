@@ -397,6 +397,8 @@ export default class Retry<
       createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
     );
 
+    throwIfAborted(c.signal);
+
     if (c.key === c.destinationKey) {
       return;
     }
@@ -405,6 +407,9 @@ export default class Retry<
       createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
       data as unknown as TWriteData,
     );
+
+    // 書き込み中に中断されたときは移動元を削除しません。
+    throwIfAborted(c.signal);
 
     if (move) {
       await this.inner.delete(createFallbackContext(c, c.action, c.key) as IStorage.DeleteContext);

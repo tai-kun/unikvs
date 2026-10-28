@@ -13,7 +13,8 @@ export type RecordedPut = {
  * `EtcdClientLike` を満たすインメモリーフェイクです。
  *
  * 実サーバーなしで CRUD・TTL 付与・接頭辞削除の振る舞いを検証します。
- * リースの失効は etcd 側の責務のため再現しません。実装は `etcd3` の `autoKeepAlive` (既定で有効) を使うため、開いている間はキーが残ります。
+ * リースの失効は etcd 側の責務のため再現しません。
+ * `Etcd` は注入クライアントのリース管理に関与せず、TTL を put オプションとして渡します。
  */
 export class FakeEtcdClient implements EtcdClientLike {
   public readonly store = new Map<string, Buffer>();

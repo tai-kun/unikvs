@@ -134,3 +134,15 @@ The `AbortSignal` is already aborted when `getWritable()` is called. A shared `@
 #### How to fix
 
 Pass a signal that is not aborted, or check the signal state before requesting.
+
+### AggregateError [#error-aggregate]
+
+An error thrown when bulk deletion (`clear()`) fails to delete individual objects.
+
+#### Meaning
+
+`DeleteObjects` returns HTTP 200 even when some objects could not be deleted, and puts the failed keys in the `Errors` field of the response. `clear()` does not treat these failures as success; it throws an `AggregateError` whose `errors` property contains one `Error` per failed object.
+
+#### How to fix
+
+Check the `errors` property of the `AggregateError`, resolve the cause for each failed key (such as access permissions or the object's state), and run `clear()` again.

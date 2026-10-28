@@ -108,6 +108,61 @@ describe("キーの扱い", () => {
     await expect(client.get("unikvs-other:key")).resolves.toBe("keep");
   });
 
+  test("clear はグロブのメタ文字を含むプレフィックスをリテラルとして扱う", async ({
+    url,
+    client,
+    expect,
+    signal,
+  }) => {
+    // 準備：
+    const id = crypto.randomUUID();
+    const cases = [
+      {
+        prefix: `[tenant]:${id}:`,
+        collision: `t:${id}:keep`,
+      },
+      {
+        prefix: `app*${id}:`,
+        collision: `application${id}:keep`,
+      },
+      {
+        prefix: `a?b${id}:`,
+        collision: `axb${id}:keep`,
+      },
+      {
+        prefix: `back\\slash${id}:`,
+        collision: `backslash${id}:keep`,
+      },
+    ];
+
+    for (const { prefix, collision } of cases) {
+      const storage = createStorage(url, prefix);
+      await storage.open(createOpenContext() as IStorage.OpenContext);
+
+      try {
+        // 準備：
+        await storage.write(
+          createSetContext("own.bin", { signal }) as IStorage.WriteContext,
+          new Uint8Array([1]),
+        );
+        await client.set(collision, "keep");
+
+        // 実行：
+        await storage.clear(createClearContext("", { signal }) as IStorage.ClearContext);
+
+        // 検証：
+        await expect(
+          storage.exists(createHasContext("own.bin", { signal }) as IStorage.ExistsContext),
+        ).resolves.toBe(false);
+        await expect(client.get(collision)).resolves.toBe("keep");
+
+        await client.del(collision);
+      } finally {
+        await storage.close(createCloseContext() as IStorage.CloseContext);
+      }
+    }
+  });
+
   test("getWritable の一時キーはプレフィックス配下に作られ close で消える", async ({
     client,
     expect,

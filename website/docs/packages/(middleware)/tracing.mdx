@@ -5,7 +5,7 @@ description: "操作ごとにトレーススパンを発行するミドルウェ
 
 ## 概要 [#overview]
 
-`Tracing` は読み書きや変換の操作ごとにトレーススパンを発行し、処理時間と成否を記録します。<Badge>Middleware</Badge>
+`Tracing` は読み書きや変換の操作ごとにトレーススパンを発行し、成否を記録します。`use`・`encode`・`decode` のスパンはフックチェーンの実行時間を測り、ストリームのスパンは読み切り・エラー・取り消しまで継続するため、ストリームの消費時間やストレージ読み取り時間を含むことがあります。<Badge>Middleware</Badge>
 
 分散トレーシングや性能分析に使います。OpenTelemetry と構造的に互換性のあるトレーサーを渡して使います。
 
@@ -121,7 +121,7 @@ await kvs.close();
 | `encodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
 | `decodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
 
-- `use` は `unikvs.use.<action>` のスパンで操作を包み、`encode` は `unikvs.encode`、`decode` は `unikvs.decode` のスパンで包みます。
+- `use` は `unikvs.use.<action>` のスパンで下流の `use` フックチェーンを包み、ストレージ I/O は含みません。`encode` は `unikvs.encode`、`decode` は `unikvs.decode` のスパンで包みます。
 - ストリームは `unikvs.encodeStream`・`unikvs.decodeStream` のスパンで包み、読み切り・エラー・取り消しのいずれかで終了します。
 - チャンクはそのまま通し、順序と参照を保ちます。
 - 成功時は `success` に `true` と状態 `ok` を設定し、失敗時は `success` に `false` と状態 `error`、メッセージを設定します。

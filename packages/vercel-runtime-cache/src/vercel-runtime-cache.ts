@@ -196,11 +196,11 @@ export default class VercelRuntimeCache implements IStorage {
   readonly #fallback: Map<string, CacheEntry>;
 
   /**
-   * バックエンドに書き込んだキーの集合です。
+   * バックエンドに書き込んだキーと失効時刻の対応です。
    *
-   * `clear` 時に個別削除するために保持します。
+   * 挿入順を古い順として保持し、`clear` と `maxEntries` の追い出しに使います。
    */
-  readonly #backendKeys: Set<string>;
+  readonly #backendKeys: Map<string, number>;
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-runtime-cache#vercel-runtime-cache)
@@ -237,7 +237,7 @@ export default class VercelRuntimeCache implements IStorage {
     this.#backend = backend ?? detectVercelRuntimeCache();
     this.#now = now;
     this.#fallback = new Map();
-    this.#backendKeys = new Set();
+    this.#backendKeys = new Map();
   }
 
   /**
@@ -390,9 +390,11 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   /**
-   * 保持する値をすべて削除します。
+   * 現在のインスタンスが追跡している値を削除します。
    *
-   * バックエンドとフォールバックの双方を掃除します。
+   * バックエンドを共有するとき、削除するのは現在のインスタンスが追跡しているキーだけです。同じ名前空間で他のインスタンスやプロセスが書き込んだキーは削除されません。
+   * `maxEntries` と失効による削除もインスタンスごとの追跡に基づくため、共有バックエンドは `maxEntries` を超えるキーを保持することがあります。
+   * `namespace` が空でバックエンドが `clear` を持つときは、バックエンド全体を削除します。
    *
    * @param c クリアコンテキストです。
    *
@@ -402,20 +404,24 @@ export default class VercelRuntimeCache implements IStorage {
     throwIfAborted(c.signal);
 
     if (this.#backend !== undefined) {
-      if (typeof this.#backend.clear === "function") {
+      // 名前空間付きで共有バックエンドを使うとき、グローバルの clear は他の名前空間まで消してしまいます。
+      if (this.namespace === "" && typeof this.#backend.clear === "function") {
         await this.#backend.clear();
         this.#backendKeys.clear();
 
         return;
       }
 
-      for (const storedKey of this.#backendKeys) {
+      for (const storedKey of this.#backendKeys.keys()) {
         throwIfAborted(c.signal);
 
-        await this.#backend.delete(storedKey);
+        await this.#deleteRaw(this.#backend, storedKey);
       }
 
       this.#backendKeys.clear();
+      this.#fallback.clear();
+
+      return;
     }
 
     this.#fallback.clear();
@@ -508,14 +514,22 @@ export default class VercelRuntimeCache implements IStorage {
     const storedValue = this.#clone(data);
     const expiresAt = this.#expiresAt();
 
-    if (this.#backend !== undefined) {
+    const backend = this.#backend;
+
+    if (backend !== undefined) {
+      if (this.maxEntries === 0) {
+        return;
+      }
+
       const storedKey = this.#storageKey(key);
       const envelope: CacheEntry = {
         value: storedValue,
         expiresAt,
       };
-      await this.#backend.set(storedKey, envelope, { ttlSeconds: this.ttlSeconds });
-      this.#backendKeys.add(storedKey);
+      await backend.set(storedKey, envelope, { ttlSeconds: this.ttlSeconds });
+      this.#trackBackendKey(storedKey, expiresAt);
+
+      await this.#evictBackendIfNeeded(backend);
 
       return;
     }
@@ -650,6 +664,64 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   /**
+   * バックエンドに書き込んだキーを最新として記録します。
+   *
+   * 同じキーを書き直したときは、挿入順の末尾へ移動します。
+   *
+   * @param storedKey 記録する実キーです。
+   * @param expiresAt エントリの失効時刻です。
+   */
+  #trackBackendKey(storedKey: string, expiresAt: number): void {
+    this.#backendKeys.delete(storedKey);
+    this.#backendKeys.set(storedKey, expiresAt);
+  }
+
+  /**
+   * バックエンドの追跡対象から失効済みのキーを削除します。
+   *
+   * 同じ TTL で書き込むため挿入順は失効順と一致し、先頭から確認します。
+   *
+   * @param backend 削除に使うバックエンドです。
+   */
+  async #purgeExpiredBackend(backend: VercelRuntimeCacheBackend): Promise<void> {
+    const now = this.#now();
+
+    for (const [storedKey, expiresAt] of this.#backendKeys) {
+      if (expiresAt > now) {
+        break;
+      }
+
+      await this.#deleteRaw(backend, storedKey);
+    }
+  }
+
+  /**
+   * バックエンドの追跡対象を上限まで減らします。
+   *
+   * 失効済みのキーを掃除してから、書き込みが古い順 (FIFO) にバックエンドから削除します。
+   *
+   * @param backend 削除に使うバックエンドです。
+   */
+  async #evictBackendIfNeeded(backend: VercelRuntimeCacheBackend): Promise<void> {
+    await this.#purgeExpiredBackend(backend);
+
+    if (this.maxEntries === undefined) {
+      return;
+    }
+
+    while (this.#backendKeys.size > this.maxEntries) {
+      const oldest = this.#backendKeys.keys().next().value;
+
+      if (oldest === undefined) {
+        break;
+      }
+
+      await backend.delete(oldest);
+      this.#backendKeys.delete(oldest);
+    }
+  }
+
+  /**
    * 名前空間を付与した保存キーを組み立てます。
    *
    * @param key 変換する論理キーです。
@@ -704,7 +776,7 @@ export default class VercelRuntimeCache implements IStorage {
   }
 
   /**
-   * 上限を超えたフォールバックの古いエントリを追い出します。
+   * 上限を超えたフォールバックの最も古く使われたエントリ (LRU) を追い出します。
    */
   #evictFallbackIfNeeded(): void {
     if (this.maxEntries === undefined) {

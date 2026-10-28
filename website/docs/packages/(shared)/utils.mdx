@@ -249,7 +249,7 @@ const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1
 
 ### `proxyTransformStream()` [#proxy-transform-stream]
 
-ソースの前後に入出力変換を挟んだ新しいストリームを作ります。書き込まれた値は `proxyInput` で変換してソースへ送り、ソースの出力は `proxyOutput` で変換して読み取ります。`proxyInput` と `proxyOutput` には変換コールバックまたは `Transformer` オブジェクトを指定できます。返される `closePromise` は入力からソースへの接続が終わると解決し、途中の失敗は読み取りと `closePromise` へ伝わります。
+ソースの前後に入出力変換を挟んだ新しいストリームを作ります。書き込まれた値は `proxyInput` で変換してソースへ送り、ソースの出力は `proxyOutput` で変換して読み取ります。`proxyInput` と `proxyOutput` には変換コールバックまたは `Transformer` オブジェクトを指定できます。返される `closePromise` は入力からソースへの接続とソースから出力への接続の両方が終わると解決します。出力側の変換の flush が完了するまでは解決しません。途中の失敗は読み取りと `closePromise` へ伝わり、もう一方の接続の完了を待たずに拒否します。
 
 ```ts
 import { proxyTransformStream } from "@unikvs/utils";
@@ -270,7 +270,7 @@ const proxied = proxyTransformStream(
     closePromise: {
       type: "[#iproxied-transform-stream-closepromise] NinjaPromise<void>",
       required: true,
-      description: "入力からソースへの接続が終わると解決します。",
+      description: "入力からソースへの接続とソースから出力への接続の両方が終わると解決します。",
     },
   }}
 />

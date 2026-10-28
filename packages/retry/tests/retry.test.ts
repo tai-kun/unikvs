@@ -904,6 +904,87 @@ describe("copy と move のフォールバック", () => {
     expect(inner.map.get("destination")).toBe("value");
     expect(inner.map.has("source")).toBe(false);
   });
+
+  test("読み出し中に中断された move は書き込みも削除もしない", async ({ expect }) => {
+    // 準備 : 読み出した直後に中断する下層ストレージ。
+    class AbortingReadStorage extends BasicStorage {
+      readonly #controller: AbortController;
+
+      readonly #reason: unknown;
+
+      public constructor(controller: AbortController, reason: unknown) {
+        super();
+        this.#controller = controller;
+        this.#reason = reason;
+      }
+
+      public override read(c: IStorage.ReadContext): unknown {
+        const value = super.read(c);
+
+        this.#controller.abort(this.#reason);
+
+        return value;
+      }
+    }
+
+    const controller = new AbortController();
+    const reason = new Error("stop");
+    const inner = new AbortingReadStorage(controller, reason);
+    inner.map.set("source", "value");
+
+    const retry = new Retry(inner);
+
+    // 実行と検証：
+    await expect(
+      retry.move(
+        createMoveContext("source", "destination", {
+          signal: controller.signal,
+        }) as IStorage.MoveContext,
+      ),
+    ).rejects.toBe(reason);
+
+    expect(inner.map.get("source")).toBe("value");
+    expect(inner.map.has("destination")).toBe(false);
+  });
+
+  test("書き込み後に中断された move は移動元を削除しない", async ({ expect }) => {
+    // 準備 : 書き込んだ直後に中断する下層ストレージ。
+    class AbortingWriteStorage extends BasicStorage {
+      readonly #controller: AbortController;
+
+      readonly #reason: unknown;
+
+      public constructor(controller: AbortController, reason: unknown) {
+        super();
+        this.#controller = controller;
+        this.#reason = reason;
+      }
+
+      public override write(c: IStorage.WriteContext, data: unknown): void {
+        super.write(c, data);
+        this.#controller.abort(this.#reason);
+      }
+    }
+
+    const controller = new AbortController();
+    const reason = new Error("stop");
+    const inner = new AbortingWriteStorage(controller, reason);
+    inner.map.set("source", "value");
+
+    const retry = new Retry(inner);
+
+    // 実行と検証：
+    await expect(
+      retry.move(
+        createMoveContext("source", "destination", {
+          signal: controller.signal,
+        }) as IStorage.MoveContext,
+      ),
+    ).rejects.toBe(reason);
+
+    expect(inner.map.get("destination")).toBe("value");
+    expect(inner.map.get("source")).toBe("value");
+  });
 });
 
 describe("isRetryableError", () => {

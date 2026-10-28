@@ -45,7 +45,7 @@ Cookie をバックエンドに使うストレージです。
     sizeLimitBytes: {
       type: "[#cookies-size-limit-bytes] number",
       default: "4096",
-      description: "1 つの値の最大サイズ (バイト) です。",
+      description: "1 つの値の生サイズとシリアル化後のサイズに適用する上限 (バイト) です。",
     },
     store: {
       type: "[#cookies-store] CookieStoreLike",
@@ -83,6 +83,8 @@ await kvs.close();
 
 - 文字列とバイト列を保存できます。文字列には `s:`、バイト列には Base64 化した値に `b:` の接頭辞を付けて保存します。
 - 値の生サイズ (文字列は UTF-8 バイト数、バイト列はバイト数) が `sizeLimitBytes` を超えると保存できません。
+- 生サイズが上限内でも、URL エンコードした名前と値に属性を加えた Set-Cookie 文字列のサイズが `sizeLimitBytes` を超える場合は保存できません。
+- 空のキーを指定すると `write` が `TypeError` を投げます。
 - `document.cookie` が使えない環境では `store` に `CookieStoreLike` を注入します。
 - ストリームの読み書きには対応していません。
 
@@ -92,13 +94,39 @@ await kvs.close();
 
 ### CookieTooLargeError [#error-cookie-too-large]
 
+<TypeTable
+  type={{
+    key: {
+      type: "[#error-cookie-too-large-key] string",
+      required: true,
+      description: "書き込み対象のキーです。",
+    },
+    actual: {
+      type: "[#error-cookie-too-large-actual] number",
+      required: true,
+      description: "上限を超えたサイズ (バイト) です。",
+    },
+    limit: {
+      type: "[#error-cookie-too-large-limit] number",
+      required: true,
+      description: "適用した sizeLimitBytes です。",
+    },
+    measurement: {
+      type: '[#error-cookie-too-large-measurement] "raw" | "serialized"',
+      required: true,
+      description:
+        "actual が生サイズかシリアル化後のサイズかを示します。コンストラクターで省略した場合は raw になります。",
+    },
+  }}
+/>
+
 #### 意味
 
-Cookie 値の生サイズが `sizeLimitBytes` を超えたときに `write` が投げます。
+生サイズ (文字列は UTF-8 バイト数、バイト列はバイト数) が `sizeLimitBytes` を超えた場合、またはシリアル化後の Set-Cookie 文字列のサイズが `sizeLimitBytes` を超えた場合に `write` が投げます。シリアル化後のサイズには、URL エンコードした名前と値、および `cookieAttributes` で指定した属性が含まれます。どちらのサイズで超過したかは `meta.measurement` で判別できます。
 
 #### 対処方法
 
-値を小さくするか、`sizeLimitBytes` を大きくしてください。Cookie にはブラウザーごとの上限もあるため、大きな値は別のストレージに保存してください。
+値を小さくするか、`sizeLimitBytes` を大きくしてください。シリアル化後のサイズだけが上限を超える場合は、キーや値を短くするか、属性を減らしてください。Cookie にはブラウザーごとの上限もあるため、大きな値は別のストレージに保存してください。
 
 ### CookieNotAvailableError [#error-cookie-not-available]
 

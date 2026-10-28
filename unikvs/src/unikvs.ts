@@ -20,6 +20,7 @@ import {
 } from "./_contexts.js";
 import { logger, logRepairError, logRepairFailure, logSkippedRepair } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
+import { MiddlewareContractTracker } from "./_pipeline-graph.helpers.js";
 import type { PipelineGraph } from "./_pipeline-graph.js";
 import type { PipelineLeaf, ResolvedLeaf, StreamEncodeTarget } from "./_pipeline-graph.types.js";
 import { cancelStreams, isReadableStream } from "./_streams.js";
@@ -138,6 +139,31 @@ type PluginErrorRecord = {
    * 失敗の理由です。
    */
   readonly reason: unknown;
+};
+
+/**
+ * 操作中に更新する宛先ごとの結果です。
+ */
+type MutableUseTargetOutcome = {
+  /**
+   * 宛先の名前です。
+   */
+  readonly name: string;
+
+  /**
+   * 宛先の登録順です。
+   */
+  readonly index: number;
+
+  /**
+   * 宛先の結果です。
+   */
+  status: "committed" | "notFound" | "skipped" | "failed";
+
+  /**
+   * 失敗の理由です。
+   */
+  error?: unknown;
 };
 
 /**
@@ -279,13 +305,24 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               await leaf.storage.open(c);
               dispose.push(async () => {
                 try {
+                  // ロールバックは open の signal に引きずられないよう、新しいタイムアウト signal で閉じます。
                   const cc = new CloseContext({
                     vars: pluginVars.entries(),
-                    signal,
+                    signal: AbortSignal.timeout(10e3),
                   });
                   await leaf.storage.close(cc);
                 } catch (ex) {
                   logger.error`Failed to close storage: ${ex}`;
+                  // 通常の close と同じく、失敗した実 close だけを新しい signal で 1 回再試行します。
+                  try {
+                    const cc = new CloseContext({
+                      vars: pluginVars.entries(),
+                      signal: AbortSignal.timeout(10e3),
+                    });
+                    await leaf.storage.retryClose(cc);
+                  } catch (retryEx) {
+                    logger.error`Failed to retry closing storage: ${retryEx}`;
+                  }
                 }
               });
             },
@@ -308,13 +345,24 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
               await middleware.open(c);
               dispose.push(async () => {
                 try {
+                  // ロールバックは open の signal に引きずられないよう、新しいタイムアウト signal で閉じます。
                   const cc = new CloseContext({
                     vars: pluginVars.entries(),
-                    signal,
+                    signal: AbortSignal.timeout(10e3),
                   });
                   await middleware.close(cc);
                 } catch (ex) {
                   logger.error`Failed to close middleware: ${ex}`;
+                  // 通常の close と同じく、失敗した実 close だけを新しい signal で 1 回再試行します。
+                  try {
+                    const cc = new CloseContext({
+                      vars: pluginVars.entries(),
+                      signal: AbortSignal.timeout(10e3),
+                    });
+                    await middleware.retryClose(cc);
+                  } catch (retryEx) {
+                    logger.error`Failed to retry closing middleware: ${retryEx}`;
+                  }
                 }
               });
             },
@@ -424,8 +472,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         if (this.#con === con) {
           this.#con = null;
 
-          // プラグインの close 段階まで到達していれば、成功分の参照は解放済みで、失敗分は #close が再試行済みです。
-          // ここで全プラグインを再度閉じると参照を二重解放してしまうため、close 段階に到達できなかったときだけ破棄します。
+          // プラグインの close 段階まで到達していれば、各プラグインの参照は解放済みか、実 close の失敗として retryClose 済みです。
+          // ただし、プラグインのラッパーロック待機が中断されて lifecycle.close に到達しなかった場合は参照が減っておらず、retryClose も「実 close の失敗」がないため何もしません。その参照は次回の close に委ねます。
+          // ここで全プラグインを再度閉じると、解放済みの参照を二重解放してしまうため、close 段階に到達できなかったときだけ破棄します。
           if (!progress.pluginsStarted) {
             const disposeSignal = AbortSignal.timeout(10e3);
             await Promise.all(
@@ -510,9 +559,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       if (stream !== null) {
         // これ以降の後始末は `#setStream` が所有します。
         ownsStream = false;
-        await this.#setStream(io, signal, key, store, stream);
+        await this.#setStream(io, signal, key, store, stream, useContext);
       } else {
-        await this.#setPlain(io, signal, key, store, value);
+        await this.#setPlain(io, signal, key, store, value, useContext);
       }
     } catch (ex) {
       if (ownsStream && stream !== null) {
@@ -1166,28 +1215,72 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     });
     // 全宛先を並列に削除し、失敗は宛先の index 付きで集約します。
     const errors: PluginErrorRecord[] = [];
+    const outcomes = this.#createTargetOutcomes(this.#pipeline.leaves);
     const resolver = this.#pipeline.createResolver({
       key,
       store,
       signal,
     });
-    await Promise.all(
-      this.#pipeline.leaves.map(async (leaf) => {
-        const resolved = resolver.resolve(leaf);
+    const prepared: {
+      readonly key: string;
+      readonly leaf: PipelineLeaf;
+    }[] = [];
+
+    // キー写像はストレージ操作を開始する前に全葉分を解決します。
+    // 途中で写像に失敗しても、開始済みの削除を残したままキーロックを解放しないようにするためです。
+    for (const leaf of this.#pipeline.leaves) {
+      try {
+        prepared.push({
+          key: resolver.resolve(leaf).key,
+          leaf,
+        });
+      } catch (ex) {
+        errors.push({
+          name: leaf.name,
+          index: leaf.index,
+          reason: ex,
+        });
+
+        const outcome = outcomes.get(leaf);
+
+        if (outcome !== undefined) {
+          outcome.status = "failed";
+          outcome.error = ex;
+        }
+
+        logger.error`Failed to delete in a storage: ${ex}`;
+      }
+    }
+
+    // 中断や予期しない失敗があっても、開始済みの削除が終わるまで待ってから通知します。
+    const results = await Promise.allSettled(
+      prepared.map(async ({ key: resolvedKey, leaf }) => {
         const existsContext = new HasContext({
-          key: resolved.key,
+          key: resolvedKey,
           store,
           signal,
         });
         const deleteContext = new DeleteContext({
-          key: resolved.key,
+          key: resolvedKey,
           store,
           signal,
         });
 
         try {
-          if (await leaf.storage.exists(existsContext)) {
-            await leaf.storage.delete(deleteContext);
+          const outcome = outcomes.get(leaf);
+
+          if (!(await leaf.storage.exists(existsContext))) {
+            if (outcome !== undefined) {
+              outcome.status = "notFound";
+            }
+
+            return;
+          }
+
+          await leaf.storage.delete(deleteContext);
+
+          if (outcome !== undefined) {
+            outcome.status = "committed";
           }
         } catch (ex) {
           errors.push({
@@ -1195,16 +1288,57 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             index: leaf.index,
             reason: ex,
           });
+
+          const outcome = outcomes.get(leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "failed";
+            outcome.error = ex;
+          }
         }
       }),
     );
 
-    if (errors.length > 0) {
-      throw new PluginOperationAggregateError({
-        action: "delete",
-        errors,
-        plugin: "storage",
+    // 想定外の拒否も結果へ反映し、すべての宛先に確定した結果を渡します。
+    for (const [index, result] of results.entries()) {
+      if (result.status !== "rejected") {
+        continue;
+      }
+
+      const target = prepared[index];
+
+      if (target === undefined) {
+        continue;
+      }
+
+      const { leaf } = target;
+      const outcome = outcomes.get(leaf);
+      errors.push({
+        name: leaf.name,
+        index: leaf.index,
+        reason: result.reason,
       });
+
+      if (outcome !== undefined) {
+        outcome.status = "failed";
+        outcome.error = result.reason;
+      }
+
+      logger.error`Failed to delete in a storage: ${result.reason}`;
+    }
+
+    const error =
+      errors.length === 0
+        ? undefined
+        : new PluginOperationAggregateError({
+            action: "delete",
+            errors,
+            plugin: "storage",
+          });
+    await this.#notifyAfterUse(useContext, this.#createUseOutcome(signal, outcomes, error));
+
+    if (error !== undefined) {
+      throw error;
     }
   }
 
@@ -1285,6 +1419,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     throwIfAborted(signal);
     // 一括削除は全宛先で並列に実行し、失敗は宛先の index 付きで集約します。
     const errors: PluginErrorRecord[] = [];
+    const outcomes = this.#createTargetOutcomes(this.#pipeline.leaves);
     await Promise.all(
       this.#pipeline.leaves.map(async (leaf, index) => {
         try {
@@ -1293,22 +1428,41 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             signal,
           });
           await leaf.storage.clear(c);
+
+          const outcome = outcomes.get(leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "committed";
+          }
         } catch (ex) {
           errors.push({
             name: leaf.name,
             index,
             reason: ex,
           });
+
+          const outcome = outcomes.get(leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "failed";
+            outcome.error = ex;
+          }
         }
       }),
     );
 
-    if (errors.length > 0) {
-      throw new PluginOperationAggregateError({
-        action: "clear",
-        errors,
-        plugin: "storage",
-      });
+    const error =
+      errors.length === 0
+        ? undefined
+        : new PluginOperationAggregateError({
+            action: "clear",
+            errors,
+            plugin: "storage",
+          });
+    await this.#notifyAfterUse(useContext, this.#createUseOutcome(signal, outcomes, error));
+
+    if (error !== undefined) {
+      throw error;
     }
   }
 
@@ -1384,7 +1538,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         signal,
       });
 
-      await this.#transferLeaves(action, key, store, signal, sourceResolver, destinationResolver);
+      await this.#transferLeaves(
+        action,
+        key,
+        store,
+        signal,
+        sourceResolver,
+        destinationResolver,
+        useContext,
+      );
 
       return;
     }
@@ -1401,7 +1563,15 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       signal,
     });
 
-    await this.#transferLeaves(action, key, store, signal, sourceResolver, destinationResolver);
+    await this.#transferLeaves(
+      action,
+      key,
+      store,
+      signal,
+      sourceResolver,
+      destinationResolver,
+      useContext,
+    );
   }
 
   /**
@@ -1413,6 +1583,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param signal 中断シグナルです。
    * @param sourceResolver コピー元・移動元のキーを解決するリゾルバーです。
    * @param destinationResolver コピー先・移動先のキーを解決するリゾルバーです。
+   * @param useContext 操作前の `use` で使ったコンテキストです。
    *
    * @returns 操作が完了したら解決します。
    */
@@ -1423,14 +1594,47 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     signal: AbortSignal,
     sourceResolver: ReturnType<PipelineGraph["createResolver"]>,
     destinationResolver: ReturnType<PipelineGraph["createResolver"]>,
+    useContext: IMiddleware.UseContext,
   ): Promise<void> {
     const errors: PluginErrorRecord[] = [];
-    let found = 0;
-    await Promise.all(
-      this.#pipeline.leaves.map(async (leaf) => {
-        const sourceKey = sourceResolver.resolve(leaf).key;
-        const destinationKey = destinationResolver.resolve(leaf).key;
+    const outcomes = this.#createTargetOutcomes(this.#pipeline.leaves);
+    const prepared: {
+      readonly leaf: PipelineLeaf;
+      readonly sourceKey: string;
+      readonly destinationKey: string;
+    }[] = [];
 
+    // キー写像はストレージ操作を開始する前に全葉分を解決します。
+    // 途中で写像に失敗しても、開始済みの転送を残したままキーロックを解放しないようにするためです。
+    for (const leaf of this.#pipeline.leaves) {
+      try {
+        prepared.push({
+          leaf,
+          sourceKey: sourceResolver.resolve(leaf).key,
+          destinationKey: destinationResolver.resolve(leaf).key,
+        });
+      } catch (ex) {
+        errors.push({
+          name: leaf.name,
+          index: leaf.index,
+          reason: ex,
+        });
+
+        const outcome = outcomes.get(leaf);
+
+        if (outcome !== undefined) {
+          outcome.status = "failed";
+          outcome.error = ex;
+        }
+
+        logger.error`Failed to ${action} in a storage: ${ex}`;
+      }
+    }
+
+    let found = 0;
+    // 中断で失敗した転送は即座に投げず、開始済みの全転送が終わるまで待ってから投げます。
+    const results = await Promise.allSettled(
+      prepared.map(async ({ leaf, sourceKey, destinationKey }) => {
         try {
           const existsContext = new HasContext({
             key: sourceKey,
@@ -1439,6 +1643,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           });
 
           if (!(await leaf.storage.exists(existsContext))) {
+            const outcome = outcomes.get(leaf);
+
+            if (outcome !== undefined) {
+              outcome.status = "notFound";
+            }
+
             return;
           }
 
@@ -1461,7 +1671,20 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             });
             await leaf.storage.move(c);
           }
+
+          const outcome = outcomes.get(leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "committed";
+          }
         } catch (ex) {
+          const outcome = outcomes.get(leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "failed";
+            outcome.error = ex;
+          }
+
           if (signal.aborted) {
             throw ex;
           }
@@ -1476,16 +1699,50 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       }),
     );
 
-    if (found === 0) {
-      throw this.#notFound(key, errors, action);
+    const abortFailure = results.find(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+    let failure: Error | undefined = undefined;
+
+    if (!signal.aborted) {
+      if (found === 0) {
+        // キー写像の失敗などで 1 件も存在確認できていない場合は、キー不在ではなく解決失敗として報告します。
+        if (prepared.length === 0 && errors.length > 0) {
+          failure = new PluginOperationAggregateError({
+            action,
+            errors,
+            plugin: "storage",
+          });
+        } else {
+          failure = this.#notFound(key, errors, action);
+        }
+      } else if (errors.length > 0) {
+        failure = new PluginOperationAggregateError({
+          action,
+          errors,
+          plugin: "storage",
+        });
+      }
     }
 
-    if (errors.length > 0) {
-      throw new PluginOperationAggregateError({
-        action,
-        errors,
-        plugin: "storage",
-      });
+    await this.#notifyAfterUse(
+      useContext,
+      this.#createUseOutcome(
+        signal,
+        outcomes,
+        signal.aborted ? (abortFailure?.reason ?? signal.reason) : failure,
+      ),
+    );
+
+    if (abortFailure !== undefined) {
+      throw abortFailure.reason;
+    }
+
+    // ストレージが中断を無視して完了した場合も、中断済みの操作を成功として扱いません。
+    throwIfAborted(signal);
+
+    if (failure !== undefined) {
+      throw failure;
     }
   }
 
@@ -1723,8 +1980,9 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * 書き込み失敗の集約と、成功した宛先への通知を行います。
    *
    * @param targets 書き込みを試みた対象です。
+   * @param store 操作内で共有される変数ストアです。
    * @param failed 失敗した葉の集合です。
-   * @param errors 集約する失敗です。
+   * @param error 集約する失敗です。失敗がないときは `undefined` です。
    * @param signal 中断シグナルです。
    */
   async #finishWrites(
@@ -1734,18 +1992,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     }[],
     store: VariablesStore,
     failed: ReadonlySet<PipelineLeaf>,
-    errors: PluginErrorRecord[],
+    error: PluginOperationAggregateError | undefined,
     signal: AbortSignal,
   ): Promise<void> {
-    if (errors.length === 0) {
+    if (error === undefined) {
       return;
     }
 
-    const error = new PluginOperationAggregateError({
-      action: "write",
-      errors,
-      plugin: "storage",
-    });
     const notifyErrors: unknown[] = [];
     await Promise.all(
       targets.map(async (target) => {
@@ -1775,12 +2028,126 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
   }
 
   /**
+   * 宛先ごとの結果を未確定 (`skipped`) の状態で作成します。
+   *
+   * @param leaves 対象の葉です。
+   *
+   * @returns 葉をキーにした更新可能な結果のマップを返します。
+   */
+  #createTargetOutcomes(
+    leaves: readonly PipelineLeaf[],
+  ): Map<PipelineLeaf, MutableUseTargetOutcome> {
+    const targets = new Map<PipelineLeaf, MutableUseTargetOutcome>();
+
+    for (const leaf of leaves) {
+      targets.set(leaf, {
+        name: leaf.name,
+        index: leaf.index,
+        status: "skipped",
+      });
+    }
+
+    return targets;
+  }
+
+  /**
+   * 宛先ごとの結果から `afterUse` に渡す操作全体の結果を組み立てます。
+   *
+   * @param signal 中断シグナルです。
+   * @param targets 宛先ごとの結果です。
+   * @param error 操作全体の失敗理由です。
+   *
+   * @returns 操作全体の結果を返します。
+   */
+  #createUseOutcome(
+    signal: AbortSignal,
+    targets: ReadonlyMap<PipelineLeaf, MutableUseTargetOutcome>,
+    error: unknown,
+  ): IMiddleware.UseOutcome {
+    const targetOutcomes: IMiddleware.UseTargetOutcome[] = [];
+
+    for (const target of [...targets.values()].sort((a, b) => a.index - b.index)) {
+      targetOutcomes.push(
+        Object.freeze(
+          target.status === "failed" && target.error !== undefined
+            ? {
+                name: target.name,
+                error: target.error,
+                index: target.index,
+                status: target.status,
+              }
+            : {
+                name: target.name,
+                index: target.index,
+                status: target.status,
+              },
+        ),
+      );
+    }
+
+    const frozenTargets = Object.freeze(targetOutcomes);
+
+    if (signal.aborted) {
+      return Object.freeze({
+        error: signal.reason,
+        status: "aborted",
+        targets: frozenTargets,
+      });
+    }
+
+    if (error !== undefined) {
+      return Object.freeze({
+        error,
+        status: "error",
+        targets: frozenTargets,
+      });
+    }
+
+    return Object.freeze({
+      status: "success",
+      targets: frozenTargets,
+    });
+  }
+
+  /**
+   * ストレージ I/O の確定を全ミドルウェアへ通知します。
+   *
+   * 登録順に 1 回ずつ呼び、ミドルウェアが適用されない葉の結果は渡しません。
+   * 通知の失敗はログに記録するだけで、操作の結果を置き換えません。
+   *
+   * @param c 操作コンテキストです。
+   * @param outcome 操作全体と宛先ごとの結果です。
+   */
+  async #notifyAfterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): Promise<void> {
+    for (const middleware of this.#pipeline.middlewares) {
+      const leafIndexes = this.#pipeline.leafIndexesOf(middleware);
+      const targets = Object.freeze(
+        outcome.targets.filter((target) => leafIndexes.has(target.index)),
+      );
+      const middlewareOutcome = Object.freeze({
+        status: outcome.status,
+        ...(outcome.error === undefined ? {} : { error: outcome.error }),
+        targets,
+      });
+
+      try {
+        await middleware.afterUse(c, middlewareOutcome);
+      } catch (ex) {
+        logger.error`Middleware "${middleware.name}" failed in afterUse: ${ex}`;
+      }
+    }
+  }
+
+  /**
    * ミドルウェアの `use` をオニオン実行し、失敗時は集約して投げます。
    *
    * 同一コンテキストオブジェクトを全ミドルウェアで共有し、`next` で下流をネスト実行するため、下流の `set` が上流の `await next()` 後の `get` に見えます。
    * `encode`/`decode` と同じく `next()` の呼び出し規約を検証し、違反したときは操作を実行せず失敗させます (fail-close)。
    * いずれかのミドルウェアが投げたときは即時に確定し、後段は実行しません (fail-fast)。
    * 失敗は集約エラー (単一件) として投げます。
+   *
+   * `use` はストレージ I/O の前に完了するため、この境界だけでは I/O の成否を表現できません。
+   * 書き込み系の操作では、ストレージ操作の完了後に `afterUse` で結果を通知します。
    *
    * @param action 集約エラーに付与する操作名です。
    * @param c 共有の `use` コンテキストです。
@@ -1803,18 +2170,24 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
       let nextCalled = false;
       let nextSettled = false;
+      let nextCalledMultipleTimes = false;
       let downstreamError: unknown;
       let hasDownstreamError = false;
+      const contract = new MiddlewareContractTracker();
 
       function next(): Promise<void> {
         if (nextCalled) {
           // 2 回目以降の `next()` は下流を実行せず拒否だけを返します。
-          const rejection = Promise.reject(
-            new MiddlewareNextCalledMultipleTimesError({
-              name: middleware.name,
-              operation: "use",
-            }),
-          );
+          // 規約違反は、呼び出し側が拒否を握り潰しても操作全体を失敗させます。
+          nextCalledMultipleTimes = true;
+
+          const ex = new MiddlewareNextCalledMultipleTimesError({
+            name: middleware.name,
+            operation: "use",
+          });
+          contract.record(ex);
+
+          const rejection = Promise.reject(ex);
           // 呼び出し側が切り離した場合の未処理 rejection を防ぎます。await したときは従来どおり拒否されます。
           // oxlint-disable-next-line promise/prefer-await-to-then
           rejection.catch(() => {});
@@ -1831,6 +2204,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             // 下流の失敗を親自身の失敗と取り違えないよう、由来を記録します。
             downstreamError = ex;
             hasDownstreamError = true;
+            // 下流の規約違反を上流が握り潰しても、境界で再び投げられるよう記録します。
+            contract.record(ex);
             throw ex;
           } finally {
             nextSettled = true;
@@ -1846,19 +2221,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       try {
         await middleware.use(c, next);
         throwIfAborted(c.signal);
+        if (nextCalledMultipleTimes) {
+          contract.record(
+            new MiddlewareNextCalledMultipleTimesError({
+              name: middleware.name,
+              operation: "use",
+            }),
+          );
+        }
+
         if (!nextCalled) {
-          throw new MiddlewareNextNotCalledError({
-            name: middleware.name,
-            operation: "use",
-          });
+          contract.record(
+            new MiddlewareNextNotCalledError({
+              name: middleware.name,
+              operation: "use",
+            }),
+          );
         }
 
         if (!nextSettled) {
-          throw new MiddlewareNextNotAwaitedError({
-            name: middleware.name,
-            operation: "use",
-          });
+          contract.record(
+            new MiddlewareNextNotAwaitedError({
+              name: middleware.name,
+              operation: "use",
+            }),
+          );
         }
+
+        // 下流で記録された規約違反を上流が握り潰しても、操作全体を失敗させます。
+        contract.throwIfViolated();
       } catch (ex) {
         // 中断による失敗はそのまま投げます。
         if (c.signal.aborted && ex === c.signal.reason) {
@@ -1866,13 +2257,8 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         }
 
         // 規約違反はプログラミングエラーであり、集約せずに投げます。
-        if (
-          ex instanceof MiddlewareNextNotCalledError ||
-          ex instanceof MiddlewareNextNotAwaitedError ||
-          ex instanceof MiddlewareNextCalledMultipleTimesError
-        ) {
-          throw ex;
-        }
+        contract.record(ex);
+        contract.throwIfViolated();
 
         // `next()` から伝播した下流の失敗は再集約せず、そのまま投げます。
         if (hasDownstreamError && ex === downstreamError) {
@@ -1903,6 +2289,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param key 書き込みキーです。
    * @param store 操作内で共有される変数ストアです。
    * @param value 書き込む値です.
+   * @param useContext 書き込み前の `use` で使ったコンテキストです。
    */
   async #setPlain(
     io: Asyncmux,
@@ -1910,6 +2297,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: string,
     store: VariablesStore,
     value: unknown,
+    useContext: IMiddleware.UseContext,
   ): Promise<void> {
     const targets = await this.#pipeline.encode(
       {
@@ -1925,6 +2313,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     });
     const errors: PluginErrorRecord[] = [];
     const failed = new Set<PipelineLeaf>();
+    const outcomes = this.#createTargetOutcomes(targets.map((target) => target.leaf));
     await Promise.all(
       targets.map(async (target) => {
         try {
@@ -1934,6 +2323,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             signal,
           });
           await target.leaf.storage.write(c, target.data);
+
+          const outcome = outcomes.get(target.leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "committed";
+          }
         } catch (ex) {
           errors.push({
             name: target.leaf.name,
@@ -1941,10 +2336,27 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             reason: ex,
           });
           failed.add(target.leaf);
+
+          const outcome = outcomes.get(target.leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "failed";
+            outcome.error = ex;
+          }
         }
       }),
     );
-    await this.#finishWrites(targets, store, failed, errors, signal);
+
+    const error =
+      errors.length === 0
+        ? undefined
+        : new PluginOperationAggregateError({
+            action: "write",
+            errors,
+            plugin: "storage",
+          });
+    await this.#notifyAfterUse(useContext, this.#createUseOutcome(signal, outcomes, error));
+    await this.#finishWrites(targets, store, failed, error, signal);
   }
 
   /**
@@ -1955,6 +2367,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
    * @param key 書き込みキーです。
    * @param store 操作内で共有される変数ストアです。
    * @param value 書き込むストリームです。
+   * @param useContext 書き込み前の `use` で使ったコンテキストです。
    */
   async #setStream(
     io: Asyncmux,
@@ -1962,6 +2375,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     key: string,
     store: VariablesStore,
     value: IReadableStream,
+    useContext: IMiddleware.UseContext,
   ): Promise<void> {
     const streams = new Set<IReadableStream>([value]);
     let tree;
@@ -1995,6 +2409,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const errors: PluginErrorRecord[] = [];
     const failed = new Set<PipelineLeaf>();
+    const outcomes = this.#createTargetOutcomes(tree.targets.map((target) => target.leaf));
     await Promise.all(
       tree.targets.map(async (target) => {
         try {
@@ -2005,6 +2420,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
           });
           const w = await target.leaf.storage.getWritable(c);
           await target.stream.pipeTo(w, { signal });
+
+          const outcome = outcomes.get(target.leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "committed";
+          }
         } catch (ex) {
           // tee で分岐したストリームは、片方の分岐をキャンセルするまで他方が読み取ったチャンクを保持し続けるため、失敗時に放棄した分岐は確実にキャンセルします。
           try {
@@ -2019,10 +2440,27 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
             reason: ex,
           });
           failed.add(target.leaf);
+
+          const outcome = outcomes.get(target.leaf);
+
+          if (outcome !== undefined) {
+            outcome.status = "failed";
+            outcome.error = ex;
+          }
         }
       }),
     );
-    await this.#finishWrites(tree.targets, store, failed, errors, signal);
+
+    const error =
+      errors.length === 0
+        ? undefined
+        : new PluginOperationAggregateError({
+            action: "write",
+            errors,
+            plugin: "storage",
+          });
+    await this.#notifyAfterUse(useContext, this.#createUseOutcome(signal, outcomes, error));
+    await this.#finishWrites(tree.targets, store, failed, error, signal);
   }
 
   /**

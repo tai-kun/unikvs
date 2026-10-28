@@ -1,18 +1,28 @@
 ---
 title: "@unikvs/metrics"
-description: "操作の件数やバイト数、遅延を記録し、OTel や Prometheus へ転送できるミドルウェアです。"
+description: "操作の件数とバイト数、use フックの実行時間を記録し、OTel や Prometheus へ転送できるミドルウェアです。"
 ---
 
 ## 概要 [#overview]
 
-`Metrics` はすべての操作の件数やバイト数、遅延を記録し、集計と外部転送を行います。<Badge>Middleware</Badge>
+`Metrics` は操作の件数とバイト数、use フックの実行時間を記録し、集計と外部転送を行います。この実行時間にストレージ I/O の遅延は含みません。<Badge>Middleware</Badge>
 
 性能の可視化や運用監視に使います。測定値はメモリーに保持され、必要に応じて OTel の計器やカスタム出力先へ転送されます。
 
 - `name` は `Metrics` です。
 - `isOpen` は常に `true` です。
-- `use` ですべての操作を測定し、`encode`・`decode`・ストリームではバイト数も記録します。
+- `use` は各操作の前段で `use` フックチェーンの成否と実行時間を測定します。この実行時間にストレージ I/O の遅延は含みません。`encode`・`decode`・ストリームではバイト数も記録します。
 - 記録処理は決して例外を投げず、出力先の失敗は無視します。
+
+:::warning[use の成否と遅延はストレージ操作のものではありません]
+`use` はストレージ I/O の前に実行され、`next()` が実行するのは後段の `use` フックまでです。そのため、`outcome` と `durationMs` は `use` フックチェーンの成否と実行時間を表し、ストレージ操作の成否や遅延を表しません。
+
+`use` フックの後に実行されるストレージ I/O の失敗は、`use` の記録に反映されません。プレーン値の `set` の書き込み失敗、存在しないキー以外の `get` の読み取り失敗、`stream` の取得や存在しないキーの失敗、`delete`・`has`・`clear`・`copy`・`move` の失敗が該当します。Metrics がエラーとして記録するのは、フック自体の失敗と、ラップ後のストリームの読み取り失敗・取り消しです。存在しないキーの `get` もエラーとしては記録されません。プレーン値の `set` がエンコード中に失敗した場合は、`use` の `success` と `encode` の `error` が並びます。
+
+ストリームの記録は、ストリームの完了、読み取り失敗、取り消しのいずれか早い時点で確定します。完了前に書き込み先の失敗などでストリームが取り消された場合は `error` として記録されます。確定後の失敗は反映されず、ソースがラップ前にロックされていた場合は何も記録されません。
+
+`Metrics` は `afterUse` を実装していないため、書き込み系操作の成否を別レコードとして出力しません。コアの `use` はストレージ I/O の前に実行されるため、どのミドルウェアでも `use` からストレージ操作の成否を観測できません。コアには、ストレージ I/O の確定後に成否を受け取る [`afterUse`](/packages/core/middleware#hooks-after-use) フックがあります。
+:::
 
 インストールは次のコマンドで行います。
 
@@ -93,7 +103,7 @@ await kvs.close();
 
 ### `MetricsOutcome` [#metrics-outcome]
 
-観測した操作が成功したか失敗したかを表します。`"success"` か `"error"` です。
+観測した `use` フックチェーン、または `encode`・`decode`・ストリームの成否を表します。`"success"` か `"error"` です。`use` の場合はストレージ操作の成否ではありません。
 
 ### `MetricsExporterKind` [#metrics-exporter-kind]
 
@@ -105,7 +115,7 @@ await kvs.close();
 
 ### `MetricRecord` [#metric-record]
 
-1 回の操作で観測した測定値です。
+1 回のフック実行で観測した測定値です。
 
 <TypeTable
   type={{
@@ -117,12 +127,14 @@ await kvs.close();
     outcome: {
       type: "[#metric-record-outcome] MetricsOutcome",
       required: true,
-      description: "操作が成功したか失敗したかです。",
+      description:
+        "観測したフックの成否です。use フックの場合はストレージ操作の成否ではありません。",
     },
     durationMs: {
       type: "[#metric-record-duration-ms] number",
       required: true,
-      description: "実時間での経過時間 (ミリ秒) です。",
+      description:
+        "観測したフックチェーンの経過時間 (ミリ秒) です。use の場合は use フックチェーンの実行時間で、ストレージ I/O の遅延は含みません。ストリームの場合は、ラップからソース (変換) の完了・読み取り失敗・取り消しによる確定までの時間で、ストリームの消費時間を含むことがあります。ここでの完了はソース (変換) の完了を指し、`destination` の読み切りを意味しません。",
     },
     bytes: {
       type: "[#metric-record-bytes] number | undefined",
@@ -150,17 +162,17 @@ await kvs.close();
     count: {
       type: "[#metrics-action-summary-count] number",
       required: true,
-      description: "記録した操作の総数です。",
+      description: "記録した測定値の総数です。",
     },
     success: {
       type: "[#metrics-action-summary-success] number",
       required: true,
-      description: "成功した操作の数です。",
+      description: "成功した測定値の数です。",
     },
     error: {
       type: "[#metrics-action-summary-error] number",
       required: true,
-      description: "失敗した操作の数です。",
+      description: "失敗した測定値の数です。",
     },
     totalBytes: {
       type: "[#metrics-action-summary-total-bytes] number",
@@ -208,13 +220,18 @@ await kvs.close();
 | `encodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
 | `decodeStream` | `unknown` (チャンク) | `unknown` (チャンク、透過) |
 
-- `use` はすべての操作の遅延と成否を測定し、バイト数は `undefined` で記録します。
+- `use` は操作ごとに 1 件を記録し、バイト数は `undefined` です。`durationMs` は `use` フックチェーンの実行時間で、ストレージ I/O の遅延は含みません。
+- `use` フックの後に実行されるストレージ I/O の失敗は、`use` の記録に反映されません。プレーン値の `set` の書き込み失敗、存在しないキー以外の `get` の読み取り失敗、`stream` の取得や存在しないキーの失敗、`delete`・`has`・`clear`・`copy`・`move` の失敗が該当します。
+- Metrics がエラーとして記録するのは、フック自体の失敗と、ラップ後のストリームの読み取り失敗・取り消しです。存在しないキーの `get` もエラーとしては記録されません。プレーン値の `set` がエンコード中に失敗した場合は、`use` の `success` と `encode` の `error` が並びます。
+- ストリームの記録は、ストリームの完了、読み取り失敗、取り消しのいずれか早い時点で確定します。完了は `success`、読み取り失敗と取り消しは `error` です。完了前に書き込み先の失敗などでストリームが取り消された場合も `error` になります。確定後の失敗は反映されず、ソースがラップ前にロックされていた場合は何も記録されません。
+- ストリームの `durationMs` は、ラップからソース (変換) の完了・読み取り失敗・取り消しによる確定までの時間で、ストリームの消費時間を含むことがあります。ここでの完了はソース (変換) の完了を指し、`destination` の読み切りを意味しません。`use`・`encode`・`decode` の `durationMs` はフックチェーンの実行時間です。
+- `Metrics` は `afterUse` を実装していないため、書き込み系操作の成否を別レコードとして出力しません。コアの `use` はストレージ I/O の前に実行されるため、どのミドルウェアでも `use` からストレージ操作の成否を観測できません。コアには、ストレージ I/O の確定後に成否を受け取る [`afterUse`](/packages/core/middleware#hooks-after-use) フックがあります。
 - `encode` と `decode` はデータをそのまま通し、文字列や `ArrayBuffer`、`ArrayBufferView` ではバイト数も記録します。不明な型では `undefined` です。
-- ストリームではチャンクをそのまま通し、確定時に合計チャンクサイズを 1 件として記録します。取り消しや失敗では `error` として記録します。
+- ストリームではチャンクをそのまま通し、確定時にそれまでの合計チャンクサイズを 1 件として記録します。
 - このミドルウェアはキーラベルを意図的に省略し、`toPrometheusString()` のカーディナリティーが増えないようにしています。キーごとの詳細は `getMetrics()` と `onRecord` から取得できます。
 
 ## エラー [#errors]
 
 このパッケージ固有のエラーはありません。
 
-記録処理は例外を投げず、出力先の失敗は無視するため、メトリクスが操作のパイプラインを壊すことはありません。元の操作が失敗したときは記録後にそのエラーを再送出します。
+記録処理は例外を投げず、出力先の失敗は無視するため、メトリクスが操作のパイプラインを壊すことはありません。フックの実行中にエラーが発生したときは、`error` を記録してからそのエラーを再送出します。ストリームでは、読み取り中の失敗や取り消しも `error` として記録します。ただし、`use` はストレージ I/O の前に完了するため、ストレージ操作の失敗は `use` の記録には反映されません。

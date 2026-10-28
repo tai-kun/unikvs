@@ -10,6 +10,10 @@ description: "How to use @unikvs/vercel-runtime-cache, which stores values in th
 This storage auto-detects the runtime cache and falls back to an in-process `Map` when none is found. In both cases entries are evicted by TTL and maximum count.
 
 - `name` is `VercelRuntimeCache`.
+- When you share a backend, set a `namespace`. When `namespace` is set, `clear` deletes only the keys tracked by the current instance; keys written by other instances or processes in the same namespace are not removed.
+- `maxEntries` eviction and expired-key removal rely on per-instance tracking. A shared backend may therefore hold more than `maxEntries` keys.
+- Backend eviction is oldest-written (FIFO), while fallback eviction is least-recently-used (LRU).
+- When `namespace` is empty and the backend provides `clear`, `clear` deletes the entire backend.
 - `isOpen` is always `true`. `open()` / `close()` only check for interruption.
 - `delete` throws `KeyNotFoundError` for a missing key.
 - Supports streamed reading and writing.
@@ -43,7 +47,8 @@ The constructor arguments are as follows:
     },
     maxEntries: {
       type: "[#vercel-runtime-cache-max-entries] number",
-      description: "The maximum number of entries to keep. Unlimited when omitted.",
+      description:
+        "The maximum number of entries to keep. Unlimited when omitted. Evicts oldest-written entries (FIFO) on the backend and least-recently-used entries (LRU) on the fallback.",
     },
     namespace: {
       type: "[#vercel-runtime-cache-namespace] string",

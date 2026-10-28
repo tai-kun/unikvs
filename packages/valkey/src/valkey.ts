@@ -182,6 +182,19 @@ export type ValkeyStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect
 const SCAN_COUNT = 1000;
 
 /**
+ * glob パターンで特別な意味を持つ文字をエスケープします。
+ *
+ * `keyPrefix` はリテラルな接頭辞のため、`MATCH` へ渡す前にメタ文字を無効化します。
+ *
+ * @param value エスケープする文字列です。
+ *
+ * @returns リテラルとして扱われる文字列です。
+ */
+function escapeGlob(value: string): string {
+  return value.replaceAll(/[*?[\]\\]/gu, "\\$&");
+}
+
+/**
  * 接続確立の既定タイムアウト (ミリ秒) です。
  */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
@@ -612,8 +625,9 @@ export default class Valkey implements IStorage {
     throwIfAborted(c.signal);
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
-    const pattern = `${this.#keyPrefix}*`;
-    await this.#clearPattern(client, pattern, c.signal);
+    // `keyPrefix` はリテラルな接頭辞のため、glob メタ文字をエスケープしてから `*` を付けます。
+    const pattern = `${escapeGlob(this.#keyPrefix)}*`;
+    await this.#clearPattern(client, pattern, this.#keyPrefix, c.signal);
   }
 
   /**
@@ -828,14 +842,21 @@ export default class Valkey implements IStorage {
    * 接頭辞に一致するキーを走査して削除します。
    *
    * `SCAN` で頁送りしながら `DEL` します。
+   * サーバーがパターン解釈を誤っても接頭辞外を削除しないよう、返却キーを再確認します。
    *
    * @param client 操作に使うクライアントです。
    * @param pattern 削除対象の一致パターンです。
+   * @param prefix 削除対象のリテラルな接頭辞です。
    * @param signal 中断を知らせるシグナルです。
    *
    * @returns 削除が完了したら解決します。
    */
-  async #clearPattern(client: ValkeyClient, pattern: string, signal: AbortSignal): Promise<void> {
+  async #clearPattern(
+    client: ValkeyClient,
+    pattern: string,
+    prefix: string,
+    signal: AbortSignal,
+  ): Promise<void> {
     using abortPromise = toAbortPromise(signal);
 
     let cursor = "0";
@@ -848,8 +869,11 @@ export default class Valkey implements IStorage {
         abortPromise,
       ]);
 
-      if (keys.length > 0) {
-        await client.del(...keys);
+      // `SCAN` の実装差で接頭辞外が混ざっても、自プレフィックス配下だけを削除します。
+      const targets = keys.filter((key) => key.startsWith(prefix));
+
+      if (targets.length > 0) {
+        await client.del(...targets);
       }
 
       cursor = nextCursor;

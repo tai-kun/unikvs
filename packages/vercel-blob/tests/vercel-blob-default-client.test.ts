@@ -62,6 +62,34 @@ describe("既定クライアントの委譲", () => {
     });
   });
 
+  test("Buffer の部分ビューでも byteLength 分だけを put に渡す", async ({ expect }) => {
+    // 準備：
+    mockPut.mockResolvedValue({
+      url: "https://fake.blob/k",
+      pathname: "k",
+    });
+    const backing = new ArrayBuffer(64);
+    const buffer = Buffer.from(backing, 16, 3);
+    buffer.set([1, 2, 3]);
+
+    const storage = new VercelBlob();
+
+    // 実行：
+    await storage.write(
+      createSetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.WriteContext,
+      buffer,
+    );
+
+    // 検証：
+    const [, body] = mockPut.mock.calls[0] as unknown as [
+      string,
+      ArrayBuffer,
+      Record<string, unknown>,
+    ];
+    expect(body.byteLength).toBe(3);
+    expect(new Uint8Array(body)).toStrictEqual(new Uint8Array([1, 2, 3]));
+  });
+
   test("keyPrefix と access が put に反映される", async ({ expect }) => {
     // 準備：
     mockPut.mockResolvedValue({
@@ -277,7 +305,7 @@ describe("既定クライアントの委譲", () => {
     // 検証：
     expect(result).toStrictEqual(new Uint8Array([9]));
 
-    expect(gotRequest?.url).toBe("https://fake.blob/k");
+    expect(gotRequest?.url).toBe("https://fake.blob/k?cache=0");
     expect(gotRequest?.headers.get("authorization")).toBe("Bearer secret");
   });
 });

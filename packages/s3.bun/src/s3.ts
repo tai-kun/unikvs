@@ -330,6 +330,10 @@ export default class S3 implements IStorage {
    * 書き込み用ストリームを取得します。
    *
    * コンテキストのパートサイズ設定でマルチパート書き込みを行います。
+   * 中断時は読み取り側のストリームをエラーにして、Bun に進行中のマルチパートアップロードを中止させます。
+   *
+   * `abort()` も `close()` も呼ばずにストリームを破棄した場合は、Bun の S3 クライアントがガベージコレクション時にアップロードを中止するまでマルチパートアップロードが残ります。
+   * 明示的な中断には `abort()` を使用してください。
    *
    * @param c 書き込みストリーム取得コンテキストです。
    *
@@ -341,22 +345,97 @@ export default class S3 implements IStorage {
     }
 
     const partSize = resolvePartSize(c);
-    const writer = this.#getClient()
+    const { readable, writable } = new TransformStream<
+      Uint8Array<ArrayBuffer>,
+      Uint8Array<ArrayBuffer>
+    >();
+    const sink = writable.getWriter();
+    const upload = this.#getClient()
       .file(c.key)
-      .writer(partSize === undefined ? {} : { partSize });
+      .write(new Response(readable), partSize === undefined ? {} : { partSize });
+
+    // `close()` または `abort()` で待つまで、アップロードの失敗を未処理の拒否にしません。
+    void (async (): Promise<void> => {
+      try {
+        await upload;
+      } catch {
+        // 失敗は `close()` または `abort()` の待機時に改めて受け取ります。
+      }
+    })();
+
+    let finished = false;
+    let cleanup: Promise<void> | null = null;
+    const removeAbortListener = (): void => {
+      c.signal.removeEventListener("abort", onAbort);
+    };
+    const discard = (reason: unknown): Promise<void> => {
+      if (cleanup !== null) {
+        return cleanup;
+      }
+
+      if (finished) {
+        return Promise.resolve();
+      }
+
+      finished = true;
+      removeAbortListener();
+      // 読み取り側をエラーにすると、Bun が進行中のマルチパートアップロードを中止します。
+      cleanup = (async (): Promise<void> => {
+        try {
+          await sink.abort(reason);
+        } catch {
+          // 中断時の失敗は無視します。
+        }
+
+        try {
+          await upload;
+        } catch {
+          // 中断したアップロードの失敗は呼び出し側へ伝えません。
+        }
+      })();
+
+      return cleanup;
+    };
+    const onAbort = (): void => {
+      void discard(c.signal.reason);
+    };
+    c.signal.addEventListener("abort", onAbort, { once: true });
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
-      async abort() {
-        // Bun の NetworkSink には中断用の API がないため、end を呼ばずに破棄します。
-        // 完了していないマルチパートアップロードはオブジェクトとして公開されません。
+      async abort(reason) {
+        await discard(reason);
       },
       async close() {
         c.signal.throwIfAborted();
-        await writer.end();
+
+        // 中断リスナーが後から割り込まないよう、先に完了扱いにします。
+        finished = true;
+        removeAbortListener();
+
+        try {
+          await sink.close();
+        } catch (ex) {
+          // 読み取り側を閉じられなかった場合は、アップロードの完了も待ってから失敗を返します。
+          try {
+            await upload;
+          } catch {
+            // 元の失敗を優先します。
+          }
+
+          throw ex;
+        }
+
+        await upload;
       },
       async write(chunk) {
         c.signal.throwIfAborted();
-        await writer.write(chunk);
+
+        try {
+          await sink.write(chunk);
+        } catch (ex) {
+          await discard(ex);
+          throw ex;
+        }
       },
     });
   }

@@ -339,6 +339,40 @@ describe("複合値のラウンドトリップ", () => {
   });
 });
 
+describe("デコード結果の所有権", () => {
+  test("元のバッファーより大きな領域を参照するサブ配列からデコードしたバイト文字列は元のバッファーを参照しない", async () => {
+    // 準備：
+    const bytes = Uint8Array.of(0x44, 1, 2, 3, 4);
+    const pool = new Uint8Array(bytes.byteLength + 32);
+    const source = pool.subarray(16, 16 + bytes.byteLength);
+    source.set(bytes);
+
+    // 実行：
+    const output = await decode(source);
+
+    // 検証：
+    expect(output).toBeInstanceOf(Uint8Array);
+    expect((output as Uint8Array).buffer).not.toBe(pool.buffer);
+  });
+
+  test("デコード後に元のバッファーを書き換えてもデコード結果は変化しない", async () => {
+    // 準備：
+    const expected = Uint8Array.of(1, 2, 3, 4);
+    const bytes = Uint8Array.of(0x44, 1, 2, 3, 4);
+    const pool = new Uint8Array(bytes.byteLength + 32);
+    const source = pool.subarray(16, 16 + bytes.byteLength);
+    source.set(bytes);
+
+    // 実行：
+    const output = await decode(source);
+
+    pool.fill(255);
+
+    // 検証：
+    expect(output).toStrictEqual(expected);
+  });
+});
+
 describe("標準の CBOR との相互運用", () => {
   test("標準のマップはプレーンオブジェクトへデコードされる", async () => {
     // 準備：

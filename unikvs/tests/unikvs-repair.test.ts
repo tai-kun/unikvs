@@ -4,7 +4,7 @@ import { vi, test, describe } from "vite-plus/test";
 
 import { logger, repairLogger } from "../src/_logger.js";
 import { PluginOperationAggregateError } from "../src/errors.js";
-import { Builder } from "../src/index.js";
+import { Branch, Builder } from "../src/index.js";
 import type { PlainValue, StreamValue } from "../src/value-schemas.js";
 import {
   Gate,
@@ -1307,5 +1307,332 @@ describe("UniKvs - 共有 prefix の修復", () => {
 
     // 後片付け。
     await vs.dispose();
+  });
+});
+
+describe("UniKvs - 書き戻し中の中断と拒否", () => {
+  test("abort で失敗しても開始済みの書き戻しが終わるまでキーロックを解放しない", async ({
+    expect,
+  }) => {
+    // 準備 : 共有節の next() 後に abort し、2 つの書き戻しをゲートで保留する。
+    const reason = new Error("repair aborted");
+    const cache1 = new FakeStorage("cache1");
+    const cache2 = new FakeStorage("cache2");
+    const server = new FakeStorage("server");
+    const release = new Gate();
+    let started = 0;
+    const entered = Promise.withResolvers<void>();
+
+    for (const cache of [cache1, cache2]) {
+      cache.hook = async (call): Promise<void> => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (call.method === "write") {
+          started += 1;
+          // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+          if (started === 2) {
+            entered.resolve();
+          }
+
+          await release.wait();
+        }
+      };
+    }
+
+    const ac = new AbortController();
+
+    class AbortAfterNextMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("AbortAfterNext");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+        ac.abort(reason);
+      }
+    }
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new AllowRepair())
+      .use(new AbortAfterNextMiddleware())
+      .persist(cache1)
+      .persist(cache2)
+      .persist(server)
+      .build();
+    await kvs.open();
+
+    server.map.set("foo", "value");
+
+    const pending = kvs.get("foo", {
+      repair: true,
+      signal: ac.signal,
+    });
+
+    try {
+      await entered.promise;
+      // 早期の拒否がマイクロタスク境界を越えて伝播するのを待ちます。
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // 検証 : abort 済みでも、開始済みの書き戻しが終わるまで get は確定しない。
+      await expect(isPending(pending)).resolves.toBe(true);
+
+      release.open();
+
+      await expect(pending).rejects.toBe(reason);
+
+      // 検証 : 書き戻しの完了後にキーロックが解放され、後続の削除が遅れて上書きされない。
+      await kvs.delete("foo");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(cache1.map.has("foo")).toBe(false);
+      expect(cache2.map.has("foo")).toBe(false);
+      expect(server.map.has("foo")).toBe(false);
+    } finally {
+      release.open();
+      await pending.catch(() => {});
+    }
+  });
+
+  test("走査中の拒否でも開始済みの書き戻しが終わるまでキーロックを解放しない", async ({
+    expect,
+  }) => {
+    // 準備 : 許可された c1 の書き戻しを開始した後、許可のない c2 の走査で拒否を確定させる。
+    const allowed = new FakeStorage("allowed");
+    const denied = new FakeStorage("denied");
+    const server = new FakeStorage("server");
+    const release = new Gate();
+    const entered = Promise.withResolvers<void>();
+    allowed.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "write") {
+        entered.resolve();
+        await release.wait();
+      }
+    };
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .persist(denied)
+      .use(new AllowRepair())
+      .persist(allowed)
+      .persist(server)
+      .build();
+    await kvs.open();
+
+    server.map.set("foo", "value");
+
+    const pending = kvs.get("foo", {
+      repair: true,
+      throwOnRepairDenied: true,
+    });
+
+    try {
+      await entered.promise;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // 検証 : 走査中の拒否は、開始済みの書き戻しが終わるまで確定しない。
+      await expect(isPending(pending)).resolves.toBe(true);
+
+      release.open();
+
+      await expect(pending).rejects.toBeInstanceOf(RepairNotAllowedError);
+
+      await kvs.delete("foo");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(allowed.map.has("foo")).toBe(false);
+      expect(denied.map.has("foo")).toBe(false);
+      expect(server.map.has("foo")).toBe(false);
+    } finally {
+      release.open();
+      await pending.catch(() => {});
+    }
+  });
+
+  test("書き戻し中に close しても開始済みの書き込みが close 後に着地しない", async ({ expect }) => {
+    // 準備 : 書き戻しの書き込みをゲートで保留し、next() 後にもう一方のゲートで走査を止める。
+    class OrderedStorage extends FakeStorage {
+      public closed = false;
+
+      public writesAfterClose = 0;
+
+      public override async close(c: Parameters<FakeStorage["close"]>[0]): Promise<void> {
+        await super.close(c);
+        this.closed = true;
+      }
+
+      public override async write(
+        c: Parameters<FakeStorage["write"]>[0],
+        data: unknown,
+      ): Promise<void> {
+        await super.write(c, data);
+
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (this.closed) {
+          this.writesAfterClose += 1;
+        }
+      }
+    }
+
+    const cache1 = new OrderedStorage("cache1");
+    const cache2 = new OrderedStorage("cache2");
+    const server = new FakeStorage("server");
+    const writeRelease = new Gate();
+    const writeEntered = Promise.withResolvers<void>();
+    let writeStarted = 0;
+
+    for (const cache of [cache1, cache2]) {
+      cache.hook = async (call): Promise<void> => {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (call.method === "write") {
+          writeStarted += 1;
+          // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+          if (writeStarted === 2) {
+            writeEntered.resolve();
+          }
+
+          await writeRelease.wait();
+        }
+      };
+    }
+
+    class PauseAfterNextMiddleware extends FakeMiddleware {
+      public readonly entered = new Gate();
+
+      public readonly release = new Gate();
+
+      public constructor() {
+        super("PauseAfterNext");
+      }
+
+      public override async encode(
+        c: IMiddleware.EncodeContext,
+        next: IMiddleware.INext,
+      ): Promise<void> {
+        c.destination = c.source;
+        await next();
+        this.entered.open();
+        await this.release.wait();
+      }
+    }
+
+    const pause = new PauseAfterNextMiddleware();
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new AllowRepair())
+      .use(pause)
+      .persist(cache1)
+      .persist(cache2)
+      .persist(server)
+      .build();
+    await kvs.open();
+
+    server.map.set("foo", "value");
+
+    const getPending = kvs.get("foo", { repair: true });
+
+    try {
+      await writeEntered.promise;
+      await pause.entered.wait();
+
+      // 実行 : 走査を保留したまま close する。
+      const closing = kvs.close();
+
+      // 実行 : 走査を再開させ、repair が書き戻しの完了待ちに入るか確認する。
+      pause.release.open();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // 検証 : 書き戻しの書き込み中は close も完了しない。
+      await expect(isPending(closing)).resolves.toBe(true);
+
+      writeRelease.open();
+
+      await expect(getPending).rejects.toBeInstanceOf(Error);
+      await withTimeout(closing, 2000, "close-after-repair");
+
+      // 検証 : close は書き戻しの完了を待つため、close 後の書き込みは発生しない。
+      expect(kvs.isOpen).toBe(false);
+      expect(cache1.writesAfterClose).toBe(0);
+      expect(cache2.writesAfterClose).toBe(0);
+      expect(cache1.map.get("foo")).toBe("value");
+      expect(cache2.map.get("foo")).toBe("value");
+    } finally {
+      pause.release.open();
+      writeRelease.open();
+      await getPending.catch(() => {});
+    }
+  });
+
+  test("最初の書き戻しで中断した後は次の書き戻しを開始しない", async ({ expect }) => {
+    // 準備 : 2 つの独立した根直下の節を持ち、最初の節の書き込みで中断する。
+    const reason = new Error("repair aborted between branches");
+    const cacheA = new FakeStorage("cacheA");
+    const cacheB = new FakeStorage("cacheB");
+    const server = new FakeStorage("server");
+    const ac = new AbortController();
+    cacheA.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "write") {
+        ac.abort(reason);
+      }
+    };
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .fork(new Branch().use(new AllowRepair()).persist(cacheA))
+      .fork(new Branch().use(new AllowRepair()).persist(cacheB))
+      .persist(server)
+      .build();
+    await kvs.open();
+
+    server.map.set("foo", "value");
+
+    // 実行と検証 : 開始済みの cacheA への書き戻しは完了するが、中断後の cacheB へは書き込まない。
+    await expect(
+      kvs.get("foo", {
+        repair: true,
+        signal: ac.signal,
+      }),
+    ).rejects.toBe(reason);
+
+    expect(cacheA.map.get("foo")).toBe("value");
+    expect(cacheB.map.has("foo")).toBe(false);
+  });
+
+  test("同じ節内でも中断した後は次の書き戻しを開始しない", async ({ expect }) => {
+    // 準備 : 同じ節に 2 つの書き戻し先を持ち、最初の書き込みで中断する。
+    const reason = new Error("repair aborted within node");
+    const cacheA = new FakeStorage("cacheA");
+    const cacheB = new FakeStorage("cacheB");
+    const server = new FakeStorage("server");
+    const ac = new AbortController();
+    cacheA.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "write") {
+        ac.abort(reason);
+      }
+    };
+
+    await using kvs = new Builder<{ foo: PlainValue<string> }>()
+      .use(new AllowRepair())
+      .persist(cacheA)
+      .persist(cacheB)
+      .persist(server)
+      .build();
+    await kvs.open();
+
+    server.map.set("foo", "value");
+
+    // 実行と検証 : 開始済みの cacheA への書き戻しは完了するが、中断後の cacheB へは書き込まない。
+    await expect(
+      kvs.get("foo", {
+        repair: true,
+        signal: ac.signal,
+      }),
+    ).rejects.toBe(reason);
+
+    expect(cacheA.map.get("foo")).toBe("value");
+    expect(cacheB.map.has("foo")).toBe(false);
   });
 });

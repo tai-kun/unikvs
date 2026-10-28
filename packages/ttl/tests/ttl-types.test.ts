@@ -63,4 +63,11 @@ describe("型", () => {
     expectTypeOf<Ttl["mapKey"]>().parameter(0).toEqualTypeOf<IMiddleware.MapKeyContext>();
     expectTypeOf<Ttl["mapKey"]>().returns.toEqualTypeOf<string>();
   });
+
+  test("afterUse は UseOutcome を受けて Promise<void> を返す", () => {
+    // 実行と検証：
+    expectTypeOf<Ttl["afterUse"]>().parameter(0).toEqualTypeOf<IMiddleware.UseContext>();
+    expectTypeOf<Ttl["afterUse"]>().parameter(1).toEqualTypeOf<IMiddleware.UseOutcome>();
+    expectTypeOf<Ttl["afterUse"]>().returns.toEqualTypeOf<Promise<void>>();
+  });
 });

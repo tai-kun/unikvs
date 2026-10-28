@@ -443,3 +443,121 @@ describe("UniKvs - 未オープン時の操作", () => {
     await expect(kvs[Symbol.asyncDispose]()).resolves.toBeUndefined();
   });
 });
+
+describe("UniKvs - open 失敗時のロールバックと中断シグナル", () => {
+  test("abort 済み signal で close が失敗するストレージも新しい signal で閉じられる", async ({
+    expect,
+  }) => {
+    // 準備 : abort 済み signal を受け取ると close に失敗するストレージと、open が abort まで待機するストレージ。
+    class AbortSensitiveCloseStorage extends FakeStorage {
+      public constructor(name: string) {
+        super(name);
+      }
+
+      public override async close(c: Parameters<FakeStorage["close"]>[0]): Promise<void> {
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (c.signal.aborted) {
+          throw new Error("close received an aborted signal");
+        }
+
+        await super.close(c);
+      }
+    }
+
+    const storage = new AbortSensitiveCloseStorage("abort-sensitive");
+    const hanging = new FakeStorage("hanging");
+    const entered = new Gate();
+    hanging.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "open") {
+        entered.open();
+        await new Promise<never>((_, reject) => {
+          call.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(call.signal?.reason);
+            },
+            { once: true },
+          );
+        });
+      }
+    };
+
+    const reason = new Error("open aborted");
+    const ac = new AbortController();
+    const kvs = new Builder().persist(storage).persist(hanging).build();
+
+    const opening = kvs.open({ signal: ac.signal });
+
+    await entered.wait();
+    ac.abort(reason);
+
+    // 実行と検証 : open は abort 理由で失敗し、ロールバックは abort していない signal で close を完了する。
+    await expect(opening).rejects.toBe(reason);
+
+    expect(kvs.isOpen).toBe(false);
+    expect(storage.isOpen).toBe(false);
+    expect(storage.callsOf("close")).toHaveLength(1);
+  });
+
+  test("ロールバックの close が一時的に失敗しても retryClose で閉じられる", async ({ expect }) => {
+    // 準備 : 最初の実 close だけ失敗するストレージと、open が abort まで待機するストレージ。
+    class FlakyCloseStorage extends FakeStorage {
+      public failNextClose = true;
+
+      public closeAttempts = 0;
+
+      public constructor(name: string) {
+        super(name);
+      }
+
+      public override async close(c: Parameters<FakeStorage["close"]>[0]): Promise<void> {
+        this.closeAttempts += 1;
+
+        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+        if (this.failNextClose) {
+          this.failNextClose = false;
+          throw new Error("transient close failure");
+        }
+
+        await super.close(c);
+      }
+    }
+
+    const storage = new FlakyCloseStorage("flaky-close");
+    const hanging = new FakeStorage("hanging");
+    const entered = new Gate();
+    hanging.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "open") {
+        entered.open();
+        await new Promise<never>((_, reject) => {
+          call.signal?.addEventListener(
+            "abort",
+            () => {
+              reject(call.signal?.reason);
+            },
+            { once: true },
+          );
+        });
+      }
+    };
+
+    const reason = new Error("open aborted");
+    const ac = new AbortController();
+    const kvs = new Builder().persist(storage).persist(hanging).build();
+
+    const opening = kvs.open({ signal: ac.signal });
+
+    await entered.wait();
+    ac.abort(reason);
+
+    // 実行と検証 : ロールバックの close は失敗後に retryClose で完了する。
+    await expect(opening).rejects.toBe(reason);
+
+    expect(kvs.isOpen).toBe(false);
+    expect(storage.isOpen).toBe(false);
+    expect(storage.closeAttempts).toBe(2);
+    expect(storage.callsOf("close")).toHaveLength(1);
+  });
+});

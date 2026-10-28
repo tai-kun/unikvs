@@ -95,6 +95,134 @@ class FailOnWriteStorage extends Memory {
   }
 }
 
+/**
+ * 墓標の書き込み直後に purge を開始する下層ストレージです。
+ * 削除と purge の競合を再現するために使用します。
+ */
+class PurgeOnTombstoneWriteStorage extends Memory {
+  public softDelete: SoftDelete | undefined = undefined;
+
+  public purging: Promise<boolean> = Promise.resolve(false);
+
+  public override write(c: IStorage.WriteContext, data: unknown): void {
+    super.write(c, data);
+
+    if ((data as { readonly __tombstone?: unknown }).__tombstone === true) {
+      this.purging = this.softDelete?.purge(c.key) ?? Promise.resolve(false);
+    }
+  }
+}
+
+/**
+ * 指定したキーの読み出し時に一度だけフックを実行する下層ストレージです。
+ * 読み出しから掃除・復元までの競合を決定的に再現するために使用します。
+ */
+class ReadHookStorage extends Memory {
+  public hook: ((key: string) => Promise<unknown> | unknown) | undefined = undefined;
+
+  public override async read(c: IStorage.ReadContext): Promise<unknown> {
+    const hook = this.hook;
+
+    if (hook === undefined) {
+      return await super.read(c);
+    }
+
+    this.hook = undefined;
+
+    return await hook(c.key);
+  }
+}
+
+/**
+ * 指定したキーと値の書き込みをゲートで止める下層ストレージです。
+ * 書き込みの順序を決定的に再現するために使用します。
+ */
+class GateWriteStorage implements IStorage {
+  public readonly name: string = "GateWrite";
+
+  public gateKey: string | undefined = undefined;
+
+  public gateData: unknown = undefined;
+
+  public gate: Promise<void> = Promise.resolve();
+
+  public gatedWrites = 0;
+
+  public hook: ((key: string) => Promise<unknown> | unknown) | undefined = undefined;
+
+  public onGate: (() => void) | undefined = undefined;
+
+  readonly #inner = new Memory();
+
+  public get isOpen(): boolean {
+    return this.#inner.isOpen;
+  }
+
+  public async read(c: IStorage.ReadContext): Promise<unknown> {
+    const hook = this.hook;
+
+    if (hook === undefined) {
+      return this.#inner.read(c);
+    }
+
+    this.hook = undefined;
+
+    return await hook(c.key);
+  }
+
+  public async write(c: IStorage.WriteContext, data: unknown): Promise<void> {
+    if (c.key === this.gateKey && data === this.gateData) {
+      this.gatedWrites += 1;
+      this.onGate?.();
+      await this.gate;
+    }
+
+    this.#inner.write(c, data);
+  }
+
+  public async exists(c: IStorage.ExistsContext): Promise<boolean> {
+    return this.#inner.exists(c);
+  }
+
+  public async delete(c: IStorage.DeleteContext): Promise<void> {
+    this.#inner.delete(c);
+  }
+
+  public async clear(c: IStorage.ClearContext): Promise<void> {
+    this.#inner.clear(c);
+  }
+}
+
+/**
+ * 台帳への追加だけを一度失敗させる下層ストレージです。
+ * 墓標の書き込み後に台帳の更新が失敗した場合の復旧の検証に使用します。
+ */
+class FailRegistryAddOnceStorage extends Memory {
+  readonly #targetKey: string;
+
+  #failed = false;
+
+  public constructor(targetKey: string) {
+    super();
+    this.#targetKey = targetKey;
+  }
+
+  public override write(c: IStorage.WriteContext, data: unknown): void {
+    if (
+      c.key === REGISTRY_KEY &&
+      !this.#failed &&
+      typeof data === "object" &&
+      data !== null &&
+      Object.hasOwn(data, this.#targetKey)
+    ) {
+      this.#failed = true;
+      throw new Error("registry add failed");
+    }
+
+    super.write(c, data);
+  }
+}
+
 describe("初期化と基本属性", () => {
   test("name は SoftDelete である", ({ expect }) => {
     // 実行と検証：
@@ -586,6 +714,323 @@ describe("copy と move", () => {
   });
 });
 
+describe("台帳の同時更新", () => {
+  test("並行した削除でも両方の墓標が残り、purge で両方消える", async ({ expect }) => {
+    // 準備：
+    const softDelete = new SoftDelete(new Memory());
+    await softDelete.write(createSetContext("a") as IStorage.WriteContext, "va");
+    await softDelete.write(createSetContext("b") as IStorage.WriteContext, "vb");
+
+    // 実行：台帳の読み書きが競合するように同時に削除する。
+    await Promise.all([
+      softDelete.delete(createDeleteContext("a") as IStorage.DeleteContext),
+      softDelete.delete(createDeleteContext("b") as IStorage.DeleteContext),
+    ]);
+
+    // 検証：台帳の更新が失われず、両方の墓標が一覧に現れる。
+    const entries = await softDelete.listTombstones();
+    expect(entries.map((entry) => entry.key).sort()).toStrictEqual(["a", "b"]);
+
+    // 検証：purge が両方を取り除く。
+    expect(await softDelete.purge()).toBe(2);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+    expect(await softDelete.exists(createHasContext("a") as IStorage.ExistsContext)).toBe(false);
+    expect(await softDelete.exists(createHasContext("b") as IStorage.ExistsContext)).toBe(false);
+  });
+
+  test("異なるキーの書き込みは互いを待たない", async ({ expect }) => {
+    // 準備 : キー a の書き込みだけをゲートで止める。
+    const inner = new GateWriteStorage();
+    const softDelete = new SoftDelete(inner);
+    let releaseA: (() => void) | undefined;
+    inner.gate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    inner.gateKey = "a";
+    inner.gateData = "va";
+
+    let markReached: (() => void) | undefined;
+    const reached = new Promise<void>((resolve) => {
+      markReached = resolve;
+    });
+    inner.onGate = (): void => {
+      markReached?.();
+    };
+
+    // 実行 : キー a の書き込みを止めたまま、キー b の書き込みを開始する。
+    const writeA = softDelete.write(createSetContext("a") as IStorage.WriteContext, "va");
+
+    await reached;
+
+    const writeB = softDelete.write(createSetContext("b") as IStorage.WriteContext, "vb");
+    let outcome: "done" | "timeout";
+
+    try {
+      outcome = await Promise.race([
+        writeB.then((): "done" => "done"),
+        sleep(200).then((): "timeout" => "timeout"),
+      ]);
+    } finally {
+      releaseA?.();
+    }
+
+    await Promise.all([writeA, writeB]);
+
+    // 検証 : キー b はキー a の完了を待たずに書き込める。
+    expect(outcome).toBe("done");
+    expect(await softDelete.read(createGetContext("a") as IStorage.ReadContext)).toBe("va");
+    expect(await softDelete.read(createGetContext("b") as IStorage.ReadContext)).toBe("vb");
+  });
+
+  test("墓標の書き込み後に台帳の追加が失敗しても、再削除で台帳へ登録し直す", async ({ expect }) => {
+    // 準備 : 台帳への追加だけを一度失敗させる下層ストレージ。
+    const inner = new FailRegistryAddOnceStorage("k1");
+    const softDelete = new SoftDelete(inner);
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行 : 墓標の書き込みは成功するが、台帳の追加が失敗する。
+    await expect(
+      softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext),
+    ).rejects.toThrow("registry add failed");
+
+    // 検証 : 墓標は残るが、台帳には登録されていない。
+    expect(await inner.read(createGetContext("k1") as IStorage.ReadContext)).toMatchObject({
+      __tombstone: true,
+    });
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+
+    // 実行 : 再削除で台帳への登録をやり直す。
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 検証 : 台帳に登録され、一覧と復元が機能する。
+    expect(await softDelete.listTombstones()).toMatchObject([
+      {
+        key: "k1",
+      },
+    ]);
+    expect(await softDelete.restore("k1")).toBe("v1");
+  });
+
+  for (const key of ["toString", "__proto__"] as const) {
+    test(`台帳の追加が失敗した ${key} の再削除は台帳へ登録し直し、一覧・purge・restore が機能する`, async ({
+      expect,
+    }) => {
+      // 準備 : 台帳への追加だけを一度失敗させる下層ストレージ。
+      const inner = new FailRegistryAddOnceStorage(key);
+      const softDelete = new SoftDelete(inner);
+      await softDelete.write(createSetContext(key) as IStorage.WriteContext, "v1");
+
+      // 実行 : 墓標の書き込みは成功するが、台帳の追加が失敗する。
+      await expect(
+        softDelete.delete(createDeleteContext(key) as IStorage.DeleteContext),
+      ).rejects.toThrow("registry add failed");
+
+      // 検証 : 台帳には登録されていない。
+      expect(await softDelete.listTombstones()).toStrictEqual([]);
+
+      // 実行 : 再削除で台帳への登録をやり直す。
+      await softDelete.delete(createDeleteContext(key) as IStorage.DeleteContext);
+
+      // 検証 : 台帳に登録され、一覧に現れる。
+      expect(await softDelete.listTombstones()).toMatchObject([{ key }]);
+      expect(
+        Object.hasOwn(
+          (await inner.read(createGetContext(REGISTRY_KEY) as IStorage.ReadContext)) as object,
+          key,
+        ),
+      ).toBe(true);
+
+      // 検証 : 復元でき、台帳から外れる。
+      expect(await softDelete.restore(key)).toBe("v1");
+      expect(await softDelete.listTombstones()).toStrictEqual([]);
+
+      // 実行 : 再度削除し、purge() が台帳から拾って消す。
+      await softDelete.delete(createDeleteContext(key) as IStorage.DeleteContext);
+      expect(await softDelete.purge()).toBe(1);
+
+      // 検証 : 墓標も台帳の項目も残らない。
+      expect(await softDelete.listTombstones()).toStrictEqual([]);
+      expect(inner.exists(createHasContext(key) as IStorage.ExistsContext)).toBe(false);
+      expect(
+        Object.hasOwn(
+          (await inner.read(createGetContext(REGISTRY_KEY) as IStorage.ReadContext)) as object,
+          key,
+        ),
+      ).toBe(false);
+    });
+  }
+
+  test("削除直後に purge が走っても、台帳だけの項目を残さない", async ({ expect }) => {
+    // 準備 : 墓標の書き込み直後に purge を開始する下層ストレージ。
+    const inner = new PurgeOnTombstoneWriteStorage();
+    const softDelete = new SoftDelete(inner);
+    inner.softDelete = softDelete;
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+
+    // 実行 : 墓標の書き込みと同時に purge を開始する。
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 検証 : 墓標も台帳の項目も残らない。
+    expect(await inner.purging).toBe(true);
+    expect(inner.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
+    expect(await inner.read(createGetContext(REGISTRY_KEY) as IStorage.ReadContext)).toStrictEqual(
+      {},
+    );
+  });
+
+  test("期限切れの墓標の掃除は、読み出し後にできた新しい墓標を消さない", async ({ expect }) => {
+    // 準備 : 古い墓標を読み出した直後に、新しい値の書き込みと削除を割り込ませる。
+    const now = vi.spyOn(Date, "now");
+    const inner = new ReadHookStorage();
+    const softDelete = new SoftDelete(inner, { retentionMs: 20 });
+
+    try {
+      now.mockReturnValue(1000);
+      await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+      await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+      const stale = inner.read(createGetContext("k1") as IStorage.ReadContext);
+
+      now.mockReturnValue(1100);
+      inner.hook = async (key): Promise<unknown> => {
+        await softDelete.write(createSetContext(key) as IStorage.WriteContext, "v2");
+        await softDelete.delete(createDeleteContext(key) as IStorage.DeleteContext);
+
+        return stale;
+      };
+
+      // 実行 : 期限切れの墓標を読み出す。
+      const error = await captureRejection(
+        softDelete.read(createGetContext("k1") as IStorage.ReadContext),
+      );
+
+      // 検証 : 読み出した墓標だけを掃除の対象にし、新しい墓標とその値を残す。
+      expect(error).toBeInstanceOf(KeyNotFoundError);
+
+      expect(await inner.read(createGetContext("k1") as IStorage.ReadContext)).toMatchObject({
+        value: "v2",
+        __tombstone: true,
+      });
+      expect(await softDelete.listTombstones()).toMatchObject([
+        {
+          key: "k1",
+          deletedAt: 1100,
+        },
+      ]);
+      expect(await softDelete.restore("k1")).toBe("v2");
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  test("purge は読み出し後にできた新しい墓標を同じミリ秒でも消さず false を返す", async ({
+    expect,
+  }) => {
+    // 準備 : 古い墓標を読み出した直後に、同じミリ秒で新しい値の書き込みと削除を割り込ませる。
+    const now = vi.spyOn(Date, "now");
+    const inner = new ReadHookStorage();
+    const softDelete = new SoftDelete(inner, { retentionMs: 20 });
+
+    try {
+      now.mockReturnValue(1000);
+      await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+      await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+      const stale = inner.read(createGetContext("k1") as IStorage.ReadContext);
+      inner.hook = async (key): Promise<unknown> => {
+        await softDelete.write(createSetContext(key) as IStorage.WriteContext, "v2");
+        await softDelete.delete(createDeleteContext(key) as IStorage.DeleteContext);
+
+        return stale;
+      };
+
+      // 実行 :
+      const purged = await softDelete.purge("k1");
+
+      // 検証 : 新しい墓標は残り、実際に消せなかったため false を返す。
+      expect(purged).toBe(false);
+
+      expect(await inner.read(createGetContext("k1") as IStorage.ReadContext)).toMatchObject({
+        value: "v2",
+        __tombstone: true,
+      });
+      expect(await softDelete.listTombstones()).toMatchObject([
+        {
+          key: "k1",
+          deletedAt: 1000,
+        },
+      ]);
+      expect(await softDelete.restore("k1")).toBe("v2");
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  test("purge は墓標が消えた台帳の項目を掃除する", async ({ expect }) => {
+    // 準備 : 墓標だけを下層から直接消し、台帳の項目を残す。
+    const inner = new Memory();
+    const softDelete = new SoftDelete(inner);
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+    inner.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    // 実行 :
+    const count = await softDelete.purge();
+
+    // 検証 : 墓標がないため数えず、台帳の項目は掃除する。
+    expect(count).toBe(0);
+
+    expect(await inner.read(createGetContext(REGISTRY_KEY) as IStorage.ReadContext)).toStrictEqual(
+      {},
+    );
+  });
+});
+
+describe("復元と書き込みの直列化", () => {
+  test("restore は読み出し中に始まった書き込みを古い値で上書きしない", async ({ expect }) => {
+    // 準備 : 墓標を復元する読み出しの中で、新しい値の書き込みを完了させ、その後に復元値の書き込みを解放する。
+    const inner = new GateWriteStorage();
+    const softDelete = new SoftDelete(inner);
+    await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await softDelete.delete(createDeleteContext("k1") as IStorage.DeleteContext);
+
+    const stale = await inner.read(createGetContext("k1") as IStorage.ReadContext);
+    let releaseRestoreWrite: (() => void) | undefined;
+    inner.gate = new Promise<void>((resolve) => {
+      releaseRestoreWrite = resolve;
+    });
+
+    inner.gateKey = "k1";
+    inner.gateData = "v1";
+
+    let pendingWrite: Promise<void> | undefined;
+    inner.hook = async (key): Promise<unknown> => {
+      pendingWrite = softDelete.write(createSetContext(key) as IStorage.WriteContext, "v2");
+      await pendingWrite;
+      releaseRestoreWrite?.();
+
+      return stale;
+    };
+
+    // 実行 :
+    let error: unknown;
+
+    try {
+      await softDelete.restore("k1");
+    } catch (ex) {
+      error = ex;
+    }
+
+    await pendingWrite;
+
+    // 検証 : 復元は古い値を書き込まず、後から完了した書き込みの値が残る。
+    expect(await softDelete.read(createGetContext("k1") as IStorage.ReadContext)).toBe("v2");
+    expect(inner.gatedWrites).toBe(0);
+    expect(error).toBeInstanceOf(TombstoneNotFoundError);
+    expect(await softDelete.listTombstones()).toStrictEqual([]);
+  });
+});
+
 describe("墓標の直接操作", () => {
   test("read は墓標を KeyNotFoundError として扱う", async ({ expect }) => {
     // 準備：
@@ -957,7 +1402,8 @@ describe("ストリームの直接操作", () => {
 
   test("getWritable の close は墓標を復活させる", async ({ expect }) => {
     // 準備：
-    const softDelete = new SoftDelete(new Memory());
+    const inner = new Memory();
+    const softDelete = new SoftDelete(inner);
     await softDelete.write(createSetContext("s1") as IStorage.WriteContext, "v1");
     await softDelete.delete(createDeleteContext("s1") as IStorage.DeleteContext);
     expect(await softDelete.listTombstones()).toHaveLength(1);
@@ -969,6 +1415,11 @@ describe("ストリームの直接操作", () => {
     const writer = writable.getWriter();
     await writer.write(new Uint8Array([3, 4]));
     await writer.close();
+
+    // 検証 : close が台帳から墓標を外す。
+    expect(await inner.read(createGetContext(REGISTRY_KEY) as IStorage.ReadContext)).toStrictEqual(
+      {},
+    );
 
     // 検証 : 通常値として読め、墓標の一覧から外れる。
     expect(await softDelete.read(createGetContext("s1") as IStorage.ReadContext)).toStrictEqual(

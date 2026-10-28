@@ -94,6 +94,33 @@ describe("AbortSignal による中断", () => {
     expect(storage.isOpen).toBe(false);
   });
 
+  test("並行 open の一方を中断しても、もう一方は利用可能な接続を確立する", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備：
+    const controller = new AbortController();
+    const reason = new Error("テスト用の中断");
+
+    // 実行：
+    const aborted = storage.open(
+      createOpenContext({ signal: controller.signal }) as IStorage.OpenContext,
+    );
+    const waiting = storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    controller.abort(reason);
+
+    // 検証：
+    await expect(aborted).rejects.toBe(reason);
+    await expect(waiting).resolves.toBeUndefined();
+
+    expect(storage.isOpen).toBe(true);
+
+    await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, "v1");
+    expect(await storage.read(createGetContext("k1", { signal }) as IStorage.ReadContext)).toBe(
+      "v1",
+    );
+  });
+
   test("実行中に中断された read は中断理由で拒否される", async ({ expect, storage }) => {
     // 準備：
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);

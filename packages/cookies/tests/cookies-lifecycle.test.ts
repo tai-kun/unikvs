@@ -144,10 +144,23 @@ describe("エラークラス", () => {
         key: "k",
         limit: 4096,
         actual: 5000,
+        measurement: "raw",
       }).name,
     ).toBe("UniKvsCookieTooLargeError");
     expect(new CookieNotAvailableError().name).toBe("CookieNotAvailableError");
     expect(new KeyNotFoundError({ key: "k" }).name).toBe("UniKvsKeyNotFoundError");
+  });
+
+  test("measurement を省略すると raw になる", ({ expect }) => {
+    // 実行：
+    const error = new CookieTooLargeError({
+      key: "k",
+      limit: 4096,
+      actual: 5000,
+    });
+
+    // 検証：
+    expect(error.meta.measurement).toBe("raw");
   });
 
   test("新設クラスは用途別に基底クラスを継承する", ({ expect }) => {
@@ -158,6 +171,7 @@ describe("エラークラス", () => {
         key: "k",
         limit: 0,
         actual: 1,
+        measurement: "raw",
       }),
     ).toBeInstanceOf(core.ErrorBase);
     expect(
@@ -165,6 +179,7 @@ describe("エラークラス", () => {
         key: "k",
         limit: 0,
         actual: 1,
+        measurement: "raw",
       }),
     ).toBeInstanceOf(Error);
   });
@@ -176,8 +191,19 @@ describe("エラークラス", () => {
         key: "k",
         limit: 4096,
         actual: 5000,
+        measurement: "raw",
       }).message,
     ).toBe('Cookie value for key "k" is 5000 bytes, which exceeds the size limit of 4096 bytes.');
+    expect(
+      new CookieTooLargeError({
+        key: "k",
+        limit: 128,
+        actual: 143,
+        measurement: "serialized",
+      }).message,
+    ).toBe(
+      'Serialized cookie for key "k" is 143 bytes, which exceeds the size limit of 128 bytes.',
+    );
     expect(new CookieNotAvailableError().message).toBe(
       "Cookies are not available in this environment. Inject a CookieStoreLike via options.store.",
     );

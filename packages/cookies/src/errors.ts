@@ -8,25 +8,38 @@ export { KeyNotFoundError } from "@unikvs/core";
  */
 export type CookieTooLargeErrorMeta = {
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large-key)
    */
   readonly key: string;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large-actual)
    */
   readonly actual: number;
 
   /**
-   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large-limit)
    */
   readonly limit: number;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large-measurement)
+   */
+  readonly measurement: "raw" | "serialized";
 };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
  */
-export type CookieTooLargeErrorArgs = ErrorOptions & CookieTooLargeErrorMeta;
+export type CookieTooLargeErrorArgs = ErrorOptions &
+  Omit<CookieTooLargeErrorMeta, "measurement"> & {
+    /**
+     * actual が生サイズかシリアル化後のサイズかを示します。
+     *
+     * @default "raw"
+     */
+    readonly measurement?: CookieTooLargeErrorMeta["measurement"];
+  };
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
@@ -40,16 +53,24 @@ export class CookieTooLargeError extends ErrorBase<CookieTooLargeErrorMeta> {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/cookies#error-cookie-too-large)
    */
   public constructor(args: CookieTooLargeErrorArgs) {
-    const { key, limit, actual, ...options } = args;
+    const { key, limit, actual, measurement = "raw", ...options } = args;
     const meta: CookieTooLargeErrorMeta = {
       key,
       limit,
       actual,
+      measurement,
     };
     super(
       meta,
-      ({ key: messageKey, limit: messageLimit, actual: messageActual }) =>
-        `Cookie value for key ${JSON.stringify(messageKey)} is ${messageActual} bytes, which exceeds the size limit of ${messageLimit} bytes.`,
+      ({
+        key: messageKey,
+        limit: messageLimit,
+        actual: messageActual,
+        measurement: messageMeasurement,
+      }) =>
+        messageMeasurement === "serialized"
+          ? `Serialized cookie for key ${JSON.stringify(messageKey)} is ${messageActual} bytes, which exceeds the size limit of ${messageLimit} bytes.`
+          : `Cookie value for key ${JSON.stringify(messageKey)} is ${messageActual} bytes, which exceeds the size limit of ${messageLimit} bytes.`,
       options,
     );
   }
@@ -57,8 +78,10 @@ export class CookieTooLargeError extends ErrorBase<CookieTooLargeErrorMeta> {
 
 setErrorMessage(
   CookieTooLargeError,
-  ({ key, limit, actual }) =>
-    `キー ${JSON.stringify(key)} の Cookie 値は ${actual} バイトであり、上限 ${limit} バイトを超えています`,
+  ({ key, limit, actual, measurement }) =>
+    measurement === "serialized"
+      ? `キー ${JSON.stringify(key)} のシリアル化された Cookie は ${actual} バイトであり、上限 ${limit} バイトを超えています`
+      : `キー ${JSON.stringify(key)} の Cookie 値は ${actual} バイトであり、上限 ${limit} バイトを超えています`,
   "ja",
 );
 

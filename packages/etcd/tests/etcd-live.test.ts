@@ -1,6 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import {
   createGetContext,
+  createHasContext,
   createSetContext,
   createOpenContext,
   createCloseContext,
@@ -27,6 +28,40 @@ live("etcd 実サーバー", () => {
       await expect(
         storage.read(createGetContext("live.bin", { signal }) as IStorage.ReadContext),
       ).resolves.toStrictEqual(data);
+    } finally {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
+      if (storage.isOpen) {
+        await storage.close(createCloseContext() as IStorage.CloseContext);
+      }
+    }
+  }, 30e3);
+
+  test("leaseTtlSeconds のキーは接続を開いたまま自動失効する", async () => {
+    const keyPrefix = `unikvs-live-${crypto.randomUUID()}:`;
+    const storage = new Etcd({
+      endpoints,
+      keyPrefix,
+      leaseTtlSeconds: 2,
+    });
+    await storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      const signal = new AbortController().signal;
+      const data = new Uint8Array([1]);
+      await storage.write(
+        createSetContext("leased.bin", { signal }) as IStorage.WriteContext,
+        data,
+      );
+      await expect(
+        storage.exists(createHasContext("leased.bin", { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(true);
+
+      // リースの TTL (2 秒) を十分に超えるまで待つ。
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      await expect(
+        storage.exists(createHasContext("leased.bin", { signal }) as IStorage.ExistsContext),
+      ).resolves.toBe(false);
     } finally {
       // oxlint-disable-next-line vitest/no-conditional-in-test -- ポーリング／後始末の条件分岐はテストの進行に必須のため、使用します。
       if (storage.isOpen) {

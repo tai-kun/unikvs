@@ -14,6 +14,7 @@ import {
   Gate,
   collect,
   streamOf,
+  isPending,
   FakeStorage,
   withTimeout,
   FakeMiddleware,
@@ -385,7 +386,9 @@ describe("UniKvs - 書き戻しの並列性", () => {
     expect(c1.map.has("foo")).toBe(false);
   });
 
-  test("拒否があっても保留中の他の書き込みを待たずに失敗する", async ({ expect }) => {
+  test("拒否があっても保留中の他の書き込みが完了するまでキーロックを解放しない", async ({
+    expect,
+  }) => {
     // 準備 : c1 は拒否され、c2 への書き込みはゲートで保留する。
     const ar = new AllowRepair();
     const c1 = new FakeStorage("c1");
@@ -417,20 +420,24 @@ describe("UniKvs - 書き戻しの並列性", () => {
       throwOnRepairDenied: true,
     });
 
-    // 検証 : 許可された対象の書き込みは開始し、拒否はその完了を待たずに確定する。
+    // 検証 : 許可された対象の書き込みは開始するが、拒否は開始済みの書き込みが終わるまで確定しない。
     await expect(withTimeout(enteredC2.wait(), 1000, "c2-start")).resolves.toBeUndefined();
-    await expect(withTimeout(pending, 1000, "fail-fast")).rejects.toBeInstanceOf(
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(isPending(pending)).resolves.toBe(true);
+
+    // 実行 : 保留中の書き込みを解放する。
+    releaseC2.open();
+
+    // 検証 : 書き込みの完了後に拒否が確定し、キーロックは書き込み中に解放されない。
+    await expect(withTimeout(pending, 1000, "denied-after-write")).rejects.toBeInstanceOf(
       RepairNotAllowedError,
     );
-
-    // 後片付け : 保留中の書き込みを解放して完了させてから閉じる。
-    releaseC2.open();
-    await vi.waitFor(() => {
-      expect(c2.map.get("foo")).toBe("value");
-    });
+    expect(c2.map.get("foo")).toBe("value");
   });
 
-  test("書き込み時の拒否も応答のない他の書き戻しを待たずに失敗する", async ({ expect }) => {
+  test("書き込み時の拒否も応答のない他の書き戻しの完了まで待ってから失敗する", async ({
+    expect,
+  }) => {
     // 準備 : c1 の write は拒否を投げ、c2 の write はゲートで保留する。
     const ar = new AllowRepair();
     const c1 = new DenyOnRepairWriteStorage("c1");
@@ -462,17 +469,19 @@ describe("UniKvs - 書き戻しの並列性", () => {
       throwOnRepairDenied: true,
     });
 
-    // 検証 : 保留中の書き込みは開始しているが、書き込み時の拒否はその完了を待たずに確定する。
+    // 検証 : 保留中の書き込みは開始しているが、拒否は開始済みの書き込みが終わるまで確定しない。
     await expect(withTimeout(enteredC2.wait(), 1000, "c2-start")).resolves.toBeUndefined();
-    await expect(withTimeout(pending, 1000, "fail-fast-write")).rejects.toBeInstanceOf(
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await expect(isPending(pending)).resolves.toBe(true);
+
+    // 実行 : 保留中の書き込みを解放する。
+    releaseC2.open();
+
+    // 検証 : 書き込みの完了後に拒否が確定する。
+    await expect(withTimeout(pending, 1000, "denied-after-write")).rejects.toBeInstanceOf(
       RepairNotAllowedError,
     );
-
-    // 後片付け : 保留中の書き込みを解放して完了させてから閉じる。
-    releaseC2.open();
-    await vi.waitFor(() => {
-      expect(c2.map.get("foo")).toBe("value");
-    });
+    expect(c2.map.get("foo")).toBe("value");
   });
 });
 

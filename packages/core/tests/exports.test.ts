@@ -62,6 +62,8 @@ describe("exports", () => {
   test("middleware の型はエントリーポイントから同一に解決される", () => {
     // 実行と検証：
     expectTypeOf<middlewareTypes.IMiddleware>().toEqualTypeOf<core.IMiddleware>();
+    expectTypeOf<middlewareTypes.UseOutcome>().toEqualTypeOf<core.UseOutcome>();
+    expectTypeOf<middlewareTypes.UseTargetOutcome>().toEqualTypeOf<core.UseTargetOutcome>();
   });
 
   test("pipeline-context の型はエントリーポイントから同一に解決される", () => {

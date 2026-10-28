@@ -408,6 +408,8 @@ export default class Metrics implements IMiddleware {
   /**
    * `next` の実行時間を測り、成功または失敗の測定値を 1 件記録します。
    *
+   * `use` の `next` は後続の `use` フックまでしか含まないため、この記録はストレージ操作の成否ではなくフック範囲の成否です。`encode`/`decode` は同じ action でバイト数を追加記録する仕様です。
+   *
    * @param c 測定する操作のコンテキストです。
    * @param next 次のミドルウェアを呼び出す関数です。
    */
@@ -420,6 +422,9 @@ export default class Metrics implements IMiddleware {
     const key = c.action === "clear" || !("key" in c) ? undefined : c.key;
     const bytes = "source" in c ? estimateBytes(c.source) : undefined;
 
+    // `use` はストレージ操作の前に呼ばれ、`next()` は後続の `use` フックまでしか含みません。
+    // そのため、ここで記録する成否はストレージ操作そのものではなく、このフック範囲の成否です。
+    // ストレージ操作の成否を `use` に伝える仕組みは現状のミドルウェア境界にないため、`use` の success が missing key や書き込み失敗を表すことはありません。
     try {
       await next();
     } catch (error) {
@@ -443,7 +448,7 @@ export default class Metrics implements IMiddleware {
   }
 
   /**
-   * ストリームをバイト数を数える変換へ通し、確定 (flush) または失敗 (cancel/ フックのエラー) したときに 1 件の測定値を記録します。
+   * ストリームをバイト数を数える変換へ通し、確定 (flush)、読み取り中の失敗、または取り消し (cancel) のいずれか早い時点で 1 件の測定値を記録します。
    *
    * @param c ストリーム操作のコンテキストです。
    * @param next 次のトランスフォーマーです。
@@ -491,7 +496,15 @@ export default class Metrics implements IMiddleware {
     const reader = piped.getReader();
     c.destination = new ReadableStream<unknown>({
       async pull(controller: ReadableStreamDefaultController<unknown>): Promise<void> {
-        const result = await reader.read();
+        let result: ReadableStreamReadResult<unknown>;
+
+        try {
+          result = await reader.read();
+        } catch (error) {
+          // ソース (下流の変換を含む) が読み取り中に失敗したときも、それまでに読めたバイト数で 1 件だけ記録します。
+          settle("error");
+          throw error;
+        }
 
         if (result.done) {
           controller.close();

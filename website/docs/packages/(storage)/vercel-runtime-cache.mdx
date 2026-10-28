@@ -10,6 +10,10 @@ description: "Vercel のランタイムキャッシュに値を保存する @uni
 このストレージはランタイムキャッシュを自動検出して使い、見つからなければプロセス内の `Map` にフォールバックします。どちらの場合も TTL と最大件数による追い出しを行います。
 
 - `name` は `VercelRuntimeCache` です。
+- バックエンドを共有するときは `namespace` を指定してください。`namespace` を指定した場合、`clear` は現在のインスタンスが追跡しているキーだけを削除します。同じ名前空間で他のインスタンスやプロセスが書き込んだキーは削除されません。
+- `maxEntries` による追い出しと失効したキーの削除は、インスタンスごとの追跡に基づきます。そのため、共有バックエンドは `maxEntries` を超えるキーを保持することがあります。
+- バックエンドの追い出しは書き込みが古い順 (FIFO) で、フォールバックの追い出しは最も古く使われた順 (LRU) です。
+- `namespace` が空でバックエンドが `clear` を持つ場合は、`clear` はバックエンド全体を削除します。
 - `isOpen` は常に `true` です。`open()`・`close()` は中断の確認のみ行います。
 - `delete` は存在しないキーを指定した場合は `KeyNotFoundError` を投げます。
 - ストリームの読み書きに対応しています。
@@ -43,7 +47,8 @@ Vercel Runtime Cache を使うストレージです。
     },
     maxEntries: {
       type: "[#vercel-runtime-cache-max-entries] number",
-      description: "保持するエントリの最大数です。未指定なら無制限です。",
+      description:
+        "保持するエントリの最大数です。未指定なら無制限です。バックエンドでは書き込みが古い順 (FIFO)、フォールバックでは最終使用が古い順 (LRU) に追い出します。",
     },
     namespace: {
       type: "[#vercel-runtime-cache-namespace] string",

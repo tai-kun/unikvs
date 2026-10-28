@@ -167,6 +167,115 @@ describe("バックエンド委譲 (Vercel ランタイム結合)", () => {
     await expect(storage.read(createGetContext("k1") as IStorage.ReadContext)).resolves.toBe("v1");
   });
 
+  test("namespace 付き clear は共有バックエンドの他の名前空間を消さない", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const a = new VercelRuntimeCache({
+      backend,
+      namespace: "a",
+    });
+    const b = new VercelRuntimeCache({
+      backend,
+      namespace: "b",
+    });
+    await a.write(createSetContext("k") as IStorage.WriteContext, "va");
+    await b.write(createSetContext("k") as IStorage.WriteContext, "vb");
+    await a.clear(createClearContext() as IStorage.ClearContext);
+    expect(backend.store.has("a:k")).toBe(false);
+    expect(backend.store.has("b:k")).toBe(true);
+    await expect(b.read(createGetContext("k") as IStorage.ReadContext)).resolves.toBe("vb");
+  });
+
+  test("同じ名前空間を共有するインスタンスの追跡は独立している", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const a = new VercelRuntimeCache({
+      backend,
+      namespace: "shared",
+      maxEntries: 1,
+    });
+    const b = new VercelRuntimeCache({
+      backend,
+      namespace: "shared",
+      maxEntries: 1,
+    });
+    await a.write(createSetContext("k1") as IStorage.WriteContext, "a1");
+    await b.write(createSetContext("k2") as IStorage.WriteContext, "b2");
+
+    // インスタンスごとの追跡なので、共有バックエンドは maxEntries を超えるキーを保持します。
+    expect([...backend.store.keys()]).toStrictEqual(["shared:k1", "shared:k2"]);
+    await a.clear(createClearContext() as IStorage.ClearContext);
+    expect(backend.store.has("shared:k1")).toBe(false);
+    expect(backend.store.has("shared:k2")).toBe(true);
+    await expect(b.read(createGetContext("k2") as IStorage.ReadContext)).resolves.toBe("b2");
+  });
+
+  test("バックエンドでも maxEntries を超えた書き込みが古いキーを削除する", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const storage = new VercelRuntimeCache({
+      backend,
+      maxEntries: 2,
+    });
+    await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    await storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
+    // 読み取りでは追跡順が変わらないため、LRU ではなく FIFO で k1 が追い出されます。
+    await storage.read(createGetContext("k1") as IStorage.ReadContext);
+    await storage.write(createSetContext("k3") as IStorage.WriteContext, "v3");
+    expect([...backend.store.keys()]).toStrictEqual(["k2", "k3"]);
+    expect(backend.deleteCalls).toStrictEqual(["k1"]);
+    await expect(
+      storage.read(createGetContext("k1") as IStorage.ReadContext),
+    ).rejects.toBeInstanceOf(KeyNotFoundError);
+    await expect(storage.read(createGetContext("k2") as IStorage.ReadContext)).resolves.toBe("v2");
+    await expect(storage.read(createGetContext("k3") as IStorage.ReadContext)).resolves.toBe("v3");
+  });
+
+  test("バックエンドの maxEntries: 0 では書き込まない", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const storage = new VercelRuntimeCache({
+      backend,
+      maxEntries: 0,
+    });
+    await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    expect(backend.store.size).toBe(0);
+    expect(backend.setCalls).toHaveLength(0);
+    await expect(storage.exists(createHasContext("k1") as IStorage.ExistsContext)).resolves.toBe(
+      false,
+    );
+  });
+
+  test("書き込み時に失効した追跡キーをバックエンドから削除する", async ({ expect }) => {
+    let now = 0;
+    const backend = createFakeRuntimeCache();
+    const storage = new VercelRuntimeCache({
+      now: (): number => now,
+      backend,
+      ttlSeconds: 10,
+    });
+    await storage.write(createSetContext("k1") as IStorage.WriteContext, "v1");
+    now += 11_000;
+    await storage.write(createSetContext("k2") as IStorage.WriteContext, "v2");
+    expect([...backend.store.keys()]).toStrictEqual(["k2"]);
+    expect(backend.deleteCalls).toStrictEqual(["k1"]);
+  });
+
+  test("名前空間付き maxEntries は他の名前空間のキーを追い出さない", async ({ expect }) => {
+    const backend = createFakeRuntimeCache();
+    const a = new VercelRuntimeCache({
+      backend,
+      namespace: "a",
+      maxEntries: 1,
+    });
+    const b = new VercelRuntimeCache({
+      backend,
+      namespace: "b",
+      maxEntries: 1,
+    });
+    await a.write(createSetContext("k1") as IStorage.WriteContext, "a1");
+    await b.write(createSetContext("k1") as IStorage.WriteContext, "b1");
+    await a.write(createSetContext("k2") as IStorage.WriteContext, "a2");
+    expect([...backend.store.keys()]).toStrictEqual(["b:k1", "a:k2"]);
+    expect(backend.deleteCalls).toStrictEqual(["a:k1"]);
+  });
+
   test("グローバルから Vercel ランタイムキャッシュを検出する", async ({ expect }) => {
     const backend = createFakeRuntimeCache();
     const g = globalThis as Record<string, unknown>;

@@ -272,7 +272,8 @@ export function createFakeDownload(
       );
     }
 
-    const pathname = fromFakeUrl(request.url);
+    const requestUrl = new URL(request.url);
+    const pathname = fromFakeUrl(`${requestUrl.origin}${requestUrl.pathname}`);
     const found = pathname === undefined ? undefined : store.get(pathname);
 
     if (found === undefined) {

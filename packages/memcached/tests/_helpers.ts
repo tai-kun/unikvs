@@ -2,12 +2,17 @@ import type { IStorage } from "@unikvs/core";
 import { createOpenContext, createCloseContext } from "@unikvs/testing";
 import { test as vitest } from "vite-plus/test";
 
-import Memcached, { type MemcachedGetResult, type MemcachedClientLike } from "../src/memcached.js";
+import Memcached, {
+  type MemcachedGetResult,
+  type MemcachedClientLike,
+  MAX_RELATIVE_EXPIRATION_SECONDS,
+} from "../src/memcached.js";
 
 /**
  * `memjs` 互換のインメモリー偽クライアントです。
  * `get` は `{ value: Buffer | null, flags }` を返し、TTL の期限切れを再現します。
- * 時刻は手動進行式で、TTL の検証を確定的にするために使用します。
+ * 時刻は構築時点を基準にした手動進行式で、TTL の検証を確定的にするために使用します。
+ * Memcached の仕様に合わせ、30 日を超える `expires` は絶対 Unix 時刻として解釈します。
  */
 export class FakeMemcachedClient implements MemcachedClientLike {
   public quitCalls = 0;
@@ -34,7 +39,7 @@ export class FakeMemcachedClient implements MemcachedClientLike {
     }
   >();
 
-  #now = 0;
+  #nowMs = Date.now();
 
   public get size(): number {
     return this.#store.size;
@@ -44,7 +49,7 @@ export class FakeMemcachedClient implements MemcachedClientLike {
    * 偽時計を進めて、TTL の期限切れを確定的に再現します。
    */
   public advance(ms: number): void {
-    this.#now += ms;
+    this.#nowMs += ms;
   }
 
   public async get(key: string): Promise<MemcachedGetResult> {
@@ -81,18 +86,20 @@ export class FakeMemcachedClient implements MemcachedClientLike {
       value: text,
       expires,
     });
-    this.#store.set(
-      key,
-      expires > 0
-        ? {
-            value: text,
-            expiresAt: this.#now + expires * 1000,
-          }
-        : {
-            value: text,
-            expiresAt: null,
-          },
-    );
+
+    let expiresAt: number | null = null;
+
+    if (expires > MAX_RELATIVE_EXPIRATION_SECONDS) {
+      // 30 日を超える値は絶対 Unix 時刻 (秒) です。
+      expiresAt = expires * 1000;
+    } else if (expires > 0) {
+      expiresAt = this.#nowMs + expires * 1000;
+    }
+
+    this.#store.set(key, {
+      value: text,
+      expiresAt,
+    });
 
     return true;
   }
@@ -119,7 +126,7 @@ export class FakeMemcachedClient implements MemcachedClientLike {
   }
 
   #isExpired(entry: { expiresAt: number | null }): boolean {
-    return entry.expiresAt !== null && this.#now >= entry.expiresAt;
+    return entry.expiresAt !== null && this.#nowMs >= entry.expiresAt;
   }
 }
 

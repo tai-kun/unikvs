@@ -1,8 +1,8 @@
 import type { IMiddleware } from "@unikvs/core";
-import { asyncmux } from "asyncmux";
 import { callFnOnce } from "call-fn-once";
 
 import { PluginLifecycle } from "./_plugin-lifecycle.js";
+import acquireSignalLock from "./_signal-lock.js";
 import {
   MiddlewareIsNotOpenError,
   StreamDecodingNotSupportedError,
@@ -55,10 +55,13 @@ export default class UniKvsMiddleware {
   /**
    * ミドルウェアを開きます。
    *
+   * 共有インスタンスの開閉は直列化し、待機中はコンテキストの signal で中断できるようにします。
+   *
    * @param c オープンコンテキストです。
    */
-  @asyncmux
   public async open(c: IMiddleware.OpenContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.open(c);
   }
 
@@ -67,8 +70,9 @@ export default class UniKvsMiddleware {
    *
    * @param c クローズコンテキストです。
    */
-  @asyncmux
   public async close(c: IMiddleware.CloseContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.close(c);
   }
 
@@ -77,8 +81,9 @@ export default class UniKvsMiddleware {
    *
    * @param c クローズコンテキストです。
    */
-  @asyncmux
   public async retryClose(c: IMiddleware.CloseContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.retryClose(c);
   }
 
@@ -119,6 +124,25 @@ export default class UniKvsMiddleware {
     } else {
       await this.#mw.use(c, next);
     }
+  }
+
+  /**
+   * ストレージ I/O の確定後に操作の結果を通知します。
+   *
+   * @param c 操作コンテキストです。
+   * @param outcome 操作全体と宛先ごとの結果です。
+   */
+  public async afterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): Promise<void> {
+    if (!this.#mw.isOpen) {
+      throw new MiddlewareIsNotOpenError({ name: this.name });
+    }
+
+    if (this.#mw.afterUse === undefined) {
+      // 既定では通知しません。
+      return;
+    }
+
+    await this.#mw.afterUse(c, outcome);
   }
 
   /**

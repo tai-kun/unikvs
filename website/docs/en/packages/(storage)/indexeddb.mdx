@@ -76,8 +76,41 @@ await kvs.close();
 - `delete` on a missing key succeeds, and `exists` returns `false`.
 - Stream chunks are `Uint8Array`.
 - Streams from `getWritable` concatenate chunks and save them on `close`.
+- Writing a non-`Uint8Array` chunk to a stream from `getWritable` throws `InvalidChunkTypeError`.
 - Streams from `getReadable` emit the stored value as a single chunk.
 
 ## Errors [#errors]
 
-This package has no package-specific errors. Reading a missing key throws a `NotFoundError` `DOMException`. Operating before opening throws a `TypeError`.
+This package throws the following errors.
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "The key being operated on.",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "The received chunk value.",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "The type name of the received chunk.",
+    },
+  }}
+/>
+
+#### Meaning
+
+Thrown when a non-`Uint8Array` chunk is written to a stream from `getWritable`.
+
+#### How to fix
+
+Write `Uint8Array` chunks to streams.
+
+Reading a missing key throws a `NotFoundError` `DOMException`, and operating before opening throws a `TypeError`.

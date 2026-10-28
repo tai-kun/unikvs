@@ -1,6 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import {
   abortedSignal,
+  captureRejection,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -63,6 +64,28 @@ describe("ライフサイクル管理", () => {
 
     // 検証：
     expect(storage.isOpen).toBe(false);
+  });
+
+  test("open の待機中に close したとき、open の完了後もクローズ状態を維持する", async ({
+    expect,
+    storage,
+  }) => {
+    // 実行：
+    const opening = storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
+    storage.close();
+    await expect(opening).resolves.toBeUndefined();
+
+    // 検証：
+    expect(storage.isOpen).toBe(false);
+    expect(
+      await captureRejection(
+        storage.write(
+          createSetContext("k1", { signal }) as IStorage.WriteContext,
+          new Response(new Uint8Array([1])),
+        ),
+      ),
+    ).toBeInstanceOf(TypeError);
   });
 
   test("close した後に再度 open したとき、保存値は引き継がれる", async ({ expect, storage }) => {
@@ -253,6 +276,38 @@ describe("基本データ操作 (CRUD)", () => {
     expect(requests.map((request) => request.url)).toStrictEqual([
       `https://example.test/items/${encodeURIComponent(key)}`,
     ]);
+  });
+
+  test("同じ Response を複数のストレージへ書き込んでも呼び出し元の Response を消費しない", async ({
+    expect,
+    cacheName,
+  }) => {
+    // 準備：
+    const backend = createFakeCaches();
+    const first = new CacheStorage({
+      caches: backend,
+      cacheName: `${cacheName}-first`,
+      toRequest: createRequest,
+    });
+    const second = new CacheStorage({
+      caches: backend,
+      cacheName: `${cacheName}-second`,
+      toRequest: createRequest,
+    });
+    await first.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    await second.open(createOpenContext({ signal }) as IStorage.OpenContext);
+
+    const response = new Response(new Uint8Array([1, 2, 3]));
+
+    // 実行：
+    await first.write(createSetContext("k1", { signal }) as IStorage.WriteContext, response);
+    await second.write(createSetContext("k1", { signal }) as IStorage.WriteContext, response);
+
+    // 検証：
+    expect(response.bodyUsed).toBe(false);
+
+    expect(await readBytes(first, "k1")).toStrictEqual(new Uint8Array([1, 2, 3]));
+    expect(await readBytes(second, "k1")).toStrictEqual(new Uint8Array([1, 2, 3]));
   });
 
   test("書き込んだ Response のステータスとヘッダーも読み取れる", async ({ expect, storage }) => {

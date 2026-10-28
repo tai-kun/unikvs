@@ -300,17 +300,44 @@ class StubNativeClient {
     readonly value: Buffer;
   }[] = [];
 
+  /**
+   * `lease()` に渡されたオプションの記録です。
+   */
+  public readonly leaseOptions: { readonly autoKeepAlive?: boolean | undefined }[] = [];
+
   public leasesCreated = 0;
 
   public releasedLeases = 0;
 
   public closed = false;
 
+  /**
+   * リース付き put を失敗させたいときの例外です。
+   */
+  public leasePutError: Error | null = null;
+
+  /**
+   * リース付き put の完了を待たせたいときの Promise です。
+   */
+  public leasePutGate: Promise<void> | null = null;
+
+  /**
+   * リースの失効を検証するための疑似時計 (ミリ秒) です。
+   */
+  public now = 0;
+
+  readonly #leaseExpiresAt = new Map<string, number>();
+
+  public advance(ms: number): void {
+    this.now += ms;
+  }
+
   public get(key: string | Buffer): { buffer(): Promise<Buffer | null> } {
     const name = key.toString();
 
     return {
       buffer: async (): Promise<Buffer | null> => {
+        this.#purge(name);
         const value = this.store.get(name);
 
         return value === undefined ? null : Buffer.from(value);
@@ -324,6 +351,7 @@ class StubNativeClient {
     return {
       prefix: (prefix: string | Buffer) => ({
         buffers: async (): Promise<Record<string, Buffer>> => {
+          this.#purgeAll();
           const name = prefix.toString();
           const out: Record<string, Buffer> = {};
 
@@ -346,6 +374,8 @@ class StubNativeClient {
       value: async (value: string | Buffer): Promise<void> => {
         const data = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
         this.store.set(name, data);
+
+        this.#leaseExpiresAt.delete(name);
         this.directPuts.push({
           key: name,
           value: Buffer.from(data),
@@ -362,6 +392,7 @@ class StubNativeClient {
       for (const key of this.store.keys()) {
         if (prefix ? key.startsWith(name) : key === name) {
           this.store.delete(key);
+          this.#leaseExpiresAt.delete(key);
         }
       }
     };
@@ -380,18 +411,34 @@ class StubNativeClient {
     };
   }
 
-  public lease(ttl: number): {
+  public lease(
+    ttl: number,
+    options?: { readonly autoKeepAlive?: boolean | undefined },
+  ): {
     put(key: string | Buffer): { value(value: string | Buffer): Promise<void> };
     release(): void;
   } {
     this.leasesCreated += 1;
+    this.leaseOptions.push({ ...options });
+    // リースの TTL は付与時点から数えます。
+    // 同じリースを再利用すると、後から書いたキーも最初の付与時刻で失効することを再現します。
+    const expiresAt = this.now + ttl * 1000;
 
     return {
       put: (key: string | Buffer) => ({
         value: async (value: string | Buffer): Promise<void> => {
+          if (this.leasePutGate !== null) {
+            await this.leasePutGate;
+          }
+
+          if (this.leasePutError !== null) {
+            throw this.leasePutError;
+          }
+
           const name = key.toString();
           const data = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
           this.store.set(name, data);
+          this.#leaseExpiresAt.set(name, expiresAt);
           this.leasePuts.push({
             key: name,
             ttl,
@@ -408,6 +455,21 @@ class StubNativeClient {
   public close(): void {
     this.closed = true;
   }
+
+  #purge(key: string): void {
+    const expiresAt = this.#leaseExpiresAt.get(key);
+
+    if (expiresAt !== undefined && expiresAt <= this.now) {
+      this.store.delete(key);
+      this.#leaseExpiresAt.delete(key);
+    }
+  }
+
+  #purgeAll(): void {
+    for (const key of this.#leaseExpiresAt.keys()) {
+      this.#purge(key);
+    }
+  }
 }
 
 describe("ネイティブクライアントの適合", () => {
@@ -420,15 +482,109 @@ describe("ネイティブクライアントの適合", () => {
     await expect(client.get("k")).resolves.toStrictEqual(Buffer.from([1, 2]));
   });
 
-  test("TTL 付きの put はリース経由で書き込み、リースを使い回す", async () => {
+  test("TTL 付きの put は書き込みごとに新しいリースを作り、自動 keepalive を無効にする", async () => {
     const raw = new StubNativeClient();
     const client = wrapNativeEtcdClient(raw, 60);
     await client.put("a", Buffer.from([1]));
     await client.put("a2", Buffer.from([2]));
     await client.put("b", Buffer.from([3]), { leaseTtlSeconds: 10 });
-    expect(raw.leasesCreated).toBe(2);
+    expect(raw.leasesCreated).toBe(3);
+    expect(raw.leaseOptions).toStrictEqual([
+      { autoKeepAlive: false },
+      { autoKeepAlive: false },
+      { autoKeepAlive: false },
+    ]);
     expect(raw.leasePuts.map(({ ttl }) => ttl)).toStrictEqual([60, 60, 10]);
+    // 書き込みの完了後はリースを保持しない。
+    expect(raw.releasedLeases).toBe(3);
     await expect(client.get("a")).resolves.toStrictEqual(Buffer.from([1]));
+    client.close();
+    expect(raw.releasedLeases).toBe(3);
+  });
+
+  test("各キーは自分の書き込みから TTL 経過後に失効する", async () => {
+    const raw = new StubNativeClient();
+    const client = wrapNativeEtcdClient(raw, 10);
+    await client.put("a", Buffer.from([1]));
+    // リースは書き込みの完了と同時に手放され、保持され続けない。
+    expect(raw.releasedLeases).toBe(1);
+    raw.advance(5000);
+    await client.put("b", Buffer.from([2]));
+    expect(raw.releasedLeases).toBe(2);
+
+    // 最初の書き込みから 10 秒を超えても、後から書いたキーはまだ残ります。
+    raw.advance(5999);
+    await expect(client.get("a")).resolves.toBeNull();
+    await expect(client.get("b")).resolves.toStrictEqual(Buffer.from([2]));
+
+    // 2 回目の書き込みから 10 秒経過すると失効します。
+    raw.advance(4001);
+    await expect(client.get("b")).resolves.toBeNull();
+
+    // 解放済みのリースを close で再度解放しない。
+    client.close();
+    expect(raw.releasedLeases).toBe(2);
+  });
+
+  test("長い TTL で書き込みを繰り返してもリースを保持しない", async () => {
+    const raw = new StubNativeClient();
+    // 30 日は setTimeout の上限 (2^31-1 ミリ秒) を超える長さだが、タイマーに依存せず解放される。
+    const client = wrapNativeEtcdClient(raw, 30 * 24 * 60 * 60);
+    const count = 100;
+
+    for (let index = 0; index < count; index += 1) {
+      await client.put(`key-${index}`, Buffer.from([index]));
+    }
+
+    // 書き込み履歴ではなく、完了した書き込みの分だけ解放されている。
+    expect(raw.leasesCreated).toBe(count);
+    expect(raw.releasedLeases).toBe(count);
+
+    // 解放済みのリースを close で再度解放しない。
+    client.close();
+    expect(raw.releasedLeases).toBe(count);
+  });
+
+  test("close は書き込み中のリースを解放し、完了後に二重解放しない", async () => {
+    const raw = new StubNativeClient();
+    let unblock!: () => void;
+    raw.leasePutGate = new Promise<void>((resolve) => {
+      unblock = resolve;
+    });
+
+    const client = wrapNativeEtcdClient(raw, 60);
+    const pending = client.put("a", Buffer.from([1]));
+
+    // async 関数は最初の await まで同期的に進むため、この時点でリースは保持されている。
+    expect(raw.leasesCreated).toBe(1);
+    expect(raw.releasedLeases).toBe(0);
+
+    // 書き込み中でも close は保持しているリースを解放する。
+    client.close();
+    expect(raw.releasedLeases).toBe(1);
+    expect(raw.closed).toBe(true);
+
+    unblock();
+    await pending;
+
+    // close で解放済みのリースを finally で再度解放しない。
+    expect(raw.releasedLeases).toBe(1);
+  });
+
+  test("リース付き put が失敗したらリースを解放して保持しない", async () => {
+    const raw = new StubNativeClient();
+    const cause = new Error("lease put failed");
+    raw.leasePutError = cause;
+
+    const client = wrapNativeEtcdClient(raw, 60);
+    await expect(client.put("a", Buffer.from([1]))).rejects.toBe(cause);
+
+    expect(raw.leasePuts).toHaveLength(0);
+    expect(raw.releasedLeases).toBe(1);
+
+    // 解放済みのリースを close で再度解放しない。
+    client.close();
+    expect(raw.releasedLeases).toBe(1);
   });
 
   test("文字列値も Buffer に変換して書き込む", async () => {
@@ -467,11 +623,12 @@ describe("ネイティブクライアントの適合", () => {
     expect(raw.store.size).toBe(0);
   });
 
-  test("close はリースを解放してクライアントを閉じる", async () => {
+  test("close は解放済みのリースを再度解放せずクライアントを閉じる", async () => {
     const raw = new StubNativeClient();
     const client = wrapNativeEtcdClient(raw, 60);
     await client.put("a", Buffer.from([1]));
     await client.put("b", Buffer.from([2]), { leaseTtlSeconds: 10 });
+    expect(raw.releasedLeases).toBe(2);
     client.close();
     expect(raw.releasedLeases).toBe(2);
     expect(raw.closed).toBe(true);

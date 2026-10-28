@@ -1,7 +1,7 @@
 {
   "name": "@unikvs/metrics",
   "version": "0.0.18",
-  "description": "Middleware plugin that records operation metrics (counts, bytes, latency) with optional OTel/Prometheus export.",
+  "description": "Middleware plugin that records operation metrics (counts, bytes, hook duration) with optional OTel/Prometheus export.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
   "repository": {
@@ -31,11 +31,13 @@
   },
   "devDependencies": {
     "@opentelemetry/api": "1.10.0",
+    "@unikvs/memory": "workspace:*",
     "@unikvs/testing": "workspace:*",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "playwright": "catalog:",
+    "unikvs": "workspace:*",
     "vite-plus": "catalog:"
   },
   "peerDependencies": {

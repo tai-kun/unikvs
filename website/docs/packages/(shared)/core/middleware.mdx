@@ -35,16 +35,17 @@ type MyMiddleware = IMiddleware<string, string, ArrayBuffer, ArrayBuffer>;
 
 ## フック [#hooks]
 
-| フック         | 引数                          | 説明                           |
-| -------------- | ----------------------------- | ------------------------------ |
-| `mapKey`       | `MapKeyContext`               | キーを変換して `string` を返す |
-| `open`         | `OpenContext`                 | 初期化処理                     |
-| `close`        | `CloseContext`                | 終了処理                       |
-| `use`          | `UseContext`, `next`          | 読み書き操作の前後処理         |
-| `encode`       | `EncodeContext`, `next`       | 書き込みデータの変換           |
-| `decode`       | `DecodeContext`, `next`       | 読み取りデータの逆変換         |
-| `encodeStream` | `EncodeStreamContext`, `next` | 書き込みストリームの変換       |
-| `decodeStream` | `DecodeStreamContext`, `next` | 読み取りストリームの逆変換     |
+| フック         | 引数                          | 説明                                               |
+| -------------- | ----------------------------- | -------------------------------------------------- |
+| `mapKey`       | `MapKeyContext`               | キーを変換して `string` を返す                     |
+| `open`         | `OpenContext`                 | 初期化処理                                         |
+| `close`        | `CloseContext`                | 終了処理                                           |
+| `use`          | `UseContext`, `next`          | ストレージ操作の前段のフック (後段の `use` を包む) |
+| `afterUse`     | `UseContext`, `UseOutcome`    | ストレージ I/O の確定後の通知                      |
+| `encode`       | `EncodeContext`, `next`       | 書き込みデータの変換                               |
+| `decode`       | `DecodeContext`, `next`       | 読み取りデータの逆変換                             |
+| `encodeStream` | `EncodeStreamContext`, `next` | 書き込みストリームの変換                           |
+| `decodeStream` | `DecodeStreamContext`, `next` | 読み取りストリームの逆変換                         |
 
 ### `mapKey` [#hooks-map-key]
 
@@ -52,7 +53,7 @@ type MyMiddleware = IMiddleware<string, string, ArrayBuffer, ArrayBuffer>;
 
 ### `use` [#hooks-use]
 
-読み書き操作 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) の前後処理です。`action` で絞り込むと、各操作の `key` や `repair`、`destinationKey` に型安全に触れます。
+ストレージ操作 (`set`・`get`・`stream`・`has`・`delete`・`copy`・`move`・`clear`) の前段で実行されるフックです。`use` はストレージ I/O の前に実行され、`next()` が実行するのは後段の `use` フックまでです。ストレージ操作はすべての `use` フックが完了した後に実行されるため、`use` からストレージ操作の成否は観測できません。書き込み系の操作の結果は [`afterUse`](#hooks-after-use) で受け取ります。`action` で絞り込むと、各操作の `key` や `repair`、`destinationKey` に型安全に触れます。
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -64,10 +65,49 @@ export class Timing implements IMiddleware {
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     const startedAt = Date.now();
     await next();
-    console.log(`${c.action} took ${Date.now() - startedAt}ms`);
+    console.log(`use chain for ${c.action} took ${Date.now() - startedAt}ms`);
   }
 }
 ```
+
+### `afterUse` [#hooks-after-use]
+
+`afterUse` は、書き込み系の操作 (`set`・`delete`・`copy`・`move`・`clear`) でストレージ I/O が確定した後に 1 回だけ呼ばれる通知専用のフックです。読み取り系の操作 (`get`・`stream`・`has`) では呼ばれません。`get`・`stream` の `repair` による書き戻しは読み取りの一部として扱われ、`afterUse` は呼ばれません。
+
+`use` と異なり、ストレージ操作の成否を観測できます。キーロックと I/O ロックを保持したまま、すべての宛先の処理が終わってから実行されます。`outcome.targets` と `outcome` は読み取り専用に凍結されて渡されます。
+
+:::warning[同じキーへの KVS 操作はデッドロックします]
+`afterUse` はキーロックと I/O ロックを保持したまま実行されるため、同じキーに対する KVS 操作を呼び出すとデッドロックする可能性があります。
+:::
+
+```ts
+import type { IMiddleware } from "@unikvs/core";
+
+export class Audit implements IMiddleware {
+  public readonly name = "Audit";
+  public isOpen = false;
+
+  public afterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): void {
+    console.log({
+      action: c.action,
+      status: outcome.status,
+      targets: outcome.targets,
+    });
+  }
+}
+```
+
+`outcome.status` は `success`・`error`・`aborted` のいずれかです。`outcome.targets` には宛先ごとの `name`・`index`・`status` が入ります。分岐にだけ適用したミドルウェアには、その分岐の宛先だけが渡されます。`status` は `committed` (書き込み・削除などの確定)、`notFound` (キー不在)、`skipped` (予約済み。現在の UniKvs は実行した宛先について返しません)、`failed` (失敗) のいずれかで、`failed` のときだけ `error` を持ちます。
+
+`committed` は操作全体が成功したときだけ現れるわけではありません。一部の宛先だけが失敗した場合や、ストレージの確定後に操作が中断された場合でも、実際に確定した宛先は `committed` として渡されます。`aborted` は操作全体が中断されたことを表し、その時点で確定済みの宛先は `committed` のまま残ります。成功として扱えるかは `outcome.status` ではなく、`targets` の実結果で判断してください。そのため、メトリクスの集計や後片付けのように、宛先ごとの実結果を使う処理を書けます。
+
+:::note[読み取り時の repair と afterUse]
+`get`・`stream` で `repair` を有効にしたときの書き戻しは、読み取り操作の一部としてストレージへ直接書き込まれます。`afterUse` は呼ばれないため、`encode`・`encodeStream` で書き込み用のメタデータを操作内に保存するミドルウェアは、そのメタデータを読み取り側のインスタンスへ確定できません。たとえば TTL のストリーム期限は帯域内に埋め込まれないため、repair で書き戻したストリームの期限は読み取り側の記録に残りません。
+:::
+
+:::warning[通知専用です]
+`afterUse` は操作の結果を変更できません。フックが投げた例外はログに記録され、操作の成功・失敗はそのまま維持されます。操作を拒否したいときは `use` を使ってください。
+:::
 
 ### `encode` と `decode` [#hooks-encode-decode]
 

@@ -4,7 +4,7 @@ import { test, describe } from "vite-plus/test";
 import { KeyNotFoundError, PluginOperationAggregateError } from "../src/errors.js";
 import { Builder } from "../src/index.js";
 import type { PlainValue } from "../src/value-schemas.js";
-import { FakeStorage } from "./_helpers.js";
+import { Gate, isPending, FakeStorage, FakeMiddleware } from "./_helpers.js";
 
 type Mapping = Record<string, PlainValue<string>>;
 
@@ -307,5 +307,378 @@ describe("UniKvs - 移動", () => {
     expect(second.map.has("source")).toBe(false);
     expect(first.map.get("destination")).toBe("value");
     expect(second.map.get("destination")).toBe("value");
+  });
+});
+
+describe("UniKvs - 転送中の中断とキー写像の失敗", () => {
+  test("copy の中断で拒否しても開始済みの転送が終わるまでキーロックを解放しない", async ({
+    expect,
+  }) => {
+    // 準備 : first の copy は中断で失敗し、second の copy はゲートで保留する。
+    const reason = new Error("copy aborted");
+    const first = new FakeStorage("first");
+    const second = new FakeStorage("second");
+    const { kvs } = await createKvs([first, second]);
+    first.map.set("source", "value");
+    second.map.set("source", "value");
+
+    const enteredFirst = new Gate();
+    const releaseFirst = new Gate();
+    first.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "copy") {
+        enteredFirst.open();
+        await releaseFirst.wait();
+        call.signal?.throwIfAborted();
+      }
+    };
+
+    const enteredSecond = new Gate();
+    const releaseSecond = new Gate();
+    second.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "copy") {
+        enteredSecond.open();
+        await releaseSecond.wait();
+      }
+    };
+
+    const ac = new AbortController();
+    const copying = kvs.copy("source", "destination", { signal: ac.signal });
+
+    try {
+      await enteredFirst.wait();
+      await enteredSecond.wait();
+      ac.abort(reason);
+      releaseFirst.open();
+
+      // 実行 : first の失敗後、second の転送中に同じキーを削除する。
+      const deleting = kvs.delete("destination");
+
+      // 検証 : 開始済みの転送が終わるまでキーロックは解放されない。
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await expect(isPending(deleting)).resolves.toBe(true);
+
+      releaseSecond.open();
+
+      await expect(copying).rejects.toBe(reason);
+      await expect(deleting).resolves.toBeUndefined();
+
+      // 検証 : second の転送は削除前に完了しており、削除後に復活しない。
+      expect(second.map.has("destination")).toBe(false);
+      expect(first.map.has("destination")).toBe(false);
+    } finally {
+      releaseFirst.open();
+      releaseSecond.open();
+      await copying.catch(() => {});
+    }
+  });
+
+  test("move の中断で拒否しても開始済みの転送が終わるまでキーロックを解放しない", async ({
+    expect,
+  }) => {
+    // 準備 : first の move は中断で失敗し、second の move はゲートで保留する。
+    const reason = new Error("move aborted");
+    const first = new FakeStorage("first");
+    const second = new FakeStorage("second");
+    const { kvs } = await createKvs([first, second]);
+    first.map.set("source", "value");
+    second.map.set("source", "value");
+
+    const enteredFirst = new Gate();
+    const releaseFirst = new Gate();
+    first.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "move") {
+        enteredFirst.open();
+        await releaseFirst.wait();
+        call.signal?.throwIfAborted();
+      }
+    };
+
+    const enteredSecond = new Gate();
+    const releaseSecond = new Gate();
+    second.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "move") {
+        enteredSecond.open();
+        await releaseSecond.wait();
+      }
+    };
+
+    const ac = new AbortController();
+    const moving = kvs.move("source", "destination", { signal: ac.signal });
+
+    try {
+      await enteredFirst.wait();
+      await enteredSecond.wait();
+      ac.abort(reason);
+      releaseFirst.open();
+
+      // 実行 : first の失敗後、second の転送中に移動先を削除する。
+      const deleting = kvs.delete("destination");
+
+      // 検証 : 開始済みの転送が終わるまでキーロックは解放されない。
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await expect(isPending(deleting)).resolves.toBe(true);
+
+      releaseSecond.open();
+
+      await expect(moving).rejects.toBe(reason);
+      await expect(deleting).resolves.toBeUndefined();
+
+      // 検証 : second の転送は削除前に完了しており、削除後に復活しない。
+      expect(second.map.has("destination")).toBe(false);
+      expect(second.map.has("source")).toBe(false);
+      expect(first.map.has("destination")).toBe(false);
+    } finally {
+      releaseFirst.open();
+      releaseSecond.open();
+      await moving.catch(() => {});
+    }
+  });
+
+  test("キー写像の失敗でも開始済みの転送が終わるまで拒否しない", async ({ expect }) => {
+    // 準備 : first の copy はゲートで保留し、second のキー写像は失敗する。
+    class ThrowingMapKeyMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("ThrowingMapKey");
+      }
+
+      public override mapKey(): string {
+        throw new Error("mapKey failed");
+      }
+    }
+
+    const first = new FakeStorage("first");
+    const second = new FakeStorage("second");
+    const kvs = new Builder<Mapping>()
+      .persist(first)
+      .use(new ThrowingMapKeyMiddleware())
+      .persist(second)
+      .build();
+    await kvs.open();
+    first.map.set("source", "value");
+    second.map.set("source", "value");
+
+    const entered = new Gate();
+    const release = new Gate();
+    first.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "copy") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const copying = kvs.copy("source", "destination");
+
+    try {
+      await entered.wait();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // 検証 : キー写像の失敗だけでは、開始済みのコピーを残したまま拒否しない。
+      await expect(isPending(copying)).resolves.toBe(true);
+
+      release.open();
+
+      // 検証 : 失敗は集約エラーとして報告され、コピーは完了している。
+      await expect(copying).rejects.toThrow(PluginOperationAggregateError);
+      expect(first.map.get("destination")).toBe("value");
+    } finally {
+      release.open();
+      await copying.catch(() => {});
+      await kvs.close();
+    }
+  });
+
+  test("単一ストレージの copy でキー写像に失敗したとき KeyNotFoundError ではなく集約エラーを投げる", async ({
+    expect,
+  }) => {
+    // 準備 : 唯一のストレージへ到達する前にキー写像が失敗する。
+    class ThrowingMapKeyMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("ThrowingMapKey");
+      }
+
+      public override mapKey(): string {
+        throw new Error("mapKey failed");
+      }
+    }
+
+    const storage = new FakeStorage();
+    const kvs = new Builder<Mapping>().use(new ThrowingMapKeyMiddleware()).persist(storage).build();
+    await kvs.open();
+    storage.map.set("source", "value");
+
+    // 実行：
+    const error: unknown = await kvs.copy("source", "destination").catch((ex: unknown) => ex);
+
+    // 検証 : 存在確認を 1 件も行っていないため、キー不在ではなく解決失敗として報告する。
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect(error).not.toBeInstanceOf(KeyNotFoundError);
+    expect(error).toMatchObject({
+      meta: {
+        action: "copy",
+        errors: [
+          {
+            name: "FakeStorage",
+            index: 0,
+            reason: expect.objectContaining({ message: "mapKey failed" }),
+          },
+        ],
+      },
+    });
+
+    expect(storage.callsOf("exists")).toHaveLength(0);
+    expect(storage.map.has("destination")).toBe(false);
+  });
+
+  test("単一ストレージの move でキー写像に失敗したとき KeyNotFoundError ではなく集約エラーを投げる", async ({
+    expect,
+  }) => {
+    // 準備 : 唯一のストレージへ到達する前にキー写像が失敗する。
+    class ThrowingMapKeyMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("ThrowingMapKey");
+      }
+
+      public override mapKey(): string {
+        throw new Error("mapKey failed");
+      }
+    }
+
+    const storage = new FakeStorage();
+    const kvs = new Builder<Mapping>().use(new ThrowingMapKeyMiddleware()).persist(storage).build();
+    await kvs.open();
+    storage.map.set("source", "value");
+
+    // 実行：
+    const error: unknown = await kvs.move("source", "destination").catch((ex: unknown) => ex);
+
+    // 検証 : 存在確認を 1 件も行っていないため、キー不在ではなく解決失敗として報告する。
+    expect(error).toBeInstanceOf(PluginOperationAggregateError);
+    expect(error).not.toBeInstanceOf(KeyNotFoundError);
+    expect(error).toMatchObject({
+      meta: {
+        action: "move",
+        errors: [
+          {
+            name: "FakeStorage",
+            index: 0,
+            reason: expect.objectContaining({ message: "mapKey failed" }),
+          },
+        ],
+      },
+    });
+
+    expect(storage.callsOf("exists")).toHaveLength(0);
+    expect(storage.map.has("destination")).toBe(false);
+  });
+
+  test("不在とキー写像の失敗が混在するときは KeyNotFoundError に原因を残す", async ({ expect }) => {
+    // 準備 : first は不在、second はキー写像に失敗して存在確認に到達しない。
+    class ThrowingMapKeyMiddleware extends FakeMiddleware {
+      public constructor() {
+        super("ThrowingMapKey");
+      }
+
+      public override mapKey(): string {
+        throw new Error("mapKey failed");
+      }
+    }
+
+    const first = new FakeStorage("first");
+    const second = new FakeStorage("second");
+    const kvs = new Builder<Mapping>()
+      .persist(first)
+      .use(new ThrowingMapKeyMiddleware())
+      .persist(second)
+      .build();
+    await kvs.open();
+    second.map.set("source", "value");
+
+    // 実行：
+    const error: unknown = await kvs.copy("source", "destination").catch((ex: unknown) => ex);
+
+    // 検証 : 不在として報告しつつ、確認できなかったストレージの失敗を cause に残す。
+    expect(error).toBeInstanceOf(KeyNotFoundError);
+    expect(error).not.toBeInstanceOf(PluginOperationAggregateError);
+    expect(error).toMatchObject({
+      cause: expect.objectContaining({ message: "mapKey failed" }),
+    });
+
+    expect(first.callsOf("exists")).toHaveLength(1);
+    expect(second.callsOf("exists")).toHaveLength(0);
+    expect(second.map.get("source")).toBe("value");
+  });
+
+  test("copy 中に中断してもストレージが完了した場合は abort 理由で失敗する", async ({ expect }) => {
+    // 準備 : ストレージは中断を無視してコピーを完了する。
+    const reason = new Error("copy aborted after storage completed");
+    const storage = new FakeStorage();
+    const { kvs } = await createKvs([storage]);
+    storage.map.set("source", "value");
+
+    const entered = new Gate();
+    const release = new Gate();
+    storage.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "copy") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const ac = new AbortController();
+    const copying = kvs.copy("source", "destination", { signal: ac.signal });
+
+    try {
+      await entered.wait();
+      ac.abort(reason);
+      release.open();
+
+      // 検証 : ストレージが成功しても、中断済みの操作を成功として扱わない。
+      await expect(copying).rejects.toBe(reason);
+      expect(storage.map.get("destination")).toBe("value");
+    } finally {
+      release.open();
+      await copying.catch(() => {});
+    }
+  });
+
+  test("move 中に中断してもストレージが完了した場合は abort 理由で失敗する", async ({ expect }) => {
+    // 準備 : ストレージは中断を無視して移動を完了する。
+    const reason = new Error("move aborted after storage completed");
+    const storage = new FakeStorage();
+    const { kvs } = await createKvs([storage]);
+    storage.map.set("source", "value");
+
+    const entered = new Gate();
+    const release = new Gate();
+    storage.hook = async (call): Promise<void> => {
+      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
+      if (call.method === "move") {
+        entered.open();
+        await release.wait();
+      }
+    };
+
+    const ac = new AbortController();
+    const moving = kvs.move("source", "destination", { signal: ac.signal });
+
+    try {
+      await entered.wait();
+      ac.abort(reason);
+      release.open();
+
+      // 検証 : ストレージが成功しても、中断済みの操作を成功として扱わない。
+      await expect(moving).rejects.toBe(reason);
+      expect(storage.map.get("destination")).toBe("value");
+      expect(storage.map.has("source")).toBe(false);
+    } finally {
+      release.open();
+      await moving.catch(() => {});
+    }
   });
 });

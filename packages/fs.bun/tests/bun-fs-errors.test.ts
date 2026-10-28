@@ -1,8 +1,14 @@
-import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, access, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { IStorage } from "@unikvs/core";
-import { createGetContext, createSetContext } from "@unikvs/testing";
+import {
+  createGetContext,
+  createHasContext,
+  createSetContext,
+  createClearContext,
+  createDeleteContext,
+} from "@unikvs/testing";
 import { listTemporaryFiles } from "@unikvs/testing/node";
 import { describe } from "vite-plus/test";
 
@@ -52,6 +58,29 @@ describe("権限エラー", () => {
       }
     },
   );
+
+  test.skipIf(!isPermissionTestSupported)(
+    "読み取り権限のないルートでは exists が EACCES で失敗する",
+    async ({ root, expect, signal, storage }) => {
+      // 準備：
+      const key = "no-access.bin";
+      await storage.write(
+        createSetContext(key, { signal }) as IStorage.WriteContext,
+        new Uint8Array([1]),
+      );
+
+      await chmod(root, 0o000);
+
+      try {
+        // 実行と検証：
+        await expect(
+          storage.exists(createHasContext(key, { signal }) as IStorage.ExistsContext),
+        ).rejects.toThrow(/EACCES/u);
+      } finally {
+        await chmod(root, 0o700);
+      }
+    },
+  );
 });
 
 describe("abort された signal", () => {
@@ -70,6 +99,97 @@ describe("abort された signal", () => {
     await expect(
       storage.read(createGetContext(key, { signal: controller.signal }) as IStorage.ReadContext),
     ).rejects.toThrow();
+  });
+
+  test("exists は中断理由で失敗する", async ({ expect, signal, storage }) => {
+    // 準備：
+    const key = "aborted-exists.bin";
+    await storage.write(
+      createSetContext(key, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+
+    const controller = new AbortController();
+    const reason = new Error("exists の中断");
+    controller.abort(reason);
+
+    // 実行と検証：
+    await expect(
+      storage.exists(
+        createHasContext(key, { signal: controller.signal }) as IStorage.ExistsContext,
+      ),
+    ).rejects.toBe(reason);
+  });
+
+  test("delete は中断理由で失敗し、データが残る", async ({ expect, signal, storage }) => {
+    // 準備：
+    const key = "aborted-delete.bin";
+    const data = new Uint8Array([1, 2, 3]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
+    const controller = new AbortController();
+    const reason = new Error("delete の中断");
+    controller.abort(reason);
+
+    // 実行と検証：
+    await expect(
+      storage.delete(
+        createDeleteContext(key, { signal: controller.signal }) as IStorage.DeleteContext,
+      ),
+    ).rejects.toBe(reason);
+
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(data);
+  });
+
+  test("clear は中断理由で失敗し、データが残る", async ({ expect, signal, storage }) => {
+    // 準備：
+    const key = "aborted-clear.bin";
+    const data = new Uint8Array([4, 5, 6]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
+    const controller = new AbortController();
+    const reason = new Error("clear の中断");
+    controller.abort(reason);
+
+    // 実行と検証：
+    await expect(
+      storage.clear(createClearContext("", { signal: controller.signal }) as IStorage.ClearContext),
+    ).rejects.toBe(reason);
+
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(data);
+  });
+});
+
+describe("clear 中の中断", () => {
+  test("削除中に中断したとき、中断理由で失敗しルートを作り直さない", async ({
+    root,
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    await storage.write(
+      createSetContext("clear-midway.bin", { signal }) as IStorage.WriteContext,
+      new Uint8Array([1]),
+    );
+    const controller = new AbortController();
+    const reason = new Error("clear 実行中の中断");
+
+    // 実行：
+    const clearing = storage.clear(
+      createClearContext("", { signal: controller.signal }) as IStorage.ClearContext,
+    );
+    controller.abort(reason);
+
+    // 検証：
+    await expect(clearing).rejects.toBe(reason);
+
+    // 削除は完了していますが、中断後の再作成は行われません。
+    await expect(access(root)).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

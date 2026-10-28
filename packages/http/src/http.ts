@@ -266,6 +266,9 @@ export default class Http implements IStorage {
     const url = this.#keyUrl(c.key);
     const response = await this.#send(c.signal, url, "PUT", headers, c.key, data);
 
+    // 応答の内容は使わないため、ボディを破棄して接続を解放します。
+    await this.#discardBody(response);
+
     if (!response.ok) {
       throw new HttpResponseError({
         key: c.key,
@@ -294,10 +297,12 @@ export default class Http implements IStorage {
     const response = await this.#send(c.signal, url, "GET", headers, c.key);
 
     if (response.status === 404 || response.status === 410) {
+      await this.#discardBody(response);
       throw new KeyNotFoundError({ key: c.key });
     }
 
     if (!response.ok) {
+      await this.#discardBody(response);
       throw new HttpResponseError({
         key: c.key,
         url,
@@ -329,15 +334,20 @@ export default class Http implements IStorage {
     const headResponse = await this.#send(c.signal, url, "HEAD", headers, c.key);
 
     if (headResponse.status === 404 || headResponse.status === 410) {
+      await this.#discardBody(headResponse);
+
       return false;
     }
 
     if (headResponse.ok) {
+      await this.#discardBody(headResponse);
+
       return true;
     }
 
     // `HEAD` 未対応サーバー向けに `GET` でフォールバックします。
     if (headResponse.status !== 405 && headResponse.status !== 501) {
+      await this.#discardBody(headResponse);
       throw new HttpResponseError({
         key: c.key,
         url,
@@ -395,6 +405,9 @@ export default class Http implements IStorage {
     const url = this.#keyUrl(c.key);
     const response = await this.#send(c.signal, url, "DELETE", headers, c.key);
 
+    // 応答の内容は使わないため、ボディを破棄してから結果を判定します。
+    await this.#discardBody(response);
+
     // 削除は冪等とし存在しないキーも成功扱いにします。
     if (response.status === 404 || response.status === 410) {
       return;
@@ -431,6 +444,9 @@ export default class Http implements IStorage {
     const headers = this.#resolveHeaders(c);
     const url = this.#clearUrl();
     const response = await this.#send(c.signal, url, "DELETE", headers, undefined);
+
+    // 応答の内容は使わないため、ボディを破棄してから結果を判定します。
+    await this.#discardBody(response);
 
     if (response.ok) {
       return;
@@ -498,6 +514,9 @@ export default class Http implements IStorage {
           merged,
         );
 
+        // 応答の内容は使わないため、ボディを破棄して接続を解放します。
+        await this.#discardBody(response);
+
         if (!response.ok) {
           throw new HttpResponseError({
             key: c.key,
@@ -540,10 +559,12 @@ export default class Http implements IStorage {
     const response = await this.#send(c.signal, url, "GET", headers, c.key);
 
     if (response.status === 404 || response.status === 410) {
+      await this.#discardBody(response);
       throw new KeyNotFoundError({ key: c.key });
     }
 
     if (!response.ok) {
+      await this.#discardBody(response);
       throw new HttpResponseError({
         key: c.key,
         url,
@@ -563,6 +584,24 @@ export default class Http implements IStorage {
     }
 
     return response.body;
+  }
+
+  /**
+   * 消費しない応答ボディを破棄します。
+   *
+   * 後始末の失敗で本来の結果 (成功や HTTP エラー) を覆さないよう、破棄時の例外は無視します。
+   * `exists` の HEAD 応答もここで破棄し、フォールバックは判定前に破棄失敗を伝播する既存仕様のためこの関数を使いません。
+   *
+   * @param response ボディを破棄する応答です。
+   *
+   * @returns 破棄が完了したら解決します。
+   */
+  async #discardBody(response: Response): Promise<void> {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // ボディ破棄は後始末のため、失敗しても無視します。
+    }
   }
 
   /**

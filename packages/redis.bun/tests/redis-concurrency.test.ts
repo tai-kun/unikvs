@@ -3,14 +3,181 @@ import {
   bytesEqual,
   createGetContext,
   createSetContext,
+  createOpenContext,
+  createCloseContext,
   createDeleteContext,
   createPseudoRandomBytes,
 } from "@unikvs/testing";
-import { describe } from "vite-plus/test";
+import { RedisClient } from "bun";
+import { vi, describe } from "vite-plus/test";
 
-import { test } from "./_helpers.js";
+import { test, createStorage } from "./_helpers.js";
 
 describe("並行操作", () => {
+  test("並行した open は接続を 1 つだけ作り、close でその接続を閉じる", async ({
+    url,
+    expect,
+    keyPrefix,
+  }) => {
+    // 準備：
+    const storage = createStorage(url, keyPrefix);
+    const gate = Promise.withResolvers<void>();
+    const connectSpy = vi
+      .spyOn(RedisClient.prototype, "connect")
+      .mockImplementation(() => gate.promise);
+    const closeSpy = vi.spyOn(RedisClient.prototype, "close").mockImplementation(() => {});
+
+    try {
+      // 実行：
+      const first = storage.open(createOpenContext() as IStorage.OpenContext);
+      const second = storage.open(createOpenContext() as IStorage.OpenContext);
+
+      await vi.waitFor(() => {
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // 検証：
+      expect(storage.isOpen).toBe(false);
+
+      gate.resolve();
+      await Promise.all([first, second]);
+
+      expect(storage.isOpen).toBe(true);
+
+      storage.close(createCloseContext() as IStorage.CloseContext);
+
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+      expect(storage.isOpen).toBe(false);
+    } finally {
+      gate.resolve();
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("open の接続待ち中に close すると、接続は公開されない", async ({
+    url,
+    expect,
+    keyPrefix,
+  }) => {
+    // 準備：
+    const storage = createStorage(url, keyPrefix);
+    const gate = Promise.withResolvers<void>();
+    const connectSpy = vi
+      .spyOn(RedisClient.prototype, "connect")
+      .mockImplementation(() => gate.promise);
+    const closeSpy = vi.spyOn(RedisClient.prototype, "close").mockImplementation(() => {});
+
+    try {
+      const opening = storage.open(createOpenContext() as IStorage.OpenContext);
+
+      await vi.waitFor(() => {
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // 実行：
+      storage.close(createCloseContext() as IStorage.CloseContext);
+      gate.resolve();
+
+      // 検証：
+      await expect(opening).rejects.toThrow(TypeError);
+      expect(storage.isOpen).toBe(false);
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      gate.resolve();
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("接続の公開直後に close が割り込んでも、公開された接続を閉じる", async ({
+    url,
+    expect,
+    keyPrefix,
+  }) => {
+    // 準備：
+    const storage = createStorage(url, keyPrefix);
+    const gate = Promise.withResolvers<void>();
+    const connectSpy = vi
+      .spyOn(RedisClient.prototype, "connect")
+      .mockImplementation(() => gate.promise);
+    const closeSpy = vi.spyOn(RedisClient.prototype, "close").mockImplementation(() => {});
+
+    try {
+      const opening = storage.open(createOpenContext() as IStorage.OpenContext);
+
+      await vi.waitFor(() => {
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // 実行：
+      // connect の完了を open() の継続より先に処理させ、公開直後の close を再現します。
+      gate.resolve();
+      queueMicrotask(() => {
+        storage.close(createCloseContext() as IStorage.CloseContext);
+      });
+
+      // 検証：
+      await expect(opening).resolves.toBeUndefined();
+      expect(closeSpy).toHaveBeenCalledTimes(1);
+      expect(storage.isOpen).toBe(false);
+    } finally {
+      gate.resolve();
+      vi.restoreAllMocks();
+    }
+  });
+
+  test("接続待ちの open を close でキャンセルした後、open し直せる", async ({
+    url,
+    expect,
+    signal,
+    keyPrefix,
+  }) => {
+    // 準備：
+    const storage = createStorage(url, keyPrefix);
+    const gate = Promise.withResolvers<void>();
+    const connectSpy = vi
+      .spyOn(RedisClient.prototype, "connect")
+      .mockImplementationOnce(() => gate.promise);
+    const key = "reopen-after-cancel.bin";
+    const data = new Uint8Array([1, 2, 3]);
+
+    const cancelled = storage.open(createOpenContext() as IStorage.OpenContext);
+
+    try {
+      await vi.waitFor(() => {
+        expect(connectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      // 実行：
+      storage.close(createCloseContext() as IStorage.CloseContext);
+      await storage.open(createOpenContext() as IStorage.OpenContext);
+
+      try {
+        // 検証：
+        expect(storage.isOpen).toBe(true);
+
+        gate.resolve();
+        await expect(cancelled).rejects.toThrow(TypeError);
+        expect(storage.isOpen).toBe(true);
+
+        await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+        await expect(
+          storage.read(createGetContext(key, { signal }) as IStorage.ReadContext),
+        ).resolves.toStrictEqual(data);
+      } finally {
+        storage.close(createCloseContext() as IStorage.CloseContext);
+      }
+    } finally {
+      gate.resolve();
+      vi.restoreAllMocks();
+
+      try {
+        await cancelled;
+      } catch {
+        // キャンセル済みの open は検証済みか、テスト失敗時の後始末として無視します。
+      }
+    }
+  });
+
   test("異なるキーへ並列に書き込んだとき、すべてのデータが保存される", async ({
     expect,
     signal,

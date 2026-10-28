@@ -1,6 +1,7 @@
 import {
   type S3ClientConfig,
   type GetObjectCommandOutput,
+  type DeleteObjectsCommandOutput,
   type ListObjectsV2CommandOutput,
   S3Client,
   GetObjectCommand,
@@ -52,6 +53,34 @@ function isKeyNotFoundError(ex: unknown): boolean {
     error.name === "NoSuchKey" ||
     error.name === "NotFound" ||
     error.$metadata?.httpStatusCode === 404
+  );
+}
+
+/**
+ * 一括削除の応答に含まれるオブジェクト単位の失敗を検査します。
+ *
+ * `DeleteObjects` はオブジェクトの削除に失敗しても HTTP 200 を返し、失敗したキーを `Errors` に格納します。
+ * 成功として扱うと削除されていないオブジェクトが残るため、失敗があれば集約して投げます。
+ *
+ * @param response 一括削除の応答です。
+ */
+function throwIfDeleteFailed(response: DeleteObjectsCommandOutput): void {
+  const errors = response.Errors;
+
+  if (!errors || errors.length === 0) {
+    return;
+  }
+
+  const details = errors.map((error) => {
+    const key = error.Key === undefined ? "<unknown>" : JSON.stringify(error.Key);
+    const code = error.Code ?? "UnknownError";
+
+    return error.Message === undefined ? `${code}: ${key}` : `${code}: ${key}: ${error.Message}`;
+  });
+
+  throw new AggregateError(
+    details.map((detail) => new Error(detail)),
+    `S3: failed to delete ${errors.length} object(s): ${details.join("; ")}`,
   );
 }
 
@@ -323,7 +352,10 @@ export default class S3 implements IStorage {
             Objects: objectsToDelete,
           },
         });
-        await this.#getClient().send(deleteCommand, { abortSignal: c.signal });
+        const deleteResponse = await this.#getClient().send(deleteCommand, {
+          abortSignal: c.signal,
+        });
+        throwIfDeleteFailed(deleteResponse);
       }
 
       isTruncated = response.IsTruncated ?? false;

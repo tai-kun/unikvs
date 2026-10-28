@@ -35,16 +35,17 @@ type MyMiddleware = IMiddleware<string, string, ArrayBuffer, ArrayBuffer>;
 
 ## Hooks [#hooks]
 
-| Hook           | Arguments                     | Description                          |
-| -------------- | ----------------------------- | ------------------------------------ |
-| `mapKey`       | `MapKeyContext`               | Transforms the key, returns `string` |
-| `open`         | `OpenContext`                 | Initialization                       |
-| `close`        | `CloseContext`                | Teardown                             |
-| `use`          | `UseContext`, `next`          | Around read/write operations         |
-| `encode`       | `EncodeContext`, `next`       | Write-data conversion                |
-| `decode`       | `DecodeContext`, `next`       | Read-data reverse conversion         |
-| `encodeStream` | `EncodeStreamContext`, `next` | Write-stream conversion              |
-| `decodeStream` | `DecodeStreamContext`, `next` | Read-stream reverse conversion       |
+| Hook           | Arguments                     | Description                                                   |
+| -------------- | ----------------------------- | ------------------------------------------------------------- |
+| `mapKey`       | `MapKeyContext`               | Transforms the key, returns `string`                          |
+| `open`         | `OpenContext`                 | Initialization                                                |
+| `close`        | `CloseContext`                | Teardown                                                      |
+| `use`          | `UseContext`, `next`          | Hook before storage operations (wraps downstream `use` hooks) |
+| `afterUse`     | `UseContext`, `UseOutcome`    | Notification after storage I/O settles                        |
+| `encode`       | `EncodeContext`, `next`       | Write-data conversion                                         |
+| `decode`       | `DecodeContext`, `next`       | Read-data reverse conversion                                  |
+| `encodeStream` | `EncodeStreamContext`, `next` | Write-stream conversion                                       |
+| `decodeStream` | `DecodeStreamContext`, `next` | Read-stream reverse conversion                                |
 
 ### `mapKey` [#hooks-map-key]
 
@@ -52,7 +53,7 @@ Transforms the key itself. Synchronously returns a `string`. Unlike other hooks,
 
 ### `use` [#hooks-use]
 
-Runs around read/write operations (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`). Narrow by `action` for type-safe access to each operation's `key`, `repair`, or `destinationKey`.
+Hook that runs before storage operations (`set` / `get` / `stream` / `has` / `delete` / `copy` / `move` / `clear`). `use` runs before storage I/O, and `next()` runs only downstream `use` hooks. The storage operation runs after all `use` hooks complete, so `use` cannot observe whether it succeeds. Receive the outcome of mutating operations with [`afterUse`](#hooks-after-use). Narrow by `action` for type-safe access to each operation's `key`, `repair`, or `destinationKey`.
 
 ```ts
 import type { IMiddleware } from "@unikvs/core";
@@ -64,10 +65,49 @@ export class Timing implements IMiddleware {
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     const startedAt = Date.now();
     await next();
-    console.log(`${c.action} took ${Date.now() - startedAt}ms`);
+    console.log(`use chain for ${c.action} took ${Date.now() - startedAt}ms`);
   }
 }
 ```
+
+### `afterUse` [#hooks-after-use]
+
+`afterUse` is a notification-only hook called once after storage I/O settles for mutating operations (`set` / `delete` / `copy` / `move` / `clear`). It is not called for reads (`get` / `stream` / `has`). Repair writes performed by `get` / `stream` are treated as part of the read and do not call `afterUse`.
+
+Unlike `use`, it can observe whether the storage operation succeeded. It runs after every target has finished, while the key and I/O locks are still held. `outcome` and `outcome.targets` are frozen before they are passed to the hook.
+
+:::warning[KVS operations on the same key can deadlock]
+`afterUse` runs while the key and I/O locks are held, so calling KVS operations on the same key from `afterUse` can deadlock.
+:::
+
+```ts
+import type { IMiddleware } from "@unikvs/core";
+
+export class Audit implements IMiddleware {
+  public readonly name = "Audit";
+  public isOpen = false;
+
+  public afterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): void {
+    console.log({
+      action: c.action,
+      status: outcome.status,
+      targets: outcome.targets,
+    });
+  }
+}
+```
+
+`outcome.status` is `success`, `error`, or `aborted`. Each entry in `outcome.targets` has a target `name`, `index`, and `status`. A middleware applied to only one branch receives only that branch's targets. The status is `committed` (write or delete confirmed), `notFound` (key absent), `skipped` (reserved; current UniKvs does not return it for an executed target), or `failed` (failure). Only `failed` targets carry `error`.
+
+A `committed` target does not imply the whole operation succeeded. When only some targets fail, or when an operation is aborted after storage has settled, targets that actually committed are still reported as `committed`. `aborted` means the operation as a whole was aborted; targets already committed remain `committed`. Decide whether the operation is usable from the per-target results, not from `outcome.status` alone. This lets metrics and cleanup decisions use the real per-target result.
+
+:::note[Repair during reads and afterUse]
+When `get` / `stream` runs with `repair`, its write-back goes directly to storage as part of the read operation. `afterUse` is not called, so a middleware that stages write metadata in `encode` / `encodeStream` cannot commit that metadata on the reading instance. For example, TTL stream expiry is not stored in-band, so a stream repaired through `get` / `stream` does not gain a TTL record on the reading instance.
+:::
+
+:::warning[Notification only]
+`afterUse` cannot change the operation result. If the hook throws, the error is logged and the original success or failure is preserved. Use `use` to reject an operation.
+:::
 
 ### `encode` and `decode` [#hooks-encode-decode]
 

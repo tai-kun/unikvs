@@ -201,7 +201,7 @@ describe("getWritable", () => {
     );
   });
 
-  test("中断済みの signal でチャンクを書いたとき、中断理由で拒否される", async ({
+  test("中断済みの signal で getWritable を呼ぶと中断理由で拒否される", async ({
     expect,
     storage,
   }) => {
@@ -209,12 +209,64 @@ describe("getWritable", () => {
     await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
     const reason = new Error("独自の中断理由");
     const aborted = abortedSignal(reason);
-    const writer = storage
-      .getWritable(createSetContext("s1", { signal: aborted }) as IStorage.GetWritableContext)
-      .getWriter();
 
     // 実行と検証：
-    await expect(writer.write(new Uint8Array([1]))).rejects.toBe(reason);
+    expect(() =>
+      storage.getWritable(
+        createSetContext("s1", { signal: aborted }) as IStorage.GetWritableContext,
+      ),
+    ).toThrow(reason);
+  });
+
+  test("close 前に中断されたとき、チャンクを保存せず close が拒否される", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備：
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const controller = new AbortController();
+    const reason = new Error("独自の中断理由");
+    const writer = storage
+      .getWritable(
+        createSetContext("s1", { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+    await writer.write(new Uint8Array([1, 2]));
+
+    // 実行：
+    controller.abort(reason);
+
+    // 検証：
+    await expect(writer.close()).rejects.toBe(reason);
+
+    expect(await storage.exists(createHasContext("s1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
+  });
+
+  test("チャンクなしでも close 前に中断されたときは空の Response を保存しない", async ({
+    expect,
+    storage,
+  }) => {
+    // 準備：
+    await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+    const controller = new AbortController();
+    const reason = new Error("独自の中断理由");
+    const writer = storage
+      .getWritable(
+        createSetContext("s1", { signal: controller.signal }) as IStorage.GetWritableContext,
+      )
+      .getWriter();
+
+    // 実行：
+    controller.abort(reason);
+
+    // 検証：
+    await expect(writer.close()).rejects.toBe(reason);
+
+    expect(await storage.exists(createHasContext("s1", { signal }) as IStorage.ExistsContext)).toBe(
+      false,
+    );
   });
 });
 describe("getReadable", () => {

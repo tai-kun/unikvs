@@ -591,6 +591,46 @@ describe("複合値のラウンドトリップ", () => {
   });
 });
 
+describe("デコード結果の所有権", () => {
+  test("プールを共有する Buffer からデコードした型付き配列は元のバッファーを参照しない", async ({
+    expect,
+    signal,
+  }) => {
+    // 準備：
+    const target = await createOpenedTarget(signal);
+    const input = Uint8Array.of(1, 2, 3, 4);
+    const encoded = await encode(target, input);
+    const pool = Buffer.alloc(encoded.byteLength + 32);
+    const source = pool.subarray(16, 16 + encoded.byteLength);
+    source.set(encoded);
+
+    // 実行：
+    const output = (await decode(target, source)) as Uint8Array;
+
+    // 検証：
+    expect(output).toBeInstanceOf(Uint8Array);
+    expect(output.buffer).not.toBe(pool.buffer);
+  });
+
+  test("デコード後に元の Buffer を書き換えても結果は変化しない", async ({ expect, signal }) => {
+    // 準備：
+    const target = await createOpenedTarget(signal);
+    const input = Uint8Array.of(1, 2, 3, 4);
+    const encoded = await encode(target, input);
+    const pool = Buffer.alloc(encoded.byteLength + 32);
+    const source = pool.subarray(16, 16 + encoded.byteLength);
+    source.set(encoded);
+
+    // 実行：
+    const output = (await decode(target, source)) as Uint8Array;
+
+    pool.fill(255);
+
+    // 検証：
+    expect(output).toStrictEqual(input);
+  });
+});
+
 describe("単発の trailing の扱い", () => {
   test("2 つの値の連結をデコードすると先頭の値だけが返る", async ({ expect, signal }) => {
     // 注意 : Node.js v24 での実測に基づく仕様ピンです。

@@ -1,6 +1,8 @@
 import type { IStorage, IKeyedActionContext } from "@unikvs/core";
 import { type IDBPDatabase, openDB } from "idb";
 
+import { InvalidChunkTypeError } from "./errors.js";
+
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/indexeddb#usage)
  */
@@ -164,46 +166,68 @@ export default class Indexeddb implements IStorage {
   public async open(c: IStorage.OpenContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.#db !== null) {
-      return;
-    }
-
-    if (this.#opening !== null) {
-      await this.#opening;
-      c.signal.throwIfAborted();
-
-      return;
-    }
-
-    const opening = openDB(this.#dbName, 1, {
-      upgrade: (upgraded) => {
-        // オブジェクトストアが存在しない場合は作成します。
-        if (!upgraded.objectStoreNames.contains(this.#storeName)) {
-          upgraded.createObjectStore(this.#storeName);
-        }
-      },
-    });
-    this.#opening = opening;
-
-    let opened: IDBPDatabase | null = null;
-
-    try {
-      opened = await opening;
-      c.signal.throwIfAborted();
-      this.#db = opened;
-      opened = null;
-    } catch (ex) {
-      if (opened !== null) {
-        try {
-          opened.close();
-        } catch {
-          // 閉鎖時の失敗は無視します。
-        }
+    // 並行した open は同じ接続処理を共有します。
+    // 接続処理の所有者が中断しても、待機中の呼び出しが未接続のまま成功しないよう、接続が公開されていなければ待機側が改めて接続処理を開始します。
+    for (;;) {
+      if (this.#db !== null) {
+        return;
       }
 
-      throw ex;
-    } finally {
-      this.#opening = null;
+      const pending = this.#opening;
+
+      if (pending !== null) {
+        try {
+          await pending;
+        } catch (ex) {
+          c.signal.throwIfAborted();
+          throw ex;
+        }
+
+        if (this.#db !== null) {
+          c.signal.throwIfAborted();
+
+          return;
+        }
+
+        // 所有者が接続を公開する前に中断した場合は、自分の接続処理を開始します。
+        c.signal.throwIfAborted();
+        continue;
+      }
+
+      const opening = openDB(this.#dbName, 1, {
+        upgrade: (upgraded) => {
+          // オブジェクトストアが存在しない場合は作成します。
+          if (!upgraded.objectStoreNames.contains(this.#storeName)) {
+            upgraded.createObjectStore(this.#storeName);
+          }
+        },
+      });
+      this.#opening = opening;
+
+      let opened: IDBPDatabase | null = null;
+
+      try {
+        opened = await opening;
+        c.signal.throwIfAborted();
+        this.#db = opened;
+        opened = null;
+
+        return;
+      } catch (ex) {
+        if (opened !== null) {
+          try {
+            opened.close();
+          } catch {
+            // 閉鎖時の失敗は無視します。
+          }
+        }
+
+        throw ex;
+      } finally {
+        if (this.#opening === opening) {
+          this.#opening = null;
+        }
+      }
     }
   }
 
@@ -343,7 +367,16 @@ export default class Indexeddb implements IStorage {
       },
       write: (chunk): void => {
         c.signal.throwIfAborted();
-        chunks.push(chunk);
+
+        if (!(chunk instanceof Uint8Array)) {
+          throw new InvalidChunkTypeError({
+            key: c.key,
+            chunk,
+          });
+        }
+
+        // 後からチャンクを書き換えても保存値が変わらないよう、複製して保持します。
+        chunks.push(chunk.slice());
       },
     });
   }

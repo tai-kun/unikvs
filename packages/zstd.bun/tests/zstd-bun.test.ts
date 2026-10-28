@@ -430,6 +430,17 @@ describe.skipIf(!hasBunZstd)("Bun との相互運用", () => {
   });
 });
 
+describe("空の入力の decode", () => {
+  test("空のバイト列をエラーで拒否する", async ({ expect, signal }) => {
+    // 準備：
+    const target = await createOpenedTarget(signal);
+
+    // 実行と検証：
+    // Bun の zstd API は空の入力を空の展開結果として受け入れるため、破損データとの取り違えを防ぐ契約を検証する。
+    await expect(decode(target, new Uint8Array(0))).rejects.toThrow(Error);
+  });
+});
+
 describe.skipIf(!hasZstd)("node:zlib との相互運用", () => {
   test("node:zlib で圧縮したフレームを decode で展開できる", async ({ expect, signal }) => {
     // 準備：

@@ -56,6 +56,32 @@ describe.skipIf(!hasNativeCaches())("実 Cache API との統合", () => {
     }
   });
 
+  test("write は呼び出し元の Response を消費しない", async ({ expect }) => {
+    // 準備：
+    const cacheName = createCacheName();
+    const storage = new CacheStorage({
+      cacheName,
+      toRequest: createRequest,
+    });
+
+    try {
+      await storage.open(createOpenContext({ signal }) as IStorage.OpenContext);
+      const response = new Response(new Uint8Array([1, 2, 3]));
+
+      // 実行：
+      await storage.write(createSetContext("k1", { signal }) as IStorage.WriteContext, response);
+
+      // 検証：
+      expect(response.bodyUsed).toBe(false);
+      expect(new Uint8Array(await response.arrayBuffer())).toStrictEqual(new Uint8Array([1, 2, 3]));
+
+      expect(await readBytes(storage, "k1")).toStrictEqual(new Uint8Array([1, 2, 3]));
+    } finally {
+      storage.close();
+      await globalThis.caches.delete(cacheName);
+    }
+  });
+
   test("ストリーム経由で書き込んだ値を読み取れる", async ({ expect }) => {
     // 準備：
     const cacheName = createCacheName();

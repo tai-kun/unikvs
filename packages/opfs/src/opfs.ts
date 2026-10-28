@@ -233,10 +233,38 @@ export default class Opfs implements IStorage {
         c.signal.throwIfAborted();
       }
 
-      await parentHandle.removeEntry(this.#rootDirname, { recursive: true });
+      // 破壊フェーズの前にハンドルを手放します。
+      // 削除後の再作成に失敗しても、未オープン状態として `open()` から復旧できるようにするためです。
+      this.#rootHandle = null;
+      let recreationError: Error | undefined;
+
+      try {
+        await parentHandle.removeEntry(this.#rootDirname, { recursive: true });
+      } catch (ex) {
+        // 既に存在しない場合は消去済みとして扱います。
+        if (!(ex instanceof DOMException && ex.name === "NotFoundError")) {
+          throw ex;
+        }
+      } finally {
+        try {
+          // 中断されていてもルートを再作成し、削除済みのハンドルを保持したままにしないようにします。
+          this.#rootHandle = await parentHandle.getDirectoryHandle(this.#rootDirname, {
+            create: true,
+          });
+        } catch (ex) {
+          // 再作成できなかった場合は未オープンのまま残し、`open()` で再試行できるようにします。
+          recreationError =
+            ex instanceof Error
+              ? ex
+              : new Error("Failed to recreate the OPFS root directory.", { cause: ex });
+        }
+      }
+
+      if (recreationError !== undefined && !c.signal.aborted) {
+        throw recreationError;
+      }
 
       c.signal.throwIfAborted();
-      this.#rootHandle = await parentHandle.getDirectoryHandle(this.#rootDirname, { create: true });
     }
   }
 

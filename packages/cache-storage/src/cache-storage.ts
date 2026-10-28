@@ -56,6 +56,11 @@ export default class CacheStorage implements IStorage {
   #cache: Cache | null;
 
   /**
+   * open と close の世代です。open の待機中に close された場合、古い open が結果を公開しないようにします。
+   */
+  #generation: number;
+
+  /**
    * 使用する `Cache` 名です。
    */
   readonly #cacheName: string;
@@ -77,6 +82,7 @@ export default class CacheStorage implements IStorage {
     const { caches, cacheName, toRequest } = options;
 
     this.#cache = null;
+    this.#generation = 0;
     this.#cacheName = cacheName;
     this.#toRequest = toRequest;
     this.#injectedCaches = caches;
@@ -100,6 +106,7 @@ export default class CacheStorage implements IStorage {
    */
   public async open(c: IStorage.OpenContext): Promise<void> {
     using abortPromise = toAbortPromise(c.signal);
+    const generation = this.#generation;
 
     // 注入されたバックエンドを優先します。
     // 実行環境の `Cache API` は `globalThis` 経由で参照します。
@@ -116,7 +123,12 @@ export default class CacheStorage implements IStorage {
       throw new CacheStorageNotAvailableError();
     }
 
-    this.#cache = await Promise.race([caches.open(this.#cacheName), abortPromise]);
+    const cache = await Promise.race([caches.open(this.#cacheName), abortPromise]);
+
+    // 待機中に close されていた場合は、その close を打ち消さずに結果を破棄します。
+    if (this.#generation === generation) {
+      this.#cache = cache;
+    }
   }
 
   /**
@@ -126,6 +138,9 @@ export default class CacheStorage implements IStorage {
    */
   public close(): void {
     this.#cache = null;
+
+    // 進行中の open が後から結果を公開して close を打ち消さないよう、世代を進めます。
+    this.#generation += 1;
   }
 
   /**
@@ -140,7 +155,10 @@ export default class CacheStorage implements IStorage {
     // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
     const cache = this.#getCache();
     const request = this.#toRequest(c.key);
-    await cache.put(request, response);
+
+    // 呼び出し元の Response を消費せず、複数のストレージへ同じ Response を書き込めるようにします。
+    // clone は body を読む前に同期的に行う必要があります。
+    await cache.put(request, response.clone());
   }
 
   /**
@@ -214,6 +232,8 @@ export default class CacheStorage implements IStorage {
    * @returns Uint8Array を受け付ける書き込みストリームです。
    */
   public getWritable(c: IStorage.GetWritableContext): WritableStream<Uint8Array<ArrayBuffer>> {
+    throwIfAborted(c.signal);
+
     const chunks: Uint8Array<ArrayBuffer>[] = [];
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
@@ -222,6 +242,9 @@ export default class CacheStorage implements IStorage {
       },
       close: async (): Promise<void> => {
         try {
+          // 中断済みの場合は空の Response であっても保存しません。
+          throwIfAborted(c.signal);
+
           const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
           const data = new Uint8Array(totalLength);
 

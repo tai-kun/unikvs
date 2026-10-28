@@ -76,8 +76,41 @@ await kvs.close();
 - 存在しないキーに対する `delete` は成功し、`exists` は `false` を返します。
 - ストリームのチャンクは `Uint8Array` です。
 - `getWritable` で取得したストリームは、チャンクを結合し、`close` 時に保存します。
+- `getWritable` で取得したストリームに `Uint8Array` 以外のチャンクを書き込むと `InvalidChunkTypeError` を投げます。
 - `getReadable` で取得したストリームは、保存値を単一チャンクとして送出します。
 
 ## エラー [#errors]
 
-このパッケージ固有のエラーはありません。見つからないキーを読み取ると `NotFoundError` の `DOMException` が投げられます。未オープン時に操作すると `TypeError` が投げられます。
+このパッケージが投げるエラーは次のとおりです。
+
+### InvalidChunkTypeError [#invalid-chunk-type-error]
+
+<TypeTable
+  type={{
+    key: {
+      type: "[#invalid-chunk-type-key] string",
+      required: true,
+      description: "操作対象のキーです。",
+    },
+    chunk: {
+      type: "[#invalid-chunk-type-chunk] unknown",
+      required: true,
+      description: "受け取ったチャンクの値です。",
+    },
+    chunkType: {
+      type: "[#invalid-chunk-type-chunk-type] string",
+      required: true,
+      description: "受け取ったチャンクの型名です。",
+    },
+  }}
+/>
+
+#### 意味
+
+`getWritable` で取得したストリームに `Uint8Array` 以外のチャンクを書き込んだ場合に投げます。
+
+#### 対処方法
+
+ストリームには `Uint8Array` のチャンクを書き込んでください。
+
+また、見つからないキーを読み取ると `NotFoundError` の `DOMException` が投げられ、未オープン時に操作すると `TypeError` が投げられます。

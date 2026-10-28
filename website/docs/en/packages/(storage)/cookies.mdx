@@ -45,7 +45,8 @@ Constructor arguments:
     sizeLimitBytes: {
       type: "[#cookies-size-limit-bytes] number",
       default: "4096",
-      description: "Maximum size (bytes) of a single value.",
+      description:
+        "Maximum size (bytes) applied to both the raw value size and the serialized size.",
     },
     store: {
       type: "[#cookies-store] CookieStoreLike",
@@ -83,6 +84,8 @@ await kvs.close();
 
 - Stores strings and bytes. Strings are stored with an `s:` prefix, bytes as Base64 with a `b:` prefix.
 - Values whose raw size (UTF-8 bytes for strings, byte length for bytes) exceeds `sizeLimitBytes` cannot be stored.
+- Even when the raw size is within the limit, a value cannot be stored when the size of the Set-Cookie string, including the URL-encoded name, value, and attributes, exceeds `sizeLimitBytes`.
+- `write` throws a `TypeError` when the key is empty.
 - Inject a `CookieStoreLike` as `store` in environments without `document.cookie`.
 - Stream reading and writing are not supported.
 
@@ -92,13 +95,39 @@ This package throws the following errors.
 
 ### CookieTooLargeError [#error-cookie-too-large]
 
+<TypeTable
+  type={{
+    key: {
+      type: "[#error-cookie-too-large-key] string",
+      required: true,
+      description: "The key being written.",
+    },
+    actual: {
+      type: "[#error-cookie-too-large-actual] number",
+      required: true,
+      description: "The size (bytes) that exceeded the limit.",
+    },
+    limit: {
+      type: "[#error-cookie-too-large-limit] number",
+      required: true,
+      description: "The applied sizeLimitBytes.",
+    },
+    measurement: {
+      type: '[#error-cookie-too-large-measurement] "raw" | "serialized"',
+      required: true,
+      description:
+        'Whether actual is the raw size or the serialized size. Defaults to "raw" when omitted from the constructor.',
+    },
+  }}
+/>
+
 #### Meaning
 
-`write` throws it when the raw cookie value size exceeds `sizeLimitBytes`.
+`write` throws it when the raw size (UTF-8 bytes for strings, byte length for bytes) exceeds `sizeLimitBytes`, or when the size of the serialized Set-Cookie string exceeds `sizeLimitBytes`. The serialized size includes the URL-encoded name, the URL-encoded value, and the attributes specified in `cookieAttributes`. Use `meta.measurement` to tell which size exceeded the limit.
 
 #### How to fix
 
-Make the value smaller or raise `sizeLimitBytes`. Browsers also impose their own cookie limits, so store large values in another storage.
+Make the value smaller or raise `sizeLimitBytes`. When only the serialized size exceeds the limit, shorten the key or value, or reduce the attributes. Browsers also impose their own cookie limits, so store large values in another storage.
 
 ### CookieNotAvailableError [#error-cookie-not-available]
 

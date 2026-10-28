@@ -1,9 +1,9 @@
 import type { IStorage, IReadableStream, IWritableStream } from "@unikvs/core";
-import { asyncmux } from "asyncmux";
 import { callFnOnce } from "call-fn-once";
 
 import { CopyContext, MoveContext, getVariablesStore } from "./_contexts.js";
 import { PluginLifecycle } from "./_plugin-lifecycle.js";
+import acquireSignalLock from "./_signal-lock.js";
 import { ReadableStreamSchema, WritableStreamSchema } from "./_streams.schemas.js";
 import * as v from "./_valibot.js";
 import {
@@ -59,10 +59,13 @@ export default class UniKvsStorage {
   /**
    * ストレージを開きます。
    *
+   * 共有インスタンスの開閉は直列化し、待機中はコンテキストの signal で中断できるようにします。
+   *
    * @param c オープンコンテキストです。
    */
-  @asyncmux
   public async open(c: IStorage.OpenContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.open(c);
   }
 
@@ -71,8 +74,9 @@ export default class UniKvsStorage {
    *
    * @param c クローズコンテキストです。
    */
-  @asyncmux
   public async close(c: IStorage.CloseContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.close(c);
   }
 
@@ -81,8 +85,9 @@ export default class UniKvsStorage {
    *
    * @param c クローズコンテキストです。
    */
-  @asyncmux
   public async retryClose(c: IStorage.CloseContext): Promise<void> {
+    using _lock = await acquireSignalLock(this, c.signal);
+
     await this.#lifecycle.retryClose(c);
   }
 

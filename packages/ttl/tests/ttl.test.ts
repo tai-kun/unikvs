@@ -6,6 +6,8 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createClearContext,
   createDecodeContext,
   createDeleteContext,
@@ -37,7 +39,48 @@ function createTtl(now: () => number = (): number => NOW, defaultTtl?: TtlInput)
 }
 
 /**
- * エンコードして変換後の値を返します。
+ * 宛先 1 件分の結果を作成します。
+ */
+function target(
+  status: IMiddleware.UseTargetOutcome["status"],
+  error?: unknown,
+): IMiddleware.UseTargetOutcome {
+  return error === undefined
+    ? {
+        name: "storage",
+        index: 0,
+        status,
+      }
+    : {
+        name: "storage",
+        error,
+        index: 0,
+        status,
+      };
+}
+
+/**
+ * 操作全体の結果を作成します。
+ */
+function outcome(
+  status: IMiddleware.UseOutcome["status"] = "success",
+  targets: IMiddleware.UseTargetOutcome[] = [target("committed")],
+  error?: unknown,
+): IMiddleware.UseOutcome {
+  return error === undefined
+    ? {
+        status,
+        targets,
+      }
+    : {
+        error,
+        status,
+        targets,
+      };
+}
+
+/**
+ * エンコードして成功を確定し、変換後の値を返します。
  */
 async function encode(
   ttl: Ttl,
@@ -47,8 +90,83 @@ async function encode(
 ): Promise<unknown> {
   const c = createEncodeContext(source, key, values === undefined ? {} : { values });
   await ttl.encode(c as IMiddleware.EncodeContext, createNext());
+  await ttl.afterUse(c as IMiddleware.UseContext, outcome());
 
   return c.destination;
+}
+
+/**
+ * ストリームをエンコードして成功を確定し、コンテキストを返します。
+ */
+async function encodeStream(
+  ttl: Ttl,
+  source: ReadableStream,
+  key = "",
+  values?: [string, unknown][],
+): Promise<ReturnType<typeof createEncodeStreamContext>> {
+  const c = createEncodeStreamContext(source, key, values === undefined ? {} : { values });
+  await ttl.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+  await ttl.afterUse(c as IMiddleware.UseContext, outcome());
+
+  return c;
+}
+
+/**
+ * コピー・移動の前段フックを実行します。
+ */
+async function transfer(
+  ttl: Ttl,
+  action: "copy" | "move",
+  key: string,
+  destinationKey: string,
+): Promise<IMiddleware.UseContext> {
+  const c =
+    action === "copy"
+      ? createCopyContext(key, destinationKey)
+      : createMoveContext(key, destinationKey);
+  await ttl.use(c as IMiddleware.UseContext, createNext());
+
+  return c;
+}
+
+/**
+ * 削除の前段フックを実行します。
+ */
+async function prepareDelete(ttl: Ttl, key: string): Promise<IMiddleware.UseContext> {
+  const c = createDeleteContext(key);
+  await ttl.use(c as IMiddleware.UseContext, createNext());
+
+  return c;
+}
+
+/**
+ * 全削除の前段フックを実行します。
+ */
+async function prepareClear(ttl: Ttl): Promise<IMiddleware.UseContext> {
+  const c = createClearContext();
+  await ttl.use(c as IMiddleware.UseContext, createNext());
+
+  return c;
+}
+
+/**
+ * 記録上で失効していないストリームを開けるかを判定します。
+ */
+async function canDecodeStream(ttl: Ttl, key: string): Promise<boolean> {
+  const c = createDecodeStreamContext(sourceFrom([]), key);
+
+  try {
+    await ttl.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
+
+    return true;
+  } catch (ex) {
+    // oxlint-disable-next-line vitest/no-conditional-in-test -- 失効だけを結果として扱うための分岐です。
+    if (ex instanceof KeyNotFoundError) {
+      return false;
+    }
+
+    throw ex;
+  }
 }
 
 /**
@@ -289,6 +407,7 @@ describe("encode の透過と付与", () => {
     const c = createEncodeContext("new", "k");
     await ttl.encode(c as IMiddleware.EncodeContext, createNext());
     expect(c.destination).toBe("new");
+    await ttl.afterUse(c as IMiddleware.UseContext, outcome());
 
     // 以前の期限を引き継ぐと、この読み取りは KeyNotFoundError になります。
     now = NOW + 120_000;
@@ -399,8 +518,7 @@ describe("ストリームの付与と失効", () => {
     for (const ttl of [createTtl(), createTtl((): number => NOW, 60)]) {
       const chunks = ["a", "b", "c"];
       const source = sourceFrom(chunks);
-      const c = createEncodeStreamContext(source, "k");
-      await ttl.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
+      const c = await encodeStream(ttl, source, "k");
       expect(c.destination).toBe(source);
       expect(await readAll(c.destination)).toStrictEqual(chunks);
     }
@@ -413,8 +531,7 @@ describe("ストリームの付与と失効", () => {
       defaultTtl: 60,
     });
     const chunks = ["a", "b", "c"];
-    const encoded = createEncodeStreamContext(sourceFrom(chunks), "k");
-    await ttl.encodeStream(encoded as IMiddleware.EncodeStreamContext, createNext());
+    await encodeStream(ttl, sourceFrom(chunks), "k");
     now = NOW + 1000;
 
     const decoded = createDecodeStreamContext(sourceFrom(chunks), "k");
@@ -428,8 +545,7 @@ describe("ストリームの付与と失効", () => {
       now: (): number => now,
       defaultTtl: 60,
     });
-    const encoded = createEncodeStreamContext(sourceFrom([]), "k");
-    await ttl.encodeStream(encoded as IMiddleware.EncodeStreamContext, createNext());
+    await encodeStream(ttl, sourceFrom([]), "k");
     now = NOW + 1000;
 
     const decoded = createDecodeStreamContext(sourceFrom([]), "k");
@@ -443,8 +559,7 @@ describe("ストリームの付与と失効", () => {
       now: (): number => now,
       defaultTtl: 60,
     });
-    const encoded = createEncodeStreamContext(sourceFrom(["a"]), "k");
-    await ttl.encodeStream(encoded as IMiddleware.EncodeStreamContext, createNext());
+    await encodeStream(ttl, sourceFrom(["a"]), "k");
     now = NOW + 61_000;
 
     const decoded = createDecodeStreamContext(sourceFrom(["a"]), "k");
@@ -456,15 +571,10 @@ describe("ストリームの付与と失効", () => {
   test("TTL なしの encodeStream では記録が消える", async ({ expect }) => {
     let now = NOW;
     const ttl = new Ttl({ now: (): number => now });
-    const withTtl = createEncodeStreamContext(sourceFrom(["a"]), "k", {
-      values: [["ttl", 60]],
-    });
-    await ttl.encodeStream(withTtl as IMiddleware.EncodeStreamContext, createNext());
-
-    const withoutTtl = createEncodeStreamContext(sourceFrom(["a"]), "k");
-    await ttl.encodeStream(withoutTtl as IMiddleware.EncodeStreamContext, createNext());
-
+    await encodeStream(ttl, sourceFrom(["a"]), "k", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom(["a"]), "k");
     now = NOW + 120_000;
+
     const decoded = createDecodeStreamContext(sourceFrom(["a"]), "k");
     await ttl.decodeStream(decoded as IMiddleware.DecodeStreamContext, createNext());
     expect(await readAll(decoded.destination)).toStrictEqual(["a"]);
@@ -484,8 +594,7 @@ describe("ストリームの付与と失効", () => {
       defaultTtl: 60,
     });
     const chunks = [new Uint8Array([1, 2]), new Uint8Array([3])];
-    const encoded = createEncodeStreamContext(sourceFrom(chunks), "k");
-    await ttl.encodeStream(encoded as IMiddleware.EncodeStreamContext, createNext());
+    const encoded = await encodeStream(ttl, sourceFrom(chunks), "k");
     now = NOW + 1000;
 
     const decoded = createDecodeStreamContext(encoded.destination, "k");
@@ -499,10 +608,384 @@ describe("ストリームの付与と失効", () => {
       now: (): number => now,
       defaultTtl: 60,
     });
-    const encoded = createEncodeStreamContext(sourceFrom(["a"]), "k");
-    await ttl.encodeStream(encoded as IMiddleware.EncodeStreamContext, createNext());
+    await encodeStream(ttl, sourceFrom(["a"]), "k");
     now = NOW + 61_000;
     await expect(decode(ttl, "raw", "k")).rejects.toThrow(KeyNotFoundError);
+  });
+});
+
+describe("メタデータの確定タイミング", () => {
+  test("encode は afterUse まで記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    const c = createEncodeContext("v", "k", { values: [["ttl", 60]] });
+    await ttl.encode(c as IMiddleware.EncodeContext, createNext());
+    now = NOW + 61_000;
+
+    // まだ記録がないため、エンベロープのない読み取りは透過します。
+    expect(await decode(ttl, "raw", "k")).toBe("raw");
+    await ttl.afterUse(c as IMiddleware.UseContext, outcome());
+    await expect(decode(ttl, "raw", "k")).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("TTL なしの上書きは afterUse まで既存の記録を残す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encode(ttl, "old", "k", [["ttl", 60]]);
+
+    const c = createEncodeContext("new", "k");
+    await ttl.encode(c as IMiddleware.EncodeContext, createNext());
+
+    now = NOW + 61_000;
+
+    // 確定前は以前の期限が残るため、古い記録で失効します。
+    await expect(decode(ttl, "new", "k")).rejects.toThrow(KeyNotFoundError);
+
+    await ttl.afterUse(c as IMiddleware.UseContext, outcome());
+    expect(await decode(ttl, "new", "k")).toBe("new");
+  });
+
+  test("set の失敗では確定待ちの期限を記録に反映しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encode(ttl, "old", "k");
+
+    const failure = new Error("write failed");
+    const c = createEncodeContext("new", "k", { values: [["ttl", 10]] });
+    await ttl.encode(c as IMiddleware.EncodeContext, createNext());
+    await ttl.afterUse(
+      c as IMiddleware.UseContext,
+      outcome("error", [target("failed", failure)], failure),
+    );
+
+    now = NOW + 20_000;
+
+    // TTL なしの古い値に期限が付かないため、そのまま読めます。
+    expect(await decode(ttl, "old", "k")).toBe("old");
+  });
+
+  test("set の中断でも全宛先が確定していれば期限を記録する", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    const c = createEncodeContext("v", "k", { values: [["ttl", 60]] });
+    await ttl.encode(c as IMiddleware.EncodeContext, createNext());
+    await ttl.afterUse(c as IMiddleware.UseContext, outcome("aborted"));
+    now = NOW + 61_000;
+    await expect(decode(ttl, "raw", "k")).rejects.toThrow(KeyNotFoundError);
+  });
+});
+
+describe("コピーと移動のトランザクション", () => {
+  test("copy 成功時にコピー元の期限をコピー先へ引き継ぐ", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "copy", "source", "destination");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+  });
+
+  test("copy の失敗ではコピー先の記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const failure = new Error("copy failed");
+    const c = await transfer(ttl, "copy", "source", "destination");
+    await ttl.afterUse(c, outcome("error", [target("failed", failure)], failure));
+
+    now = NOW + 10_000;
+
+    // コピー先の古い期限 (5 秒) が残るため失効します。
+    expect(await canDecodeStream(ttl, "destination")).toBe(false);
+  });
+
+  test("copy はコピー元に期限がなければコピー先の記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source");
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "copy", "source", "destination");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 10_000;
+
+    // コピー元に期限がないため、コピー先の古い記録は消えます。
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+  });
+
+  test("copy は未確定の宛先があるとコピー先の記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "copy", "source", "destination");
+    // 一部の宛先でコピー元が見つからない部分成功です。
+    await ttl.afterUse(c, outcome("success", [target("committed"), target("notFound")]));
+
+    now = NOW + 10_000;
+
+    // 触れていない宛先の古い期限を復活させないため、コピー先の記録は変更しません。
+    expect(await canDecodeStream(ttl, "destination")).toBe(false);
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+  });
+
+  test("move 成功時に移動先の期限を更新し、移動元の記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "move", "source", "destination");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 10_000;
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+
+    now = NOW + 61_000;
+
+    // 移動元の記録が消えているため、失効した記録に邪魔されません。
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+  });
+
+  test("copy の中断でも全宛先が確定していればコピー先の記録を更新する", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "copy", "source", "destination");
+    await ttl.afterUse(c, outcome("aborted"));
+
+    now = NOW + 10_000;
+
+    // ストレージ確定後の中断でも、全宛先が committed なら期限を引き継ぎます。
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+  });
+
+  test("move の中断でも全宛先が確定していれば移動元の記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "move", "source", "destination");
+    await ttl.afterUse(c, outcome("aborted"));
+
+    now = NOW + 10_000;
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+
+    now = NOW + 61_000;
+
+    // 移動元の記録も消えているため、失効した記録に邪魔されません。
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+  });
+
+  test("move の失敗では移動元を残し、移動先の記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const failure = new Error("move failed");
+    const c = await transfer(ttl, "move", "source", "destination");
+    await ttl.afterUse(c, outcome("error", [target("failed", failure)], failure));
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+    expect(await canDecodeStream(ttl, "destination")).toBe(false);
+  });
+
+  test("move の部分成功では移動元を残し、移動先の記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const failure = new Error("move failed");
+    const c = await transfer(ttl, "move", "source", "destination");
+    await ttl.afterUse(
+      c,
+      outcome("error", [target("committed"), target("failed", failure)], failure),
+    );
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+    expect(await canDecodeStream(ttl, "destination")).toBe(false);
+  });
+
+  test("move は未確定の宛先があると移動元を残し、移動先の記録を変更しない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "move", "source", "destination");
+    // 一部の宛先で移動元が見つからない部分成功です。
+    await ttl.afterUse(c, outcome("success", [target("committed"), target("notFound")]));
+
+    now = NOW + 10_000;
+
+    // 移動元の記録を残し、触れていない宛先の古い期限を復活させないため移動先の記録も変更しません。
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+    expect(await canDecodeStream(ttl, "destination")).toBe(false);
+  });
+
+  test("move は移動元に期限がなければ移動先の記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source");
+    await encodeStream(ttl, sourceFrom([]), "destination", [["ttl", 5]]);
+
+    const c = await transfer(ttl, "move", "source", "destination");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 10_000;
+
+    // 移動元に期限がないため、移動先の古い記録は消えます。
+    expect(await canDecodeStream(ttl, "destination")).toBe(true);
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+  });
+
+  test("同じキーへの move は記録を消さない", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "key", [["ttl", 60]]);
+
+    const c = await transfer(ttl, "move", "key", "key");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 61_000;
+
+    expect(await canDecodeStream(ttl, "key")).toBe(false);
+  });
+
+  test("期限切れのコピー元・移動元は記録を残し、delete の成功で消える", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "source", [["ttl", 60]]);
+    now = NOW + 61_000;
+
+    for (const action of ["copy", "move"] as const) {
+      const c = await transfer(ttl, action, "source", "destination");
+
+      // 失効済みのキーは実在しないキーへ写像されます。
+      expect(ttl.mapKey(c as IMiddleware.MapKeyContext)).not.toBe("source");
+      await ttl.afterUse(c, outcome("error", [target("notFound")]));
+
+      // ストリームの失効情報を失わないよう、記録は残ります。
+      expect(await canDecodeStream(ttl, "source")).toBe(false);
+      expect(await canDecodeStream(ttl, "destination")).toBe(true);
+    }
+
+    const c = await prepareDelete(ttl, "source");
+    await ttl.afterUse(c, outcome());
+
+    // 削除が成功したときだけ記録が消えます。
+    expect(await canDecodeStream(ttl, "source")).toBe(true);
+  });
+
+  test("decodeStream の失効は記録を残し、delete の成功で消える", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "key", [["ttl", 60]]);
+    now = NOW + 61_000;
+    await expect(
+      ttl.decodeStream(
+        createDecodeStreamContext(sourceFrom([]), "key") as IMiddleware.DecodeStreamContext,
+        createNext(),
+      ),
+    ).rejects.toThrow(KeyNotFoundError);
+    // 2 回目も同じ記録で失効します。
+    expect(await canDecodeStream(ttl, "key")).toBe(false);
+
+    const c = await prepareDelete(ttl, "key");
+    await ttl.afterUse(c, outcome());
+
+    expect(await canDecodeStream(ttl, "key")).toBe(true);
+  });
+});
+
+describe("削除と全削除のトランザクション", () => {
+  test("delete の成功で記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "key", [["ttl", 60]]);
+
+    const c = await prepareDelete(ttl, "key");
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 61_000;
+
+    expect(await canDecodeStream(ttl, "key")).toBe(true);
+  });
+
+  test("存在しないキーの delete でも成功なら記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "key", [["ttl", 5]]);
+
+    const c = await prepareDelete(ttl, "key");
+    await ttl.afterUse(c, outcome("success", [target("notFound")]));
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "key")).toBe(true);
+  });
+
+  test("delete の失敗では記録を残す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "key", [["ttl", 5]]);
+
+    const failure = new Error("delete failed");
+    const c = await prepareDelete(ttl, "key");
+    await ttl.afterUse(c, outcome("error", [target("failed", failure)], failure));
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "key")).toBe(false);
+  });
+
+  test("clear の成功で全記録を消す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "a", [["ttl", 5]]);
+    await encodeStream(ttl, sourceFrom([]), "b", [["ttl", 5]]);
+
+    const c = await prepareClear(ttl);
+    await ttl.afterUse(c, outcome());
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "a")).toBe(true);
+    expect(await canDecodeStream(ttl, "b")).toBe(true);
+  });
+
+  test("clear の失敗では記録を残す", async ({ expect }) => {
+    let now = NOW;
+    const ttl = new Ttl({ now: (): number => now });
+    await encodeStream(ttl, sourceFrom([]), "a", [["ttl", 5]]);
+    await encodeStream(ttl, sourceFrom([]), "b", [["ttl", 5]]);
+
+    const failure = new Error("clear failed");
+    const c = await prepareClear(ttl);
+    await ttl.afterUse(c, outcome("error", [target("failed", failure)], failure));
+
+    now = NOW + 10_000;
+
+    expect(await canDecodeStream(ttl, "a")).toBe(false);
+    expect(await canDecodeStream(ttl, "b")).toBe(false);
   });
 });
 

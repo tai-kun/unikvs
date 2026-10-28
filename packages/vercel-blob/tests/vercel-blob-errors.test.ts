@@ -481,6 +481,39 @@ describe("ダウンロード失敗の包み直し", () => {
     });
   });
 
+  test("失敗応答のボディーを破棄する", async ({ expect }) => {
+    // 準備：
+    const client = createFakeClient();
+    client.store.set("k", new Uint8Array([1]));
+
+    let canceled = false;
+    // oxlint-disable-next-line unicorn/consistent-function-scoping
+    const badFetch: IFetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array<ArrayBuffer>>({
+          cancel() {
+            canceled = true;
+          },
+        }),
+        {
+          status: 500,
+          statusText: "Internal Server Error",
+        },
+      );
+    const storage = new VercelBlob({
+      fetch: badFetch,
+      client,
+    });
+
+    // 実行と検証：
+    await expect(
+      storage.read(
+        createGetContext("k", { signal: AbortSignal.timeout(5000) }) as IStorage.ReadContext,
+      ),
+    ).rejects.toBeInstanceOf(BlobResponseError);
+    expect(canceled).toBe(true);
+  });
+
   test("空の statusText でも BlobResponseError を組み立てられる", async ({ expect }) => {
     // 準備：
     const client = createFakeClient();

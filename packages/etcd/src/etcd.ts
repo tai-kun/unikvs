@@ -141,20 +141,59 @@ export type NativeEtcdClientLike = {
 };
 
 /**
+ * `raw.lease()` が返すリースの型です。
+ */
+type NativeLease = ReturnType<NativeEtcdClientLike["lease"]>;
+
+/**
+ * `etcd3` の `autoKeepAlive` を受け付けるリース生成関数の内部ビューです。
+ */
+type NativeLeaseFactory = (
+  this: void,
+  ttl: number,
+  options?: { readonly autoKeepAlive?: boolean | undefined },
+) => NativeLease;
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/etcd#wrapnativeetcdclient)
  */
 export function wrapNativeEtcdClient(
   raw: NativeEtcdClientLike,
   leaseTtlSeconds?: number,
 ): EtcdClientLike & { close(): void } {
-  // リースは TTL ごとに使い回します。
-  const leases = new Map<
-    number,
-    {
-      put(key: string | Buffer): { value(value: string | Buffer): unknown };
-      release(): void;
+  /**
+   * 書き込み中のリースの集合です。
+   *
+   * `release()` はハートビートを止めるだけでキーを削除しない。
+   * そのため、書き込みが終わればすぐに手放せます。
+   * 保持するのは進行中の書き込みだけで、書き込み履歴では増えません。
+   * close 時に解放するため、集合で保持します。
+   */
+  const leases = new Set<NativeLease>();
+
+  const releaseLease = (lease: NativeLease): void => {
+    // 既に解放済み (close 済みなど) なら二重に解放しません。
+    if (!leases.delete(lease)) {
+      return;
     }
-  >();
+
+    try {
+      lease.release();
+    } catch {
+      // 後始末としての解放のため、失敗しても無視します。
+    }
+  };
+
+  const createLease = (ttl: number): NativeLease => {
+    // autoKeepAlive を有効にすると開いている間ずっとキーが残り、TTL が機能しません。
+    // 書き込みごとに新しいリースを作り、その書き込みから TTL を数えさせます。
+    // 公開型は最小契約に保ちつつ、etcd3 固有の autoKeepAlive をここでだけ指定します。
+    const factory: NativeLeaseFactory = raw.lease.bind(raw);
+    const lease = factory(ttl, { autoKeepAlive: false });
+    leases.add(lease);
+
+    return lease;
+  };
 
   return {
     async get(key: string): Promise<Buffer | null> {
@@ -175,14 +214,16 @@ export function wrapNativeEtcdClient(
         return;
       }
 
-      let lease = leases.get(ttl);
+      const lease = createLease(ttl);
 
-      if (lease === undefined) {
-        lease = raw.lease(ttl);
-        leases.set(ttl, lease);
+      try {
+        await lease.put(key).value(data);
+      } finally {
+        // 成否にかかわらず手放します。
+        // `release()` はハートビートを止めるだけでキーを削除しない。
+        // そのため、解放後もキーは書き込み時刻から TTL 経過まで残ります。
+        releaseLease(lease);
       }
-
-      await lease.put(key).value(data);
     },
 
     async delete(key: string): Promise<void> {
@@ -198,11 +239,10 @@ export function wrapNativeEtcdClient(
     },
 
     close(): void {
-      for (const lease of leases.values()) {
-        lease.release();
+      for (const lease of leases) {
+        releaseLease(lease);
       }
 
-      leases.clear();
       raw.close();
     },
   };

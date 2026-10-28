@@ -1,8 +1,31 @@
 import type { IMiddleware } from "@unikvs/core";
 import { toOwnedBytes } from "@unikvs/utils";
-import { decode, encode, Decoder } from "cbor-x";
+import { encode, Decoder } from "cbor-x";
 
 import { CborDecodeError, CborEncodeError } from "./errors.js";
+
+/**
+ * 一括デコードとストリームデコードで共通のデコーダーを生成します。
+ *
+ * `copyBuffers` を有効にすると、デコードした型付き配列が入力バッファーを参照しなくなります。
+ * 入力が大きなプールを参照していても、デコード結果がそのプールを保持し続けることはありません。
+ * デコード後の書き換えの影響も受けません。
+ *
+ * @returns 新しいデコーダーを返します。
+ */
+function createDecoder(): Decoder {
+  return new Decoder({
+    useRecords: false,
+    copyBuffers: true,
+  });
+}
+
+/**
+ * 一括デコード用のデコーダーです。
+ *
+ * デコードは同期的に完結するため、呼び出し間で共有できます。
+ */
+const batchDecoder = createDecoder();
 
 /**
  * cbor-x のデコードが入力不足で失敗したときのエラーの形です。
@@ -223,7 +246,13 @@ export default class Cbor implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     try {
-      c.destination = decode(c.source);
+      // Buffer などの Uint8Array 派生クラスをそのまま渡すと、バイト文字列が Buffer で返ります。
+      // 常に Uint8Array のビューとして渡し、ストリームのデコード結果と型を揃えます。
+      const source =
+        c.source.constructor === Uint8Array
+          ? c.source
+          : new Uint8Array(c.source.buffer, c.source.byteOffset, c.source.byteLength);
+      c.destination = batchDecoder.decode(source);
     } catch (ex) {
       throw new CborDecodeError({ cause: ex });
     }
@@ -268,10 +297,7 @@ export default class Cbor implements IMiddleware {
   ): Promise<void> {
     // copyBuffers を有効にすると、デコードした型付き配列が内部バッファーを参照しなくなります。
     // バッファーを使い回すため、参照のままだと後続チャンクの追加で値が壊れます。
-    const decoder = new Decoder({
-      useRecords: false,
-      copyBuffers: true,
-    });
+    const decoder = createDecoder();
     const queue = new ByteQueue();
     c.destination = c.source.pipeThrough(
       new TransformStream<Uint8Array<ArrayBuffer>, unknown>({

@@ -256,6 +256,16 @@ describe("ストリーム API の提供", () => {
     ).rejects.toThrow(TypeError);
   });
 
+  test("空のストリームを decodeStream するとエラーで拒否される", async ({ expect, signal }) => {
+    // 準備：
+    const target = new ZstdNode();
+    await openTarget(target, signal);
+
+    // 実行と検証：
+    // 上流の node:zlib は入力なしで終了した展開ストリームをエラーにするため、その契約を維持する。
+    await expect(pumpDecode(target, [])).rejects.toThrow(Error);
+  });
+
   test("分割書き込みしてもストリームで往復できる", async ({ expect, signal }) => {
     // 準備：
     const target = new ZstdNode();

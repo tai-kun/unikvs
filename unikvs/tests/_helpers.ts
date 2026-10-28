@@ -321,8 +321,10 @@ export type MiddlewareCall = {
     | "encodeStream"
     | "decodeStream"
     | "use"
+    | "afterUse"
     | "mapKey";
   readonly signal: AbortSignal | undefined;
+  readonly outcome?: IMiddleware.UseOutcome | undefined;
 };
 
 /**
@@ -397,6 +399,13 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
     await next();
   }
 
+  public async afterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): Promise<void> {
+    await this.record("afterUse", {
+      c,
+      outcome,
+    });
+  }
+
   public async encode(c: IMiddleware.EncodeContext<TData>, next: IMiddleware.INext): Promise<void> {
     await this.record("encode", {
       c,
@@ -424,6 +433,7 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
         readonly signal?: AbortSignal;
       } & IPipelineContext;
       readonly data?: unknown;
+      readonly outcome?: IMiddleware.UseOutcome | undefined;
     },
   ): Promise<void> {
     const call: MiddlewareCall = {
@@ -433,6 +443,7 @@ export class FakeMiddleware<TData = any> implements IMiddleware<TData, TData, TD
       action: (args.c as { readonly action?: string }).action,
       method,
       signal: args.c.signal,
+      outcome: args.outcome,
     };
     this.calls.push(call);
     await this.hook?.(call);

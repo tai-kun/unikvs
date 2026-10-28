@@ -13,7 +13,7 @@ Use it for short-lived caches or session-like data. Plain values and streams exp
 - `isOpen` is always `true`.
 - Set the expiry per operation with the `@unikvs/ttl:ttl` / `@unikvs/ttl:expiresAt` vars (bare `ttl` / `expiresAt` are also accepted for backward compatibility), or with `defaultTtl`.
 - Expired `get` / `has` / `stream` / `copy` / `move` behave as `KeyNotFoundError`.
-- `copy` and `move` carry the source expiry to the destination.
+- `copy` and `move` carry the source expiry to the destination only when every TTL-applicable target in the middleware's branch is `committed`.
 
 Install with:
 
@@ -86,11 +86,28 @@ Per-write TTL value. A `number` is relative seconds (fractions allowed; zero or 
 | `encodeStream` | `unknown` (chunk)     | `unknown` (chunk, passthrough) |
 | `decodeStream` | `unknown` (chunk)     | `unknown` (chunk, passthrough) |
 
-- `encode` wraps the value as `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` when a TTL applies, and stores the expiry in the operation record. Overwrites without a TTL clear the record and pass data through.
+- `encode` wraps the value as `{ "@unikvs/ttl": 1, expiresAt: number, data: unknown }` when a TTL applies. Overwrites without a TTL pass data through.
 - `decode` unwraps the envelope while it is valid, and throws `KeyNotFoundError` once expired. When the record is missing (e.g. after a restart), it restores the record from the envelope.
 - Streams never embed the expiry in-band (to fit chunk type constraints) and are managed by records only. `encodeStream` and `decodeStream` pass data through.
-- `copy` and `move` carry the recorded expiry to the destination. Only a live source can be copied or moved; an expired source throws `KeyNotFoundError`.
 - TTL resolution prefers the `ttl` var, then the `expiresAt` var, then `defaultTtl`. Namespaced vars take precedence over bare names.
+
+### When records are committed [#transaction]
+
+This middleware receives storage outcomes through [`afterUse`](/packages/core/middleware#hooks-after-use) and commits records then. `use`, `encode`, and `encodeStream` do not mutate records; they stage pending values in the operation's variable store. A failed write therefore cannot leave an expiry on a value that was never stored. The targets passed to `afterUse` are only those in the branch where this middleware is applied.
+
+- `set` applies the staged expiry after every target commits. An overwrite without a TTL removes the record. On failure, the previous record is kept.
+- `copy` carries the source expiry to the destination when every TTL-applicable target in the middleware's branch is `committed`. If the source has no record, the destination record is removed. If any target is `notFound` or `failed`, the destination record is left unchanged.
+- `move` updates the destination record and removes the source record when every TTL-applicable target in the middleware's branch is `committed`. If any target is `notFound` or `failed`, it keeps the source record and does not change the destination record.
+- If an operation is aborted after storage settles, its result is still recorded when every TTL-applicable target in the middleware's branch is `committed`. If any target is uncommitted, records are left unchanged as on failure.
+- The source expiry is not frozen at `use` time. It is read again from the record in `afterUse` (while the key locks are held), so a concurrent `set` that changes the source TTL after `use` is reflected in the destination.
+- `delete` and `clear` remove records only when they succeed. Partial success keeps records so surviving values do not lose their expiry.
+- An expired copy or move source fails with `KeyNotFoundError` but keeps its record. Streams carry no in-band expiry, so this preserves expiry detection after a failed copy or move. A successful `set` replaces the record with the new expiry (or removes it when the write has no TTL); a successful `delete` or `clear` removes it.
+- `decodeStream` keeps the record when it detects expiry. Later reads of the same key still fail with `KeyNotFoundError`.
+- Repair writes performed by `get` / `stream` are treated as part of the read and do not trigger `afterUse`. Therefore the reading instance does not commit a stream record for a repaired destination that has no in-band expiry envelope.
+
+:::note[Partial-success limitation]
+When an operation spanning multiple storages partially succeeds, TTL records are left unchanged for safety. For example, if `set` or `move` succeeds on only some storages, stream data written to a destination may not have an expiry. Likewise, when a `copy` or `move` source exists in only some storages, the destination record is left unchanged so an old expiry in an untouched storage cannot be resurrected. A single per-key record cannot represent that partial state exactly.
+:::
 
 ## Errors [#errors]
 

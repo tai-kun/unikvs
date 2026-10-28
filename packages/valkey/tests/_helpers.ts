@@ -224,28 +224,147 @@ function upperBound(sorted: string[], value: string): number {
 }
 
 /**
- * `MATCH` パターンのうち `*` と `?` を解釈します。
- * テストで使う `${prefix}*` 形式の照合に使います。
+ * 正規表現で特別な意味を持つ文字をエスケープします。
+ */
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+/**
+ * 文字クラス内で特別な意味を持つ文字をエスケープします。
+ */
+function escapeRegExpClass(value: string): string {
+  return value.replaceAll(/[\\\]^-]/gu, "\\$&");
+}
+
+/**
+ * `[` から始まる文字クラスを正規表現へ変換します。
+ * 閉じ括弧がない場合は null を返します。
+ */
+function parseGlobClass(
+  pattern: string,
+  start: number,
+): {
+  readonly next: number;
+  readonly source: string;
+} | null {
+  let index = start + 1;
+  let negate = false;
+
+  if (pattern[index] === "^") {
+    negate = true;
+    index += 1;
+  }
+
+  let content = "";
+
+  // 先頭の `]` はリテラルとして扱います。
+  if (pattern[index] === "]") {
+    content += "\\]";
+    index += 1;
+  }
+
+  while (index < pattern.length) {
+    const char = pattern[index];
+
+    if (char === "]") {
+      return {
+        next: index + 1,
+        source: `[${negate ? "^" : ""}${content}]`,
+      };
+    }
+
+    if (char === "\\") {
+      index += 1;
+      const escaped = pattern[index];
+
+      if (escaped === undefined) {
+        return null;
+      }
+
+      content += escapeRegExpClass(escaped);
+      index += 1;
+      continue;
+    }
+
+    if (char === "-") {
+      // 範囲指定のハイフンはそのまま残します。
+      content += "-";
+      index += 1;
+      continue;
+    }
+
+    content += escapeRegExpClass(char ?? "");
+    index += 1;
+  }
+
+  return null;
+}
+
+/**
+ * `MATCH` パターンを Valkey (Redis 互換) の glob として解釈します。
+ *
+ * `*`、`?`、`[...]`、`\` によるエスケープに対応します。
  */
 export function matchGlob(pattern: string, key: string): boolean {
-  const source = pattern
-    .split("")
-    .map((char) => {
-      switch (char) {
-        case "*": {
-          return ".*";
-        }
+  let source = "";
+  let index = 0;
 
-        case "?": {
-          return ".";
-        }
+  while (index < pattern.length) {
+    const char = pattern[index];
 
-        default: {
-          return char.replace(/[.*+?^${}()|[\]\\]/u, "\\$&");
-        }
+    switch (char) {
+      case "*": {
+        source += ".*";
+        index += 1;
+        break;
       }
-    })
-    .join("");
+
+      case "?": {
+        source += ".";
+        index += 1;
+        break;
+      }
+
+      case "\\": {
+        index += 1;
+        const escaped = pattern[index];
+
+        if (escaped === undefined) {
+          source += "\\\\";
+        } else {
+          source += escapeRegExp(escaped);
+          index += 1;
+        }
+
+        break;
+      }
+
+      case "[": {
+        const parsed = parseGlobClass(pattern, index);
+
+        if (parsed === null) {
+          source += "\\[";
+          index += 1;
+        } else {
+          source += parsed.source;
+          index = parsed.next;
+        }
+
+        break;
+      }
+
+      case undefined: {
+        index += 1;
+        break;
+      }
+
+      default: {
+        source += escapeRegExp(char ?? "");
+        index += 1;
+      }
+    }
+  }
 
   return new RegExp(`^${source}$`, "u").test(key);
 }

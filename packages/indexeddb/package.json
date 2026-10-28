@@ -28,9 +28,11 @@
   },
   "dependencies": {
     "@unikvs/core": "workspace:*",
-    "idb": "^8.0.4"
+    "idb": "^8.0.4",
+    "type-name": "^2.0.2"
   },
   "devDependencies": {
+    "@types/type-name": "1.0.32",
     "@unikvs/testing": "workspace:*",
     "@vitest/browser-playwright": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",

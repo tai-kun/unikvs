@@ -249,7 +249,7 @@ const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1
 
 ### `proxyTransformStream()` [#proxy-transform-stream]
 
-Builds a new stream with input/output conversion around a source. Written values are converted by `proxyInput` before reaching the source; source output is converted by `proxyOutput` for reading. `proxyInput` and `proxyOutput` take either conversion callbacks or `Transformer` objects. The returned `closePromise` resolves when the input-to-source connection finishes; mid-stream failures propagate to reads and `closePromise`.
+Builds a new stream with input/output conversion around a source. Written values are converted by `proxyInput` before reaching the source; source output is converted by `proxyOutput` for reading. `proxyInput` and `proxyOutput` take either conversion callbacks or `Transformer` objects. The returned `closePromise` resolves when both the input-to-source and source-to-output connections finish, including the output transform's flush. Mid-stream failures propagate to reads and `closePromise`, which rejects without waiting for the other connection to finish.
 
 ```ts
 import { proxyTransformStream } from "@unikvs/utils";
@@ -270,7 +270,8 @@ The stream returned by [`proxyTransformStream`](#proxy-transform-stream), with i
     closePromise: {
       type: "[#iproxied-transform-stream-closepromise] NinjaPromise<void>",
       required: true,
-      description: "Resolves when the input-to-source connection finishes.",
+      description:
+        "Resolves when both the input-to-source and source-to-output connections finish.",
     },
   }}
 />

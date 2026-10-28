@@ -296,6 +296,24 @@ function requestOptions(options: BlobRequestOptions): ForwardedRequestOptions {
 }
 
 /**
+ * `put` へ渡す ArrayBuffer を用意します。
+ *
+ * ビューがバッキングバッファーの全体を指すときはそのまま渡し、部分ビューのときは範囲だけを複製します。
+ * Node.js の Buffer は小さな確保を共有プールに載せるため、部分ビューに対して `.buffer` を渡すと余分なバイト列まで送信されます。
+ *
+ * @param body 保存するバイト列です。
+ *
+ * @returns 保存する範囲だけを持つ ArrayBuffer です。
+ */
+function toPutBody(body: Uint8Array<ArrayBuffer>): ArrayBuffer {
+  if (body.byteOffset === 0 && body.byteLength === body.buffer.byteLength) {
+    return body.buffer;
+  }
+
+  return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
+}
+
+/**
  * 既定のクライアントを作成します。
  *
  * `@vercel/blob` の関数を使い、未定義項目を取り除いて渡します。
@@ -307,7 +325,7 @@ function createDefaultClient(): BlobClientLike {
     del: (pathname, options) =>
       del(Array.isArray(pathname) ? [...pathname] : pathname, requestOptions(options)),
     put: (pathname, body, options) =>
-      put(pathname, body.buffer, {
+      put(pathname, toPutBody(body), {
         access: options.access,
         ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
         allowOverwrite: true,
@@ -368,6 +386,21 @@ function assertAccessValue(value: unknown): BlobAccess {
   }
 
   throw new InvalidAccessError({ actual: value });
+}
+
+/**
+ * 失敗応答のボディーを破棄します。
+ *
+ * ボディーを読み捨てて接続を解放します。
+ *
+ * @param response 破棄する応答です。
+ */
+async function discardResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // ボディーの破棄に失敗しても、元の応答エラーを優先します。
+  }
 }
 
 /**
@@ -919,6 +952,26 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
   }
 
   /**
+   * ダウンロード先の URL を組み立てます。
+   *
+   * 非公開 Blob は CDN にキャッシュされるため、書き込み直後の読み取りで古い内容を返さないようにキャッシュを迂回します。
+   *
+   * @param url メタ情報が示す URL です。
+   *
+   * @returns ダウンロードに使う URL です。
+   */
+  #downloadUrl(url: string): string {
+    if (this.#access !== "private") {
+      return url;
+    }
+
+    const consistentUrl = new URL(url);
+    consistentUrl.searchParams.set("cache", "0");
+
+    return consistentUrl.toString();
+  }
+
+  /**
    * ダウンロード要求を組み立てます。
    *
    * @param url 要求先の URL です。
@@ -934,7 +987,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    return new Request(url, {
+    return new Request(this.#downloadUrl(url), {
       signal,
       headers,
     });
@@ -971,10 +1024,12 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
 
     if (response.status === 404 || response.status === 410) {
+      await discardResponseBody(response);
       throw new KeyNotFoundError({ key: c.key });
     }
 
     if (!response.ok) {
+      await discardResponseBody(response);
       throw new BlobResponseError({
         key: c.key,
         url,

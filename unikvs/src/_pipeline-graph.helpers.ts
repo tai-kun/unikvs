@@ -17,7 +17,73 @@ import type {
 } from "./_pipeline-graph.types.js";
 import { ReadableStreamSchema } from "./_streams.schemas.js";
 import * as v from "./_valibot.js";
-import { MiddlewareDestinationFrozenError, MiddlewareDestinationMissingError } from "./errors.js";
+import {
+  MiddlewareNextNotCalledError,
+  MiddlewareNextNotAwaitedError,
+  MiddlewareDestinationFrozenError,
+  MiddlewareDestinationMissingError,
+  MiddlewareNextCalledMultipleTimesError,
+} from "./errors.js";
+
+/**
+ * `next()` と `destination` の規約違反を表すエラーの共用型です。
+ */
+export type MiddlewareContractError =
+  | MiddlewareNextCalledMultipleTimesError
+  | MiddlewareNextNotAwaitedError
+  | MiddlewareNextNotCalledError
+  | MiddlewareDestinationMissingError
+  | MiddlewareDestinationFrozenError;
+
+/**
+ * `next()` と `destination` の規約違反かどうかを判定します。
+ *
+ * @param ex 判定する例外です。
+ *
+ * @returns 規約違反の場合は `true` を返します。
+ */
+export function isMiddlewareContractError(ex: unknown): ex is MiddlewareContractError {
+  return (
+    ex instanceof MiddlewareNextCalledMultipleTimesError ||
+    ex instanceof MiddlewareNextNotAwaitedError ||
+    ex instanceof MiddlewareNextNotCalledError ||
+    ex instanceof MiddlewareDestinationMissingError ||
+    ex instanceof MiddlewareDestinationFrozenError
+  );
+}
+
+/**
+ * 操作内で発生したミドルウェアの規約違反を保持します。
+ *
+ * 規約違反は、上流のミドルウェアが下流の拒否を握り潰しても操作全体を失敗させる必要があります。
+ * そのため、各境界で最初の規約違反を記録し、ミドルウェアから戻った時点で再び投げます。
+ */
+export class MiddlewareContractTracker {
+  /**
+   * 最初に記録された規約違反です。
+   */
+  #error: MiddlewareContractError | undefined;
+
+  /**
+   * 規約違反を記録します。最初の 1 件だけを保持します。
+   *
+   * @param ex 記録する例外です。
+   */
+  public record(ex: unknown): void {
+    if (this.#error === undefined && isMiddlewareContractError(ex)) {
+      this.#error = ex;
+    }
+  }
+
+  /**
+   * 記録された規約違反があれば投げます。
+   */
+  public throwIfViolated(): void {
+    if (this.#error !== undefined) {
+      throw this.#error;
+    }
+  }
+}
 
 /**
  * 対象判定に通る葉だけを登録順に絞ります。

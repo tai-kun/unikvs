@@ -5,7 +5,7 @@ description: "Middleware that emits a trace span per operation."
 
 ## Overview [#overview]
 
-`Tracing` emits a trace span for each read, write, and conversion operation, recording duration and success.<Badge>Middleware</Badge>
+`Tracing` emits a trace span for each read, write, and conversion operation and records success. `use`, `encode`, and `decode` spans measure hook-chain duration; stream spans run until the stream is fully consumed, fails, or is cancelled, and can include stream consumption or storage read time.<Badge>Middleware</Badge>
 
 Use it for distributed tracing and performance analysis. Pass a structurally OpenTelemetry-compatible tracer.
 
@@ -121,7 +121,7 @@ Minimal interface of tracers that emit spans. Structurally compatible with OpenT
 | `encodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
 | `decodeStream` | `unknown` (chunk) | `unknown` (chunk, passthrough) |
 
-- `use` wraps operations in a `unikvs.use.<action>` span; `encode` uses `unikvs.encode` and `decode` uses `unikvs.decode`.
+- `use` wraps the downstream `use` hook chain in a `unikvs.use.<action>` span; storage I/O is not included. `encode` uses `unikvs.encode` and `decode` uses `unikvs.decode`.
 - Streams are wrapped in `unikvs.encodeStream` / `unikvs.decodeStream` spans, ending on full read, error, or cancellation.
 - Chunks pass through unchanged, preserving order and references.
 - Success sets `success` to `true` with status `ok`; failure sets `success` to `false` with status `error` and a message.

@@ -13,6 +13,7 @@ This wrapper turns `delete` into a tombstone write to the same key instead of a 
 - `isOpen` follows the delegated storage.
 - With `retentionMs`, tombstones past their retention period are swept.
 - Stream support and chunk types follow the delegated storage.
+- Data mutations are serialized per key, so operations on different keys can proceed in parallel. This covers `write`, `delete`, `restore`, `purge`, `listTombstones`, the sweep performed when an expired tombstone is encountered, and the registry cleanup on stream close. `read`, `exists`, and `getReadable` do not take the per-key lock unless they sweep an expired tombstone. Registry updates are serialized across keys within a single instance. If multiple instances share the same delegated storage, any operation that can update the registry can race, so keep these operations on one instance.
 
 Install with:
 
@@ -104,6 +105,7 @@ const kvs = new unikvs.Builder<{
 - Tombstones and the registry live in the delegated storage. The reserved key `__unikvs_soft_delete_registry__` is used for the registry.
 - Stream support and chunk types follow the delegated storage. Acquisition functions stay undefined when unsupported.
 - As middleware it is transparent. When a tombstone leaks into the read path, this middleware throws `KeyNotFoundError`.
+- `purge(key)` returns `true` when it removes a tombstone, and `false` when this call removes no tombstone. `false` covers not only an absent tombstone, but also a tombstone that was restored or replaced by a newer tombstone before removal. `purge()` with no key targets a snapshot of the registry and returns the number actually removed, even when other operations run concurrently.
 
 ## Errors [#errors]
 
@@ -113,11 +115,13 @@ This package throws the following errors.
 
 #### Meaning
 
-`restore` and `purge` throw it when the target has no tombstone, or when the tombstone is past its retention period.
+`restore` throws it when the target has no tombstone, or when the tombstone is past its retention period.
+
+`purge(key)` does not throw this error when there is no tombstone. It returns `false` when this call removes no tombstone. A tombstone past its retention period is still purged by `purge(key)`, which returns `true` when it removes it.
 
 #### How to fix
 
-Check the tombstone list with `listTombstones` before operating.
+Check the tombstone list with `listTombstones` before operating. A `false` from `purge(key)` means this call removed no tombstone; it does not necessarily mean no tombstone exists. This is distinct from being unable to restore.
 
 ### SoftDeleteInvalidRetentionError [#error-soft-delete-invalid-retention]
 

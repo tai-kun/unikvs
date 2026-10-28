@@ -49,6 +49,48 @@ const EXPIRED_FLAG = "@unikvs/ttl:expired";
 const DEAD_KEY_SUFFIX = "\0@unikvs/ttl:expired";
 
 /**
+ * 操作内に一時保存するメタデータの変数名の接頭辞です。
+ *
+ * ミドルウェアのインスタンスごとに固有の名前を使い、同じ操作内で複数の Ttl が共存しても衝突しないようにします。
+ */
+const STAGE_VAR_PREFIX = "@unikvs/ttl:stage:";
+
+/**
+ * モジュールごとに割り当てる、変数名の衝突を避けるための識別子です。
+ *
+ * `crypto.randomUUID` は安全なコンテキストでしか使えないため、環境に依存しない乱数と時刻から作ります。
+ * モジュールが複数コピーされても、それぞれの連番に別の接頭辞が付くため衝突しません。
+ */
+const STAGE_VAR_MODULE_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+/**
+ * モジュール内で Ttl インスタンスに割り当てる連番です。
+ */
+let stageVarSequence = 0;
+
+/**
+ * セットで確定待ちのメタデータです。
+ */
+type StagedSet = {
+  readonly kind: "set";
+  readonly expiresAt: number | undefined;
+};
+
+/**
+ * コピー・移動で確定待ちのメタデータです。
+ *
+ * 転送元の期限は `use` の時点で固定せず、キーロック内の `afterUse` で記録から読み直します。
+ */
+type StagedTransfer = {
+  readonly kind: "copy" | "move";
+};
+
+/**
+ * 確定待ちのメタデータです。
+ */
+type StagedOperation = StagedSet | StagedTransfer;
+
+/**
  * プレーン値に付ける有効期限エンベロープです。
  */
 type TtlEnvelope = {
@@ -95,6 +137,11 @@ export default class Ttl implements IMiddleware {
   readonly #expiry: Map<string, number>;
 
   /**
+   * このインスタンスの確定待ちメタデータを保存する変数名です。
+   */
+  readonly #stageVarName: string;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/ttl#ttl)
    */
   public constructor(options: TtlOptions = {}) {
@@ -112,6 +159,8 @@ export default class Ttl implements IMiddleware {
     this.defaultTtl = defaultTtl;
     this.#now = now;
     this.#expiry = new Map();
+    // インスタンスごとに一意な名前を使い、同じ操作内で複数の Ttl が共存しても衝突しないようにします。
+    this.#stageVarName = createStageVarName();
   }
 
   public get isOpen(): boolean {
@@ -149,19 +198,18 @@ export default class Ttl implements IMiddleware {
       case "move": {
         const expiresAt = this.#expiry.get(c.key);
 
-        if (expiresAt === undefined) {
-          break;
-        }
-
-        if (this.#isExpired(expiresAt)) {
-          this.#expiry.delete(c.key);
+        if (expiresAt !== undefined && this.#isExpired(expiresAt)) {
           // 失効済みのコピー元・移動元は実在しないキーへ写像し、存在確認を不発にします。
+          // 記録は afterUse で操作が成功するまで残し、ストリームの失効情報を失わないようにします。
           c.set(EXPIRED_FLAG, true);
           break;
         }
 
-        // 移動先にも同じ有効期限を引き継ぎます。
-        this.#expiry.set(c.destinationKey, expiresAt);
+        // 転送の成否が確定するまでメタデータを変更せず、操作の種類だけを操作内に保存します。
+        // 転送元の期限は afterUse で記録から読み直し、use 後の並行 set による更新を反映します。
+        this.#stage(c, {
+          kind: c.action,
+        });
         break;
       }
 
@@ -178,12 +226,16 @@ export default class Ttl implements IMiddleware {
   public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
     const expiresAt = this.#expiresAtFor(c);
 
+    // 記録は書き込みの成否が確定するまで変更せず、操作内にだけ保存します。
+    this.#stage(c, {
+      kind: "set",
+      expiresAt,
+    });
+
     if (expiresAt === undefined) {
-      // TTL なしの上書きでは記録を消し、データを透過させます。
-      this.#expiry.delete(c.key);
+      // TTL なしの上書きではデータを透過させ、成功時に記録を消します。
       c.destination = c.source;
     } else {
-      this.#expiry.set(c.key, expiresAt);
       c.destination = Object.freeze({
         [TTL_MARKER]: TTL_VERSION,
         expiresAt,
@@ -227,11 +279,11 @@ export default class Ttl implements IMiddleware {
     // ストリームは塊の型がストレージごとに制約されるため、帯域内に期限を埋め込まず、記録だけで管理します。いかなるストレージでも透過するためです。
     const expiresAt = this.#expiresAtFor(c);
 
-    if (expiresAt === undefined) {
-      this.#expiry.delete(c.key);
-    } else {
-      this.#expiry.set(c.key, expiresAt);
-    }
+    // 記録は書き込みの成否が確定するまで変更せず、操作内にだけ保存します。
+    this.#stage(c, {
+      kind: "set",
+      expiresAt,
+    });
 
     c.destination = c.source;
 
@@ -243,17 +295,108 @@ export default class Ttl implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     // 記録上で期限切れなら、ストリームを開く前に確定させます。
+    // ストリームは帯域内に期限を持たないため、記録を消すと失効情報を二度と復元できません。削除は成功した set/delete/clear に委ねます。
     const expiresAt = this.#expiry.get(c.key);
 
     if (expiresAt !== undefined && this.#isExpired(expiresAt)) {
-      this.#expiry.delete(c.key);
-
       throw new KeyNotFoundError({ key: c.key });
     }
 
     c.destination = c.source;
 
     await next();
+  }
+
+  /**
+   * ストレージ I/O が確定した後に、操作内に保存したメタデータを確定します。
+   *
+   * 失敗した操作や一部の宛先だけ失敗した操作では、原則として記録を変更しません。古いデータが残っている可能性があるためです。
+   * ただし、ストレージの確定後に中断された操作でも、TTL の対象となる全宛先が `committed` なら記録を確定します。
+   *
+   * @param c 操作コンテキストです。
+   * @param outcome 操作全体と宛先ごとの結果です。
+   */
+  public async afterUse(c: IMiddleware.UseContext, outcome: IMiddleware.UseOutcome): Promise<void> {
+    switch (c.action) {
+      case "set": {
+        const staged = this.#staged(c);
+
+        if (staged?.kind !== "set" || !isSuccessful(outcome, false)) {
+          return;
+        }
+
+        this.#applyExpiry(c.key, staged.expiresAt);
+
+        return;
+      }
+
+      case "copy": {
+        if (c.key === c.destinationKey) {
+          return;
+        }
+
+        const staged = this.#staged(c);
+
+        // 一部の宛先が notFound や failed のときは、触れていない宛先の古い記録を復活させないよう変更しません。
+        if (staged?.kind !== "copy" || !isSuccessful(outcome, false)) {
+          return;
+        }
+
+        // キーロック内で転送元の現在の期限を読み直し、use 後の並行 set による更新を反映します。
+        this.#applyExpiry(c.destinationKey, this.#expiry.get(c.key));
+
+        return;
+      }
+
+      case "move": {
+        if (c.key === c.destinationKey) {
+          return;
+        }
+
+        const staged = this.#staged(c);
+
+        // 一部の宛先が notFound や failed のときは、触れていない宛先の古い記録を復活させないよう変更しません。
+        if (staged?.kind !== "move" || !isSuccessful(outcome, false)) {
+          // 失敗・部分成功では移動元の記録を残します。移動先のメタデータは、全体が成功したときだけ確定します。
+          return;
+        }
+
+        // キーロック内で転送元の現在の期限を読み直し、use 後の並行 set による更新を反映します。
+        this.#applyExpiry(c.destinationKey, this.#expiry.get(c.key));
+        this.#expiry.delete(c.key);
+
+        return;
+      }
+
+      case "delete": {
+        // 存在しないキーの削除も成功です。確定した宛先が 1 件もなくても記録を消します。
+        if (!isSuccessful(outcome, true, false)) {
+          return;
+        }
+
+        this.#expiry.delete(c.key);
+
+        return;
+      }
+
+      case "clear": {
+        // 一部の宛先だけ削除できた場合は、残っているキーの失効記録を消さないようにします。
+        if (!isSuccessful(outcome, false)) {
+          return;
+        }
+
+        this.#expiry.clear();
+
+        return;
+      }
+
+      case "get":
+      case "stream":
+      case "has": {
+        // 読み取り系では afterUse によるメタデータの確定を行いません。
+        return;
+      }
+    }
   }
 
   /**
@@ -265,6 +408,41 @@ export default class Ttl implements IMiddleware {
    */
   #isExpired(expiresAt: number): boolean {
     return this.#now() >= expiresAt;
+  }
+
+  /**
+   * 操作内にメタデータを保存します。
+   *
+   * @param c 操作内変数を保持するコンテキストです。
+   * @param staged 確定待ちのメタデータです。
+   */
+  #stage(c: IPipelineContext, staged: StagedOperation): void {
+    c.set(this.#stageVarName, staged);
+  }
+
+  /**
+   * 操作内に保存したメタデータを取得します。
+   *
+   * @param c 操作内変数を保持するコンテキストです。
+   *
+   * @returns 確定待ちのメタデータを返します。保存されていないときは `undefined` を返します。
+   */
+  #staged(c: IPipelineContext): StagedOperation | undefined {
+    return c.get(this.#stageVarName) as StagedOperation | undefined;
+  }
+
+  /**
+   * 記録を更新します。
+   *
+   * @param key 対象のキーです。
+   * @param expiresAt 失効時刻 (epoch ミリ秒) です。`undefined` のときは記録を削除します。
+   */
+  #applyExpiry(key: string, expiresAt: number | undefined): void {
+    if (expiresAt === undefined) {
+      this.#expiry.delete(key);
+    } else {
+      this.#expiry.set(key, expiresAt);
+    }
   }
 
   /**
@@ -292,6 +470,49 @@ export default class Ttl implements IMiddleware {
 
     return expiresAt;
   }
+}
+
+/**
+ * このインスタンスの確定待ちメタデータを保存する変数名を作成します。
+ *
+ * @returns インスタンスごとに一意な変数名を返します。
+ */
+function createStageVarName(): string {
+  stageVarSequence += 1;
+
+  return `${STAGE_VAR_PREFIX}${STAGE_VAR_MODULE_ID}:${stageVarSequence.toString(36)}`;
+}
+
+/**
+ * 宛先ごとの結果がすべて成功しているかを判定します。
+ *
+ * @param outcome 操作全体と宛先ごとの結果です。
+ * @param allowNotFound キー不在を成功として扱うかどうかです。
+ * @param requireCommitted 確定した宛先が少なくとも 1 件必要かどうかです。
+ *
+ * @returns 失敗やスキップがなく、必要な確定件数を満たすとき `true` を返します。
+ */
+function isSuccessful(
+  outcome: IMiddleware.UseOutcome,
+  allowNotFound: boolean,
+  requireCommitted = true,
+): boolean {
+  let committed = 0;
+
+  for (const target of outcome.targets) {
+    if (target.status === "committed") {
+      committed += 1;
+      continue;
+    }
+
+    if (allowNotFound && target.status === "notFound") {
+      continue;
+    }
+
+    return false;
+  }
+
+  return committed > 0 || !requireCommitted;
 }
 
 /**

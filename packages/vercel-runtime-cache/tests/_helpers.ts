@@ -12,6 +12,8 @@ export type FakeRuntimeCache = VercelRuntimeCacheBackend & {
   readonly store: Map<string, unknown>;
 
   readonly setCalls: RecordedSetCall[];
+
+  readonly deleteCalls: string[];
 };
 
 export type FakeRuntimeCacheOptions = {
@@ -31,6 +33,7 @@ export function createFakeRuntimeCache(options: FakeRuntimeCacheOptions = {}): F
   const { supportsClear = true } = options;
   const store = new Map<string, unknown>();
   const setCalls: RecordedSetCall[] = [];
+  const deleteCalls: string[] = [];
   const backend: FakeRuntimeCache = {
     async get(key: string): Promise<unknown> {
       await Promise.resolve();
@@ -48,9 +51,11 @@ export function createFakeRuntimeCache(options: FakeRuntimeCacheOptions = {}): F
     store,
     async delete(key: string): Promise<void> {
       await Promise.resolve();
+      deleteCalls.push(key);
       store.delete(key);
     },
     setCalls,
+    deleteCalls,
   };
 
   if (supportsClear) {

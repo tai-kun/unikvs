@@ -58,6 +58,19 @@ export type RedisStorageOptions = Omit<RedisOptions, "keyPrefix" | "lazyConnect"
 const SCAN_COUNT = 1000;
 
 /**
+ * Redis の `MATCH` でリテラル文字列として扱うため、グロブのメタ文字をエスケープします。
+ *
+ * `MATCH` は `*`、`?`、`[...]`、`\` を特別に解釈するため、キープレフィックスをそのまま連結すると意図しないキーが対象になります。
+ *
+ * @param value エスケープする文字列です。
+ *
+ * @returns グロブのメタ文字をエスケープした文字列です。
+ */
+function escapeRedisGlob(value: string): string {
+  return value.replaceAll(/[\\*?[\]]/gu, "\\$&");
+}
+
+/**
  * 接続確立の既定タイムアウト (ミリ秒) です。
  */
 const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
@@ -429,8 +442,7 @@ export default class Redis implements IStorage {
     c.signal.throwIfAborted();
 
     // prefix が空文字の場合は MATCH "*" となり、選択中のデータベースの全キーが対象になります。
-    const pattern = `${this.#keyPrefix}*`;
-    await this.#clearPattern(client, pattern, c.signal);
+    await this.#clearPattern(client, this.#keyPrefix, c.signal);
   }
 
   /**
@@ -652,12 +664,15 @@ export default class Redis implements IStorage {
    * `SCAN` で頁送りしながら `DEL` します。
    *
    * @param client 操作に使うクライアントです。
-   * @param pattern 削除対象の一致パターンです。
+   * @param prefix 削除対象のキープレフィックスです。
    * @param signal 中断を知らせるシグナルです。
    *
    * @returns 削除が完了したら解決します。
    */
-  async #clearPattern(client: Ioredis, pattern: string, signal: AbortSignal): Promise<void> {
+  async #clearPattern(client: Ioredis, prefix: string, signal: AbortSignal): Promise<void> {
+    // プレフィックスはリテラルとして扱う必要があるため、グロブのメタ文字をエスケープします。
+    const pattern = `${escapeRedisGlob(prefix)}*`;
+
     let cursor = "0";
 
     do {
@@ -665,8 +680,11 @@ export default class Redis implements IStorage {
 
       const [nextCursor, keys] = await client.scan(cursor, "MATCH", pattern, "COUNT", SCAN_COUNT);
 
-      if (keys.length > 0) {
-        await client.del(...keys);
+      // エスケープ漏れやサーバー実装差に備え、削除前にもプレフィックスを確認します。
+      const targets = keys.filter((key) => key.startsWith(prefix));
+
+      if (targets.length > 0) {
+        await client.del(...targets);
       }
 
       cursor = nextCursor;

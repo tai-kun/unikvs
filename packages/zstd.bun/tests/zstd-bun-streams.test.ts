@@ -191,6 +191,16 @@ describe("ストリーム API の提供", () => {
     expect(decoded).toStrictEqual(new Uint8Array(0));
   });
 
+  test("空のストリームを decodeStream するとエラーで拒否される", async ({ expect, signal }) => {
+    // 準備：
+    const target = new ZstdBun();
+    await openTarget(target, signal);
+
+    // 実行と検証：
+    // 空の入力は破損データとの取り違えを防ぐため拒否する。
+    await expect(pumpDecode(target, [])).rejects.toThrow(Error);
+  });
+
   test("Buffer を書き込んでもストリームで往復できる", async ({ expect, signal }) => {
     // 準備：
     // Node の Buffer 入力は複写せずそのまま渡す分岐を通る。
