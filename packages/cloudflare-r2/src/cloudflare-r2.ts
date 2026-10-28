@@ -238,10 +238,7 @@ export default class CloudflareR2 implements IStorage {
    * @returns 書き込みが完了したら解決します。
    */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    throwIfAborted(c.signal);
-
-    // 呼び出し側がビューを再利用しても保存値が変わらないよう、複製して渡します。
-    await this.#bucket.put(this.#resolveKey(c.key), data.slice());
+    await this.#put(c.signal, c.key, data);
   }
 
   /**
@@ -297,6 +294,43 @@ export default class CloudflareR2 implements IStorage {
     throwIfAborted(c.signal);
 
     await this.#bucket.delete(this.#resolveKey(c.key));
+  }
+
+  /**
+   * 指定したキーのバイト列を別のキーへ複製します。複製先が存在する場合は上書きします。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, data);
+  }
+
+  /**
+   * 指定したキーのバイト列を別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.#put(c.signal, c.destinationKey, data);
+    await this.delete(c as unknown as IStorage.DeleteContext);
   }
 
   /**
@@ -431,6 +465,22 @@ export default class CloudflareR2 implements IStorage {
         controller.close();
       },
     });
+  }
+
+  /**
+   * 指定したキーへバイト列を保存します。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 保存先のキーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #put(signal: AbortSignal, key: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    throwIfAborted(signal);
+
+    // 呼び出し側がビューを再利用しても保存値が変わらないよう、複製して渡します。
+    await this.#bucket.put(this.#resolveKey(key), data.slice());
   }
 
   /**
