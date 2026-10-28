@@ -37,6 +37,53 @@ export const VariablesArgsSchema: TupleSchema<[typeof VariablesInitSchema], unde
   VariablesInitSchema,
 ]);
 
+/**
+ * キー付き操作の引数スキーマを作成します。
+ *
+ * オプションオブジェクト形式と、キーを先頭に並べた位置引数形式の両方を受け付けます。
+ *
+ * @param optionsSchema オプションオブジェクトのスキーマです。
+ * @param requiredKeys 位置引数の先頭に並べ、変換後のオブジェクトにも引き継ぐキーです。
+ * @param omittedKeys 位置引数の末尾に置くオプションから除外するキーです。
+ *
+ * @returns 引数スキーマを返します。
+ */
+function createKeyedArgsSchema(
+  optionsSchema: ObjectSchema<any, undefined>,
+  requiredKeys: readonly string[],
+  omittedKeys: readonly [string, ...string[]],
+): GenericSchema<any, any> {
+  const entries = optionsSchema.entries as Record<string, GenericSchema>;
+  const requiredEntries = requiredKeys.map((key) => {
+    const entry = entries[key];
+
+    if (entry === undefined) {
+      throw new Error(`キー "${key}" のスキーマが存在しません。`);
+    }
+
+    return entry;
+  });
+
+  return v.union([
+    v.tuple([optionsSchema]),
+    v.pipe(
+      v.tuple([...requiredEntries, v.optional(v.omit(optionsSchema, omittedKeys))]),
+      v.transform((input: [...unknown[], {} | undefined]): [Record<string, unknown>] => {
+        const options = input[requiredKeys.length];
+        const result: Record<string, unknown> = {
+          ...(options as Record<string, unknown> | undefined),
+        };
+
+        for (let i = 0; i < requiredKeys.length; i++) {
+          result[requiredKeys[i] as string] = input[i];
+        }
+
+        return [result];
+      }),
+    ),
+  ]);
+}
+
 export const OpenOptionsSchema: ObjectSchema<
   {
     readonly vars: OptionalSchema<typeof VariablesInitSchema, undefined>;
@@ -116,42 +163,7 @@ export const SetArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = v.union([
-  v.tuple([SetOptionsSchema]),
-  v.pipe(
-    v.tuple([
-      SetOptionsSchema.entries.key,
-      SetOptionsSchema.entries.value,
-      v.optional(v.omit(SetOptionsSchema, ["key", "value"])),
-    ]),
-    v.transform(
-      ([key, value, options]: [
-        string,
-        unknown,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              signal?: AbortSignal | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          value: unknown;
-          signal?: AbortSignal | undefined;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-          value,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(SetOptionsSchema, ["key", "value"], ["key", "value"]);
 
 export const GetOptionsSchema: ObjectSchema<
   {
@@ -190,39 +202,7 @@ export const GetArgsSchema: GenericSchema<
         readonly throwOnRepairDenied?: boolean | undefined;
       },
     ]
-> = v.union([
-  v.tuple([GetOptionsSchema]),
-  v.pipe(
-    v.tuple([GetOptionsSchema.entries.key, v.optional(v.omit(GetOptionsSchema, ["key"]))]),
-    v.transform(
-      ([key, options]: [
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              repair?: boolean | undefined;
-              signal?: AbortSignal | undefined;
-              throwOnRepairDenied?: boolean | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          repair?: boolean | undefined;
-          signal?: AbortSignal | undefined;
-          throwOnRepairDenied?: boolean | undefined;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(GetOptionsSchema, ["key"], ["key"]);
 
 export const StreamOptionsSchema: ObjectSchema<
   {
@@ -261,39 +241,7 @@ export const StreamArgsSchema: GenericSchema<
         readonly throwOnRepairDenied?: boolean | undefined;
       },
     ]
-> = v.union([
-  v.tuple([StreamOptionsSchema]),
-  v.pipe(
-    v.tuple([StreamOptionsSchema.entries.key, v.optional(v.omit(StreamOptionsSchema, ["key"]))]),
-    v.transform(
-      ([key, options]: [
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              repair?: boolean | undefined;
-              signal?: AbortSignal | undefined;
-              throwOnRepairDenied?: boolean | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          repair?: boolean | undefined;
-          signal?: AbortSignal | undefined;
-          throwOnRepairDenied?: boolean | undefined;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(StreamOptionsSchema, ["key"], ["key"]);
 
 export const HasOptionsSchema: ObjectSchema<
   {
@@ -324,35 +272,7 @@ export const HasArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = v.union([
-  v.tuple([HasOptionsSchema]),
-  v.pipe(
-    v.tuple([HasOptionsSchema.entries.key, v.optional(v.omit(HasOptionsSchema, ["key"]))]),
-    v.transform(
-      ([key, options]: [
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              signal?: AbortSignal | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          signal?: AbortSignal | undefined;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(HasOptionsSchema, ["key"], ["key"]);
 
 export const DeleteOptionsSchema: ObjectSchema<
   {
@@ -383,35 +303,7 @@ export const DeleteArgsSchema: GenericSchema<
         readonly signal?: AbortSignal | undefined;
       },
     ]
-> = v.union([
-  v.tuple([DeleteOptionsSchema]),
-  v.pipe(
-    v.tuple([DeleteOptionsSchema.entries.key, v.optional(v.omit(DeleteOptionsSchema, ["key"]))]),
-    v.transform(
-      ([key, options]: [
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              signal?: AbortSignal | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          signal?: AbortSignal | undefined;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(DeleteOptionsSchema, ["key"], ["key"]);
 
 export const CopyOptionsSchema: ObjectSchema<
   {
@@ -438,42 +330,7 @@ export const CopyArgsSchema: GenericSchema<
       readonly destinationKey: string;
     },
   ]
-> = v.union([
-  v.tuple([CopyOptionsSchema]),
-  v.pipe(
-    v.tuple([
-      CopyOptionsSchema.entries.key,
-      CopyOptionsSchema.entries.destinationKey,
-      v.optional(v.omit(CopyOptionsSchema, ["key", "destinationKey"])),
-    ]),
-    v.transform(
-      ([key, destinationKey, options]: [
-        string,
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              signal?: AbortSignal | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          signal?: AbortSignal | undefined;
-          destinationKey: string;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-          destinationKey,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(CopyOptionsSchema, ["key", "destinationKey"], ["key", "destinationKey"]);
 
 export const MoveOptionsSchema: ObjectSchema<
   {
@@ -500,42 +357,7 @@ export const MoveArgsSchema: GenericSchema<
       readonly destinationKey: string;
     },
   ]
-> = v.union([
-  v.tuple([MoveOptionsSchema]),
-  v.pipe(
-    v.tuple([
-      MoveOptionsSchema.entries.key,
-      MoveOptionsSchema.entries.destinationKey,
-      v.optional(v.omit(MoveOptionsSchema, ["key", "destinationKey"])),
-    ]),
-    v.transform(
-      ([key, destinationKey, options]: [
-        string,
-        string,
-        (
-          | {
-              vars?: readonly VariablesEntry[] | undefined;
-              signal?: AbortSignal | undefined;
-            }
-          | undefined
-        ),
-      ]): [
-        {
-          key: string;
-          vars?: readonly VariablesEntry[] | undefined;
-          signal?: AbortSignal | undefined;
-          destinationKey: string;
-        },
-      ] => [
-        {
-          ...options,
-          key,
-          destinationKey,
-        },
-      ],
-    ),
-  ),
-]);
+> = createKeyedArgsSchema(MoveOptionsSchema, ["key", "destinationKey"], ["key", "destinationKey"]);
 
 export const ClearOptionsSchema: ObjectSchema<
   {

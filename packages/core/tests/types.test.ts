@@ -91,14 +91,7 @@ describe("IStorage", () => {
 
   test("IStorage の write はコンテキストとデータを受け取る", () => {
     // 実行と検証：
-    expectTypeOf<AnyStorage["write"]>()
-      .parameter(0)
-      .toEqualTypeOf<
-        IStorage["write"] extends (c: infer C, ...rest: never[]) => unknown ? C : never
-      >();
-    expectTypeOf<ObjectStorage["read"]>().returns.toEqualTypeOf<
-      MaybePromise<{ readonly id: number }>
-    >();
+    expectTypeOf<AnyStorage["write"]>().parameter(0).toEqualTypeOf<IStorage.WriteContext>();
   });
 
   test("IStorage の read は型引数を返す", () => {
@@ -248,7 +241,7 @@ describe("IMiddleware", () => {
 
   test("IMiddleware の next は引数なしで Promise<void> を返す", () => {
     // 実行と検証：
-    expectTypeOf<IMiddleware.INext>().toEqualTypeOf<IMiddleware.INext>();
+    expectTypeOf<Parameters<IMiddleware.INext>>().toEqualTypeOf<[]>();
     expectTypeOf<IMiddleware.INext>().returns.toEqualTypeOf<Promise<void>>();
   });
 });
@@ -359,8 +352,17 @@ describe("pipeline-context とストリーム", () => {
 
   test("IWritableStream と IReadableStream は標準のストリームを継承する", () => {
     // 実行と検証：
-    expectTypeOf<IWritableStream<Uint8Array<ArrayBuffer>>>().toEqualTypeOf<
+    expectTypeOf<IWritableStream<Uint8Array<ArrayBuffer>>>().toExtend<
+      WritableStream<Uint8Array<ArrayBuffer>>
+    >();
+    expectTypeOf<WritableStream<Uint8Array<ArrayBuffer>>>().toExtend<
       IWritableStream<Uint8Array<ArrayBuffer>>
+    >();
+    expectTypeOf<IReadableStream<Uint8Array<ArrayBuffer>>>().toExtend<
+      ReadableStream<Uint8Array<ArrayBuffer>>
+    >();
+    expectTypeOf<ReadableStream<Uint8Array<ArrayBuffer>>>().toExtend<
+      IReadableStream<Uint8Array<ArrayBuffer>>
     >();
   });
 
@@ -389,7 +391,7 @@ describe("エラー", () => {
 
   test("ErrorBase の型引数の既定値は ErrorMeta | undefined である", () => {
     // 実行と検証：
-    expectTypeOf<ErrorBase>().toEqualTypeOf<ErrorBase>();
+    expectTypeOf<ErrorBase["meta"]>().toEqualTypeOf<ErrorMeta | undefined>();
   });
 
   test("ErrorBase は型引数を省略すると meta から型引数を推論する", () => {

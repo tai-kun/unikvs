@@ -10,6 +10,7 @@ import {
 import { test, describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
+import { decode, encode } from "./_helpers.js";
 
 const TRANSPARENT_VALUES: readonly {
   readonly name: string;
@@ -80,27 +81,6 @@ const TRANSPARENT_VALUES: readonly {
     value: () => 42,
   },
 ];
-
-/**
- * データを書き込みとして記録し、そのまま返します。
- */
-async function encode(debug: Debug, data: unknown): Promise<unknown> {
-  const c = createEncodeContext(data, "key");
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * データを読み込みとして記録し、そのまま返します。
- */
-async function decode(debug: Debug, data: unknown): Promise<unknown> {
-  const c = createDecodeContext(data, "key");
-  await debug.decode(c as IMiddleware.DecodeContext, createNext());
-
-  return c.destination;
-}
-
 describe("データの透過", () => {
   test.for(TRANSPARENT_VALUES)(
     "encode は $name を同一参照で返す",

@@ -1,6 +1,5 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
-  readAll,
   createNext,
   sourceFrom,
   createDecodeStreamContext,
@@ -9,38 +8,9 @@ import {
 import { describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { pumpDecode, pumpEncode, createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
-
-/**
- * チャンク列を書き込みストリームに流し、出力されたチャンクを返します。
- */
-async function pumpEncode(
-  debug: Debug,
-  chunks: readonly unknown[],
-  key: string,
-): Promise<unknown[]> {
-  const c = createEncodeStreamContext(sourceFrom(chunks), key);
-  await debug.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
-
-  return readAll(c.destination as ReadableStream<unknown>);
-}
-
-/**
- * チャンク列を読み込みストリームに流し、出力されたチャンクを返します。
- */
-async function pumpDecode(
-  debug: Debug,
-  chunks: readonly unknown[],
-  key: string,
-): Promise<unknown[]> {
-  const c = createDecodeStreamContext(sourceFrom(chunks), key);
-  await debug.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
-
-  return readAll(c.destination as ReadableStream<unknown>);
-}
-
 describe("ストリームのチャンク", () => {
   test("チャンクが 0 個のときは何も記録しない", async ({ expect, records }) => {
     // 準備：
@@ -118,7 +88,6 @@ describe("ストリームのチャンク", () => {
     expect(records.every((record) => record.properties["action"] === "stream")).toBe(true);
   });
 });
-
 describe("ストリームのエラー", () => {
   test("上流のエラーが出力側へ伝播する", async ({ expect, records }) => {
     // 準備：
@@ -163,7 +132,6 @@ describe("ストリームのエラー", () => {
     expect(records.at(0)?.properties["direction"]).toBe("read");
   });
 });
-
 describe("ストリームのキャンセル", () => {
   test("読み取りをキャンセルすると上流のソースもキャンセルされる", async ({ expect, records }) => {
     // 準備：

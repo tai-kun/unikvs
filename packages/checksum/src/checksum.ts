@@ -90,6 +90,24 @@ export type ChecksumOptions = {
 };
 
 /**
+ * 解決済みのチェックサム設定です。
+ *
+ * `checksum` は検証に使う期待値、`onHash` は計算結果を受け取るコールバックです。
+ * どちらも有効でない場合は設定自体が `null` になります。
+ */
+type ChecksumConfig = {
+  /**
+   * 検証に使う期待値です。検証しない場合は `undefined` です。
+   */
+  readonly checksum: string | undefined;
+
+  /**
+   * 計算結果を受け取るコールバックです。指定されていない場合は `undefined` です。
+   */
+  readonly onHash: ChecksumOnHash | undefined;
+};
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/checksum#checksum)
  */
 export default abstract class Checksum implements IMiddleware {
@@ -188,40 +206,76 @@ export default abstract class Checksum implements IMiddleware {
     data: Uint8Array<ArrayBuffer>,
     c: IPipelineContext,
   ): Promise<Uint8Array<ArrayBuffer>> {
+    const config = this.#resolveConfig(c);
+
+    if (config === null) {
+      // 検証もコールバックも不要な場合は何もせずデータを透過させます。
+      return data;
+    }
+
+    const hash = bytesToHex(this.#hash(data));
+    const finalized = this.#finalize(config, c, hash);
+
+    if (config.onHash) {
+      await finalized;
+    }
+
+    // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
+    return data;
+  }
+
+  /**
+   * コンテキストからチェックサム設定を解決する内部メソッドです。
+   *
+   * @param c チェックサム変数を保持するコンテキストです。
+   *
+   * @returns 解決した設定を返します。検証もコールバックも不要な場合は `null` を返します。
+   */
+  #resolveConfig(c: IPipelineContext): ChecksumConfig | null {
     const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
 
     if (typeof CHECKSUM_VAR_NAME !== "string") {
       throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
     }
 
-    const checksum = c.get(CHECKSUM_VAR_NAME);
+    const value = c.get(CHECKSUM_VAR_NAME);
 
-    if (typeof checksum !== "string" && this.required) {
+    if (typeof value !== "string" && this.required) {
       throw new ChecksumRequiredError();
     }
 
     const onHash = this.#getOnHash(c);
 
-    if (typeof checksum !== "string" && !onHash) {
-      // 検証もコールバックも不要な場合は何もせずデータを透過させます。
-      return data;
+    if (typeof value !== "string" && !onHash) {
+      return null;
     }
 
-    const hash = bytesToHex(this.#hash(data));
+    return {
+      onHash,
+      checksum: typeof value === "string" ? value : undefined,
+    };
+  }
 
-    if (typeof checksum === "string" && checksum !== hash) {
+  /**
+   * 計算したハッシュの検証とコールバックの呼び出しを行う内部メソッドです。
+   *
+   * @param config 解決済みのチェックサム設定です。
+   * @param c コールバックへ渡す実行コンテキストです。
+   * @param hash 計算したハッシュの 16 進文字列です。
+   *
+   * @returns コールバックの完了を待つプロミスを返します。コールバックがない場合は何も返しません。
+   */
+  #finalize(config: ChecksumConfig, c: IPipelineContext, hash: string): Promise<void> | void {
+    if (config.checksum !== undefined && config.checksum !== hash) {
       throw new ChecksumMismatchError({
         actual: hash,
-        expected: checksum,
+        expected: config.checksum,
       });
     }
 
-    if (onHash) {
-      await onHash.call(this, c, hash);
+    if (config.onHash) {
+      return config.onHash.call(this, c, hash);
     }
-
-    // 検証が成功した、あるいは検証が不要な場合はデータを透過させます。
-    return data;
   }
 
   /**
@@ -252,21 +306,9 @@ export default abstract class Checksum implements IMiddleware {
   #checksumStream(
     c: IPipelineContext,
   ): TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>> {
-    const { CHECKSUM_VAR_NAME } = this.constructor as typeof Checksum;
+    const config = this.#resolveConfig(c);
 
-    if (typeof CHECKSUM_VAR_NAME !== "string") {
-      throw new ChecksumInvalidVarNameError({ actual: CHECKSUM_VAR_NAME });
-    }
-
-    const checksum = c.get(CHECKSUM_VAR_NAME);
-
-    if (typeof checksum !== "string" && this.required) {
-      throw new ChecksumRequiredError();
-    }
-
-    const onHash = this.#getOnHash(c);
-
-    if (typeof checksum !== "string" && !onHash) {
+    if (config === null) {
       // 検証もコールバックも不要な場合は、何も処理をしない透過ストリームを返します。
       return new TransformStream();
     }
@@ -294,16 +336,10 @@ export default abstract class Checksum implements IMiddleware {
        */
       flush: async () => {
         const hash = bytesToHex(hasher.digest());
+        const finalized = this.#finalize(config, c, hash);
 
-        if (typeof checksum === "string" && checksum !== hash) {
-          throw new ChecksumMismatchError({
-            actual: hash,
-            expected: checksum,
-          });
-        }
-
-        if (onHash) {
-          await onHash.call(this, c, hash);
+        if (config.onHash) {
+          await finalized;
         }
       },
     });

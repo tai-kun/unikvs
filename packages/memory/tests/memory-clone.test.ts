@@ -1,22 +1,13 @@
 import type { IStorage } from "@unikvs/core";
-import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
+import {
+  captureThrown,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import Memory from "../src/memory.js";
-
-/**
- * 関数を実行して投げられた例外を返します。
- * clone が投げるエラーが呼び出し元へ伝播することを検証するために使用します。
- */
-function captureThrown(fn: () => unknown): unknown {
-  try {
-    fn();
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("例外が投げられませんでした");
-}
 
 describe("clone オプション", () => {
   test("clone を省略したとき、structuredClone で複製される", ({ expect }) => {

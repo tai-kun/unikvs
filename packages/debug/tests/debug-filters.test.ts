@@ -1,20 +1,9 @@
-import type { IMiddleware } from "@unikvs/core";
-import { createNext, createEncodeContext } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { encode, createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
-
-/**
- * データを書き込みとして記録します。
- */
-async function encode(debug: Debug, data: unknown, key: string): Promise<void> {
-  const c = createEncodeContext(data, key);
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-}
-
 describe("フィルターの呼び出し", () => {
   test("keyFilter と actionFilter は解決済みの文字列で呼ばれる", async ({ expect }) => {
     // 準備：
@@ -109,7 +98,6 @@ describe("フィルターの呼び出し", () => {
     });
   });
 });
-
 describe("既定のフィルターとコールバック", () => {
   test("オプション省略時は任意のキーと操作を受け入れる", ({ expect }) => {
     // 準備：

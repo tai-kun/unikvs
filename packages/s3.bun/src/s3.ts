@@ -65,10 +65,9 @@ const DELETE_CONCURRENCY = 25;
  * @returns 解決したパートサイズです。未指定のときは undefined です。
  */
 function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
+  const packagePartSize = c.get("@unikvs/s3.bun:partSize");
   const rawPartSize =
-    c.get("@unikvs/s3.bun:partSize") !== undefined
-      ? c.get("@unikvs/s3.bun:partSize")
-      : c.get("@unikvs/s3:partSize");
+    packagePartSize !== undefined ? packagePartSize : c.get("@unikvs/s3:partSize");
   let partSize: number | undefined = undefined;
 
   if (rawPartSize !== undefined) {
@@ -80,6 +79,20 @@ function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
   }
 
   return partSize;
+}
+
+/**
+ * S3 オブジェクトを読み取り、契約どおりのバイト列へ正規化します。
+ *
+ * @param client 操作に使う S3 クライアントです。
+ * @param key 読み取るキーです。
+ *
+ * @returns 読み取ったバイト列です。
+ */
+async function readObject(client: S3Client, key: string): Promise<Uint8Array<ArrayBuffer>> {
+  const buffer = await client.file(key).arrayBuffer();
+
+  return new Uint8Array(buffer);
 }
 
 /**
@@ -149,7 +162,7 @@ export default class S3 implements IStorage {
 
     // オープン済みの場合は既存のクライアントを破棄し、開き直しでリークしないようにします。
     if (this.#client) {
-      this.close(_c as unknown as IStorage.CloseContext);
+      this.#closeClient();
     }
 
     const { S3Client: S3ClientImpl } = await import("bun");
@@ -167,12 +180,7 @@ export default class S3 implements IStorage {
    * @param _c クローズコンテキストです。
    */
   public close(_c: IStorage.CloseContext): void {
-    if (!this.#client) {
-      throw new StorageNotOpenError();
-    }
-
-    // Bun の S3Client には破棄用の API がないため、参照を外して GC に委ねます。
-    this.#client = null;
+    this.#closeClient();
   }
 
   /**
@@ -203,9 +211,7 @@ export default class S3 implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     c.signal.throwIfAborted();
 
-    const buffer = await this.#getClient().file(c.key).arrayBuffer();
-
-    return new Uint8Array(buffer);
+    return readObject(this.#getClient(), c.key);
   }
 
   /**
@@ -218,7 +224,7 @@ export default class S3 implements IStorage {
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
     c.signal.throwIfAborted();
 
-    return this.#getClient().exists(c.key);
+    return this.#keyExists(c.key);
   }
 
   /**
@@ -402,7 +408,7 @@ export default class S3 implements IStorage {
   async #assertKeyExists(key: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
 
-    if (!(await this.#getClient().exists(key))) {
+    if (!(await this.#keyExists(key))) {
       throw new KeyNotFoundError({ key });
     }
   }
@@ -425,8 +431,7 @@ export default class S3 implements IStorage {
     let data: Uint8Array<ArrayBuffer>;
 
     try {
-      const buffer = await client.file(sourceKey).arrayBuffer();
-      data = new Uint8Array(buffer);
+      data = await readObject(client, sourceKey);
     } catch (ex) {
       if (isKeyNotFoundError(ex)) {
         throw new KeyNotFoundError({ key: sourceKey });
@@ -437,6 +442,33 @@ export default class S3 implements IStorage {
 
     signal.throwIfAborted();
     await client.write(destinationKey, data);
+  }
+
+  /**
+   * キーのオブジェクトが存在するかどうかを確認します。
+   *
+   * @param key 確認するキーです。
+   *
+   * @returns キーが存在すれば真です。
+   */
+  async #keyExists(key: string): Promise<boolean> {
+    return this.#getClient().exists(key);
+  }
+
+  /**
+   * 開いているクライアントを破棄します。
+   *
+   * `open()` の再接続からも呼べるよう、クローズコンテキストは受け取りません。
+   * サブクラスが公開 `close()` をオーバーライドしても、再接続時にはこのメソッドが使われます。
+   */
+  #closeClient(): void {
+    // 未オープン時の `close()` は従来どおり `StorageNotOpenError` にします。
+    if (!this.#client) {
+      throw new StorageNotOpenError();
+    }
+
+    // Bun の S3Client には破棄用の API がないため、参照を外して GC に委ねます。
+    this.#client = null;
   }
 
   /**

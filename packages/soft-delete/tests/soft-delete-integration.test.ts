@@ -6,6 +6,7 @@ import { test, describe } from "vite-plus/test";
 
 import { TombstoneNotFoundError } from "../src/errors.js";
 import SoftDelete, { type SoftDeleteOptions } from "../src/soft-delete.js";
+import { sleep } from "./_helpers.js";
 
 /**
  * 統合テストで使うキーと値の対応です。
@@ -35,14 +36,6 @@ async function createSoftDeleteKvs(options?: SoftDeleteOptions): Promise<{
     inner,
     softDelete,
   };
-}
-
-/**
- * 指定ミリ秒だけ待ちます。
- * 保持期限の遅延失効の検証に使用します。
- */
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  collectBytes,
   abortedSignal,
   captureRejection,
   createGetContext,
@@ -12,38 +13,6 @@ import { test, describe } from "vite-plus/test";
 import { KeyNotFoundError, BlobOperationError, InvalidChunkTypeError } from "../src/errors.js";
 import VercelBlob, { type IFetch } from "../src/vercel-blob.js";
 import { createFakeClient, createFakeDownload } from "./_helpers.js";
-
-/**
- * ストリームの全チャンクを読み切って結合します。
- * 読み取り結果の検証に使用します。
- */
-async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    if (value !== undefined) {
-      chunks.push(value);
-    }
-  }
-
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-  const merged = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-
-  return merged;
-}
 
 function setup(): { storage: VercelBlob } {
   const client = createFakeClient();
@@ -214,7 +183,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
+    expect(await collectBytes(stream)).toStrictEqual(new Uint8Array([1, 2, 3, 4, 5, 6]));
   });
 
   test("存在しないキーの getReadable は KeyNotFoundError を投げる", async ({ expect }) => {
@@ -282,7 +251,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(new Uint8Array(0));
+    expect(await collectBytes(stream)).toStrictEqual(new Uint8Array(0));
   });
 
   test("中断済みシグナルでの getReadable は中断例外を投げる", async ({ expect }) => {

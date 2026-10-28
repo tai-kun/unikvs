@@ -48,7 +48,7 @@ describe("NodeFs", () => {
       // 検証：
       expect(storage.isOpen).toBe(true);
 
-      await expect(access(TEST_ROOT)).resolves.not.toThrow();
+      await expect(access(TEST_ROOT)).resolves.toBeUndefined();
     });
 
     test("相対ルートで open した後にカレントディレクトリーが変更されたとき、データは open 時点のカレントディレクトリー配下に書き込まれる", async ({
@@ -210,7 +210,7 @@ describe("NodeFs", () => {
       await expect(
         storage.exists(createHasContext("file2.txt") as IStorage.ExistsContext),
       ).resolves.toBe(false);
-      await expect(access(TEST_ROOT)).resolves.not.toThrow();
+      await expect(access(TEST_ROOT)).resolves.toBeUndefined();
     });
   });
   describe("ストリーム操作", () => {

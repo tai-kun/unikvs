@@ -111,6 +111,26 @@ function toStatusMessage(error: unknown): string {
 }
 
 /**
+ * スパンに成否と状態を設定します。
+ *
+ * @param span 状態を設定するスパンです。
+ * @param success 成功したとき `true` です。
+ * @param error 失敗したときのエラーです。
+ */
+function setSpanOutcome(span: SpanLike, success: boolean, error?: unknown): void {
+  span.setAttribute("success", success);
+
+  if (success) {
+    span.setStatus({ code: "ok" });
+  } else {
+    span.setStatus({
+      code: "error",
+      message: toStatusMessage(error),
+    });
+  }
+}
+
+/**
  * 操作対象の論理キーを取り出す内部関数です。
  * `clear` のようにキーがない操作では空文字を返します。
  *
@@ -211,14 +231,9 @@ export default class Tracing implements IMiddleware {
 
     try {
       await next();
-      span.setAttribute("success", true);
-      span.setStatus({ code: "ok" });
+      setSpanOutcome(span, true);
     } catch (error) {
-      span.setAttribute("success", false);
-      span.setStatus({
-        code: "error",
-        message: toStatusMessage(error),
-      });
+      setSpanOutcome(span, false, error);
       throw error;
     } finally {
       span.setAttribute("durationMs", Date.now() - startTime);
@@ -254,16 +269,7 @@ export default class Tracing implements IMiddleware {
 
       finished = true;
 
-      span.setAttribute("success", success);
-
-      if (success) {
-        span.setStatus({ code: "ok" });
-      } else {
-        span.setStatus({
-          code: "error",
-          message: toStatusMessage(error),
-        });
-      }
+      setSpanOutcome(span, success, error);
 
       span.setAttribute("durationMs", Date.now() - startTime);
       span.end();

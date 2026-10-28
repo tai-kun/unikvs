@@ -17,11 +17,6 @@ type IncompleteDecodeError = Error & {
    * 未完成のデータアイテムの開始位置です。
    */
   lastPosition: number;
-
-  /**
-   * 未完成のデータアイテムより前にデコードされた値です。
-   */
-  values?: unknown[];
 };
 
 /**
@@ -35,7 +30,14 @@ type IncompleteDecodeError = Error & {
  */
 function isPossiblyIncompleteInputError(error: unknown): error is IncompleteDecodeError {
   // プリミティブ値が渡されても安全にプロパティーを参照できるよう、Object で包みます。
-  return Object(error).incomplete === true || error instanceof SyntaxError;
+  const candidate = Object(error) as Partial<IncompleteDecodeError>;
+
+  // 開始位置が数値でない場合は、キューを消費すると壊れるため入力不足として扱いません。
+  if (typeof candidate.lastPosition !== "number") {
+    return false;
+  }
+
+  return candidate.incomplete === true || error instanceof SyntaxError;
 }
 
 /**
@@ -112,25 +114,23 @@ class ByteQueue {
 }
 
 /**
- * 入力不足エラーに含まれる完成済みの値を下流へ流します。
+ * 完成済みの値を下流へ流します。
  *
  * @param controller ストリームを制御するためのコントローラーです。
- * @param error cbor-x が投げたエラーです。
+ * @param values 下流へ流す値の配列です。
  */
 function enqueueValues(
   controller: TransformStreamDefaultController<unknown>,
-  error: unknown,
+  values: readonly unknown[],
 ): void {
-  const values = (error as Partial<IncompleteDecodeError>).values;
-
-  for (const value of values ?? []) {
+  for (const value of values) {
     controller.enqueue(value);
   }
 }
 
 /**
  * バッファーに溜まったデータを先頭から順にデコードして下流へ流します。
- * cbor-x の `decodeMultiple` は、完成済みの値の配列を返すか、入力不足なら `incomplete` フラグと完成済みの値を持つエラーを投げます。
+ * cbor-x の `decodeMultiple` にコールバックを渡して完成済みの値を収集し、入力不足なら残りを次回へ持ち越します。
  *
  * @param decoder cbor-x のデコーダーです。
  * @param queue 未処理データを保持するバッファーです。
@@ -148,20 +148,19 @@ function drain(
   }
 
   const view = queue.view();
+  const values: unknown[] = [];
 
   try {
-    // forEach を渡さない場合はデコード済みの値の配列が返るため、型を合わせてキャストします。
-    const values = decoder.decodeMultiple(view) as unknown as unknown[];
+    decoder.decodeMultiple(view, (value: unknown) => {
+      values.push(value);
+    });
 
-    for (const value of values) {
-      controller.enqueue(value);
-    }
-
+    enqueueValues(controller, values);
     queue.consume(view.byteLength);
   } catch (ex) {
     if (isFinal) {
       // 終了時に残ったデータは入力不足でもエラーです。完成済みの値は流してからエラーにします。
-      enqueueValues(controller, ex);
+      enqueueValues(controller, values);
       throw new CborDecodeError({ cause: ex });
     }
 
@@ -171,7 +170,7 @@ function drain(
     }
 
     // データが途中で切れているため、完成済みの分だけ流して次のチャンクの到着を待ちます。
-    enqueueValues(controller, ex);
+    enqueueValues(controller, values);
     queue.consume(ex.lastPosition);
   }
 }

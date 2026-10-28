@@ -1,9 +1,7 @@
-import type { IMiddleware } from "@unikvs/core";
-import { createNext, createEncodeContext } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { encode, createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
 
@@ -18,16 +16,6 @@ function argsFor(data: unknown): DebugInfoArgs {
     action: "set",
     direction: "write",
   };
-}
-
-/**
- * データを書き込みとして記録し、そのまま返します。
- */
-async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
-  const c = createEncodeContext(data, key);
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-
-  return c.destination;
 }
 
 class Example {

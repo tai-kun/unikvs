@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  captureRejection,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -20,21 +21,6 @@ const test = vitest.extend<{ storage: Memory }>({
     await use(new Memory());
   },
 });
-
-/**
- * Promise の拒否理由を返します。
- * ストリームが非同期に拒否するエラーの種類を検証するために使用します。
- */
-async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("Promise が拒否されませんでした");
-}
-
 describe("getWritable", () => {
   test("長さの異なる複数のチャンクを順番どおり結合して保存する", async ({ expect, storage }) => {
     // 準備：
@@ -216,7 +202,6 @@ describe("getWritable", () => {
     expect(storage.read(createGetContext(key) as IStorage.ReadContext)).toStrictEqual(expected);
   });
 });
-
 describe("getReadable", () => {
   test("存在しないキーでは KeyNotFoundError を投げる", ({ expect, storage }) => {
     // 実行と検証：

@@ -1,5 +1,10 @@
 import type { IStorage } from "@unikvs/core";
-import { createGetContext, createHasContext, createSetContext } from "@unikvs/testing";
+import {
+  captureThrown,
+  createGetContext,
+  createHasContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { test as vitest, describe } from "vite-plus/test";
 
 // oxlint-disable unicorn/number-literal-case
@@ -14,20 +19,6 @@ const test = vitest.extend<{ storage: Memory }>({
     await use(new Memory());
   },
 });
-
-/**
- * 関数を実行して投げられた例外を返します。
- * structuredClone が投げる DOMException の名前を検証するために使用します。
- */
-function captureThrown(fn: () => unknown): unknown {
-  try {
-    fn();
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("例外が投げられませんでした");
-}
 
 const primitiveValues: readonly {
   readonly label: string;
@@ -107,7 +98,6 @@ describe("プリミティブ値", () => {
     ).toBe(true);
   });
 });
-
 describe("複合値", () => {
   test("ネストしたオブジェクトと配列を保存できる", ({ expect, storage }) => {
     // 準備：

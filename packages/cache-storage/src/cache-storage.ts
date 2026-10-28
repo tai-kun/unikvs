@@ -162,12 +162,7 @@ export default class CacheStorage implements IStorage {
    * @returns キーが存在すれば true を返します。
    */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    using abortPromise = toAbortPromise(c.signal);
-
-    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
-    const cache = this.#getCache();
-    const request = this.#toRequest(c.key);
-    const response = await Promise.race([cache.match(request), abortPromise]);
+    const response = await this.#match(c);
 
     return response !== undefined;
   }
@@ -226,25 +221,29 @@ export default class CacheStorage implements IStorage {
         chunks.length = 0;
       },
       close: async (): Promise<void> => {
-        const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-        const data = new Uint8Array(totalLength);
+        try {
+          const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+          const data = new Uint8Array(totalLength);
 
-        let offset = 0;
+          let offset = 0;
 
-        for (const chunk of chunks) {
-          data.set(chunk, offset);
-          offset += chunk.length;
+          for (const chunk of chunks) {
+            data.set(chunk, offset);
+            offset += chunk.length;
+          }
+
+          // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+          const cache = this.#getCache();
+          const request = this.#toRequest(c.key);
+          const response = new Response(data, {
+            headers: {
+              "Content-Type": "application/octet-stream",
+            },
+          });
+          await cache.put(request, response);
+        } finally {
+          chunks.length = 0;
         }
-
-        // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
-        const cache = this.#getCache();
-        const request = this.#toRequest(c.key);
-        const response = new Response(data, {
-          headers: {
-            "Content-Type": "application/octet-stream",
-          },
-        });
-        await cache.put(request, response);
       },
       write: (chunk: Uint8Array<ArrayBuffer>): void => {
         throwIfAborted(c.signal);
@@ -277,9 +276,9 @@ export default class CacheStorage implements IStorage {
         try {
           const response = await this.#read(c);
 
-          // 読み手がチャンクを書き換えても保存値が変わらないよう、複製して送出します。
+          // `Response.arrayBuffer()` は呼び出しごとに新しい ArrayBuffer を返すため、そのまま送出できます。
           const buff = await response.arrayBuffer();
-          const view = new Uint8Array(buff.slice());
+          const view = new Uint8Array(buff);
           controller.enqueue(view);
 
           controller.close();
@@ -313,17 +312,29 @@ export default class CacheStorage implements IStorage {
    * @returns 保存されている Response です。
    */
   async #read(c: IKeyedActionContext): Promise<Response> {
-    using abortPromise = toAbortPromise(c.signal);
-
-    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
-    const cache = this.#getCache();
-    const request = this.#toRequest(c.key);
-    const response = await Promise.race([cache.match(request), abortPromise]);
+    const response = await this.#match(c);
 
     if (response === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
     return response;
+  }
+
+  /**
+   * 指定したキーの Response を読み出します。存在しない場合は undefined を返します。
+   *
+   * @param c 読み出すキーと中断信号を持つコンテキストです。
+   *
+   * @returns 保存されている Response です。存在しない場合は undefined です。
+   */
+  async #match(c: IKeyedActionContext): Promise<Response | undefined> {
+    using abortPromise = toAbortPromise(c.signal);
+
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
+    const request = this.#toRequest(c.key);
+
+    return await Promise.race([cache.match(request), abortPromise]);
   }
 }

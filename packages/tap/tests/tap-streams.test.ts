@@ -54,7 +54,7 @@ function createStreamContext(
   method: StreamMethod,
   source: ReadableStream<unknown>,
   key = "",
-): ReturnType<typeof createEncodeStreamContext> {
+): ReturnType<typeof createEncodeStreamContext> | ReturnType<typeof createDecodeStreamContext> {
   if (method === "encodeStream") {
     return createEncodeStreamContext(source, key);
   }

@@ -86,6 +86,54 @@ function base64EncodeText(data: Uint8Array, padding: boolean): string {
 }
 
 /**
+ * base64 文字列を出力先のバイト列へ復元します。
+ *
+ * 4 文字単位の完全な量子に加え、末尾の 2 文字または 3 文字の量子も復元します。
+ * 未使用下位ビットは検査せず受理します。
+ *
+ * @param text 復元する base64 文字列です。
+ * @param output 復元先のバイト列です。
+ * @param offset 書き込みを開始する位置です。
+ *
+ * @returns 書き込み後の位置を返します。
+ */
+function decodeInto(text: string, output: Uint8Array<ArrayBuffer>, offset: number): number {
+  const prefixLength = text.length - (text.length % 4);
+  let position = offset;
+
+  // 4 文字を 3 バイトへ復元します。
+  for (let index = 0; index < prefixLength; index += 4) {
+    const quad =
+      ((DECODE_TABLE[text.charCodeAt(index)] ?? 0) << 18) |
+      ((DECODE_TABLE[text.charCodeAt(index + 1)] ?? 0) << 12) |
+      ((DECODE_TABLE[text.charCodeAt(index + 2)] ?? 0) << 6) |
+      (DECODE_TABLE[text.charCodeAt(index + 3)] ?? 0);
+    output[position++] = (quad >> 16) & 0xff;
+    output[position++] = (quad >> 8) & 0xff;
+    output[position++] = quad & 0xff;
+  }
+
+  const rest = text.length - prefixLength;
+
+  // 末尾量子の未使用下位ビットは検査せず受理します。
+  if (rest === 2) {
+    const tail =
+      ((DECODE_TABLE[text.charCodeAt(prefixLength)] ?? 0) << 18) |
+      ((DECODE_TABLE[text.charCodeAt(prefixLength + 1)] ?? 0) << 12);
+    output[position++] = (tail >> 16) & 0xff;
+  } else if (rest === 3) {
+    const tail =
+      ((DECODE_TABLE[text.charCodeAt(prefixLength)] ?? 0) << 18) |
+      ((DECODE_TABLE[text.charCodeAt(prefixLength + 1)] ?? 0) << 12) |
+      ((DECODE_TABLE[text.charCodeAt(prefixLength + 2)] ?? 0) << 6);
+    output[position++] = (tail >> 16) & 0xff;
+    output[position++] = (tail >> 8) & 0xff;
+  }
+
+  return position;
+}
+
+/**
  * 4 文字境界に整列した base64 文字列をバイト列へ変換します。
  *
  * @param text 変換する 4 の倍数長の文字列です。
@@ -93,20 +141,8 @@ function base64EncodeText(data: Uint8Array, padding: boolean): string {
  * @returns 変換したバイト列を返します。
  */
 function decodeAligned(text: string): Uint8Array<ArrayBuffer> {
-  // 4 文字を 3 バイトへ復元し、未使用下位ビットは検査せず受理します。
   const output = new Uint8Array((text.length / 4) * 3);
-  let offset = 0;
-
-  for (let index = 0; index < text.length; index += 4) {
-    const quad =
-      ((DECODE_TABLE[text.charCodeAt(index)] ?? 0) << 18) |
-      ((DECODE_TABLE[text.charCodeAt(index + 1)] ?? 0) << 12) |
-      ((DECODE_TABLE[text.charCodeAt(index + 2)] ?? 0) << 6) |
-      (DECODE_TABLE[text.charCodeAt(index + 3)] ?? 0);
-    output[offset++] = (quad >> 16) & 0xff;
-    output[offset++] = (quad >> 8) & 0xff;
-    output[offset++] = quad & 0xff;
-  }
+  decodeInto(text, output, 0);
 
   return output;
 }
@@ -145,36 +181,7 @@ function decodeChecked(text: string): Uint8Array<ArrayBuffer> {
 
   // 本体とパディングの合計は 4 文字境界であり、余剰バイトを切り捨てて返します。
   const output = new Uint8Array(((body.length + padCount) / 4) * 3 - padCount);
-  const prefixLength = body.length - (body.length % 4);
-  let offset = 0;
-
-  for (let index = 0; index < prefixLength; index += 4) {
-    const quad =
-      ((DECODE_TABLE[body.charCodeAt(index)] ?? 0) << 18) |
-      ((DECODE_TABLE[body.charCodeAt(index + 1)] ?? 0) << 12) |
-      ((DECODE_TABLE[body.charCodeAt(index + 2)] ?? 0) << 6) |
-      (DECODE_TABLE[body.charCodeAt(index + 3)] ?? 0);
-    output[offset++] = (quad >> 16) & 0xff;
-    output[offset++] = (quad >> 8) & 0xff;
-    output[offset++] = quad & 0xff;
-  }
-
-  const rest = body.length - prefixLength;
-
-  // 末尾量子の未使用下位ビットは検査せず受理します。
-  if (rest === 2) {
-    const tail =
-      ((DECODE_TABLE[body.charCodeAt(prefixLength)] ?? 0) << 18) |
-      ((DECODE_TABLE[body.charCodeAt(prefixLength + 1)] ?? 0) << 12);
-    output[offset++] = (tail >> 16) & 0xff;
-  } else if (rest === 3) {
-    const tail =
-      ((DECODE_TABLE[body.charCodeAt(prefixLength)] ?? 0) << 18) |
-      ((DECODE_TABLE[body.charCodeAt(prefixLength + 1)] ?? 0) << 12) |
-      ((DECODE_TABLE[body.charCodeAt(prefixLength + 2)] ?? 0) << 6);
-    output[offset++] = (tail >> 16) & 0xff;
-    output[offset++] = (tail >> 8) & 0xff;
-  }
+  decodeInto(body, output, 0);
 
   return output;
 }

@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import type { IStorage, IKeyedActionContext } from "@unikvs/core";
 import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
@@ -40,9 +40,16 @@ export default class Opfs implements IStorage {
   #rootHandle: FileSystemDirectoryHandle | null;
 
   /**
+   * データを保存する OPFS 内のルートディレクトリーの構成要素です。
+   *
+   * ルート直下を使用する場合や、ハンドルを直接受け取った場合は空です。
+   */
+  readonly #rootSegments: readonly string[];
+
+  /**
    * データを保存する OPFS 内のルートディレクトリー名です。
    */
-  readonly #root: string;
+  readonly #rootDirname: string;
 
   /**
    * コンストラクターでディレクトリーハンドルを直接受け取ったかどうかです。
@@ -71,18 +78,23 @@ export default class Opfs implements IStorage {
       }
 
       if (normalized === "" || normalized === "." || normalized === "/") {
-        this.#root = "";
+        this.#rootSegments = [];
+        this.#rootDirname = "";
       } else {
-        this.#root = normalized;
+        const segments = normalized.split("/");
 
-        for (const dirname of this.#root.split("/")) {
+        for (const dirname of segments) {
           assertValidDirname(dirname);
         }
+
+        this.#rootSegments = segments;
+        this.#rootDirname = normalized.slice(normalized.lastIndexOf("/") + 1);
       }
 
       this.#rootHandle = null;
     } else {
-      this.#root = root.name;
+      this.#rootSegments = [];
+      this.#rootDirname = root.name;
       this.#rootHandle = root;
       this.#fromHandle = true;
     }
@@ -115,9 +127,9 @@ export default class Opfs implements IStorage {
 
     c.signal.throwIfAborted();
 
-    if (this.#root !== "") {
+    if (this.#rootSegments.length > 0) {
       // 指定された名前のディレクトリーを作成・取得します。
-      for (const dirname of this.#root.split("/")) {
+      for (const dirname of this.#rootSegments) {
         handle = await handle.getDirectoryHandle(dirname, { create: true });
         c.signal.throwIfAborted();
       }
@@ -147,15 +159,7 @@ export default class Opfs implements IStorage {
    * @returns ファイル内容のバイト列です。
    */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    assertValidFilename(c.key);
-    c.signal.throwIfAborted();
-
-    const fileHandle = await this.#getRootHandle().getFileHandle(c.key);
-
-    c.signal.throwIfAborted();
-    const file = await fileHandle.getFile();
-
-    c.signal.throwIfAborted();
+    const file = await this.#getFile(c);
     const buff = await file.arrayBuffer();
 
     return new Uint8Array(buff);
@@ -209,7 +213,7 @@ export default class Opfs implements IStorage {
   public async clear(c: IStorage.ClearContext): Promise<void> {
     c.signal.throwIfAborted();
 
-    if (this.#root === "" || this.#fromHandle) {
+    if (this.#rootSegments.length === 0 || this.#fromHandle) {
       // ルートディレクトリー直下を使用している場合や、ハンドルを直接受け取った場合は、すべてのエントリーを個別に削除します。
       const rootHandle = this.#getRootHandle();
 
@@ -221,25 +225,18 @@ export default class Opfs implements IStorage {
       // サブディレクトリーを使用している場合は、ディレクトリーごと削除して再作成します。
       // 先に開いていることを確認し、未オープン時は `TypeError` で拒否します。
       this.#getRootHandle();
-      const dirnames = this.#root.split("/");
       let parentHandle = await navigator.storage.getDirectory();
 
       c.signal.throwIfAborted();
-      for (const dirname of dirnames.slice(0, -1)) {
+      for (const dirname of this.#rootSegments.slice(0, -1)) {
         parentHandle = await parentHandle.getDirectoryHandle(dirname, { create: true });
         c.signal.throwIfAborted();
       }
 
-      const currentDirname = dirnames.at(-1);
-
-      if (currentDirname === undefined) {
-        throw new TypeError("Opfs root is empty. Call open() first.");
-      }
-
-      await parentHandle.removeEntry(currentDirname, { recursive: true });
+      await parentHandle.removeEntry(this.#rootDirname, { recursive: true });
 
       c.signal.throwIfAborted();
-      this.#rootHandle = await parentHandle.getDirectoryHandle(currentDirname, { create: true });
+      this.#rootHandle = await parentHandle.getDirectoryHandle(this.#rootDirname, { create: true });
     }
   }
 
@@ -253,16 +250,7 @@ export default class Opfs implements IStorage {
   public async getWritable(
     c: IStorage.GetWritableContext,
   ): Promise<WritableStream<Uint8Array<ArrayBuffer>>> {
-    assertValidFilename(c.key);
-    c.signal.throwIfAborted();
-
-    const fileHandle = await this.#getRootHandle().getFileHandle(c.key, { create: true });
-
-    c.signal.throwIfAborted();
-    const writable = await fileHandle.createWritable();
-
-    c.signal.throwIfAborted();
-
+    const writable = await this.#createWritable(c.signal, c.key);
     const writer = writable.getWriter();
 
     // 中断と失敗のどちらからでも後始末が走るため、完了処理は一度だけ行います。
@@ -323,16 +311,7 @@ export default class Opfs implements IStorage {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    assertValidFilename(c.key);
-    c.signal.throwIfAborted();
-
-    const fileHandle = await this.#getRootHandle().getFileHandle(c.key);
-
-    c.signal.throwIfAborted();
-    const file = await fileHandle.getFile();
-
-    c.signal.throwIfAborted();
-
+    const file = await this.#getFile(c);
     const reader = file.stream().getReader();
 
     // 中断時は待機中の読み取りを終わらせ、以降の pull で中断理由を通知できるようにします。
@@ -382,15 +361,35 @@ export default class Opfs implements IStorage {
   }
 
   /**
-   * 指定したキーのファイルへバイト列を保存します。失敗時は変更を破棄します。
+   * 指定したキーのファイルを取得します。
+   *
+   * @param c 読み出すキーと中断信号を持つコンテキストです。
+   *
+   * @returns 取得したファイルです。
+   */
+  async #getFile(c: IKeyedActionContext): Promise<File> {
+    assertValidFilename(c.key);
+    c.signal.throwIfAborted();
+
+    const fileHandle = await this.#getRootHandle().getFileHandle(c.key);
+
+    c.signal.throwIfAborted();
+    const file = await fileHandle.getFile();
+
+    c.signal.throwIfAborted();
+
+    return file;
+  }
+
+  /**
+   * 指定したキーのファイルへ書き込むためのストリームを作成します。
    *
    * @param signal 中断を知らせるシグナルです。
    * @param key 保存先のキーです。
-   * @param data 保存するバイト列です。
    *
-   * @returns 完了を知らせるプロミスです。
+   * @returns 書き込みストリームです。
    */
-  async #writeFile(signal: AbortSignal, key: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+  async #createWritable(signal: AbortSignal, key: string): Promise<FileSystemWritableFileStream> {
     assertValidFilename(key);
     signal.throwIfAborted();
 
@@ -400,6 +399,21 @@ export default class Opfs implements IStorage {
     const writable = await fileHandle.createWritable();
 
     signal.throwIfAborted();
+
+    return writable;
+  }
+
+  /**
+   * 指定したキーのファイルへバイト列を保存します。失敗時は変更を破棄します。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 保存先のキーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  async #writeFile(signal: AbortSignal, key: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    const writable = await this.#createWritable(signal, key);
 
     try {
       await writable.write(data);

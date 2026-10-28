@@ -82,6 +82,24 @@ function readBunProbe(): unknown {
 }
 
 /**
+ * プローブが bun の zstd API を備えているかを判定します。
+ *
+ * @param probe 判定対象のプローブです。
+ *
+ * @returns bun の zstd API を備えていれば `true` を返します。
+ */
+function isBunZstdApi(probe: unknown): probe is BunZstdApi {
+  if (typeof probe !== "object" || probe === null) {
+    return false;
+  }
+
+  return (
+    typeof Reflect.get(probe, "zstdCompressSync") === "function" &&
+    typeof Reflect.get(probe, "zstdDecompressSync") === "function"
+  );
+}
+
+/**
  * チャンク列を結合して 1 つの所有化されたバイト列にします。
  *
  * @param chunks 結合するチャンク列です。
@@ -107,6 +125,32 @@ function concatChunks(chunks: readonly Uint8Array[]): Uint8Array<ArrayBuffer> {
 }
 
 /**
+ * 書き込まれたチャンクを蓄積し、flush 時に一括変換して 1 チャンクとして出力する TransformStream を作成します。
+ *
+ * @param convert 蓄積したバイト列を変換する関数です。
+ *
+ * @returns 変換用のストリームを返します。
+ */
+function createAccumulatingStream(
+  convert: (data: Uint8Array<ArrayBuffer>) => Uint8Array,
+): ITransformStream<Uint8Array, Uint8Array<ArrayBuffer>> {
+  const chunks: Uint8Array[] = [];
+
+  return new TransformStream({
+    transform(chunk) {
+      chunks.push(chunk);
+    },
+
+    flush(controller) {
+      const data = concatChunks(chunks);
+
+      chunks.length = 0;
+      controller.enqueue(toOwnedBytes(convert(data)));
+    },
+  });
+}
+
+/**
  * テストで差し替えできるよう上流呼び出しを薄く包みます。
  */
 export const api = {
@@ -120,17 +164,7 @@ export const api = {
    * @returns Bun の名前空間、または `undefined` を返します。
    */
   detectBun(probe: unknown): BunZstdApi | undefined {
-    let resolved: BunZstdApi | undefined;
-
-    if (typeof probe === "object" && probe !== null) {
-      const { zstdCompressSync, zstdDecompressSync } = probe as Partial<BunZstdApi>;
-
-      if (typeof zstdCompressSync === "function" && typeof zstdDecompressSync === "function") {
-        resolved = probe as BunZstdApi;
-      }
-    }
-
-    return resolved;
+    return isBunZstdApi(probe) ? probe : undefined;
   },
 
   /**
@@ -232,20 +266,8 @@ export const api = {
     // open() 前の利用は TypeError で拒否されるよう、実行環境へ同期的に触れます。
     const compressSync = env.compressSync;
     const { level } = options;
-    const chunks: Uint8Array[] = [];
 
-    return new TransformStream({
-      transform(chunk) {
-        chunks.push(chunk);
-      },
-
-      flush(controller) {
-        const data = concatChunks(chunks);
-
-        chunks.length = 0;
-        controller.enqueue(toOwnedBytes(compressSync(data, level)));
-      },
-    });
+    return createAccumulatingStream((data) => compressSync(data, level));
   },
 
   /**
@@ -260,19 +282,7 @@ export const api = {
   createDecompress(env: IEnv): ITransformStream<Uint8Array, Uint8Array<ArrayBuffer>> {
     // open() 前の利用は TypeError で拒否されるよう、実行環境へ同期的に触れます。
     const decompressSync = env.decompressSync;
-    const chunks: Uint8Array[] = [];
 
-    return new TransformStream({
-      transform(chunk) {
-        chunks.push(chunk);
-      },
-
-      flush(controller) {
-        const data = concatChunks(chunks);
-
-        chunks.length = 0;
-        controller.enqueue(toOwnedBytes(decompressSync(data)));
-      },
-    });
+    return createAccumulatingStream((data) => decompressSync(data));
   },
 };

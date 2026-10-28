@@ -41,6 +41,21 @@ function toError(error: unknown): Error {
 }
 
 /**
+ * 同期関数を実行し、送出された値を `Error` へ正規化して再送出します。
+ *
+ * @param fn 実行する関数です。
+ *
+ * @returns 関数の戻り値を返します。
+ */
+function withNormalizedError<T>(fn: () => T): T {
+  try {
+    return fn();
+  } catch (error) {
+    throw toError(error);
+  }
+}
+
+/**
  * テストで差し替えできるよう上流呼び出しを薄く包みます。
  */
 export const api = {
@@ -50,8 +65,7 @@ export const api = {
    * ESM の `import` はブラウザーでは Web ビルドに解決され、そのまま動作します。
    * 一方 Node.js の ESM では Web ビルドに解決されて WASM の取得に失敗するため、失敗時は Node.js 用の CJS ビルドへフォールバックします。
    *
-   * なお上流の型定義は CJS ビルドの形状を表すため `default` を `unknown` 経由で受けます。
-   * 実行時の `default` は Web ビルドでは `Promise` ですが、`await` が同期値も透過するため分岐は不要です。
+   * 上流の `default` は Web ビルドでは `Promise` ですが、`await` が同期値も透過するため分岐は不要です。
    *
    * 関数の有無はここでは検証せず、使用時のエラーをそのまま表面化させます。
    *
@@ -60,7 +74,7 @@ export const api = {
   async init(): Promise<IEnv> {
     try {
       const mod = await import("brotli-wasm");
-      const wasm = (await (mod as { default?: unknown }).default) as IEnv;
+      const wasm = await Promise.resolve(mod.default);
 
       return {
         compress: wasm.compress,
@@ -90,11 +104,7 @@ export const api = {
   compress(env: IEnv, data: Uint8Array<ArrayBuffer>, options: CompressOptions): Uint8Array {
     const { level } = options;
 
-    try {
-      return env.compress(data, { quality: level });
-    } catch (error) {
-      throw toError(error);
-    }
+    return withNormalizedError(() => env.compress(data, { quality: level }));
   },
 
   /**
@@ -108,10 +118,6 @@ export const api = {
    * @returns 展開したバイト列を返します。
    */
   decompress(env: IEnv, data: Uint8Array<ArrayBuffer>): Uint8Array {
-    try {
-      return env.decompress(data);
-    } catch (error) {
-      throw toError(error);
-    }
+    return withNormalizedError(() => env.decompress(data));
   },
 };

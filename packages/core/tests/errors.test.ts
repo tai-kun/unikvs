@@ -1,5 +1,4 @@
-import { setGlobalConfig, deleteGlobalConfig } from "valibot";
-import { test as vitest, describe } from "vite-plus/test";
+import { describe } from "vite-plus/test";
 
 import {
   ErrorBase,
@@ -11,22 +10,8 @@ import {
   RepairNotAllowedError,
   UnsupportedRuntimeError,
 } from "../src/errors.js";
+import { test } from "./helpers.js";
 
-/**
- * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
- *
- * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
- */
-const test = vitest.extend<{
-  setLang: (lang: string) => void;
-}>({
-  async setLang({}, use) {
-    await use((lang) => {
-      setGlobalConfig({ lang });
-    });
-    deleteGlobalConfig();
-  },
-});
 describe("RepairNotAllowedError", () => {
   test("ErrorBase を継承し name は UniKvsRepairNotAllowedError である", ({ expect }) => {
     // 実行：

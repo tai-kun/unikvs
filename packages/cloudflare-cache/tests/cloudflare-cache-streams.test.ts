@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  collectBytes,
   abortedSignal,
   captureRejection,
   createGetContext,
@@ -12,38 +13,6 @@ import { test, describe } from "vite-plus/test";
 import CloudflareCache from "../src/cloudflare-cache.js";
 import { KeyNotFoundError, InvalidChunkTypeError } from "../src/errors.js";
 import { createFakeCache } from "./_helpers.js";
-
-/**
- * ストリームの全チャンクを読み切って結合します。
- * 読み取り結果の検証に使用します。
- */
-async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    if (value !== undefined) {
-      chunks.push(value);
-    }
-  }
-
-  const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-  const merged = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.byteLength;
-  }
-
-  return merged;
-}
 
 describe("getWritable", () => {
   test("複数のチャンクを順番どおり結合して保存する", async ({ expect }) => {
@@ -274,7 +243,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(new Uint8Array([7, 8, 9]));
+    expect(await collectBytes(stream)).toStrictEqual(new Uint8Array([7, 8, 9]));
   });
 
   test("存在しないキーの getReadable は KeyNotFoundError を投げる", async ({ expect }) => {
@@ -317,7 +286,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(new Uint8Array(0));
+    expect(await collectBytes(stream)).toStrictEqual(new Uint8Array(0));
   });
 
   test("中断済みシグナルでの getReadable は中断例外を投げる", async ({ expect }) => {

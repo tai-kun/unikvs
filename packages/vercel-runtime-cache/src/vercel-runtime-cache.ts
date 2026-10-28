@@ -105,6 +105,19 @@ type CacheEntry = {
 };
 
 /**
+ * 値がキャッシュ項目のエンベロープかどうかを判定します。
+ *
+ * @param value 判定する値です。
+ *
+ * @returns エンベロープなら真です。
+ */
+function isCacheEntry(value: unknown): value is CacheEntry {
+  return (
+    value !== null && typeof value === "object" && "value" in (value as Record<string, unknown>)
+  );
+}
+
+/**
  * 実行環境からランタイムキャッシュのバックエンドを検出します。
  *
  * 見つからないときは undefined を返します。
@@ -327,25 +340,18 @@ export default class VercelRuntimeCache implements IStorage {
     if (this.#backend !== undefined) {
       using abortPromise = toAbortPromise(c.signal);
       const storedKey = this.#storageKey(c.key);
-      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+      const raw = await this.#readRaw(this.#backend, abortPromise, storedKey);
 
       if (raw === undefined) {
         return false;
       }
 
-      const entry = raw as CacheEntry;
-
-      if (
-        entry === null ||
-        typeof entry !== "object" ||
-        !("value" in (entry as Record<string, unknown>))
-      ) {
+      if (!isCacheEntry(raw)) {
         return true;
       }
 
-      if (this.#isExpired(entry)) {
-        await this.#backend.delete(storedKey);
-        this.#backendKeys.delete(storedKey);
+      if (this.#isExpired(raw)) {
+        await this.#deleteRaw(this.#backend, storedKey);
 
         return false;
       }
@@ -470,7 +476,7 @@ export default class VercelRuntimeCache implements IStorage {
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
     throwIfAborted(c.signal);
-    const value = await this.read(c as unknown as IStorage.ReadContext);
+    const value = await this.#readValue(c.key, c.signal);
     const stream = new ReadableStream<Uint8Array<ArrayBuffer>>({
       pull: (controller): void => {
         if (!(value instanceof Uint8Array)) {
@@ -525,12 +531,6 @@ export default class VercelRuntimeCache implements IStorage {
       expiresAt,
     });
 
-    if (this.maxEntries === 0) {
-      this.#fallback.delete(storedKey);
-
-      return;
-    }
-
     this.#evictFallbackIfNeeded();
   }
 
@@ -550,29 +550,22 @@ export default class VercelRuntimeCache implements IStorage {
     if (this.#backend !== undefined) {
       using abortPromise = toAbortPromise(signal);
       const storedKey = this.#storageKey(key);
-      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+      const raw = await this.#readRaw(this.#backend, abortPromise, storedKey);
 
       if (raw === undefined) {
         throw new KeyNotFoundError({ key });
       }
 
-      const entry = raw as CacheEntry;
-
-      if (
-        entry === null ||
-        typeof entry !== "object" ||
-        !("value" in (entry as Record<string, unknown>))
-      ) {
+      if (!isCacheEntry(raw)) {
         return this.#clone(raw);
       }
 
-      if (this.#isExpired(entry)) {
-        await this.#backend.delete(storedKey);
-        this.#backendKeys.delete(storedKey);
+      if (this.#isExpired(raw)) {
+        await this.#deleteRaw(this.#backend, storedKey);
         throw new KeyNotFoundError({ key });
       }
 
-      return this.#clone(entry.value);
+      return this.#clone(raw.value);
     }
 
     return this.#readFallback(key);
@@ -594,27 +587,19 @@ export default class VercelRuntimeCache implements IStorage {
     if (this.#backend !== undefined) {
       using abortPromise = toAbortPromise(signal);
       const storedKey = this.#storageKey(key);
-      const raw = await Promise.race([this.#backend.get(storedKey), abortPromise]);
+      const raw = await this.#readRaw(this.#backend, abortPromise, storedKey);
 
       if (raw === undefined) {
         throw new KeyNotFoundError({ key });
       }
 
-      const entry = raw as CacheEntry;
+      const expired = isCacheEntry(raw) && this.#isExpired(raw);
 
-      if (
-        entry !== null &&
-        typeof entry === "object" &&
-        "value" in (entry as Record<string, unknown>) &&
-        this.#isExpired(entry)
-      ) {
-        await this.#backend.delete(storedKey);
-        this.#backendKeys.delete(storedKey);
+      await this.#deleteRaw(this.#backend, storedKey);
+
+      if (expired) {
         throw new KeyNotFoundError({ key });
       }
-
-      await this.#backend.delete(storedKey);
-      this.#backendKeys.delete(storedKey);
 
       return;
     }
@@ -632,6 +617,36 @@ export default class VercelRuntimeCache implements IStorage {
     }
 
     this.#fallback.delete(storedKey);
+  }
+
+  /**
+   * バックエンドから生の値を読み取ります。
+   *
+   * @param backend 読み取りに使うバックエンドです。
+   * @param abortPromise 中断時に拒否されるプロミスです。
+   * @param storedKey 保存に使う実キーです。
+   *
+   * @returns 読み取った生の値です。
+   */
+  #readRaw(
+    backend: VercelRuntimeCacheBackend,
+    abortPromise: PromiseLike<never>,
+    storedKey: string,
+  ): Promise<unknown> {
+    return Promise.race([backend.get(storedKey), abortPromise]);
+  }
+
+  /**
+   * バックエンドから値を削除し、書き込み済みキーの記録も外します。
+   *
+   * @param backend 削除に使うバックエンドです。
+   * @param storedKey 削除する実キーです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
+  async #deleteRaw(backend: VercelRuntimeCacheBackend, storedKey: string): Promise<void> {
+    await backend.delete(storedKey);
+    this.#backendKeys.delete(storedKey);
   }
 
   /**
@@ -704,10 +719,6 @@ export default class VercelRuntimeCache implements IStorage {
       }
 
       this.#fallback.delete(oldest);
-    }
-
-    if (this.maxEntries === 0) {
-      this.#fallback.clear();
     }
   }
 

@@ -292,92 +292,25 @@ export default class Metrics implements IMiddleware {
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
-    const start = this.#clock();
-    // `clear` は型上キーを持たないため、キーの有無を確認してから参照します。
-    const key = c.action === "clear" || !("key" in c) ? undefined : c.key;
-
-    try {
-      await next();
-    } catch (error) {
-      this.#observe({
-        key,
-        bytes: undefined,
-        action: c.action,
-        outcome: "error",
-        durationMs: this.#clock() - start,
-      });
-      throw error;
-    }
-
-    this.#observe({
-      key,
-      bytes: undefined,
-      action: c.action,
-      outcome: "success",
-      durationMs: this.#clock() - start,
-    });
+    await this.#measure(c, next);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async encode(c: IMiddleware.EncodeContext, next: IMiddleware.INext): Promise<void> {
-    const start = this.#clock();
-    const bytes = estimateBytes(c.source);
-
     c.destination = c.source;
 
-    try {
-      await next();
-    } catch (error) {
-      this.#observe({
-        key: c.key,
-        bytes,
-        action: c.action,
-        outcome: "error",
-        durationMs: this.#clock() - start,
-      });
-      throw error;
-    }
-
-    this.#observe({
-      key: c.key,
-      bytes,
-      action: c.action,
-      outcome: "success",
-      durationMs: this.#clock() - start,
-    });
+    await this.#measure(c, next);
   }
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/metrics#metrics)
    */
   public async decode(c: IMiddleware.DecodeContext, next: IMiddleware.INext): Promise<void> {
-    const start = this.#clock();
-    const bytes = estimateBytes(c.source);
-
     c.destination = c.source;
 
-    try {
-      await next();
-    } catch (error) {
-      this.#observe({
-        key: c.key,
-        bytes,
-        action: c.action,
-        outcome: "error",
-        durationMs: this.#clock() - start,
-      });
-      throw error;
-    }
-
-    this.#observe({
-      key: c.key,
-      bytes,
-      action: c.action,
-      outcome: "success",
-      durationMs: this.#clock() - start,
-    });
+    await this.#measure(c, next);
   }
 
   /**
@@ -470,6 +403,43 @@ export default class Metrics implements IMiddleware {
   public reset(): void {
     this.#records.length = 0;
     this.#summaries.clear();
+  }
+
+  /**
+   * `next` の実行時間を測り、成功または失敗の測定値を 1 件記録します。
+   *
+   * @param c 測定する操作のコンテキストです。
+   * @param next 次のミドルウェアを呼び出す関数です。
+   */
+  async #measure(
+    c: IMiddleware.UseContext | IMiddleware.EncodeContext | IMiddleware.DecodeContext,
+    next: IMiddleware.INext,
+  ): Promise<void> {
+    const start = this.#clock();
+    // `clear` は型上キーを持たないため、キーの有無を確認してから参照します。
+    const key = c.action === "clear" || !("key" in c) ? undefined : c.key;
+    const bytes = "source" in c ? estimateBytes(c.source) : undefined;
+
+    try {
+      await next();
+    } catch (error) {
+      this.#observe({
+        key,
+        bytes,
+        action: c.action,
+        outcome: "error",
+        durationMs: this.#clock() - start,
+      });
+      throw error;
+    }
+
+    this.#observe({
+      key,
+      bytes,
+      action: c.action,
+      outcome: "success",
+      durationMs: this.#clock() - start,
+    });
   }
 
   /**

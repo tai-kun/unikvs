@@ -1,5 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  captureThrown,
+  captureRejection,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -20,35 +22,6 @@ const test = vitest.extend<{ storage: Memory }>({
     await use(new Memory());
   },
 });
-
-/**
- * 関数を実行して投げられた例外を返します。
- * 実際に投げられたエラーの種類とメタ情報を検証するために使用します。
- */
-function captureThrown(fn: () => unknown): unknown {
-  try {
-    fn();
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("例外が投げられませんでした");
-}
-
-/**
- * Promise の拒否理由を返します。
- * ストリームが非同期に拒否するエラーの種類とメタ情報を検証するために使用します。
- */
-async function captureRejection(promise: Promise<unknown>): Promise<unknown> {
-  try {
-    await promise;
-  } catch (error) {
-    return error;
-  }
-
-  throw new Error("Promise が拒否されませんでした");
-}
-
 describe("KeyNotFoundError", () => {
   test("name は UniKvsKeyNotFoundError である", ({ expect }) => {
     // 実行と検証：
@@ -108,7 +81,6 @@ describe("KeyNotFoundError", () => {
     expect((error as KeyNotFoundError).meta).toStrictEqual({ key: "unknown" });
   });
 });
-
 describe("InvalidChunkTypeError", () => {
   test("name は MemoryInvalidChunkTypeError である", ({ expect }) => {
     // 実行と検証：
@@ -195,7 +167,6 @@ describe("InvalidChunkTypeError", () => {
     expect((error as InvalidChunkTypeError).meta.chunkType).toBe("Object");
   });
 });
-
 describe("エラーの伝播", () => {
   test("ストリームの書き込みエラーは writer.closed へも伝播する", async ({ expect, storage }) => {
     // 準備：

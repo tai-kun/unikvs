@@ -1,46 +1,8 @@
-import type { IMiddleware } from "@unikvs/core";
-import {
-  createNext,
-  createDecodeContext,
-  createEncodeContext,
-  createPseudoRandomBytes,
-} from "@unikvs/testing";
+import { createPseudoRandomBytes } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import Compression from "../src/compression.js";
-import { FORMATS } from "./helpers.js";
-
-/**
- * バイト列を圧縮して返します。
- */
-async function encode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createEncodeContext(data);
-  await compression.encode(
-    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
-    createNext(),
-  );
-
-  return c.destination;
-}
-
-/**
- * 圧縮されたバイト列を展開して返します。
- */
-async function decode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createDecodeContext(data);
-  await compression.decode(
-    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
-    createNext(),
-  );
-
-  return c.destination;
-}
+import { decode, encode, FORMATS } from "./helpers.js";
 
 describe("インスタンスの状態", () => {
   test("encode と decode の後も name と isOpen は変化しない", async ({ expect }) => {

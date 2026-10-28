@@ -1,4 +1,4 @@
-import { type IStorage, KeyNotFoundError } from "@unikvs/core";
+import { type IStorage, type IKeyedActionContext, KeyNotFoundError } from "@unikvs/core";
 import { throwIfAborted } from "abort-signal-utils";
 
 import { CookieTooLargeError, CookieNotAvailableError } from "./errors.js";
@@ -385,7 +385,7 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   public read(c: IStorage.ReadContext): string | Uint8Array {
     throwIfAborted(c.signal);
 
-    const found = this.#backend().get(this.#toRealKey(c.key));
+    const { found } = this.#lookupRaw(c);
 
     if (found === undefined) {
       throw new KeyNotFoundError({ key: c.key });
@@ -404,7 +404,9 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   public exists(c: IStorage.ExistsContext): boolean {
     throwIfAborted(c.signal);
 
-    return this.#backend().get(this.#toRealKey(c.key)) !== undefined;
+    const { found } = this.#lookupRaw(c);
+
+    return found !== undefined;
   }
 
   /**
@@ -417,10 +419,9 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
   public delete(c: IStorage.DeleteContext): void {
     throwIfAborted(c.signal);
 
-    const backend = this.#backend();
-    const realKey = this.#toRealKey(c.key);
+    const { found, backend, realKey } = this.#lookupRaw(c);
 
-    if (backend.get(realKey) === undefined) {
+    if (found === undefined) {
       throw new KeyNotFoundError({ key: c.key });
     }
 
@@ -474,6 +475,28 @@ export default class Cookies implements IStorage<string | Uint8Array, string | U
    */
   #toRealKey(key: string): string {
     return encodeURIComponent(key);
+  }
+
+  /**
+   * 論理キーに対応する実キーでバックエンドから生の値を取得します。
+   *
+   * @param c 読み出すキーを持つコンテキストです。
+   *
+   * @returns 使用したバックエンド、実キー、取得した生の値です。
+   */
+  #lookupRaw(c: IKeyedActionContext): {
+    readonly found: string | undefined;
+    readonly backend: CookieStoreLike;
+    readonly realKey: string;
+  } {
+    const backend = this.#backend();
+    const realKey = this.#toRealKey(c.key);
+
+    return {
+      found: backend.get(realKey),
+      backend,
+      realKey,
+    };
   }
 
   /**

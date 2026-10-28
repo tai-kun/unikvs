@@ -216,21 +216,8 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
     await super.decode(c, next);
   }
 
-  public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
+  public async use(_c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     // 削除の墓標化は下層ストレージ側で担い、ここでは全操作を透過させます。
-    switch (c.action) {
-      case "set":
-      case "get":
-      case "stream":
-      case "has":
-      case "delete":
-      case "copy":
-      case "move":
-      case "clear": {
-        break;
-      }
-    }
-
     await next();
   }
 
@@ -624,24 +611,7 @@ export default class SoftDelete extends PassThrough implements IMiddleware, ISto
    * @returns 台帳の複写を返します。
    */
   async #loadRegistry(c: ContextScope): Promise<RegistryRecord> {
-    let raw: unknown;
-
-    try {
-      raw = await this.#inner.read({
-        ...this.#scopedKey(c, REGISTRY_KEY),
-        action: "get",
-        repair: {
-          enabled: false,
-          targets: [],
-        },
-      } as unknown as IStorage.ReadContext);
-    } catch (ex) {
-      if (ex instanceof KeyNotFoundError) {
-        return {};
-      }
-
-      throw ex;
-    }
+    const raw = await this.#readRaw(REGISTRY_KEY, c);
 
     if (!isRegistryRecord(raw)) {
       return {};

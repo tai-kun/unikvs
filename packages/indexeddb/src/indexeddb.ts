@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import type { IStorage, IKeyedActionContext } from "@unikvs/core";
 import { type IDBPDatabase, openDB } from "idb";
 
 /**
@@ -248,32 +248,7 @@ export default class Indexeddb implements IStorage {
    * @returns 保存されている値です。
    */
   public async read(c: IStorage.ReadContext): Promise<any> {
-    c.signal.throwIfAborted();
-
-    const db = this.#getDb();
-    const value = await db.get(this.#storeName, c.key);
-
-    c.signal.throwIfAborted();
-
-    if (isStoredBlob(value)) {
-      return fromStoredBlob(value);
-    }
-
-    if (value === undefined) {
-      const count = await db.count(this.#storeName, c.key);
-
-      c.signal.throwIfAborted();
-
-      // 存在しない場合は DOMException (NotFoundError) を投げます。
-      if (count === 0) {
-        throw new DOMException(
-          "A requested file or directory could not be found at the time an operation was processed.",
-          "NotFoundError",
-        );
-      }
-    }
-
-    return value;
+    return this.#readValue(c);
   }
 
   /**
@@ -345,22 +320,26 @@ export default class Indexeddb implements IStorage {
         chunks.length = 0;
       },
       close: async (): Promise<void> => {
-        // 保存は close のときだけ行うため、中断時はここまでのチャンクを破棄できます。
-        c.signal.throwIfAborted();
+        try {
+          // 保存は close のときだけ行うため、中断時はここまでのチャンクを破棄できます。
+          c.signal.throwIfAborted();
 
-        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-        const merged = new Uint8Array(totalLength);
-        let offset = 0;
+          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+          const merged = new Uint8Array(totalLength);
+          let offset = 0;
 
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
+          for (const chunk of chunks) {
+            merged.set(chunk, offset);
+            offset += chunk.length;
+          }
+
+          const db = this.#getDb();
+          await db.put(this.#storeName, merged, c.key);
+
+          c.signal.throwIfAborted();
+        } finally {
+          chunks.length = 0;
         }
-
-        const db = this.#getDb();
-        await db.put(this.#storeName, merged, c.key);
-
-        c.signal.throwIfAborted();
       },
       write: (chunk): void => {
         c.signal.throwIfAborted();
@@ -382,7 +361,7 @@ export default class Indexeddb implements IStorage {
     return new ReadableStream<Uint8Array>({
       pull: async (controller: ReadableStreamDefaultController<Uint8Array>): Promise<void> => {
         try {
-          const data = await this.read(c as unknown as IStorage.ReadContext);
+          const data = await this.#readValue(c);
 
           c.signal.throwIfAborted();
           controller.enqueue(data as Uint8Array);
@@ -392,6 +371,42 @@ export default class Indexeddb implements IStorage {
         }
       },
     });
+  }
+
+  /**
+   * 指定したキーの値を読み出します。中間形式は Blob または File に戻します。
+   *
+   * @param c 読み出すキーと中断信号を持つコンテキストです。
+   *
+   * @returns 保存されている値です。
+   */
+  async #readValue(c: IKeyedActionContext): Promise<any> {
+    c.signal.throwIfAborted();
+
+    const db = this.#getDb();
+    const value = await db.get(this.#storeName, c.key);
+
+    c.signal.throwIfAborted();
+
+    if (isStoredBlob(value)) {
+      return fromStoredBlob(value);
+    }
+
+    if (value === undefined) {
+      const count = await db.count(this.#storeName, c.key);
+
+      c.signal.throwIfAborted();
+
+      // 存在しない場合は DOMException (NotFoundError) を投げます。
+      if (count === 0) {
+        throw new DOMException(
+          "A requested file or directory could not be found at the time an operation was processed.",
+          "NotFoundError",
+        );
+      }
+    }
+
+    return value;
   }
 
   /**

@@ -1,45 +1,8 @@
-import { setGlobalConfig, deleteGlobalConfig } from "valibot";
-import { test as vitest, describe } from "vite-plus/test";
+import { deleteGlobalConfig } from "valibot";
+import { describe } from "vite-plus/test";
 
-import {
-  type ErrorOptions,
-  ErrorBase,
-  setErrorMessage,
-  InvalidUsageErrorBase,
-} from "../src/errors.js";
-
-/**
- * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
- *
- * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
- */
-const test = vitest.extend<{
-  setLang: (lang: string) => void;
-}>({
-  async setLang({}, use) {
-    await use((lang) => {
-      setGlobalConfig({ lang });
-    });
-    deleteGlobalConfig();
-  },
-});
-
-type KeyNotFoundErrorArgs = {
-  readonly key: string;
-};
-
-/**
- * 言語ごとのメッセージ登録と解決を検証するためのサンプルエラーです。
- */
-class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorArgs> {
-  static {
-    this.prototype.name = "KeyNotFoundError";
-  }
-
-  public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key not found: ${key}`, options);
-  }
-}
+import { ErrorBase, setErrorMessage, InvalidUsageErrorBase } from "../src/errors.js";
+import { type KeyNotFoundErrorArgs, test, KeyNotFoundError } from "./helpers.js";
 
 describe("setErrorMessage", () => {
   test("関数メッセージを言語ごとに登録すると言語切り替えで使い分けられる", ({

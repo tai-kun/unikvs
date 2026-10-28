@@ -19,6 +19,14 @@ const CR = "\r";
 const encoder = new TextEncoder();
 
 /**
+ * 一括デコードに使い回す UTF-8 デコーダーです。
+ *
+ * ストリームを使わない `decode` は呼び出しごとに内部状態を初期化するため、共有しても安全です。
+ * ストリーム用のデコーダーはストリームごとに新規作成します。
+ */
+const batchDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
  * ルートの値が SuperJSON で扱えない型ならエラーを投げます。
  *
  * SuperJSON は関数やシンボルをエラーにせず `"{}"` へ落とすため、データの消失を防ぐために事前に拒否します。
@@ -98,7 +106,7 @@ export default class Superjson implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(c.source);
+    const text = batchDecoder.decode(c.source);
     c.destination = parse(text);
 
     await next();
@@ -148,14 +156,18 @@ export default class Superjson implements IMiddleware {
           // マルチバイト文字がチャンク境界で分断されてもよいように、ストリームモードでデコードします。
           buffer += decoder.decode(chunk, { stream: true });
 
+          let start = 0;
           let newlineIndex = buffer.indexOf(LF);
 
           while (newlineIndex !== -1) {
-            const line = buffer.slice(0, newlineIndex);
+            parseLine(buffer.slice(start, newlineIndex), controller);
+            start = newlineIndex + 1;
+            newlineIndex = buffer.indexOf(LF, start);
+          }
 
-            buffer = buffer.slice(newlineIndex + 1);
-            parseLine(line, controller);
-            newlineIndex = buffer.indexOf(LF);
+          // 改行を含まない残余だけを次回へ持ち越します。
+          if (start > 0) {
+            buffer = buffer.slice(start);
           }
         },
 

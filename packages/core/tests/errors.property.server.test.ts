@@ -1,24 +1,8 @@
-import { setGlobalConfig, deleteGlobalConfig } from "valibot";
-import { test as vitest, describe } from "vite-plus/test";
+import { describe } from "vite-plus/test";
 
 // oxlint-disable unicorn/number-literal-case
-import { type ErrorOptions, ErrorBase, setErrorMessage } from "../src/errors.js";
-
-/**
- * 言語設定をテスト内でのみ変更するためのフィクスチャーです。
- *
- * 設定した言語はテスト終了後に削除され、ほかのテストに影響しません。
- */
-const test = vitest.extend<{
-  setLang: (lang: string) => void;
-}>({
-  async setLang({}, use) {
-    await use((lang) => {
-      setGlobalConfig({ lang });
-    });
-    deleteGlobalConfig();
-  },
-});
+import { ErrorBase, setErrorMessage } from "../src/errors.js";
+import { test, KeyNotFoundError } from "./helpers.js";
 
 const seed = 20_260_930;
 const cases = 100;
@@ -92,23 +76,6 @@ function createRandomEntries(
   }
 
   return entries;
-}
-
-type KeyNotFoundErrorArgs = {
-  readonly key: string;
-};
-
-/**
- * 任意の文字列キーに対して meta とメッセージが正しく生成されるかを検証するためのサンプルエラーです。
- */
-class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorArgs> {
-  static {
-    this.prototype.name = "KeyNotFoundError";
-  }
-
-  public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key not found: ${key}`, options);
-  }
 }
 
 const keyEdgeCases: string[] = [

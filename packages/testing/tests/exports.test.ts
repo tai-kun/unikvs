@@ -19,6 +19,8 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createOpenContext,
   createClearContext,
   createCloseContext,
@@ -74,6 +76,8 @@ describe("index のエクスポート", () => {
     expect(index.createOpenContext).toBe(createOpenContext);
     expect(index.createCloseContext).toBe(createCloseContext);
     expect(index.createSetContext).toBe(createSetContext);
+    expect(index.createCopyContext).toBe(createCopyContext);
+    expect(index.createMoveContext).toBe(createMoveContext);
     expect(index.createRepairContext).toBe(createRepairContext);
     expect(index.createGetContext).toBe(createGetContext);
     expect(index.createStreamContext).toBe(createStreamContext);

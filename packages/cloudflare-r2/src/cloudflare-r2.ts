@@ -150,14 +150,8 @@ export default class CloudflareR2 implements IStorage {
   /**
    * 使用する R2 バケットのバインディングです。
    */
-  /**
-   * 使用する R2 バケットのバインディングです。
-   */
   readonly #bucket: R2BucketLike;
 
-  /**
-   * すべてのキーに付与する接頭辞です。
-   */
   /**
    * すべてのキーに付与する接頭辞です。
    */
@@ -251,18 +245,7 @@ export default class CloudflareR2 implements IStorage {
    * @returns 読み取ったバイト列です。
    */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    throwIfAborted(c.signal);
-    using abortPromise = toAbortPromise(c.signal);
-
-    const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
-
-    if (object === null) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    const buffer = await Promise.race([object.arrayBuffer(), abortPromise]);
-
-    return new Uint8Array(buffer);
+    return this.#getBytes(c.signal, c.key);
   }
 
   /**
@@ -406,18 +389,8 @@ export default class CloudflareR2 implements IStorage {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
-    throwIfAborted(c.signal);
-    using abortPromise = toAbortPromise(c.signal);
-
-    const object = await Promise.race([this.#bucket.get(this.#resolveKey(c.key)), abortPromise]);
-
-    if (object === null) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
     // R2 のボディは `arrayBuffer` で実体化してから単一チャンクのストリームで送出します。
-    const buffer = await Promise.race([object.arrayBuffer(), abortPromise]);
-    const data = new Uint8Array(buffer);
+    const data = await this.#getBytes(c.signal, c.key);
 
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       start(controller) {
@@ -428,6 +401,31 @@ export default class CloudflareR2 implements IStorage {
         controller.close();
       },
     });
+  }
+
+  /**
+   * 指定したキーの値をバイト列として取得します。
+   *
+   * 取得と実体化のそれぞれで中断と競合させます。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 取得する論理キーです。
+   *
+   * @returns 取得したバイト列です。
+   */
+  async #getBytes(signal: AbortSignal, key: string): Promise<Uint8Array<ArrayBuffer>> {
+    throwIfAborted(signal);
+    using abortPromise = toAbortPromise(signal);
+
+    const object = await Promise.race([this.#bucket.get(this.#resolveKey(key)), abortPromise]);
+
+    if (object === null) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    const buffer = await Promise.race([object.arrayBuffer(), abortPromise]);
+
+    return new Uint8Array(buffer);
   }
 
   /**

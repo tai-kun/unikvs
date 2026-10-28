@@ -259,32 +259,12 @@ export default class Http implements IStorage {
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     c.signal.throwIfAborted();
 
-    const headers = this.#resolveHeaders(c);
+    const headers = {
+      ...this.#resolveHeaders(c),
+      "Content-Type": "application/octet-stream",
+    };
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(
-        new Request(url, {
-          body: data,
-          method: "PUT",
-          signal: c.signal,
-          headers: {
-            ...headers,
-            "Content-Type": "application/octet-stream",
-          },
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "PUT",
-      });
-    }
+    const response = await this.#send(c.signal, url, "PUT", headers, c.key, data);
 
     if (!response.ok) {
       throw new HttpResponseError({
@@ -311,26 +291,7 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(
-        new Request(url, {
-          method: "GET",
-          signal: c.signal,
-          headers,
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "GET",
-      });
-    }
+    const response = await this.#send(c.signal, url, "GET", headers, c.key);
 
     if (response.status === 404 || response.status === 410) {
       throw new KeyNotFoundError({ key: c.key });
@@ -365,26 +326,7 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
-    let headResponse: Response;
-
-    try {
-      headResponse = await fetchFn(
-        new Request(url, {
-          method: "HEAD",
-          signal: c.signal,
-          headers,
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "HEAD",
-      });
-    }
+    const headResponse = await this.#send(c.signal, url, "HEAD", headers, c.key);
 
     if (headResponse.status === 404 || headResponse.status === 410) {
       return false;
@@ -405,44 +347,28 @@ export default class Http implements IStorage {
       });
     }
 
-    let getResponse: Response;
-
-    try {
-      getResponse = await fetchFn(
-        new Request(url, {
-          method: "GET",
-          signal: c.signal,
-          headers: {
-            ...headers,
-            Range: "bytes=0-0",
-          },
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "GET",
-      });
-    }
+    const getResponse = await this.#send(
+      c.signal,
+      url,
+      "GET",
+      {
+        ...headers,
+        Range: "bytes=0-0",
+      },
+      c.key,
+    );
 
     // ボディを消費せず破棄します。
-    // 判定・送出の前に破棄を待ちます。
-    if (getResponse.status === 404 || getResponse.status === 410) {
-      await getResponse.body?.cancel();
+    // 判定・送出の前に破棄を待つため、破棄の失敗はそのまま伝播します。
+    await getResponse.body?.cancel();
 
+    if (getResponse.status === 404 || getResponse.status === 410) {
       return false;
     }
 
     if (getResponse.ok) {
-      await getResponse.body?.cancel();
-
       return true;
     }
-
-    await getResponse.body?.cancel();
 
     throw new HttpResponseError({
       key: c.key,
@@ -467,26 +393,7 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(
-        new Request(url, {
-          method: "DELETE",
-          signal: c.signal,
-          headers,
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "DELETE",
-      });
-    }
+    const response = await this.#send(c.signal, url, "DELETE", headers, c.key);
 
     // 削除は冪等とし存在しないキーも成功扱いにします。
     if (response.status === 404 || response.status === 410) {
@@ -523,26 +430,7 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#clearUrl();
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(
-        new Request(url, {
-          method: "DELETE",
-          signal: c.signal,
-          headers,
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: undefined,
-        url,
-        cause: ex,
-        method: "DELETE",
-      });
-    }
+    const response = await this.#send(c.signal, url, "DELETE", headers, undefined);
 
     if (response.ok) {
       return;
@@ -579,7 +467,6 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
     // サーバー側にストリーミング `PUT` を要求しないよう蓄積して `close` 時に一括送信します。
     const chunks: Uint8Array[] = [];
 
@@ -599,29 +486,17 @@ export default class Http implements IStorage {
           offset += chunk.byteLength;
         }
 
-        let response: Response;
-
-        try {
-          response = await fetchFn(
-            new Request(url, {
-              body: merged,
-              method: "PUT",
-              signal: c.signal,
-              headers: {
-                ...headers,
-                "Content-Type": "application/octet-stream",
-              },
-            }),
-          );
-        } catch (ex) {
-          Http.#rethrowIfAborted(c.signal);
-          throw new HttpNetworkError({
-            key: c.key,
-            url,
-            cause: ex,
-            method: "PUT",
-          });
-        }
+        const response = await this.#send(
+          c.signal,
+          url,
+          "PUT",
+          {
+            ...headers,
+            "Content-Type": "application/octet-stream",
+          },
+          c.key,
+          merged,
+        );
 
         if (!response.ok) {
           throw new HttpResponseError({
@@ -662,26 +537,7 @@ export default class Http implements IStorage {
 
     const headers = this.#resolveHeaders(c);
     const url = this.#keyUrl(c.key);
-    const fetchFn = this.#resolveFetch();
-    let response: Response;
-
-    try {
-      response = await fetchFn(
-        new Request(url, {
-          method: "GET",
-          signal: c.signal,
-          headers,
-        }),
-      );
-    } catch (ex) {
-      Http.#rethrowIfAborted(c.signal);
-      throw new HttpNetworkError({
-        key: c.key,
-        url,
-        cause: ex,
-        method: "GET",
-      });
-    }
+    const response = await this.#send(c.signal, url, "GET", headers, c.key);
 
     if (response.status === 404 || response.status === 410) {
       throw new KeyNotFoundError({ key: c.key });
@@ -707,6 +563,46 @@ export default class Http implements IStorage {
     }
 
     return response.body;
+  }
+
+  /**
+   * 要求を送信し、通信失敗を専用エラーに包みます。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param url 要求先の URL です。
+   * @param method HTTP メソッドです。
+   * @param headers 送信ヘッダーです。
+   * @param key エラーに付与する論理キーです。`clear` では undefined です。
+   * @param body 送信するバイト列です。不要なときは省略します。
+   *
+   * @returns 受信した応答です。
+   */
+  async #send(
+    signal: AbortSignal,
+    url: string,
+    method: string,
+    headers: Record<string, string>,
+    key: string | undefined,
+    body?: Uint8Array<ArrayBuffer>,
+  ): Promise<Response> {
+    try {
+      return await this.#resolveFetch()(
+        new Request(url, {
+          ...(body === undefined ? null : { body }),
+          method,
+          signal,
+          headers,
+        }),
+      );
+    } catch (ex) {
+      Http.#rethrowIfAborted(signal);
+      throw new HttpNetworkError({
+        key,
+        url,
+        cause: ex,
+        method,
+      });
+    }
   }
 
   /**
@@ -773,16 +669,7 @@ export default class Http implements IStorage {
    * @returns キーに対応する完全 URL です。
    */
   #keyUrl(key: string): string {
-    let segment: string;
-
-    try {
-      segment = encodeURIComponent(`${this.#keyPrefix}${key}`).replaceAll(".", "%2E");
-    } catch (ex) {
-      throw new InvalidKeyError({
-        key,
-        cause: ex,
-      });
-    }
+    const segment = this.#encodeSegment(`${this.#keyPrefix}${key}`, key).replaceAll(".", "%2E");
 
     return `${this.#baseUrl}/${segment}`;
   }
@@ -795,17 +682,29 @@ export default class Http implements IStorage {
    * @returns クリア要求に使う完全 URL です。
    */
   #clearUrl(): string {
-    let encoded: string;
+    const encoded = this.#encodeSegment(this.#keyPrefix, this.#keyPrefix);
 
+    return `${this.#baseUrl}/?prefix=${encoded}`;
+  }
+
+  /**
+   * URL の 1 セグメントを符号化します。
+   *
+   * 符号化に失敗した場合は例外を投げます。
+   *
+   * @param value 符号化する値です。
+   * @param key 例外に付与するキーです。
+   *
+   * @returns 符号化したセグメントです。
+   */
+  #encodeSegment(value: string, key: string): string {
     try {
-      encoded = encodeURIComponent(this.#keyPrefix);
+      return encodeURIComponent(value);
     } catch (ex) {
       throw new InvalidKeyError({
-        key: this.#keyPrefix,
+        key,
         cause: ex,
       });
     }
-
-    return `${this.#baseUrl}/?prefix=${encoded}`;
   }
 }

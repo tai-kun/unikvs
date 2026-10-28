@@ -1,47 +1,8 @@
-import { forCasesAsync } from "@unikvs/testing";
+import { readAll, forCasesAsync } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import toReadableStream from "../src/to-readable-stream.js";
-
-/**
- * ストリームからすべての値を読み取り、配列として返します。
- */
-async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
-  const reader = stream.getReader();
-  const values: T[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    values.push(value);
-  }
-
-  return values;
-}
-
-/**
- * ReadableStream.from を一時的に削除して処理を実行し、終了後に元へ戻します。
- * ReadableStream.from が存在しない環境でのポリフィル経路を検証するために使用します。
- */
-async function withoutReadableStreamFrom<T>(fn: () => T | Promise<T>): Promise<T> {
-  const descriptor = Object.getOwnPropertyDescriptor(ReadableStream, "from");
-
-  delete (ReadableStream as { from?: unknown }).from;
-
-  try {
-    return await fn();
-  } finally {
-    if (descriptor === undefined) {
-      delete (ReadableStream as { from?: unknown }).from;
-    } else {
-      Object.defineProperty(ReadableStream, "from", descriptor);
-    }
-  }
-}
+import { withoutReadableStreamFrom } from "./helpers.js";
 
 describe("toReadableStream", () => {
   test("ReadableStream のインスタンスを返す", ({ expect }) => {
@@ -58,7 +19,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream([42]);
 
     // 検証：
-    expect(await collectFromStream(stream)).toStrictEqual([42]);
+    expect(await readAll(stream)).toStrictEqual([42]);
   });
 
   test("複数の要素を順番どおりに配信する", async ({ expect }) => {
@@ -69,7 +30,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream(values);
 
     // 検証：
-    expect(await collectFromStream(stream)).toStrictEqual(values);
+    expect(await readAll(stream)).toStrictEqual(values);
   });
 
   test("要素の参照をそのまま配信する", async ({ expect }) => {
@@ -78,7 +39,7 @@ describe("toReadableStream", () => {
 
     // 実行：
     const stream = toReadableStream([value]);
-    const [received] = await collectFromStream(stream);
+    const [received] = await readAll(stream);
 
     // 検証：
     expect(received).toBe(value);
@@ -96,14 +57,14 @@ describe("toReadableStream", () => {
     const stream = toReadableStream(generate());
 
     // 検証：
-    expect(await collectFromStream(stream)).toStrictEqual([1, 2]);
+    expect(await readAll(stream)).toStrictEqual([1, 2]);
   });
 
   test("ReadableStream.from がない環境でも変換できる", async ({ expect }) => {
     // 準備：と実行。
     const values = await withoutReadableStreamFrom(async () => {
       const stream = toReadableStream([1, 2, 3]);
-      const result = await collectFromStream(stream);
+      const result = await readAll(stream);
 
       // 検証 : ポリフィルが後始末されている。
       expect("from" in ReadableStream).toBe(false);
@@ -151,7 +112,7 @@ describe("toReadableStream", () => {
       const stream = toReadableStream(values);
 
       // 検証：
-      expect(await collectFromStream(stream)).toStrictEqual(values);
+      expect(await readAll(stream)).toStrictEqual(values);
     });
   });
 });

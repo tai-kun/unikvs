@@ -2,8 +2,6 @@ import type { IMiddleware } from "@unikvs/core";
 import {
   createNext,
   sourceFrom,
-  createDecodeContext,
-  createEncodeContext,
   createPseudoRandomBytes,
   createDecodeStreamContext,
   createEncodeStreamContext,
@@ -12,7 +10,7 @@ import { test, describe } from "vite-plus/test";
 
 // oxlint-disable unicorn/number-literal-case
 import Compression from "../src/compression.js";
-import { FORMATS } from "./helpers.js";
+import { decode, encode, FORMATS } from "./helpers.js";
 
 const INVALID_FORMATS = ["unknown-format", "zstd", ""] as const;
 
@@ -35,38 +33,6 @@ function getSettledError(settled: {
   readonly writeError: unknown;
 }): unknown {
   return settled.writeError ?? settled.readError;
-}
-
-/**
- * バイト列を圧縮して返します。
- */
-async function encode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createEncodeContext(data);
-  await compression.encode(
-    c as IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
-    createNext(),
-  );
-
-  return c.destination;
-}
-
-/**
- * 圧縮されたバイト列を展開して返します。
- */
-async function decode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createDecodeContext(data);
-  await compression.decode(
-    c as IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>,
-    createNext(),
-  );
-
-  return c.destination;
 }
 
 /**

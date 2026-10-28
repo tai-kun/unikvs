@@ -1,70 +1,11 @@
 import type { IMiddleware } from "@unikvs/core";
-import {
-  readAll,
-  createNext,
-  sourceFrom,
-  createDecodeContext,
-  createEncodeContext,
-  createDecodeStreamContext,
-  createEncodeStreamContext,
-} from "@unikvs/testing";
+import { createNext, createDecodeContext } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { decode, encode, pumpDecode, pumpEncode, createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
-
-/**
- * データを書き込みとして記録し、そのまま返します。
- */
-async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
-  const c = createEncodeContext(data, key);
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * データを読み込みとして記録し、そのまま返します。
- */
-async function decode(debug: Debug, data: unknown, key: string): Promise<unknown> {
-  const c = createDecodeContext(data, key);
-  await debug.decode(c as IMiddleware.DecodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * チャンク列を書き込みストリームに流し、出力されたチャンクを返します。
- * ストリーム経由でもログが記録されることを検証するために使用します。
- */
-async function pumpEncode(
-  debug: Debug,
-  chunks: readonly unknown[],
-  key: string,
-): Promise<unknown[]> {
-  const c = createEncodeStreamContext(sourceFrom(chunks), key);
-  await debug.encodeStream(c as IMiddleware.EncodeStreamContext, createNext());
-
-  return readAll(c.destination as ReadableStream<unknown>);
-}
-
-/**
- * チャンク列を読み込みストリームに流し、出力されたチャンクを返します。
- * ストリーム経由でもログが記録されることを検証するために使用します。
- */
-async function pumpDecode(
-  debug: Debug,
-  chunks: readonly unknown[],
-  key: string,
-): Promise<unknown[]> {
-  const c = createDecodeStreamContext(sourceFrom(chunks), key);
-  await debug.decodeStream(c as IMiddleware.DecodeStreamContext, createNext());
-
-  return readAll(c.destination as ReadableStream<unknown>);
-}
-
 describe("初期化と基本属性", () => {
   test("name プロパティは Debug を返す", ({ expect }) => {
     // 準備：
@@ -106,7 +47,6 @@ describe("初期化と基本属性", () => {
     expect(output).toBe(data);
   });
 });
-
 describe("ログの記録", () => {
   test("encode は操作とキーと文字列長を書き込みとして記録する", async ({ expect, records }) => {
     // 準備：
@@ -204,7 +144,6 @@ describe("ログの記録", () => {
     ]);
   });
 });
-
 describe("既定のデバッグ情報", () => {
   test.for([
     ["hello", "string", { length: 5 }],
@@ -232,7 +171,6 @@ describe("既定のデバッグ情報", () => {
     });
   });
 });
-
 describe("フィルター", () => {
   test("keyFilter に一致するキーだけを記録する", async ({ expect, records }) => {
     // 準備：
@@ -288,7 +226,6 @@ describe("フィルター", () => {
     expect(records).toHaveLength(3);
   });
 });
-
 describe("ストリーム", () => {
   test("encodeStream はチャンクごとに書き込みとして記録する", async ({ expect, records }) => {
     // 準備：

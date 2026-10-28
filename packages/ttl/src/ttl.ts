@@ -138,7 +138,7 @@ export default class Ttl implements IMiddleware {
         // 記録上で失効済みなら写像で不発にします。実判定は decode でも行います。
         const expiresAt = this.#expiry.get(c.key);
 
-        if (expiresAt !== undefined && this.#now() >= expiresAt) {
+        if (expiresAt !== undefined && this.#isExpired(expiresAt)) {
           c.set(EXPIRED_FLAG, true);
         }
 
@@ -153,7 +153,7 @@ export default class Ttl implements IMiddleware {
           break;
         }
 
-        if (this.#now() >= expiresAt) {
+        if (this.#isExpired(expiresAt)) {
           this.#expiry.delete(c.key);
           // 失効済みのコピー元・移動元は実在しないキーへ写像し、存在確認を不発にします。
           c.set(EXPIRED_FLAG, true);
@@ -207,7 +207,7 @@ export default class Ttl implements IMiddleware {
     }
 
     // 遅延失効 : 読み取り時に期限切れを検出し、KeyNotFound 相当として扱います。
-    if (this.#now() >= expiresAt) {
+    if (this.#isExpired(expiresAt)) {
       this.#expiry.delete(c.key);
 
       throw new KeyNotFoundError({ key: c.key });
@@ -245,7 +245,7 @@ export default class Ttl implements IMiddleware {
     // 記録上で期限切れなら、ストリームを開く前に確定させます。
     const expiresAt = this.#expiry.get(c.key);
 
-    if (expiresAt !== undefined && this.#now() >= expiresAt) {
+    if (expiresAt !== undefined && this.#isExpired(expiresAt)) {
       this.#expiry.delete(c.key);
 
       throw new KeyNotFoundError({ key: c.key });
@@ -254,6 +254,17 @@ export default class Ttl implements IMiddleware {
     c.destination = c.source;
 
     await next();
+  }
+
+  /**
+   * 失効時刻を過ぎているかを判定します。
+   *
+   * @param expiresAt 失効時刻 (epoch ミリ秒) です。
+   *
+   * @returns 失効済みのとき `true` を返します。
+   */
+  #isExpired(expiresAt: number): boolean {
+    return this.#now() >= expiresAt;
   }
 
   /**
@@ -268,12 +279,12 @@ export default class Ttl implements IMiddleware {
     let expiresAt: number | undefined = undefined;
 
     if (ttl !== undefined) {
-      expiresAt = toExpiresAt(ttl as TtlInput, this.#now());
+      expiresAt = toExpiresAt(ttl, this.#now());
     } else {
       const rawExpiresAt = firstDefined(c.get(Ttl.EXPIRES_AT_VAR_NAME), c.get("expiresAt"));
 
       if (rawExpiresAt !== undefined) {
-        expiresAt = toAbsolute(rawExpiresAt as number | Date);
+        expiresAt = toAbsolute(rawExpiresAt);
       } else if (this.defaultTtl !== undefined) {
         expiresAt = toExpiresAt(this.defaultTtl, this.#now());
       }
@@ -303,7 +314,7 @@ function firstDefined<A, B>(primary: A | undefined, fallback: B | undefined): A 
  *
  * @returns 失効時刻を返します。
  */
-function toExpiresAt(input: TtlInput, now: number): number {
+function toExpiresAt(input: unknown, now: number): number {
   if (typeof input === "number") {
     if (!Number.isFinite(input)) {
       throw new TtlInvalidValueError({ actual: input });
@@ -323,7 +334,10 @@ function toExpiresAt(input: TtlInput, now: number): number {
   }
 
   if (typeof input === "object" && input !== null) {
-    const { ttl, expiresAt } = input;
+    const { ttl, expiresAt } = input as {
+      readonly ttl?: unknown;
+      readonly expiresAt?: unknown;
+    };
 
     if (expiresAt !== undefined) {
       return toAbsolute(expiresAt);
@@ -354,7 +368,7 @@ function toExpiresAt(input: TtlInput, now: number): number {
  *
  * @returns 失効時刻を返します。
  */
-function toAbsolute(input: number | Date): number {
+function toAbsolute(input: unknown): number {
   if (typeof input === "number") {
     if (!Number.isFinite(input)) {
       throw new TtlInvalidValueError({ actual: input });

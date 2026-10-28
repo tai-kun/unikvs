@@ -6,14 +6,12 @@ import {
   createNext,
   sourceFrom,
   forCasesAsync,
-  createDecodeContext,
-  createEncodeContext,
   createDecodeStreamContext,
 } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
 import Debug, { type DebugInfoArgs } from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { decode, encode, createRecordsTest } from "./_helpers.js";
 
 const SEED = 20_260_930;
 const CASE_COUNT = 100;
@@ -32,26 +30,6 @@ function argsFor(data: unknown): DebugInfoArgs {
     action: "set",
     direction: "write",
   };
-}
-
-/**
- * データを書き込みとして記録し、そのまま返します。
- */
-async function encode(debug: Debug, data: unknown): Promise<unknown> {
-  const c = createEncodeContext(data, "key");
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * データを読み込みとして記録し、そのまま返します。
- */
-async function decode(debug: Debug, data: unknown): Promise<unknown> {
-  const c = createDecodeContext(data, "key");
-  await debug.decode(c as IMiddleware.DecodeContext, createNext());
-
-  return c.destination;
 }
 
 const VIEW_FACTORIES = [

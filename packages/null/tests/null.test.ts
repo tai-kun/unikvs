@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  captureThrown,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -109,14 +110,9 @@ describe("読み出し", () => {
   test("read が投げる KeyNotFoundError はキーを保持する", ({ expect, storage }) => {
     // 準備：
     const key = "k1";
-    let error: unknown;
 
     // 実行：
-    try {
-      storage.read(createGetContext(key) as IStorage.ReadContext);
-    } catch (ex) {
-      error = ex;
-    }
+    const error = captureThrown(() => storage.read(createGetContext(key) as IStorage.ReadContext));
 
     // 検証：
     expect(error).toBeInstanceOf(KeyNotFoundError);
@@ -189,14 +185,11 @@ describe("削除", () => {
   test("delete が投げる KeyNotFoundError はキーを保持する", ({ expect, storage }) => {
     // 準備：
     const key = "k1";
-    let error: unknown;
 
     // 実行：
-    try {
-      storage.delete(createDeleteContext(key) as IStorage.DeleteContext);
-    } catch (ex) {
-      error = ex;
-    }
+    const error = captureThrown(() =>
+      storage.delete(createDeleteContext(key) as IStorage.DeleteContext),
+    );
 
     // 検証：
     expect(error).toBeInstanceOf(KeyNotFoundError);

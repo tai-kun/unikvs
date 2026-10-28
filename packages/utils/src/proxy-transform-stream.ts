@@ -15,6 +15,19 @@ export interface IProxiedTransformStream<TInput = any, TOutput = any> extends IT
 }
 
 /**
+ * 変換関数または変換オブジェクトを Transformer へ正規化します。
+ *
+ * @param transformer 変換関数または変換オブジェクトです。
+ *
+ * @returns 正規化された Transformer です。
+ */
+function toTransformer<TInput, TOutput>(
+  transformer: Transformer<TInput, TOutput> | TransformerTransformCallback<TInput, TOutput>,
+): Transformer<TInput, TOutput> {
+  return typeof transformer === "function" ? { transform: transformer } : transformer;
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/utils#proxy-transform-stream)
  */
 export default function proxyTransformStream<TSourceInput, TSourceOutput, TInput, TOutput>(
@@ -26,23 +39,8 @@ export default function proxyTransformStream<TSourceInput, TSourceOutput, TInput
     | Transformer<TSourceOutput, TOutput>
     | TransformerTransformCallback<TSourceOutput, TOutput>,
 ): IProxiedTransformStream<TInput, TOutput> {
-  let inputTransformer:
-    | Transformer<TInput, TSourceInput>
-    | TransformerTransformCallback<TInput, TSourceInput> = proxyInput;
-
-  if (typeof inputTransformer === "function") {
-    const transform = inputTransformer;
-    inputTransformer = { transform };
-  }
-
-  let outputTransformer:
-    | Transformer<TSourceOutput, TOutput>
-    | TransformerTransformCallback<TSourceOutput, TOutput> = proxyOutput;
-
-  if (typeof outputTransformer === "function") {
-    const transform = outputTransformer;
-    outputTransformer = { transform };
-  }
+  const inputTransformer = toTransformer(proxyInput);
+  const outputTransformer = toTransformer(proxyOutput);
 
   const inputTransform = new TransformStream<TInput, TSourceInput>(inputTransformer);
   const outputTransform = new TransformStream<TSourceOutput, TOutput>(outputTransformer);

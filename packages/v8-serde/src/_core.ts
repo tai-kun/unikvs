@@ -16,7 +16,7 @@ export interface IEnv {
 }
 
 /**
- * テストで差し替えできるよう上流呼び出しを薄く包みます。
+ * テストで差し替えできるよう、上流モジュールの解決を薄く包みます。
  */
 export const api = {
   /**
@@ -34,31 +34,5 @@ export const api = {
       serialize: v8.serialize,
       deserialize: v8.deserialize,
     };
-  },
-
-  /**
-   * 値をシリアライズします。
-   *
-   * @param env 使用する実行環境です。
-   * @param data シリアライズする値です。
-   *
-   * @returns シリアライズしたバイト列を返します。
-   */
-  serialize(env: IEnv, data: unknown): Buffer {
-    return env.serialize(data);
-  },
-
-  /**
-   * バイト列をデシリアライズします。
-   *
-   * 失敗時は上流のエラーをそのまま伝播させます。
-   *
-   * @param env 使用する実行環境です。
-   * @param data デシリアライズするバイト列です。
-   *
-   * @returns デシリアライズした値を返します。
-   */
-  deserialize(env: IEnv, data: Uint8Array<ArrayBuffer>): unknown {
-    return env.deserialize(data);
   },
 };

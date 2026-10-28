@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  captureThrown,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -123,14 +124,11 @@ describe("getReadable", () => {
   test("getReadable が投げる KeyNotFoundError はキーを保持する", ({ expect, storage }) => {
     // 準備：
     const key = "k1";
-    let error: unknown;
 
     // 実行：
-    try {
-      storage.getReadable(createStreamContext(key) as IStorage.GetReadableContext);
-    } catch (ex) {
-      error = ex;
-    }
+    const error = captureThrown(() =>
+      storage.getReadable(createStreamContext(key) as IStorage.GetReadableContext),
+    );
 
     // 検証：
     expect(error).toBeInstanceOf(KeyNotFoundError);

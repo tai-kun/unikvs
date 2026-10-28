@@ -23,6 +23,34 @@ function isErrnoCode(error: unknown, code: string): boolean {
 }
 
 /**
+ * 後始末としてファイルを削除します。
+ *
+ * 削除に失敗しても無視します。
+ *
+ * @param path 削除するファイルのパスです。
+ *
+ * @returns 削除が完了したら解決します。
+ */
+async function removeFile(path: string): Promise<void> {
+  try {
+    await fs.rm(path, { force: true });
+  } catch {
+    // 後始末の削除に失敗しても無視します。
+  }
+}
+
+/**
+ * 中断理由を `Error` に正規化します。
+ *
+ * @param reason 中断理由です。
+ *
+ * @returns `Error` ならそのまま、それ以外は文字列化した `Error` です。
+ */
+function toError(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error(String(reason));
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-node#nodefsoptions)
  */
 export type NodeFsOptions = {};
@@ -102,11 +130,7 @@ export default class NodeFs implements IStorage {
       await fs.rename(file.tmp, file.dest);
     } catch (ex) {
       // 失敗・中断時には一時ファイルを削除し、既存のデータを保全します。
-      try {
-        await fs.rm(file.tmp, { force: true });
-      } catch {
-        // 後始末の削除に失敗しても無視します。
-      }
+      await removeFile(file.tmp);
 
       throw ex;
     }
@@ -124,7 +148,7 @@ export default class NodeFs implements IStorage {
 
     assertValidFilename(c.key);
 
-    const file = join(this.#root, c.key);
+    const file = this.#toPath(c.key);
     const data = await fs.readFile(file, { signal: c.signal });
 
     return data;
@@ -142,7 +166,7 @@ export default class NodeFs implements IStorage {
 
     assertValidFilename(c.key);
 
-    const file = join(this.#root, c.key);
+    const file = this.#toPath(c.key);
 
     try {
       await fs.access(file);
@@ -165,7 +189,7 @@ export default class NodeFs implements IStorage {
 
     assertValidFilename(c.key);
 
-    const file = join(this.#root, c.key);
+    const file = this.#toPath(c.key);
     await fs.unlink(file);
   }
 
@@ -177,31 +201,9 @@ export default class NodeFs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async copy(c: IStorage.CopyContext): Promise<void> {
-    this.#getConnection();
-
-    assertValidFilename(c.key);
-    assertValidFilename(c.destinationKey);
-    c.signal.throwIfAborted();
-
-    // 同じキーへのコピーはファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.#assertExists(c.key, c.signal);
-
-      return;
-    }
-
-    const source = join(this.#root, c.key);
-    const dest = join(this.#root, c.destinationKey);
-
-    try {
-      await fs.copyFile(source, dest);
-    } catch (ex) {
-      if (isErrnoCode(ex, "ENOENT")) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throw ex;
-    }
+    await this.#transfer(c.key, c.destinationKey, c.signal, (source, dest) =>
+      fs.copyFile(source, dest),
+    );
   }
 
   /**
@@ -214,31 +216,9 @@ export default class NodeFs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async move(c: IStorage.MoveContext): Promise<void> {
-    this.#getConnection();
-
-    assertValidFilename(c.key);
-    assertValidFilename(c.destinationKey);
-    c.signal.throwIfAborted();
-
-    // 同じキーへの移動はファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.#assertExists(c.key, c.signal);
-
-      return;
-    }
-
-    const source = join(this.#root, c.key);
-    const dest = join(this.#root, c.destinationKey);
-
-    try {
-      await fs.rename(source, dest);
-    } catch (ex) {
-      if (isErrnoCode(ex, "ENOENT")) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throw ex;
-    }
+    await this.#transfer(c.key, c.destinationKey, c.signal, (source, dest) =>
+      fs.rename(source, dest),
+    );
   }
 
   /**
@@ -275,13 +255,7 @@ export default class NodeFs implements IStorage {
 
     // 一時ファイルへの書き込みストリームを作成します。
     const writeStream = createWriteStream(file.tmp);
-    const removeTmp = async (): Promise<void> => {
-      try {
-        await fs.rm(file.tmp, { force: true });
-      } catch {
-        // 後始末の削除に失敗しても無視します。
-      }
-    };
+    const removeTmp = (): Promise<void> => removeFile(file.tmp);
 
     // fs ストリーム上のエラーは各操作の Promise 経由で通知するため、ここで捕捉して未処理のエラーイベントを防ぎます。
     const state: { error?: Error } = {};
@@ -290,8 +264,7 @@ export default class NodeFs implements IStorage {
     });
 
     const onAbort = (): void => {
-      const reason = c.signal.reason;
-      writeStream.destroy(reason instanceof Error ? reason : new Error(String(reason)));
+      writeStream.destroy(toError(c.signal.reason));
 
       void removeTmp();
     };
@@ -303,7 +276,7 @@ export default class NodeFs implements IStorage {
 
     return new WritableStream<Uint8Array<ArrayBuffer>>({
       async abort(reason?: unknown): Promise<void> {
-        writeStream.destroy(reason instanceof Error ? reason : new Error(String(reason)));
+        writeStream.destroy(toError(reason));
         await removeTmp();
       },
       async close(): Promise<void> {
@@ -383,12 +356,57 @@ export default class NodeFs implements IStorage {
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const file = join(this.#root, c.key);
+    const file = this.#toPath(c.key);
     // signal を渡すことで、中断時にはストリームが中断理由で破棄され、進行中の読み取りも失敗します。
     const readStream = createReadStream(file, { signal: c.signal });
     const readableStream = Readable.toWeb(readStream);
 
     return readableStream as ReadableStream<Uint8Array<ArrayBuffer>>;
+  }
+
+  /**
+   * キーの値を別のキーへ転送します。
+   *
+   * 同じキーへの転送は存在確認だけを行います。
+   *
+   * @param key 転送元のキーです。
+   * @param destinationKey 転送先のキーです。
+   * @param signal 中断を監視するシグナルです。
+   * @param operation 実際のファイル操作です。
+   *
+   * @returns 転送が完了したら解決します。
+   */
+  async #transfer(
+    key: string,
+    destinationKey: string,
+    signal: AbortSignal,
+    operation: (source: string, destination: string) => Promise<void>,
+  ): Promise<void> {
+    this.#getConnection();
+
+    assertValidFilename(key);
+    assertValidFilename(destinationKey);
+    signal.throwIfAborted();
+
+    // 同じキーへの転送はファイルの存在確認だけを行います。
+    if (key === destinationKey) {
+      await this.#assertExists(key, signal);
+
+      return;
+    }
+
+    const source = this.#toPath(key);
+    const dest = this.#toPath(destinationKey);
+
+    try {
+      await operation(source, dest);
+    } catch (ex) {
+      if (isErrnoCode(ex, "ENOENT")) {
+        throw new KeyNotFoundError({ key });
+      }
+
+      throw ex;
+    }
   }
 
   /**
@@ -402,7 +420,7 @@ export default class NodeFs implements IStorage {
   async #assertExists(key: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
 
-    const file = join(this.#root, key);
+    const file = this.#toPath(key);
 
     try {
       await fs.access(file);
@@ -446,7 +464,7 @@ export default class NodeFs implements IStorage {
      */
     dest: string;
   } {
-    const dest = join(this.#root, key);
+    const dest = this.#toPath(key);
     // 一意なサフィックスにより、同一キーへの並行書き込みでも一時ファイルが衝突しないようにします。
     const tmp = `${dest}.${randomUUID()}.tmp`;
 
@@ -454,5 +472,16 @@ export default class NodeFs implements IStorage {
       tmp,
       dest,
     };
+  }
+
+  /**
+   * キーをルートディレクトリー配下の絶対パスへ変換します。
+   *
+   * @param key 変換するキーです。
+   *
+   * @returns キーに対応するファイルのパスです。
+   */
+  #toPath(key: string): string {
+    return join(this.#root, key);
   }
 }

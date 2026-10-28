@@ -578,7 +578,7 @@ export function mapOf(storage: Memory): {
       let value: unknown;
 
       try {
-        value = storage.read(createGetContext(key) as unknown as IStorage.ReadContext);
+        value = storage.read(createGetContext(key));
       } catch {
         value = undefined;
       }
@@ -587,18 +587,18 @@ export function mapOf(storage: Memory): {
     },
     has: (key: string): boolean =>
       // storage.exists は MaybePromise<boolean> ですが、Memory の実装は同期的です。
-      storage.exists(createHasContext(key) as unknown as IStorage.ExistsContext),
+      storage.exists(createHasContext(key)),
     set: (key: string, value: unknown): unknown => {
-      storage.write(createSetContext(key) as unknown as IStorage.WriteContext, value);
+      storage.write(createSetContext(key), value);
 
       return undefined;
     },
     clear: (): void => {
-      storage.clear(createClearContext() as unknown as IStorage.ClearContext);
+      storage.clear(createClearContext());
     },
     delete: (key: string): boolean => {
       try {
-        storage.delete(createDeleteContext(key) as unknown as IStorage.DeleteContext);
+        storage.delete(createDeleteContext(key));
 
         return true;
       } catch {

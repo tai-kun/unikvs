@@ -1,6 +1,7 @@
 import type { Transform } from "node:stream";
 import type {
   constants,
+  ZstdOptions,
   zstdCompress,
   zstdDecompress,
   createZstdCompress,
@@ -55,6 +56,22 @@ export type CompressOptions = {
 };
 
 /**
+ * 指定した圧縮レベルに対応する zstd の圧縮オプションを作成します。
+ *
+ * @param env 使用する実行環境です。
+ * @param level 圧縮レベルです。
+ *
+ * @returns zstd の圧縮オプションを返します。
+ */
+function createZstdOptions(env: IEnv, level: number): ZstdOptions {
+  return {
+    params: {
+      [env.constants.ZSTD_c_compressionLevel]: level,
+    },
+  };
+}
+
+/**
  * テストで差し替えできるよう上流呼び出しを薄く包みます。
  */
 export const api = {
@@ -96,11 +113,7 @@ export const api = {
   ): Promise<Buffer> {
     const { level } = options;
 
-    return env.zstdCompress(data, {
-      params: {
-        [env.constants.ZSTD_c_compressionLevel]: level,
-      },
-    });
+    return env.zstdCompress(data, createZstdOptions(env, level));
   },
 
   /**
@@ -125,13 +138,8 @@ export const api = {
    */
   createCompress(env: IEnv, options: CompressOptions): ITransformStream<Buffer, Buffer> {
     const { level } = options;
-    const duplex = env.createZstdCompress({
-      params: {
-        [env.constants.ZSTD_c_compressionLevel]: level,
-      },
-    });
+    const duplex = env.createZstdCompress(createZstdOptions(env, level));
 
-    // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
     return env.Transform.toWeb(duplex);
   },
 
@@ -145,7 +153,6 @@ export const api = {
   createDecompress(env: IEnv): ITransformStream<Buffer, Buffer> {
     const duplex = env.createZstdDecompress();
 
-    // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
     return env.Transform.toWeb(duplex);
   },
 };

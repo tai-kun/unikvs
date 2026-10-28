@@ -1,6 +1,7 @@
 import type { Transform } from "node:stream";
 import type {
   constants,
+  BrotliOptions,
   brotliCompress,
   brotliDecompress,
   createBrotliCompress,
@@ -57,6 +58,22 @@ export type CompressOptions = {
 };
 
 /**
+ * 指定した圧縮レベルに対応する brotli の圧縮オプションを作成します。
+ *
+ * @param env 使用する実行環境です。
+ * @param level 圧縮レベルです。
+ *
+ * @returns brotli の圧縮オプションを返します。
+ */
+function createBrotliOptions(env: IEnv, level: number): BrotliOptions {
+  return {
+    params: {
+      [env.constants.BROTLI_PARAM_QUALITY]: level,
+    },
+  };
+}
+
+/**
  * テストで差し替えできるよう上流呼び出しを薄く包みます。
  */
 export const api = {
@@ -98,11 +115,7 @@ export const api = {
   ): Promise<Buffer> {
     const { level } = options;
 
-    return env.brotliCompress(data, {
-      params: {
-        [env.constants.BROTLI_PARAM_QUALITY]: level,
-      },
-    });
+    return env.brotliCompress(data, createBrotliOptions(env, level));
   },
 
   /**
@@ -127,13 +140,8 @@ export const api = {
    */
   createCompress(env: IEnv, options: CompressOptions): ITransformStream<Buffer, Buffer> {
     const { level } = options;
-    const duplex = env.createBrotliCompress({
-      params: {
-        [env.constants.BROTLI_PARAM_QUALITY]: level,
-      },
-    });
+    const duplex = env.createBrotliCompress(createBrotliOptions(env, level));
 
-    // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
     return env.Transform.toWeb(duplex);
   },
 
@@ -147,7 +155,6 @@ export const api = {
   createDecompress(env: IEnv): ITransformStream<Buffer, Buffer> {
     const duplex = env.createBrotliDecompress();
 
-    // toWeb しても ReadableStream と WritableStream の互換性エラーが出るためキャストします。
     return env.Transform.toWeb(duplex);
   },
 };

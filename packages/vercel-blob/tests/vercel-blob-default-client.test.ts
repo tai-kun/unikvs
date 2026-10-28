@@ -1,38 +1,15 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  type TestContextInit,
-  TestContext,
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
   createClearContext,
   createDeleteContext,
 } from "@unikvs/testing";
 import { vi, test, describe, beforeEach } from "vite-plus/test";
 
 import VercelBlob from "../src/vercel-blob.js";
-
-/**
- * 複製用のコンテキストを組み立てます。
- *
- * @param key 複製元のキーです。
- * @param destinationKey 複製先のキーです。
- * @param init 追加の初期値です。
- *
- * @returns 複製用のコンテキストです。
- */
-function createCopyContext(
-  key: string,
-  destinationKey: string,
-  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): IStorage.CopyContext {
-  return new TestContext({
-    ...init,
-    action: "copy",
-    key,
-    destinationKey,
-  }) as unknown as IStorage.CopyContext;
-}
 
 const { mockDel, mockPut, mockCopy, mockHead, mockList } = vi.hoisted(() => ({
   mockDel: vi.fn<(pathname: string | readonly string[], options: unknown) => Promise<void>>(),

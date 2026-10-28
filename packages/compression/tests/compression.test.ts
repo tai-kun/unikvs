@@ -1,24 +1,17 @@
 import type { IMiddleware } from "@unikvs/core";
 import {
+  readAll,
   createNext,
   sourceFrom,
-  createDecodeContext,
-  createEncodeContext,
+  concatBytes,
+  createPseudoRandomBytes,
   createDecodeStreamContext,
   createEncodeStreamContext,
 } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import Compression from "../src/compression.js";
-
-const FORMATS = ["gzip", "deflate", "deflate-raw"] as const;
-
-type ByteContext = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
-
-type ByteDecodeContext = IMiddleware.DecodeContext<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
->;
+import { decode, encode, FORMATS } from "./helpers.js";
 
 type ByteEncodeStreamContext = IMiddleware.EncodeStreamContext<
   Uint8Array<ArrayBuffer>,
@@ -29,85 +22,6 @@ type ByteDecodeStreamContext = IMiddleware.DecodeStreamContext<
   Uint8Array<ArrayBuffer>,
   Uint8Array<ArrayBuffer>
 >;
-
-/**
- * 疑似乱数ジェネレーター (線形合同法) で、実行ごとに同じバイト列を生成します。
- */
-function createPseudoRandomBytes(size: number): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(size);
-  let state = 0x12_34_56_78;
-
-  for (let i = 0; i < size; i++) {
-    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
-    bytes[i] = state >>> 24;
-  }
-
-  return bytes;
-}
-
-/**
- * バイト列を圧縮して返します。
- */
-async function encode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createEncodeContext(data);
-  await compression.encode(c as ByteContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * 圧縮されたバイト列を展開して返します。
- */
-async function decode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createDecodeContext(data);
-  await compression.decode(c as ByteDecodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * ストリームからすべてのチャンクを読み取ります。
- */
-async function readAll(
-  stream: ReadableStream<Uint8Array<ArrayBuffer>>,
-): Promise<Uint8Array<ArrayBuffer>[]> {
-  const reader = stream.getReader();
-  const outputChunks: Uint8Array<ArrayBuffer>[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    outputChunks.push(value);
-  }
-
-  return outputChunks;
-}
-
-/**
- * 複数のチャンクを 1 つのバイト配列に連結します。
- */
-function concatBytes(chunks: Uint8Array[]): Uint8Array {
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return result;
-}
 
 /**
  * チャンク列を圧縮ストリームに流し、出力ストリームを返します。

@@ -236,11 +236,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     using abortPromise = toAbortPromise(c.signal);
 
     const request = this.#requestFor(c.key);
-    const response = await Promise.race([this.#match(c, request), abortPromise]);
-
-    if (response === undefined) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
+    const response = await this.#matchOrThrow(c, request, abortPromise);
 
     const buffer = await Promise.race([response.arrayBuffer(), abortPromise]);
 
@@ -324,7 +320,6 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     throwIfAborted(c.signal);
 
     const request = this.#requestFor(c.key);
-    const cache = this.#cache;
     const signal = c.signal;
     // Cache API にストリーミング `put` はないため蓄積して `close` 時に一括保存します。
     const chunks: Uint8Array[] = [];
@@ -345,15 +340,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
           offset += chunk.byteLength;
         }
 
-        try {
-          await cache.put(request, CloudflareCache.#toResponse(merged));
-        } catch (ex) {
-          throw new CacheOperationError({
-            key: c.key,
-            cause: ex,
-            operation: "put",
-          });
-        }
+        await this.#putResponse(c.key, request, merged);
       },
       write(chunk) {
         throwIfAborted(signal);
@@ -386,11 +373,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     using abortPromise = toAbortPromise(c.signal);
 
     const request = this.#requestFor(c.key);
-    const response = await Promise.race([this.#match(c, request), abortPromise]);
-
-    if (response === undefined) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
+    const response = await this.#matchOrThrow(c, request, abortPromise);
 
     // ボディなし応答は空ストリームとして返します。
     if (response.body === null) {
@@ -401,7 +384,7 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
       });
     }
 
-    return response.body as ReadableStream<Uint8Array<ArrayBuffer>>;
+    return response.body;
   }
 
   /**
@@ -417,9 +400,23 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     throwIfAborted(signal);
 
     const request = this.#requestFor(key);
+    await this.#putResponse(key, request, data.slice());
+  }
 
+  /**
+   * 指定した要求へ応答を保存します。
+   *
+   * 失敗時は専用エラーに包んで投げます。
+   *
+   * @param key エラーに付与する論理キーです。
+   * @param request 保存先の要求です。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #putResponse(key: string, request: Request, data: Uint8Array<ArrayBuffer>): Promise<void> {
     try {
-      await this.#cache.put(request, CloudflareCache.#toResponse(data.slice()));
+      await this.#cache.put(request, CloudflareCache.#toResponse(data));
     } catch (ex) {
       throw new CacheOperationError({
         key,
@@ -451,6 +448,29 @@ export default class CloudflareCache implements IStorage<Uint8Array<ArrayBuffer>
     }
 
     return new Request(`${this.#origin}/${segment}`);
+  }
+
+  /**
+   * 一致する応答を探し、欠番なら `KeyNotFoundError` を投げます。
+   *
+   * @param c 読み取りや取得のコンテキストです。
+   * @param request 照合する要求です。
+   * @param abortPromise 中断時に拒否されるプロミスです。
+   *
+   * @returns 一致する応答です。
+   */
+  async #matchOrThrow(
+    c: IStorage.ReadContext | IStorage.GetReadableContext,
+    request: Request,
+    abortPromise: PromiseLike<never>,
+  ): Promise<Response> {
+    const response = await Promise.race([this.#match(c, request), abortPromise]);
+
+    if (response === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    return response;
   }
 
   /**

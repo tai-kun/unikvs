@@ -29,14 +29,7 @@ import {
 } from "../src/errors.js";
 import * as index from "../src/index.js";
 import SoftDelete, { type SoftDeleteOptions } from "../src/soft-delete.js";
-
-/**
- * 指定ミリ秒だけ待ちます。
- * 保持期限の遅延失効の検証に使用します。
- */
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { sleep } from "./_helpers.js";
 
 /**
  * 削除墓標の台帳を下層ストレージに保存するときの予約キーです。
@@ -324,7 +317,7 @@ function createUseContext(action: IMiddleware.UseContext["action"]): IMiddleware
     }
 
     case "clear": {
-      return createClearContext() as unknown as IMiddleware.UseContext;
+      return createClearContext();
     }
 
     default: {
@@ -382,7 +375,7 @@ describe("下層ストレージへの委譲", () => {
     await softDelete.write(createSetContext("k1") as IStorage.WriteContext, "v1");
 
     // 実行：
-    await softDelete.clear(createClearContext() as unknown as IStorage.ClearContext);
+    await softDelete.clear(createClearContext());
 
     // 検証：
     expect(await softDelete.exists(createHasContext("k1") as IStorage.ExistsContext)).toBe(false);
@@ -410,10 +403,7 @@ describe("下層ストレージへの委譲", () => {
     ] as unknown as readonly IStorage.IOtherWriteError[];
 
     // 実行：
-    await softDelete.onOtherWriteError(
-      context as unknown as IStorage.OtherWriteErrorHandlerContext,
-      errors,
-    );
+    await softDelete.onOtherWriteError(context, errors);
 
     // 検証：
     expect(inner.onOtherWriteErrorCalls).toHaveLength(1);

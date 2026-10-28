@@ -3,6 +3,19 @@ import type { IMiddleware } from "@unikvs/core";
 import { JsonUnsupportedValueError } from "./errors.js";
 
 /**
+ * 値を UTF-8 のバイト列へ変換するエンコーダーです。
+ */
+const encoder = new TextEncoder();
+
+/**
+ * 一括デコードに使い回す UTF-8 デコーダーです。
+ *
+ * ストリームを使わない `decode` は呼び出しごとに内部状態を初期化するため、共有しても安全です。
+ * ストリーム用のデコーダーはストリームごとに新規作成します。
+ */
+const batchDecoder = new TextDecoder("utf-8", { fatal: true });
+
+/**
  * 値を 1 つの JSON 文字列へ変換します。
  *
  * JSON.stringify が undefined を返す値は JSON で表現できないため、JsonUnsupportedValueError を投げます。
@@ -67,7 +80,7 @@ export default class Json implements IMiddleware {
     c: IMiddleware.EncodeContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    c.destination = new TextEncoder().encode(stringify(c.source));
+    c.destination = encoder.encode(stringify(c.source));
 
     await next();
   }
@@ -84,8 +97,7 @@ export default class Json implements IMiddleware {
     c: IMiddleware.DecodeContext<Uint8Array<ArrayBuffer>, unknown>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const decoder = new TextDecoder("utf-8", { fatal: true });
-    c.destination = JSON.parse(decoder.decode(c.source));
+    c.destination = JSON.parse(batchDecoder.decode(c.source));
 
     await next();
   }
@@ -102,7 +114,6 @@ export default class Json implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<unknown, Uint8Array<ArrayBuffer>>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const encoder = new TextEncoder();
     c.destination = c.source.pipeThrough(
       new TransformStream({
         transform(chunk, controller): void {
@@ -133,14 +144,18 @@ export default class Json implements IMiddleware {
         transform(chunk, controller): void {
           buffer += decoder.decode(chunk, { stream: true });
 
+          let start = 0;
           let newlineIndex = buffer.indexOf("\n");
 
           while (newlineIndex !== -1) {
-            const line = buffer.slice(0, newlineIndex);
+            parseLine(buffer.slice(start, newlineIndex), controller);
+            start = newlineIndex + 1;
+            newlineIndex = buffer.indexOf("\n", start);
+          }
 
-            buffer = buffer.slice(newlineIndex + 1);
-            parseLine(line, controller);
-            newlineIndex = buffer.indexOf("\n");
+          // 改行を含まない残余だけを次回へ持ち越します。
+          if (start > 0) {
+            buffer = buffer.slice(start);
           }
         },
 

@@ -3,6 +3,7 @@ import {
   type Random,
   bytesEqual,
   collectBytes,
+  splitBySizes,
   forCasesAsync,
   createGetContext,
   createHasContext,
@@ -110,24 +111,7 @@ describe("プロパティベース検証", () => {
       const key = "stream.bin";
       const expected = random.bytes(random.int(0, 2048));
       const sizes = random.array(random.int(0, 24), () => random.int(1, 300));
-      const chunks: Uint8Array<ArrayBuffer>[] = [];
-      let offset = 0;
-
-      for (const size of sizes) {
-        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
-        if (offset >= expected.length) {
-          break;
-        }
-
-        const end = Math.min(offset + size, expected.length);
-        chunks.push(expected.subarray(offset, end));
-        offset = end;
-      }
-
-      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
-      if (offset < expected.length) {
-        chunks.push(expected.subarray(offset));
-      }
+      const chunks = splitBySizes(expected, sizes);
 
       // 実行：
       const writable = storage.getWritable(

@@ -74,17 +74,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-action)
    */
-  public readonly action:
-    | "open"
-    | "close"
-    | "set"
-    | "get"
-    | "stream"
-    | "has"
-    | "delete"
-    | "clear"
-    | "copy"
-    | "move";
+  public readonly action: IActionContext["action"];
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-key)
@@ -197,6 +187,13 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
 }
 
 /**
+ * アクションが確定したテストコンテキストです。
+ */
+type TestContextWithAction<TAction extends IActionContext["action"]> = TestContext & {
+  readonly action: TAction;
+};
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-next)
  */
 export function createNext(): () => Promise<void> {
@@ -204,23 +201,44 @@ export function createNext(): () => Promise<void> {
 }
 
 /**
- * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-open-context)
+ * ファクトリー共通のコンテキスト生成処理です。
+ *
+ * 利用者の初期値を展開したあとにファクトリー固有の値を上書きし、最後に action を確定します。
+ *
+ * @param action コンテキストのアクションです。
+ * @param init 利用者から渡された初期値です。
+ * @param overrides ファクトリーが管理する初期値です。
+ *
+ * @returns アクションが絞り込まれたテストコンテキストです。
  */
-export function createOpenContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
+function createActionContext<TAction extends IActionContext["action"]>(
+  action: TAction,
+  init: Omit<TestContextInit, "action">,
+  overrides: Omit<TestContextInit, "action"> = {},
+): TestContextWithAction<TAction> {
   return new TestContext({
     ...init,
-    action: "open",
-  });
+    ...overrides,
+    action,
+  }) as TestContextWithAction<TAction>;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-open-context)
+ */
+export function createOpenContext(
+  init: Omit<TestContextInit, "action"> = {},
+): TestContextWithAction<"open"> {
+  return createActionContext("open", init);
 }
 
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-close-context)
  */
-export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): TestContext {
-  return new TestContext({
-    ...init,
-    action: "close",
-  });
+export function createCloseContext(
+  init: Omit<TestContextInit, "action"> = {},
+): TestContextWithAction<"close"> {
+  return createActionContext("close", init);
 }
 
 /**
@@ -229,12 +247,8 @@ export function createCloseContext(init: Omit<TestContextInit, "action"> = {}): 
 export function createSetContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "set",
-    key,
-  });
+): TestContextWithAction<"set"> {
+  return createActionContext("set", init, { key });
 }
 
 /**
@@ -244,10 +258,8 @@ export function createRepairContext(
   key: string,
   targets: readonly string[] = [],
   init: Omit<TestContextInit, "action" | "key" | "repair"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "get",
+): TestContextWithAction<"get"> {
+  return createActionContext("get", init, {
     key,
     repair: {
       enabled: true,
@@ -262,12 +274,8 @@ export function createRepairContext(
 export function createGetContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "get",
-    key,
-  });
+): TestContextWithAction<"get"> {
+  return createActionContext("get", init, { key });
 }
 
 /**
@@ -276,12 +284,8 @@ export function createGetContext(
 export function createStreamContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "stream",
-    key,
-  });
+): TestContextWithAction<"stream"> {
+  return createActionContext("stream", init, { key });
 }
 
 /**
@@ -290,12 +294,8 @@ export function createStreamContext(
 export function createHasContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "has",
-    key,
-  });
+): TestContextWithAction<"has"> {
+  return createActionContext("has", init, { key });
 }
 
 /**
@@ -304,12 +304,8 @@ export function createHasContext(
 export function createDeleteContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "delete",
-    key,
-  });
+): TestContextWithAction<"delete"> {
+  return createActionContext("delete", init, { key });
 }
 
 /**
@@ -319,10 +315,8 @@ export function createCopyContext(
   key: string,
   destinationKey: string,
   init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "copy",
+): TestContextWithAction<"copy"> {
+  return createActionContext("copy", init, {
     key,
     destinationKey,
   });
@@ -335,10 +329,8 @@ export function createMoveContext(
   key: string,
   destinationKey: string,
   init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "move",
+): TestContextWithAction<"move"> {
+  return createActionContext("move", init, {
     key,
     destinationKey,
   });
@@ -350,12 +342,8 @@ export function createMoveContext(
 export function createClearContext(
   key = "",
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "clear",
-    key,
-  });
+): TestContextWithAction<"clear"> {
+  return createActionContext("clear", init, { key });
 }
 
 /**
@@ -364,11 +352,8 @@ export function createClearContext(
 export function createMapKeyContext(
   key: string,
   init: Omit<TestContextInit, "action" | "key"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    key,
-  });
+): TestContextWithAction<"set"> {
+  return createActionContext("set", init, { key });
 }
 
 /**
@@ -378,10 +363,8 @@ export function createEncodeContext(
   source: unknown,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "set",
+): TestContextWithAction<"set"> {
+  return createActionContext("set", init, {
     key,
     source,
   });
@@ -394,10 +377,8 @@ export function createDecodeContext(
   source: unknown,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "get",
+): TestContextWithAction<"get"> {
+  return createActionContext("get", init, {
     key,
     source,
   });
@@ -410,10 +391,8 @@ export function createEncodeStreamContext(
   source: ReadableStream,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "set",
+): TestContextWithAction<"set"> {
+  return createActionContext("set", init, {
     key,
     source,
   });
@@ -426,10 +405,8 @@ export function createDecodeStreamContext(
   source: ReadableStream,
   key = "",
   init: Omit<TestContextInit, "action" | "key" | "source"> = {},
-): TestContext {
-  return new TestContext({
-    ...init,
-    action: "stream",
+): TestContextWithAction<"stream"> {
+  return createActionContext("stream", init, {
     key,
     source,
   });

@@ -1,49 +1,10 @@
+import { readAll } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import withReadableStreamFrom from "../src/with-readable-stream-from.js";
+import { withoutReadableStreamFrom } from "./helpers.js";
 
 const hasNativeFrom = typeof (ReadableStream as { from?: unknown }).from === "function";
-
-/**
- * ストリームからすべての値を読み取り、配列として返します。
- */
-async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
-  const reader = stream.getReader();
-  const values: T[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    values.push(value);
-  }
-
-  return values;
-}
-
-/**
- * ReadableStream.from を一時的に削除して処理を実行し、終了後に元へ戻します。
- * ReadableStream.from が存在しない環境でのポリフィル経路を検証するために使用します。
- */
-async function withoutReadableStreamFrom<T>(fn: () => T | Promise<T>): Promise<T> {
-  const descriptor = Object.getOwnPropertyDescriptor(ReadableStream, "from");
-
-  delete (ReadableStream as { from?: unknown }).from;
-
-  try {
-    return await fn();
-  } finally {
-    if (descriptor === undefined) {
-      delete (ReadableStream as { from?: unknown }).from;
-    } else {
-      Object.defineProperty(ReadableStream, "from", descriptor);
-    }
-  }
-}
-
 describe("withReadableStreamFrom", () => {
   test.skipIf(!hasNativeFrom)(
     "ReadableStream.from が存在する環境ではポリフィルを追加せずに実行する",
@@ -133,8 +94,8 @@ describe("withReadableStreamFrom", () => {
       }));
 
       expect(innerSawPolyfill).toBe(true);
-      expect(await collectFromStream(first)).toStrictEqual([1]);
-      expect(await collectFromStream(second)).toStrictEqual(["x"]);
+      expect(await readAll(first)).toStrictEqual([1]);
+      expect(await readAll(second)).toStrictEqual(["x"]);
       expect("from" in ReadableStream).toBe(false);
     });
   });
@@ -256,7 +217,7 @@ describe("withReadableStreamFrom", () => {
     const values = await withoutReadableStreamFrom(async () => {
       const stream = withReadableStreamFrom((RS) => RS.from([]));
 
-      return collectFromStream(stream);
+      return readAll(stream);
     });
 
     // 検証：

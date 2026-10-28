@@ -5,8 +5,6 @@ import {
   sourceFrom,
   concatBytes,
   splitIntoChunks,
-  createDecodeContext,
-  createEncodeContext,
   createPseudoRandomBytes,
   createDecodeStreamContext,
   createEncodeStreamContext,
@@ -14,14 +12,7 @@ import {
 import { test, describe } from "vite-plus/test";
 
 import Compression from "../src/compression.js";
-import { FORMATS } from "./helpers.js";
-
-type ByteContext = IMiddleware.EncodeContext<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>;
-
-type ByteDecodeContext = IMiddleware.DecodeContext<
-  Uint8Array<ArrayBuffer>,
-  Uint8Array<ArrayBuffer>
->;
+import { decode, encode, FORMATS } from "./helpers.js";
 
 type ByteEncodeStreamContext = IMiddleware.EncodeStreamContext<
   Uint8Array<ArrayBuffer>,
@@ -32,32 +23,6 @@ type ByteDecodeStreamContext = IMiddleware.DecodeStreamContext<
   Uint8Array<ArrayBuffer>,
   Uint8Array<ArrayBuffer>
 >;
-
-/**
- * バイト列を圧縮して返します。
- */
-async function encode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createEncodeContext(data);
-  await compression.encode(c as ByteContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * 圧縮されたバイト列を展開して返します。
- */
-async function decode(
-  compression: Compression,
-  data: Uint8Array<ArrayBuffer>,
-): Promise<Uint8Array<ArrayBuffer>> {
-  const c = createDecodeContext(data);
-  await compression.decode(c as ByteDecodeContext, createNext());
-
-  return c.destination;
-}
 
 /**
  * 読み取り中に起きたエラーを握り潰さずに観測しつつ、読み取れたデータをすべて集めます。

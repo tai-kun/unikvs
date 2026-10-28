@@ -286,18 +286,25 @@ export default class LruCache implements IStorage {
     // メモリーストレージにはネイティブなストリームがないため、書き込まれたチャンクを配列に保持し、クローズ時に結合して保存します。
     const chunks: Uint8Array[] = [];
     const stream = new WritableStream<Uint8Array<ArrayBuffer>>({
+      abort: (): void => {
+        chunks.length = 0;
+      },
       close: (): void => {
-        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-        const merged = new Uint8Array(totalLength);
+        try {
+          const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+          const merged = new Uint8Array(totalLength);
 
-        let offset = 0;
+          let offset = 0;
 
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.byteLength;
+          for (const chunk of chunks) {
+            merged.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
+
+          this.#commit(c.key, merged);
+        } finally {
+          chunks.length = 0;
         }
-
-        this.#commit(c.key, merged);
       },
       write: (chunk: Uint8Array<ArrayBuffer>): void => {
         if (!(chunk instanceof Uint8Array)) {

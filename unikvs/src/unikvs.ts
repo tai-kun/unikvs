@@ -18,7 +18,7 @@ import {
   StreamContext,
   createVariablesStore,
 } from "./_contexts.js";
-import { logger, repairLogger } from "./_logger.js";
+import { logger, logRepairError, logRepairFailure, logSkippedRepair } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import type { PipelineGraph } from "./_pipeline-graph.js";
 import type { PipelineLeaf, ResolvedLeaf, StreamEncodeTarget } from "./_pipeline-graph.types.js";
@@ -473,9 +473,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     options?: Omit<SetOptions, "key" | "value">,
   ): Promise<void>;
   public async set(...args: any): Promise<void> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options] = v.parseInput(SetArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
@@ -484,7 +482,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     // スキーマ検証はロック取得前に済ませ、無効な入力ではロックを取得しません。
     const value = valueSchema ? parseSetValue(valueSchema, options.value) : options.value;
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
@@ -496,9 +494,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     try {
       using _lock = await asyncmux.readonly(this, signal);
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (this.#con === null) {
-        throw new UniKvsIsNotOpenError();
-      }
+      this.#assertOpen();
 
       // 書き込み前の `use` による検証を行います。変異は後続のエンコード・書き込みに引き継がれます。
       const useContext = new SetContext({
@@ -540,9 +536,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     options?: Omit<GetOptions, "key">,
   ): Promise<$InferPlainValueData<TKeyValueMapping[TKey]>>;
   public async get(...args: any): Promise<unknown> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options] = v.parseInput(GetArgsSchema, args);
     const {
@@ -555,16 +549,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const valueSchema = this.#resolveValueSchema(key);
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
 
     using _lock = await asyncmux.readonly(this, signal);
     // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
     const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
@@ -693,9 +685,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     options?: Omit<StreamOptions, "key">,
   ): Promise<IValueStream<$InferStreamValueChunkData<TKeyValueMapping[TKey]>>>;
   public async stream(...args: any): Promise<IValueStream> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options] = v.parseInput(StreamArgsSchema, args);
     const {
@@ -708,7 +698,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
     const valueSchema = this.#resolveValueSchema(key);
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
@@ -716,9 +706,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     {
       using _lock = await asyncmux.readonly(this, signal);
       // ロック待機中に接続状態が変更されていないか再確認します。
-      if (this.#con === null) {
-        throw new UniKvsIsNotOpenError();
-      }
+      this.#assertOpen();
 
       // 読み取り前の `use` による検証を行います。書き戻し要求は `repair` フィールドで伝えます。
       const leafNames = this.#pipeline.leaves.map((leaf) => leaf.name);
@@ -851,12 +839,12 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 }
 
                 if (ex instanceof RepairNotAllowedError) {
-                  repairLogger.warn`Failed to repair a storage: ${ex}`;
+                  logRepairFailure(ex);
 
                   return;
                 }
 
-                logger.error`Failed to repair a storage: ${ex}`;
+                logRepairError(ex);
               }
             })(),
           );
@@ -900,7 +888,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                 continue;
               }
 
-              repairLogger.warn`Skipped repair for a storage without AllowRepair: ${leaf.name}`;
+              logSkippedRepair(leaf.name);
 
               if (throwOnRepairDenied) {
                 throw new RepairNotAllowedError({ names: [leaf.name] });
@@ -931,7 +919,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                   throwIfAborted(signal);
 
                   if (ex instanceof RepairNotAllowedError) {
-                    repairLogger.warn`Failed to repair a storage: ${ex}`;
+                    logRepairFailure(ex);
 
                     if (throwOnRepairDenied) {
                       throw new RepairNotAllowedError({
@@ -943,7 +931,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
                     return true;
                   }
 
-                  logger.error`Failed to repair a storage: ${ex}`;
+                  logRepairError(ex);
 
                   throw ex;
                 },
@@ -1062,9 +1050,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     options?: Omit<HasOptions, "key">,
   ): Promise<boolean>;
   public async has(...args: any): Promise<boolean> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options] = v.parseInput(HasArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
@@ -1072,16 +1058,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     // キーがキースキーマに一致するかを検証します。
     this.#resolveValueSchema(key);
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
 
     using _lock = await asyncmux.readonly(this, signal);
     // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     // 存在確認に先立ち、各ミドルウェアの `use` を実行します。
     // `use` による vars の変更は後続の解決・走査に引き継がれます。
@@ -1149,9 +1133,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     options?: Omit<DeleteOptions, "key">,
   ): Promise<void>;
   public async delete(...args: any): Promise<void> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options] = v.parseInput(DeleteArgsSchema, args);
     const { key, vars: varsOption, signal: signalOption } = options;
@@ -1159,16 +1141,14 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     // キーがキースキーマに一致するかを検証します。
     this.#resolveValueSchema(key);
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
 
     using _lock = await asyncmux.readonly(this, signal);
     // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     // 削除に先立ち、各ミドルウェアの `use` を実行します。
     // `use` による vars の変更は後続の解決・削除に引き継がれます。
@@ -1280,23 +1260,19 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
 
   public async clear(options?: ClearOptions): Promise<void>;
   public async clear(...args: any): Promise<void> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const [options = {}] = v.parseInput(ClearArgsSchema, args);
     const { vars: varsOption, signal: signalOption } = options;
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, signalOption]);
 
     const store = this.#createOperationStore(varsOption);
 
     using _lock = await asyncmux.readonly(this, signal);
     // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     using _ioLock = await io.lock({ signal });
     // 全ミドルウェアの `use` を実行します。
@@ -1353,9 +1329,7 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
       readonly destinationKey: string;
     },
   ): Promise<void> {
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const { key, destinationKey } = options;
 
@@ -1363,15 +1337,13 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
     this.#resolveValueSchema(key);
     this.#resolveValueSchema(destinationKey);
 
-    const { ac, io } = this.#con;
+    const { ac, io } = this.#requireOpen();
     const signal = combineSignals([ac.signal, options.signal]);
     const store = this.#createOperationStore(options.vars);
 
     using _lock = await asyncmux.readonly(this, signal);
     // ロック待機中に接続状態が変更されていないか再確認します。
-    if (this.#con === null) {
-      throw new UniKvsIsNotOpenError();
-    }
+    this.#assertOpen();
 
     const useContext =
       action === "copy"
@@ -1514,6 +1486,35 @@ export default class UniKvs<TKeyValueMapping extends KeyValueMapping = KeyValueM
         errors,
         plugin: "storage",
       });
+    }
+  }
+
+  /**
+   * 接続中のコネクションを取得します。
+   *
+   * 未接続のときは `UniKvsIsNotOpenError` を投げます。
+   *
+   * @returns 接続中のコネクションを返します。
+   */
+  #requireOpen(): Connection {
+    const con = this.#con;
+
+    if (con === null) {
+      throw new UniKvsIsNotOpenError();
+    }
+
+    return con;
+  }
+
+  /**
+   * 接続中かどうかを確認します。
+   *
+   * 非同期待機の後に呼び、待機中に切断されていないことを確認します。
+   * 未接続のときは `UniKvsIsNotOpenError` を投げます。
+   */
+  #assertOpen(): void {
+    if (this.#con === null) {
+      throw new UniKvsIsNotOpenError();
     }
   }
 

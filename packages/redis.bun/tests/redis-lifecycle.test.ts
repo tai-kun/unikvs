@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  collectBytes,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -9,7 +10,8 @@ import {
   createDeleteContext,
   createStreamContext,
 } from "@unikvs/testing";
-import { describe } from "vite-plus/test";
+import { RedisClient } from "bun";
+import { vi, describe } from "vite-plus/test";
 
 import Redis from "../src/redis.js";
 import { test, createStorage } from "./_helpers.js";
@@ -219,6 +221,36 @@ describe("ライフサイクル管理", () => {
         createStreamContext("after-close.bin", { signal }) as IStorage.GetReadableContext,
       ),
     ).toThrow(TypeError);
+  });
+
+  test("getReadable 取得後に close しても、取得時のクライアントで読み取れる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    const key = "readable-after-close.bin";
+    const expected = new Uint8Array([4, 5, 6]);
+    // close 済みでも応答するよう取得だけをスタブ化します。
+    // 接続を再解決すると TypeError になるため、取得時のクライアントが使われたことを確認できます。
+    const getBufferSpy = vi
+      .spyOn(RedisClient.prototype, "getBuffer")
+      .mockResolvedValue(new Uint8Array(expected));
+    const readable = storage.getReadable(
+      createStreamContext(key, { signal }) as IStorage.GetReadableContext,
+    );
+
+    try {
+      // 実行：
+      storage.close(createCloseContext() as IStorage.CloseContext);
+      const result = await collectBytes(readable);
+
+      // 検証：
+      expect(getBufferSpy).toHaveBeenCalledTimes(1);
+      expect(result).toStrictEqual(expected);
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 
   test("clear した後に close と open をしてもデータは戻らない", async ({

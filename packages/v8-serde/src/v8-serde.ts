@@ -86,6 +86,17 @@ class ByteQueue {
 }
 
 /**
+ * フレーム先頭の 4 バイトからペイロード長を読み取ります。
+ *
+ * @param view フレームの先頭を参照するビューです。
+ *
+ * @returns ペイロード長を返します。
+ */
+function readFrameLength(view: Uint8Array<ArrayBuffer>): number {
+  return new DataView(view.buffer, view.byteOffset, view.byteLength).getUint32(0, false);
+}
+
+/**
  * バッファーに溜まった完成済みのフレームを先頭から順にデコードして下流へ流します。
  * 未完成のフレームは残して次のチャンクの到着を待ち、終了時は残余をエラーとして扱います。
  *
@@ -102,7 +113,7 @@ function drain(
 ): void {
   while (queue.length >= 4) {
     const view = queue.view();
-    const length = new DataView(view.buffer, view.byteOffset, view.byteLength).getUint32(0, false);
+    const length = readFrameLength(view);
 
     if (queue.length < 4 + length) {
       // フレームが途中で切れているため、次のチャンクの到着を待ちます。
@@ -128,7 +139,7 @@ function drain(
     }
 
     const view = queue.view();
-    const length = new DataView(view.buffer, view.byteOffset, view.byteLength).getUint32(0, false);
+    const length = readFrameLength(view);
 
     throw new V8SerdeDecodeError({
       cause: new Error(
@@ -216,7 +227,7 @@ export default class V8Serde implements IMiddleware {
     const env = this.#requireEnv();
 
     try {
-      c.destination = toOwnedBytes(api.serialize(env, c.source));
+      c.destination = toOwnedBytes(env.serialize(c.source));
     } catch (ex) {
       throw new V8SerdeEncodeError({ cause: ex });
     }
@@ -240,7 +251,7 @@ export default class V8Serde implements IMiddleware {
     const env = this.#requireEnv();
 
     try {
-      c.destination = api.deserialize(env, c.source);
+      c.destination = env.deserialize(c.source);
     } catch (ex) {
       throw new V8SerdeDecodeError({ cause: ex });
     }

@@ -265,6 +265,37 @@ export type VercelBlobOptions = {
 const DEFAULT_ACCESS: BlobAccess = "private";
 
 /**
+ * 転送用の要求オプションです。
+ */
+type ForwardedRequestOptions = {
+  token?: string;
+  abortSignal?: AbortSignal;
+};
+
+/**
+ * 既定クライアントへ転送する要求オプションを組み立てます。
+ *
+ * 未定義の項目は転送しません。
+ *
+ * @param options 要求オプションです。
+ *
+ * @returns 転送用の要求オプションです。
+ */
+function requestOptions(options: BlobRequestOptions): ForwardedRequestOptions {
+  const forwarded: ForwardedRequestOptions = {};
+
+  if (options.token !== undefined) {
+    forwarded.token = options.token;
+  }
+
+  if (options.abortSignal !== undefined) {
+    forwarded.abortSignal = options.abortSignal;
+  }
+
+  return forwarded;
+}
+
+/**
  * 既定のクライアントを作成します。
  *
  * `@vercel/blob` の関数を使い、未定義項目を取り除いて渡します。
@@ -274,37 +305,27 @@ const DEFAULT_ACCESS: BlobAccess = "private";
 function createDefaultClient(): BlobClientLike {
   return {
     del: (pathname, options) =>
-      del(Array.isArray(pathname) ? [...pathname] : pathname, {
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
-      }),
+      del(Array.isArray(pathname) ? [...pathname] : pathname, requestOptions(options)),
     put: (pathname, body, options) =>
       put(pathname, body.buffer, {
         access: options.access,
         ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
         allowOverwrite: true,
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+        ...requestOptions(options),
       }),
     copy: (fromUrlOrPathname, toPathname, options) =>
       copy(fromUrlOrPathname, toPathname, {
         access: options.access,
         allowOverwrite: true,
         ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+        ...requestOptions(options),
       }),
-    head: (pathname, options) =>
-      head(pathname, {
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
-      }),
+    head: (pathname, options) => head(pathname, requestOptions(options)),
     list: (options) =>
       list({
         ...(options.prefix !== undefined ? { prefix: options.prefix } : null),
         ...(options.cursor !== undefined ? { cursor: options.cursor } : null),
-        ...(options.token !== undefined ? { token: options.token } : null),
-        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+        ...requestOptions(options),
       }),
   };
 }
@@ -496,27 +517,13 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
-    let url: string;
+    const metadata = await this.#head(c, token);
 
-    try {
-      ({ url } = await this.#client.head(this.#pathname(c.key), {
-        token,
-        abortSignal: c.signal,
-      }));
-    } catch (ex) {
-      if (isBlobNotFound(ex)) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throwIfAborted(c.signal);
-      throw new BlobOperationError({
-        key: c.key,
-        cause: ex,
-        operation: "head",
-      });
+    if (metadata === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    const response = await this.#download(c, url, token);
+    const response = await this.#download(c, metadata.url, token);
     const buffer = await response.arrayBuffer();
 
     return new Uint8Array(buffer);
@@ -536,25 +543,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
 
     const token = this.#resolveToken(c);
 
-    try {
-      await this.#client.head(this.#pathname(c.key), {
-        token,
-        abortSignal: c.signal,
-      });
-
-      return true;
-    } catch (ex) {
-      if (isBlobNotFound(ex)) {
-        return false;
-      }
-
-      throwIfAborted(c.signal);
-      throw new BlobOperationError({
-        key: c.key,
-        cause: ex,
-        operation: "head",
-      });
-    }
+    return (await this.#head(c, token)) !== undefined;
   }
 
   /**
@@ -606,7 +595,9 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
     if (c.key === c.destinationKey) {
-      if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+      const token = this.#resolveToken(c);
+
+      if ((await this.#head(c, token)) === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -661,7 +652,9 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
     if (c.key === c.destinationKey) {
-      if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+      const token = this.#resolveToken(c);
+
+      if ((await this.#head(c, token)) === undefined) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -792,27 +785,13 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     throwIfAborted(c.signal);
 
     const token = this.#resolveToken(c);
-    let url: string;
+    const metadata = await this.#head(c, token);
 
-    try {
-      ({ url } = await this.#client.head(this.#pathname(c.key), {
-        token,
-        abortSignal: c.signal,
-      }));
-    } catch (ex) {
-      if (isBlobNotFound(ex)) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throwIfAborted(c.signal);
-      throw new BlobOperationError({
-        key: c.key,
-        cause: ex,
-        operation: "head",
-      });
+    if (metadata === undefined) {
+      throw new KeyNotFoundError({ key: c.key });
     }
 
-    const response = await this.#download(c, url, token);
+    const response = await this.#download(c, metadata.url, token);
 
     // ボディなし応答は空ストリームとして返します。
     if (response.body === null) {
@@ -824,6 +803,46 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
 
     return response.body;
+  }
+
+  /**
+   * Blob のメタ情報を取得します。
+   *
+   * 欠番は undefined を返し、それ以外の失敗は `BlobOperationError` に包みます。
+   *
+   * @param c キーと中断シグナルを持つコンテキストです。
+   * @param token 送信に使うトークンです。
+   *
+   * @returns 取得したメタ情報です。欠番時は undefined です。
+   */
+  async #head(
+    c:
+      | IStorage.ReadContext
+      | IStorage.ExistsContext
+      | IStorage.GetReadableContext
+      | IStorage.CopyContext
+      | IStorage.MoveContext,
+    token: string | undefined,
+  ): Promise<BlobHeadResult | undefined> {
+    let metadata: BlobHeadResult | undefined;
+
+    try {
+      metadata = await this.#client.head(this.#pathname(c.key), {
+        token,
+        abortSignal: c.signal,
+      });
+    } catch (ex) {
+      if (!isBlobNotFound(ex)) {
+        throwIfAborted(c.signal);
+        throw new BlobOperationError({
+          key: c.key,
+          cause: ex,
+          operation: "head",
+        });
+      }
+    }
+
+    return metadata;
   }
 
   /**

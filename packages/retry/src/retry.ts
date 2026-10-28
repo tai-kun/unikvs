@@ -156,6 +156,22 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 /**
+ * オプション値が有効でないとき、無効なオプションのエラーを投げます。
+ *
+ * @param name オプション名です。
+ * @param actual 実際の値です。
+ * @param isValid 検証結果です。
+ */
+function assertOption(name: string, actual: unknown, isValid: boolean): void {
+  if (!isValid) {
+    throw new RetryInvalidOptionError({
+      name,
+      actual,
+    });
+  }
+}
+
+/**
  * 中断に対応した待機です。
  */
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -255,34 +271,14 @@ export default class Retry<
       maxRetries = 3,
       initialDelayMs = 100,
     } = options;
-
-    if (!Number.isInteger(maxRetries) || maxRetries < 0) {
-      throw new RetryInvalidOptionError({
-        name: "maxRetries",
-        actual: maxRetries,
-      });
-    }
-
-    if (!Number.isFinite(initialDelayMs) || initialDelayMs < 0) {
-      throw new RetryInvalidOptionError({
-        name: "initialDelayMs",
-        actual: initialDelayMs,
-      });
-    }
-
-    if (!Number.isFinite(maxDelayMs) || maxDelayMs < 0) {
-      throw new RetryInvalidOptionError({
-        name: "maxDelayMs",
-        actual: maxDelayMs,
-      });
-    }
-
-    if (!Number.isFinite(factor) || factor < 1) {
-      throw new RetryInvalidOptionError({
-        name: "factor",
-        actual: factor,
-      });
-    }
+    assertOption("maxRetries", maxRetries, Number.isInteger(maxRetries) && maxRetries >= 0);
+    assertOption(
+      "initialDelayMs",
+      initialDelayMs,
+      Number.isFinite(initialDelayMs) && initialDelayMs >= 0,
+    );
+    assertOption("maxDelayMs", maxDelayMs, Number.isFinite(maxDelayMs) && maxDelayMs >= 0);
+    assertOption("factor", factor, Number.isFinite(factor) && factor >= 1);
 
     this.inner = inner;
     this.maxRetries = maxRetries;
@@ -333,18 +329,7 @@ export default class Retry<
     const copy = this.inner.copy?.bind(this.inner);
 
     if (copy === undefined) {
-      return this.#run(c, "copy", async () => {
-        const data = await this.inner.read(
-          createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
-        );
-
-        if (c.key !== c.destinationKey) {
-          await this.inner.write(
-            createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
-            data as unknown as TWriteData,
-          );
-        }
-      });
+      return this.#run(c, "copy", () => this.#transferFallback(c, false));
     }
 
     return this.#run(c, "copy", () => copy(c));
@@ -361,23 +346,7 @@ export default class Retry<
     const move = this.inner.move?.bind(this.inner);
 
     if (move === undefined) {
-      return this.#run(c, "move", async () => {
-        const data = await this.inner.read(
-          createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
-        );
-
-        if (c.key === c.destinationKey) {
-          return;
-        }
-
-        await this.inner.write(
-          createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
-          data as unknown as TWriteData,
-        );
-        await this.inner.delete(
-          createFallbackContext(c, c.action, c.key) as IStorage.DeleteContext,
-        );
-      });
+      return this.#run(c, "move", () => this.#transferFallback(c, true));
     }
 
     return this.#run(c, "move", () => move(c));
@@ -391,12 +360,7 @@ export default class Retry<
     const getWritable = this.inner.getWritable;
 
     if (typeof getWritable !== "function") {
-      return Promise.reject(
-        new RetryUnsupportedOperationError({
-          storage: this.inner.name,
-          operation: "getWritable",
-        }),
-      );
+      return this.#unsupported("getWritable");
     }
 
     return this.#run(c, "getWritable", () => getWritable.call(this.inner, c));
@@ -406,12 +370,7 @@ export default class Retry<
     const getReadable = this.inner.getReadable;
 
     if (typeof getReadable !== "function") {
-      return Promise.reject(
-        new RetryUnsupportedOperationError({
-          storage: this.inner.name,
-          operation: "getReadable",
-        }),
-      );
+      return this.#unsupported("getReadable");
     }
 
     return this.#run(c, "getReadable", () => getReadable.call(this.inner, c));
@@ -422,6 +381,50 @@ export default class Retry<
     errors: readonly IStorage.IOtherWriteError[],
   ): Promise<void> {
     await this.inner.onOtherWriteError?.(c, errors);
+  }
+
+  /**
+   * copy/move のフォールバックで、読み出したデータを移動先へ書き込みます。
+   *
+   * @param c コピーまたは移動のコンテキストです。
+   * @param move `true` のとき移動元を削除します。
+   */
+  async #transferFallback(
+    c: IStorage.CopyContext | IStorage.MoveContext,
+    move: boolean,
+  ): Promise<void> {
+    const data = await this.inner.read(
+      createFallbackContext(c, c.action, c.key) as IStorage.ReadContext,
+    );
+
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    await this.inner.write(
+      createFallbackContext(c, c.action, c.destinationKey) as IStorage.WriteContext,
+      data as unknown as TWriteData,
+    );
+
+    if (move) {
+      await this.inner.delete(createFallbackContext(c, c.action, c.key) as IStorage.DeleteContext);
+    }
+  }
+
+  /**
+   * 下層ストレージが対応していない操作のエラーを返します。
+   *
+   * @param operation 対応していない操作です。
+   *
+   * @returns 拒否された Promise を返します。
+   */
+  #unsupported(operation: "getWritable" | "getReadable"): Promise<never> {
+    return Promise.reject(
+      new RetryUnsupportedOperationError({
+        storage: this.inner.name,
+        operation,
+      }),
+    );
   }
 
   /**

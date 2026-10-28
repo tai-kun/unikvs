@@ -1,11 +1,12 @@
 import type { IStorage } from "@unikvs/core";
 import {
-  TestContext,
   abortedSignal,
   captureRejection,
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createOpenContext,
   createCloseContext,
 } from "@unikvs/testing";
@@ -13,42 +14,6 @@ import { describe } from "vite-plus/test";
 
 import { KeyNotFoundError } from "../src/errors.js";
 import { test, createStorage } from "./_helpers.js";
-
-/**
- * 複製コンテキストを作ります。
- *
- * `@unikvs/testing` の公開エントリに専用ヘルパーが揃うまでのローカル実装です。
- */
-function createCopyContext(
-  key: string,
-  destinationKey: string,
-  init: { readonly signal?: AbortSignal | undefined } = {},
-): IStorage.CopyContext {
-  return new TestContext({
-    key,
-    action: "copy",
-    signal: init.signal,
-    destinationKey,
-  }) as unknown as IStorage.CopyContext;
-}
-
-/**
- * 移動コンテキストを作ります。
- *
- * `@unikvs/testing` の公開エントリに専用ヘルパーが揃うまでのローカル実装です。
- */
-function createMoveContext(
-  key: string,
-  destinationKey: string,
-  init: { readonly signal?: AbortSignal | undefined } = {},
-): IStorage.MoveContext {
-  return new TestContext({
-    key,
-    action: "move",
-    signal: init.signal,
-    destinationKey,
-  }) as unknown as IStorage.MoveContext;
-}
 
 describe("コピー", () => {
   test("複製元を残したまま複製先へ同じ値を作る", async ({

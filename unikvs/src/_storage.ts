@@ -299,12 +299,7 @@ export default class UniKvsStorage {
 
     await this.#io.onOtherWriteError(c, [
       {
-        errors: (
-          err.meta.errors as readonly {
-            readonly plugin: "storage";
-            readonly reason: unknown;
-          }[]
-        ).map((error) => ({
+        errors: err.meta.errors.map((error) => ({
           plugin: "storage" as const,
           reason: error.reason,
         })),

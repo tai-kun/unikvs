@@ -1,23 +1,7 @@
 import { test, describe } from "vite-plus/test";
 
 import { type ErrorOptions, ErrorBase, InvalidUsageErrorBase } from "../src/errors.js";
-
-type KeyNotFoundErrorArgs = {
-  readonly key: string;
-};
-
-/**
- * ErrorBase のメタ情報・名前・プロトタイプチェーンの契約を検証するためのサンプルエラーです。
- */
-class KeyNotFoundError extends ErrorBase<KeyNotFoundErrorArgs> {
-  static {
-    this.prototype.name = "KeyNotFoundError";
-  }
-
-  public constructor(args: KeyNotFoundErrorArgs, options?: ErrorOptions) {
-    super(args, ({ key }) => `Key not found: ${key}`, options);
-  }
-}
+import { KeyNotFoundError } from "./helpers.js";
 
 describe("name", () => {
   test("プロトタイプに設定した名前を返す", ({ expect }) => {

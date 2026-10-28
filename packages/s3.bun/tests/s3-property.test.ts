@@ -2,6 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
+  splitBySizes,
   forCasesAsync,
   createGetContext,
   createHasContext,
@@ -19,35 +20,6 @@ const caseCount = 25;
 const KEY_CHARS = Array.from(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_日本語📦éΩ",
 );
-
-/**
- * バイト列を指定幅で切り分けます。
- * 任意のチャンク分割での書き込み検証に使用します。
- */
-function splitIntoChunks(
-  data: Uint8Array<ArrayBuffer>,
-  sizes: readonly number[],
-): Uint8Array<ArrayBuffer>[] {
-  const chunks: Uint8Array<ArrayBuffer>[] = [];
-  let offset = 0;
-
-  for (const size of sizes) {
-    if (offset >= data.length) {
-      break;
-    }
-
-    const end = Math.min(offset + size, data.length);
-    chunks.push(data.subarray(offset, end));
-    offset = end;
-  }
-
-  if (offset < data.length) {
-    chunks.push(data.subarray(offset));
-  }
-
-  return chunks;
-}
-
 describe("決定的ファズ検証", () => {
   test("任意のキーとバイト列で write→read が往復する", async ({ expect, signal, storage }) => {
     // 実行と検証：
@@ -79,7 +51,7 @@ describe("決定的ファズ検証", () => {
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const key = "property-stream.bin";
       const expected = random.bytes(random.uint(8 * 1024 + 1));
-      const chunks = splitIntoChunks(
+      const chunks = splitBySizes(
         expected,
         random.array(random.uint(13), () => random.int(1, 2048)),
       );

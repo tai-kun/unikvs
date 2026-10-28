@@ -88,6 +88,29 @@ export interface KVNamespaceLike {
 }
 
 /**
+ * 必須メソッドをすべて備えた KV binding かどうかを判定します。
+ *
+ * @param value 判定する値です。
+ *
+ * @returns 必須メソッドをすべて備えていれば真です。
+ */
+function isKVNamespaceLike(value: unknown): value is KVNamespaceLike {
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  for (const name of ["get", "put", "delete", "list"] as const) {
+    if (typeof record[name] !== "function") {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/cloudflare-kv#cloudflare-kv)
  */
 export type CloudflareKvOptions = {
@@ -143,14 +166,7 @@ export default class CloudflareKv implements IStorage {
 
     const { binding, keyPrefix = "unikvs:", ttlSeconds } = options;
 
-    if (
-      binding === null ||
-      typeof binding !== "object" ||
-      typeof (binding as Partial<KVNamespaceLike>).get !== "function" ||
-      typeof (binding as Partial<KVNamespaceLike>).put !== "function" ||
-      typeof (binding as Partial<KVNamespaceLike>).delete !== "function" ||
-      typeof (binding as Partial<KVNamespaceLike>).list !== "function"
-    ) {
+    if (!isKVNamespaceLike(binding)) {
       throw new InvalidBindingError({ actual: binding });
     }
 
@@ -232,13 +248,7 @@ export default class CloudflareKv implements IStorage {
    * @returns 読み取ったバイト列です。
    */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    throwIfAborted(c.signal);
-    using abortPromise = toAbortPromise(c.signal);
-
-    const buffer = await Promise.race([
-      this.#binding.get(this.#fullKey(c.key), "arrayBuffer"),
-      abortPromise,
-    ]);
+    const buffer = await this.#getBuffer(c.signal, c.key);
 
     if (buffer === null) {
       throw new KeyNotFoundError({ key: c.key });
@@ -257,16 +267,8 @@ export default class CloudflareKv implements IStorage {
    * @returns 存在すれば真です。
    */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    throwIfAborted(c.signal);
-    using abortPromise = toAbortPromise(c.signal);
-
     // KV に `head` 相当の API がないため `get` で存在を確認します。
-    const buffer = await Promise.race([
-      this.#binding.get(this.#fullKey(c.key), "arrayBuffer"),
-      abortPromise,
-    ]);
-
-    return buffer !== null;
+    return (await this.#getBuffer(c.signal, c.key)) !== null;
   }
 
   /**
@@ -305,14 +307,10 @@ export default class CloudflareKv implements IStorage {
 
     do {
       const page: KVNamespaceListResult = await Promise.race([
-        this.#binding.list(
-          cursor === undefined
-            ? { prefix: this.#keyPrefix }
-            : {
-                cursor,
-                prefix: this.#keyPrefix,
-              },
-        ),
+        this.#binding.list({
+          ...(cursor === undefined ? null : { cursor }),
+          prefix: this.#keyPrefix,
+        }),
         abortPromise,
       ]);
 
@@ -327,6 +325,28 @@ export default class CloudflareKv implements IStorage {
       throwIfAborted(c.signal);
       await this.#binding.delete(name);
     }
+  }
+
+  /**
+   * 指定したキーの値を `ArrayBuffer` として取得します。
+   *
+   * 中断済みなら開始前に中断理由を投げ、取得中は中断と競合させます。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 取得する論理キーです。
+   *
+   * @returns 取得したバイト列です。欠番時は null です。
+   */
+  async #getBuffer(signal: AbortSignal, key: string): Promise<ArrayBuffer | null> {
+    throwIfAborted(signal);
+    using abortPromise = toAbortPromise(signal);
+
+    const buffer = await Promise.race([
+      this.#binding.get(this.#fullKey(key), "arrayBuffer"),
+      abortPromise,
+    ]);
+
+    return buffer;
   }
 
   /**

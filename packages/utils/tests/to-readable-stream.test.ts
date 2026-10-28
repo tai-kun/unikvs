@@ -1,26 +1,7 @@
+import { readAll } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import toReadableStream from "../src/to-readable-stream.js";
-
-/**
- * ストリームからすべての値を読み取り、配列として返します。
- */
-async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
-  const reader = stream.getReader();
-  const values: T[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    values.push(value);
-  }
-
-  return values;
-}
 
 describe("toReadableStream", () => {
   test("同期イテラブルを ReadableStream に変換する", async ({ expect }) => {
@@ -28,7 +9,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream([1, 2, 3]);
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual([1, 2, 3]);
   });
 
@@ -45,7 +26,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream(asyncGen());
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual([1, 2, 3]);
   });
 
@@ -54,7 +35,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream([]);
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual([]);
   });
 
@@ -63,7 +44,7 @@ describe("toReadableStream", () => {
     const stream = toReadableStream("abc");
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual(["a", "b", "c"]);
   });
 });

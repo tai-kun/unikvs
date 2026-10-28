@@ -1,5 +1,6 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  collectBytes,
   abortedSignal,
   captureRejection,
   createGetContext,
@@ -14,39 +15,6 @@ import Http, { type IFetch } from "../src/http.js";
 import { createMockServer } from "./_helpers.js";
 
 const baseUrl = "https://kv.example.com/store";
-
-/**
- * ストリームの全チャンクを読み切って結合します。
- * 読み取り結果の検証に使用します。
- */
-async function readAll(stream: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Uint8Array> {
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    if (value !== undefined) {
-      chunks.push(value);
-    }
-  }
-
-  const totalLength = chunks.reduce((sum, c) => sum + c.byteLength, 0);
-  const merged = new Uint8Array(totalLength);
-  let offset = 0;
-
-  for (const c of chunks) {
-    merged.set(c, offset);
-    offset += c.byteLength;
-  }
-
-  return merged;
-}
-
 describe("getWritable", () => {
   test("複数のチャンクを順番どおり結合して保存する", async ({ expect }) => {
     // 準備：
@@ -272,7 +240,6 @@ describe("getWritable", () => {
     expect(error).toBeInstanceOf(DOMException);
   });
 });
-
 describe("getReadable", () => {
   test("存在しないキーでは KeyNotFoundError を投げる", async ({ expect }) => {
     // 準備：
@@ -336,7 +303,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(data);
+    expect(await collectBytes(stream)).toStrictEqual(data);
   });
 
   test("body が null のとき、空ストリームを返す", async ({ expect }) => {
@@ -359,7 +326,7 @@ describe("getReadable", () => {
     );
 
     // 検証：
-    expect(await readAll(stream)).toStrictEqual(new Uint8Array(0));
+    expect(await collectBytes(stream)).toStrictEqual(new Uint8Array(0));
   });
 
   test("返却後に abort してもストリームは自動 cancel されない", async ({ expect }) => {
@@ -379,7 +346,7 @@ describe("getReadable", () => {
     // 実行：
     controller.abort();
 
-    const result = await readAll(stream);
+    const result = await collectBytes(stream);
 
     // 検証：
     expect(result).toStrictEqual(new Uint8Array([1, 2, 3]));

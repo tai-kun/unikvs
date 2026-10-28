@@ -158,7 +158,7 @@ export default class Debug implements IMiddleware {
     c: IMiddleware.EncodeStreamContext<TChunk>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const transform = this.#createTransform("write", c);
+    const transform = this.#createTransform<TChunk>("write", c);
     c.destination = c.source.pipeThrough(transform);
 
     await next();
@@ -168,7 +168,7 @@ export default class Debug implements IMiddleware {
     c: IMiddleware.DecodeStreamContext<TChunk>,
     next: IMiddleware.INext,
   ): Promise<void> {
-    const transform = this.#createTransform("read", c);
+    const transform = this.#createTransform<TChunk>("read", c);
     c.destination = c.source.pipeThrough(transform);
 
     await next();
@@ -182,8 +182,11 @@ export default class Debug implements IMiddleware {
    *
    * @returns 入力をそのまま出力する TransformStream オブジェクトです。
    */
-  #createTransform(direction: DebugDirection, c: IKeyedActionContext): TransformStream {
-    return new TransformStream({
+  #createTransform<TChunk>(
+    direction: DebugDirection,
+    c: IKeyedActionContext,
+  ): TransformStream<TChunk, TChunk> {
+    return new TransformStream<TChunk, TChunk>({
       transform: (chunk, controller) => {
         this.#log(direction, c, chunk);
 

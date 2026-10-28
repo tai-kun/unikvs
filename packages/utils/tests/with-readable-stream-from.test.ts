@@ -1,26 +1,8 @@
+import { readAll } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import withReadableStreamFrom from "../src/with-readable-stream-from.js";
-
-/**
- * ストリームからすべての値を読み取り、配列として返します。
- */
-async function collectFromStream<T>(stream: ReadableStream<T>): Promise<T[]> {
-  const reader = stream.getReader();
-  const values: T[] = [];
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      break;
-    }
-
-    values.push(value);
-  }
-
-  return values;
-}
+import { withoutReadableStreamFrom } from "./helpers.js";
 
 describe("withReadableStreamFrom", () => {
   test("同期イテラブルから ReadableStream を生成する", async ({ expect }) => {
@@ -28,7 +10,7 @@ describe("withReadableStreamFrom", () => {
     const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from([1, 2, 3]));
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual([1, 2, 3]);
   });
 
@@ -45,35 +27,24 @@ describe("withReadableStreamFrom", () => {
     const stream = withReadableStreamFrom((ReadableStream) => ReadableStream.from(asyncGen()));
 
     // 検証：
-    const values = await collectFromStream(stream);
+    const values = await readAll(stream);
     expect(values).toEqual([1, 2, 3]);
   });
 
   test("ReadableStream.from が存在しない場合はポリフィルを使用する", async ({ expect }) => {
-    // 準備：
-    const originalFrom = (ReadableStream as any).from;
-
-    delete (ReadableStream as any).from;
-
-    try {
-      // 実行：
+    // 準備：と実行。
+    const values = await withoutReadableStreamFrom(async () => {
       const stream = withReadableStreamFrom((RS) => RS.from([1, 2, 3]));
 
-      // 検証：
-      const values = await collectFromStream(stream);
-      expect(values).toEqual([1, 2, 3]);
-    } finally {
-      // 後片付け。
-      (ReadableStream as any).from = originalFrom;
-    }
+      return readAll(stream);
+    });
+
+    // 検証：
+    expect(values).toEqual([1, 2, 3]);
   });
 
   test("ポリフィルが非同期イテラブルを正しく処理する", async ({ expect }) => {
     // 準備：
-    const originalFrom = (ReadableStream as any).from;
-
-    delete (ReadableStream as any).from;
-
     // oxlint-disable-next-line unicorn/consistent-function-scoping
     async function* asyncGen(): AsyncGenerator<unknown, void, unknown> {
       yield "a";
@@ -81,52 +52,41 @@ describe("withReadableStreamFrom", () => {
       yield "c";
     }
 
-    try {
-      // 実行：
+    // 実行：
+    const values = await withoutReadableStreamFrom(async () => {
       const stream = withReadableStreamFrom((RS) => RS.from(asyncGen()));
 
-      // 検証：
-      const values = await collectFromStream(stream);
-      expect(values).toEqual(["a", "b", "c"]);
-    } finally {
-      (ReadableStream as any).from = originalFrom;
-    }
+      return readAll(stream);
+    });
+
+    // 検証：
+    expect(values).toEqual(["a", "b", "c"]);
   });
 
   test("ポリフィルでイテレーターのエラーがストリームに伝播する", async ({ expect }) => {
     // 準備：
-    const originalFrom = (ReadableStream as any).from;
-
-    delete (ReadableStream as any).from;
-
     // oxlint-disable-next-line unicorn/consistent-function-scoping
     async function* failingGen(): AsyncGenerator<unknown, void, unknown> {
       yield 1;
       throw new Error("boom");
     }
 
-    try {
-      // 実行：
+    // 実行と検証：
+    await withoutReadableStreamFrom(async () => {
       const stream = withReadableStreamFrom((RS) => RS.from(failingGen()));
       const reader = stream.getReader();
 
-      // 検証 : エラーまでのチャンクは読めて、その後の読み取りでエラーが再現される。
+      // エラーまでのチャンクは読めて、その後の読み取りでエラーが再現される。
       expect(await reader.read()).toStrictEqual({
         done: false,
         value: 1,
       });
       await expect(reader.read()).rejects.toThrow("boom");
-    } finally {
-      (ReadableStream as any).from = originalFrom;
-    }
+    });
   });
 
   test("ポリフィルのストリームをキャンセルするとイテレーターも閉じられる", async ({ expect }) => {
     // 準備：
-    const originalFrom = (ReadableStream as any).from;
-
-    delete (ReadableStream as any).from;
-
     let closed = false;
 
     function* gen(): Generator<unknown, void, unknown> {
@@ -138,33 +98,25 @@ describe("withReadableStreamFrom", () => {
       }
     }
 
-    try {
-      // 実行：
+    // 実行：
+    await withoutReadableStreamFrom(async () => {
       const stream = withReadableStreamFrom((RS) => RS.from(gen()));
       const reader = stream.getReader();
       await reader.read();
       await reader.cancel();
+    });
 
-      // 検証：
-      expect(closed).toBe(true);
-    } finally {
-      (ReadableStream as any).from = originalFrom;
-    }
+    // 検証：
+    expect(closed).toBe(true);
   });
 
-  test("ポリフィル使用後に ReadableStream.from が削除される", ({ expect }) => {
-    // 準備：
-    const originalFrom = (ReadableStream as any).from;
+  test("ポリフィル使用後に ReadableStream.from が削除される", async ({ expect }) => {
+    // 実行と検証：
+    await withoutReadableStreamFrom(() => {
+      withReadableStreamFrom((RS) => RS.from([1]));
 
-    delete (ReadableStream as any).from;
-
-    // 実行：
-    withReadableStreamFrom((RS) => RS.from([1]));
-
-    // 検証 : クリーンアップ後も from が存在しない。
-    expect("from" in ReadableStream).toBe(false);
-
-    // 後片付け。
-    (ReadableStream as any).from = originalFrom;
+      // クリーンアップ後も from が存在しない。
+      expect("from" in ReadableStream).toBe(false);
+    });
   });
 });

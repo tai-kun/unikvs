@@ -76,13 +76,17 @@ function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function assertPositiveNumber(name: string, value: number): void {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+function assertOption(name: string, actual: unknown, isValid: boolean): void {
+  if (!isValid) {
     throw new RateLimitInvalidOptionError({
       name,
-      actual: value,
+      actual,
     });
   }
+}
+
+function assertPositiveNumber(name: string, value: number): void {
+  assertOption(name, value, typeof value === "number" && Number.isFinite(value) && value > 0);
 }
 
 /**
@@ -145,26 +149,9 @@ export default class RateLimit extends PassThrough implements IMiddleware {
     const capacity = maxTokens ?? burst ?? tokensPerInterval;
     assertPositiveNumber("maxTokens", capacity);
 
-    if (strategy !== "wait" && strategy !== "throw") {
-      throw new RateLimitInvalidOptionError({
-        name: "strategy",
-        actual: strategy,
-      });
-    }
-
-    if (typeof now !== "function") {
-      throw new RateLimitInvalidOptionError({
-        name: "now",
-        actual: now,
-      });
-    }
-
-    if (typeof sleep !== "function") {
-      throw new RateLimitInvalidOptionError({
-        name: "sleep",
-        actual: sleep,
-      });
-    }
+    assertOption("strategy", strategy, strategy === "wait" || strategy === "throw");
+    assertOption("now", now, typeof now === "function");
+    assertOption("sleep", sleep, typeof sleep === "function");
 
     this.tokensPerInterval = tokensPerInterval;
     this.intervalMs = intervalMs;
@@ -195,14 +182,7 @@ export default class RateLimit extends PassThrough implements IMiddleware {
   async #acquire(signal: AbortSignal): Promise<void> {
     throwIfAborted(signal);
 
-    let release!: () => void;
-    const previous = this.#tail;
-    this.#tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await previous;
-
-    try {
+    await this.#enqueue(async (): Promise<void> => {
       for (;;) {
         throwIfAborted(signal);
         this.#refill();
@@ -219,8 +199,28 @@ export default class RateLimit extends PassThrough implements IMiddleware {
 
         await this.#sleep(this.#retryAfterMs(), signal);
       }
+    });
+  }
+
+  /**
+   * 処理を先着順の待ち行列へつなぎ、完了時に次の処理を解放します。
+   *
+   * @param fn 待ち行列の中で実行する処理です。
+   *
+   * @returns 処理の結果を返します。
+   */
+  async #enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    let release: (() => void) | undefined;
+    const previous = this.#tail;
+    this.#tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+
+    try {
+      return await fn();
     } finally {
-      release();
+      release?.();
     }
   }
 

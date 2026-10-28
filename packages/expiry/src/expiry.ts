@@ -113,20 +113,17 @@ function asEnvelope(value: unknown): ExpiryEnvelope | undefined {
   let envelope: ExpiryEnvelope | undefined = undefined;
 
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    if (
-      EXPIRY_MARKER in value &&
-      "expiresAt" in value &&
-      "data" in value &&
-      Object.keys(value).length === 3
-    ) {
-      const { expiresAt } = value as { readonly expiresAt: unknown };
+    const record = value as Record<string, unknown>;
 
-      if (
-        (value as { readonly [EXPIRY_MARKER]?: unknown })[EXPIRY_MARKER] === EXPIRY_VERSION &&
-        (expiresAt === null || typeof expiresAt === "number")
-      ) {
-        envelope = value as ExpiryEnvelope;
-      }
+    if (
+      Object.keys(record).length === 3 &&
+      EXPIRY_MARKER in record &&
+      "expiresAt" in record &&
+      "data" in record &&
+      record[EXPIRY_MARKER] === EXPIRY_VERSION &&
+      (record["expiresAt"] === null || typeof record["expiresAt"] === "number")
+    ) {
+      envelope = record as ExpiryEnvelope;
     }
   }
 
@@ -190,12 +187,7 @@ export default class Expiry implements IMiddleware {
     }
 
     if (envelope.expiresAt !== null && this.#now() >= envelope.expiresAt) {
-      this.#onExpire?.({
-        key: c.key,
-        expiresAt: envelope.expiresAt,
-      });
-
-      throw new KeyNotFoundError({ key: c.key });
+      this.#throwExpired(c.key, envelope.expiresAt);
     }
 
     c.destination = envelope.data;
@@ -230,11 +222,10 @@ export default class Expiry implements IMiddleware {
     next: IMiddleware.INext,
   ): Promise<void> {
     const now = this.#now;
-    const onExpire = this.#onExpire;
     const key = c.key;
     c.destination = c.source.pipeThrough(
       new TransformStream({
-        transform(chunk, controller): void {
+        transform: (chunk, controller): void => {
           const envelope = asEnvelope(chunk);
 
           if (envelope === undefined) {
@@ -244,12 +235,7 @@ export default class Expiry implements IMiddleware {
           }
 
           if (envelope.expiresAt !== null && now() >= envelope.expiresAt) {
-            onExpire?.({
-              key,
-              expiresAt: envelope.expiresAt,
-            });
-
-            throw new KeyNotFoundError({ key });
+            this.#throwExpired(key, envelope.expiresAt);
           }
 
           controller.enqueue(envelope.data);
@@ -258,6 +244,21 @@ export default class Expiry implements IMiddleware {
     );
 
     await next();
+  }
+
+  /**
+   * 失効を通知してから、存在しないキーとして投げます。
+   *
+   * @param key 失効したキーです。
+   * @param expiresAt 失効時刻です。
+   */
+  #throwExpired(key: string, expiresAt: number): never {
+    this.#onExpire?.({
+      key,
+      expiresAt,
+    });
+
+    throw new KeyNotFoundError({ key });
   }
 
   #resolveExpiresAt(c: IMiddleware.EncodeContext | IMiddleware.EncodeStreamContext): number | null {

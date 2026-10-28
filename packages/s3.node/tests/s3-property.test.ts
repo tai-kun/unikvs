@@ -2,6 +2,7 @@ import type { IStorage } from "@unikvs/core";
 import {
   bytesEqual,
   collectBytes,
+  splitBySizes,
   forCasesAsync,
   createGetContext,
   createHasContext,
@@ -57,24 +58,10 @@ describe("決定的ファズ検証", () => {
     await forCasesAsync(seed + 1, caseCount, async (random) => {
       const key = "property-stream.bin";
       const expected = random.bytes(random.uint(8 * 1024 + 1));
-      const chunks: Uint8Array<ArrayBuffer>[] = [];
-      let offset = 0;
-
-      for (const size of random.array(random.uint(13), () => random.int(1, 2048))) {
-        // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
-        if (offset >= expected.length) {
-          break;
-        }
-
-        const end = Math.min(offset + size, expected.length);
-        chunks.push(expected.subarray(offset, end));
-        offset = end;
-      }
-
-      // oxlint-disable-next-line vitest/no-conditional-in-test -- モック／モデルの分岐はテスト対象の挙動再現に必須のため、条件分岐を使用します。
-      if (offset < expected.length) {
-        chunks.push(expected.subarray(offset));
-      }
+      const chunks = splitBySizes(
+        expected,
+        random.array(random.uint(13), () => random.int(1, 2048)),
+      );
 
       const writer = storage
         .getWritable(createSetContext(key, { signal }) as IStorage.GetWritableContext)

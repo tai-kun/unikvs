@@ -1,32 +1,9 @@
-import type { IMiddleware } from "@unikvs/core";
-import { createNext, createDecodeContext, createEncodeContext } from "@unikvs/testing";
 import { describe } from "vite-plus/test";
 
 import Debug from "../src/debug.js";
-import { createRecordsTest } from "./_helpers.js";
+import { decode, encode, createRecordsTest } from "./_helpers.js";
 
 const test = createRecordsTest();
-
-/**
- * データを書き込みとして記録し、そのまま返します。
- */
-async function encode(debug: Debug, data: unknown, key: string): Promise<unknown> {
-  const c = createEncodeContext(data, key);
-  await debug.encode(c as IMiddleware.EncodeContext, createNext());
-
-  return c.destination;
-}
-
-/**
- * データを読み込みとして記録し、そのまま返します。
- */
-async function decode(debug: Debug, data: unknown, key: string): Promise<unknown> {
-  const c = createDecodeContext(data, key);
-  await debug.decode(c as IMiddleware.DecodeContext, createNext());
-
-  return c.destination;
-}
-
 describe("ログのメタデータ", () => {
   test("encode は書き込みとしてロガーとレベルとメッセージを記録する", async ({
     expect,

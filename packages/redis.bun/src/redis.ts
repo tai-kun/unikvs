@@ -102,7 +102,7 @@ export default class Redis implements IStorage {
 
     // オープン済みの場合は古い接続を閉じ、開き直しでリークしないようにします。
     if (this.#con) {
-      this.close(_c as unknown as IStorage.CloseContext);
+      this.#closeClient();
     }
 
     const { RedisClient: RedisClientImpl } = await import("bun");
@@ -127,8 +127,7 @@ export default class Redis implements IStorage {
    * @param _c クローズコンテキストです。
    */
   public close(_c: IStorage.CloseContext): void {
-    this.#getConnection().client.close();
-    this.#con = null;
+    this.#closeClient();
   }
 
   /**
@@ -162,16 +161,7 @@ export default class Redis implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
-    c.signal.throwIfAborted();
-
-    const data = await client.getBuffer(this.#toKey(c.key));
-
-    if (data === null) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    // Bun は Buffer を返すため、契約どおりの Uint8Array へ正規化します。
-    return new Uint8Array(data);
+    return this.#readValue(client, c.key, c.signal);
   }
 
   /**
@@ -228,7 +218,7 @@ export default class Redis implements IStorage {
 
     // 同じキーへの複製は値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
-      if (!(await client.exists(src))) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -262,7 +252,7 @@ export default class Redis implements IStorage {
 
     // 同じキーへの移動は値の存在確認だけを行い、削除しません。
     if (c.key === c.destinationKey) {
-      if (!(await client.exists(src))) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -274,7 +264,7 @@ export default class Redis implements IStorage {
       await client.rename(src, dest);
     } catch (ex) {
       // `RENAME` は移動元が存在しないときサーバーエラーを返すため、欠番を統一します。
-      if (!(await client.exists(src))) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -411,12 +401,11 @@ export default class Redis implements IStorage {
 
     c.signal.throwIfAborted();
 
-    const dest = this.#toKey(c.key);
     let sent = false;
 
     // Redis の GET は値を一括で返すため、取得したバイト列を単一のチャンクとして送出します。
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
-      async pull(controller) {
+      pull: async (controller) => {
         if (sent) {
           controller.close();
 
@@ -424,19 +413,63 @@ export default class Redis implements IStorage {
         }
 
         sent = true;
-        c.signal.throwIfAborted();
 
-        const data = await client.getBuffer(dest);
-
-        if (data === null) {
-          throw new KeyNotFoundError({ key: c.key });
-        }
-
-        // Bun は Buffer を返すため、契約どおりの Uint8Array へ正規化します。
-        controller.enqueue(new Uint8Array(data));
+        controller.enqueue(await this.#readValue(client, c.key, c.signal));
         controller.close();
       },
     });
+  }
+
+  /**
+   * キーの値を取得し、契約どおりのバイト列へ正規化します。
+   *
+   * @param client 取得に使うクライアントです。
+   * @param key 取得する論理キーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 取得したバイト列です。
+   */
+  async #readValue(
+    client: RedisClient,
+    key: string,
+    signal: AbortSignal,
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    signal.throwIfAborted();
+
+    const data = await client.getBuffer(this.#toKey(key));
+
+    if (data === null) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    // Bun は Buffer を返すため、契約どおりの Uint8Array へ正規化します。
+    return new Uint8Array(data);
+  }
+
+  /**
+   * キーが存在するかどうかを確認します。
+   *
+   * 中断の確認は呼び出し側で行います。
+   *
+   * @param client 操作に使うクライアントです。
+   * @param key 確認する論理キーです。
+   *
+   * @returns キーが存在すれば真です。
+   */
+  async #keyExists(client: RedisClient, key: string): Promise<boolean> {
+    return client.exists(this.#toKey(key));
+  }
+
+  /**
+   * 開いているクライアントを閉じます。
+   *
+   * `open()` の再接続からも呼べるよう、クローズコンテキストは受け取りません。
+   * サブクラスが公開 `close()` をオーバーライドしても、再接続時にはこのメソッドが使われます。
+   */
+  #closeClient(): void {
+    // 未オープン時の `close()` は従来どおり `TypeError` にします。
+    this.#getConnection().client.close();
+    this.#con = null;
   }
 
   /**

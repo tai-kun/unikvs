@@ -6,7 +6,7 @@ import {
   DecodeStreamContext,
   EncodeStreamContext,
 } from "./_contexts.js";
-import { logger, repairLogger } from "./_logger.js";
+import { logRepairError, logRepairFailure, logSkippedRepair } from "./_logger.js";
 import type UniKvsMiddleware from "./_middleware.js";
 import {
   applyMapKey,
@@ -55,48 +55,83 @@ function* visit(node: PipelineNode): IterableIterator<PipelineNode> {
 }
 
 /**
- * 直通区間をまとめて葉名簿と全葉を確定します。
+ * 同じ階層の葉と子節から、項目列・全葉・葉名簿を確定します。
+ *
+ * 直通区間では子の全葉と葉名簿の参照を共有します。
+ *
+ * @param leaves この階層で終端する葉です。
+ * @param children 確定済みの子節です。
+ * @param passThroughErrorMessage 直通区間の子節が欠けているときのエラーメッセージです。
+ *
+ * @returns 確定した項目列・全葉・葉名簿を返します。
+ */
+function summarizeLevel(
+  leaves: readonly PipelineLeaf[],
+  children: readonly PipelineNode[],
+  passThroughErrorMessage: string,
+): {
+  readonly entries: readonly PipelineEntry[];
+  readonly allLeaves: readonly PipelineLeaf[];
+  readonly leafNames: readonly string[];
+} {
+  // 直通の節は子の葉名簿と全葉を共有します。
+  if (leaves.length === 0 && children.length === 1) {
+    const [child] = children;
+
+    if (child === undefined) {
+      throw new Error(passThroughErrorMessage);
+    }
+
+    return {
+      entries: [
+        {
+          kind: "node",
+          node: child,
+        },
+      ],
+      allLeaves: child.allLeaves,
+      leafNames: child.leafNames,
+    };
+  }
+
+  const allLeaves = [...leaves];
+
+  for (const child of children) {
+    allLeaves.push(...child.allLeaves);
+  }
+
+  allLeaves.sort((a, b) => a.index - b.index);
+
+  const [singleLeaf] = allLeaves;
+
+  return {
+    entries: createEntries(leaves, children),
+    allLeaves,
+    leafNames:
+      allLeaves.length === 1 && singleLeaf !== undefined
+        ? singleLeaf.nameNames
+        : Object.freeze(allLeaves.map((leaf) => leaf.name)),
+  };
+}
+
+/**
+ * 節の項目列と葉名簿を確定します。
  *
  * @param node 確定する節です。
  */
 function finalize(node: MutableNode): void {
-  // 直通の節は子の葉名簿と全葉を共有します。
-  if (node.leaves.length === 0 && node.children.length === 1) {
-    const [child] = node.children;
-
-    if (child === undefined) {
-      throw new Error("直通区間の子節が存在しません。");
-    }
-
+  for (const child of node.children) {
     finalize(child);
-    node.entries = [
-      {
-        kind: "node",
-        node: child,
-      },
-    ];
-    node.allLeaves = child.allLeaves;
-    node.leafNames = child.leafNames;
-  } else {
-    const leaves = [...node.leaves];
-
-    for (const child of node.children) {
-      finalize(child);
-      leaves.push(...child.allLeaves);
-    }
-
-    leaves.sort((a, b) => a.index - b.index);
-
-    const [singleLeaf] = leaves;
-
-    node.entries = createEntries(node.leaves, node.children);
-    node.allLeaves = leaves;
-    if (leaves.length === 1 && singleLeaf !== undefined) {
-      node.leafNames = singleLeaf.nameNames;
-    } else {
-      node.leafNames = Object.freeze(leaves.map((leaf) => leaf.name));
-    }
   }
+
+  const { entries, allLeaves, leafNames } = summarizeLevel(
+    node.leaves,
+    node.children,
+    "直通区間の子節が存在しません。",
+  );
+  node.entries = entries;
+  node.allLeaves = allLeaves;
+  node.leafNames = leafNames;
 }
 
 /**
@@ -223,33 +258,11 @@ export class PipelineGraph {
       finalize(child);
     }
 
-    let rootEntries: readonly PipelineEntry[];
-    let rootAllLeaves: readonly PipelineLeaf[];
-
-    if (rootLeaves.length === 0 && rootChildren.length === 1) {
-      const [child] = rootChildren;
-
-      if (child === undefined) {
-        throw new Error("根直下の子節が存在しません。");
-      }
-
-      rootEntries = [
-        {
-          kind: "node",
-          node: child,
-        },
-      ];
-      rootAllLeaves = child.allLeaves;
-    } else {
-      const collected = [...rootLeaves];
-
-      for (const child of rootChildren) {
-        collected.push(...child.allLeaves);
-      }
-
-      rootEntries = createEntries(rootLeaves, rootChildren);
-      rootAllLeaves = collected.toSorted((a, b) => a.index - b.index);
-    }
+    const { entries: rootEntries, allLeaves: rootAllLeaves } = summarizeLevel(
+      rootLeaves,
+      rootChildren,
+      "根直下の子節が存在しません。",
+    );
 
     return new PipelineGraph(rootAllLeaves, rootEntries, middlewares);
   }
@@ -687,7 +700,7 @@ export class PipelineGraph {
             }
 
             if (ex instanceof RepairNotAllowedError) {
-              repairLogger.warn`Failed to repair a storage: ${ex}`;
+              logRepairFailure(ex);
 
               if (throwOnRepairDenied) {
                 writeDenials.push(
@@ -703,7 +716,7 @@ export class PipelineGraph {
               return;
             }
 
-            logger.error`Failed to repair a storage: ${ex}`;
+            logRepairError(ex);
           }
         })(),
       );
@@ -719,7 +732,7 @@ export class PipelineGraph {
         return;
       }
 
-      repairLogger.warn`Skipped repair for a storage without AllowRepair: ${leaf.name}`;
+      logSkippedRepair(leaf.name);
 
       if (throwOnRepairDenied) {
         recordTraversalDenial(new RepairNotAllowedError({ names: [leaf.name] }));
@@ -874,18 +887,18 @@ export class PipelineGraph {
             }
 
             // 拒否をエラーにしない指定では、下流開始前と同じく警告に留めて読み取りを成功させます。
-            repairLogger.warn`Failed to repair a storage: ${ex}`;
+            logRepairFailure(ex);
 
             return;
           }
 
-          logger.error`Failed to repair a storage: ${ex}`;
+          logRepairError(ex);
 
           return;
         }
 
         if (ex instanceof RepairNotAllowedError) {
-          repairLogger.warn`Failed to repair a storage: ${ex}`;
+          logRepairFailure(ex);
 
           if (throwOnRepairDenied) {
             const denied = new RepairNotAllowedError({
@@ -900,7 +913,7 @@ export class PipelineGraph {
             recordTraversalDenial(denied);
           }
         } else {
-          logger.error`Failed to repair a storage: ${ex}`;
+          logRepairError(ex);
         }
       }
     };
@@ -1161,7 +1174,7 @@ export class PipelineGraph {
               }
             }
 
-            logger.error`Failed to repair a storage: ${ex}`;
+            logRepairError(ex);
 
             return output === undefined
               ? null

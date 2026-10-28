@@ -1,62 +1,18 @@
 import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import {
-  type TestContextInit,
-  TestContext,
   abortedSignal,
   captureRejection,
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
 } from "@unikvs/testing";
 import { test, describe } from "vite-plus/test";
 
 import { BlobOperationError } from "../src/errors.js";
 import VercelBlob, { type BlobClientLike } from "../src/vercel-blob.js";
 import { createFakeClient, createFakeDownload } from "./_helpers.js";
-
-/**
- * 複製用のコンテキストを組み立てます。
- *
- * @param key 複製元のキーです。
- * @param destinationKey 複製先のキーです。
- * @param init 追加の初期値です。
- *
- * @returns 複製用のコンテキストです。
- */
-function createCopyContext(
-  key: string,
-  destinationKey: string,
-  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): IStorage.CopyContext {
-  return new TestContext({
-    ...init,
-    action: "copy",
-    key,
-    destinationKey,
-  }) as unknown as IStorage.CopyContext;
-}
-
-/**
- * 移動用のコンテキストを組み立てます。
- *
- * @param key 移動元のキーです。
- * @param destinationKey 移動先のキーです。
- * @param init 追加の初期値です。
- *
- * @returns 移動用のコンテキストです。
- */
-function createMoveContext(
-  key: string,
-  destinationKey: string,
-  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
-): IStorage.MoveContext {
-  return new TestContext({
-    ...init,
-    action: "move",
-    key,
-    destinationKey,
-  }) as unknown as IStorage.MoveContext;
-}
 
 /**
  * 疑似クライアントとストレージを組み立てます。

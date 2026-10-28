@@ -209,6 +209,24 @@ export function wrapNativeEtcdClient(
 }
 
 /**
+ * キーと値の組を反復できるかどうかを判定します。
+ *
+ * @param value 判定する値です。
+ *
+ * @returns 反復可能なキーと値の組なら真です。
+ */
+function isEntryIterable(
+  value: unknown,
+): value is Iterable<readonly [string, Uint8Array | string | Buffer]> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Symbol.iterator in value &&
+    typeof (value as Iterable<readonly [string, unknown]>)[Symbol.iterator] === "function"
+  );
+}
+
+/**
  * 取得結果からキーの一覧を取り出します。
  *
  * 配列や Map や反復可能のいずれにも対応します。
@@ -222,13 +240,8 @@ function collectKeys(result: EtcdGetAllResult): readonly string[] {
     return [...result.keys()];
   }
 
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    Symbol.iterator in result &&
-    typeof (result as Iterable<readonly [string, unknown]>)[Symbol.iterator] === "function"
-  ) {
-    return [...(result as Iterable<readonly [string, unknown]>)].map(([key]) => key);
+  if (isEntryIterable(result)) {
+    return [...result].map(([key]) => key);
   }
 
   return Object.keys(result);
@@ -418,7 +431,7 @@ export default class Etcd implements IStorage {
     // 並行 `open` 同士および `open` 接続待ち中の `close` の同時呼び出しは禁止 (事前条件) です。
     // 呼び出し側で直列化してください。
     if (this.#con) {
-      await this.close(_c as unknown as IStorage.CloseContext);
+      await this.#teardownConnection();
     }
 
     // 空文字の環境変数は未指定として扱います (本パッケージ仕様)。
@@ -465,15 +478,7 @@ export default class Etcd implements IStorage {
    * @returns クローズが完了したら解決します。
    */
   public async close(_c: IStorage.CloseContext): Promise<void> {
-    // 未 `open`・二重 `close` は `TypeError` で reject されます。
-    // 必ず `await` し、結果を浮かせないでください。
-    const { onClose } = this.#getConnection();
-
-    // 先行 null 化により、並行 `close` 同士は二重クローズになりません。
-    this.#con = null;
-
-    // 注入クライアントの所有権は呼び出し側にあるため、ここでは破棄しません。
-    await onClose?.();
+    await this.#teardownConnection();
   }
 
   /**
@@ -507,16 +512,7 @@ export default class Etcd implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
-    throwIfAborted(c.signal);
-    using abortPromise = toAbortPromise(c.signal);
-
-    const data = await Promise.race([client.get(this.#toKey(c.key)), abortPromise]);
-
-    if (data === null || data === undefined) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    return toBytes(data);
+    return this.#readBytes(client, c.signal, c.key);
   }
 
   /**
@@ -649,13 +645,11 @@ export default class Etcd implements IStorage {
 
     throwIfAborted(c.signal);
 
-    const dest = this.#toKey(c.key);
-    const key = c.key;
     let sent = false;
 
     // etcd の GET は値を一括で返すため、取得したバイト列を単一のチャンクとして送出します。
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
-      async pull(controller) {
+      pull: async (controller) => {
         if (sent) {
           controller.close();
 
@@ -663,19 +657,58 @@ export default class Etcd implements IStorage {
         }
 
         sent = true;
-        throwIfAborted(c.signal);
-        using abortPromise = toAbortPromise(c.signal);
 
-        const data = await Promise.race([client.get(dest), abortPromise]);
-
-        if (data === null || data === undefined) {
-          throw new KeyNotFoundError({ key });
-        }
-
-        controller.enqueue(toBytes(data));
+        controller.enqueue(await this.#readBytes(client, c.signal, c.key));
         controller.close();
       },
     });
+  }
+
+  /**
+   * 接続からキーの値をバイト列として読み取ります。
+   *
+   * 中断済みなら開始前に中断理由を投げ、取得中は中断と競合させます。
+   *
+   * @param client 読み取りに使うクライアントです。
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 読み取る論理キーです。
+   *
+   * @returns 読み取ったバイト列です。
+   */
+  async #readBytes(
+    client: EtcdClientLike,
+    signal: AbortSignal,
+    key: string,
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    throwIfAborted(signal);
+    using abortPromise = toAbortPromise(signal);
+
+    const data = await Promise.race([client.get(this.#toKey(key)), abortPromise]);
+
+    if (data === null || data === undefined) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    return toBytes(data);
+  }
+
+  /**
+   * 開いている接続を破棄します。
+   *
+   * 未オープン時は例外を投げます。
+   *
+   * @returns 破棄が完了したら解決します。
+   */
+  async #teardownConnection(): Promise<void> {
+    // 未 `open`・二重 `close` は `TypeError` で reject されます。
+    // 必ず `await` し、結果を浮かせないでください。
+    const { onClose } = this.#getConnection();
+
+    // 先行 null 化により、並行 `close` 同士は二重クローズになりません。
+    this.#con = null;
+
+    // 注入クライアントの所有権は呼び出し側にあるため、ここでは破棄しません。
+    await onClose?.();
   }
 
   /**

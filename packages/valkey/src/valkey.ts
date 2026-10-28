@@ -192,6 +192,40 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 
 /**
+ * 処理をタイムアウトと競合させます。
+ *
+ * 成功・失敗・タイムアウトのいずれでもタイマーを片付けます。
+ *
+ * @param operation 待機する処理です。
+ * @param timeoutMs タイムアウト (ミリ秒) です。
+ * @param createError タイムアウト時に使う例外を作る関数です。
+ *
+ * @returns 処理の結果です。
+ */
+async function raceWithTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  createError: () => Error,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(createError());
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
  * ストレージの動作に必要な接続を保持する型定義です。
  *
  * 所有権の有無で `close` 時の切断要否を切り替えます。
@@ -331,7 +365,7 @@ export default class Valkey implements IStorage {
     // 呼び出し側で直列化してください。
     // 並行 `close` 同士は一方が `TypeError` reject する形で直列化されます。
     if (this.#con) {
-      await this.close(_c as unknown as IStorage.CloseContext);
+      await this.#closeConnection();
     }
 
     // 注入されたクライアントは呼び出し側の所有物のため、接続も切断も行いません。
@@ -376,24 +410,15 @@ export default class Valkey implements IStorage {
     // 可観測性は v1 では提供しません。
     raw.on("error", () => {});
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
     try {
-      await Promise.race([
+      await raceWithTimeout(
         raw.connect(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new ConnectTimeoutError({ timeoutMs: connectTimeout }));
-          }, connectTimeout);
-        }),
-      ]);
+        connectTimeout,
+        () => new ConnectTimeoutError({ timeoutMs: connectTimeout }),
+      );
     } catch (ex) {
       raw.disconnect();
       throw ex;
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
     }
 
     this.#con = {
@@ -412,38 +437,7 @@ export default class Valkey implements IStorage {
    * @returns クローズが完了したら解決します。
    */
   public async close(_c: IStorage.CloseContext): Promise<void> {
-    // 未 `open`・二重 `close` は `TypeError` で reject されます。
-    // 必ず `await` し、結果を浮かせないでください。
-    const { owned, client } = this.#getConnection();
-
-    // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
-    this.#con = null;
-
-    // 注入されたクライアントは呼び出し側が所有するため切断しません。
-    if (!owned) {
-      return;
-    }
-
-    const closeTimeout = this.#closeTimeout;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    try {
-      await Promise.race([
-        client.quit(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new CloseTimeoutError({ timeoutMs: closeTimeout }));
-          }, closeTimeout);
-        }),
-      ]);
-    } catch {
-      // `quit()` の失敗全般 (タイムアウト含む) は `disconnect()` で掃除して正常復帰します。
-      client.disconnect();
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-    }
+    await this.#closeConnection();
   }
 
   /**
@@ -461,11 +455,7 @@ export default class Valkey implements IStorage {
 
     throwIfAborted(c.signal);
 
-    if (this.#ttl === undefined) {
-      await client.set(this.#toKey(c.key), Buffer.from(data));
-    } else {
-      await client.set(this.#toKey(c.key), Buffer.from(data), "PX", this.#ttl);
-    }
+    await this.#setValue(client, this.#toKey(c.key), data);
   }
 
   /**
@@ -560,11 +550,7 @@ export default class Valkey implements IStorage {
     }
 
     // 設定された TTL を複製先にも適用します。
-    if (this.#ttl === undefined) {
-      await client.set(dest, Buffer.from(data));
-    } else {
-      await client.set(dest, Buffer.from(data), "PX", this.#ttl);
-    }
+    await this.#setValue(client, dest, data);
   }
 
   /**
@@ -757,6 +743,57 @@ export default class Valkey implements IStorage {
         controller.close();
       },
     });
+  }
+
+  /**
+   * 有効期限を考慮してキーへ値を保存します。
+   *
+   * @param client 保存に使うクライアントです。
+   * @param key 保存先の実キーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #setValue(client: ValkeyClient, key: string, data: Uint8Array): Promise<void> {
+    const value = Buffer.from(data);
+
+    if (this.#ttl === undefined) {
+      await client.set(key, value);
+    } else {
+      await client.set(key, value, "PX", this.#ttl);
+    }
+  }
+
+  /**
+   * 開いている接続を破棄します。
+   *
+   * 所有する接続のみ切断し、注入クライアントは残します。
+   *
+   * @returns 破棄が完了したら解決します。
+   */
+  async #closeConnection(): Promise<void> {
+    // 未 `open`・二重 `close` は `TypeError` で reject されます。
+    // 必ず `await` し、結果を浮かせないでください。
+    const { owned, client } = this.#getConnection();
+
+    // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
+    this.#con = null;
+
+    // 注入されたクライアントは呼び出し側が所有するため切断しません。
+    if (!owned) {
+      return;
+    }
+
+    try {
+      await raceWithTimeout(
+        client.quit(),
+        this.#closeTimeout,
+        () => new CloseTimeoutError({ timeoutMs: this.#closeTimeout }),
+      );
+    } catch {
+      // `quit()` の失敗全般 (タイムアウト含む) は `disconnect()` で掃除して正常復帰します。
+      client.disconnect();
+    }
   }
 
   /**

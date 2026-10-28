@@ -1,5 +1,6 @@
 import {
   type S3ClientConfig,
+  type GetObjectCommandOutput,
   type ListObjectsV2CommandOutput,
   S3Client,
   GetObjectCommand,
@@ -13,6 +14,7 @@ import {
 import { Upload } from "@aws-sdk/lib-storage";
 import {
   type IStorage,
+  type IPipelineContext,
   KeyNotFoundError,
   StorageAbortedError,
   InvalidPartSizeError,
@@ -51,6 +53,31 @@ function isKeyNotFoundError(ex: unknown): boolean {
     error.name === "NotFound" ||
     error.$metadata?.httpStatusCode === 404
   );
+}
+
+/**
+ * 書き込みストリームのパートサイズをコンテキストから解決します。
+ * パッケージ固有の変数を優先し、なければ共通の変数を参照します。
+ *
+ * @param c パイプラインコンテキストです。
+ *
+ * @returns 解決したパートサイズです。未指定のときは undefined です。
+ */
+function resolvePartSize(c: Pick<IPipelineContext, "get">): number | undefined {
+  const packagePartSize = c.get("@unikvs/s3.node:partSize");
+  const rawPartSize =
+    packagePartSize !== undefined ? packagePartSize : c.get("@unikvs/s3:partSize");
+  let partSize: number | undefined = undefined;
+
+  if (rawPartSize !== undefined) {
+    if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
+      throw new InvalidPartSizeError({ actual: rawPartSize });
+    }
+
+    partSize = rawPartSize;
+  }
+
+  return partSize;
 }
 
 /**
@@ -155,17 +182,7 @@ export default class S3 implements IStorage {
    * @returns 読み取ったバイト列です。
    */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    const command = new GetObjectCommand({
-      Key: c.key,
-      Bucket: this.#bucket,
-    });
-    const response = await this.#getClient().send(command, { abortSignal: c.signal });
-    const body = response.Body;
-
-    if (body === undefined) {
-      throw new TypeError("S3: Missing response body.");
-    }
-
+    const body = await this.#getObjectBody(c.key, c.signal);
     const byteArray = await body.transformToByteArray();
 
     return byteArray satisfies Uint8Array as Uint8Array<ArrayBuffer>;
@@ -328,19 +345,7 @@ export default class S3 implements IStorage {
       throw new StorageAbortedError({ key: c.key });
     }
 
-    let partSize: number | undefined = undefined;
-    const rawPartSize =
-      c.get("@unikvs/s3.node:partSize") !== undefined
-        ? c.get("@unikvs/s3.node:partSize")
-        : c.get("@unikvs/s3:partSize");
-
-    if (rawPartSize !== undefined) {
-      if (typeof rawPartSize !== "number" || !Number.isInteger(rawPartSize) || rawPartSize <= 0) {
-        throw new InvalidPartSizeError({ actual: rawPartSize });
-      }
-
-      partSize = rawPartSize;
-    }
+    const partSize = resolvePartSize(c);
 
     const { readable, writable } = new TransformStream<
       Uint8Array<ArrayBuffer>,
@@ -417,18 +422,35 @@ export default class S3 implements IStorage {
   public async getReadable(
     c: IStorage.GetReadableContext,
   ): Promise<ReadableStream<Uint8Array<ArrayBuffer>>> {
+    const body = await this.#getObjectBody(c.key, c.signal);
+
+    return body.transformToWebStream();
+  }
+
+  /**
+   * S3 オブジェクトの本文を取得します。
+   *
+   * @param key 取得するキーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 取得したオブジェクトの本文です。
+   */
+  async #getObjectBody(
+    key: string,
+    signal: AbortSignal,
+  ): Promise<NonNullable<GetObjectCommandOutput["Body"]>> {
     const command = new GetObjectCommand({
-      Key: c.key,
+      Key: key,
       Bucket: this.#bucket,
     });
-    const response = await this.#getClient().send(command, { abortSignal: c.signal });
+    const response = await this.#getClient().send(command, { abortSignal: signal });
     const body = response.Body;
 
     if (body === undefined) {
       throw new TypeError("S3: Missing response body.");
     }
 
-    return body.transformToWebStream();
+    return body;
   }
 
   /**
@@ -450,11 +472,7 @@ export default class S3 implements IStorage {
     try {
       await this.#getClient().send(command, { abortSignal: signal });
     } catch (ex) {
-      if (isKeyNotFoundError(ex)) {
-        throw new KeyNotFoundError({ key });
-      }
-
-      throw ex;
+      this.#rethrowKeyNotFound(ex, key);
     }
   }
 
@@ -480,12 +498,24 @@ export default class S3 implements IStorage {
     try {
       await this.#getClient().send(command, { abortSignal: signal });
     } catch (ex) {
-      if (isKeyNotFoundError(ex)) {
-        throw new KeyNotFoundError({ key: sourceKey });
-      }
-
-      throw ex;
+      this.#rethrowKeyNotFound(ex, sourceKey);
     }
+  }
+
+  /**
+   * キーの欠番を `KeyNotFoundError` に変換し、それ以外の失敗はそのまま投げ直します。
+   *
+   * `exists` の 404 判定とは意図的に共有しません。
+   *
+   * @param ex 判定する失敗です。
+   * @param key 欠番と判定したときの論理キーです。
+   */
+  #rethrowKeyNotFound(ex: unknown, key: string): never {
+    if (isKeyNotFoundError(ex)) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    throw ex;
   }
 
   /**

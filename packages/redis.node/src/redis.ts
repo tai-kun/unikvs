@@ -68,6 +68,51 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5000;
 const DEFAULT_CLOSE_TIMEOUT_MS = 5000;
 
 /**
+ * 指定した時間でタイムアウトする `Promise.race` を作ります。
+ *
+ * 待機対象のプロミスは呼び出し側で先に開始しておく必要があります。
+ *
+ * @param promise 待機するプロミスです。
+ * @param timeoutMs タイムアウト (ミリ秒) です。
+ * @param createError タイムアウト時のエラーを作る関数です。
+ *
+ * @returns 待機対象が解決または拒否されたら同じ結果で解決します。
+ */
+async function withTimeout<T>(
+  promise: PromiseLike<T>,
+  timeoutMs: number,
+  createError: () => Error,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(createError());
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * 空文字の URL を未指定として扱います。
+ *
+ * @param url 正規化する URL です。
+ *
+ * @returns 空文字なら undefined、それ以外は元の値です。
+ */
+function normalizeUrl(url: string | undefined): string | undefined {
+  return url === undefined || url === "" ? undefined : url;
+}
+
+/**
  * ストレージの動作に必要な接続を保持する型定義です。
  */
 type Connection = {
@@ -174,22 +219,16 @@ export default class Redis implements IStorage {
     // 呼び出し側で直列化してください。
     // 並行 `close` 同士は一方が `TypeError` reject する形で直列化されます。
     if (this.#con) {
-      await this.close(_c as unknown as IStorage.CloseContext);
+      await this.#closeConnection();
     }
 
     // 空文字の `url`・環境変数は未指定として扱います (本パッケージ仕様)。
     // `url` は `redis://` / `rediss://` 形式での指定を要求します。
     // 実行時の形式検証は行いません (bare 形式は非サポート・動作未保証)。
-    const explicitUrl = this.#url === undefined || this.#url === "" ? undefined : this.#url;
-    const redisUrl =
-      process.env["REDIS_URL"] === undefined || process.env["REDIS_URL"] === ""
-        ? undefined
-        : process.env["REDIS_URL"];
-    const valkeyUrl =
-      process.env["VALKEY_URL"] === undefined || process.env["VALKEY_URL"] === ""
-        ? undefined
-        : process.env["VALKEY_URL"];
-    const url = explicitUrl ?? redisUrl ?? valkeyUrl;
+    const url =
+      normalizeUrl(this.#url) ??
+      normalizeUrl(process.env["REDIS_URL"]) ??
+      normalizeUrl(process.env["VALKEY_URL"]);
     const connectTimeout = this.#options.connectTimeout ?? DEFAULT_CONNECT_TIMEOUT_MS;
 
     // `ioredis` v6 のコンストラクタ型は `replyMapping` に明示 `undefined` を許しません。
@@ -209,24 +248,15 @@ export default class Redis implements IStorage {
     // 可観測性は v1 では提供しません。
     raw.on("error", () => {});
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
     try {
-      await Promise.race([
+      await withTimeout(
         raw.connect(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new ConnectTimeoutError({ timeoutMs: connectTimeout }));
-          }, connectTimeout);
-        }),
-      ]);
+        connectTimeout,
+        () => new ConnectTimeoutError({ timeoutMs: connectTimeout }),
+      );
     } catch (ex) {
       raw.disconnect();
       throw ex;
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
     }
 
     this.#con = { client: raw };
@@ -242,33 +272,7 @@ export default class Redis implements IStorage {
    * @returns クローズが完了したら解決します。
    */
   public async close(_c: IStorage.CloseContext): Promise<void> {
-    // 未 `open`・二重 `close` は `TypeError` で reject されます。
-    // 必ず `await` し、結果を浮かせないでください。
-    const { client } = this.#getConnection();
-
-    // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
-    this.#con = null;
-
-    const closeTimeout = this.#closeTimeout;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    try {
-      await Promise.race([
-        client.quit(),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new CloseTimeoutError({ timeoutMs: closeTimeout }));
-          }, closeTimeout);
-        }),
-      ]);
-    } catch {
-      // `quit()` の失敗全般 (タイムアウト含む) は `disconnect()` で掃除して正常復帰します。
-      client.disconnect();
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-    }
+    await this.#closeConnection();
   }
 
   /**
@@ -301,15 +305,7 @@ export default class Redis implements IStorage {
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
     const { client } = this.#getConnection();
 
-    c.signal.throwIfAborted();
-
-    const data = await client.getBuffer(this.#toKey(c.key));
-
-    if (data === null) {
-      throw new KeyNotFoundError({ key: c.key });
-    }
-
-    return new Uint8Array(data);
+    return this.#readValue(client, c.key, c.signal);
   }
 
   /**
@@ -364,7 +360,7 @@ export default class Redis implements IStorage {
 
     // 同じキーへの複製は値の存在確認だけを行います。
     if (c.key === c.destinationKey) {
-      if ((await client.exists(src)) === 0) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -398,7 +394,7 @@ export default class Redis implements IStorage {
 
     // 同じキーへの移動は値の存在確認だけを行い、削除しません。
     if (c.key === c.destinationKey) {
-      if ((await client.exists(src)) === 0) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -410,7 +406,7 @@ export default class Redis implements IStorage {
       await client.rename(src, dest);
     } catch (ex) {
       // `RENAME` は移動元が存在しないときサーバーエラーを返すため、欠番を統一します。
-      if ((await client.exists(src)) === 0) {
+      if (!(await this.#keyExists(client, c.key))) {
         throw new KeyNotFoundError({ key: c.key });
       }
 
@@ -534,12 +530,11 @@ export default class Redis implements IStorage {
 
     c.signal.throwIfAborted();
 
-    const dest = this.#toKey(c.key);
     let sent = false;
 
     // Redis の GET は値を一括で返すため、取得したバイト列を単一のチャンクとして送出します。
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
-      async pull(controller) {
+      pull: async (controller) => {
         if (sent) {
           controller.close();
 
@@ -547,18 +542,80 @@ export default class Redis implements IStorage {
         }
 
         sent = true;
-        c.signal.throwIfAborted();
 
-        const data = await client.getBuffer(dest);
-
-        if (data === null) {
-          throw new KeyNotFoundError({ key: c.key });
-        }
-
-        controller.enqueue(new Uint8Array(data));
+        controller.enqueue(await this.#readValue(client, c.key, c.signal));
         controller.close();
       },
     });
+  }
+
+  /**
+   * キーの値を取得し、契約どおりのバイト列へ正規化します。
+   *
+   * @param client 取得に使うクライアントです。
+   * @param key 取得する論理キーです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 取得したバイト列です。
+   */
+  async #readValue(
+    client: Ioredis,
+    key: string,
+    signal: AbortSignal,
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    signal.throwIfAborted();
+
+    const data = await client.getBuffer(this.#toKey(key));
+
+    if (data === null) {
+      throw new KeyNotFoundError({ key });
+    }
+
+    return new Uint8Array(data);
+  }
+
+  /**
+   * キーが存在するかどうかを確認します。
+   *
+   * 中断の確認は呼び出し側で行います。
+   *
+   * @param client 操作に使うクライアントです。
+   * @param key 確認する論理キーです。
+   *
+   * @returns キーが存在すれば真です。
+   */
+  async #keyExists(client: Ioredis, key: string): Promise<boolean> {
+    return (await client.exists(this.#toKey(key))) > 0;
+  }
+
+  /**
+   * ストレージをクローズし、接続を切断します。
+   *
+   * `open()` の再接続からも呼べるよう、クローズコンテキストは受け取りません。
+   * サブクラスが公開 `close()` をオーバーライドしても、再接続時にはこのメソッドが使われます。
+   *
+   * @returns クローズが完了したら解決します。
+   */
+  async #closeConnection(): Promise<void> {
+    // 未 `open`・二重 `close` は `TypeError` で reject されます。
+    // 必ず `await` し、結果を浮かせないでください。
+    const { client } = this.#getConnection();
+
+    // 先行 null 化により、並行 `close` 同士は二重 `quit` になりません。
+    this.#con = null;
+
+    const closeTimeout = this.#closeTimeout;
+
+    try {
+      await withTimeout(
+        client.quit(),
+        closeTimeout,
+        () => new CloseTimeoutError({ timeoutMs: closeTimeout }),
+      );
+    } catch {
+      // `quit()` の失敗全般 (タイムアウト含む) は `disconnect()` で掃除して正常復帰します。
+      client.disconnect();
+    }
   }
 
   /**

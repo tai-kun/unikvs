@@ -46,6 +46,17 @@ type Connection = {
 };
 
 /**
+ * コピーまたは移動に使うファイル操作です。
+ *
+ * 第 1 引数に `node:fs/promises` 相当のモジュールを受け取ります。
+ */
+type TransferOperation = (
+  fs: Connection["fs"],
+  source: string,
+  destination: string,
+) => Promise<void>;
+
+/**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/fs-bun#bunfsoptions)
  */
 export type BunFsOptions = {};
@@ -138,11 +149,7 @@ export default class BunFs implements IStorage {
       await fs.rename(file.tmp, file.dest);
     } catch (ex) {
       // 失敗・中断時には一時ファイルを削除し、既存のデータを保全します。
-      try {
-        await tmp.delete();
-      } catch {
-        // 後始末の削除に失敗しても無視します。
-      }
+      await this.#removeTemporary(tmp);
 
       throw ex;
     }
@@ -156,12 +163,11 @@ export default class BunFs implements IStorage {
    * @returns ファイル内容のバイト列です。
    */
   public async read(c: IStorage.ReadContext): Promise<Uint8Array<ArrayBuffer>> {
-    this.#getConnection();
+    const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const { path } = this.#getConnection();
     const file = path.join(this.#root, c.key);
     const data = await Bun.file(file).bytes();
 
@@ -176,11 +182,10 @@ export default class BunFs implements IStorage {
    * @returns ファイルがあれば true を返します。
    */
   public async exists(c: IStorage.ExistsContext): Promise<boolean> {
-    this.#getConnection();
+    const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
 
-    const { path } = this.#getConnection();
     const file = path.join(this.#root, c.key);
 
     return Bun.file(file).exists();
@@ -194,11 +199,10 @@ export default class BunFs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async delete(c: IStorage.DeleteContext): Promise<void> {
-    this.#getConnection();
+    const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
 
-    const { path } = this.#getConnection();
     const file = path.join(this.#root, c.key);
     await Bun.file(file).delete();
   }
@@ -211,31 +215,9 @@ export default class BunFs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async copy(c: IStorage.CopyContext): Promise<void> {
-    const { fs, path } = this.#getConnection();
-
-    assertValidFilename(c.key);
-    assertValidFilename(c.destinationKey);
-    c.signal.throwIfAborted();
-
-    // 同じキーへのコピーはファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.#assertExists(c.key, c.signal);
-
-      return;
-    }
-
-    const source = path.join(this.#root, c.key);
-    const dest = path.join(this.#root, c.destinationKey);
-
-    try {
-      await fs.copyFile(source, dest);
-    } catch (ex) {
-      if (isErrnoCode(ex, "ENOENT")) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throw ex;
-    }
+    await this.#transfer(c.key, c.destinationKey, c.signal, (fs, source, dest) =>
+      fs.copyFile(source, dest),
+    );
   }
 
   /**
@@ -248,31 +230,9 @@ export default class BunFs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async move(c: IStorage.MoveContext): Promise<void> {
-    const { fs, path } = this.#getConnection();
-
-    assertValidFilename(c.key);
-    assertValidFilename(c.destinationKey);
-    c.signal.throwIfAborted();
-
-    // 同じキーへの移動はファイルの存在確認だけを行います。
-    if (c.key === c.destinationKey) {
-      await this.#assertExists(c.key, c.signal);
-
-      return;
-    }
-
-    const source = path.join(this.#root, c.key);
-    const dest = path.join(this.#root, c.destinationKey);
-
-    try {
-      await fs.rename(source, dest);
-    } catch (ex) {
-      if (isErrnoCode(ex, "ENOENT")) {
-        throw new KeyNotFoundError({ key: c.key });
-      }
-
-      throw ex;
-    }
+    await this.#transfer(c.key, c.destinationKey, c.signal, (fs, source, dest) =>
+      fs.rename(source, dest),
+    );
   }
 
   /**
@@ -310,13 +270,7 @@ export default class BunFs implements IStorage {
     // 一時ファイルへの書き込みシンクを作成します。
     const tmp = Bun.file(file.tmp);
     const sink = tmp.writer();
-    const removeTmp = async (): Promise<void> => {
-      try {
-        await tmp.delete();
-      } catch {
-        // 後始末の削除に失敗しても無視します。
-      }
-    };
+    const removeTmp = (): Promise<void> => this.#removeTemporary(tmp);
 
     // 中断と失敗のどちらからでも後始末が走るため、完了処理は一度だけ行います。
     let finished = false;
@@ -398,12 +352,11 @@ export default class BunFs implements IStorage {
    * @returns ファイル内容を送出する読み取りストリームです。
    */
   public getReadable(c: IStorage.GetReadableContext): ReadableStream<Uint8Array<ArrayBuffer>> {
-    this.#getConnection();
+    const { path } = this.#getConnection();
 
     assertValidFilename(c.key);
     c.signal.throwIfAborted();
 
-    const { path } = this.#getConnection();
     const file = path.join(this.#root, c.key);
     const source = Bun.file(file);
     let reader: ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>> | null = null;
@@ -459,6 +412,68 @@ export default class BunFs implements IStorage {
         }
       },
     });
+  }
+
+  /**
+   * キーの値を別のキーへ転送します。
+   *
+   * 同じキーへの転送は存在確認だけを行います。
+   *
+   * @param key 転送元のキーです。
+   * @param destinationKey 転送先のキーです。
+   * @param signal 中断を監視するシグナルです。
+   * @param operation 実際のファイル操作です。
+   *
+   * @returns 転送が完了したら解決します。
+   */
+  async #transfer(
+    key: string,
+    destinationKey: string,
+    signal: AbortSignal,
+    operation: TransferOperation,
+  ): Promise<void> {
+    const { fs, path } = this.#getConnection();
+
+    assertValidFilename(key);
+    assertValidFilename(destinationKey);
+    signal.throwIfAborted();
+
+    // 同じキーへの転送はファイルの存在確認だけを行います。
+    if (key === destinationKey) {
+      await this.#assertExists(key, signal);
+
+      return;
+    }
+
+    const source = path.join(this.#root, key);
+    const dest = path.join(this.#root, destinationKey);
+
+    try {
+      await operation(fs, source, dest);
+    } catch (ex) {
+      if (isErrnoCode(ex, "ENOENT")) {
+        throw new KeyNotFoundError({ key });
+      }
+
+      throw ex;
+    }
+  }
+
+  /**
+   * 一時ファイルを削除します。
+   *
+   * 後始末としての削除のため、失敗しても無視します。
+   *
+   * @param tmp 削除する一時ファイルです。
+   *
+   * @returns 削除が完了したら解決します。
+   */
+  async #removeTemporary(tmp: Bun.BunFile): Promise<void> {
+    try {
+      await tmp.delete();
+    } catch {
+      // 後始末の削除に失敗しても無視します。
+    }
   }
 
   /**

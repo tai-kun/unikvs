@@ -194,6 +194,14 @@ function createClient(servers: string): MemcachedClientLike {
 }
 
 /**
+ * 実装差で名前が異なるメソッドを名前で引くためのビューです。
+ */
+type ClientMethodView = Record<
+  string,
+  ((this: MemcachedClientLike, ...args: unknown[]) => unknown) | undefined
+>;
+
+/**
  * 別名 (`quit`/`close`/`end`、`flush`/`flushAll`、`delete`/`del`) を吸収して呼び出します。
  *
  * 実装差で名前が異なるメソッドを順に探して実行します。
@@ -209,17 +217,13 @@ function invokeClient(
   names: readonly string[],
   key?: string,
 ): Promise<unknown> {
-  const record = client as unknown as Record<string, unknown>;
+  const view = client as unknown as ClientMethodView;
 
   for (const name of names) {
-    const fn = record[name];
+    const fn = view[name];
 
     if (typeof fn === "function") {
-      return Promise.resolve(
-        key === undefined
-          ? (fn as (this: MemcachedClientLike) => unknown).call(client)
-          : (fn as (this: MemcachedClientLike, key: string) => unknown).call(client, key),
-      );
+      return Promise.resolve(key === undefined ? fn.call(client) : fn.call(client, key));
     }
   }
 
@@ -388,32 +392,14 @@ export default class Memcached implements IStorage {
     const client: MemcachedClientLike = injected ?? createClient(this.#servers);
     const owned = injected === undefined;
 
-    using abortPromise = toAbortPromise(c.signal);
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
     try {
-      // `memjs` は遅延接続のため、`get` による疎通確認で接続可否を検証します。
-      // 存在しないキーへの `get` は `null` 値で成功するため、読み取り専用で安全です。
-      await Promise.race([
-        client.get(PROBE_KEY),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            reject(new ConnectTimeoutError({ timeoutMs: this.#connectTimeout }));
-          }, this.#connectTimeout);
-        }),
-        abortPromise,
-      ]);
+      await this.#probe(client, c.signal);
     } catch (error) {
       if (owned) {
         await releaseClient(client);
       }
 
       throw error;
-    } finally {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
     }
 
     this.#con = { client };
@@ -538,6 +524,40 @@ export default class Memcached implements IStorage {
     // memcached にキー列挙手段はないため、`flush` で全件削除します。
     // プレフィックスの内外を問わず、サーバー上の全キーが対象になります。
     await invokeClient(client, ["flush", "flushAll"]);
+  }
+
+  /**
+   * クライアントへ疎通確認を行います。
+   *
+   * タイムアウトと中断のいずれか早い方で失敗します。
+   *
+   * @param client 疎通確認するクライアントです。
+   * @param signal 中断を知らせるシグナルです。
+   *
+   * @returns 疎通確認が完了したら解決します。
+   */
+  async #probe(client: MemcachedClientLike, signal: AbortSignal): Promise<void> {
+    using abortPromise = toAbortPromise(signal);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      // `memjs` は遅延接続のため、`get` による疎通確認で接続可否を検証します。
+      // 存在しないキーへの `get` は `null` 値で成功するため、読み取り専用で安全です。
+      await Promise.race([
+        client.get(PROBE_KEY),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            reject(new ConnectTimeoutError({ timeoutMs: this.#connectTimeout }));
+          }, this.#connectTimeout);
+        }),
+        abortPromise,
+      ]);
+    } finally {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+    }
   }
 
   /**
