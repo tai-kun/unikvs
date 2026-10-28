@@ -8,6 +8,8 @@ export {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createOpenContext,
   createClearContext,
   createCloseContext,

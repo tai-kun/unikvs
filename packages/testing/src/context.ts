@@ -53,6 +53,11 @@ export type TestContextInit = {
   readonly destination?: unknown;
 
   /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-destination-key)
+   */
+  readonly destinationKey?: string | undefined;
+
+  /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-init-values)
    */
   readonly values?: TestContextValues | undefined;
@@ -70,7 +75,17 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-action)
    */
-  public readonly action: "open" | "close" | "set" | "get" | "stream" | "has" | "delete" | "clear";
+  public readonly action:
+    | "open"
+    | "close"
+    | "set"
+    | "get"
+    | "stream"
+    | "has"
+    | "delete"
+    | "clear"
+    | "copy"
+    | "move";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-key)
@@ -91,6 +106,11 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
    * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-destination)
    */
   public destination: any;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#test-context-destination-key)
+   */
+  public readonly destinationKey: string;
 
   /**
    * 変数名と値の対応を保持する内部マップです。
@@ -117,6 +137,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
       source,
       values,
       destination,
+      destinationKey = "",
     } = init;
     this.signal = signal ?? new AbortController().signal;
     this.action = action;
@@ -124,6 +145,7 @@ export class TestContext<TTypes extends object = {}> implements IPipelineContext
     this.repair = repair;
     this.source = source;
     this.destination = destination;
+    this.destinationKey = destinationKey;
 
     let entries: readonly (readonly [string, unknown])[] = [];
 
@@ -295,6 +317,38 @@ export function createDeleteContext(
     ...init,
     action: "delete",
     key,
+  });
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-copy-context)
+ */
+export function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  });
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/testing#create-move-context)
+ */
+export function createMoveContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "move",
+    key,
+    destinationKey,
   });
 }
 
