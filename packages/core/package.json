@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/core",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Core package shared across all packages including plugins.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

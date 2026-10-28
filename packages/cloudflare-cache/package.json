@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/cloudflare-cache",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Storage plugin that stores byte arrays in the Cloudflare Workers Cache API binding.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

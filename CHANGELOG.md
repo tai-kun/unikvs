@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.0.17
+
+### 新機能
+
+- **tap:** Context を受け取る Tap ミドルウェアを追加 ([08130e7](https://github.com/tai-kun/unikvs/commit/08130e7afb77f19f5b304263b404c9a6acab91d3))
+- copy と move を任意化しフォールバックを追加 ([af7122d](https://github.com/tai-kun/unikvs/commit/af7122d2070fdb40d5cf5eaa6255910df41945fe))
+
+### バグ修正
+
+- **unikvs:** copy と move のフォールバックで書き込み先キーを正しく使う ([89dc16d](https://github.com/tai-kun/unikvs/commit/89dc16d446e94b01dbb2f6740b0fc7cfa1a0f5fb))
+- コメント内の誤字を修正 ([05ac75d](https://github.com/tai-kun/unikvs/commit/05ac75daaa722cda395f34f23f31a3908a5152e7))
+
+### リファクタリング
+
+- Context の snapshot() と checksum の onHash 第二引数を廃止 ([91988c0](https://github.com/tai-kun/unikvs/commit/91988c0d4627499c22c76d610dc7dc02e20a6a44))
+- copy と move の個別実装を削除し共通フォールバックに統一 ([31b2724](https://github.com/tai-kun/unikvs/commit/31b2724685651093234ee205145cf860c375bfae))
+
+### ドキュメント
+
+- copy と move のドキュメントを更新 ([2251584](https://github.com/tai-kun/unikvs/commit/2251584f52e52d88b475fe8d90b8f4b8fcec01a7))
+
+### その他
+
+- パッケージを更新 ([09a6b56](https://github.com/tai-kun/unikvs/commit/09a6b5692034d88badb9a68e312b6fb9d403d93b))
+
+**Full Changelog**: https://github.com/tai-kun/unikvs/compare/@unikvs/core@0.0.16...@unikvs/core@0.0.17
+
 ## v0.0.16
 
 ### 新機能

@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/brotli.node",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Transformer plugin that compresses and decompresses byte arrays with Brotli via node:zlib. Node.js-only.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

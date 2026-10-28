@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/key-prefix",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Transformer plugin that prefixes all keys with a fixed string.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

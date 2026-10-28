@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/brotli.wasm",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "description": "Transformer plugin that compresses and decompresses byte arrays with Brotli via WebAssembly. Works in browsers and Node.js.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",
