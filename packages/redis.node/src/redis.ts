@@ -345,6 +345,80 @@ export default class Redis implements IStorage {
   }
 
   /**
+   * キーの値を別のキーへ複製します。
+   *
+   * 複製先が存在する場合は上書きします。
+   * `COPY` の `REPLACE` を使い、複製元の有効期限もそのまま引き継ぎます。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    c.signal.throwIfAborted();
+
+    const src = this.#toKey(c.key);
+    const dest = this.#toKey(c.destinationKey);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      if ((await client.exists(src)) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    // `COPY` は複製元が存在しないとき 0 を返すため、欠番を明示的にエラーへ変換します。
+    const copied = await client.copy(src, dest, "REPLACE");
+
+    if (copied === 0) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+  }
+
+  /**
+   * キーの値を別のキーへ移動します。
+   *
+   * `RENAME` で移動先を上書きし、移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const { client } = this.#getConnection();
+
+    c.signal.throwIfAborted();
+
+    const src = this.#toKey(c.key);
+    const dest = this.#toKey(c.destinationKey);
+
+    // 同じキーへの移動は値の存在確認だけを行い、削除しません。
+    if (c.key === c.destinationKey) {
+      if ((await client.exists(src)) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    try {
+      // `RENAME` は移動先を上書きし、移動元を削除します。
+      await client.rename(src, dest);
+    } catch (ex) {
+      // `RENAME` は移動元が存在しないときサーバーエラーを返すため、欠番を統一します。
+      if ((await client.exists(src)) === 0) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      throw ex;
+    }
+  }
+
+  /**
    * 接頭辞に一致するキーをすべて削除します。
    *
    * `SCAN` で列挙しながら削除します。
