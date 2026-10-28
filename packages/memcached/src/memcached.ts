@@ -151,7 +151,7 @@ const PROBE_KEY = "__unikvs_memcached_probe__";
  *
  * これを超える値は絶対 Unix 時刻として扱われます。
  */
-export const MAX_RELATIVE_EXPIRATION_SECONDS = 60 * 60 * 24 * 30;
+export const MAX_RELATIVE_EXPIRATION_SECONDS: number = 60 * 60 * 24 * 30;
 
 /**
  * Memcached の `set` に渡す有効期限を組み立てます。
