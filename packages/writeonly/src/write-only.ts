@@ -62,7 +62,9 @@ export default class WriteOnly implements IMiddleware {
 
   public async use(c: IMiddleware.UseContext, next: IMiddleware.INext): Promise<void> {
     switch (c.action) {
-      case "set": {
+      case "set":
+      case "copy":
+      case "move": {
         break;
       }
 
