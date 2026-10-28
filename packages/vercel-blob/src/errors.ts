@@ -100,7 +100,7 @@ export type BlobOperationErrorMeta = {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)
    */
-  readonly operation: "put" | "head" | "del" | "list";
+  readonly operation: "put" | "head" | "del" | "list" | "copy";
 
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#error-blob-operation)

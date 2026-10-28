@@ -1,5 +1,7 @@
 import type { IStorage } from "@unikvs/core";
 import {
+  type TestContextInit,
+  TestContext,
   createGetContext,
   createHasContext,
   createSetContext,
@@ -10,15 +12,40 @@ import { vi, test, describe, beforeEach } from "vite-plus/test";
 
 import VercelBlob from "../src/vercel-blob.js";
 
-const { mockDel, mockPut, mockHead, mockList } = vi.hoisted(() => ({
+/**
+ * 複製用のコンテキストを組み立てます。
+ *
+ * @param key 複製元のキーです。
+ * @param destinationKey 複製先のキーです。
+ * @param init 追加の初期値です。
+ *
+ * @returns 複製用のコンテキストです。
+ */
+function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): IStorage.CopyContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  }) as unknown as IStorage.CopyContext;
+}
+
+const { mockDel, mockPut, mockCopy, mockHead, mockList } = vi.hoisted(() => ({
   mockDel: vi.fn<(pathname: string | readonly string[], options: unknown) => Promise<void>>(),
   mockPut: vi.fn<(pathname: string, body: unknown, options: unknown) => Promise<unknown>>(),
+  mockCopy:
+    vi.fn<(fromUrlOrPathname: string, toPathname: string, options: unknown) => Promise<unknown>>(),
   mockHead: vi.fn<(pathname: string, options: unknown) => Promise<unknown>>(),
   mockList: vi.fn<(options: unknown) => Promise<unknown>>(),
 }));
 vi.mock("@vercel/blob", () => ({
   del: mockDel,
   put: mockPut,
+  copy: mockCopy,
   head: mockHead,
   list: mockList,
 }));
@@ -87,6 +114,36 @@ describe("既定クライアントの委譲", () => {
       contentType: "application/octet-stream",
     });
     expect("token" in options).toBe(false);
+  });
+
+  test("client 未指定のとき、copy に委譲する", async ({ expect }) => {
+    // 準備：
+    mockCopy.mockResolvedValue({
+      url: "https://fake.blob/app/destination",
+      pathname: "app/destination",
+    });
+    const storage = new VercelBlob({
+      token: "secret",
+      access: "public",
+      keyPrefix: "app/",
+    });
+
+    // 実行：
+    await storage.copy(
+      createCopyContext("source", "destination", {
+        signal: AbortSignal.timeout(5000),
+      }),
+    );
+
+    // 検証：
+    expect(mockCopy).toHaveBeenCalledOnce();
+    expect(mockCopy).toHaveBeenCalledWith("app/source", "app/destination", {
+      token: "secret",
+      access: "public",
+      abortSignal: expect.any(AbortSignal),
+      contentType: "application/octet-stream",
+      allowOverwrite: true,
+    });
   });
 
   test("client 未指定のとき、exists が head に委譲する", async ({ expect }) => {

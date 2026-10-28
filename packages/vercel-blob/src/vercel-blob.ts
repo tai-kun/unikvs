@@ -1,5 +1,5 @@
 import { type IStorage, type IPipelineContext, KeyNotFoundError } from "@unikvs/core";
-import { del, put, head, list } from "@vercel/blob";
+import { del, put, copy, head, list } from "@vercel/blob";
 import { throwIfAborted } from "abort-signal-utils";
 
 import {
@@ -56,6 +56,21 @@ export interface BlobPutRequestOptions extends BlobRequestOptions {
 /**
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
+export interface BlobCopyRequestOptions extends BlobRequestOptions {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+   */
+  readonly access: BlobAccess;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+   */
+  readonly contentType?: string | undefined;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+ */
 export interface BlobListRequestOptions extends BlobRequestOptions {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
@@ -72,6 +87,21 @@ export interface BlobListRequestOptions extends BlobRequestOptions {
  * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
  */
 export interface BlobPutResult {
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+   */
+  readonly url: string;
+
+  /**
+   * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+   */
+  readonly pathname: string;
+}
+
+/**
+ * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
+ */
+export interface BlobCopyResult {
   /**
    * [API Reference](https://tai-kun.github.io/unikvs/packages/vercel-blob#vercel-blob)
    */
@@ -151,6 +181,21 @@ export interface BlobClientLike {
     body: Uint8Array<ArrayBuffer>,
     options: BlobPutRequestOptions,
   ): Promise<BlobPutResult>;
+
+  /**
+   * `fromUrlOrPathname` の Blob を `toPathname` へ複製します。
+   *
+   * @param fromUrlOrPathname 複製元の URL または pathname です。
+   * @param toPathname 複製先の pathname です。
+   * @param options 複製に渡す項目です。
+   *
+   * @returns 複製結果です。
+   */
+  copy?(
+    fromUrlOrPathname: string,
+    toPathname: string,
+    options: BlobCopyRequestOptions,
+  ): Promise<BlobCopyResult>;
 
   /**
    * `pathname` のメタ情報を取得します。存在しないときは拒否します。
@@ -238,6 +283,14 @@ function createDefaultClient(): BlobClientLike {
         access: options.access,
         ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
         allowOverwrite: true,
+        ...(options.token !== undefined ? { token: options.token } : null),
+        ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
+      }),
+    copy: (fromUrlOrPathname, toPathname, options) =>
+      copy(fromUrlOrPathname, toPathname, {
+        access: options.access,
+        allowOverwrite: true,
+        ...(options.contentType !== undefined ? { contentType: options.contentType } : null),
         ...(options.token !== undefined ? { token: options.token } : null),
         ...(options.abortSignal !== undefined ? { abortSignal: options.abortSignal } : null),
       }),
@@ -427,24 +480,7 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
    */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
     throwIfAborted(c.signal);
-
-    const token = this.#resolveToken(c);
-
-    try {
-      await this.#client.put(this.#pathname(c.key), data.slice(), {
-        token,
-        access: this.#access,
-        abortSignal: c.signal,
-        contentType: "application/octet-stream",
-      });
-    } catch (ex) {
-      throwIfAborted(c.signal);
-      throw new BlobOperationError({
-        key: c.key,
-        cause: ex,
-        operation: "put",
-      });
-    }
+    await this.#put(c, c.key, data);
   }
 
   /**
@@ -553,6 +589,88 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
         operation: "del",
       });
     }
+  }
+
+  /**
+   * キーの Blob を別のキーへ複製します。
+   *
+   * クライアントが複製操作を持つときはそれを使い、持たないときは読み取りと書き込みで複製します。
+   * 複製先に既存の Blob があるときは上書きします。
+   * 複製元が存在しないときは `KeyNotFoundError` を投げます。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 複製が完了したら解決します。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    throwIfAborted(c.signal);
+
+    if (c.key === c.destinationKey) {
+      if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    const token = this.#resolveToken(c);
+
+    try {
+      if (this.#client.copy !== undefined) {
+        await this.#client.copy(this.#pathname(c.key), this.#pathname(c.destinationKey), {
+          token,
+          access: this.#access,
+          abortSignal: c.signal,
+          contentType: "application/octet-stream",
+        });
+
+        return;
+      }
+
+      const data = await this.read(c as unknown as IStorage.ReadContext);
+      await this.#put(c, c.destinationKey, data);
+    } catch (ex) {
+      if (ex instanceof KeyNotFoundError) {
+        throw ex;
+      }
+
+      if (isBlobNotFound(ex)) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      throwIfAborted(c.signal);
+      throw new BlobOperationError({
+        key: c.key,
+        cause: ex,
+        operation: "copy",
+      });
+    }
+  }
+
+  /**
+   * キーの Blob を別のキーへ移動します。
+   *
+   * 複製先の書き込みが完了してから複製元を削除します。
+   * 複製先の書き込みに失敗したときは複製元を残します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 移動が完了したら解決します。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    throwIfAborted(c.signal);
+
+    if (c.key === c.destinationKey) {
+      if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      return;
+    }
+
+    await this.copy(c as unknown as IStorage.CopyContext);
+    throwIfAborted(c.signal);
+    await this.delete(c as unknown as IStorage.DeleteContext);
   }
 
   /**
@@ -706,6 +824,43 @@ export default class VercelBlob implements IStorage<Uint8Array<ArrayBuffer>> {
     }
 
     return response.body;
+  }
+
+  /**
+   * 指定したキーへバイト列を保存します。
+   *
+   * トークンを解決し、失敗は `BlobOperationError` に包みます。
+   *
+   * @param c パイプラインコンテキストです。
+   * @param key 保存先の論理キーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 保存が完了したら解決します。
+   */
+  async #put(
+    c: Pick<IStorage.WriteContext, "get" | "signal">,
+    key: string,
+    data: Uint8Array<ArrayBuffer>,
+  ): Promise<void> {
+    throwIfAborted(c.signal);
+
+    const token = this.#resolveToken(c);
+
+    try {
+      await this.#client.put(this.#pathname(key), data.slice(), {
+        token,
+        access: this.#access,
+        abortSignal: c.signal,
+        contentType: "application/octet-stream",
+      });
+    } catch (ex) {
+      throwIfAborted(c.signal);
+      throw new BlobOperationError({
+        key,
+        cause: ex,
+        operation: "put",
+      });
+    }
   }
 
   /**

@@ -4,7 +4,13 @@
  * pathname をキーにする `Map` バックで `put` / `head` / `del` / `list` を処理します。
  * 呼び出し記録は pathname 解決・トークン伝搬・頁分割の表明に使います。
  */
-import type { IFetch, BlobClientLike, BlobHeadResult, BlobListResult } from "../src/vercel-blob.js";
+import type {
+  IFetch,
+  BlobClientLike,
+  BlobCopyResult,
+  BlobHeadResult,
+  BlobListResult,
+} from "../src/vercel-blob.js";
 
 const FAKE_ORIGIN = "https://fake.blob";
 
@@ -22,6 +28,13 @@ export type RecordedClientCall =
     }
   | {
       readonly token: string | undefined;
+      readonly access: string;
+      readonly operation: "copy";
+      readonly toPathname: string;
+      readonly fromPathname: string;
+    }
+  | {
+      readonly token: string | undefined;
       readonly operation: "del";
       readonly pathnames: readonly string[];
     }
@@ -34,7 +47,7 @@ export type RecordedClientCall =
 
 export type FakeBlobClientOptions = {
   readonly error?: unknown;
-  readonly failOn?: "put" | "head" | "del" | "list" | undefined;
+  readonly failOn?: "put" | "head" | "del" | "list" | "copy" | undefined;
   readonly pageSize?: number | undefined;
 };
 
@@ -124,6 +137,34 @@ export function createFakeClient(options: FakeBlobClientOptions = {}): FakeBlobC
       return {
         url: toFakeUrl(pathname),
         pathname,
+      };
+    },
+    copy: async (fromUrlOrPathname, toPathname, copyOptions): Promise<BlobCopyResult> => {
+      copyOptions.abortSignal?.throwIfAborted();
+      calls.push({
+        token: copyOptions.token,
+        access: copyOptions.access,
+        operation: "copy",
+        toPathname,
+        fromPathname: fromUrlOrPathname,
+      });
+
+      if (failOn === "copy") {
+        throw error;
+      }
+
+      const source = store.get(fromUrlOrPathname);
+
+      if (source === undefined) {
+        throw createBlobNotFoundError();
+      }
+
+      await Promise.resolve();
+      store.set(toPathname, source.slice());
+
+      return {
+        url: toFakeUrl(toPathname),
+        pathname: toPathname,
       };
     },
     head: async (pathname, headOptions): Promise<BlobHeadResult> => {
