@@ -4,6 +4,8 @@ import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createClearContext,
   createDeleteContext,
   createStreamContext,
@@ -38,12 +40,20 @@ function createUseContext(action: IMiddleware.UseContext["action"]): IMiddleware
       return createDeleteContext("key") as IMiddleware.UseContext;
     }
 
+    case "copy": {
+      return createCopyContext("key", "destination") as IMiddleware.UseContext;
+    }
+
+    case "move": {
+      return createMoveContext("key", "destination") as IMiddleware.UseContext;
+    }
+
     case "clear": {
       return createClearContext() as IMiddleware.UseContext;
     }
 
     default: {
-      throw new Error(`Unknown action: ${String(action)}`);
+      throw new Error("Unknown action");
     }
   }
 }
