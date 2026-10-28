@@ -1,11 +1,13 @@
 import { rm, stat, mkdir, access, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import type { IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import {
   createGetContext,
   createHasContext,
   createSetContext,
+  createCopyContext,
+  createMoveContext,
   createClearContext,
   createDeleteContext,
 } from "@unikvs/testing";
@@ -39,6 +41,192 @@ describe("CRUD の詳細", () => {
     expect(
       new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
     ).toStrictEqual(next);
+  });
+
+  test("copy で別のキーへ複製したとき、コピー元とコピー先の両方に同じ内容が残る", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    const source = "copy-source.bin";
+    const destination = "copy-destination.bin";
+    const data = new Uint8Array([1, 2, 3]);
+    await storage.write(createSetContext(source, { signal }) as IStorage.WriteContext, data);
+
+    // 実行：
+    await storage.copy(createCopyContext(source, destination, { signal }) as IStorage.CopyContext);
+
+    // 検証：
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(source, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(destination, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
+  });
+
+  test("copy のコピー先に既存の値があるとき、上書きされる", async ({ expect, signal, storage }) => {
+    // 準備：
+    const source = "copy-overwrite-source.bin";
+    const destination = "copy-overwrite-destination.bin";
+    const data = new Uint8Array([9, 8, 7]);
+    await storage.write(createSetContext(source, { signal }) as IStorage.WriteContext, data);
+    await storage.write(
+      createSetContext(destination, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 1, 1, 1]),
+    );
+
+    // 実行：
+    await storage.copy(createCopyContext(source, destination, { signal }) as IStorage.CopyContext);
+
+    // 検証：
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(destination, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
+  });
+
+  test("copy のコピー元が存在しないとき、KeyNotFoundError が投げられる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 実行と検証：
+    await expect(
+      storage.copy(
+        createCopyContext("copy-missing.bin", "copy-missing-dest.bin", {
+          signal,
+        }) as IStorage.CopyContext,
+      ),
+    ).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("copy のコピー元とコピー先が同じとき、存在確認だけでデータが残る", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    const key = "copy-same.bin";
+    const data = new Uint8Array([4, 5]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
+    // 実行：
+    await storage.copy(createCopyContext(key, key, { signal }) as IStorage.CopyContext);
+
+    // 検証：
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(data);
+  });
+
+  test("move で別のキーへ移動したとき、移動先に内容が移り移動元が消える", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    const source = "move-source.bin";
+    const destination = "move-destination.bin";
+    const data = new Uint8Array([6, 7, 8]);
+    await storage.write(createSetContext(source, { signal }) as IStorage.WriteContext, data);
+
+    // 実行：
+    await storage.move(createMoveContext(source, destination, { signal }) as IStorage.MoveContext);
+
+    // 検証：
+    expect(await storage.exists(createHasContext(source) as IStorage.ExistsContext)).toBe(false);
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(destination, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
+  });
+
+  test("move の移動先に既存の値があるとき、上書きされる", async ({ expect, signal, storage }) => {
+    // 準備：
+    const source = "move-overwrite-source.bin";
+    const destination = "move-overwrite-destination.bin";
+    const data = new Uint8Array([3, 2, 1]);
+    await storage.write(createSetContext(source, { signal }) as IStorage.WriteContext, data);
+    await storage.write(
+      createSetContext(destination, { signal }) as IStorage.WriteContext,
+      new Uint8Array([1, 1, 1, 1]),
+    );
+
+    // 実行：
+    await storage.move(createMoveContext(source, destination, { signal }) as IStorage.MoveContext);
+
+    // 検証：
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(destination, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
+  });
+
+  test("move の移動元が存在しないとき、KeyNotFoundError が投げられる", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 実行と検証：
+    await expect(
+      storage.move(
+        createMoveContext("move-missing.bin", "move-missing-dest.bin", {
+          signal,
+        }) as IStorage.MoveContext,
+      ),
+    ).rejects.toThrow(KeyNotFoundError);
+  });
+
+  test("move の移動元と移動先が同じとき、存在確認だけでデータが残る", async ({
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：
+    const key = "move-same.bin";
+    const data = new Uint8Array([0, 1]);
+    await storage.write(createSetContext(key, { signal }) as IStorage.WriteContext, data);
+
+    // 実行：
+    await storage.move(createMoveContext(key, key, { signal }) as IStorage.MoveContext);
+
+    // 検証：
+    expect(
+      new Uint8Array(await storage.read(createGetContext(key, { signal }) as IStorage.ReadContext)),
+    ).toStrictEqual(data);
+  });
+
+  test("move の移動先への書き込みが失敗したとき、移動元が残る", async ({
+    root,
+    expect,
+    signal,
+    storage,
+  }) => {
+    // 準備：移動先と同じ名前のディレクトリーを作り、リネームを失敗させます。
+    const source = "move-blocked-source.bin";
+    const destination = "move-blocked-destination.bin";
+    const data = new Uint8Array([5, 4, 3]);
+    await storage.write(createSetContext(source, { signal }) as IStorage.WriteContext, data);
+    await mkdir(join(root, destination));
+
+    // 実行と検証：
+    await expect(
+      storage.move(createMoveContext(source, destination, { signal }) as IStorage.MoveContext),
+    ).rejects.toThrow();
+    expect(
+      new Uint8Array(
+        await storage.read(createGetContext(source, { signal }) as IStorage.ReadContext),
+      ),
+    ).toStrictEqual(data);
   });
 
   test("読み取り結果のバイト列を変更しても保存データは変わらない", async ({

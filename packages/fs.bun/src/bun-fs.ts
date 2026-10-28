@@ -1,8 +1,24 @@
-import type { rm, mkdir, rename } from "node:fs/promises";
+import type { rm, mkdir, rename, copyFile } from "node:fs/promises";
 import type { join, resolve } from "node:path";
 
-import { type IStorage, UnsupportedRuntimeError } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError, UnsupportedRuntimeError } from "@unikvs/core";
 import { assertValidFilename } from "@unikvs/utils";
+
+/**
+ * ファイル操作のエラーが指定した errno コードかどうかを判定します。
+ *
+ * @param error 判定するエラーです。
+ * @param code 期待する errno コードです。
+ *
+ * @returns コードが一致するとき true を返します。
+ */
+function isErrnoCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { readonly code?: unknown }).code === code
+  );
+}
 
 /**
  * ストレージの動作に必要な Node.js 互換モジュールをまとめて保持する型定義です。
@@ -17,6 +33,7 @@ type Connection = {
     readonly rm: typeof rm;
     readonly mkdir: typeof mkdir;
     readonly rename: typeof rename;
+    readonly copyFile: typeof copyFile;
   };
 
   /**
@@ -184,6 +201,78 @@ export default class BunFs implements IStorage {
     const { path } = this.#getConnection();
     const file = path.join(this.#root, c.key);
     await Bun.file(file).delete();
+  }
+
+  /**
+   * 指定したキーのファイルを別のキーへ複製します。コピー先の既存ファイルは上書きされます。
+   *
+   * @param c コピー元とコピー先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const { fs, path } = this.#getConnection();
+
+    assertValidFilename(c.key);
+    assertValidFilename(c.destinationKey);
+    c.signal.throwIfAborted();
+
+    // 同じキーへのコピーはファイルの存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      await this.#assertExists(c.key, c.signal);
+
+      return;
+    }
+
+    const source = path.join(this.#root, c.key);
+    const dest = path.join(this.#root, c.destinationKey);
+
+    try {
+      await fs.copyFile(source, dest);
+    } catch (ex) {
+      if (isErrnoCode(ex, "ENOENT")) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      throw ex;
+    }
+  }
+
+  /**
+   * 指定したキーのファイルを別のキーへ移動します。移動先の既存ファイルは上書きされます。
+   *
+   * 移動先への書き込みが成功した後に移動元を削除するため、失敗時には移動元が残ります。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const { fs, path } = this.#getConnection();
+
+    assertValidFilename(c.key);
+    assertValidFilename(c.destinationKey);
+    c.signal.throwIfAborted();
+
+    // 同じキーへの移動はファイルの存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      await this.#assertExists(c.key, c.signal);
+
+      return;
+    }
+
+    const source = path.join(this.#root, c.key);
+    const dest = path.join(this.#root, c.destinationKey);
+
+    try {
+      await fs.rename(source, dest);
+    } catch (ex) {
+      if (isErrnoCode(ex, "ENOENT")) {
+        throw new KeyNotFoundError({ key: c.key });
+      }
+
+      throw ex;
+    }
   }
 
   /**
@@ -370,6 +459,25 @@ export default class BunFs implements IStorage {
         }
       },
     });
+  }
+
+  /**
+   * 指定したキーのファイルが存在することを確認します。
+   *
+   * @param key 確認するキーです。
+   * @param signal 中断を監視するシグナルです。
+   *
+   * @returns ファイルが存在するとき完了するプロミスです。存在しないときはエラーを投げます。
+   */
+  async #assertExists(key: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+
+    const { path } = this.#getConnection();
+    const file = path.join(this.#root, key);
+
+    if (!(await Bun.file(file).exists())) {
+      throw new KeyNotFoundError({ key });
+    }
   }
 
   /**
