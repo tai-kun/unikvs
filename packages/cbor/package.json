@@ -33,7 +33,7 @@
   "dependencies": {
     "@unikvs/core": "workspace:*",
     "@unikvs/utils": "workspace:*",
-    "cbor-x": "^1.6.7"
+    "cbor-x": "^1.6.8"
   },
   "devDependencies": {
     "@unikvs/testing": "workspace:*",

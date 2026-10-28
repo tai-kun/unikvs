@@ -27,8 +27,8 @@
     "build": "vp -C .config pack"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "~3.1152.0",
-    "@aws-sdk/lib-storage": "~3.1152.0",
+    "@aws-sdk/client-s3": "~3.1154.0",
+    "@aws-sdk/lib-storage": "~3.1154.0",
     "@unikvs/core": "workspace:*"
   },
   "devDependencies": {
