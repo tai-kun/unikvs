@@ -1,6 +1,6 @@
 {
   "name": "@unikvs/memory",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "Storage plugin that stores arbitrary data in memory.",
   "homepage": "https://tai-kun.github.io/unikvs/",
   "license": "MIT",

@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.0.16
+
+### 新機能
+
+- **ttl:** copy と move の有効期限を引き継ぐ ([c87a7b3](https://github.com/tai-kun/unikvs/commit/c87a7b39a133ec6cfa01c526a41f446de93c223f))
+- **writeonly:** copy と move を許可する ([e4c848f](https://github.com/tai-kun/unikvs/commit/e4c848f9ef9707346678cfdffb2301ef7dd4792a))
+- **readonly:** copy と move を拒否する ([a4c1504](https://github.com/tai-kun/unikvs/commit/a4c15049e0c0a781243fbdd4b04389a8efed0e20))
+- **vercel-runtime-cache:** copy と move を実装 ([04fe27e](https://github.com/tai-kun/unikvs/commit/04fe27e41c2ebfcb853efcbca7370eea9a21407d))
+- **vercel-blob:** copy と move を実装 ([63d1408](https://github.com/tai-kun/unikvs/commit/63d140891c0a60400e989e84f3cfb14d0d27fe40))
+- **s3.node:** copy と move を実装 ([bc71a4b](https://github.com/tai-kun/unikvs/commit/bc71a4b7e009cb31bf8ba36c6bb04f40482f3f43))
+- **s3.bun:** copy と move を実装 ([1b0e631](https://github.com/tai-kun/unikvs/commit/1b0e631ed054d4620e0ade7f6333d4e468f2722d))
+- **etcd:** copy と move を実装 ([f9bb4e3](https://github.com/tai-kun/unikvs/commit/f9bb4e3e960b28a3df9db538e3325ecf4d27831b))
+- **memcached:** copy と move を実装 ([24bf636](https://github.com/tai-kun/unikvs/commit/24bf6362a7d406e4d66048801d439b62f8d0d696))
+- **valkey:** copy と move を実装 ([a83f3d4](https://github.com/tai-kun/unikvs/commit/a83f3d424364f134ecec3925e9e9eb5b6f05e120))
+- **redis.node:** copy と move を実装 ([51474b3](https://github.com/tai-kun/unikvs/commit/51474b383bc7a05a45b4f6358b49a357bb7f6620))
+- **redis.bun:** copy と move を実装 ([087e6a6](https://github.com/tai-kun/unikvs/commit/087e6a656f2bd98e83d06a68282098ef7409c395))
+- **soft-delete:** copy と move を実装 ([497fc72](https://github.com/tai-kun/unikvs/commit/497fc72083f77ee6c67e3f7db56c844078fc722d))
+- **http:** copy と move を実装 ([c3c8741](https://github.com/tai-kun/unikvs/commit/c3c8741fcba766e1b1fe70ca1a4a9bde1fc91c2b))
+- **retry:** copy と move を再試行対象に追加 ([a5be46e](https://github.com/tai-kun/unikvs/commit/a5be46e5caaf1ef7a2f78e15fac73cc442043f34))
+- **fs.bun:** copy と move を実装 ([cd5e7b9](https://github.com/tai-kun/unikvs/commit/cd5e7b9fcd50207987e1a3d7d1cfbaa85cd5e1b2))
+- **fs.node:** copy と move を実装 ([fd1c1bf](https://github.com/tai-kun/unikvs/commit/fd1c1bf46d0a2353a38322b45ddea6ff51863ab6))
+- **cloudflare-r2:** copy と move を実装 ([a4c6a37](https://github.com/tai-kun/unikvs/commit/a4c6a3752760f6d05bb521f9d19bfe5251a6a76d))
+- **cloudflare-kv:** copy と move を実装 ([81be3e3](https://github.com/tai-kun/unikvs/commit/81be3e3c2bdef08c3ce7c0813656a8f2afd0ec06))
+- **cloudflare-cache:** copy と move を実装 ([8dfdd6d](https://github.com/tai-kun/unikvs/commit/8dfdd6d81fb051e85fbe8ba7e260e381c5f101df))
+- **cache-storage:** copy と move を実装 ([066027b](https://github.com/tai-kun/unikvs/commit/066027bd71e62a02a69d611fe056a49e82b4a0aa))
+- **opfs:** copy と move を実装 ([383bc91](https://github.com/tai-kun/unikvs/commit/383bc919bd16edf0deafc761695131a8679d7d58))
+- **indexeddb:** copy と move を実装 ([0b5a578](https://github.com/tai-kun/unikvs/commit/0b5a578e8befca5bb4f8e0a1d1bc0c0f1c9d7f23))
+- **null:** copy と move を実装 ([afde166](https://github.com/tai-kun/unikvs/commit/afde1666f528bbd210f244a3c288a3da252e5d0c))
+- **cookies:** copy と move を実装 ([9027b13](https://github.com/tai-kun/unikvs/commit/9027b1369d9016b6cd506d17e6da28d13d182f21))
+- **session-storage:** copy と move を実装 ([4ce6053](https://github.com/tai-kun/unikvs/commit/4ce60533c7cc93ecdb7f69263c9f16a0124a5f34))
+- **localstorage:** copy と move を実装 ([ec5df2f](https://github.com/tai-kun/unikvs/commit/ec5df2f2759fa060a2af8945b33f9cc9c09a245b))
+- **lru-cache:** copy と move を実装 ([13df984](https://github.com/tai-kun/unikvs/commit/13df98444d389adb3c6e6c6ca28192cadee04f27))
+- **memory:** copy と move を実装 ([8ae7d7b](https://github.com/tai-kun/unikvs/commit/8ae7d7b5b84a8459484199c1b128f9611d9f560c))
+- **testing:** copy と move 用のテストコンテキストを追加 ([82fd477](https://github.com/tai-kun/unikvs/commit/82fd47750c8941514341d2e3a4d4c9ef6afd4dab))
+- copy と move を IStorage と UniKvs に追加 ([e8aa099](https://github.com/tai-kun/unikvs/commit/e8aa099ea86d098ff90de29cd4536e447ec91097))
+
+### テスト
+
+- **metrics:** copy と move の use コンテキストを検証する ([9704b3b](https://github.com/tai-kun/unikvs/commit/9704b3b4bdf31c975eb0a8517308422000737af0))
+
+**Full Changelog**: https://github.com/tai-kun/unikvs/compare/@unikvs/core@0.0.15...@unikvs/core@0.0.16
+
 ## v0.0.15
 
 ### 新機能
