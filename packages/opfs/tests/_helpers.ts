@@ -1,5 +1,5 @@
 import type { IStorage } from "@unikvs/core";
-import { createOpenContext } from "@unikvs/testing";
+import { type TestContextInit, TestContext, createOpenContext } from "@unikvs/testing";
 import { test as vitest } from "vite-plus/test";
 
 import Opfs from "../src/opfs.js";
@@ -37,6 +37,40 @@ export async function removeRoot(root: string): Promise<void> {
   } catch {
     // 後始末の失敗は無視します。
   }
+}
+
+/**
+ * テスト用のコピーコンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  });
+}
+
+/**
+ * テスト用の移動コンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createMoveContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "move",
+    key,
+    destinationKey,
+  });
 }
 
 /**

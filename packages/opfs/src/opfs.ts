@@ -1,4 +1,4 @@
-import type { IStorage } from "@unikvs/core";
+import { type IStorage, KeyNotFoundError } from "@unikvs/core";
 import { assertValidDirname, assertValidFilename } from "@unikvs/utils";
 
 /**
@@ -136,27 +136,7 @@ export default class Opfs implements IStorage {
    * @returns 完了を知らせるプロミスです。
    */
   public async write(c: IStorage.WriteContext, data: Uint8Array<ArrayBuffer>): Promise<void> {
-    assertValidFilename(c.key);
-    c.signal.throwIfAborted();
-
-    const fileHandle = await this.#getRootHandle().getFileHandle(c.key, { create: true });
-
-    c.signal.throwIfAborted();
-    const writable = await fileHandle.createWritable();
-
-    c.signal.throwIfAborted();
-
-    try {
-      await writable.write(data);
-      // close でコミットされる前に中断を検知し、部分的な書き込みを破棄します。
-      c.signal.throwIfAborted();
-    } catch (ex) {
-      // 失敗時に close すると、書き込めた分の内容が既存データを上書きしてコミットされるため abort して変更を破棄します。
-      await ignoreRejection(writable.abort(ex));
-      throw ex;
-    }
-
-    await writable.close();
+    await this.#writeFile(c.signal, c.key, data);
   }
 
   /**
@@ -217,6 +197,54 @@ export default class Opfs implements IStorage {
     c.signal.throwIfAborted();
 
     await this.#getRootHandle().removeEntry(c.key);
+  }
+
+  /**
+   * 指定したキーのファイルを別のキーへ複製します。複製先が存在する場合は上書きします。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    // 同じキーへの複製はファイルの存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+    await this.#writeFile(c.signal, c.destinationKey, data);
+  }
+
+  /**
+   * 指定したキーのファイルを別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    c.signal.throwIfAborted();
+
+    if (!(await this.exists(c as unknown as IStorage.ExistsContext))) {
+      throw new KeyNotFoundError({ key: c.key });
+    }
+
+    // 同じキーへの移動はファイルの存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      return;
+    }
+
+    const data = await this.read(c as unknown as IStorage.ReadContext);
+    await this.#writeFile(c.signal, c.destinationKey, data);
+
+    await this.delete(c as unknown as IStorage.DeleteContext);
   }
 
   /**
@@ -399,6 +427,39 @@ export default class Opfs implements IStorage {
         await ignoreRejection(reader.cancel(reason));
       },
     });
+  }
+
+  /**
+   * 指定したキーのファイルへバイト列を保存します。失敗時は変更を破棄します。
+   *
+   * @param signal 中断を知らせるシグナルです。
+   * @param key 保存先のキーです。
+   * @param data 保存するバイト列です。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  async #writeFile(signal: AbortSignal, key: string, data: Uint8Array<ArrayBuffer>): Promise<void> {
+    assertValidFilename(key);
+    signal.throwIfAborted();
+
+    const fileHandle = await this.#getRootHandle().getFileHandle(key, { create: true });
+
+    signal.throwIfAborted();
+    const writable = await fileHandle.createWritable();
+
+    signal.throwIfAborted();
+
+    try {
+      await writable.write(data);
+      // close でコミットされる前に中断を検知し、部分的な書き込みを破棄します。
+      signal.throwIfAborted();
+    } catch (ex) {
+      // 失敗時に close すると、書き込めた分の内容が既存データを上書きしてコミットされるため abort して変更を破棄します。
+      await ignoreRejection(writable.abort(ex));
+      throw ex;
+    }
+
+    await writable.close();
   }
 
   /**
