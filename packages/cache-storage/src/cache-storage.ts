@@ -191,6 +191,63 @@ export default class CacheStorage implements IStorage {
   }
 
   /**
+   * 指定したキーの Response を別のキーへ複製します。複製先が存在する場合は上書きします。
+   *
+   * @param c 複製元と複製先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async copy(c: IStorage.CopyContext): Promise<void> {
+    const response = await this.#read(c);
+
+    // 同じキーへの複製は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      await response.body?.cancel();
+
+      return;
+    }
+
+    throwIfAborted(c.signal);
+
+    using abortPromise = toAbortPromise(c.signal);
+
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
+    const request = this.#toRequest(c.destinationKey);
+    await Promise.race([cache.put(request, response), abortPromise]);
+  }
+
+  /**
+   * 指定したキーの Response を別のキーへ移動します。移動先の書き込みが成功してから移動元を削除します。
+   *
+   * @param c 移動元と移動先のキーを持つコンテキストです。
+   *
+   * @returns 完了を知らせるプロミスです。
+   */
+  public async move(c: IStorage.MoveContext): Promise<void> {
+    const response = await this.#read(c);
+
+    // 同じキーへの移動は値の存在確認だけを行います。
+    if (c.key === c.destinationKey) {
+      await response.body?.cancel();
+
+      return;
+    }
+
+    throwIfAborted(c.signal);
+
+    using abortPromise = toAbortPromise(c.signal);
+
+    // UniKvs の仕様では先に `open()` が実行されるため、ここでは開いていることが前提です。
+    const cache = this.#getCache();
+    const request = this.#toRequest(c.destinationKey);
+    await Promise.race([cache.put(request, response), abortPromise]);
+
+    throwIfAborted(c.signal);
+    await this.delete(c as unknown as IStorage.DeleteContext);
+  }
+
+  /**
    * 専用の Cache 内の要求をすべて削除します。
    *
    * @param c 中断を知らせるシグナルを持つコンテキストです。

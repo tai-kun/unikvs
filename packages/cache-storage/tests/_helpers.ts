@@ -5,7 +5,12 @@
  */
 
 import type { IStorage } from "@unikvs/core";
-import { createGetContext, createSetContext } from "@unikvs/testing";
+import {
+  type TestContextInit,
+  TestContext,
+  createGetContext,
+  createSetContext,
+} from "@unikvs/testing";
 import { test as vitest } from "vite-plus/test";
 
 import CacheStorage from "../src/cache-storage.js";
@@ -257,6 +262,40 @@ export function hasNativeCaches(): boolean {
     typeof Request !== "undefined" &&
     typeof Response !== "undefined"
   );
+}
+
+/**
+ * テスト用のコピーコンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createCopyContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "copy",
+    key,
+    destinationKey,
+  });
+}
+
+/**
+ * テスト用の移動コンテキストを作成します。
+ * パイプライン変数や中断シグナルを引き継いだコンテキストを組み立てるために使用します。
+ */
+export function createMoveContext(
+  key: string,
+  destinationKey: string,
+  init: Omit<TestContextInit, "action" | "key" | "destinationKey"> = {},
+): TestContext {
+  return new TestContext({
+    ...init,
+    action: "move",
+    key,
+    destinationKey,
+  });
 }
 
 /**
